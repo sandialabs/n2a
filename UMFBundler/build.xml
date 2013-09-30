@@ -1,0 +1,89 @@
+
+<!--
+
+    UMF Bundler Ant Build Script
+    ============================
+    
+    The main targets are:
+
+        build                 - builds projects after first cleaning projects
+        clean                 - removes previous build dirs.
+
+    The final output is:
+
+        build/deploy/umf_VERSION.jar
+        build/deploy/*
+
+-->
+
+<project name="umf_bundler" default="build" basedir=".">
+    
+    <!-- Path properties. -->
+    <property name="build_base" location="build"/>
+    <property name="build_deploy" location="${build_base}/deploy"/>
+    <property name="build_deploy_plugins" location="${build_base}/deploy/plugins"/>
+    
+    <!-- Fully clean and then build entire bundle. -->
+    <target name="build" depends="clean, build_subprojects, gather" 
+        description="Builds the UMF platform project and all known UMF plugin projects.">
+    </target>
+
+    <!-- Fully clean the bundling area and all projects. -->
+    <target name="clean" depends="clean_subprojects" description="Cleans the UMF platform project and all known UMF plugin projects.">
+        <delete dir="${build_base}" />
+    </target>
+    
+    <!-- Invoke the build scripts of the individual projects for building. -->
+    <target name="build_subprojects">
+        <ant antfile="../Replete/build.xml" target="build" inheritAll="false" useNativeBasedir="true"/>
+        <ant antfile="../JGraphCustom/build.xml" target="build" inheritAll="false" useNativeBasedir="true"/>
+        <ant antfile="../UMFPlatform/build.xml" target="build" inheritAll="false" useNativeBasedir="true"/>
+        <!--ant antfile="../UMFBIAPlugin/build.xml" target="build" inheritAll="false" useNativeBasedir="true"/-->
+        <ant antfile="../UMFN2APlugin/build.xml" target="build" inheritAll="false" useNativeBasedir="true"/>
+        <ant antfile="../UMFXycePlugin/build.xml" target="build" inheritAll="false" useNativeBasedir="true"/>
+        <!--ant antfile="../UMFTestPlugin/build.xml" target="build" inheritAll="false" useNativeBasedir="true"/-->
+        <ant antfile="../UMFBackendC/build.xml" target="build" inheritAll="false" useNativeBasedir="true"/>
+    </target>
+
+    <!-- Invoke the build scripts of the individual projects for cleaning. -->
+    <target name="clean_subprojects">
+        <ant antfile="../Replete/build.xml" target="clean" inheritAll="false" useNativeBasedir="true"/>
+        <ant antfile="../JGraphCustom/build.xml" target="clean" inheritAll="false" useNativeBasedir="true"/>
+        <ant antfile="../UMFPlatform/build.xml" target="clean" inheritAll="false" useNativeBasedir="true"/>
+        <!--ant antfile="../UMFBIAPlugin/build.xml" target="clean" inheritAll="false" useNativeBasedir="true"/-->
+        <ant antfile="../UMFN2APlugin/build.xml" target="clean" inheritAll="false" useNativeBasedir="true"/>
+        <ant antfile="../UMFXycePlugin/build.xml" target="clean" inheritAll="false" useNativeBasedir="true"/>
+        <!--ant antfile="../UMFTestPlugin/build.xml" target="clean" inheritAll="false" useNativeBasedir="true"/-->
+        <ant antfile="../UMFBackendC/build.xml" target="clean" inheritAll="false" useNativeBasedir="true"/>
+    </target>
+    
+    
+    <!-- Once individual builds have been performed, gather the generated
+         deployment files into one area. -->
+    <target name="gather">
+        
+        <!-- Copy the platform's deployment files to the bundling area. -->  
+        <mkdir dir="${build_deploy}"/>
+        <copy todir="${build_deploy}">
+            <fileset dir="../UMFPlatform/build/deploy" includes="**" />
+        </copy>
+        
+        <!-- Copy each plug-in's deployment files to the bundling area. -->
+        <mkdir dir="${build_deploy_plugins}"/>
+        <!--copy todir="${build_deploy_plugins}">
+            <fileset dir="../UMFBIAPlugin/build/deploy" includes="**" />
+        </copy-->
+        <copy todir="${build_deploy_plugins}">
+            <fileset dir="../UMFN2APlugin/build/deploy" includes="**" />
+        </copy>
+        <copy todir="${build_deploy_plugins}">
+            <fileset dir="../UMFXycePlugin/build/deploy" includes="**" />
+        </copy>
+        <!--copy todir="${build_deploy_plugins}">
+            <fileset dir="../UMFTestPlugin/build/deploy" includes="**" />
+        </copy-->
+        <copy todir="${build_deploy_plugins}">
+            <fileset dir="../UMFBackendC/build/deploy" includes="**" />
+        </copy>
+    </target>
+</project>

@@ -1,0 +1,45 @@
+
+1.  Names overlap on summary graph.
+2.  Get some good examples, not dummy data
+3.  For inclusions and connects, make sure they can't add the same exact compartment.  Also, couldn't add a compartment with the same "association name" - whatever that might be given situation.
+4.  Clicking cancel on NEW record fails.
+5.  Impl cancel & delete for new record.
+5.5.Impl delete & duplicate for existing records.
+6.  Gray out duplicate for new records, enable when saved.
+7.  Validation on # of compartment records that a connection can connect?
+8.  "Includes" vs. "Inclusions"...
+9.  Add more help
+10. Why do help notes go so low for the non-standard L&F's?
+11. "Change L&F?" title of one of the dialogs.
+12. Double-clicking in white space on a table (inclusions, connects, tags), invokes add?
+13. Make sure delete key handled consistently in all tables.
+14. Model part tree/table?
+15. Persist tags for both PARTS AND MODELS.
+16. More general meta data: created by, updated by, created date, updated date.
+17. Can't add non-equations to the equations table (that was allowed for output variables I think)
+18. More search criteria
+19. Think about some protection mechanism making sure you can't save a record that has already been saved since you read the record.
+20. Some kind of statistics page showing counts of various things in the database and/or usage volume (more political / marketing, but cool)
+21. Switch persistence to non-SQL DB?  Something simpler! ORM???
+22. Need strikethrough/red on summary trees to indicate overridden
+23. Need to add included part's equations to the equations given to Christy's code
+24. Need to add back in the netlist generation some how...... something to do with the models!?! (maybe need a temp feature though before that gets worked out...)
+25. Work out ALL PERSISTENCE BUGS ON PART & MODEL EDIT PANELS
+ * Make sure equation records don't keep getting new UID's -- they will have EquationReference records relying on those.
+ * Make sure you know how cancel works!! seems like magic.... check previous app.
+26. Add a "copied/duplicated from" flag and display it?
+27. Change history?
+28. Errors get emailed to me???? haha  worth a try...
+29. Don't really need memory showing... ever.  What to replace it with....
+30. Don't really need the split pane on search... maybe when using in dialog?  maybe scroll bars then? idk..
+31. Finish text summary... needs to include included equations (properly prefixed).
+32. ABSTRACT equations!!!
+33. Summary needs to have an area where warnings, inconsistencies, errors with the part are shown.
+34. how to make the table after a double-click immediately start editing on a cell?
+35. how to make an editable cell in a JTable replace it's value when you start typing? instead of appending to existing content.
+
+---
+generic table issue... even if a node has collapsible false... adding a child 
+node to the parent, even via the table model insert method, doesn't cause the 
+expansion!... saw this with the root issue earlier and it is happening on 
+summary/tree/eqn nodes 

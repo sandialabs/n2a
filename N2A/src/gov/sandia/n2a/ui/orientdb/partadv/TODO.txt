@@ -1,0 +1,9 @@
+modified mxGraphOutline.java still sometimes leaves wrong cursor after a zoom change operation.
+not sure if the problem exists in original code, or if only there after added hand/grab cursors.
+sometimes should end up being open hand cuz still over zoom handle but it's a normal cursor, 
+and sometimes it's a move cross instead of a normal cursor if cursor winds up under finder.
+exists in original code.
+
+mxGraphOutline can be put to 0x0 size causing non-exception error.  Exists in original code.
+
+to enable native drag and drop... graphComponent.setDragEnabled(true) && make all cell values' serializable (seem to just go to a byte stream as far as I can tell, with MIME-type descriptions)

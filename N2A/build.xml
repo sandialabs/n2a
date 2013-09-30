@@ -1,0 +1,237 @@
+
+<!--
+
+    UMF N2A Plug-in Ant Build Script
+    ================================
+    
+    The public targets are:
+
+        build - Builds JAR after performing a clean
+        clean - Removes previous build directory
+
+    The final output is:
+
+        build/deploy/gov.sandia.umf.plugins.n2a_VERSION.jar
+
+    Intermediate build files are stored in:
+
+        build/temp/
+
+    You can choose to include/exclude the source code in/from
+    the JAR by changing the value of the "include.source" condition
+    variable.  You can choose to remove the temporary build files
+    by changing the "clean.temp" condition variable.
+
+-->
+
+<project name="umf_n2a_plugin" default="build" basedir=".">
+
+
+    <!--===================================================
+                      Environment Setup
+    ====================================================-->
+    
+    <!-- Project version: major.minor.service.build -->
+    <property name="app_version_major" value="0" />
+    <property name="app_version_minor" value="9" />
+    <property name="app_version_service" value="0" />
+    <tstamp>
+        <format property="app_version_build" pattern="'b'yyyyMMdd-HHmm"/>
+    </tstamp>
+    <property name="app_version" 
+        value="${app_version_major}.${app_version_minor}.${app_version_service}.${app_version_build}" />
+    
+    <!-- Miscellaneous -->
+    <property name="app_name_lower" value="gov.sandia.n2a" />
+
+    <!-- Input files -->
+    <property name="src_path" location="src" />
+    <property name="lib_path" location="lib" />
+    <property name="reso_path" location="resources" />
+
+    <!-- Output files -->
+    <property name="build_base" location="build"/>
+    <property name="build_deploy" location="${build_base}/deploy/${app_name_lower}_${app_version}"/>
+    <!--property name="build_deploy_res" location="${build_deploy}/resources" /-->
+    <property name="build_temp" location="${build_base}/temp" />
+
+        <!-- From workspace -->
+        <property name="build_temp_src" location="${build_temp}/src"/>
+        <property name="build_temp_bin" location="${build_temp}/bin"/>
+
+    <!-- Path to version constants file -->
+    <fileset dir="${src_path}" id="version.constants" includes="**/VersionConstants.java" />
+
+    <!-- Compile classpath -->
+    <path id="compile.classpath">
+        <fileset dir="${lib_path}">
+            <include name="**/*.jar" />
+        </fileset>
+        <fileset dir="../UMFPlatform/build/deploy">
+            <include name="**/*.jar" />
+        </fileset>
+        <fileset dir="../Replete/build/deploy">
+            <include name="**/*.jar" />
+        </fileset>
+        <fileset dir="../JGraphCustom/build/deploy">
+            <include name="**/*.jar" />
+        </fileset>
+    </path>
+
+    <condition property="include.source">
+        <istrue value="true" />
+    </condition>
+    <condition property="build.source.zip">
+        <istrue value="true" />
+    </condition>
+    <condition property="clean.temp">
+        <istrue value="true" />
+    </condition>
+    
+    <property name="target_jvm_version" value="1.6" />
+
+
+    <!--===================================================
+                      External Targets
+    ====================================================-->
+
+    <!-- Rebuild without removing existing files first. -->
+    <target name="build" depends="clean, make_app_products, clean_temp"
+        description="Builds the UMF N2A plug-in project.">
+    </target>
+
+    <!-- Complete removal of all build files. -->
+    <target name="clean" description="Removes the build directory completely.">
+        <delete dir="${build_base}" />
+    </target>
+
+
+    <!--===================================================
+                       Internal Targets
+    ====================================================-->
+
+    <!-- Create the JAR file that holds all the compiled
+         class files and supplemental files that comprise
+         the application and create a zip file containing
+         just the source code. -->
+    <target name="make_app_products" depends="copy_external_libraries, make_app_jar, make_app_zip" />
+        
+    <target name="copy_external_libraries">
+        <copy todir="${build_deploy}/${app_name_lower}_lib">
+            <fileset dir="${lib_path}"/>
+        </copy>
+        <copy todir="${build_deploy}/${app_name_lower}_lib">
+            <fileset dir="../JGraphCustom/build/deploy">
+                <include name="**/*.jar" />
+            </fileset>
+        </copy>
+    </target>
+
+    <!-- Place a JAR file with all the compiled code,
+         supplemental resources and possibly source
+         code into the deploy directory. -->
+    <target name="make_app_jar" depends="copy_bin_with_recompile, compute_manifest_classpath">
+        <mkdir dir="${build_deploy}"/>
+        <jar destfile="${build_deploy}/${app_name_lower}_${app_version}.jar" basedir="${build_temp_bin}">
+            <manifest>
+                <attribute name="Class-Path" value=". ${manifest.classpath}"/>
+            </manifest>
+        </jar>            
+    </target>
+
+    <!-- Copy the compiled class files along with any other
+         non-code files required for the application to the
+         binary destination directory.  We recompile from
+         the source instead of using Eclipse's compiled
+         class files as a safety precaution. If we were to
+         use the compiled class files that Eclipse produces,
+         then we would not need to copy the supplemental
+         files since that is done automatically by Eclipse.
+         Does not remove previous binary destination directory
+         beforehand. -->
+    <target name="copy_bin_with_recompile" depends="copy_src, copy_src_to_bin">
+
+        <!-- Compile -->
+        <mkdir dir="${build_temp_bin}"/>
+        <javac classpathref="compile.classpath" debug="true" deprecation="true" destdir="${build_temp_bin}" 
+                fork="true" memoryMaximumSize="80m" target="${target_jvm_version}" source="${target_jvm_version}">
+            <src path="${build_temp_src}" />
+            <include name="**/*.java" />
+        </javac>
+
+        <!-- Copy supplemental files -->
+        <copy todir="${build_temp_bin}">
+            <fileset dir="${src_path}" excludes="**/*.java"/>   <!-- .svn dirs excluded by default -->  
+        </copy>
+        
+    </target>
+
+    <!-- Copy source files to source destination directory,
+         exclude non-code files.  Does not remove previous
+         source destination directory beforehand. -->
+    <target name="copy_src">
+        <replaceregexp byline="true">
+            <regexp pattern="MAJOR = .*;"/>
+            <substitution expression="MAJOR = &quot;${app_version_major}&quot;;" />
+            <fileset refid="version.constants" />
+        </replaceregexp>
+        <replaceregexp byline="true">
+            <regexp pattern="MINOR = .*;"/>
+            <substitution expression="MINOR = &quot;${app_version_minor}&quot;;" />
+            <fileset refid="version.constants" />
+        </replaceregexp>
+        <replaceregexp byline="true">
+            <regexp pattern="SERVICE = .*;"/>
+            <substitution expression="SERVICE = &quot;${app_version_service}&quot;;" />
+            <fileset refid="version.constants" />
+        </replaceregexp>
+        <replaceregexp byline="true">
+            <regexp pattern="BUILD = .*;"/>
+            <substitution expression="BUILD = &quot;${app_version_build}&quot;;" />
+            <fileset refid="version.constants" />
+        </replaceregexp>
+        <copy todir="${build_temp_src}">
+            <fileset dir="${src_path}">
+                <include name="**/*.java" />
+            </fileset>
+        </copy>
+    </target>
+
+    <!-- Copy source files to where the class files will
+         be located if the flag to include source is
+         set to true. -->
+    <target name="copy_src_to_bin" if="include.source">
+        <copy todir="${build_temp_bin}">
+            <fileset dir="${src_path}">
+                <include name="**/*.java" />
+            </fileset>
+        </copy>
+    </target>
+
+    <target name="compute_manifest_classpath">
+        <path id="final.dependent.lib.jars">
+            <fileset dir="${build_deploy}/${app_name_lower}_lib"/>
+        </path>
+      <concat destfile="mf-temp.txt">${toString:final.dependent.lib.jars}<filterchain>
+          <replaceregex pattern="^.*?[\\/][^\\/]+_lib[\\/]" replace="${app_name_lower}_lib/" flags="g"/>
+          <replaceregex pattern=";.*?[\\/][^\\/]+_lib[\\/]" replace=" ${app_name_lower}_lib/" flags="g"/>
+          <replacestring from="\" to="/"/>
+      </filterchain></concat>
+      <loadfile property="manifest.classpath" srcFile="mf-temp.txt" />
+      <delete file="mf-temp.txt"/>
+    </target>
+
+    <!-- Place a ZIP file with all the source in the
+         deploy directory if the flag to include source
+         is set to true. -->
+    <target name="make_app_zip" depends="copy_src" if="build.source.zip">
+        <mkdir dir="${build_deploy}"/>
+        <zip destfile="${build_deploy}/${app_name_lower}_src_${app_version}.zip" basedir="${build_temp_src}" update="true" />
+    </target>
+
+    <!-- Removal of all temporary build files. -->
+    <target name="clean_temp" if="clean.temp">
+        <delete dir="${build_temp}" />
+    </target>
+    
+</project>

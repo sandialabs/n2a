@@ -1,0 +1,30 @@
+{
+   "part-name": {
+       topic: "Name", 
+       content: "The name of this part is a friendly identifier useful for searching and identification.  The name does not have to be unique across the system."
+   },
+   "part-parent": {
+       topic: "Parent", 
+       content: "tes2t"
+   },
+   "part-owner": {
+       topic: "Owner", 
+       content: "This identifies who created the record and who determines who else has permissions to change the record."
+   },
+   "part-db-uid": {
+       topic: "DB UID", 
+       content: "This is the globally-unique numeric identifier for this record.  Useful for debugging and identification."
+   },
+   "part-connect": {
+       topic: "Connected Compartments",
+       content: "A valid connection specifies two or more compartments that it connects together.  Connections with 0 or 1 compartments are incomplete and unusable."
+   },
+   "wp-mywork": {
+       topic: "My Work",
+       content: "This is a customizable list of records of any type that you want to save between sessions.  Add records to this list by pressing the 'In My Work?' button at the top of any record."
+   },
+   "wp-recent": {
+       topic: "Recently Viewed",
+       content: "This list automatically keeps track of records you have opened recently."
+   }
+}

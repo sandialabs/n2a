@@ -1,0 +1,225 @@
+
+Unsorted Items From Friday Before Trip:
+* "Add New *" In search box (i.e. reference, part).                                                                                                                 
+* Summary Model Layer Vis Height Reduce
+* Function params exposed in UI
+  - In eqn add/edit dlg
+  - In "Help" type library function
+  - Add eqn dlg box shows variables avaailable   
+* Better Bridge Add Dialog Box
+  - Shows chosen layers, can choose which layers connect into which cxn slots
+*# Model topo needs open comp/cxn context menus
+*# Clean up run dialog
+*# Remove developer test record?
+* References have owners?  Owned by $N2ASystem prolly?
+
+Save:
+* Need better validation consistency.  Saving a blank record produces three diff experiences: Save Button, Ctrl+S, and Ctrl+Shift+S.
+
+Misc:
+* Get some good examples, not dummy data
+* More general meta data: created by, updated by, created date, updated date. (owner separate? write list?)
+*# Units support
+* A people search section? And public profiles?
+* Uses: Models that contain -- should be easy now.
+*# "Dev Test Record" concept should be removed some day. -- really need dev, qual, & prod schemas.
+
+Search:
+* More search criteria
+* !Tags criteria (& need to search the parent hierarchy's tags)
+* Maybe search dialog's results should save on a cancel too??
+*# Maybe a results panel that doesn't use a grid, but rather a list that can have an 
+  arbitrary panel for the items (so can show icon, and custom text, instead of relying 
+  on specific column headings to make sense for all records)
+*# Faceted results (like newegg)
+*# Google-type search & advanced search
+
+Tabs:
+* Update summary progress message overrides closing message for close all (no big deal, but maybe should be using ProgressManager class instead of accessing SB directly)
+* Would be nice if we got a progress bar on window closing for close all on exit (many dirty records)
+* Would be nice if when you close all, only those with validation errors remained open
+
+Graph:
+*- Names overlap on summary graph.
+*- Click on circle opens record
+*- Parent: underneath circles?  List in corner?
+*- Shapes show type (square for connection?)
+
+Equations:
+*# Can't add non-equations to the equations table (that was allowed for output variables I think)
+* Have to be able to show/edit notes associated with each equation reference in equation tree panel.
+* Easily be able to copy a set of equations to text (to email, put in text file), and import from text.
+* Table mode for editing.  Want to be able to "hit enter" between equations.
+* @ notation should be a part of equation and only relates to context.
+* Metadata on equations for all other previously-@ related information
+
+Model:
+* Think about inputs/outputs more
+*# Run panel needs execution environment
+
+Run:
+* Need to have a "snapshot" of the model and Xyce netlist stored with the run.
+
+Random Ideas:
+* Add a "copied/duplicated from" flag and display it?
+* Change history? (placeholder in UI)
+* References (part/model/eqn level) (placeholder in UI)
+* Tools,Options
+* Potential: Preferences on summary tree org
+
+Permissions:
+* Owner
+* Managers (can change permissions list)
+* Editors
+* Viewers
+
+Persistence:
+* Think about some protection mechanism making sure you can't save a record that has already been saved since you read the record.
+*# Switch persistence to non-SQL DB?
+*- Should be able to switch to a local file using XStream.  How about an H2 implementation?  Now we have an embeddable database. 
+
+Matrix Syntax
+* [1 2 3; 1 2 3]
+
+Core:
+* Need some sort of notifier/lister on other records being changed related to parent/include/connect.
+* Need listeners for deleting causes tab panel to remove a tab.  It should subscribe to the model right??
+* Persist tags for parts, models, and references.
+* Could remove item from search results if it's in the search results (the deleted record)!
+
+Summary:
+* Need help for each summary section.????
+
+Help:
+* Add more help
+* Create main help
+
+Workpane
+* Prolly need to implement the -N for new beans -- there's really no downside, but will enable certain UI operations greatly (right now it's hard to write
+extra code to handle the case where a bunch of beans' IDs are all null.
+* selecting a NEW record from my work or recently viewed pane causes errors. -- make sure these are not written out.  also, should be using -UIDs to fix this.
+* if delete my work doesn't update associated panel icon yet.
+* deleting removes selection
+* opening a record shouldn't remove selection in list boxes.
+* should write this information to the DB instead of the .n2a file?  YES -- contained within profile, which is available anywhere they are.
+
+Profile
+* Need to have records in a read-only state for records you don't have access too.  Same to be said for parts, models (permissions)
+* Need to add a few more characters, need to have a 'owns' page for models, parts, etc.  
+* Publications
+* About me
+* Interests
+* Tags
+* Message me
+
+Reference
+* Be able to enter a DOI (direct object identifier) as a reference, which would automatically enter in the author, title, etc.
+
+Tags
+* When you delete a tag, only the middle table record is deleted, leaving the TermValue record.
+* Conundrum: TermValue needs to "Own" its term so that the term is saved if it doesn't exist.
+  However, TermValue should not attempt to delete the term when it is deleted.  Deebee only
+  has support for one kind of "Owns" (not a "DeleteOwns" & "SaveOwns").
+* Ability to search on tags
+* When you add a new term twice before saving, it has no chance to use the same record, and
+  two are created.  Normally it will find the existing term and use that one (and its case).
+* Need a screen to view/edit the descriptions of the terminologies and terms.  Right now
+  all term descriptions are blank.
+* Not sure why when the terminologies are added for the first time (getAndCreate), '' appears
+  in the description.
+  
+Discussion
+* Each record should have a discussion page.
+* Posts are "saved" immediately to the record.  Don't have to save the record.
+* Would be nice if the user didn't have to "referesh" like on a standard forum, if new records were just auto-populated.
+
+Welcome Page
+* News, Stats, Who's Online?
+* Some kind of statistics page showing counts of various things in the database and/or usage volume (more political / marketing, but cool)
+  
+Bugs: 
+* Changing Show UID's doesn't affect Compartment/Uses immediately.
+
+Functions:
+* User-defined, sharable functions, This can be done in way of plugins... but how
+in way of textual definitions that can be pushed/pulled?
+
+Need to refactor the code to not have lists of instanceof!!!!!!!!!!!!!
+
+---
+
+Generic tree issue:
+    even if a node has collapsible false... adding a child node to the parent,
+    even via the table model insert method, doesn't cause the expansion!... saw
+    this with the root issue earlier and it is happening on summary/tree/eqn nodes 
+Generic table issue:
+    how to have a nice API that uses the N2A scheme of {min, pref, max} for column widths
+    how to make an editable cell in a JTable replace it's
+    value when you start typing? instead of appending to existing content.
+    have ability to add a clickedinempty listener that you can just subscribe to
+
+Errors: 
+ * Let's say someone opens and changes record on client A, and someone deletes that record on client B.  Then client A tries to save - error.
+ * Same problem with canceling that same record.  revertBean fails since there no longer is a record to which to revert.
+ * For some reason equations don't show up on Izy connections.  do show up after eqn is added... UI refresh issue?
+ * Workpane lists not showing up on laptop.
+ 
+Deebee TODO: add count() & count(query) for each bean class 
+    
+Summary Text Help:    
+The following output represents the final equation set for
+this COMP/CONN.  Local equations are layered with inherited
+equations, overriding where necessary, and component compartments'
+equations are included as well with their proper namespace prefix
+prepended (THIS SHOULD MAYBE ALL JUST BE IN SOME HELP WIN SOMEWHERE).
+Explain the format -- why are there multiple entries possible for each symbol?
+also, note they're in alphabetical order    
+    
+The way it is implemented now, can easily create parent/include loops by just having two records open, setting the 
+appropriate fields to one another and then saving both, since the validation only happens on the 
+select dialog.
+
+case senstivitiy clashing warnings
+summary... double click goes to equation tab.
+add includes from summary tree?
+different hierarchy set up - not parent, grandparent in linear order, but rather a part centric view - has 1 parent, includes have 1 parent too.
+
+TODO: Some of the record operations do weird things if the record behind the record panel UI has been deleted (could have better error messages and/or behavior).
+TODO: Fix astvarnode 
+
+
+Search searches all entities
+# faceted results
+# standard fields for all ents
+# open opeation delgates to plugin/extension
+error on plugin not installed
+# run records are system records
+record input/output files and run status
+unnec to have run tab on model UI's
+
+Run =>
+"C:\usrs\dtrumbo\.umf\runs\08FA-012F2-BC01\"
+simulator-> writes input file here output files
+
+what is a run runstate object
+wr.t. to plugin
+
+OrientDB: 
+  learn about indexes
+  learn how to do POJO's with object DB.  
+  investigate what happens when you delete a referenced doc
+  learn about more threading issues
+  
+  
+UQ / SA Comments:
+2.  Fixed params instead of default values?
+3.  Random seed support
+4.  Run & Est Dur look like part of parameter information
+5.  Replicate / repeat all x times option?
+6.  Regenerate button to produce new values for randomly-generated variables.
+
+Note the things it can't do at this point (not things I don't think might have value, just things it doesn't do): 
+1.  Iteration over simulators / environments, you have to manually create multiple run ensembles.
+2.  Arbitrary include/exclude hierarchy parameter spaces (don't visit & visit spaces)
+3.  Non-uniform random variable distributions (planning on adding others later as needed)
+4.  Can't have different output parameters per run in a run ensemble.
