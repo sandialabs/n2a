@@ -70,9 +70,6 @@ import replete.util.User;
 import replete.xstream.SerializationResult;
 import replete.xstream.XStreamWrapper;
 
-// TODO: Right now doesn't seem like delete is working for many
-// to many relationships (Model's Output Equations?)
-
 public class UMF {
 
     public static File getAppResourceDir() {
@@ -180,7 +177,7 @@ public class UMF {
                 return new File((String) o);
             }
         });
-        pluginDirs = ArrayUtil.cat(pluginDirs, UMFPluginManager.getPluginsDir());
+        pluginDirs = ArrayUtil.cat(pluginDirs, new File (getAppResourceDir (), "plugins"));
 
         if(!PluginManager.initialize(new PlatformPlugin(), pluginMem, pluginDirs)) {
             System.err.println(PluginManager.getInitializationErrors());

@@ -80,15 +80,15 @@ public class UMFPluginManager {
         return found;
     }
 
-    public static File getPluginsDir() {
-        File code = CodeUtil.getCodeSourcePath().getParentFile();
-        File pluginsDir = new File(code, "plugins");
-        return pluginsDir;
+    public static File getPluginsDir ()
+    {
+        return new File (UMF.getAppResourceDir (), "plugins");
     }
 
-    public static File getStorageDir(Class<?> pClass) {
-        File pluginsStorage = new File(UMF.getAppResourceDir(), "plugins");
-        File pluginStorage = new File(pluginsStorage, pClass.getName());
+    public static File getStorageDir (Class<?> pClass)
+    {
+        File pluginsDir = getPluginsDir ();
+        File pluginStorage = new File (pluginsDir, pClass.getName());
         pluginStorage.mkdirs();
         return pluginStorage;
     }
