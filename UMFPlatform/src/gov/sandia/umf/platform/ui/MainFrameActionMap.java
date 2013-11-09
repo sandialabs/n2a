@@ -201,6 +201,21 @@ public class MainFrameActionMap extends UIActionMap {
         action.addDescriptor(new MenuBarActionDescriptor());
         addAction(action);
 
+        listener = new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                uiController.backup ();
+            }
+        };
+        action = new UIAction ("backup");
+        action.addDescriptor (new MenuBarActionDescriptor ("fileMenu", "Backup...", 0, i ("saveall.gif"), allEnabledStateMap, listener));
+        addAction (action);
+
+        action = new UIAction(sepId());
+        action.addDescriptor(new MenuBarActionDescriptor());
+        addAction(action);
+
         ActionListener exitListener = new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 uiController.closeMainFrame();
@@ -290,57 +305,6 @@ public class MainFrameActionMap extends UIActionMap {
             i("prnplot.gif"), allEnabledStateMap, false, 0, false, prnGraphListener));
         action.addDescriptor(new ToolBarActionDescriptor("toolsMenu", "Open PRN Plotter", i("prnplot.gif"),
             allEnabledStateMap, false, prnGraphListener));
-        addAction(action);
-
-        /*
-        ActionListener parsingListener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-//                parent.openChildWindow("parsing1", null);
-            }
-        };
-        action = new UIAction("testParsing");
-        action.addDescriptor(new MenuBarActionDescriptor("toolsMenu", "Test Equation Parsing...", 'T',
-            i("function.gif"), allEnabledStateMap, false, 'T', true, parsingListener));
-        action.addDescriptor(new ToolBarActionDescriptor("toolsMenu", "Test Equation Parsing...", i("function.gif"),
-            allEnabledStateMap, false, parsingListener));
-        addAction(action);
-
-        parsingListener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-//                parent.openChildWindow("parsing2", null);
-            }
-        };
-        action = new UIAction("testParsing2");
-        action.addDescriptor(new MenuBarActionDescriptor("toolsMenu", "Test Equation/Resolution/Translation Parsing...", 'P',
-            i("greenlight.gif"), allEnabledStateMap, false, 'T', true, parsingListener));
-        action.addDescriptor(new ToolBarActionDescriptor("toolsMenu", "Test Equation Parsing...", i("greenlight.gif"),
-            allEnabledStateMap, false, parsingListener));
-        addAction(action);
-
-        ActionListener graphListener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-//                parent.visualizeWithGraph();
-            }
-        };
-        action = new UIAction("vizWithGraph");
-        action.addDescriptor(new MenuBarActionDescriptor("toolsMenu", "Visualize Model", 'V',
-            i("graph.gif"), allEnabledStateMap, false, 0, true, graphListener));
-        action.addDescriptor(new ToolBarActionDescriptor("toolsMenu", "Visualize Model", i("graph.gif"),
-            allEnabledStateMap, false, graphListener));
-        addAction(action);
-         */
-
-        ActionListener izyListener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.notImpl();
-//                uiController.openChildWindow("izy", null);
-            }
-        };
-        action = new UIAction("IzyModel");
-        action.addDescriptor(new MenuBarActionDescriptor("toolsMenu", "Izhikevich Engine", 'I',
-            i("izy.gif"), allEnabledStateMap, false, 0, true, izyListener));
-        action.addDescriptor(new ToolBarActionDescriptor("toolsMenu", "Izhikevich Engine", i("izy.gif"),
-            allEnabledStateMap, false, izyListener));
         addAction(action);
 
         action = new UIAction(sepId());
