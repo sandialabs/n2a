@@ -123,12 +123,6 @@ public abstract class RecordEditPanel extends JPanel {
                 doDelete();
             }
         });
-        if(ReflectionUtil.hasMethod("getOwner", record)) {
-            String owner = (String) ReflectionUtil.invoke("getOwner", record);
-            if(!User.getName().equals("dtrumbo") && !User.getName().equals(owner)) {
-                btnDelete.setEnabled(false);
-            }
-        }
 
         JButton btnDuplicate = new IconButton(ImageUtil.getImage("dup.gif"), "Duplicate " + record.getClassName(), 2);
         btnDuplicate.addActionListener(new ActionListener() {
