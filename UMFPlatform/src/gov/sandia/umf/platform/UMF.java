@@ -21,9 +21,12 @@ import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.wp.WorkpaneModel;
 import gov.sandia.umf.platform.ui.wp.WorkpaneRecord;
 
+import java.io.BufferedInputStream;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.Thread.UncaughtExceptionHandler;
 import java.lang.management.ManagementFactory;
 import java.lang.management.OperatingSystemMXBean;
@@ -36,6 +39,7 @@ import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.TreeMap;
+import java.util.zip.GZIPInputStream;
 
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
@@ -45,6 +49,10 @@ import javax.swing.event.ChangeListener;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 import org.json.JSONObject;
+
+import com.orientechnologies.orient.core.command.OCommandOutputListener;
+import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
+import com.orientechnologies.orient.core.db.tool.ODatabaseImport;
 
 import replete.cli.CommandLineParser;
 import replete.cli.errors.CommandLineParseException;
@@ -70,10 +78,15 @@ import replete.util.User;
 import replete.xstream.SerializationResult;
 import replete.xstream.XStreamWrapper;
 
-public class UMF {
-
-    public static File getAppResourceDir() {
-        return new File(User.getHome(), ".umf");
+public class UMF
+{
+    public static File getAppResourceDir ()
+    {
+        return new File (User.getHome (), "n2a");
+    }
+    public static File getAppLogDir ()
+    {
+        return new File (getAppResourceDir (), "log");
     }
 
 
@@ -159,15 +172,47 @@ public class UMF {
 
         AppState.load();
 
-        ConnectionModel mdl2 = AppState.getState().getConnectModel();
-        if(mdl2.getList().size() == 0) {
-            File repos = new File(getAppResourceDir(), "repos");
-            File dflt = new File(repos, "default-local");
-            OrientConnectDetails details = new OrientConnectDetails(
-                "Default Local",
-                "local:" + dflt.getAbsolutePath(), "admin", "admin");
-            mdl2.getList().add(details);
-            mdl2.setSelected(details);
+        ConnectionModel mdl2 = AppState.getState ().getConnectModel ();
+        if (mdl2.getList ().size () == 0)
+        {
+            // Create a new DB in the standard location
+            File repos = new File (getAppResourceDir (), "repos");
+            File dflt  = new File (repos, "local");
+            OrientConnectDetails details = new OrientConnectDetails
+            (
+                "Local",
+                "local:" + dflt.getAbsolutePath (),
+                "admin",
+                "admin"
+            );
+            mdl2.getList ().add (details);
+            mdl2.setSelected (details);
+
+            // Populate the new DB with a default set of parts
+            ODatabaseDocumentTx db = new ODatabaseDocumentTx (details.location);
+            if (! db.exists ())
+            {
+                db.create ();
+
+                OCommandOutputListener listener = new OCommandOutputListener ()
+                {
+                    public void onMessage (String arg0)
+                    {
+                        System.out.println (arg0);
+                    }
+                };
+
+                try
+                {
+                    InputStream stream = UMF.class.getResource ("initialDB").openStream ();
+                    ODatabaseImport importer = new ODatabaseImport (db, stream, listener);
+                    importer.importDatabase ();
+                }
+                catch (IOException error)
+                {
+                    System.out.println (error.toString ());
+                }
+            }
         }
 
         String[] pluginMem = ArrayUtil.translate(String.class, pluginValuesCL);
@@ -177,7 +222,7 @@ public class UMF {
                 return new File((String) o);
             }
         });
-        pluginDirs = ArrayUtil.cat(pluginDirs, new File (getAppResourceDir (), "plugins"));
+        pluginDirs = ArrayUtil.cat (pluginDirs, UMFPluginManager.getPluginsDir ());
 
         if(!PluginManager.initialize(new PlatformPlugin(), pluginMem, pluginDirs)) {
             System.err.println(PluginManager.getInitializationErrors());
@@ -198,7 +243,7 @@ public class UMF {
         String lafTheme = AppState.getState().getTheme();
         LafManager.initialize(lafClassName, lafTheme);
 
-        LogManager.setLogFile(new File(User.getHome(), "n2a.log"));
+        LogManager.setLogFile (new File (getAppLogDir (), "n2a.log"));
 
         // Read popup help.
         popupHelp = readPopupHelp();
@@ -524,7 +569,7 @@ public class UMF {
 
          BufferedWriter writer = null;
 
-         File debugFile = new File(User.getHome(), "umf-debug.txt");
+         File debugFile = new File (getAppLogDir (), "umf-debug.txt");
          boolean exists = debugFile.exists();
          try {
 
