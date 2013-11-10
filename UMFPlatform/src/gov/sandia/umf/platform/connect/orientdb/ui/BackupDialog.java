@@ -27,7 +27,6 @@ import com.orientechnologies.orient.core.command.OCommandOutputListener;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.db.tool.ODatabaseExport;
 import com.orientechnologies.orient.core.db.tool.ODatabaseImport;
-
 import replete.gui.windows.EscapeDialog;
 import replete.util.Lay;
 
@@ -124,7 +123,7 @@ public class BackupDialog extends EscapeDialog
             "C", Lay.p (Lay.sp (list), "eb=5lr"),
             "S", Lay.BL
             (
-                "N", Lay.lb ("<html>WARNING: If you click Restore, your data will be erased and replaced by the selected backup. You will lose all work done after that point in time.</html>", "eb=5tlr,pref=[100,50]"),
+                "N", Lay.lb ("<html>WARNING: If you click Restore, your working repository will be erased and replaced by the selected backup. You will lose all work done after the time of the backup.</html>", "eb=5tlr,pref=[100,50]"),
                 "C", Lay.FL ("R", Backup, Restore, Delete, Cancel)
             )
         );
