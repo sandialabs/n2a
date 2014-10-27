@@ -46,7 +46,7 @@ public class XycePlotPrnFile extends EscapeFrame {
         JButton btnChoose = new JButton("Select PRN File...");
         btnChoose.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                File startDir = new File(System.getProperty("user.home"), ".n2a_jobs");
+                File startDir = new File (new File(System.getProperty("user.home"), "n2a"), "jobs");  // TODO: Should really route this through the ExecutionEnv class, rather than hardcoding.
                 final CommonFileChooser chooser = CommonFileChooser.getChooser("Select PRN File");
                 FilterBuilder builder = new FilterBuilder(chooser, true);
                 builder.append("Xyce PRN Files (*.prn)", false, "prn");

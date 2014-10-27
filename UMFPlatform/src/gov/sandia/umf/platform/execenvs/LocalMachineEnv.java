@@ -169,7 +169,7 @@ public abstract class LocalMachineEnv extends ExecutionEnv
         {
             try
             {
-                File n2a = new File (User.getHome (), ".n2a");
+                File n2a = new File (User.getHome (), "n2a");
                 return new File (n2a, "jobs").getAbsolutePath ();
             }
             catch (Exception e)
@@ -181,7 +181,7 @@ public abstract class LocalMachineEnv extends ExecutionEnv
         {
             try
             {
-                File n2a = new File (User.getHome (), ".n2a");
+                File n2a = new File (User.getHome (), "n2a");
                 return new File (n2a, "cruntime").getAbsolutePath ();
             }
             catch (Exception e)

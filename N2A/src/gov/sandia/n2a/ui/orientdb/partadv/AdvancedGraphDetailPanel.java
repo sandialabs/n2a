@@ -22,6 +22,7 @@ import java.awt.event.ComponentEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Stack;
@@ -318,8 +319,8 @@ public class AdvancedGraphDetailPanel extends JPanel {
 
     // Static, called once per VM
     private void addStencilReg() throws IOException {
-        String filename = AdvancedGraphDetailPanel.class.getResource ("shapes.xml").getPath();
-        Document doc = mxXmlUtils.parseXml(mxUtils.readFile(filename));
+        InputStream stream = AdvancedGraphDetailPanel.class.getResource ("shapes.xml").openStream();
+        Document doc = mxXmlUtils.parseXml(mxUtils.readInputStream(stream));
         Element shapes = doc.getDocumentElement();
         NodeList list = shapes.getElementsByTagName("shape");
         for(int i = 0; i < list.getLength(); i++) {
