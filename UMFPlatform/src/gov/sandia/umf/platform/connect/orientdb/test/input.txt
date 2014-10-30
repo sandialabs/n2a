@@ -1,5 +1,0 @@
-{
-    search: 'hello',
-    what: 'where',
-    why: 123
-    }

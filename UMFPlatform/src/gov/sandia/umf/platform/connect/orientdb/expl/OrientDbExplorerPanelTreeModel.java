@@ -143,7 +143,7 @@ public class OrientDbExplorerPanelTreeModel {
 
         if(!userClasses.isEmpty()) {
             TNode nUserClasses = nDb.add(new NodeClassGroup("User Classes"));
-            addGroupClasses(source.getDb(), userClasses, nUserClasses);
+            addGroupClasses(source.getDB(), userClasses, nUserClasses);
         }
 
         source.disconnect();
@@ -189,7 +189,7 @@ public class OrientDbExplorerPanelTreeModel {
         NodeClass uClass = nClass.getObject();
 
         try {
-            ORecordIteratorClass<ODocument> iterator = source.getDb().browseClass(uClass.getName());
+            ORecordIteratorClass<ODocument> iterator = source.getDB().browseClass(uClass.getName());
             for(Object doc : iterator) {
                 addDataToTree(nClass, doc, null);
             }
@@ -366,7 +366,7 @@ public class OrientDbExplorerPanelTreeModel {
         OrientDatasource source = new OrientDatasource(cxn);
 
         if(!query.equals(lastQuery)) {
-            searchResults= source.getDb().query(
+            searchResults= source.getDB().query(
                 new OSQLSynchQuery<ODocument>(query));
             if(searchResults.size() == 0) {
                 searchPos = -1;
@@ -400,7 +400,7 @@ public class OrientDbExplorerPanelTreeModel {
 
         OrientDatasource source = new OrientDatasource(cxn);
 
-        OCommandRequest cmd = source.getDb().command(new OCommandSQL(query));
+        OCommandRequest cmd = source.getDB().command(new OCommandSQL(query));
 
         Object ret = cmd.execute();
 
@@ -488,7 +488,7 @@ public class OrientDbExplorerPanelTreeModel {
 
         NodeRecord uRecord = nRecord.getObject();
         try {
-            source.getDb().delete(uRecord.getDocument());
+            source.getDB().delete(uRecord.getDocument());
             nRecord.removeFromParent();
             fireChangeNotifier();
         } catch(Exception e) {

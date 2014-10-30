@@ -29,61 +29,38 @@ import com.orientechnologies.orient.core.id.OClusterPositionLong;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 
-public class NDoc {
+public class NDoc
+{
+    public ODocument     source;
+    public RecordHandler handler;
 
-
-    ////////////
-    // FIELDS //
-    ////////////
-
-    private ODocument source;
-    private RecordHandler handler;
-
-
-    /////////////////
-    // CONSTRUCTOR //
-    /////////////////
-
-    public NDoc() {
-        initSource(null, null);
+    public NDoc ()
+    {
+    	source = new ODocument ();
+        init ();
     }
-    public NDoc(ODocument source) {
-        initSource(null, source);
+
+    public NDoc (ODocument source)
+    {
+    	this.source = source;
+        init ();
     }
-    public NDoc(String className) {
-        this(className, (String) null);
+
+    public NDoc (String className)
+    {
+        source = new ODocument (className);
+        init ();
     }
-    public NDoc(String className, String seed) {  // e.g. className = "gov.sandia.n2a$Part", seed = "{name='HH', type='COMPARTMENT'}"
-        initSource(className, null);
-        if(seed != null) {
-            source.fromJSON(seed);
+
+    private void init ()
+    {
+        if (source.getClassName () != null)
+        {
+            handler = UMFPluginManager.getHandler (source.getClassName ());
         }
-    }
-    public NDoc(String className, Map<String, Object> seedMap) {
-        initSource(className, null);
-        for(String s : seedMap.keySet()) {
-            source.field(s, seedMap.get(s));
-        }
-    }
-
-    private void initSource(String className, ODocument thisSrc) {
-        checkDbThread();
-        if(thisSrc != null) {
-            source = thisSrc;
-        } else {
-            if(className == null) {
-                source = new ODocument();
-            } else {
-                source = new ODocument(className);
-            }
-        }
-        if(source.getClassName() == null) {
-            handler = null;
-        } else {
-            handler = UMFPluginManager.getHandler(source.getClassName());
-        }
-        if(source.getIdentity().isNew()) {
-            source.setIdentity(-1, new OClusterPositionLong(getNewBeanId()));
+        if (source.getIdentity ().isNew ())
+        {
+            source.setIdentity (-1, new OClusterPositionLong (getNewBeanId ()));
             //System.out.println("NEW ID==>"+source.getIdentity()+","+source.toJSON());
         }
     }
@@ -93,27 +70,12 @@ public class NDoc {
     // ACCESSORS / MUTATORS //
     //////////////////////////
 
-    //// Primary ////
-
-    // Accessors
-
-    public ODocument getSource() {
-        return source;
-    }
-    public RecordHandler getHandler() {
+    public RecordHandler getHandler ()
+    {
         return handler;
     }
 
     // Mutators
-
-    public void setSource(ODocument doc) {
-        initSource(null, doc);   // So this same NDoc can be used for various
-    }
-    public void setHandler(RecordHandler hndlr) {
-        handler = hndlr;
-    }
-
-    //// Fields ////
 
     // There are 6 different methods for getting fields:
     // * These will return whatever value is in the record,
@@ -130,120 +92,142 @@ public class NDoc {
     //   - getAndSetValid(String, Object, Class)
 
     // Returns null if doesn't exist, value corresponding to key if does.
-    public <T> T get(String field) {
-        checkDbThread();
-        return (T) wrapGetValue(source.field(field));
+    public <T> T get (String field)
+    {
+        T result = (T) wrapGetValue (source.field (field));
+        OrientDatasource.releaseDB ();
+        return result;
     }
 
     // Returns null if doesn't exist, or value is not cast-able to given type,
     // value otherwise.
-    public <T> T getValid(String field, Class clazz) {
-        checkDbThread();
-        T ret = (T) wrapGetValue(source.field(field));
-        if(ret == null || clazz.isAssignableFrom(ret.getClass())) {
-            return ret;
-        }
+    public <T> T getValid (String field, Class clazz)
+    {
+        T result = (T) wrapGetValue (source.field (field));
+        if (result != null  &&  ! clazz.isAssignableFrom (result.getClass ())) result = null;
+        OrientDatasource.releaseDB ();
         return null;
     }
 
     // Returns default value if doesn't exist, value otherwise.
-    public <T> T get(String field, Object deflt) {
-        checkDbThread();
-        List<String> fieldList = Arrays.asList(source.fieldNames());
-        if(!fieldList.contains(field)) {
-            return (T) deflt;
-        }
-        return (T) wrapGetValue(source.field(field));
+    public <T> T get (String field, Object deflt)
+    {
+        T result;
+        List<String> fieldList = Arrays.asList (source.fieldNames ());
+        if (fieldList.contains (field)) result = (T) wrapGetValue (source.field (field));
+        else                            result = (T) deflt;
+        OrientDatasource.releaseDB ();
+        return result;
     }
 
     // Returns default value if doesn't exist or value is not cast-able
     // to given type.
-    public <T> T getValid(String field, Object deflt, Class clazz) {
-        checkDbThread();
-        List<String> fieldList = Arrays.asList(source.fieldNames());
-        if(!fieldList.contains(field)) {
-            return (T) deflt;
+    public <T> T getValid (String field, Object deflt, Class clazz)
+    {
+        T result;
+        List<String> fieldList = Arrays.asList (source.fieldNames ());
+        if (fieldList.contains (field))
+        {
+            result = (T) wrapGetValue (source.field (field));
+            if (result != null  &&  ! clazz.isAssignableFrom (result.getClass ())) result = null;
         }
-        T ret = (T) wrapGetValue(source.field(field));
-        if(ret == null || clazz.isAssignableFrom(ret.getClass())) {
-            return ret;
+        else
+        {
+            result = (T) deflt;
         }
-        return (T) deflt;
+        OrientDatasource.releaseDB ();
+        return result;
     }
 
     // Returns default value if doesn't exist, value otherwise.  Sets
     // the return value back into the record to make sure key does
     // then exist after the call.
-    public <T> T getAndSet(String field, Object deflt) {
-        checkDbThread();
-        List<String> fieldList = Arrays.asList(source.fieldNames());
-        T setToThis = null;
-        try {
-            if(!fieldList.contains(field)) {
-                return setToThis = (T) deflt;
-            }
-            return setToThis = (T) wrapGetValue(source.field(field));
-        } finally {
-            set(field, setToThis);
+    public <T> T getAndSet (String field, Object deflt)
+    {
+        T result;
+        List<String> fieldList = Arrays.asList (source.fieldNames ());
+        if (fieldList.contains (field))
+        {
+            result = (T) wrapGetValue (source.field (field));
         }
+        else
+        {
+            result = (T) deflt;
+            set (field, result);
+        }
+        OrientDatasource.releaseDB ();
+        return result;
     }
 
     // Return default value if doesn't exist or value is not cast-able to
     // given type, value otherwise.
-    public <T> T getAndSetValid(String field, Object deflt, Class clazz) {
-        checkDbThread();
-        List<String> fieldList = Arrays.asList(source.fieldNames());
-        T setToThis = null;
-        try {
-            if(!fieldList.contains(field)) {
-                return setToThis = (T) deflt;
-            }
-            T ret = (T) wrapGetValue(source.field(field));
-            if(ret == null || clazz.isAssignableFrom(ret.getClass())) {
-                return setToThis = ret;
-            }
-            return setToThis = (T) deflt;
-        } finally {
-            set(field, setToThis);
+    public <T> T getAndSetValid (String field, Object deflt, Class clazz)
+    {
+        List<String> fieldList = Arrays.asList (source.fieldNames ());
+        T result = null;
+        if (fieldList.contains (field))
+        {
+            result = (T) wrapGetValue (source.field (field));
+            if (result != null  &&  ! clazz.isAssignableFrom (result.getClass ())) result = null;
         }
+        if (result == null)
+        {
+            result = (T) deflt;
+            set (field, result);
+        }
+        OrientDatasource.releaseDB ();
+        return result;
     }
 
-    // TODO: recursively check for NDoc's
-    private <T> T wrapGetValue(Object ret) {
-        if(ret instanceof ODocument) {
-            return (T) new NDoc((ODocument) ret);
-        } else if(ret instanceof List) {
-            List docs = new ArrayList();
+    /**
+     * TODO: recursively check for NDoc's
+     * Note: No need to release DB, because only called internally by methods that do close DB.
+     */
+    private <T> T wrapGetValue (Object ret)
+    {
+        if (ret instanceof ODocument)
+        {
+            return (T) new NDoc ((ODocument) ret);
+        }
+        else if (ret instanceof List)
+        {
+            List docs = new ArrayList ();
             List retList = (List) ret;
-            for(Object retElem : retList) {
-                docs.add(wrapGetValue(retElem));
-            }
+            for (Object retElem : retList) docs.add (wrapGetValue (retElem));
             return (T) docs;
         }
         return (T) ret;
     }
 
-    public boolean has(String field) {
-        checkDbThread();
-        List<String> fieldList = Arrays.asList(source.fieldNames());
-        return fieldList.contains(field);
+    public boolean has (String field)
+    {
+        List<String> fieldList = Arrays.asList (source.fieldNames ());
+        boolean result = fieldList.contains (field);
+        OrientDatasource.releaseDB ();  // TODO: Not sure if call to source.fieldNames() actually produces a DB access, so this may be overkill.
+        return result;
     }
 
-    public void set(String field, Object o) {
-        checkDbThread();
-        o = unwrapSetValue(o);
-        source.field(field, o);
+    public void set (String field, Object o)
+    {
+        o = unwrapSetValue (o);
+        source.field (field, o);
+        OrientDatasource.releaseDB ();
     }
 
     // TODO: recursively check for NDoc's
     // TODO - do we need to worry about caching docs here?
-    private Object unwrapSetValue(Object o) {
-        if(o instanceof NDoc) {
+    private Object unwrapSetValue (Object o)
+    {
+        if (o instanceof NDoc)
+        {
             o = ((NDoc) o).source;
-        } else if(o instanceof List) {
-            List docs = new ArrayList();
-            for(Object obj : (List) o) {
-                docs.add(unwrapSetValue(obj));
+        }
+        else if (o instanceof List)
+        {
+            List docs = new ArrayList ();
+            for (Object obj : (List) o)
+            {
+                docs.add (unwrapSetValue (obj));
             }
             o = docs;
         }
@@ -319,127 +303,98 @@ public class NDoc {
     // BEAN //
     //////////
 
-    public void save() {
-        checkDbThread();
-        set("$modified", System.currentTimeMillis());
-        source.save();
+    public void save ()
+    {
+        set ("$modified", System.currentTimeMillis ());
+        source.save ();
+        OrientDatasource.releaseDB ();
     }
 
-    public void saveRecursive() {
-        checkDbThread();
-        saveRecursiveInternal(this);
+    public void saveRecursive ()
+    {
+        Set<Object> stack = new HashSet<Object> ();
+        saveRecursiveInternal (this, stack);
+        OrientDatasource.releaseDB ();
     }
 
-    // Recursively reload this document and child documents from the database.
-    private void saveRecursiveInternal(Object obj) {
-        Set<Object> stack = new HashSet<Object>();
-        saveRecursiveInternal(obj, stack);
-    }
-
-    private void saveRecursiveInternal(Object obj, Set<Object> stack) {
-
+    private void saveRecursiveInternal (Object obj, Set<Object> stack)
+    {
         // Recursion detection.
-        if(stack.contains(obj)) {
-            return;
-        }
-        stack.add(obj);
+        if (stack.contains (obj)) return;
+        stack.add (obj);
 
-        try {
-
+        try
+        {
             // Reload from database.
-            if(obj instanceof ODocument || obj instanceof NDoc) {
-                ODocument doc = obj instanceof ODocument ?
-                    (ODocument) obj : ((NDoc) obj).source;
-                doc.save();
-            }
+            ODocument toSave = null;
+            if      (obj instanceof ODocument) toSave = (ODocument) obj;
+            else if (obj instanceof NDoc)      toSave = ((NDoc) obj).source;
+            if (toSave != null) toSave.save ();
 
             // Recurse to children.  Would be null only if obj is a scalar.
-            Map<String, Object> gMap = toGenericMap(obj);
-            if(gMap != null) {
-                for(String key : gMap.keySet()) {
-                    Object value = gMap.get(key);
-                    saveRecursiveInternal(value, stack);
-                }
-            }
-
-        } finally {
-
+            Map<String, Object> gMap = toGenericMap (obj);
+            if (gMap != null) for (String key : gMap.keySet ()) saveRecursiveInternal (gMap.get (key), stack);
+        }
+        finally
+        {
             // Recursion detection.
-            stack.remove(obj);
+            stack.remove (obj);
         }
     }
 
-    public void delete() {
-        checkDbThread();
-        source.delete();
+    public void delete ()
+    {
+        source.delete ();
+        OrientDatasource.releaseDB ();
     }
 
     // Questionable semantics... only reverts if changes are made, but this means we
     // cannot use this for version discrepancy resolution.
-    public void revert() {
-        checkDbThread();
-        revertInternal(this);
+    public void revert ()
+    {
+        Set<Object> stack = new HashSet<Object> ();
+        revertInternal (this, stack);
+        OrientDatasource.releaseDB ();
     }
 
-    // Recursively reload this document and child documents from the database.
-    private void revertInternal(Object obj) {
-        Set<Object> stack = new HashSet<Object>();
-        revertInternal(obj, stack);
-    }
-
-    private void revertInternal(Object obj, Set<Object> stack) {
-
+    private void revertInternal (Object obj, Set<Object> stack)
+    {
         // Recursion detection.
-        if(stack.contains(obj)) {
-            return;
-        }
-        stack.add(obj);
+        if (stack.contains(obj)) return;
+        stack.add (obj);
 
-        try {
-
+        try
+        {
             // Reload from database.
-            if(obj instanceof ODocument || obj instanceof NDoc) {
-                ODocument doc = obj instanceof ODocument ?
-                    (ODocument) obj : ((NDoc) obj).source;
-                if(doc.isDirty()) {
-                    doc.reload();
-                }
-            }
+            ODocument toReload = null;
+            if      (obj instanceof ODocument) toReload = (ODocument) obj;
+            else if (obj instanceof NDoc)      toReload = ((NDoc) obj).source;
+            if (toReload != null  &&  toReload.isDirty ()) toReload.reload ();
 
             // Recurse to children.  Would be null only if obj is a scalar.
-            Map<String, Object> gMap = toGenericMap(obj);
-            if(gMap != null) {
-                for(String key : gMap.keySet()) {
-                    Object value = gMap.get(key);
-                    revertInternal(value, stack);
-                }
-            }
-
-        } finally {
-
+            Map<String, Object> gMap = toGenericMap (obj);
+            if (gMap != null) for (String key : gMap.keySet ()) revertInternal(gMap.get (key), stack);
+        }
+        finally
+        {
             // Recursion detection.
             stack.remove(obj);
         }
     }
 
-    public NDoc copy() {
-        checkDbThread();
-        ODocument newSource = source.copy();
-        newSource.setIdentity(new ORecordId());
-        return new NDoc(newSource);
+    public NDoc copy ()
+    {
+        ODocument newSource = source.copy ();
+        newSource.setIdentity (new ORecordId ());
+        NDoc result = new NDoc (newSource);
+        OrientDatasource.releaseDB ();
+        return result;
     }
 
 
     //////////
     // MISC //
     //////////
-
-    private void checkDbThread() {
-        ConnectionManager dmm = ConnectionManager.getInstance();
-        OrientDatasource ds = dmm.getDataModel();
-        ODatabaseDocumentTx db = ds.getDb();
-        ODatabaseRecordThreadLocal.INSTANCE.set(db);
-    }
 
     public void dump() {
         dump(null);
@@ -560,11 +515,6 @@ public class NDoc {
         return source.toString();
     }
 
-    // Temporary
-    public void ts() {
-        System.out.println(this);
-    }
-
 
     ///////////
     // DEBUG //
@@ -608,35 +558,5 @@ public class NDoc {
     }
     public static synchronized void setSavedIdForTempId(Integer tempId, Integer savedId) {
         tempIdMap.put(tempId, savedId);
-    }
-
-
-    //////////////////////////
-    // STATIC RECORD LOOKUP //
-    //////////////////////////
-
-    // Field
-
-    private static NDocDataModel model;
-
-    // Accessor/Mutator
-
-    public static NDocDataModel getDataModel() {
-        return model;
-    }
-    public static void setDataModel(NDocDataModel mdl) {
-        model = mdl;
-    }
-
-    // Look up
-
-    public static NDoc getById(String className, String id) {
-        return getDataModel().getById(className, id);
-    }
-    public static List<NDoc> getAll(String className) {
-        return getDataModel().getAll(className);
-    }
-    public static List<NDoc> getByQuery(String className, String query) {
-        return getDataModel().getByQuery(className, query);
     }
 }

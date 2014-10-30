@@ -71,7 +71,7 @@ public class ConnectionManager {
     }
     public void disconnect() {
         if(dataModel != null) {
-            dataModel.disconnect();
+            //dataModel.disconnect();
             dataModel = null;
             fireConnectNotifier();
         }

@@ -7,29 +7,35 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.connect.orientdb.ui;
 
+import gov.sandia.umf.platform.UMF;
 import gov.sandia.umf.platform.plugins.UMFPluginManager;
 import gov.sandia.umf.platform.plugins.extpoints.RecordHandler;
 
-import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
-import replete.util.FileUtil;
 import replete.util.StringUtil;
 
+import com.orientechnologies.orient.core.Orient;
+import com.orientechnologies.orient.core.command.OCommandOutputListener;
+import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
+import com.orientechnologies.orient.core.db.ODatabaseThreadLocalFactory;
+import com.orientechnologies.orient.core.db.document.ODatabaseDocumentPool;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
+import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
+import com.orientechnologies.orient.core.db.tool.ODatabaseImport;
 import com.orientechnologies.orient.core.id.ORecordId;
-import com.orientechnologies.orient.core.iterator.ORecordIteratorClass;
 import com.orientechnologies.orient.core.metadata.schema.OClass;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery;
 
-public class OrientDatasource implements NDocDataModel {
-
-    private static final String[] systemClasses = new String[] {
+public class OrientDatasource
+{
+    private static final String[] systemClasses = new String[]
+    {
         "ORestricted",
         "ORIDs",
         "OIdentity",
@@ -40,306 +46,172 @@ public class OrientDatasource implements NDocDataModel {
         "OGraphEdge",       // System classes in relation to
         "OGraphVertex"      // a document database at least.
     };
-    private static final String ADMIN_CLASS = "gov.sandia.umf.platform$Admin";
 
-    private ODatabaseDocumentTx db;
-    private OrientConnectDetails details;
-    private Map<String, ODocument> oDocCache = new HashMap<String, ODocument>();
-    private Map<String, NDoc> nDocCache = new HashMap<String, NDoc>();
+    public class DBFactory implements ODatabaseThreadLocalFactory
+    {
+        public OrientConnectDetails details;
 
-    public OrientDatasource(OrientConnectDetails deets) {
-        details = deets;
-        connect();
-    }
+        public DBFactory (OrientConnectDetails details)
+        {
+            this.details = details;
+        }
 
-    public void deleteAllRecords(String className) {
-        if(existsClass(className)) {
-            for(Object doc : db.browseClass(className)) {
-                db.delete((ODocument) doc);
-            }
+        public ODatabaseRecord getThreadDatabase ()
+        {
+            //return ODatabaseDocumentPool.global ().acquire (details.location, details.user, details.password);
+            Object result = ODatabaseDocumentPool.global ().acquire (details.location, details.user, details.password);
+            return (ODatabaseRecord) result;
         }
     }
 
-    public void deleteClass(String className) {
-        if(existsClass(className)) {
-            db.getMetadata().getSchema().dropClass(className);
+    public OrientDatasource (OrientConnectDetails details)
+    {
+        System.out.println ("OrientDatasource ctor");
+        if (! details.location.contains ("local:")  &&  ! details.location.startsWith ("remote:"))
+        {
+            details.location = "local:" + details.location;  // Could be smarter
+        }
+
+        if (details.location.contains ("local:"))  // matches either "local:" or "plocal:"
+        {
+            ODatabaseDocumentTx db = new ODatabaseDocumentTx (details.location);
+        	if (! db.exists ())
+        	{
+                db.create ();
+
+                OCommandOutputListener listener = new OCommandOutputListener ()
+                {
+                    public void onMessage (String arg0)
+                    {
+                        System.out.println (arg0);
+                    }
+                };
+
+                try
+                {
+                    InputStream stream = UMF.class.getResource ("initialDB").openStream ();
+                    ODatabaseImport importer = new ODatabaseImport (db, stream, listener);
+                    importer.importDatabase ();
+                }
+                catch (IOException error)
+                {
+                    System.out.println (error.toString ());
+                }
+        	}
+        	db.close ();
+        }
+
+        Orient.instance ().registerThreadDatabaseFactory (new DBFactory (details));
+        ODatabaseRecordThreadLocal.INSTANCE.set (null);
+    }
+
+    public static ODatabaseDocumentTx getDB ()
+    {
+        ODatabaseRecord db = ODatabaseRecordThreadLocal.INSTANCE.get ();
+        if (! (db instanceof ODatabaseDocumentTx))
+        {
+            ODatabaseRecordThreadLocal.INSTANCE.set (null);
+            // At this point, our own factory should provide the correct DB type, so don't bother re-checking.
+            db = ODatabaseRecordThreadLocal.INSTANCE.get ();
+        }
+        return (ODatabaseDocumentTx) db;
+    }
+
+    public static void releaseDB ()
+    {
+        if (ODatabaseRecordThreadLocal.INSTANCE.isDefined ())
+        {
+            ODatabaseRecord db = ODatabaseRecordThreadLocal.INSTANCE.get ();
+            if (db instanceof ODatabaseDocumentTx) db.close ();
         }
     }
 
-    public void deleteAllNonSystemClasses() {
-        List<String> ents = new ArrayList<String>();
-        List<String> sc = Arrays.asList(systemClasses);
-        for(OClass clazz : db.getMetadata().getSchema().getClasses()) {
-            String name = clazz.getName();
-            if(!sc.contains(name)) {
-                ents.add(clazz.getName());
-            }
-        }
-        for(String ent : ents) {
-            // TODO sometimes this call hangs indefinitely??????
-            db.getMetadata().getSchema().dropClass(ent);
-        }
+    public boolean isConnected ()
+    {
+        ODatabaseDocumentTx db = getDB ();
+        return db != null  &&  ! db.isClosed ();
     }
 
-    private void connect() {
-        String location = details.location;
-        if(!location.startsWith("local:") && !location.startsWith("remote:")) {
-            location = "local:" + location;  // Could be smarter
-        }
-
-        db = new ODatabaseDocumentTx(location);
-        if(location.startsWith("local:")) {
-            if(!db.exists()) {
-                db.create();
-            } else {
-                db.open(details.user, details.password);
-            }
-        } else if(location.startsWith("remote:")) {
-            db.open(details.user, details.password);
-        }
-        initialize();
+    public void disconnect ()
+    {
+        Orient.instance ().registerThreadDatabaseFactory (null);
+        ODatabaseRecordThreadLocal.INSTANCE.set (null);
     }
 
-    public ODatabaseDocumentTx getDb() {
-        return db;
-    }
-
-    private void initialize() {
-        addClass(ADMIN_CLASS);
-        long count = countDocuments(ADMIN_CLASS);
-        if(count == 0) {
-            String json = "{'createdDate': " + System.currentTimeMillis() + "}";
-            addDocument(ADMIN_CLASS, json);
-        } else {
-            ORecordIteratorClass<?> it = db.browseClass(ADMIN_CLASS);
-            ODocument admin = (ODocument) it.next();
-            if(!admin.containsField("createdDate")) {
-                admin.field("createdDate", System.currentTimeMillis());
-            }
-            admin.save();
+    public List<String> getClassNames ()
+    {
+        ODatabaseDocumentTx db = getDB ();
+        List<String> ents = new ArrayList<String> ();
+        List<String> sc = Arrays.asList (systemClasses);
+        for (OClass clazz : db.getMetadata ().getSchema ().getClasses ())
+        {
+            String name = clazz.getName ();
+            if (! sc.contains (name)) ents.add (clazz.getName ());
         }
-    }
-
-    public void disconnect() {
-        if(db != null) {
-            db.close();
-        }
-    }
-
-    public boolean isConnected() {
-        return db != null && !db.isClosed();
-    }
-
-    public List<String> getClassNames() {
-        List<String> ents = new ArrayList<String>();
-        List<String> sc = Arrays.asList(systemClasses);
-        for(OClass clazz : db.getMetadata().getSchema().getClasses()) {
-            String name = clazz.getName();
-            if(!sc.contains(name)) {
-                ents.add(clazz.getName());
-            }
-        }
+        db.close ();
         return ents;
     }
 
-    public List<OClass> getUserClasses() {
-        List<OClass> ents = new ArrayList<OClass>();
-        List<String> sc = Arrays.asList(systemClasses);
-        for(OClass clazz : db.getMetadata().getSchema().getClasses()) {
-            String name = clazz.getName();
-            if(!sc.contains(name)) {
-                ents.add(clazz);
-            }
+    public List<OClass> getUserClasses ()
+    {
+        ODatabaseDocumentTx db = getDB ();
+        List<OClass> ents = new ArrayList<OClass> ();
+        List<String> sc = Arrays.asList (systemClasses);
+        for (OClass clazz : db.getMetadata ().getSchema ().getClasses ())
+        {
+            String name = clazz.getName ();
+            if (! sc.contains (name)) ents.add (clazz);
         }
+        db.close ();
         return ents;
     }
 
-    public List<OClass> getSystemClasses() {
-        List<OClass> ents = new ArrayList<OClass>();
-        List<String> sc = Arrays.asList(systemClasses);
-        for(OClass clazz : db.getMetadata().getSchema().getClasses()) {
-            String name = clazz.getName();
-            if(sc.contains(name)) {
-                ents.add(clazz);
-            }
-        }
-        return ents;
-    }
-
-    public Map<String, OClass> getClassMap() {
-        Map<String, OClass> map = new HashMap<String, OClass>();
-        List<String> sc = Arrays.asList(systemClasses);
-        for(OClass clazz : db.getMetadata().getSchema().getClasses()) {
-            String name = clazz.getName();
-            if(!sc.contains(name)) {
-                map.put(clazz.getName(), clazz);
-            }
-        }
-        return map;
-    }
-
-    public long countDocuments(String name) {
-        OClass cls = db.getMetadata().getSchema().getClass(name);
-        return cls.count();
-    }
-
-    public void addClass(String name) {
-        if(!existsClass(name)) {
-            db.getMetadata().getSchema().createClass(name);
-        }
-    }
-
-    public boolean existsClass(String className) {
-        return db.getMetadata().getSchema().existsClass(className);
-    }
-
-    public void removeClass(String name) {
-        db.getMetadata().getSchema().dropClass(name);
-    }
-
-    public void addDocument(String name, String json) {
-        addClass(name);
-        ODocument doc = db.newInstance(name).fromJSON(json);
-        doc.save();
-    }
-
-    public void addDocument(String name, File file) {
-        addClass(name);
-        ODocument doc = db.newInstance(name).fromJSON(FileUtil.getTextContent(file));
-        doc.save();
-    }
-
-    public ODocument getAdminDocument() {
-        ORecordIteratorClass<?> it = db.browseClass(ADMIN_CLASS);
-        ODocument admin = (ODocument) it.next();
-        return admin;
-    }
-
-    public List<NDoc> search(String searchText) {
-        List<String> ents = getClassNames();
+    public List<NDoc> search (String searchText)
+    {
+        ODatabaseDocumentTx db = getDB ();
         List<NDoc> results = new ArrayList<NDoc>();
-        searchText = searchText.trim();
-        for(String ent : ents) {
-            RecordHandler handler = UMFPluginManager.getHandler(ent);
-            if(handler != null) {
-                if(handler.includeTypeInSearchResults(ent)) {
+        searchText = searchText.trim ();
+        for (String ent : getClassNames ())
+        {
+            RecordHandler handler = UMFPluginManager.getHandler (ent);
+            if (handler != null)
+            {
+                if (handler.includeTypeInSearchResults(ent))
+                {
                     String query = "select * from " + ent + " where ";
-                    String[] searchFields = handler.getRecordTypeSearchFields(ent);
-                    for(int f = 0; f < searchFields.length; f++) {
+                    String[] searchFields = handler.getRecordTypeSearchFields (ent);
+                    for (int f = 0; f < searchFields.length; f++)
+                    {
                         String field = searchFields[f];
-                        String critExpr;
-                        if(searchText.equals("")) {
-                            // To fix orient bug where blank values don't match against "like '%%'"
-                            critExpr = " like '%" + searchText.toUpperCase() + "%' OR " + field + " == ''";
-                        } else {
-                            critExpr = " like '%" + searchText.toUpperCase() + "%'";
-                        }
+                        String critExpr = " like '%" + searchText.toUpperCase() + "%'";
+                        if (searchText.equals ("")) critExpr = critExpr + " OR " + field + " == ''";  // To fix orient bug where blank values don't match against "like '%%'"
                         query += field + ".toUpperCase()" + critExpr;
-                        if(f != searchFields.length - 1) {
-                            query += " or ";
-                        }
+                        if (f != searchFields.length - 1) query += " or ";
                     }
-                    if(query.endsWith(" or ")) {
-                        query = StringUtil.cut(query, " or ");
-                    }
+                    if (query.endsWith (" or ")) query = StringUtil.cut(query, " or ");
                     List<ODocument> result = db.query(new OSQLSynchQuery<ODocument>(query));
-                    oDocCacheLookup(result);
-                    for(ODocument result0 : result) {
-                        NDoc record = nDocCacheLookup(result0);
-                        if(record.getHandler().includeRecordInSearchResults(record)) {
-                            results.add(record);
-                        }
+                    for (ODocument result0 : result)
+                    {
+                        NDoc record = new NDoc (result0);
+                        if (record.getHandler ().includeRecordInSearchResults (record)) results.add (record);
                     }
                 }
             }
         }
+        db.close ();
         return results;
     }
 
-    public NDoc getRecord(String className, String id) {
+    public NDoc getRecord (String className, String id)
+    {
+        ODatabaseDocumentTx db = getDB ();
         String query = "select * from " + className + " where @rid = ?";
         // Query does not do caching of ODocument instances, but rather
         // will return new instances even for ODocuments with the same
         // record ID returned previously.
-        List<ODocument> result = db.query(new OSQLSynchQuery<ODocument>(query), new ORecordId(id));
-        if(result.size() == 0) {
-            return null;
-        }
-        return nDocCacheLookup(oDocCacheLookup(result.get(0)));
-    }
-
-    @Override
-    public NDoc getById(String className, String id) {
-        return getRecord(className, id);
-    }
-
-    @Override
-    public List<NDoc> getAll(String className) {
-        return getByQuery(className, null);
-    }
-
-    @Override
-    public List<NDoc> getByQuery(String className, String queryCrit) {
-        String query = "select * from " + className;
-        if(queryCrit != null  && !queryCrit.equals("")) {
-            query += " " + queryCrit;
-        }
-        List<ODocument> result = db.query(new OSQLSynchQuery<ODocument>(query));
-        oDocCacheLookup(result);
-        List<NDoc> results = new ArrayList<NDoc>();
-        for(ODocument result0 : result) {
-//            Object obj = result0.field("runs");
-//            System.out.println(obj + " = " + (obj==null?obj:obj.getClass()));
-            NDoc record = nDocCacheLookup(result0);
-            if(record.getHandler() != null) {
-                if(record.getHandler().includeRecordInSearchResults(record)) {
-                    results.add(record);
-                }
-            } else {
-                results.add(record);
-            }
-        }
-        return results;
-    }
-
-
-    /////////////
-    // CACHING //
-    /////////////
-
-    private void oDocCacheLookup(List<ODocument> docs) {
-        for(int i = 0; i < docs.size(); i++) {
-            docs.set(i, oDocCacheLookup(docs.get(i)));
-        }
-    }
-//    private void nDocCacheLookup(List<NDoc> docs) {
-//        for(int i = 0; i < docs.size(); i++) {
-//            docs.set(i, nDocCacheLookup(docs.get(i)));
-//        }
-//    }
-
-    private ODocument oDocCacheLookup(ODocument doc) {
-        String key = doc.getIdentity().toString();   // "#8:23"
-        ODocument cachedDoc = oDocCache.get(key);
-        if(cachedDoc == null || cachedDoc.getVersion() < doc.getVersion()) {
-            cachedDoc = doc;
-            oDocCache.put(key, cachedDoc);
-            // ALERT
-        }
-        return cachedDoc;
-    }
-
-    private NDoc nDocCacheLookup(ODocument doc) {       // Best input argument?  ODocument? String ID? NDoc?s
-        String key = doc.getIdentity().toString();   // "#8:23"
-        NDoc cachedDoc = nDocCache.get(key);
-        if(cachedDoc == null) {
-            cachedDoc = new NDoc(doc);
-            nDocCache.put(key, cachedDoc);
-            // ALERT
-        } else if(cachedDoc.getVersion() < doc.getVersion()) {
-            cachedDoc.setSource(doc);  // Replace document in case of new version.
-            // ALERT
-        }
-        return cachedDoc;
+        List<ODocument> result = db.query (new OSQLSynchQuery<ODocument> (query), new ORecordId (id));
+        db.close ();
+        if (result.size () == 0) return null;
+        return new NDoc (result.get (0));
     }
 }

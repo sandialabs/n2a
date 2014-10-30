@@ -174,7 +174,7 @@ public class BackupDialog extends EscapeDialog
         try
         {
             ConnectionManager    connections = ConnectionManager.getInstance ();
-            ODatabaseDocumentTx  db          = connections.getDataModel ().getDb ();
+            ODatabaseDocumentTx  db          = connections.getDataModel ().getDB ();
             OrientConnectDetails details     = connections.getConnectDetails ();
 
             String[] parts = details.location.split (":", 2);
@@ -211,8 +211,10 @@ public class BackupDialog extends EscapeDialog
         System.out.println ("restore " + restoreMe.toString ());
 
         // TODO: This assumes db is local
-        ODatabaseDocumentTx db = ConnectionManager.getInstance ().getDataModel ().getDb ();
-        db.drop ();  // erase everything, including directory in which db files are stored
+        OrientConnectDetails details = ConnectionManager.getInstance ().getConnectDetails ();
+        ODatabaseDocumentTx db = new ODatabaseDocumentTx (details.location);
+        db.open (details.user, details.password);
+        db.drop ();  // erase everything, including directory in which db files are stored. TODO: Is OrientDB smart enough to propagate this to other pooled DB objects?
         db.create ();
 
         OCommandOutputListener listener = new OCommandOutputListener ()

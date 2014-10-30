@@ -181,38 +181,13 @@ public class UMF
             OrientConnectDetails details = new OrientConnectDetails
             (
                 "Local",
-                "local:" + dflt.getAbsolutePath (),
+                "local:" + dflt.getAbsolutePath (),  // TODO: change to "plocal:"
                 "admin",
                 "admin"
             );
             mdl2.getList ().add (details);
             mdl2.setSelected (details);
-
-            // Populate the new DB with a default set of parts
-            ODatabaseDocumentTx db = new ODatabaseDocumentTx (details.location);
-            if (! db.exists ())
-            {
-                db.create ();
-
-                OCommandOutputListener listener = new OCommandOutputListener ()
-                {
-                    public void onMessage (String arg0)
-                    {
-                        System.out.println (arg0);
-                    }
-                };
-
-                try
-                {
-                    InputStream stream = UMF.class.getResource ("initialDB").openStream ();
-                    ODatabaseImport importer = new ODatabaseImport (db, stream, listener);
-                    importer.importDatabase ();
-                }
-                catch (IOException error)
-                {
-                    System.out.println (error.toString ());
-                }
-            }
+            // DB will be automatically populated by the OrientDatasource class
         }
 
         String[] pluginMem = ArrayUtil.translate(String.class, pluginValuesCL);

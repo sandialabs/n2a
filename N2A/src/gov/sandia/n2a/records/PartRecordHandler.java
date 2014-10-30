@@ -79,7 +79,7 @@ public class PartRecordHandler implements RecordHandler {
 
     @Override
     public String getToString(NDoc doc) {
-        return (String) doc.get("name") + " [DIRTY=" + doc.isDirty() + ", FIELDS=" + Arrays.toString(doc.getSource().getDirtyFields()) + "]";
+        return (String) doc.get("name") + " [DIRTY=" + doc.isDirty() + ", FIELDS=" + Arrays.toString(doc.source.getDirtyFields()) + "]";
     }
     @Override
     public boolean includeTypeInSearchResults(String type) {

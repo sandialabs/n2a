@@ -190,26 +190,6 @@ public class ConnectionSelectionDialog extends EscapeDialog {
         showDetails();
     }
 
-    protected void createSelLocation() {
-        try {
-            OrientDatasource source = new OrientDatasource(selDetails);
-            source.disconnect();
-        } catch(OSecurityAccessException ex){
-            Dialogs.showWarning("The user name and password provided for this connection were rejected.", "Authentication Error");
-            return;
-        }
-    }
-
-    protected void testSelLocation() {
-        try {
-            OrientDatasource source = new OrientDatasource(selDetails);
-            source.disconnect();
-        } catch(Exception ex) {
-            Dialogs.showWarning("The selected connection contains an invalid location URL.  The URL should have the form:\n    <engine>:<db-name>", "Could not connect");
-            return;
-        }
-    }
-
     private FocusListener saveOnFormFocusLost = new FocusAdapter() {
         @Override
         public void focusGained(FocusEvent e) {

@@ -105,7 +105,7 @@ public class PropertiesPanel extends JPanel {
         }
 
         OrientDatasource source = new OrientDatasource(cxn);
-        curDb = source.getDb();
+        curDb = source.getDB();
     }
 
     protected void rebuildTable(TNode nSel) {
