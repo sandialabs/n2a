@@ -47,7 +47,7 @@ public:
 
     // Interface for computing simulation steps
     virtual void getPopulations     (std::vector<_Population *> & result);         ///< Append to result any populations contained as members of this part.
-    virtual void init               (float _24t, float & _24dt, int _24index = 0); ///< $dt may be modified; it is passed in with a value of 0
+    virtual void init               (float _24t, float & _24dt);                   ///< $dt may be modified; it is passed in with a value of 0
     virtual void integrate          (float _24t, float _24dt);
     virtual void prepare            ();
     virtual void update             (float _24t, float & _24dt);                   ///< $dt may be modified
@@ -67,8 +67,8 @@ public:
     virtual void addToMembers       ();                  ///< members += D0; pop D0
 
     // Accessors for $variables
-    virtual float getP   (const Vector3 & _24xyz);  ///< Default is 1 (always create)
-    virtual void  getXYZ (Vector3 & _24xyz);  ///< Default is [0,0,0].
+    virtual float getP   (const Vector3 & _24xyz); ///< Default is 1 (always create)
+    virtual void  getXYZ (Vector3 & _24xyz);       ///< Default is [0,0,0].
 
     // Generic metadata
     virtual void getNamedValue (const std::string & name, std::string & value);
@@ -90,7 +90,7 @@ public:
     _Population ();  ///< Zero out lastPartSize
     virtual ~_Population ();
 
-    virtual _Part * create   () = 0;                 ///< Construct an instance of the kind of part this population holds. Caller is fully responsible of lifespan of result, unless it pushes the part onto our _parts collection.
+    virtual _Part * create   () = 0;                 ///< Construct an instance of the kind of part this population holds. Caller is fully responsible for lifespan of result, unless it pushes the part onto our _parts collection.
     _Part *         allocate (float t, float & dt);  ///< Convenience function for re-using or creating a part, depending on state of nextEntry.
     virtual void    kill     (_Part *);
 

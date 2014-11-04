@@ -40,7 +40,7 @@ _Part::getPopulations (vector<_Population *> & resutl)
 }
 
 void
-_Part::init (float _24t, float & _24dt, int _24index)
+_Part::init (float _24t, float & _24dt)
 {
 }
 
@@ -148,22 +148,18 @@ _Population::allocate (float t, float & dt)
     if (nextEntry < _parts.size ())
     {
         result = _parts[nextEntry];
-        if (_Compartment * compartment = dynamic_cast<_Compartment *> (result))
-        {
-            result->init (t, dt, compartment->_24index);  // re-use the existing index
-        }
-        else  // not a compartment
-        {
-            result->init (t, dt, 0);  // no index to re-use
-        }
     }
     else
     {
         result = create ();
         _parts.push_back (result);
-        result->init (t, dt, nextEntry);
+        if (_Compartment * compartment = dynamic_cast<_Compartment *> (result))
+        {
+        	compartment->_24index = nextEntry;
+        }
     }
     nextEntry++;
+    result->init (t, dt);
     return result;
 }
 
@@ -285,7 +281,7 @@ _Simulator::run ()
                 for (int j = oldCount; j < newCount; j++)
                 {
                     tempDt = 0;
-                    populations[j]->init (t, tempDt, 0);
+                    populations[j]->init (t, tempDt);
                     if (tempDt) dt = tempDt;
                 }
             }
@@ -410,7 +406,7 @@ _Simulator::run ()
                         c->setPart (Bref, b);
                         if (c->getP (xyz) <= rand () / (RAND_MAX + 1.0f)) continue;
                         float tempDt = 0;
-                        c->init (t, tempDt, 0);
+                        c->init (t, tempDt);
                         if (tempDt) dt = tempDt;
                         p->_parts.push_back (c);
                         p->nextEntry = p->_parts.size ();
@@ -463,7 +459,7 @@ _Simulator::run ()
                         c->setPart (Bref, b);
                         if (c->getP (xyz) <= rand () / (RAND_MAX + 1.0f)) continue;
                         float tempDt = 0;
-                        c->init (t, tempDt, 0);
+                        c->init (t, tempDt);
                         if (tempDt) dt = tempDt;
                         p->_parts.push_back (c);
                         p->nextEntry = p->_parts.size ();

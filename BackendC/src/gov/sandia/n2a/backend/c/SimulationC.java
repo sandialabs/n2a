@@ -191,7 +191,7 @@ public class SimulationC implements Simulation
             s.append ("  _Euler simulator;\n");
         }
         s.append ("  simulator.populations.push_back (&Model_Population_Instance);\n");
-        s.append ("  Model_Population_Instance.init (0, simulator.dt, 0);\n");
+        s.append ("  Model_Population_Instance.init (0, simulator.dt);\n");
         s.append ("  simulator.run ();\n");
         s.append ("  return 0;\n");
         s.append ("}\n");
@@ -588,13 +588,9 @@ public class SimulationC implements Simulation
         // Unit init
         if (s.connectionBindings == null  ||  localInit.size () > 0)
         {
-            result.append (pad2 + "virtual void init (float " + mangle ("$t") + ", float & " + mangle ("$dt") + ", int " + mangle ("$index") + ")\n");
+            result.append (pad2 + "virtual void init (float " + mangle ("$t") + ", float & " + mangle ("$dt") + ")\n");
             result.append (pad2 + "{\n");
             s.setInit (true);
-            if (s.connectionBindings == null)
-            {
-                result.append (pad3 + "this->" + mangle ("$index") + " = " + mangle ("$index") + ";\n");
-            }
             //   declare buffer variables
             for (Variable v : localBufferedInternal)
             {
@@ -1124,7 +1120,7 @@ public class SimulationC implements Simulation
         // Population init
         if (globalMembers.size () > 0)
         {
-            result.append (pad2 + "virtual void init (float " + mangle ("$t") + ", float & " + mangle ("$dt") + ", int " + mangle ("$index") + ")\n");
+            result.append (pad2 + "virtual void init (float " + mangle ("$t") + ", float & " + mangle ("$dt") + ")\n");
             result.append (pad2 + "{\n");
             s.setInit (true);
             //   declare buffer variables
