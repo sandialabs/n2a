@@ -28,229 +28,257 @@ float pulse (float t, float width, float period, float rise, float fall)
 }
 
 
-// class _Part ---------------------------------------------------------------
+// class Part ----------------------------------------------------------------
 
-_Part::~_Part ()
+Part::~Part ()
 {
 }
 
 void
-_Part::getPopulations (vector<_Population *> & resutl)
+Part::getPopulations (vector<Population *> & resutl)
 {
 }
 
 void
-_Part::init (float _24t, float & _24dt)
+Part::init (Simulator & simulator)
 {
 }
 
 void
-_Part::prepare ()
+Part::prepare ()
 {
 }
 
 void
-_Part::integrate (float _24t, float _24dt)
+Part::integrate (Simulator & simulator)
 {
 }
 
 void
-_Part::update (float _24t, float & _24dt)
+Part::update (Simulator & simulator)
+{
+}
+
+bool
+Part::finalize (Simulator & simulator)
+{
+    return true;
+}
+
+void
+Part::prepareDerivative ()
 {
 }
 
 void
-_Part::finalize (float _24t, float & _24dt)
+Part::updateDerivative (Simulator & simulator)
 {
 }
 
 void
-_Part::prepareDerivative ()
+Part::finalizeDerivative ()
 {
 }
 
 void
-_Part::updateDerivative (float _24t, float _24dt)
+Part::pushIntegrated ()
 {
 }
 
 void
-_Part::finalizeDerivative ()
+Part::popIntegrated ()
 {
 }
 
 void
-_Part::pushIntegrated ()
+Part::pushDerivative ()
 {
 }
 
 void
-_Part::popIntegrated ()
+Part::multiplyAddToStack (float scalar)
 {
 }
 
 void
-_Part::pushDerivative ()
+Part::multiply (float scalar)
 {
 }
 
 void
-_Part::multiplyAddToStack (float scalar)
+Part::addToMembers ()
 {
 }
 
 void
-_Part::multiply (float scalar)
+Part::die ()
 {
 }
 
 void
-_Part::addToMembers ()
+Part::release ()
 {
+}
+
+bool
+Part::live ()
+{
+    return true;
 }
 
 float
-_Part::getP (const Vector3 & _24xyz)
+Part::getLive ()
+{
+    return 1;
+}
+
+float
+Part::getP (const Vector3 & __24xyz)
 {
     return 1;
 }
 
 void
-_Part::getXYZ (Vector3 & _24xyz)
+Part::getXYZ (Vector3 & __24xyz)
 {
-    _24xyz[0] = 0;
-    _24xyz[1] = 0;
-    _24xyz[2] = 0;
+    __24xyz[0] = 0;
+    __24xyz[1] = 0;
+    __24xyz[2] = 0;
 }
 
 void
-_Part::getNamedValue (const string & name, string & value)
+Part::getNamedValue (const string & name, string & value)
 {
 }
 
 
-// class _Population ---------------------------------------------------------
+// class Population ----------------------------------------------------------
 
-_Population::_Population ()
+Population::Population ()
 {
     liveCount = 0;
     nextEntry = 0;
 }
 
-_Population::~_Population ()
+Population::~Population ()
 {
 }
 
-_Part *
-_Population::allocate (float t, float & dt)
+Part *
+Population::allocate ()
 {
-    _Part * result;
-    if (nextEntry < _parts.size ())
+    Part * result = 0;
+    if (nextEntry < parts.size ())
     {
-        result = _parts[nextEntry];
+        result = parts[nextEntry];
     }
-    else
+    if (! result)
     {
         result = create ();
-        _parts.push_back (result);
-        if (_Compartment * compartment = dynamic_cast<_Compartment *> (result))
+        parts.push_back (result);
+        if (Compartment * compartment = dynamic_cast<Compartment *> (result))
         {
-        	compartment->_24index = nextEntry;
+        	compartment->__24index = nextEntry;
         }
     }
     nextEntry++;
-    result->init (t, dt);
     return result;
 }
 
 void
-_Population::kill (_Part * p)
+Population::kill (Part * part)
 {
-    vector<_Part *>::iterator it;
-    for (it = _parts.begin (); it != _parts.end (); it++)
+    for (int i = 0; i < nextEntry; i++)
     {
-        if (*it == p)
+        if (parts[i] == part)
         {
-            _parts.erase (it);
+            if (i < nextEntry - 1) swap (parts[i], parts[nextEntry-1]);
+            assert (nextEntry > 0);
+            nextEntry--;
             break;
         }
     }
-    delete p;
+}
+
+void
+Population::die ()
+{
+    for (int i = 0; i < nextEntry; i++) parts[i]->die ();
 }
 
 int
-_Population::getK ()
+Population::getK ()
 {
     return 0;
 }
 
 int
-_Population::getMax (int i)
+Population::getMax (int i)
 {
     return 0;
 }
 
 int
-_Population::getMin (int i)
+Population::getMin (int i)
 {
     return 0;
 }
 
 float
-_Population::getN ()
+Population::getN ()
 {
     return 1;
 }
 
 float
-_Population::getRadius ()
+Population::getRadius ()
 {
     return 0;
 }
 
 int
-_Population::getRef ()
+Population::getRef ()
 {
     return -1;  // indicates this population is not a connection type
 }
 
 
-// class _Compartment --------------------------------------------------------
+// class Compartment ---------------------------------------------------------
 
 
-// class _Connection ---------------------------------------------------------
+// class Connection ----------------------------------------------------------
 
 void
-_Connection::setPart (int i, _Part * p)
+Connection::setPart (int i, Part * part)
 {
 }
 
-_Part *
-_Connection::getPart (int i)
+Part *
+Connection::getPart (int i)
 {
     return 0;
 }
 
 
-// class _Simulator ----------------------------------------------------------
+// class Simulator -----------------------------------------------------------
 
-_Simulator::_Simulator ()
+Simulator::Simulator ()
 {
     dt = 1e-4;
 }
 
-_Simulator::~_Simulator ()
+Simulator::~Simulator ()
 {
 }
 
 class KDTreeEntry : public Vector3
 {
 public:
-    _Part * part;
+    Part * part;
 };
 
 void
-_Simulator::run ()
+Simulator::run ()
 {
     string value = "1";
     populations[0]->getNamedValue ("duration", value);
@@ -262,7 +290,7 @@ _Simulator::run ()
         // Create new instances
         for (int i = 0; i < populations.size (); i++)  // since populations.size() is evaluated each cycle, this allows the string to grow
         {
-            _Population * p = populations[i];
+            Population * p = populations[i];
 
             // Determine if population size has changed since last cycle
             if (p->getRef () >= 0) continue;  // this is a connection population, so nothing more to do
@@ -270,9 +298,8 @@ _Simulator::run ()
             // Note: we do not shrink populations using $n, only grow them.
             while (p->nextEntry < n1)
             {
-                float tempDt = 0;
-                _Part * q = p->allocate (t, tempDt);
-                if (tempDt) dt = tempDt;  // TODO: this changes $dt for all parts; need to create even-queue and $dt-based groups of parts
+                Part * q = p->allocate ();
+                q->init (*this);
 
                 // Initialize and add any newly created populations
                 int oldCount = populations.size ();
@@ -280,28 +307,26 @@ _Simulator::run ()
                 int newCount = populations.size ();
                 for (int j = oldCount; j < newCount; j++)
                 {
-                    tempDt = 0;
-                    populations[j]->init (t, tempDt);
-                    if (tempDt) dt = tempDt;
+                    populations[j]->init (*this);
                 }
             }
         }
 
         // Create new connections
-        vector<_Population *>::iterator it;
+        vector<Population *>::iterator it;
         for (it = populations.begin (); it != populations.end (); it++)
         {
-            _Population * p = *it;
+            Population * p = *it;
 
             int Aref = p->getRef ();
             if (Aref < 0) continue;  // this is a compartment population, so no connections to make
             int Bref = 1 - Aref;  // presuming only two endpoints
 
-            vector<_Population *> references;
+            vector<Population *> references;
             p->getPopulations (references);
             assert (references.size () == 2);
-            _Population * A = references[Aref];
-            _Population * B = references[Bref];
+            Population * A = references[Aref];
+            Population * B = references[Bref];
 
             int An1 = floor (A->getN ());
             int Bn1 = floor (B->getN ());
@@ -323,7 +348,7 @@ _Simulator::run ()
                 entryPointers.resize (Bn1);
                 for (int i = 0; i < Bn1; i++)
                 {
-                    _Part * b = B->_parts[i];
+                    Part * b = B->parts[i];
                     KDTreeEntry & e = entries[i];
                     b->getXYZ (e);
                     e.part = b;
@@ -343,8 +368,8 @@ _Simulator::run ()
             // This is a memory vs time trade-off. It takes more time to count
             // connections whenever needed, but it saves memory, and memory is the
             // more limited resource.
-            int Alast = A->_parts.size ();
-            int Blast = B->_parts.size ();
+            int Alast = A->parts.size ();
+            int Blast = B->parts.size ();
             int * Acount = 0;
             int * Bcount = 0;
             if (doAccounting)
@@ -353,31 +378,31 @@ _Simulator::run ()
                 Bcount = new int[Blast]();
                 for (int i = 0; i < An0; i++)
                 {
-                    _Connection * c = (_Connection *) p->_parts[i];
-                    Acount[((_Compartment *) c->getPart (Aref))->_24index]++;  // TODO: Assuming the part is a Compartment prevents us from connecting Connections. Could make $index transitory.
-                    Bcount[((_Compartment *) c->getPart (Bref))->_24index]++;
+                    Connection * c = (Connection *) p->parts[i];
+                    Acount[((Compartment *) c->getPart (Aref))->__24index]++;  // TODO: Assuming the part is a Compartment prevents us from connecting Connections. Could make $index transitory.
+                    Bcount[((Compartment *) c->getPart (Bref))->__24index]++;
                 }
             }
 
-            _Connection * c = (_Connection *) p->create ();
+            Connection * c = (Connection *) p->create ();
 
             // Scan AxB
             bool minSatisfied = false;
             while (! minSatisfied)
             {
                 minSatisfied = true;
-                vector<_Part *> subset;  // of B
-                if (! doNN) subset = B->_parts;
+                vector<Part *> subset;  // of B
+                if (! doNN) subset = B->parts;
                 int count = subset.size ();
 
                 // New A with all of B
                 for (int i = An0; i < An1; i++)
                 {
-                    _Compartment * a = (_Compartment *) A->_parts[i];
-                    if (Amax  &&  Acount[a->_24index] >= Amax) continue;  // early out: this part is already full, so skip. (No need to check doAccounting, because Amax != 0 is a subcase.)
+                    Compartment * a = (Compartment *) A->parts[i];
+                    if (Amax  &&  Acount[a->__24index] >= Amax) continue;  // early out: this part is already full, so skip. (No need to check doAccounting, because Amax != 0 is a subcase.)
 
                     c->setPart (Aref, a);
-                    c->setPart (Bref, B->_parts[0]);  // give a dummy B object, in case xyz call breaks rules about only accessing A
+                    c->setPart (Bref, B->parts[0]);  // give a dummy B object, in case xyz call breaks rules about only accessing A
 
                     // Project A into B
                     Vector3 xyz;
@@ -397,40 +422,38 @@ _Simulator::run ()
                     for (int j = 0; j < count; j++)
                     {
                         int k = rand () % (count - j) + j;
-                        _Part * & bj = subset[j];
-                        _Part * & bk = subset[k];
+                        Part * & bj = subset[j];
+                        Part * & bk = subset[k];
                         swap (bj, bk);
-                        _Compartment * b = (_Compartment *) bj;
-                        if (Bmax  &&  Bcount[b->_24index] >= Bmax) continue;  // no room in this B.  (No need to check doAccounting, because Bmax != 0 is a subcase.)
+                        Compartment * b = (Compartment *) bj;
+                        if (Bmax  &&  Bcount[b->__24index] >= Bmax) continue;  // no room in this B.  (No need to check doAccounting, because Bmax != 0 is a subcase.)
 
                         c->setPart (Bref, b);
                         if (c->getP (xyz) <= rand () / (RAND_MAX + 1.0f)) continue;
-                        float tempDt = 0;
-                        c->init (t, tempDt);
-                        if (tempDt) dt = tempDt;
-                        p->_parts.push_back (c);
-                        p->nextEntry = p->_parts.size ();
-                        c = (_Connection *) p->create ();
+                        c->init (*this);
+                        p->parts.push_back (c);
+                        p->nextEntry = p->parts.size ();
+                        c = (Connection *) p->create ();
                         c->setPart (Aref, a);
 
                         if (doAccounting)
                         {
-                            Acount[a->_24index]++;
-                            Bcount[b->_24index]++;
-                            if (Amax  &&  Acount[a->_24index] >= Amax) break;  // stop scanning Bs once this A is full
+                            Acount[a->__24index]++;
+                            Bcount[b->__24index]++;
+                            if (Amax  &&  Acount[a->__24index] >= Amax) break;  // stop scanning Bs once this A is full
                         }
                     }
-                    if (doAccounting  &&  Acount[a->_24index] < Amin) minSatisfied = false;
+                    if (doAccounting  &&  Acount[a->__24index] < Amin) minSatisfied = false;
                 }
 
                 // Old A with new B
                 for (int i = 0; i < An0; i++)
                 {
-                    _Compartment * a = (_Compartment *) A->_parts[i];
-                    if (Amax  &&  Acount[a->_24index] >= Amax) continue;
+                    Compartment * a = (Compartment *) A->parts[i];
+                    if (Amax  &&  Acount[a->__24index] >= Amax) continue;
 
                     c->setPart (Aref, a);
-                    c->setPart (Bref, B->_parts[0]);
+                    c->setPart (Bref, B->parts[0]);
 
                     // Project A into B
                     Vector3 xyz;
@@ -450,30 +473,28 @@ _Simulator::run ()
                     for (int j = 0; j < count; j++)
                     {
                         int k = rand () % (count - j) + j;
-                        _Part * & bj = subset[j];
-                        _Part * & bk = subset[k];
+                        Part * & bj = subset[j];
+                        Part * & bk = subset[k];
                         swap (bj, bk);
-                        _Compartment * b = (_Compartment *) bj;
-                        if (Bmax  &&  Bcount[b->_24index] >= Bmax) continue;  // no room in this B.  (No need to check doAccounting, because Bmax != 0 is a subcase.)
+                        Compartment * b = (Compartment *) bj;
+                        if (Bmax  &&  Bcount[b->__24index] >= Bmax) continue;  // no room in this B.  (No need to check doAccounting, because Bmax != 0 is a subcase.)
 
                         c->setPart (Bref, b);
                         if (c->getP (xyz) <= rand () / (RAND_MAX + 1.0f)) continue;
-                        float tempDt = 0;
-                        c->init (t, tempDt);
-                        if (tempDt) dt = tempDt;
-                        p->_parts.push_back (c);
-                        p->nextEntry = p->_parts.size ();
-                        c = (_Connection *) p->create ();
+                        c->init (*this);
+                        p->parts.push_back (c);
+                        p->nextEntry = p->parts.size ();
+                        c = (Connection *) p->create ();
                         c->setPart (Aref, a);
 
                         if (doAccounting)
                         {
-                            Acount[a->_24index]++;
-                            Bcount[b->_24index]++;
-                            if (Amax  &&  Acount[a->_24index] >= Amax) break;  // stop scanning Bs once this A is full
+                            Acount[a->__24index]++;
+                            Bcount[b->__24index]++;
+                            if (Amax  &&  Acount[a->__24index] >= Amax) break;  // stop scanning Bs once this A is full
                         }
                     }
-                    if (doAccounting  &&  Acount[a->_24index] < Amin) minSatisfied = false;
+                    if (doAccounting  &&  Acount[a->__24index] < Amin) minSatisfied = false;
                 }
 
                 if (doAccounting)
@@ -481,7 +502,7 @@ _Simulator::run ()
                     if (! minSatisfied) continue;
                     for (int i = 0; i < Bn1; i++)
                     {
-                        if (Bcount[((_Compartment *) B->_parts[i])->_24index] < Bmin)
+                        if (Bcount[((Compartment *) B->parts[i])->__24index] < Bmin)
                         {
                             minSatisfied = false;
                             break;
@@ -497,90 +518,94 @@ _Simulator::run ()
 
         for (int i = 0; i < populations.size (); i++)
         {
-            _Population * p = populations[i];
+            Population * p = populations[i];
             p->liveCount = p->nextEntry;
         }
 
         // Update parts
         t += dt;
-        integrate (populations, t, dt);
+        integrate ();
         for (it = populations.begin (); it != populations.end (); it++)
         {
-            _Population * p = *it;
+            Population * p = *it;
             p->prepare ();
-            _Part ** j   = & p->_parts[0];
-            _Part ** end = j + p->nextEntry;
+            Part ** j   = & p->parts[0];
+            Part ** end = j + p->nextEntry;
             while (j < end) (*j++)->prepare ();
         }
         for (it = populations.begin (); it != populations.end (); it++)
         {
-            _Population * p = *it;
-            p->update (t, dt);
-            _Part ** j   = & p->_parts[0];
-            _Part ** end = j + p->nextEntry;
-            while (j < end) (*j++)->update (t, dt);
+            Population * p = *it;
+            p->update (*this);
+            Part ** j   = & p->parts[0];
+            Part ** end = j + p->nextEntry;
+            while (j < end) (*j++)->update (*this);
         }
         for (it = populations.begin (); it != populations.end (); it++)
         {
-            _Population * p = *it;
-            p->finalize (t, dt);
-            _Part ** j   = & p->_parts[0];
-            _Part ** end = j + p->nextEntry;
-            while (j < end) (*j++)->finalize (t, dt);
-            // TODO: check if a part has died. If so, exchange with lastEntry and stall j for one iteration.
+            Population * p = *it;
+            p->finalize (*this);
+            Part ** j   = & p->parts[0];
+            Part ** end = j + p->nextEntry;
+            while (j < end)
+            {
+                if ((*j)->finalize (*this)) j++;
+                else p->kill (*j);
+            }
         }
     }
 }
 
 void
-_Simulator::integrate (std::vector<_Population *> & populations, float t, float dt)
+Simulator::integrate ()
 {
 }
 
 
-// class _Euler --------------------------------------------------------------
+// class Euler ---------------------------------------------------------------
 
-_Euler::~_Euler ()
+Euler::~Euler ()
 {
 }
 
 void
-_Euler::integrate (std::vector<_Population *> & populations, float t, float dt)
+Euler::integrate ()
 {
-    vector<_Population *>::iterator it;
+    vector<Population *>::iterator it;
     for (it = populations.begin (); it != populations.end (); it++)
     {
-        _Population * p = *it;
-        p->integrate (t, dt);
-        _Part ** j   = & p->_parts[0];
-        _Part ** end = j + p->nextEntry;
-        while (j < end) (*j++)->integrate (t, dt);
+        Population * p = *it;
+        p->integrate (*this);
+        Part ** j   = & p->parts[0];
+        Part ** end = j + p->nextEntry;
+        while (j < end) (*j++)->integrate (*this);
     }
 }
 
 
-// class _RungeKutta ---------------------------------------------------------
+// class RungeKutta ----------------------------------------------------------
 
-_RungeKutta::~_RungeKutta ()
+RungeKutta::~RungeKutta ()
 {
 }
 
 void
-_RungeKutta::integrate (std::vector<_Population *> & populations, float t, float dt)
+RungeKutta::integrate ()
 {
-    float dt2 = dt / 2.0f;
-    float t2 = t - dt2;  // t is the current point in time, so we must look backward half a timestep
+    // Save current values of t and dt
+    const float t  = this->t;
+    const float dt = this->dt;
 
-    vector<_Population *>::iterator it;
+    vector<Population *>::iterator it;
 
     // k1
     for (it = populations.begin (); it != populations.end (); it++)
     {
-        _Population * p = *it;
+        Population * p = *it;
         p->pushIntegrated ();
         p->pushDerivative ();
-        _Part ** j   = & p->_parts[0];
-        _Part ** end = j + p->nextEntry;
+        Part ** j   = & p->parts[0];
+        Part ** end = j + p->nextEntry;
         while (j < end)
         {
             (*j)->pushIntegrated ();
@@ -590,18 +615,20 @@ _RungeKutta::integrate (std::vector<_Population *> & populations, float t, float
     }
 
     // k2 and k3
+    this->dt /= 2.0f;
+    this->t  -= this->dt;  // t is the current point in time, so we must look backward half a timestep
     for (int i = 0; i < 2; i++)
     {
         for (it = populations.begin (); it != populations.end (); it++)
         {
-            _Population * p = *it;
-            p->integrate (t2, dt2);
+            Population * p = *it;
+            p->integrate (*this);
             p->prepareDerivative ();
-            _Part ** j   = & p->_parts[0];
-            _Part ** end = j + p->nextEntry;
+            Part ** j   = & p->parts[0];
+            Part ** end = j + p->nextEntry;
             while (j < end)
             {
-                (*j)->integrate (t2, dt2);
+                (*j)->integrate (*this);
                 (*j)->prepareDerivative ();
                 j++;
             }
@@ -609,20 +636,20 @@ _RungeKutta::integrate (std::vector<_Population *> & populations, float t, float
 
         for (it = populations.begin (); it != populations.end (); it++)
         {
-            _Population * p = *it;
-            p->updateDerivative (t2, dt2);
-            _Part ** j   = & p->_parts[0];
-            _Part ** end = j + p->nextEntry;
-            while (j < end) (*j++)->updateDerivative (t2, dt2);
+            Population * p = *it;
+            p->updateDerivative (*this);
+            Part ** j   = & p->parts[0];
+            Part ** end = j + p->nextEntry;
+            while (j < end) (*j++)->updateDerivative (*this);
         }
 
         for (it = populations.begin (); it != populations.end (); it++)
         {
-            _Population * p = *it;
+            Population * p = *it;
             p->finalizeDerivative ();
             p->multiplyAddToStack (2.0f);
-            _Part ** j   = & p->_parts[0];
-            _Part ** end = j + p->nextEntry;
+            Part ** j   = & p->parts[0];
+            Part ** end = j + p->nextEntry;
             while (j < end)
             {
                 (*j)->finalizeDerivative ();
@@ -633,17 +660,19 @@ _RungeKutta::integrate (std::vector<_Population *> & populations, float t, float
     }
 
     // k4
+    this->dt = dt;  // restore original values
+    this->t  = t;
     {  // curly brace is here just to make organization clear
         for (it = populations.begin (); it != populations.end (); it++)
         {
-            _Population * p = *it;
-            p->integrate (t, dt);
+            Population * p = *it;
+            p->integrate (*this);
             p->prepareDerivative ();
-            _Part ** j   = & p->_parts[0];
-            _Part ** end = j + p->nextEntry;
+            Part ** j   = & p->parts[0];
+            Part ** end = j + p->nextEntry;
             while (j < end)
             {
-                (*j)->integrate (t, dt);
+                (*j)->integrate (*this);
                 (*j)->prepareDerivative ();
                 j++;
             }
@@ -651,20 +680,20 @@ _RungeKutta::integrate (std::vector<_Population *> & populations, float t, float
 
         for (it = populations.begin (); it != populations.end (); it++)
         {
-            _Population * p = *it;
-            p->updateDerivative (t, dt);
-            _Part ** j   = & p->_parts[0];
-            _Part ** end = j + p->nextEntry;
-            while (j < end) (*j++)->updateDerivative (t, dt);
+            Population * p = *it;
+            p->updateDerivative (*this);
+            Part ** j   = & p->parts[0];
+            Part ** end = j + p->nextEntry;
+            while (j < end) (*j++)->updateDerivative (*this);
         }
 
         for (it = populations.begin (); it != populations.end (); it++)
         {
-            _Population * p = *it;
+            Population * p = *it;
             p->finalizeDerivative ();
-            p->addToMembers ();  // clears _stackDerivative
-            _Part ** j   = & p->_parts[0];
-            _Part ** end = j + p->nextEntry;
+            p->addToMembers ();  // clears stackDerivative
+            Part ** j   = & p->parts[0];
+            Part ** end = j + p->nextEntry;
             while (j < end)
             {
                 (*j)->finalizeDerivative ();
@@ -676,28 +705,28 @@ _RungeKutta::integrate (std::vector<_Population *> & populations, float t, float
 
     for (it = populations.begin (); it != populations.end (); it++)
     {
-        _Population * p = *it;
+        Population * p = *it;
         p->multiply (1.0 / 6.0);
-        _Part ** j   = & p->_parts[0];
-        _Part ** end = j + p->nextEntry;
+        Part ** j   = & p->parts[0];
+        Part ** end = j + p->nextEntry;
         while (j < end) (*j++)->multiply (1.0 / 6.0);
     }
 
     for (it = populations.begin (); it != populations.end (); it++)
     {
-        _Population * p = *it;
-        p->integrate (t, dt);
-        _Part ** j   = & p->_parts[0];
-        _Part ** end = j + p->nextEntry;
-        while (j < end) (*j++)->integrate (t, dt);
+        Population * p = *it;
+        p->integrate (*this);
+        Part ** j   = & p->parts[0];
+        Part ** end = j + p->nextEntry;
+        while (j < end) (*j++)->integrate (*this);
     }
 
     for (it = populations.begin (); it != populations.end (); it++)
     {
-        _Population * p = *it;
-        p->popIntegrated ();  // clears _stackIntgrated
-        _Part ** j   = & p->_parts[0];
-        _Part ** end = j + p->nextEntry;
+        Population * p = *it;
+        p->popIntegrated ();  // clears stackIntgrated
+        Part ** j   = & p->parts[0];
+        Part ** end = j + p->nextEntry;
         while (j < end) (*j++)->popIntegrated ();  // ditto
     }
 }

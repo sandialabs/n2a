@@ -1012,6 +1012,17 @@ public class EquationSet implements Comparable<EquationSet>
         }
     }
 
+    public boolean getInit ()
+    {
+        Variable init = find (new Variable ("$init"));
+        if (init == null) return false;
+        EquationEntry e = init.equations.first ();
+        ASTConstant c = (ASTConstant) e.expression;
+        Object o = c.getValue ();
+        if (! (o instanceof Float)) return false;
+        return ((Float) o).floatValue () == 1.0;
+    }
+
     public static ArrayList<EquationSet> getSplitFrom (ASTNodeBase node) throws Exception
     {
         ArrayList<EquationSet> result = new ArrayList<EquationSet> ();
@@ -1106,7 +1117,12 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /*
+     * @param attribute The string to add to the tags associated with each given variable.
      * @param connection Tri-state: 1 = must be a connection, -1 = must be a compartment, 0 = can be either one
+     * @param withOrder Restricts name matching to exactly the same order of derivative,
+     * that is, how many "prime" marks are appended to the variable name.
+     * When false, matches any variable with the same base name.
+     * @param names A set of variable names to search for and tag.
      */
     public void addAttribute (String attribute, int connection, boolean withOrder, Set<String> names)
     {
