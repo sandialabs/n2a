@@ -73,9 +73,9 @@ public:
     virtual bool live    (); ///< Put a dead part back into service. @return true if the part is ready to use, false if the we are still waiting on other parts that reference us.
 
     // Accessors for $variables
-    virtual float getLive ();              ///< @return 1 if we are in normal simulation. 0 if we have died. Default is 1.
-    virtual float getP    (const Vector3 & __24xyz);              ///< Default is 1 (always create)
-    virtual void  getXYZ  (Vector3 & xyz); ///< Default is [0;0;0].
+    virtual float                   getLive ();               ///< @return 1 if we are in normal simulation. 0 if we have died. Default is 1.
+    virtual float                   getP    (float __24init); ///< Default is 1 (always create)
+    virtual fl::MatrixResult<float> getXYZ  (float __24init); ///< Default is [0;0;0]. TODO: consider passing vector by reference, for efficiency
 
     // Generic metadata
     virtual void getNamedValue (const std::string & name, std::string & value);

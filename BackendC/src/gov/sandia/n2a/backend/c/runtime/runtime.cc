@@ -133,17 +133,17 @@ Part::getLive ()
 }
 
 float
-Part::getP (const Vector3 & __24xyz)
+Part::getP (float __24init)
 {
     return 1;
 }
 
-void
-Part::getXYZ (Vector3 & __24xyz)
+MatrixResult<float>
+Part::getXYZ (float __24init)
 {
-    __24xyz[0] = 0;
-    __24xyz[1] = 0;
-    __24xyz[2] = 0;
+    Vector<float> * result = new Vector<float> (3);
+    result->clear ();
+    return result;
 }
 
 void
@@ -275,6 +275,13 @@ class KDTreeEntry : public Vector3
 {
 public:
     Part * part;
+    KDTreeEntry & operator = (const MatrixAbstract<float> & that)
+    {
+        (*this)[0] = that[0];
+        (*this)[1] = that[1];
+        (*this)[2] = that[2];
+        return *this;
+    }
 };
 
 void
@@ -350,7 +357,7 @@ Simulator::run ()
                 {
                     Part * b = B->parts[i];
                     KDTreeEntry & e = entries[i];
-                    b->getXYZ (e);
+                    e = b->getXYZ (0);  // b has already been initialized, so pass $init=0
                     e.part = b;
                     entryPointers[i] = &e;
                 }
@@ -405,8 +412,7 @@ Simulator::run ()
                     c->setPart (Bref, B->parts[0]);  // give a dummy B object, in case xyz call breaks rules about only accessing A
 
                     // Project A into B
-                    Vector3 xyz;
-                    c->getXYZ (xyz);
+                    Vector3 xyz = c->getXYZ (1);  // as a probe part, c is still in init, so pass $init=1
 
                     // Select the subset of B
                     if (doNN)
@@ -429,7 +435,7 @@ Simulator::run ()
                         if (Bmax  &&  Bcount[b->__24index] >= Bmax) continue;  // no room in this B.  (No need to check doAccounting, because Bmax != 0 is a subcase.)
 
                         c->setPart (Bref, b);
-                        if (c->getP (xyz) <= rand () / (RAND_MAX + 1.0f)) continue;
+                        if (c->getP (1) <= rand () / (RAND_MAX + 1.0f)) continue;
                         c->init (*this);
                         p->parts.push_back (c);
                         p->nextEntry = p->parts.size ();
@@ -456,8 +462,7 @@ Simulator::run ()
                     c->setPart (Bref, B->parts[0]);
 
                     // Project A into B
-                    Vector3 xyz;
-                    c->getXYZ (xyz);
+                    Vector3 xyz = c->getXYZ (1);
 
                     // Select the subset of B
                     if (k  ||  radius)
@@ -480,7 +485,7 @@ Simulator::run ()
                         if (Bmax  &&  Bcount[b->__24index] >= Bmax) continue;  // no room in this B.  (No need to check doAccounting, because Bmax != 0 is a subcase.)
 
                         c->setPart (Bref, b);
-                        if (c->getP (xyz) <= rand () / (RAND_MAX + 1.0f)) continue;
+                        if (c->getP (1) <= rand () / (RAND_MAX + 1.0f)) continue;
                         c->init (*this);
                         p->parts.push_back (c);
                         p->nextEntry = p->parts.size ();

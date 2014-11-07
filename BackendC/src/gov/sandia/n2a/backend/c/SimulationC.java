@@ -174,6 +174,7 @@ public class SimulationC implements Simulation
         s.append ("#include <cmath>\n");
         s.append ("\n");
         s.append ("using namespace std;\n");
+        s.append ("using namespace fl;\n");
         s.append ("\n");
 
         s.append (generateClasses (e, ""));
@@ -602,7 +603,7 @@ public class SimulationC implements Simulation
             {
                 if (! v.name.startsWith ("$")) continue;
                 if (v.name.equals ("$type")) throw new Exception ("$type should never be assigned during init. Consider adding/changing the conditions on the $type equaton.");
-                multiconditional (s, v, context, true, pad3, result);
+                multiconditional (s, v, context, pad3, result);
             }
             //   finalize $variables
             for (Variable v : localBuffered)  // more than just localBufferedInternal, because we must finalize members as well
@@ -614,7 +615,7 @@ public class SimulationC implements Simulation
             for (Variable v : localInit)
             {
                 if (v.name.startsWith ("$")) continue;
-                multiconditional (s, v, context, true, pad3, result);
+                multiconditional (s, v, context, pad3, result);
             }
             //   finalize non-$variables
             for (Variable v : localBuffered)
@@ -678,7 +679,7 @@ public class SimulationC implements Simulation
             }
             for (Variable v : local)
             {
-                multiconditional (s, v, context, false, pad3, result);
+                multiconditional (s, v, context, pad3, result);
             }
             for (Variable v : localBufferedInternal)
             {
@@ -780,7 +781,7 @@ public class SimulationC implements Simulation
             }
             for (Variable v : localDerivative)
             {
-                multiconditional (s, v, context, false, pad3, result);
+                multiconditional (s, v, context, pad3, result);
             }
             for (Variable v : localBufferedDerivative)
             {
@@ -921,26 +922,51 @@ public class SimulationC implements Simulation
         }
 
         // Unit getP
+        // TODO: $p may depend on value of $live, but when testing potential connections, getLive() will incorrectly report true.
+        //       Therefore, hack a way to force $live false during testing of non-actualized connections. 
         {
             Variable v = s.find (new Variable ("$p", 0));
             if (v != null)
             {
-                result.append (pad2 + "virtual float getP (const Vector3 & " + mangle ("$xyz") + ")\n");
+                result.append (pad2 + "virtual float getP (float " + mangle ("$init") + ")\n");
                 result.append (pad2 + "{\n");
+
+                Variable init = s.find (new Variable ("$init"));
+
                 if (v.hasAttribute ("transient"))
                 {
-                    // If $p is transient, then it is only called during init, after most other $variables are assigned
-                    // TODO: $p may depend on intermediate (temporary) values. These should also be generated here.
-                    // TODO: $p may depend on value of $live, but when testing potential connections, getLive() will incorrectly report true.
-                    //       Therefore, hack a way to force $live false during testing of non-actualized connections. 
-                    s.setInit (true);
-                    multiconditionalTransient (s, v, context, "return", "return 1", pad3, result);
-                    s.setInit (false);
+                    result.append (pad3 + "float " + mangle (v) + " = 1;\n");
+                    init.addAttribute ("preexistent");
+                    init.removeAttribute ("constant");
                 }
-                else  // stored somewhere
+                else
                 {
-                    result.append (pad3 + "return " + resolve (context, v.reference, false, 0) + ";\n");
+                    result.append (pad3 + "if (" + mangle ("$init") + ")\n");
+                    result.append (pad3 + "{\n");
+                    s.setInit (true);
                 }
+
+                // Generate any temporaries needed by $p
+                for (Variable t : local)
+                {
+                    if (t.hasAttribute ("temporary")  &&  v.dependsOn (t) != null)
+                    {
+                        multiconditional (s, t, context, pad4, result);
+                    }
+                }
+                multiconditional (s, v, context, pad4, result);
+
+                if (v.hasAttribute ("transient"))
+                {
+                    init.addAttribute ("constant");
+                    init.removeAttribute ("preexistent");
+                }
+                else  // stored in object ($variables always have defaults and therefore never resolve up to container)
+                {
+                    s.setInit (false);
+                    result.append (pad3 + "}\n");
+                }
+                result.append (pad3 + "return " + mangle (v) + ";\n");
                 result.append (pad2 + "}\n");
                 result.append ("\n");
             }
@@ -976,23 +1002,51 @@ public class SimulationC implements Simulation
             Variable v = s.find (new Variable ("$xyz", 0));
             if (v != null  ||  s.connectionBindings != null)
             {
-                result.append (pad2 + "virtual void getXYZ (Vector3 & " + mangle ("$xyz") + ")\n");
+                result.append (pad2 + "virtual MatrixResult<float> getXYZ (float " + mangle ("$init") + ")\n");
                 result.append (pad2 + "{\n");
                 if (v == null)  // This must therefore be a Connection, so we defer $xyz to our reference part.
                 {
-                    result.append (pad3 + refName + "->getXYZ (" + mangle ("$xyz") + ");\n");
+                    result.append (pad3 + "return " + refName + "->getXYZ (" + mangle ("$init") + ");\n");
                 }
-                else if (v.hasAttribute ("transient"))
+                else
                 {
-                    s.setInit (true);
-                    String returnString  = mangle ("$xyz") + " =";
-                    String defaultString = "Part::getXYZ (" + mangle ("$xyz") + ")";
-                    multiconditionalTransient (s, v, context, returnString, defaultString, pad3, result);
-                    s.setInit (false);
-                }
-                else  // stored somewhere
-                {
-                    result.append (pad3 + mangle ("$xyz") + " = " + resolve (context, v.reference, false, 0, "this->") + ";\n");
+                    Variable init = s.find (new Variable ("$init"));
+
+                    if (v.hasAttribute ("transient"))
+                    {
+                        result.append (pad3 + "Vector3 " + mangle (v) + ";\n");
+                        result.append (pad3 + mangle (v) + ".clear ();\n");
+                        init.addAttribute ("preexistent");
+                        init.removeAttribute ("constant");
+                    }
+                    else
+                    {
+                        result.append (pad3 + "if (" + mangle ("$init") + ")\n");
+                        result.append (pad3 + "{\n");
+                        s.setInit (true);
+                    }
+
+                    // Generate any temporaries needed by $p
+                    for (Variable t : local)
+                    {
+                        if (t.hasAttribute ("temporary")  &&  v.dependsOn (t) != null)
+                        {
+                            multiconditional (s, t, context, pad4, result);
+                        }
+                    }
+                    multiconditional (s, v, context, pad4, result);
+
+                    if (v.hasAttribute ("transient"))
+                    {
+                        init.addAttribute ("constant");
+                        init.removeAttribute ("preexistent");
+                    }
+                    else
+                    {
+                        s.setInit (false);
+                        result.append (pad3 + "}\n");
+                    }
+                    result.append (pad3 + "return new Vector3 (" + mangle (v) + ");\n");
                 }
                 result.append (pad2 + "}\n");
                 result.append ("\n");
@@ -1178,7 +1232,7 @@ public class SimulationC implements Simulation
             //   no separate $ and non-$ phases, because only $variables work at the population level
             for (Variable v : globalInit)
             {
-                multiconditional (s, v, context, true, pad3, result);
+                multiconditional (s, v, context, pad3, result);
             }
             //   finalize
             for (Variable v : globalBuffered)
@@ -1239,7 +1293,7 @@ public class SimulationC implements Simulation
             }
             for (Variable v : global)
             {
-                multiconditional (s, v, context, false, pad3, result);
+                multiconditional (s, v, context, pad3, result);
             }
             for (Variable v : globalBufferedInternal)
             {
@@ -1286,7 +1340,7 @@ public class SimulationC implements Simulation
             }
             for (Variable v : globalDerivative)
             {
-                multiconditional (s, v, context, false, pad3, result);
+                multiconditional (s, v, context, pad3, result);
             }
             for (Variable v : globalBufferedDerivative)
             {
@@ -1564,20 +1618,22 @@ public class SimulationC implements Simulation
         return result.toString ();
     }
 
-    public void multiconditional (EquationSet s, Variable v, CRenderingContext context, boolean init, String pad, StringBuilder result) throws Exception
+    public void multiconditional (EquationSet s, Variable v, CRenderingContext context, String pad, StringBuilder result) throws Exception
     {
+        boolean initConstant = s.find (new Variable ("$init")).hasAttribute ("constant");
+        boolean init = s.getInit ();
+        boolean isType = v.name.equals ("$type");
+
         if (v.hasAttribute ("temporary"))
         {
             result.append (pad + "float " + mangle (v) + ";\n");
         }
 
-        boolean isType = v.name.equals ("$type");
-
         // Select the default equation
         EquationEntry defaultEquation = null;
         for (EquationEntry e : v.equations)
         {
-            if (init  &&  e.ifString.equals ("$init"))
+            if (initConstant  &&  init  &&  e.ifString.equals ("$init"))
             {
                 defaultEquation = e;
                 break;
@@ -1596,13 +1652,16 @@ public class SimulationC implements Simulation
             {
                 continue;
             }
-            if (init  &&  e.ifString.length () == 0)
+            if (initConstant)
             {
-                continue;
-            }
-            if (! init  &&  e.ifString.equals ("$init"))
-            {
-                continue;
+                if (init)
+                {
+                    if (e.ifString.length () == 0) continue;
+                }
+                else  // not init
+                {
+                    if (e.ifString.equals ("$init")) continue;
+                }
             }
             if (e.conditional != null)
             {
@@ -1635,7 +1694,7 @@ public class SimulationC implements Simulation
                     result.append (pad + resolve (context, v.reference, true, 0) + " " + e.assignment + " " + context.render (e.expression) + ";\n");
                 }
             }
-            else if (! init)  // an old-style tracer
+            else if (initConstant  &&  ! init)  // an old-style tracer.  TODO: remove this case when trace() is implemented
             {
                 result.append (pad + "cout << (" + context.render (e.expression) + ") << \" \";\n");
             }
@@ -1684,38 +1743,10 @@ public class SimulationC implements Simulation
                     result.append (pad + resolve (context, v.reference, true, 0) + " " + defaultEquation.assignment + " " + context.render (defaultEquation.expression) + ";\n");
                 }
             }
-            else if (! init)  // an old-style tracer
+            else if (initConstant  &&  ! init)  // an old-style tracer
             {
                 result.append (pad + "cout << (" + context.render (defaultEquation.expression) + ") << \" \";\n");
             }
-        }
-    }
-
-    public void multiconditionalTransient (EquationSet s, Variable v, CRenderingContext context, String returnString, String defaultString, String pad, StringBuilder result)
-    {
-        boolean haveIf = false;
-        for (EquationEntry e : v.equations)
-        {
-            if (e.conditional != null  &&  ! e.ifString.equals ("$init"))
-            {
-                String ifString;
-                if (haveIf)
-                {
-                    ifString = "elseif (";
-                }
-                else
-                {
-                    ifString = "if (";
-                    haveIf = true;
-                }
-                result.append (pad + ifString + context.render (e.conditional) + ")\n  ");
-            }
-            result.append (pad + returnString + " " + context.render (e.expression) + ";\n");
-        }
-        if (haveIf)
-        {
-            result.append (pad + "else\n  ");  // copy previous value
-            result.append (pad + defaultString + ";\n");
         }
     }
 
@@ -1832,11 +1863,11 @@ public class SimulationC implements Simulation
         {
             // TODO: In general, we should never directly set a value on the simlutor object.
             // Instead we should call special functions that change how the current node is handled.
+            // That is, an assignment to $dt should be replaced by simulator.setdt (expression).
             // The right place to trap and handle this may be in multiconditional().
             if (containers.length () > 0) return "unresolved";
             return "simulator." + r.variable.name.substring (1);  // strip the $ and expect it to be a member of simulator, which must be passed into the current function
         }
-        // TODO: need to handle setXXX() functions for transients
         if (! lvalue)  // rvalue
         {
             if (r.variable.hasAttribute ("transient"))
@@ -1850,7 +1881,7 @@ public class SimulationC implements Simulation
         }
         if (name.length () == 0)
         {
-            if (lvalue  &&  r.variable.hasAny (new String[] {"cycle", "externalRead", "externalWrite", "simulator"}))
+            if (lvalue  &&  r.variable.hasAny (new String[] {"cycle", "externalRead", "externalWrite"}))
             {
                 name = mangle ("next_", r.variable);
             }

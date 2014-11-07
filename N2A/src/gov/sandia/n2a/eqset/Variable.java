@@ -30,7 +30,7 @@ public class Variable implements Comparable<Variable>
     public List<Variable>               uses;       // Variables we depend on. Forms a digraph on Variable nodes.
     public boolean                      hasUsers;   // Indicates that some variable depends on us. That is, we exist in some Variable.uses collection.
     public List<Variable>               before;     // Variables that must be evaluated after us. Generally the same as uses, unless we are a temporary, in which case the ordering is reversed. Note EquationSet.ordered
-    public Variable                     visited;    // Points to the previous variable visited on the current path. Used to prevent infinite recursion.
+    public Variable                     visited;    // Points to the previous variable visited on the current path. Used to prevent infinite recursion. Only work on a single thread.
     public int                          priority;   // For evaluation order.
 
     public Variable (String name)
@@ -157,6 +157,40 @@ public class Variable implements Comparable<Variable>
         whatWeNeed.hasUsers = true;
     }
 
+    /**
+        Determines if query exists anywhere in our dependency graph.
+        @return The actual Variable we depend on (as opposed to the query object).
+        If we don't depend on the item described by the query, then null.
+    **/
+    public Variable dependsOn (Variable query)
+    {
+        visited = null;
+        return dependsOnRecursive (query);
+    }
+
+    protected Variable dependsOnRecursive (Variable query)
+    {
+        if (query.equals (this)) return this;
+
+        // Prevent infinite recursion
+        Variable p = visited;
+        while (p != null)
+        {
+            if (p == this) return null;
+            p = p.visited;
+        }
+
+        for (Variable u : uses)
+        {
+            if (u.container != container) continue;  // Don't exit the current equation set.
+            u.visited = this;
+            Variable result = u.dependsOnRecursive (query);
+            if (result != null) return result;
+        }
+        
+        return null;
+    }
+
     public void setBefore (Variable after)
     {
         if (before == null)
@@ -253,6 +287,8 @@ public class Variable implements Comparable<Variable>
             <dt>preexistent</dt>
                 <dd>storage does not need to be created for the variable (in C)
                 because it is either inherited or passed into a function</dd>
+            <dt>simulator</dt>
+                <dd>accessible via the simulator object</dd>
             <dt>temporary</dt>
                 <dd>this variable is used immediately in the equation set and
                 never stored between time-steps; a temporary must not be

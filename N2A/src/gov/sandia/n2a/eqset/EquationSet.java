@@ -1001,8 +1001,7 @@ public class EquationSet implements Comparable<EquationSet>
             EquationEntry e = new EquationEntry ("$init", 0);
             e.variable.addAttribute ("constant");
             e.expression = new ASTConstant (new Float (value ? 1.0 : 0.0));
-            init = e.variable;
-            add (init);
+            add (e.variable);
         }
         else
         {
