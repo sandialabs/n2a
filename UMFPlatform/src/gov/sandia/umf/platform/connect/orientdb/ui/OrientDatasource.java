@@ -47,26 +47,18 @@ public class OrientDatasource
         "OGraphVertex"      // a document database at least.
     };
 
+    ODatabaseDocumentPool pool;
+
     public class DBFactory implements ODatabaseThreadLocalFactory
     {
-        public OrientConnectDetails details;
-
-        public DBFactory (OrientConnectDetails details)
-        {
-            this.details = details;
-        }
-
         public ODatabaseRecord getThreadDatabase ()
         {
-            //return ODatabaseDocumentPool.global ().acquire (details.location, details.user, details.password);
-            Object result = ODatabaseDocumentPool.global ().acquire (details.location, details.user, details.password);
-            return (ODatabaseRecord) result;
+            return pool.acquire ();
         }
     }
 
     public OrientDatasource (OrientConnectDetails details)
     {
-        System.out.println ("OrientDatasource ctor");
         if (! details.location.contains ("local:")  &&  ! details.location.startsWith ("remote:"))
         {
             details.location = "local:" + details.location;  // Could be smarter
@@ -101,7 +93,8 @@ public class OrientDatasource
         	db.close ();
         }
 
-        Orient.instance ().registerThreadDatabaseFactory (new DBFactory (details));
+        pool = new ODatabaseDocumentPool (details.location, details.user, details.password);
+        Orient.instance ().registerThreadDatabaseFactory (new DBFactory ());
         ODatabaseRecordThreadLocal.INSTANCE.set (null);
     }
 
@@ -128,6 +121,7 @@ public class OrientDatasource
 
     public boolean isConnected ()
     {
+        if (pool == null) return false;
         ODatabaseDocumentTx db = getDB ();
         return db != null  &&  ! db.isClosed ();
     }
@@ -136,6 +130,7 @@ public class OrientDatasource
     {
         Orient.instance ().registerThreadDatabaseFactory (null);
         ODatabaseRecordThreadLocal.INSTANCE.set (null);
+        pool.close ();
     }
 
     public List<String> getClassNames ()
