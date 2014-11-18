@@ -142,7 +142,7 @@ public class SimulationC implements Simulation
         e.metadata.putAll (metadata);  // parameters pushed by run system override any we already have
 
         e.flatten ();
-        e.addSpecials ();  // $dt, $index, $init, $t, $type
+        e.addSpecials ();  // $dt, $index, $init, $live, $t, $type
         e.findConstants ();
         e.fillIntegratedVariables ();
         e.findIntegrated ();
@@ -151,6 +151,8 @@ public class SimulationC implements Simulation
         e.resolveRHS ();
         e.removeUnused ();  // especially get rid of unneeded $variables created by addSpecials()
         e.collectSplits ();
+        e.findDeath ();
+        findPathToContainer (e);
         e.findTemporary ();
         e.determineOrder ();
         e.findDerivative ();
@@ -175,6 +177,8 @@ public class SimulationC implements Simulation
         s.append ("\n");
         s.append ("using namespace std;\n");
         s.append ("using namespace fl;\n");
+        s.append ("\n");
+        s.append ("class _Model_Population;\n");  // forward declaration so that Model can refer to its population as its container
         s.append ("\n");
 
         s.append (generateClasses (e, ""));
@@ -407,6 +411,10 @@ public class SimulationC implements Simulation
             }
         }
 
+        // Determine how to access my container at run time
+        EquationSet pathToContainer = null;
+        if (s.backendData instanceof EquationSet) pathToContainer = (EquationSet) s.backendData;
+
         // Unit conversions
         Set<ArrayList<EquationSet>> conversions = s.getConversions ();
         for (ArrayList<EquationSet> pair : conversions)
@@ -502,9 +510,10 @@ public class SimulationC implements Simulation
         {
             result.append (pad2 + "Integrated * stackIntegrated;\n");
         }
-        if (s.container != null  &&  s.connectionBindings == null)
+        if (pathToContainer == null)
         {
-            result.append (pad2 + mangle (s.container.name) + " * container;\n");
+            if (s.container == null) result.append (pad2 + mangle (s.name) + "_Population * container;\n");  // The top-level model points to its own population, rather than a higher container.
+            else                     result.append (pad2 + mangle (s.container.name) + " * container;\n");
         }
         if (s.connectionBindings != null)
         {
@@ -737,22 +746,55 @@ public class SimulationC implements Simulation
                         }
                         else
                         {
-                            result.append (pad5 + "container->" + mangle (s.name) + "_2_" + mangle (to.name) + " (this, simulator, " + (j + 1) + ");\n");
+                            String container = "container->";
+                            if (pathToContainer != null) container = mangle (pathToContainer.name) + "->" + container;
+                            result.append (pad5 + container + mangle (s.name) + "_2_" + mangle (to.name) + " (this, simulator, " + (j + 1) + ");\n");
                         }
                     }
-                    if (! used) result.append (pad5 + "die ();\n");
-                    result.append (pad5 + "break;\n");
+                    if (used)
+                    {
+                        result.append (pad5 + "break;\n");
+                    }
+                    else
+                    {
+                        result.append (pad5 + "die ();\n");
+                        result.append (pad5 + "return 0;\n");
+                    }
                     result.append (pad4 + "}\n");
                 }
                 result.append (pad3 + "}\n");
             }
 
-            //if (canDie)  // there exists an assignment to $p of some value less than 1
-            //{
-            //    result.append (pad3 + "if (getP () < ) die ();\n");
-            //}
+            if (s.lethalP)
+            {
+                Variable p = s.find (new Variable ("$p")); // lethalP implies that $p exists, so no need to check for null
+                result.append (pad3 + "float create = " + resolve (context, p.reference, false, 0) + ";\n");
+                result.append (pad3 + "if (create == 0  ||  create < 1  &&  create < randf ())\n");
+                result.append (pad3 + "{\n");
+                result.append (pad4 + "die ();\n");
+                result.append (pad4 + "return 0;\n");
+                result.append (pad3 + "}\n");
+            }
 
-            result.append (pad3 + "return getLive ();\n");
+            if (s.lethalConnection)
+            {
+                for (Entry<String, EquationSet> c : s.connectionBindings.entrySet ())
+                {
+                	VariableReference r = s.resolveReference (c.getKey () + ".$live");
+                    result.append (pad3 + "if (! (" + resolve (context, r, false, 0) + ")) return 0;\n");
+                }
+            }
+
+            if (s.lethalContainer)
+            {
+                VariableReference r = s.resolveReference ("$up.$live");
+                result.append (pad3 + "return " + resolve (context, r, false, 0) + ";\n");
+            }
+            else
+            {
+                result.append (pad3 + "return 1;\n");
+            }
+
             result.append (pad2 + "}\n");
             result.append ("\n");
         }
@@ -901,16 +943,15 @@ public class SimulationC implements Simulation
 
         // Unit getLive
         {
-            Variable v = s.find (new Variable ("$live", 0));
+            Variable v = s.find (new Variable ("$live"));
             if (v != null)
             {
                 result.append (pad2 + "virtual float getLive ()\n");
                 result.append (pad2 + "{\n");
                 if (v.hasAttribute ("transient"))
                 {
-                    // $live is only transient when nothing refers to this part
-                    // TODO: make sure this is enforced when "transient" attribute is assigned
-                    result.append (pad3 + "return 1;\n");  // TODO: do real calculation here
+                	// TODO: finish implementing this
+                    result.append (pad3 + "return 1;\n");
                 }
                 else  // stored somewhere
                 {
@@ -925,17 +966,17 @@ public class SimulationC implements Simulation
         // TODO: $p may depend on value of $live, but when testing potential connections, getLive() will incorrectly report true.
         //       Therefore, hack a way to force $live false during testing of non-actualized connections. 
         {
-            Variable v = s.find (new Variable ("$p", 0));
-            if (v != null)
+            Variable p = s.find (new Variable ("$p", 0));
+            if (p != null)
             {
-                result.append (pad2 + "virtual float getP (float " + mangle ("$init") + ")\n");
+                result.append (pad2 + "virtual float getP (float " + mangle ("$init") + ", float " + mangle ("$live") + ")\n");
                 result.append (pad2 + "{\n");
 
                 Variable init = s.find (new Variable ("$init"));
 
-                if (v.hasAttribute ("transient"))
+                if (p.hasAttribute ("transient"))
                 {
-                    result.append (pad3 + "float " + mangle (v) + " = 1;\n");
+                    result.append (pad3 + "float " + mangle (p) + " = 1;\n");
                     init.addAttribute ("preexistent");
                     init.removeAttribute ("constant");
                 }
@@ -949,14 +990,14 @@ public class SimulationC implements Simulation
                 // Generate any temporaries needed by $p
                 for (Variable t : local)
                 {
-                    if (t.hasAttribute ("temporary")  &&  v.dependsOn (t) != null)
+                    if (t.hasAttribute ("temporary")  &&  p.dependsOn (t) != null)
                     {
                         multiconditional (s, t, context, pad4, result);
                     }
                 }
-                multiconditional (s, v, context, pad4, result);
+                multiconditional (s, p, context, pad4, result);
 
-                if (v.hasAttribute ("transient"))
+                if (p.hasAttribute ("transient"))
                 {
                     init.addAttribute ("constant");
                     init.removeAttribute ("preexistent");
@@ -966,7 +1007,7 @@ public class SimulationC implements Simulation
                     s.setInit (false);
                     result.append (pad3 + "}\n");
                 }
-                result.append (pad3 + "return " + mangle (v) + ";\n");
+                result.append (pad3 + "return " + mangle (p) + ";\n");
                 result.append (pad2 + "}\n");
                 result.append ("\n");
             }
@@ -999,23 +1040,23 @@ public class SimulationC implements Simulation
 
         // Unit getXYZ
         {
-            Variable v = s.find (new Variable ("$xyz", 0));
-            if (v != null  ||  s.connectionBindings != null)
+            Variable xyz = s.find (new Variable ("$xyz", 0));
+            if (xyz != null  ||  s.connectionBindings != null)
             {
-                result.append (pad2 + "virtual MatrixResult<float> getXYZ (float " + mangle ("$init") + ")\n");
+                result.append (pad2 + "virtual MatrixResult<float> getXYZ (float " + mangle ("$init") + ", float " + mangle ("$live") + ")\n");
                 result.append (pad2 + "{\n");
-                if (v == null)  // This must therefore be a Connection, so we defer $xyz to our reference part.
+                if (xyz == null)  // This must therefore be a Connection, so we defer $xyz to our reference part.
                 {
-                    result.append (pad3 + "return " + refName + "->getXYZ (" + mangle ("$init") + ");\n");
+                    result.append (pad3 + "return " + refName + "->getXYZ (" + mangle ("$init") + ", " + mangle ("$live") + ");\n");
                 }
                 else
                 {
                     Variable init = s.find (new Variable ("$init"));
 
-                    if (v.hasAttribute ("transient"))
+                    if (xyz.hasAttribute ("transient"))
                     {
-                        result.append (pad3 + "Vector3 " + mangle (v) + ";\n");
-                        result.append (pad3 + mangle (v) + ".clear ();\n");
+                        result.append (pad3 + "Vector3 " + mangle (xyz) + ";\n");
+                        result.append (pad3 + mangle (xyz) + ".clear ();\n");
                         init.addAttribute ("preexistent");
                         init.removeAttribute ("constant");
                     }
@@ -1029,14 +1070,14 @@ public class SimulationC implements Simulation
                     // Generate any temporaries needed by $p
                     for (Variable t : local)
                     {
-                        if (t.hasAttribute ("temporary")  &&  v.dependsOn (t) != null)
+                        if (t.hasAttribute ("temporary")  &&  xyz.dependsOn (t) != null)
                         {
                             multiconditional (s, t, context, pad4, result);
                         }
                     }
-                    multiconditional (s, v, context, pad4, result);
+                    multiconditional (s, xyz, context, pad4, result);
 
-                    if (v.hasAttribute ("transient"))
+                    if (xyz.hasAttribute ("transient"))
                     {
                         init.addAttribute ("constant");
                         init.removeAttribute ("preexistent");
@@ -1046,7 +1087,7 @@ public class SimulationC implements Simulation
                         s.setInit (false);
                         result.append (pad3 + "}\n");
                     }
-                    result.append (pad3 + "return new Vector3 (" + mangle (v) + ");\n");
+                    result.append (pad3 + "return new Vector3 (" + mangle (xyz) + ");\n");
                 }
                 result.append (pad2 + "}\n");
                 result.append ("\n");
@@ -1063,6 +1104,7 @@ public class SimulationC implements Simulation
             int i = 0;
             for (Entry<String, EquationSet> e : s.connectionBindings.entrySet ())
             {
+                // TODO: This assumes that all the parts are children of the same container as the connection. Need to generalize so connections can cross branches of the containment hierarchy.
                 result.append (pad4 + "case " + i++ + ": " + mangle (e.getKey ()) + " = (" + prefix (s.container, e.getValue ()) + " *) part; return;\n");
             }
             result.append (pad3 + "}\n");
@@ -1194,9 +1236,10 @@ public class SimulationC implements Simulation
         result.append (pad2 + "virtual Part * create ()\n");
         result.append (pad2 + "{\n");
         result.append (pad3 + mangle (s.name) + " * p = new " + mangle (s.name) + ";\n");
-        if (s.container != null  &&  s.connectionBindings == null)
+        if (pathToContainer == null)
         {
-            result.append (pad3 + "p->container = container;\n");
+            if (s.container == null) result.append (pad3 + "p->container = this;\n");
+            else                     result.append (pad3 + "p->container = container;\n");
         }
         result.append (pad3 + "return p;\n");
         result.append (pad2 + "}\n");
@@ -1477,8 +1520,8 @@ public class SimulationC implements Simulation
         {
             result.append (pad2 + "virtual float getLive ()\n");
             result.append (pad2 + "{\n");
-            if (s.container == null) result.append (pad3 + "return 1;\n");
-            else                     result.append (pad3 + "return container->getLive ();\n");
+            if (s.container == null) result.append (pad3 + "return 1;\n");  // TODO: Not strictly accurate for top-level population. Out update() should return 0 when the last part (usually a singleton) dies.
+            else                     result.append (pad3 + "return container->getLive ();\n");  // TODO: should use resolve()
             result.append (pad2 + "}\n");
             result.append ("\n");
         }
@@ -1805,11 +1848,11 @@ public class SimulationC implements Simulation
     }
 
     /**
-     * @param lvalue Indicates that this will receive a value assignment. The other case is an rvalue, which will simply be read.
-     * @param index Into some population's part array. Only good for one level of indexing. TODO: need to change language to handle multiple subscripts properly.
-     * @param base Injects a pointer at the beginning of the resolution path.
-     * @return
-     */
+        TODO: Handle access to global variables. For top-level model, "container" points to population object rather than higher container.
+        @param lvalue Indicates that this will receive a value assignment. The other case is an rvalue, which will simply be read.
+        @param index Into some population's part array. Only good for one level of indexing. TODO: need to change language to handle multiple subscripts properly.
+        @param base Injects a pointer at the beginning of the resolution path.
+    **/
     public String resolve (CRenderingContext context, VariableReference r, boolean lvalue, int index, String base)
     {
         if (r == null  ||  r.variable == null) return "unresolved";
@@ -1847,6 +1890,11 @@ public class SimulationC implements Simulation
                 }
                 else  // going up
                 {
+                    if (current.backendData instanceof EquationSet)  // we are a Connection without a container pointer, so we must go through one of our referenced parts
+                    {
+                        EquationSet pathToContainer = (EquationSet) current.backendData;
+                        containers = "((" + prefix (s, pathToContainer) + " *) " + containers + mangle (pathToContainer.name) + ")->";
+                    }
                     containers += "container->";
                 }
                 current = s;
@@ -1891,6 +1939,27 @@ public class SimulationC implements Simulation
             }
         }
         return containers + name;
+    }
+
+    public void findPathToContainer (EquationSet s)
+    {
+        for (EquationSet p : s.parts)
+        {
+            findPathToContainer (p);
+        }
+
+        s.backendData = null;
+        if (s.connectionBindings != null  &&  s.lethalContainer)  // and therefore needs to check its container
+        {
+            for (Entry<String, EquationSet> c : s.connectionBindings.entrySet ())
+            {
+                if (c.getValue ().container == s.container)
+                {
+                    s.backendData = c.getValue ();
+                    break;
+                }
+            }
+        }
     }
 
     class CRenderingContext extends ASTRenderingContext

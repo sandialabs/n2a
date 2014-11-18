@@ -9,6 +9,13 @@
 typedef fl::MatrixFixed<float,3,1> Vector3;
 
 
+// Random number in [0, 1]
+inline float
+randf ()
+{
+  return (float) rand () / RAND_MAX;
+}
+
 /**
     Generate square and triangular waves.
     @return real values in [0,1].  Exact shape of wave depends on input parameters.
@@ -74,8 +81,8 @@ public:
 
     // Accessors for $variables
     virtual float                   getLive ();               ///< @return 1 if we are in normal simulation. 0 if we have died. Default is 1.
-    virtual float                   getP    (float __24init); ///< Default is 1 (always create)
-    virtual fl::MatrixResult<float> getXYZ  (float __24init); ///< Default is [0;0;0]. TODO: consider passing vector by reference, for efficiency
+    virtual float                   getP    (float __24init, float __24live); ///< Default is 1 (always create)
+    virtual fl::MatrixResult<float> getXYZ  (float __24init, float __24live); ///< Default is [0;0;0]. TODO: consider passing vector by reference, for efficiency
 
     // Generic metadata
     virtual void getNamedValue (const std::string & name, std::string & value);

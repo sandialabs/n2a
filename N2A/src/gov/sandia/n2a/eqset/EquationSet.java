@@ -59,6 +59,11 @@ public class EquationSet implements Comparable<EquationSet>
     public Map<String, String>               metadata;            // TODO: better to refer metadata requests to source object (the Part). Part should implement a getNamedValue() function that refers requests up the inheritance chain.
     public List<Variable>                    ordered;
     public List<ArrayList<EquationSet>>      splits;              // Enumeration of the $type splits this part can go through
+    public boolean                           lethalP;
+    public boolean                           lethalType;
+    public boolean                           lethalConnection;
+    public boolean                           lethalContainer;
+    public Object                            backendData;         // holder for extra data associated with each equation set by a given backend
 
     public EquationSet (String name)
     {
@@ -395,7 +400,7 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 v.name = v.name.substring (4);
                 v.reference.resolution.add (container);
-                return container.resolveEquationSet (v);
+                return container.resolveEquationSet (v);  // TODO: Could result in a null pointer exception, if $up is used in top-level model. This usage is not permitted, so perhaps all we need is better error reporting.
             }
             else
             {
@@ -413,7 +418,7 @@ public class EquationSet implements Comparable<EquationSet>
                 if (alias != null)
                 {
                     v.name = ns[1];
-                    v.reference.resolution.add (connectionBindings.floorEntry (ns[0]));
+                    v.reference.resolution.add (connectionBindings.floorEntry (ns[0]));  // We need to add an Entry<> rather than simply the EquationSet in "alias".
                     return alias.resolveEquationSet (v);
                 }
             }
@@ -461,6 +466,15 @@ public class EquationSet implements Comparable<EquationSet>
             return result;
         }
         return null;
+    }
+
+    public VariableReference resolveReference (String variableName)
+    {
+        Variable query = new Variable (variableName);
+        query.reference = new VariableReference ();
+        EquationSet dest = resolveEquationSet (query);
+        if (dest != null) query.reference.variable = dest.find (query);
+        return query.reference;
     }
 
     /**
@@ -825,6 +839,16 @@ public class EquationSet implements Comparable<EquationSet>
             v.equations = new TreeSet<EquationEntry> ();  // simpler to make an empty equation set than to test for null all the time
         }
 
+        v = new Variable ("$live", 0);  // $live functions much the same as $init. See setInit().
+        if (add (v))
+        {
+            v.addAttribute ("constant");  // Actually not constant if the part can die, or if it is a Connection. 
+            v.equations = new TreeSet<EquationEntry> ();
+            EquationEntry e = new EquationEntry (v, "");
+            v.equations.add (e);
+            e.expression = new ASTConstant (new Float (1));
+        }
+
         v = new Variable ("$t", 0);
         if (add (v))
         {
@@ -1110,19 +1134,117 @@ public class EquationSet implements Comparable<EquationSet>
         return result;
     }
 
+    /**
+        Determine which equation sets are capable of dying during structural dynamics.
+        An equation set can die under the following circumstances:
+        <ul>
+        <li>It has an assignment to $p which can be less than 1 during normal simulation.
+        <li>It has a $type split which does not include the part as offspring.
+        <li>It references parts that can die.
+        <li>It is in a container that can die.
+        </ul>
+        Each of these may call for different processing in the simulator, so various
+        flags are set on each equation set to indicate the causes.
+        Depends on results of: findConstants(), collectSplits()
+    **/
+    public void findDeath ()
+    {
+        findLethalVariables ();
+        while (findLethalContainers ()) {}
+    }
+
+    public void findLethalVariables ()
+    {
+        for (EquationSet s : parts)
+        {
+            s.findLethalVariables ();
+        }
+
+        // Determine if $p has an assignment less than 1
+        Variable p = find (new Variable ("$p"));
+        if (p != null)
+        {
+            // Determine if any equation is capable of setting $p to something besides 1
+            for (EquationEntry e : p.equations)
+            {
+                ASTNodeBase n = e.expression;
+                if (! (n instanceof ASTConstant))
+                {
+                    lethalP = true;
+                    break;
+                }
+                if (new Float (((ASTConstant) n).getValue ().toString ()).floatValue () != 1.0f)
+                {
+                    lethalP = true;
+                    break;
+                }
+            }
+        }
+
+        // Determine if any splits kill this part
+        for (ArrayList<EquationSet> split : splits)  // my splits are the parts I can split into
+        {
+            if (! split.contains (this))
+            {
+                lethalType = true;
+                break;
+            }
+        }
+    }
+
+    /**
+        @return true if something changed; false if no new ways to die were found
+    **/
+    public boolean findLethalContainers ()
+    {
+        boolean somethingChanged = false;
+
+        if (! lethalContainer  &&  container != null  &&  container.canDie ())
+        {
+            lethalContainer = true;
+            somethingChanged = true;
+        }
+
+        if (! lethalConnection  &&  connectionBindings != null)
+        {
+            for (Entry<String,EquationSet> e : connectionBindings.entrySet ())
+            {
+                if (e.getValue ().canDie ())
+                {
+                    lethalConnection = true;
+                    somethingChanged = true;
+                    break;
+                }
+            }
+        }
+
+        // tail recursion is better, because container death propagates downward
+        for (EquationSet s : parts)
+        {
+            if (s.findLethalContainers ()) somethingChanged = true;
+        }
+
+        return somethingChanged;
+    }
+
+    public boolean canDie ()
+    {
+        return lethalP  ||  lethalType  || lethalConnection  || lethalContainer;
+    }
+
     public void addAttribute (String attribute, int connection, boolean withOrder, String[] names)
     {
         addAttribute (attribute, connection, withOrder, new TreeSet<String> (Arrays.asList (names)));
     }
 
-    /*
-     * @param attribute The string to add to the tags associated with each given variable.
-     * @param connection Tri-state: 1 = must be a connection, -1 = must be a compartment, 0 = can be either one
-     * @param withOrder Restricts name matching to exactly the same order of derivative,
-     * that is, how many "prime" marks are appended to the variable name.
-     * When false, matches any variable with the same base name.
-     * @param names A set of variable names to search for and tag.
-     */
+    /**
+        @param attribute The string to add to the tags associated with each given variable.
+        @param connection Tri-state: 1 = must be a connection, -1 = must be a compartment, 0 = can be either one
+        @param withOrder Restricts name matching to exactly the same order of derivative,
+        that is, how many "prime" marks are appended to the variable name.
+        When false, matches any variable with the same base name.
+        @param names A set of variable names to search for and tag.
+    **/
     public void addAttribute (String attribute, int connection, boolean withOrder, Set<String> names)
     {
         for (EquationSet s : parts)
@@ -1330,7 +1452,7 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 continue;
             }
-            if (e.expression.getClass () == ASTConstant.class)
+            if (e.expression.getClass () == ASTConstant.class)  // TODO: Why isn't this instanceof?
             {
                 v.addAttribute ("constant");
             }
