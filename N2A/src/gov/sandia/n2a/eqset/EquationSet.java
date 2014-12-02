@@ -1145,7 +1145,7 @@ public class EquationSet implements Comparable<EquationSet>
         </ul>
         Each of these may call for different processing in the simulator, so various
         flags are set on each equation set to indicate the causes.
-        Depends on results of: findConstants(), collectSplits()
+        Depends on results of: addSpecials(), findConstants(), collectSplits()
     **/
     public void findDeath ()
     {
@@ -1205,15 +1205,20 @@ public class EquationSet implements Comparable<EquationSet>
             somethingChanged = true;
         }
 
-        if (! lethalConnection  &&  connectionBindings != null)
+        if (connectionBindings != null)
         {
             for (Entry<String,EquationSet> e : connectionBindings.entrySet ())
             {
-                if (e.getValue ().canDie ())
+                EquationSet s = e.getValue ();
+                if (s.canDie ())
                 {
-                    lethalConnection = true;
-                    somethingChanged = true;
-                    break;
+                    Variable live = s.find (new Variable ("$live"));
+                    if (live != null) live.hasUsers = true;
+                    if (! lethalConnection)
+                    {
+                        lethalConnection = true;
+                        somethingChanged = true;
+                    }
                 }
             }
         }
@@ -1230,6 +1235,39 @@ public class EquationSet implements Comparable<EquationSet>
     public boolean canDie ()
     {
         return lethalP  ||  lethalType  || lethalConnection  || lethalContainer;
+    }
+
+    /**
+        Determines the attributes of $live, based on whether other parts depend on it.
+        $live is either constant, transient, or stored.
+        It is constant (the default) if we can't die or no part depends on us.
+        It is transient if we only die in response to the death of our container or a referenced part.
+        It is stored if we can die from $p or $type, that is, if the fact that we died is local knowledge.
+        Depends on results of: findDeath()
+    **/
+    public void setLiveAttributes ()
+    {
+        for (EquationSet s : parts)
+        {
+            s.setLiveAttributes ();
+        }
+
+        Variable live = find (new Variable ("$live"));
+        if (live != null)
+        {
+            if (canDie ()  &&  live.hasUsers)
+            {
+                live.removeAttribute ("constant");
+                if (! lethalP  &&  ! lethalType)  // therefore must be (lethalConnection  ||  lethalContainer)
+                {
+                    live.addAttribute ("transient");
+                }
+            }
+            else
+            {
+                live.addAttribute ("constant");  // should already be set constant, but no harm in doing it again
+            }
+        }
     }
 
     public void addAttribute (String attribute, int connection, boolean withOrder, String[] names)

@@ -81,8 +81,8 @@ public:
 
     // Accessors for $variables
     virtual float                   getLive ();               ///< @return 1 if we are in normal simulation. 0 if we have died. Default is 1.
-    virtual float                   getP    (float __24init, float __24live); ///< Default is 1 (always create)
-    virtual fl::MatrixResult<float> getXYZ  (float __24init, float __24live); ///< Default is [0;0;0]. TODO: consider passing vector by reference, for efficiency
+    virtual float                   getP    (float __24live); ///< Default is 1 (always create)
+    virtual fl::MatrixResult<float> getXYZ  (float __24live); ///< Default is [0;0;0]. TODO: consider passing vector by reference, for efficiency
 
     // Generic metadata
     virtual void getNamedValue (const std::string & name, std::string & value);

@@ -133,13 +133,13 @@ Part::getLive ()
 }
 
 float
-Part::getP (float __24init, float __24live)
+Part::getP (float __24live)
 {
     return 1;
 }
 
 MatrixResult<float>
-Part::getXYZ (float __24init, float __24live)
+Part::getXYZ (float __24live)
 {
     Vector<float> * result = new Vector<float> (3);
     result->clear ();
@@ -357,7 +357,7 @@ Simulator::run ()
                 {
                     Part * b = B->parts[i];
                     KDTreeEntry & e = entries[i];
-                    e = b->getXYZ (0, 1);  // b has already been initialized, so pass $init=0
+                    e = b->getXYZ (1);
                     e.part = b;
                     entryPointers[i] = &e;
                 }
@@ -412,7 +412,7 @@ Simulator::run ()
                     c->setPart (Bref, B->parts[0]);  // give a dummy B object, in case xyz call breaks rules about only accessing A
 
                     // Project A into B
-                    Vector3 xyz = c->getXYZ (1, 0);  // as a probe part, c is still in init, so pass $init=1; not live, so $live=0
+                    Vector3 xyz = c->getXYZ (0);
 
                     // Select the subset of B
                     if (doNN)
@@ -435,7 +435,7 @@ Simulator::run ()
                         if (Bmax  &&  Bcount[b->__24index] >= Bmax) continue;  // no room in this B.  (No need to check doAccounting, because Bmax != 0 is a subcase.)
 
                         c->setPart (Bref, b);
-                        float create = c->getP (1, 0);
+                        float create = c->getP (0);
                         if (create <= 0  ||  create < 1  &&  create < randf ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
                         c->init (*this);
                         p->parts.push_back (c);
@@ -463,7 +463,7 @@ Simulator::run ()
                     c->setPart (Bref, B->parts[0]);
 
                     // Project A into B
-                    Vector3 xyz = c->getXYZ (1, 0);
+                    Vector3 xyz = c->getXYZ (0);
 
                     // Select the subset of B
                     if (k  ||  radius)
@@ -486,7 +486,7 @@ Simulator::run ()
                         if (Bmax  &&  Bcount[b->__24index] >= Bmax) continue;  // no room in this B.  (No need to check doAccounting, because Bmax != 0 is a subcase.)
 
                         c->setPart (Bref, b);
-                        float create = c->getP (1, 0);
+                        float create = c->getP (0);
                         if (create <= 0  ||  create < 1  &&  create < randf ()) continue;
                         c->init (*this);
                         p->parts.push_back (c);

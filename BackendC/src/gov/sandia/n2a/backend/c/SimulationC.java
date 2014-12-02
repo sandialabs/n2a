@@ -35,8 +35,6 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.TreeSet;
-
 import replete.util.FileUtil;
 
 public class SimulationC implements Simulation
@@ -156,10 +154,10 @@ public class SimulationC implements Simulation
         e.findTemporary ();
         e.determineOrder ();
         e.findDerivative ();
+        e.setLiveAttributes ();
         e.addAttribute    ("global",       0, false, new String[] {"$max", "$min", "$k", "$n", "$radius", "$ref"});  // population-level variables
         e.addAttribute    ("transient",    1, true,  new String[] {"$p", "$xyz"});  // variables that require accessors (for example, so no local storage is used)
         e.addAttribute    ("transient",    1, false, new String[] {"$ref"});
-        e.addAttribute    ("transient",    0, false, new String[] {"$live"});
         e.addAttribute    ("preexistent", -1, false, new String[] {"$index"});     // variables that already exist, either in the superclass or another class, so they don't require local storage 
         e.addAttribute    ("preexistent",  0, true,  new String[] {"$dt", "$t"});
         e.addAttribute    ("simulator",    0, true,  new String[] {"$dt", "$t"});  // variables that live in the simulator object
@@ -444,7 +442,7 @@ public class SimulationC implements Simulation
             {
                 if (v.name.equals ("$type"))
                 {
-                    result.append (pad3 + "to->" + mangle (v) + " = " + mangle ("$type") + ";\n");
+                    result.append (pad3 + "to->" + mangle (v) + " = " + mangle ("$type") + ";\n");  // initialize new part with its position in the $type split
                     continue;
                 }
                 if (v.hasAny (forbiddenAttributes))
@@ -781,7 +779,10 @@ public class SimulationC implements Simulation
                 for (Entry<String, EquationSet> c : s.connectionBindings.entrySet ())
                 {
                 	VariableReference r = s.resolveReference (c.getKey () + ".$live");
-                    result.append (pad3 + "if (! (" + resolve (context, r, false, 0) + ")) return 0;\n");
+                	if (! r.variable.hasAttribute ("constant"))
+                	{
+                        result.append (pad3 + "if (" + resolve (context, r, false, 0) + " == 0) return 0;\n");
+                	}
                 }
             }
 
@@ -937,25 +938,44 @@ public class SimulationC implements Simulation
         // certain $variables without knowing explicitly what is in the equation set.
         // These accessors adapt around whatever is there, and give back a useful answer.
         // * Transients are variables in the equation set that should be calculated whenever
-        // needed, rather than stored. If a variable is stored, then there may be an accessor
-        // for it, but it is not transient. Furthermore, calculations within the class
+        // needed, rather than stored. A stored variable may have an accessor, but that alone
+        // does not make it transient. Furthermore, calculations within the class
         // shouldn't use the accessors.
 
         // Unit getLive
         {
-            Variable v = s.find (new Variable ("$live"));
-            if (v != null)
+            Variable live = s.find (new Variable ("$live"));
+            if (live != null  &&  live.hasUsers)
             {
                 result.append (pad2 + "virtual float getLive ()\n");
                 result.append (pad2 + "{\n");
-                if (v.hasAttribute ("transient"))
+                if (live.hasAttribute ("transient"))
                 {
-                	// TODO: finish implementing this
-                    result.append (pad3 + "return 1;\n");
+                    if (s.lethalConnection)
+                    {
+                        for (Entry<String, EquationSet> c : s.connectionBindings.entrySet ())
+                        {
+                            VariableReference r = s.resolveReference (c.getKey () + ".$live");
+                            if (! r.variable.hasAttribute ("constant"))
+                            {
+                                result.append (pad3 + "if (" + resolve (context, r, false, 0) + " == 0) return 0;\n");
+                            }
+                        }
+                    }
+
+                    if (s.lethalContainer)
+                    {
+                        VariableReference r = s.resolveReference ("$up.$live");
+                        result.append (pad3 + "return " + resolve (context, r, false, 0) + ";\n");
+                    }
+                    else
+                    {
+                        result.append (pad3 + "return 1;\n");
+                    }
                 }
-                else  // stored somewhere
+                else  // stored somewhere  (We are unlikely to be "constant" if hasUsers is true.)
                 {
-                    result.append (pad3 + "return " + resolve (context, v.reference, false, 0) + ";\n");
+                    result.append (pad3 + "return " + resolve (context, live.reference, false, 0) + ";\n");
                 }
                 result.append (pad2 + "}\n");
                 result.append ("\n");
@@ -963,16 +983,24 @@ public class SimulationC implements Simulation
         }
 
         // Unit getP
-        // TODO: $p may depend on value of $live, but when testing potential connections, getLive() will incorrectly report true.
-        //       Therefore, hack a way to force $live false during testing of non-actualized connections. 
         {
             Variable p = s.find (new Variable ("$p", 0));
             if (p != null)
             {
-                result.append (pad2 + "virtual float getP (float " + mangle ("$init") + ", float " + mangle ("$live") + ")\n");
+                result.append (pad2 + "virtual float getP (float " + mangle ("$live") + ")\n");
                 result.append (pad2 + "{\n");
 
                 Variable init = s.find (new Variable ("$init"));
+                Variable live = s.find (new Variable ("$live"));
+
+                Set<String> liveAttributes = live.attributes;
+                live.attributes = null;
+                live.addAttribute ("preexistent");
+
+                if (p.dependsOn (init) != null)
+                {
+                    result.append (pad3 + "float " + mangle (init) + " = 1.0f - " + mangle (live) + ";\n");
+                }
 
                 if (p.hasAttribute ("transient"))
                 {
@@ -982,7 +1010,7 @@ public class SimulationC implements Simulation
                 }
                 else
                 {
-                    result.append (pad3 + "if (" + mangle ("$init") + ")\n");
+                    result.append (pad3 + "if (" + mangle ("$live") + " == 0)\n");
                     result.append (pad3 + "{\n");
                     s.setInit (true);
                 }
@@ -999,14 +1027,17 @@ public class SimulationC implements Simulation
 
                 if (p.hasAttribute ("transient"))
                 {
-                    init.addAttribute ("constant");
                     init.removeAttribute ("preexistent");
+                    init.addAttribute ("constant");
                 }
                 else  // stored in object ($variables always have defaults and therefore never resolve up to container)
                 {
                     s.setInit (false);
                     result.append (pad3 + "}\n");
                 }
+
+                live.attributes = liveAttributes;
+
                 result.append (pad3 + "return " + mangle (p) + ";\n");
                 result.append (pad2 + "}\n");
                 result.append ("\n");
@@ -1043,15 +1074,25 @@ public class SimulationC implements Simulation
             Variable xyz = s.find (new Variable ("$xyz", 0));
             if (xyz != null  ||  s.connectionBindings != null)
             {
-                result.append (pad2 + "virtual MatrixResult<float> getXYZ (float " + mangle ("$init") + ", float " + mangle ("$live") + ")\n");
+                result.append (pad2 + "virtual MatrixResult<float> getXYZ (float " + mangle ("$live") + ")\n");
                 result.append (pad2 + "{\n");
                 if (xyz == null)  // This must therefore be a Connection, so we defer $xyz to our reference part.
                 {
-                    result.append (pad3 + "return " + refName + "->getXYZ (" + mangle ("$init") + ", " + mangle ("$live") + ");\n");
+                    result.append (pad3 + "return " + refName + "->getXYZ (" + mangle ("$live") + ");\n");
                 }
                 else
                 {
                     Variable init = s.find (new Variable ("$init"));
+                    Variable live = s.find (new Variable ("$live"));
+
+                    Set<String> liveAttributes = live.attributes;
+                    live.attributes = null;
+                    live.addAttribute ("preexistent");
+
+                    if (xyz.dependsOn (init) != null)
+                    {
+                        result.append (pad3 + "float " + mangle (init) + " = 1.0f - " + mangle (live) + ";\n");
+                    }
 
                     if (xyz.hasAttribute ("transient"))
                     {
@@ -1062,7 +1103,7 @@ public class SimulationC implements Simulation
                     }
                     else
                     {
-                        result.append (pad3 + "if (" + mangle ("$init") + ")\n");
+                        result.append (pad3 + "if (" + mangle ("$live") + " == 0)\n");
                         result.append (pad3 + "{\n");
                         s.setInit (true);
                     }
@@ -1087,6 +1128,9 @@ public class SimulationC implements Simulation
                         s.setInit (false);
                         result.append (pad3 + "}\n");
                     }
+
+                    live.attributes = liveAttributes;
+
                     result.append (pad3 + "return new Vector3 (" + mangle (xyz) + ");\n");
                 }
                 result.append (pad2 + "}\n");
