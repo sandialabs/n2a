@@ -54,16 +54,17 @@ public class EquationSet implements Comparable<EquationSet>
     public EquationSet                       container;
     public NavigableSet<Variable>            variables;
     public NavigableSet<EquationSet>         parts;
-    public NavigableMap<String, EquationSet> connectionBindings;  // non-null iff this is a connection
+    public NavigableMap<String, EquationSet> connectionBindings;     // non-null iff this is a connection
     public boolean                           connected;
-    public Map<String, String>               metadata;            // TODO: better to refer metadata requests to source object (the Part). Part should implement a getNamedValue() function that refers requests up the inheritance chain.
+    public NavigableSet<EquationSet>         accountableConnections; // Connections which declare a $min or $max w.r.t. this part. Note: the member variable "connected" is a less constrained form of this information.
+    public Map<String, String>               metadata;               // TODO: better to refer metadata requests to source object (the Part). Part should implement a getNamedValue() function that refers requests up the inheritance chain.
     public List<Variable>                    ordered;
-    public List<ArrayList<EquationSet>>      splits;              // Enumeration of the $type splits this part can go through
+    public List<ArrayList<EquationSet>>      splits;                 // Enumeration of the $type splits this part can go through
     public boolean                           lethalP;
     public boolean                           lethalType;
     public boolean                           lethalConnection;
     public boolean                           lethalContainer;
-    public Object                            backendData;         // holder for extra data associated with each equation set by a given backend
+    public Object                            backendData;            // holder for extra data associated with each equation set by a given backend
 
     public EquationSet (String name)
     {
@@ -198,29 +199,19 @@ public class EquationSet implements Comparable<EquationSet>
                 v.replace (ee);
             }
         }
-        //   Model output equations (in the old system) are also effectively local equations.
-        //   However, they could be anonymous, so we must generate names for them.
-        eqs = source.getValid ("outputEqs", new ArrayList<NDoc> (), List.class);
-        int outputNumber = 0;
-        for (NDoc e : eqs)
+
+        // MAJOR HACK -- inject tracers, because UI can't save equations
+        if (name.equals ("HHmod"))
         {
-            EquationEntry ee = new EquationEntry (e);
-            if (ee.variable.name.length () == 0)  // naked expression
-            {
-                // convert into a tracer for the referenced variable
-                ee.variable.addAttribute ("output");
-                ee.variable.name = "output" + outputNumber;
-            }
-            outputNumber++;
-            Variable v = variables.floor (ee.variable);
-            if (v == null  ||  ! v.equals (ee.variable))
-            {
-                add (ee.variable);
-            }
-            else
-            {
-                v.replace (ee);
-            }
+            EquationEntry ee = new EquationEntry ("trace0 = trace(V,\"V0\") @ $index==0");
+            add (ee.variable);
+            ee = new EquationEntry ("trace2 = trace(V,\"V2\") @ $index==2");
+            add (ee.variable);
+        }
+        if (name.equals (""))
+        {
+            EquationEntry ee = new EquationEntry ("traceT = trace($t,\"t\")");
+            add (ee.variable);
         }
 
         // Metadata
@@ -842,7 +833,7 @@ public class EquationSet implements Comparable<EquationSet>
         v = new Variable ("$live", 0);  // $live functions much the same as $init. See setInit().
         if (add (v))
         {
-            v.addAttribute ("constant");  // Actually not constant if the part can die, or if it is a Connection. 
+            v.addAttribute ("constant");  // default. Actual values should be set by setLiveAttributes()
             v.equations = new TreeSet<EquationEntry> ();
             EquationEntry e = new EquationEntry (v, "");
             v.equations.add (e);
@@ -867,6 +858,17 @@ public class EquationSet implements Comparable<EquationSet>
             if (add (v))
             {
                 v.equations = new TreeSet<EquationEntry> ();
+            }
+
+            v = new Variable ("$n", 0);
+            if (add (v))
+            {
+                v.addAttribute ("constant");  // default. Actual values set by client code.
+                v.equations = new TreeSet<EquationEntry> ();
+                EquationEntry e = new EquationEntry (v, "");
+                v.equations.add (e);
+                e.assignment = "=";
+                e.expression = new ASTConstant (new Float (1));
             }
         }
     }
@@ -895,10 +897,23 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 continue;
             }
-            if (v.hasAttribute ("output"))  // Outputs must always exist!
+
+            // Scan AST for any special output functions.
+            boolean output = false;
+            for (EquationEntry e : v.equations)
             {
+                if (e.expression.containsOutput ())
+                {
+                    output = true;
+                    break;
+                }
+            }
+            if (output)  // outputs must always exist!
+            {
+                v.addAttribute ("output");  // we only get the "output" attribute when we are not otherwise referenced (hasUsers==false)
                 continue;
             }
+
             variables.remove (v);
             // In theory, removing variables may reduce the dependencies on some other variable to 0.
             // Then we could remove that variable as well. This would require multiple passes or some
@@ -1490,7 +1505,7 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 continue;
             }
-            if (e.expression.getClass () == ASTConstant.class)  // TODO: Why isn't this instanceof?
+            if (e.expression instanceof ASTConstant)
             {
                 v.addAttribute ("constant");
             }
@@ -1662,6 +1677,57 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 v.visitTemporaries ();  // sets attribute "derivativeOrDependency"
             }
+        }
+    }
+
+    /**
+        Identify variables that only change during init.
+        Depends on results of: addSpecials(), addInit() -- but both are optional
+    **/
+    public void findInitOnly ()
+    {
+        for (EquationSet s : parts)
+        {
+            s.findInitOnly ();
+        }
+
+        for (Variable v : variables)
+        {
+            boolean initOnly = true;
+            for (EquationEntry e : v.equations)
+            {
+                // TODO: this test is too narrow, because it doesn't really check the logic of the conditional statement
+                if (! e.ifString.equals ("$init"))
+                {
+                    initOnly = false;
+                    break;
+                }
+            }
+            if (initOnly) v.addAttribute    ("initOnly");
+            else          v.removeAttribute ("initOnly");
+        }
+    }
+
+    /**
+        Provide each part with a list of connections which access it and which define a $min or $max on the number of connections.
+        Depends on results of: findConstants()
+    **/
+    public void findAccountableConnections ()
+    {
+        for (EquationSet s : parts)
+        {
+            s.findAccountableConnections ();
+        }
+
+        if (connectionBindings == null) return;
+        for (Entry<String, EquationSet> c : connectionBindings.entrySet ())
+        {
+            Variable max = find (new Variable (c.getKey () + ".$max"));
+            Variable min = find (new Variable (c.getKey () + ".$min"));
+            if (max == null  &&  min == null) continue;
+            EquationSet s = c.getValue ();
+            if (s.accountableConnections == null) s.accountableConnections = new TreeSet<EquationSet> ();
+            s.accountableConnections.add (this);
         }
     }
 

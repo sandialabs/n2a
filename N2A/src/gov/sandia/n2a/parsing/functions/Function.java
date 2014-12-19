@@ -31,6 +31,11 @@ public abstract class Function implements ExtensionPoint {
         return false;
     }
 
+    public boolean isOutput ()
+    {
+        return false;
+    }
+
     //////////
     // EVAL //
     //////////

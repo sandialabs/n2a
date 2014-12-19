@@ -134,6 +134,7 @@ public class FunctionList {
         addFunc("uniform",   new UniformDistributionFunction());
         addFunc("gaussian",  new GaussianDistributionFunction());
         addFunc("lognormal", new LognormalDistributionFunction());
+        addFunc("trace",     new TraceFunction());
 
         precedenceMgr.addLevel(Associativity.RIGHT_TO_LEFT, OP_ASSIGN, OP_AASSIGN, OP_CASSIGN)  // Level 0
                      .addLevel(Associativity.LEFT_TO_RIGHT, OP_OR)

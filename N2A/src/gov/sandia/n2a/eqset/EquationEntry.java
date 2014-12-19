@@ -25,19 +25,9 @@ public class EquationEntry implements Comparable<EquationEntry>
     public ASTNodeBase             conditional;
     public TreeMap<String, String> metadata;
 
-    public EquationEntry (String name)
-    {
-        this (name, -1, "");
-    }
-
     public EquationEntry (String name, int order)
     {
-        this (name, order, "");
-    }
-
-    public EquationEntry (String name, int order, String ifString)
-    {
-        this (new Variable (name, order), ifString);
+        this (new Variable (name, order), "");
         variable.add (this);
     }
 
@@ -52,8 +42,13 @@ public class EquationEntry implements Comparable<EquationEntry>
 
     public EquationEntry (NDoc source) throws Exception
     {
+        this ((String) source.get ("value"));
         this.source = source;
-        String[] parts = ((String) source.get ("value")).split ("@");
+    }
+
+    public EquationEntry (String raw) throws Exception
+    {
+        String[] parts = raw.split ("@");
         String temp = parts[0].trim ();
         ifString = "";
         if (parts.length > 1)

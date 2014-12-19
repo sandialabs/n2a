@@ -12,37 +12,42 @@ import javax.swing.ImageIcon;
 import replete.plugins.DefaultPlugin;
 import replete.plugins.ExtensionPoint;
 
-public class PluginC extends DefaultPlugin {
-
+public class PluginC extends DefaultPlugin
+{
 	@Override
-	public String getName() {
+	public String getName ()
+	{
 		return "N2A C Backend";
 	}
 
-    public String getVersion() {
+    public String getVersion()
+    {
         return VersionConstants.MAJOR + "." +
                VersionConstants.MINOR + "." +
                VersionConstants.SERVICE + "." +
                VersionConstants.BUILD;
     }
 
-    public String getProvider() {
+    public String getProvider ()
+    {
         return "Sandia National Laboratories";
     }
 
 	@Override
-	public ImageIcon getIcon() {
-		// TODO Auto-generated method stub
+	public ImageIcon getIcon ()
+	{
 		return null;
 	}
 
 	@Override
-	public String getDescription() {
+	public String getDescription ()
+	{
 		return "N2A C Backend";
 	}
 
 	@Override
-	public ExtensionPoint[] getExtensions() {
+	public ExtensionPoint[] getExtensions ()
+	{
 		return new ExtensionPoint[] {new SimulatorC ()};
 	}
 }

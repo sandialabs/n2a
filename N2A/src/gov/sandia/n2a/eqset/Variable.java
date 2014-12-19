@@ -273,8 +273,6 @@ public class Variable implements Comparable<Variable>
                 <dd>shared by all instances of a part</dd>
             <dt>constant</dt>
                 <dd>value is known at generation time, so can be hard-coded</dd>
-            <dt>final</dt>
-                <dd>value is known at instantiation time and never changes</dd>
             <dt>reference</dt>
                 <dd>the actual value of the variable is stored in a different
                 equation set</dd>
@@ -282,13 +280,12 @@ public class Variable implements Comparable<Variable>
                 <dd>this lower-ordered version of a variable is defined by a
                 higher-order derivative rather than a direct equation</dd>
             <dt>transient</dt>
-                <dd>a $variable whose value is given by a function rather than
-                a storage location</dd>
+                <dd>value is given by a function rather than stored</dd>
             <dt>preexistent</dt>
                 <dd>storage does not need to be created for the variable (in C)
                 because it is either inherited or passed into a function</dd>
             <dt>simulator</dt>
-                <dd>accessible via the simulator object</dd>
+                <dd>accessible via the simulator object; a subcategory of preexistent</dd>
             <dt>temporary</dt>
                 <dd>this variable is used immediately in the equation set and
                 never stored between time-steps; a temporary must not be
@@ -299,6 +296,10 @@ public class Variable implements Comparable<Variable>
                 <dd>an equation in some other equation-set changes this variable</dd>
             <dt>cycle</dt>
                 <dd>needs a second storage location to break a cyclic dependency</dd>
+            <dt>output</dt>
+                <dd>an equation contains an output function, but the result itself
+                is not stored because it is never referenced. If it were stored,
+                then it would be normal equation that happens to contain an output function.</dd>
         </dl>
     **/
     public void addAttribute (String attribute)

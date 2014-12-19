@@ -27,6 +27,56 @@ float pulse (float t, float width, float period, float rise, float fall)
     return 0.0;
 }
 
+map<string, int> columnMap;  // TODO: should use unordered_map and a C11 compiler
+vector<float>    columnValues;
+
+float trace (float value, const string & column)
+{
+    map<string, int>::iterator result = columnMap.find (column);
+    if (result == columnMap.end ())
+    {
+        columnMap.insert (make_pair (column, columnValues.size ()));
+        columnValues.push_back (value);
+    }
+    else
+    {
+        columnValues[result->second] = value;
+    }
+    return value;
+}
+
+void writeTrace ()
+{
+    const int last = columnValues.size () - 1;
+    cerr << "writeTrace " << last << endl;
+    for (int i = 0; i <= last; i++)
+    {
+        float & c = columnValues[i];
+        if (! isnan (c)) cout << c;
+        if (i < last) cout << "\t";
+        c = NAN;
+    }
+    if (last >= 0) cout << endl;
+}
+
+void writeHeaders ()
+{
+    const int count = columnMap.size ();
+    const int last = count - 1;
+    vector<string> headers (count);
+    map<string, int>::iterator it;
+    for (it = columnMap.begin (); it != columnMap.end (); it++)
+    {
+        headers[it->second] = it->first;
+    }
+    for (int i = 0; i < count; i++)
+    {
+        cout << headers[i];
+        if (i < last) cout << "\t";
+    }
+    cout << endl;
+}
+
 
 // class Part ----------------------------------------------------------------
 
@@ -35,8 +85,24 @@ Part::~Part ()
 }
 
 void
-Part::getPopulations (vector<Population *> & resutl)
+Part::die ()
 {
+}
+
+void
+Part::enqueue ()
+{
+}
+
+void
+Part::dequeue ()
+{
+}
+
+bool
+Part::isFree ()
+{
+    return true;
 }
 
 void
@@ -110,22 +176,6 @@ Part::addToMembers ()
 {
 }
 
-void
-Part::die ()
-{
-}
-
-void
-Part::release ()
-{
-}
-
-bool
-Part::live ()
-{
-    return true;
-}
-
 float
 Part::getLive ()
 {
@@ -138,12 +188,12 @@ Part::getP (float __24live)
     return 1;
 }
 
-MatrixResult<float>
-Part::getXYZ (float __24live)
+void
+Part::getXYZ (float __24live, Vector3 & xyz)
 {
-    Vector<float> * result = new Vector<float> (3);
-    result->clear ();
-    return result;
+    xyz[0] = 0;
+    xyz[1] = 0;
+    xyz[2] = 0;
 }
 
 void
@@ -156,90 +206,414 @@ Part::getNamedValue (const string & name, string & value)
 
 Population::Population ()
 {
-    liveCount = 0;
-    nextEntry = 0;
+    dead = 0;
 }
 
 Population::~Population ()
 {
+    Part * p = dead;
+    while (p)
+    {
+        Part * next = p->next;
+        delete p;
+        p = next;
+    }
+}
+
+void
+Population::add (Part * part)
+{
+}
+
+void
+Population::remove (Part * part)
+{
+    part->next = dead;
+    dead = part;
 }
 
 Part *
 Population::allocate ()
 {
     Part * result = 0;
-    if (nextEntry < parts.size ())
+
+    Part ** p = &dead;
+    while (*p)
     {
-        result = parts[nextEntry];
+        if ((*p)->isFree ())
+        {
+            result = *p;
+            *p = (*p)->next;
+            break;
+        }
+        p = & (*p)->next;
     }
+
     if (! result)
     {
         result = create ();
-        parts.push_back (result);
-        if (Compartment * compartment = dynamic_cast<Compartment *> (result))
-        {
-        	compartment->__24index = nextEntry;
-        }
+        add (result);
     }
-    nextEntry++;
+
+    return result;
+}
+
+
+// class PopulationCompartment -----------------------------------------------
+
+PopulationCompartment::PopulationCompartment ()
+{
+    live.before = &live;
+    live.after  = &live;
+    old         = &live;  // same as old=live.after
+    __24n       = 0;
+    nextIndex   = 0;
+}
+
+PopulationCompartment::~PopulationCompartment ()
+{
+    Compartment * p = live.after;
+    while (p != &live)
+    {
+        Compartment * after = p->after;
+        delete p;
+        p = after;
+    }
+}
+
+void
+PopulationCompartment::add (Part * part)
+{
+    Compartment * compartment = (Compartment *) part;  // This cast is guaranteed safe by SimulationC
+    compartment->__24index = nextIndex++;
+
+    compartment->before        = &live;
+    compartment->after         =  live.after;
+    compartment->before->after = compartment;
+    compartment->after->before = compartment;
+}
+
+void
+PopulationCompartment::remove (Part * part)
+{
+    Compartment * compartment = (Compartment *) part;
+    if (compartment == old) old = old->after;
+    compartment->before->after = compartment->after;
+    compartment->after->before = compartment->before;
+
+    //Population::remove (part);  // just do it right here, for greater efficiency
+    part->next = dead;
+    dead = part;
+}
+
+Part *
+PopulationCompartment::allocate ()
+{
+    Part * result = 0;
+
+    Part ** p = &dead;
+    while (*p)
+    {
+        if ((*p)->isFree ())
+        {
+            result = *p;
+
+            // remove from dead
+            *p = (*p)->next;
+
+            // add to live
+            Compartment * compartment = (Compartment *) result;
+            compartment->before        = &live;
+            compartment->after         =  live.after;
+            compartment->before->after = compartment;
+            compartment->after->before = compartment;
+
+            break;
+        }
+        p = & (*p)->next;
+    }
+
+    if (! result)
+    {
+        result = create ();
+        add (result);
+    }
+
     return result;
 }
 
 void
-Population::kill (Part * part)
+PopulationCompartment::prepare ()
 {
-    for (int i = 0; i < nextEntry; i++)
-    {
-        if (parts[i] == part)
-        {
-            if (i < nextEntry - 1) swap (parts[i], parts[nextEntry-1]);
-            assert (nextEntry > 0);
-            nextEntry--;
-            break;
-        }
-    }
+    old = live.after;  // if old==live, then everything is new
 }
 
 void
-Population::die ()
+PopulationCompartment::resize (Simulator & simulator, int n)
 {
-    for (int i = 0; i < nextEntry; i++) parts[i]->die ();
+    while (__24n < n)
+    {
+        Part * p = allocate ();  // creates a part that knows how to find its population (that is, me)
+        simulator.enqueue (p);
+        p->init (simulator);  // increment $n
+    }
+
+    Compartment * p = live.before;
+    while (__24n > n)
+    {
+        if (p == &live) throw "Inconsistent $n";
+        p->die ();  // decrement $n
+        p = p->before;
+    }
+}
+
+
+// class PopulationConnection ------------------------------------------------
+
+Population *
+PopulationConnection::getTarget (int i)
+{
+    return 0;
+}
+
+void
+PopulationConnection::connect (Simulator & simulator)
+{
+    class KDTreeEntry : public Vector3
+    {
+    public:
+        Compartment * part;
+    };
+
+    PopulationCompartment * A = dynamic_cast<PopulationCompartment *> (getTarget (0));
+    PopulationCompartment * B = dynamic_cast<PopulationCompartment *> (getTarget (1));
+    if (A == 0  ||  B == 0) return;  // Nothing to connect. This should never happen, though we might have a unary connection.
+    int An = A->__24n;
+    int Bn = B->__24n;
+    if (An == 0  ||  Bn == 0) return;
+    if (A->old == A->live.after  &&  B->old == B->live.after) return;  // Only proceed if there are some new parts. Later, we might consider periodic scanning among old parts.
+
+    // Prepare nearest neighbor search structures on B
+    float radius = getRadius ();
+    int   k      = getK ();
+    KDTreeEntry * entries = 0;
+    vector<MatrixAbstract<float> *> entryPointers;
+    KDTree NN;
+    bool doNN = k  ||  radius;
+    if (doNN)
+    {
+        entries = new KDTreeEntry[Bn];
+        entryPointers.resize (Bn);
+        Compartment * b = B->live.after;
+        int i = 0;
+        while (b != &B->live)
+        {
+            assert (i < Bn);
+            KDTreeEntry & e = entries[i];
+            b->getXYZ (1, e);
+            e.part = b;
+            entryPointers[i] = &e;
+            b = b->after;
+            i++;
+        }
+        NN.set (entryPointers);
+        NN.k = k ? k : INT_MAX;
+    }
+
+    int Amin = getMin (0);
+    int Amax = getMax (0);
+    int Bmin = getMin (1);
+    int Bmax = getMax (1);
+
+    Connection * c = (Connection *) this->create ();
+
+    // Scan AxB
+    Compartment * Alast = A->old;
+    Compartment * Blast = B->live.after;
+    bool minSatisfied = false;
+    while (! minSatisfied)
+    {
+        minSatisfied = true;
+
+        // New A with all of B
+        Compartment * a = A->live.after;
+        while (a != A->old)
+        {
+            c->setPart (0, a);
+            int Acount;
+            if (Amax  ||  Amin) Acount = c->getCount (0);
+            if (Amax  &&  Acount >= Amax)  // early out: this part is already full, so skip
+            {
+                a = a->after;
+                continue;
+            }
+
+            // Select the subset of B
+            if (doNN)
+            {
+                c->setPart (1, B->live.after);  // give a dummy B object, in case xyz call breaks rules about only accessing A
+                Vector3 xyz;
+                c->getXYZ (0, xyz);
+                vector<MatrixAbstract<float> *> result;
+                NN.find (xyz, result);
+                int count = result.size ();
+                vector<MatrixAbstract<float> *>::iterator it;
+                for (it = result.begin (); it != result.end (); it++)
+                {
+                    Compartment * b = ((KDTreeEntry *) (*it))->part;
+
+                    c->setPart (1, b);
+                    if (Bmax  &&  c->getCount (1) >= Bmax) continue;  // no room in this B
+                    float create = c->getP (0);
+                    if (create <= 0  ||  create < 1  &&  create < randf ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
+                    c->init (simulator);
+                    simulator.enqueue (c);
+                    Acount++;
+                    c = (Connection *) this->create ();
+                    c->setPart (0, a);
+
+                    if (Amax  &&  Acount >= Amax) break;  // stop scanning B once this A is full
+                }
+            }
+            else
+            {
+                Compartment * Bnext = Blast->before;  // will change if we make some connections
+                if (Bnext == &B->live) Bnext = Bnext->before;
+                Compartment * b = Blast;
+                do
+                {
+                    b = b->after;
+                    if (b == &B->live) b = b->after;
+
+                    c->setPart (1, b);
+                    if (Bmax  &&  c->getCount (1) >= Bmax) continue;  // no room in this B
+                    float create = c->getP (0);
+                    if (create <= 0  ||  create < 1  &&  create < randf ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
+                    c->init (simulator);
+                    simulator.enqueue (c);
+                    c = (Connection *) this->create ();
+                    c->setPart (0, a);
+                    Bnext = b;
+
+                    if (Amax)
+                    {
+                        if (++Acount >= Amax) break;  // stop scanning B once this A is full
+                    }
+                }
+                while (b != Blast);
+                Blast = Bnext;
+            }
+
+            if (Amin  &&  Acount < Amin) minSatisfied = false;
+            a = a->after;
+        }
+
+        // New B with old A (new A x new B is already covered in case above)
+        if (A->old != &A->live)  // There exist some old A
+        {
+            Compartment * b = B->live.after;
+            while (b != B->old)
+            {
+                c->setPart (1, b);
+                int Bcount;
+                if (Bmax  ||  Bmin) Bcount = c->getCount (1);
+                if (Bmax  &&  Bcount >= Bmax)
+                {
+                    b = b->after;
+                    continue;
+                }
+
+                // TODO: the projection from A to B could be inverted, and another spatial search structure built.
+                // For now, we don't use spatial constraints.
+
+                Compartment * Anext;
+                if (Alast == A->old) Anext = A->live.before;
+                else                 Anext = Alast->before;
+                a = Alast;
+                do
+                {
+                    a = a->after;
+                    if (a == &A->live) a = A->old;
+
+                    c->setPart (0, a);
+                    if (Amax  &&  c->getCount (0) >= Amax) continue;
+                    float create = c->getP (0);
+                    if (create <= 0  ||  create < 1  &&  create < randf ()) continue;
+                    c->init (simulator);
+                    simulator.enqueue (c);
+                    c = (Connection *) this->create ();
+                    c->setPart (1, b);
+                    Anext = a;
+
+                    if (Bmax)
+                    {
+                        if (++Bcount >= Bmax) break;
+                    }
+                }
+                while (a != Alast);
+                Alast = Anext;
+
+                if (Bmin  &&  Bcount < Bmin) minSatisfied = false;
+                b = b->after;
+            }
+        }
+
+        // Check if minimums have been satisfied for old parts. New parts in both A and B were checked above.
+        if (Amin  &&  minSatisfied)
+        {
+            Compartment * a = A->old;
+            while (a != &A->live)
+            {
+                c->setPart (0, a);
+                if (c->getCount (0) < Amin)
+                {
+                    minSatisfied = false;
+                    break;
+                }
+                a = a->after;
+            }
+        }
+        if (Bmin  &&  minSatisfied)
+        {
+            Compartment * b = B->old;
+            while (b != &B->live)
+            {
+                c->setPart (1, b);
+                if (c->getCount (1) < Bmin)
+                {
+                    minSatisfied = false;
+                    break;
+                }
+                b = b->after;
+            }
+        }
+    }
+    delete c;
+    delete [] entries;
 }
 
 int
-Population::getK ()
+PopulationConnection::getK ()
 {
     return 0;
 }
 
 int
-Population::getMax (int i)
+PopulationConnection::getMax (int i)
 {
     return 0;
 }
 
 int
-Population::getMin (int i)
+PopulationConnection::getMin (int i)
 {
     return 0;
 }
 
 float
-Population::getN ()
-{
-    return 1;
-}
-
-float
-Population::getRadius ()
+PopulationConnection::getRadius ()
 {
     return 0;
-}
-
-int
-Population::getRef ()
-{
-    return -1;  // indicates this population is not a connection type
 }
 
 
@@ -259,313 +633,115 @@ Connection::getPart (int i)
     return 0;
 }
 
+int
+Connection::getCount (int i)
+{
+    return 0;
+}
+
 
 // class Simulator -----------------------------------------------------------
 
 Simulator::Simulator ()
 {
     dt = 1e-4;
+    queue = 0;
 }
 
 Simulator::~Simulator ()
 {
 }
 
-class KDTreeEntry : public Vector3
-{
-public:
-    Part * part;
-    KDTreeEntry & operator = (const MatrixAbstract<float> & that)
-    {
-        (*this)[0] = that[0];
-        (*this)[1] = that[1];
-        (*this)[2] = that[2];
-        return *this;
-    }
-};
-
 void
 Simulator::run ()
 {
-    string value = "1";
-    populations[0]->getNamedValue ("duration", value);
+    if (queue == 0) return;
+    // TODO: eliminate concept of duration; instead use equation: Model.$p=$t<duration
+    string value = "100";
+    queue->getNamedValue ("duration", value);  // The first part in the queue at the start of the run is presumably the top-level model.
     float duration = atof (value.c_str ());
 
     t = 0;  // updated in middle of loop below, just before integration
-    while (t <= duration)
+    while (queue != 0  &&  t <= duration)
     {
-        // Create new instances
-        for (int i = 0; i < populations.size (); i++)  // since populations.size() is evaluated each cycle, this allows the string to grow
+        // Evaluate connection populations that have requested it
+        vector<PopulationConnection *>::iterator connectIterator;
+        for (connectIterator = connectQueue.begin (); connectIterator != connectQueue.end (); connectIterator++)
         {
-            Population * p = populations[i];
-
-            // Determine if population size has changed since last cycle
-            if (p->getRef () >= 0) continue;  // this is a connection population, so nothing more to do
-            int n1 = floor (p->getN ());
-            // Note: we do not shrink populations using $n, only grow them.
-            while (p->nextEntry < n1)
-            {
-                Part * q = p->allocate ();
-                q->init (*this);
-
-                // Initialize and add any newly created populations
-                int oldCount = populations.size ();
-                q->getPopulations (populations);  // append any populations contained in the new part
-                int newCount = populations.size ();
-                for (int j = oldCount; j < newCount; j++)
-                {
-                    populations[j]->init (*this);
-                }
-            }
+            (*connectIterator)->connect (*this);
         }
-
-        // Create new connections
-        vector<Population *>::iterator it;
-        for (it = populations.begin (); it != populations.end (); it++)
-        {
-            Population * p = *it;
-
-            int Aref = p->getRef ();
-            if (Aref < 0) continue;  // this is a compartment population, so no connections to make
-            int Bref = 1 - Aref;  // presuming only two endpoints
-
-            vector<Population *> references;
-            p->getPopulations (references);
-            assert (references.size () == 2);
-            Population * A = references[Aref];
-            Population * B = references[Bref];
-
-            int An1 = floor (A->getN ());
-            int Bn1 = floor (B->getN ());
-            int An0 = A->liveCount;
-            int Bn0 = B->liveCount;
-            if (An1 == An0  &&  Bn1 == Bn0) continue;
-            if (An1 == 0  ||  Bn1 == 0) continue;
-
-            // Prepare nearest neighbor search structures on B
-            float radius = p->getRadius ();
-            int   k      = p->getK ();
-            KDTreeEntry * entries = 0;
-            vector<MatrixAbstract<float> *> entryPointers;
-            KDTree NN;
-            bool doNN = k  ||  radius;
-            if (doNN)
-            {
-                entries = new KDTreeEntry[Bn1];
-                entryPointers.resize (Bn1);
-                for (int i = 0; i < Bn1; i++)
-                {
-                    Part * b = B->parts[i];
-                    KDTreeEntry & e = entries[i];
-                    e = b->getXYZ (1);
-                    e.part = b;
-                    entryPointers[i] = &e;
-                }
-                NN.set (entryPointers);
-                NN.k = k ? k : INT_MAX;
-            }
-
-            int Amax = p->getMax (Aref);
-            int Amin = p->getMin (Aref);
-            int Bmax = p->getMax (Bref);
-            int Bmin = p->getMin (Bref);
-            bool doAccounting = Amin  ||  Amax  ||  Bmin  ||  Bmax;
-
-            // Count existing connections.
-            // This is a memory vs time trade-off. It takes more time to count
-            // connections whenever needed, but it saves memory, and memory is the
-            // more limited resource.
-            int Alast = A->parts.size ();
-            int Blast = B->parts.size ();
-            int * Acount = 0;
-            int * Bcount = 0;
-            if (doAccounting)
-            {
-                Acount = new int[Alast]();  // this is subtle, but the () at the end causes each element to be initialized to 0
-                Bcount = new int[Blast]();
-                for (int i = 0; i < An0; i++)
-                {
-                    Connection * c = (Connection *) p->parts[i];
-                    Acount[((Compartment *) c->getPart (Aref))->__24index]++;  // TODO: Assuming the part is a Compartment prevents us from connecting Connections. Could make $index transitory.
-                    Bcount[((Compartment *) c->getPart (Bref))->__24index]++;
-                }
-            }
-
-            Connection * c = (Connection *) p->create ();
-
-            // Scan AxB
-            bool minSatisfied = false;
-            while (! minSatisfied)
-            {
-                minSatisfied = true;
-                vector<Part *> subset;  // of B
-                if (! doNN) subset = B->parts;
-                int count = subset.size ();
-
-                // New A with all of B
-                for (int i = An0; i < An1; i++)
-                {
-                    Compartment * a = (Compartment *) A->parts[i];
-                    if (Amax  &&  Acount[a->__24index] >= Amax) continue;  // early out: this part is already full, so skip. (No need to check doAccounting, because Amax != 0 is a subcase.)
-
-                    c->setPart (Aref, a);
-                    c->setPart (Bref, B->parts[0]);  // give a dummy B object, in case xyz call breaks rules about only accessing A
-
-                    // Project A into B
-                    Vector3 xyz = c->getXYZ (0);
-
-                    // Select the subset of B
-                    if (doNN)
-                    {
-                        vector<MatrixAbstract<float> *> result;
-                        NN.find (xyz, result);
-                        count = result.size ();
-                        subset.resize (count);
-                        for (i = 0; i < count; i++) subset[i] = ((KDTreeEntry *) result[i])->part;
-                    }
-
-                    // Iterate over the subset in a random order
-                    for (int j = 0; j < count; j++)
-                    {
-                        int k = rand () % (count - j) + j;
-                        Part * & bj = subset[j];
-                        Part * & bk = subset[k];
-                        swap (bj, bk);
-                        Compartment * b = (Compartment *) bj;
-                        if (Bmax  &&  Bcount[b->__24index] >= Bmax) continue;  // no room in this B.  (No need to check doAccounting, because Bmax != 0 is a subcase.)
-
-                        c->setPart (Bref, b);
-                        float create = c->getP (0);
-                        if (create <= 0  ||  create < 1  &&  create < randf ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
-                        c->init (*this);
-                        p->parts.push_back (c);
-                        p->nextEntry = p->parts.size ();
-                        c = (Connection *) p->create ();
-                        c->setPart (Aref, a);
-
-                        if (doAccounting)
-                        {
-                            Acount[a->__24index]++;
-                            Bcount[b->__24index]++;
-                            if (Amax  &&  Acount[a->__24index] >= Amax) break;  // stop scanning Bs once this A is full
-                        }
-                    }
-                    if (doAccounting  &&  Acount[a->__24index] < Amin) minSatisfied = false;
-                }
-
-                // Old A with new B
-                for (int i = 0; i < An0; i++)
-                {
-                    Compartment * a = (Compartment *) A->parts[i];
-                    if (Amax  &&  Acount[a->__24index] >= Amax) continue;
-
-                    c->setPart (Aref, a);
-                    c->setPart (Bref, B->parts[0]);
-
-                    // Project A into B
-                    Vector3 xyz = c->getXYZ (0);
-
-                    // Select the subset of B
-                    if (k  ||  radius)
-                    {
-                        vector<MatrixAbstract<float> *> result;
-                        NN.find (xyz, result);
-                        count = result.size ();
-                        subset.resize (count);
-                        for (i = 0; i < count; i++) subset[i] = ((KDTreeEntry *) result[i])->part;
-                    }
-
-                    // Iterate over the subset in a random order
-                    for (int j = 0; j < count; j++)
-                    {
-                        int k = rand () % (count - j) + j;
-                        Part * & bj = subset[j];
-                        Part * & bk = subset[k];
-                        swap (bj, bk);
-                        Compartment * b = (Compartment *) bj;
-                        if (Bmax  &&  Bcount[b->__24index] >= Bmax) continue;  // no room in this B.  (No need to check doAccounting, because Bmax != 0 is a subcase.)
-
-                        c->setPart (Bref, b);
-                        float create = c->getP (0);
-                        if (create <= 0  ||  create < 1  &&  create < randf ()) continue;
-                        c->init (*this);
-                        p->parts.push_back (c);
-                        p->nextEntry = p->parts.size ();
-                        c = (Connection *) p->create ();
-                        c->setPart (Aref, a);
-
-                        if (doAccounting)
-                        {
-                            Acount[a->__24index]++;
-                            Bcount[b->__24index]++;
-                            if (Amax  &&  Acount[a->__24index] >= Amax) break;  // stop scanning Bs once this A is full
-                        }
-                    }
-                    if (doAccounting  &&  Acount[a->__24index] < Amin) minSatisfied = false;
-                }
-
-                if (doAccounting)
-                {
-                    if (! minSatisfied) continue;
-                    for (int i = 0; i < Bn1; i++)
-                    {
-                        if (Bcount[((Compartment *) B->parts[i])->__24index] < Bmin)
-                        {
-                            minSatisfied = false;
-                            break;
-                        }
-                    }
-                }
-            }
-            delete c;
-            delete [] entries;
-            delete [] Acount;
-            delete [] Bcount;
-        }
-
-        for (int i = 0; i < populations.size (); i++)
-        {
-            Population * p = populations[i];
-            p->liveCount = p->nextEntry;
-        }
+        connectQueue.clear ();
 
         // Update parts
         t += dt;
         integrate ();
-        for (it = populations.begin (); it != populations.end (); it++)
+        p = &queue;
+        while (*p)
         {
-            Population * p = *it;
-            p->prepare ();
-            Part ** j   = & p->parts[0];
-            Part ** end = j + p->nextEntry;
-            while (j < end) (*j++)->prepare ();
+            (*p)->prepare ();
+            p = & (*p)->next;
         }
-        for (it = populations.begin (); it != populations.end (); it++)
+        p = &queue;
+        while (*p)
         {
-            Population * p = *it;
-            p->update (*this);
-            Part ** j   = & p->parts[0];
-            Part ** end = j + p->nextEntry;
-            while (j < end) (*j++)->update (*this);
+            (*p)->update (*this);
+            p = & (*p)->next;
         }
-        for (it = populations.begin (); it != populations.end (); it++)
+        p = &queue;
+        while (*p)
         {
-            Population * p = *it;
-            p->finalize (*this);
-            Part ** j   = & p->parts[0];
-            Part ** end = j + p->nextEntry;
-            while (j < end)
+            if ((*p)->finalize (*this))  // part remains in queue
             {
-                if ((*j)->finalize (*this)) j++;
-                else p->kill (*j);
+                p = & (*p)->next;
+            }
+            else  // part leaves queue
+            {
+                Part * old = *p;
+                *p = (*p)->next;  // note that value of p itself remains unchanged, but its referent points to a new next.
+                old->dequeue ();
             }
         }
+
+        // Resize populations that have requested it
+        vector<pair<PopulationCompartment *, int> >::iterator resizeIterator;
+        for (resizeIterator = resizeQueue.begin (); resizeIterator != resizeQueue.end (); resizeIterator++)
+        {
+            resizeIterator->first->resize (*this, resizeIterator->second);
+        }
+        resizeQueue.clear ();
     }
 }
 
 void
 Simulator::integrate ()
 {
+}
+
+void
+Simulator::enqueue (Part * part)
+{
+    part->next = queue;
+    queue = part;
+    part->enqueue ();
+}
+
+void
+Simulator::move (float dt)
+{
+    // TODO: select correct event and move current part to it. If no such event exists, create a new one.
+    this->dt = dt;  // TODO: when above is implemented, we will never change our own dt.
+}
+
+void
+Simulator::resize (PopulationCompartment * population, int n)
+{
+    resizeQueue.push_back (make_pair (population, n));
+}
+
+void
+Simulator::connect (PopulationConnection * population)
+{
+    connectQueue.push_back (population);
 }
 
 
@@ -578,14 +754,11 @@ Euler::~Euler ()
 void
 Euler::integrate ()
 {
-    vector<Population *>::iterator it;
-    for (it = populations.begin (); it != populations.end (); it++)
+    p = &queue;
+    while (*p)
     {
-        Population * p = *it;
-        p->integrate (*this);
-        Part ** j   = & p->parts[0];
-        Part ** end = j + p->nextEntry;
-        while (j < end) (*j++)->integrate (*this);
+        (*p)->next->integrate (*this);
+        p = & (*p)->next;
     }
 }
 
@@ -603,22 +776,13 @@ RungeKutta::integrate ()
     const float t  = this->t;
     const float dt = this->dt;
 
-    vector<Population *>::iterator it;
-
     // k1
-    for (it = populations.begin (); it != populations.end (); it++)
+    p = &queue;
+    while ((*p)->next)
     {
-        Population * p = *it;
-        p->pushIntegrated ();
-        p->pushDerivative ();
-        Part ** j   = & p->parts[0];
-        Part ** end = j + p->nextEntry;
-        while (j < end)
-        {
-            (*j)->pushIntegrated ();
-            (*j)->pushDerivative ();
-            j++;
-        }
+        (*p)->next->pushIntegrated ();
+        (*p)->next->pushDerivative ();
+        p = & (*p)->next;
     }
 
     // k2 and k3
@@ -626,43 +790,27 @@ RungeKutta::integrate ()
     this->t  -= this->dt;  // t is the current point in time, so we must look backward half a timestep
     for (int i = 0; i < 2; i++)
     {
-        for (it = populations.begin (); it != populations.end (); it++)
+        p = &queue;
+        while (*p)
         {
-            Population * p = *it;
-            p->integrate (*this);
-            p->prepareDerivative ();
-            Part ** j   = & p->parts[0];
-            Part ** end = j + p->nextEntry;
-            while (j < end)
-            {
-                (*j)->integrate (*this);
-                (*j)->prepareDerivative ();
-                j++;
-            }
+            (*p)->integrate (*this);
+            (*p)->prepareDerivative ();
+            p = & (*p)->next;
         }
 
-        for (it = populations.begin (); it != populations.end (); it++)
+        p = &queue;
+        while (*p)
         {
-            Population * p = *it;
-            p->updateDerivative (*this);
-            Part ** j   = & p->parts[0];
-            Part ** end = j + p->nextEntry;
-            while (j < end) (*j++)->updateDerivative (*this);
+            (*p)->updateDerivative (*this);
+            p = & (*p)->next;
         }
 
-        for (it = populations.begin (); it != populations.end (); it++)
+        p = &queue;
+        while (*p)
         {
-            Population * p = *it;
-            p->finalizeDerivative ();
-            p->multiplyAddToStack (2.0f);
-            Part ** j   = & p->parts[0];
-            Part ** end = j + p->nextEntry;
-            while (j < end)
-            {
-                (*j)->finalizeDerivative ();
-                (*j)->multiplyAddToStack (2.0f);
-                j++;
-            }
+            (*p)->finalizeDerivative ();
+            (*p)->multiplyAddToStack (2.0f);
+            p = & (*p)->next;
         }
     }
 
@@ -670,70 +818,48 @@ RungeKutta::integrate ()
     this->dt = dt;  // restore original values
     this->t  = t;
     {  // curly brace is here just to make organization clear
-        for (it = populations.begin (); it != populations.end (); it++)
+        p = &queue;
+        while (*p)
         {
-            Population * p = *it;
-            p->integrate (*this);
-            p->prepareDerivative ();
-            Part ** j   = & p->parts[0];
-            Part ** end = j + p->nextEntry;
-            while (j < end)
-            {
-                (*j)->integrate (*this);
-                (*j)->prepareDerivative ();
-                j++;
-            }
+            (*p)->integrate (*this);
+            (*p)->prepareDerivative ();
+            p = & (*p)->next;
         }
 
-        for (it = populations.begin (); it != populations.end (); it++)
+        p = &queue;
+        while (*p)
         {
-            Population * p = *it;
-            p->updateDerivative (*this);
-            Part ** j   = & p->parts[0];
-            Part ** end = j + p->nextEntry;
-            while (j < end) (*j++)->updateDerivative (*this);
+            (*p)->updateDerivative (*this);
+            p = & (*p)->next;
         }
 
-        for (it = populations.begin (); it != populations.end (); it++)
+        p = &queue;
+        while (*p)
         {
-            Population * p = *it;
-            p->finalizeDerivative ();
-            p->addToMembers ();  // clears stackDerivative
-            Part ** j   = & p->parts[0];
-            Part ** end = j + p->nextEntry;
-            while (j < end)
-            {
-                (*j)->finalizeDerivative ();
-                (*j)->addToMembers ();  // ditto
-                j++;
-            }
+            (*p)->finalizeDerivative ();
+            (*p)->addToMembers ();  // clears stackDerivative
+            p = & (*p)->next;
         }
     }
 
-    for (it = populations.begin (); it != populations.end (); it++)
+    p = &queue;
+    while (*p)
     {
-        Population * p = *it;
-        p->multiply (1.0 / 6.0);
-        Part ** j   = & p->parts[0];
-        Part ** end = j + p->nextEntry;
-        while (j < end) (*j++)->multiply (1.0 / 6.0);
+        (*p)->multiply (1.0 / 6.0);
+        p = & (*p)->next;
     }
 
-    for (it = populations.begin (); it != populations.end (); it++)
+    p = &queue;
+    while (*p)
     {
-        Population * p = *it;
-        p->integrate (*this);
-        Part ** j   = & p->parts[0];
-        Part ** end = j + p->nextEntry;
-        while (j < end) (*j++)->integrate (*this);
+        (*p)->integrate (*this);
+        p = & (*p)->next;
     }
 
-    for (it = populations.begin (); it != populations.end (); it++)
+    p = &queue;
+    while (*p)
     {
-        Population * p = *it;
-        p->popIntegrated ();  // clears stackIntgrated
-        Part ** j   = & p->parts[0];
-        Part ** end = j + p->nextEntry;
-        while (j < end) (*j++)->popIntegrated ();  // ditto
+        (*p)->popIntegrated ();  // clears stackIntgrated
+        p = & (*p)->next;
     }
 }

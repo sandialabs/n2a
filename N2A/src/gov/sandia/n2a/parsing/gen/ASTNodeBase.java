@@ -104,6 +104,22 @@ public abstract class ASTNodeBase extends SimpleNode {
         return false;
     }
 
+    public boolean containsOutput ()
+    {
+        if (this instanceof ASTFunNode)
+        {
+            if (getValue ().toString ().equals ("trace")) return true;
+        }
+
+        int children = getCount ();
+        for (int i = 0; i < children; i++)
+        {
+            if (getChild (i).containsOutput ()) return true;
+        }
+
+        return false;
+    }
+
     public ASTVarNode getVarNode() {
         if(isSingleSymbol()) {
             return (ASTVarNode) this;
