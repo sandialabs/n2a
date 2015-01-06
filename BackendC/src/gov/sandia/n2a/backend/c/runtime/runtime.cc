@@ -48,7 +48,6 @@ float trace (float value, const string & column)
 void writeTrace ()
 {
     const int last = columnValues.size () - 1;
-    cerr << "writeTrace " << last << endl;
     for (int i = 0; i <= last; i++)
     {
         float & c = columnValues[i];
@@ -270,17 +269,6 @@ PopulationCompartment::PopulationCompartment ()
     nextIndex   = 0;
 }
 
-PopulationCompartment::~PopulationCompartment ()
-{
-    Compartment * p = live.after;
-    while (p != &live)
-    {
-        Compartment * after = p->after;
-        delete p;
-        p = after;
-    }
-}
-
 void
 PopulationCompartment::add (Part * part)
 {
@@ -440,7 +428,7 @@ PopulationConnection::connect (Simulator & simulator)
         while (a != A->old)
         {
             c->setPart (0, a);
-            int Acount;
+            volatile int Acount;
             if (Amax  ||  Amin) Acount = c->getCount (0);
             if (Amax  &&  Acount >= Amax)  // early out: this part is already full, so skip
             {
@@ -650,6 +638,12 @@ Simulator::Simulator ()
 
 Simulator::~Simulator ()
 {
+    while (queue)
+    {
+        Part * old = queue;
+        queue = queue->next;
+        old->dequeue ();
+    }
 }
 
 void
@@ -697,7 +691,7 @@ Simulator::run ()
             else  // part leaves queue
             {
                 Part * old = *p;
-                *p = (*p)->next;  // note that value of p itself remains unchanged, but its referent points to a new next.
+                *p = (*p)->next;  // note that value of p itself remains unchanged, but its referent points to another part.
                 old->dequeue ();
             }
         }

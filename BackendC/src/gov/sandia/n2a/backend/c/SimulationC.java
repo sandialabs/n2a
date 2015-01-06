@@ -434,14 +434,20 @@ public class SimulationC implements Simulation
                 // a compartment cannot know those instances. Thus, one can never be converted
                 // to the other.
             }
+
             // The "2" functions only have local meaning, so they are never virtual.
+            // Must do everything init() normally does, including increment $n.
             // Parameters:
             //   from -- the source part
             //   simulator -- the one managing the source part
             //   $type -- The integer index, in the $type expression, of the current target part. The target part's $type field will be initialized with this number (and zeroed after one cycle).
             result.append (pad2 + "void " + mangle (source.name) + "_2_" + mangle (dest.name) + " (" + mangle (source.name) + " * from, Simulator & simulator, int " + mangle ("$type") + ")\n");
             result.append (pad2 + "{\n");
-            result.append (pad3 + mangle (dest.name) + " * to = " + mangle (dest.name) + "_Population_Instance->allocate (simulator);\n");
+            result.append (pad3 + mangle (dest.name) + " * to = " + mangle (dest.name) + "_Population_Instance->allocate ();\n");
+            result.append (pad3 + "simulator.enqueue (to);\n");
+            result.append (pad3 + "to->init (simulator);\n");  // may be redundant with the following code ...
+            // TODO: Convert contained populations from matching populations in the source part?
+
             // Match variables between the two sets.
             // TODO: a match between variables should be marked as a dependency. This might change some "output" variables into stored values.
             String [] forbiddenAttributes = new String [] {"global", "constant", "transient", "reference", "temporary", "output", "preexistent"};
@@ -457,11 +463,10 @@ public class SimulationC implements Simulation
                     continue;
                 }
                 Variable v2 = source.find (v);
-                if (v2 == null  ||  ! v2.equals (v))
+                if (v2 != null  &&  v2.equals (v))
                 {
-                    continue;
+                    result.append (pad3 + "to->" + mangle (v) + " = " + resolve (v2.reference, context, false, "from->") + ";\n");
                 }
-                result.append (pad3 + "to->" + mangle (v) + " = " + resolve (v2.reference, context, false, "from->") + ";\n");
             }
             // Match connection bindings
             if (connectionDest)
@@ -474,6 +479,7 @@ public class SimulationC implements Simulation
                     result.append (pad3 + "to->" + mangle (name) + " = from->" + mangle (name) + ";\n");
                 }
             }
+
             result.append (pad2 + "}\n");
             result.append ("\n");
         }
@@ -621,6 +627,21 @@ public class SimulationC implements Simulation
             result.append ("\n");
         }
 
+        // Unit enqueue
+
+        // Unit dequeue
+        {
+            result.append (pad2 + "virtual void dequeue ()\n");
+            result.append (pad2 + "{\n");
+            String container = "container->";
+            if (pathToContainer != null) container = mangle (pathToContainer.name) + "->" + container;
+            result.append (pad3 + container + mangle (s.name) + "_Population_Instance.remove (this);\n");
+            result.append (pad2 + "}\n");
+            result.append ("\n");
+        }
+
+        // Unit isFree
+
         // Unit init
         if (s.connectionBindings == null  ||  localInit.size () > 0)
         {
@@ -654,10 +675,7 @@ public class SimulationC implements Simulation
                 if (! v.name.startsWith ("$")) continue;
                 if (v.name.equals ("$dt"))
                 {
-                    result.append (pad3 + "if (" + mangle ("next_", v) + " != simulator.dt)\n");
-                    result.append (pad3 + "{\n");
-                    result.append (pad4 + "simulator.move (" + mangle ("next_", v) + ");\n");
-                    result.append (pad3 + "}\n");
+                    result.append (pad3 + "if (" + mangle ("next_", v) + " != simulator.dt) simulator.move (" + mangle ("next_", v) + ");\n");
                 }
                 else
                 {
@@ -684,8 +702,9 @@ public class SimulationC implements Simulation
             // add contained populations
             for (EquationSet e : s.parts)
             {
-                result.append (pad3 + "simulator.enqueue (&" + mangle (e.name) + "_Population_Instance);\n");
-                result.append (pad3 + mangle (e.name) + "_Population_Instance.init (simulator);\n");
+                String PopulationInstance = mangle (e.name) + "_Population_Instance"; 
+                result.append (pad3 + "simulator.enqueue (&" + PopulationInstance + ");\n");
+                result.append (pad3 + PopulationInstance + ".init (simulator);\n");
             }
 
             s.setInit (false);
@@ -1127,7 +1146,7 @@ public class SimulationC implements Simulation
             Variable xyz = s.find (new Variable ("$xyz", 0));
             if (xyz != null  ||  s.connectionBindings != null)
             {
-                result.append (pad2 + "virtual MatrixResult<float> getXYZ (float " + mangle ("$live") + ", Vector3 " + mangle ("xyz") + ")\n");
+                result.append (pad2 + "virtual void getXYZ (float " + mangle ("$live") + ", Vector3 " + mangle ("xyz") + ")\n");
                 result.append (pad2 + "{\n");
                 if (xyz == null)  // This must therefore be a Connection, so we defer $xyz to our reference part.
                 {

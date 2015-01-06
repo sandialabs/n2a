@@ -208,11 +208,6 @@ public class EquationSet implements Comparable<EquationSet>
             ee = new EquationEntry ("trace2 = trace(V,\"V2\") @ $index==2");
             add (ee.variable);
         }
-        if (name.equals (""))
-        {
-            EquationEntry ee = new EquationEntry ("traceT = trace($t,\"t\")");
-            add (ee.variable);
-        }
 
         // Metadata
         Map<String, String> namedValues = source.getValid ("$metadata", new TreeMap<String, String> (), Map.class);

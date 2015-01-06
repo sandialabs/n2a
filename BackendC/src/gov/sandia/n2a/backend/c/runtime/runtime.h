@@ -53,8 +53,8 @@ class RungeKutta;
     The universal interface through which the runtime accesses model
     components. All parts are collected in populations, and all populations
     are members of parts. The top-level population contains at least one
-    instance of the top-level model, but is not itself contained in any
-    model.
+    instance of the top-level model, and is itself contained in a wrapper part
+    that is never accessed.
 
     <p>Lifetime management: Generally, if a part contains populations, they
     appear as member variables that are destructed automatically. Parts
@@ -67,7 +67,7 @@ public:
 
     // Lifespan management
     virtual void die     (); ///< Set $live=0 (in some form) and decrement $n of our population. If a connection with $min or $max, decrement connection counts in respective target compartments.
-    virtual void enqueue (); ///< Tells us we are going onto the simulator queue. Increment refcount on parts we directly access.
+    virtual void enqueue (); ///< Tells us we are going onto the simulator queue. Increment refcount on parts we directly access. (Note: Even though init() is usually called when a part is engueued, they are distinct operations and not always called together.)
     virtual void dequeue (); ///< Tells us we are leaving the simulator queue. Ask our population to put us on its dead list. Reduce refcount on parts we directly access, to indicate that they may be re-used.
     virtual bool isFree  (); ///< @return true if the part is ready to use, false if the we are still waiting on other parts that reference us.
 
@@ -139,8 +139,8 @@ public:
     virtual ~Population ();  ///< Deletes all parts on our dead list.
 
     virtual Part * create   () = 0;        ///< Construct an instance of the kind of part this population holds. Caller is fully responsible for lifespan of result, unless it gives the part to us via add().
-    virtual void   add      (Part * part); ///< Tells us that part newly made by create() is moving onto simulator queue.
-    virtual void   remove   (Part * part); ///< Tells us that part is moving off the simulator queue. Add it to dead.
+    virtual void   add      (Part * part); ///< The given part is going onto a simulator queue, but we may also account for it in other ways.
+    virtual void   remove   (Part * part); ///< Move part to dead list, and update any other accounting for the part.
     virtual Part * allocate ();            ///< If a dead part is available, re-use it. Otherwise, create and add a new part.
 
     Part * dead;  ///< Head of linked list of available parts, using Part::next.
@@ -153,7 +153,6 @@ class PopulationCompartment : public Population
 {
 public:
     PopulationCompartment ();
-    ~PopulationCompartment ();
 
     virtual void   add      (Part * part); ///< Assign an index to part and put it on our live list (ahead of old).
     virtual void   remove   (Part * part); ///< Remove part from live.
@@ -164,7 +163,7 @@ public:
 
     Compartment   live;      ///< Parts currently on simulator queue (regardless of $live), linked via Compartment::before and after. Used for crossing populations to make connections.
     Compartment * old;       ///< Position in parts linked list of first old part. All parts before this were added in the current simulation cycle. If old==&live, then all parts are new.
-    int           __24n;     ///< Actual number of parts with $live==1. Maintained directly by parts as they are born or die. Requested number of parts must have a separate "next" variable.
+    int           __24n;     ///< Actual number of parts with $live==1. Maintained directly by parts as they are born or die.
     int           nextIndex; ///< Next available $index value. Indices are consumed only when add() is called. With garbage collection, there could be gaps in the set of used indices.
 };
 
@@ -194,7 +193,7 @@ public:
     virtual void integrate (); ///< Perform one time step across all the parts contained in all the populations
 
     // callbacks
-    virtual void enqueue (Part *);                                    ///< Put part onto the queue. The only way to dequeue is to return false from Part::finalize().
+    virtual void enqueue (Part *);                                    ///< Put part onto the queue and calls Part::enqueue(). The only way to dequeue is to return false from Part::finalize().
     virtual void move    (float dt);                                  ///< Change simulation period for the part that makes the call. We know which part is currently executing, so no need to pass it as a parameter.
     virtual void resize  (PopulationCompartment * population, int n); ///< Schedule compartment to be resized at end of current cycle.
     virtual void connect (PopulationConnection * population);         ///< Schedule connection population to be evaluated at end of current cycle, after all resizing is done.
