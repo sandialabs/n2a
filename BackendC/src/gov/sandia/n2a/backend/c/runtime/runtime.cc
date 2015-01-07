@@ -350,7 +350,7 @@ PopulationCompartment::resize (Simulator & simulator, int n)
     while (__24n > n)
     {
         if (p == &live) throw "Inconsistent $n";
-        p->die ();  // decrement $n
+        if (p->getLive ()) p->die ();  // decrement $n. Can't dequeue part until next simulator cycle, so need to store $live.
         p = p->before;
     }
 }

@@ -59,6 +59,17 @@ class RungeKutta;
     <p>Lifetime management: Generally, if a part contains populations, they
     appear as member variables that are destructed automatically. Parts
     may not be deleted until they have a zero referenceCount.
+
+    <p>Functions that change state of $live must also update $n. This means
+    that init() increments $n and die() decrements $n. Likewise, functions
+    that change $live should also change connection counts on parts with $min
+    and $max. If finalize() will return false, it should call die() or do the
+    equivalent first.
+
+    <p>Reference counting has to do with whether a part might be executed,
+    regardless of whether it is live or not. Thus, enqueue() and dequeue()
+    are responsible for maintaining refcounts on parts that we directly
+    reference.
 **/
 class Part
 {
@@ -67,7 +78,7 @@ public:
 
     // Lifespan management
     virtual void die     (); ///< Set $live=0 (in some form) and decrement $n of our population. If a connection with $min or $max, decrement connection counts in respective target compartments.
-    virtual void enqueue (); ///< Tells us we are going onto the simulator queue. Increment refcount on parts we directly access. (Note: Even though init() is usually called when a part is engueued, they are distinct operations and not always called together.)
+    virtual void enqueue (); ///< Tells us we are going onto the simulator queue. Increment refcount on parts we directly access.
     virtual void dequeue (); ///< Tells us we are leaving the simulator queue. Ask our population to put us on its dead list. Reduce refcount on parts we directly access, to indicate that they may be re-used.
     virtual bool isFree  (); ///< @return true if the part is ready to use, false if the we are still waiting on other parts that reference us.
 
@@ -76,7 +87,7 @@ public:
     virtual void integrate          (Simulator & simulator);
     virtual void prepare            ();
     virtual void update             (Simulator & simulator);
-    virtual bool finalize           (Simulator & simulator);              ///< A population may init() and add new parts to simulator. @return true if this part is still live, false if it should die.
+    virtual bool finalize           (Simulator & simulator);              ///< A population may init() and add new parts to simulator. @return true if this part is still live, false if it should be removed from simulator queue.
     virtual void prepareDerivative  ();                                   ///< Same as prepare(), but restricted to computing derivatives.
     virtual void updateDerivative   (Simulator & simulator);              ///< Same as update(), but restricted to computing derivatives.
     virtual void finalizeDerivative ();                                   ///< Same as finalize(), but restricted to computing derivatives.

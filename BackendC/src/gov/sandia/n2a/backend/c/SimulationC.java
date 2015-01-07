@@ -395,8 +395,8 @@ public class SimulationC implements Simulation
         }
 
         // Determine how to access my container at run time
-        EquationSet pathToContainer = null;
-        if (s.backendData instanceof EquationSet) pathToContainer = (EquationSet) s.backendData;
+        String pathToContainer = null;
+        if (s.backendData instanceof String) pathToContainer = (String) s.backendData;
 
         // Determine reference population
         // This is extremely inefficient, but we are solving a very small problem
@@ -634,7 +634,7 @@ public class SimulationC implements Simulation
             result.append (pad2 + "virtual void dequeue ()\n");
             result.append (pad2 + "{\n");
             String container = "container->";
-            if (pathToContainer != null) container = mangle (pathToContainer.name) + "->" + container;
+            if (pathToContainer != null) container = mangle (pathToContainer) + "->" + container;
             result.append (pad3 + container + mangle (s.name) + "_Population_Instance.remove (this);\n");
             result.append (pad2 + "}\n");
             result.append ("\n");
@@ -643,7 +643,7 @@ public class SimulationC implements Simulation
         // Unit isFree
 
         // Unit init
-        if (s.connectionBindings == null  ||  localInit.size () > 0)
+        if (s.connectionBindings == null  ||  localInit.size () > 0  ||  s.parts.size () > 0)
         {
             result.append (pad2 + "virtual void init (Simulator & simulator)\n");
             result.append (pad2 + "{\n");
@@ -699,12 +699,10 @@ public class SimulationC implements Simulation
             Variable n = s.find (new Variable ("$n"));
             if (n != null) result.append (pad3 + resolve (n.reference, context, false) + "++;\n");
 
-            // add contained populations
+            // contained populations
             for (EquationSet e : s.parts)
             {
-                String PopulationInstance = mangle (e.name) + "_Population_Instance"; 
-                result.append (pad3 + "simulator.enqueue (&" + PopulationInstance + ");\n");
-                result.append (pad3 + PopulationInstance + ".init (simulator);\n");
+                result.append (pad3 + mangle (e.name) + "_Population_Instance.init (simulator);\n");
             }
 
             s.setInit (false);
@@ -713,34 +711,42 @@ public class SimulationC implements Simulation
         }
 
         // Unit integrate
-        if (localIntegrated.size () > 0)
+        if (localIntegrated.size () > 0  ||  s.parts.size () > 0)
         {
             result.append (pad2 + "virtual void integrate (Simulator & simulator)\n");
             result.append (pad2 + "{\n");
-            // Note the resolve() call on the left-hand-side below has lvalue==false.
-            // Integration always takes place in the primary storage of a variable.
-            result.append (pad3 + "if (stackIntegrated)\n");
-            result.append (pad3 + "{\n");
-            for (Variable v : localIntegrated)
+            if (localIntegrated.size () > 0)
             {
-                Variable vo = s.variables.floor (new Variable (v.name, v.order + 1));  // pre-processing should guarantee that this exists
-                result.append (pad4 + resolve (v.reference, context, false) + " = stackIntegrated->" + mangle (v) + " + " + resolve (vo.reference, context, false) + " * simulator.dt;\n");
+                // Note the resolve() call on the left-hand-side below has lvalue==false.
+                // Integration always takes place in the primary storage of a variable.
+                result.append (pad3 + "if (stackIntegrated)\n");
+                result.append (pad3 + "{\n");
+                for (Variable v : localIntegrated)
+                {
+                    Variable vo = s.variables.floor (new Variable (v.name, v.order + 1));  // pre-processing should guarantee that this exists
+                    result.append (pad4 + resolve (v.reference, context, false) + " = stackIntegrated->" + mangle (v) + " + " + resolve (vo.reference, context, false) + " * simulator.dt;\n");
+                }
+                result.append (pad3 + "}\n");
+                result.append (pad3 + "else\n");
+                result.append (pad3 + "{\n");
+                for (Variable v : localIntegrated)
+                {
+                    Variable vo = s.variables.floor (new Variable (v.name, v.order + 1));
+                    result.append (pad4 + resolve (v.reference, context, false) + " += " + resolve (vo.reference, context, false) + " * simulator.dt;\n");
+                }
+                result.append (pad3 + "}\n");
             }
-            result.append (pad3 + "}\n");
-            result.append (pad3 + "else\n");
-            result.append (pad3 + "{\n");
-            for (Variable v : localIntegrated)
+            // contained populations
+            for (EquationSet e : s.parts)
             {
-                Variable vo = s.variables.floor (new Variable (v.name, v.order + 1));
-                result.append (pad4 + resolve (v.reference, context, false) + " += " + resolve (vo.reference, context, false) + " * simulator.dt;\n");
+                result.append (pad3 + mangle (e.name) + "_Population_Instance.integrate (simulator);\n");
             }
-            result.append (pad3 + "}\n");
             result.append (pad2 + "}\n");
             result.append ("\n");
         }
 
         // Unit prepare
-        if (localBufferedExternalWrite.size () > 0)
+        if (localBufferedExternalWrite.size () > 0  ||  s.parts.size () > 0)
         {
             result.append (pad2 + "virtual void prepare ()\n");
             result.append (pad2 + "{\n");
@@ -748,12 +754,17 @@ public class SimulationC implements Simulation
             {
                 result.append (pad3 + mangle ("next_", v) + " = 0;\n");
             }
+            // contained populations
+            for (EquationSet e : s.parts)
+            {
+                result.append (pad3 + mangle (e.name) + "_Population_Instance.prepare ();\n");
+            }
             result.append (pad2 + "}\n");
             result.append ("\n");
         }
 
         // Unit update
-        if (localUpdate.size () > 0)
+        if (localUpdate.size () > 0  ||  s.parts.size () > 0)
         {
             result.append (pad2 + "virtual void update (Simulator & simulator)\n");
             result.append (pad2 + "{\n");
@@ -769,15 +780,33 @@ public class SimulationC implements Simulation
             {
                 result.append (pad3 + mangle (v) + " = " + mangle ("next_", v) + ";\n");
             }
+            // contained populations
+            for (EquationSet e : s.parts)
+            {
+                result.append (pad3 + mangle (e.name) + "_Population_Instance.update (simulator);\n");
+            }
             result.append (pad2 + "}\n");
             result.append ("\n");
         }
 
         // Unit finalize
-        if (localBufferedExternal.size () > 0  ||  type != null  ||  s.canDie ())
+        if (localBufferedExternal.size () > 0  ||  type != null  ||  s.canDie ()  ||  s.parts.size () > 0)
         {
             result.append (pad2 + "virtual bool finalize (Simulator & simulator)\n");
             result.append (pad2 + "{\n");
+
+            // contained populations
+            for (EquationSet e : s.parts)
+            {
+                result.append (pad3 + mangle (e.name) + "_Population_Instance.finalize (simulator);\n");  // ignore return value
+            }
+
+            Variable live = s.find (new Variable ("$live"));
+            if (live != null  &&  ! live.hasAny (new String[] {"constant", "transient"}))  // $live is stored in this part
+            {
+                result.append (pad3 + "if (" + resolve (live.reference, context, false) + " == 0) return false;\n");  // early-out if we are already dead, to avoid another call to die()
+            }
+
             for (Variable v : localBufferedExternal)
             {
                 if (v.name.equals ("$dt"))
@@ -792,6 +821,7 @@ public class SimulationC implements Simulation
                     result.append (pad3 + mangle (v) + " = " + mangle ("next_", v) + ";\n");
                 }
             }
+
             if (type != null)
             {
                 result.append (pad3 + "switch (" + mangle ("$type") + ")\n");
@@ -828,7 +858,7 @@ public class SimulationC implements Simulation
                         else
                         {
                             String container = "container->";
-                            if (pathToContainer != null) container = mangle (pathToContainer.name) + "->" + container;
+                            if (pathToContainer != null) container = mangle (pathToContainer) + "->" + container;
                             result.append (pad5 + container + mangle (s.name) + "_2_" + mangle (to.name) + " (this, simulator, " + (j + 1) + ");\n");
                         }
                     }
@@ -839,7 +869,7 @@ public class SimulationC implements Simulation
                     else
                     {
                         result.append (pad5 + "die ();\n");
-                        result.append (pad5 + "return 0;\n");
+                        result.append (pad5 + "return false;\n");
                     }
                     result.append (pad4 + "}\n");
                 }
@@ -849,12 +879,16 @@ public class SimulationC implements Simulation
             if (s.lethalP)
             {
                 // TODO: be more clever about determining lethaP; current version thinks HHmodHHmod has lethalP because of expression involving $index
+                // If the conditional expression is constant, then it won't change after init(). If all the equations of a variable are this way, it should be marked as initOnly.
+                // An initOnly variable should not add a lethalX attribute to the equation set.
+                // In the case of $index, it is a stored value that never changes, that is, a constant at runtime but not at compile time.
+
                 Variable p = s.find (new Variable ("$p")); // lethalP implies that $p exists, so no need to check for null
                 result.append (pad3 + "float create = " + resolve (p.reference, context, false) + ";\n");
                 result.append (pad3 + "if (create == 0  ||  create < 1  &&  create < randf ())\n");
                 result.append (pad3 + "{\n");
                 result.append (pad4 + "die ();\n");
-                result.append (pad4 + "return 0;\n");
+                result.append (pad4 + "return false;\n");
                 result.append (pad3 + "}\n");
             }
 
@@ -865,7 +899,11 @@ public class SimulationC implements Simulation
                 	VariableReference r = s.resolveReference (c.getKey () + ".$live");
                 	if (! r.variable.hasAttribute ("constant"))
                 	{
-                        result.append (pad3 + "if (" + resolve (r, context, false) + " == 0) return 0;\n");
+                        result.append (pad3 + "if (" + resolve (r, context, false) + " == 0)\n");
+                        result.append (pad3 + "{\n");
+                        result.append (pad4 + "die ();\n");
+                        result.append (pad4 + "return false;\n");
+                        result.append (pad3 + "}\n");
                 	}
                 }
             }
@@ -873,19 +911,23 @@ public class SimulationC implements Simulation
             if (s.lethalContainer)
             {
                 VariableReference r = s.resolveReference ("$up.$live");
-                result.append (pad3 + "return " + resolve (r, context, false) + ";\n");
-            }
-            else
-            {
-                result.append (pad3 + "return true;\n");
+                if (! r.variable.hasAttribute ("constant"))
+                {
+                    result.append (pad3 + "if (" + resolve (r, context, false) + " == 0)\n");
+                    result.append (pad3 + "{\n");
+                    result.append (pad4 + "die ();\n");
+                    result.append (pad4 + "return false;\n");
+                    result.append (pad3 + "}\n");
+                }
             }
 
+            result.append (pad3 + "return true;\n");
             result.append (pad2 + "}\n");
             result.append ("\n");
         }
 
         // Unit prepareDerivative
-        if (localBufferedExternalWriteDerivative.size () > 0)
+        if (localBufferedExternalWriteDerivative.size () > 0  ||  s.parts.size () > 0)
         {
             result.append (pad2 + "virtual void prepareDerivative ()\n");
             result.append (pad2 + "{\n");
@@ -893,12 +935,17 @@ public class SimulationC implements Simulation
             {
                 result.append (pad3 + mangle ("next_", v) + " = 0;\n");
             }
+            // contained populations
+            for (EquationSet e : s.parts)
+            {
+                result.append (pad3 + mangle (e.name) + "_Population_Instance.prepareDerivative ();\n");
+            }
             result.append (pad2 + "}\n");
             result.append ("\n");
         }
 
         // Unit updateDerivative
-        if (localDerivative.size () > 0)
+        if (localDerivative.size () > 0  ||  s.parts.size () > 0)
         {
             result.append (pad2 + "virtual void updateDerivative (Simulator & simulator)\n");
             result.append (pad2 + "{\n");
@@ -914,12 +961,17 @@ public class SimulationC implements Simulation
             {
                 result.append (pad3 + mangle (v) + " = " + mangle ("next_", v) + ";\n");
             }
+            // contained populations
+            for (EquationSet e : s.parts)
+            {
+                result.append (pad3 + mangle (e.name) + "_Population_Instance.updateDerivative (simulator);\n");
+            }
             result.append (pad2 + "}\n");
             result.append ("\n");
         }
 
         // Unit finalizeDerivative
-        if (localBufferedExternalDerivative.size () > 0)
+        if (localBufferedExternalDerivative.size () > 0  ||  s.parts.size () > 0)
         {
             result.append (pad2 + "virtual void finalizeDerivative ()\n");
             result.append (pad2 + "{\n");
@@ -927,56 +979,85 @@ public class SimulationC implements Simulation
             {
                 result.append (pad3 + mangle (v) + " = " + mangle ("next_", v) + ";\n");
             }
+            // contained populations
+            for (EquationSet e : s.parts)
+            {
+                result.append (pad3 + mangle (e.name) + "_Population_Instance.finalizeDerivative ();\n");
+            }
             result.append (pad2 + "}\n");
             result.append ("\n");
         }
 
         // Unit pushIntegrated
-        if (localIntegrated.size () > 0)
+        if (localIntegrated.size () > 0  ||  s.parts.size () > 0)
         {
             result.append (pad2 + "virtual void pushIntegrated ()\n");
             result.append (pad2 + "{\n");
-            result.append (pad3 + "Integrated * temp = new Integrated;\n");
-            result.append (pad3 + "temp->next = stackIntegrated;\n");
-            result.append (pad3 + "stackIntegrated = temp;\n");
-            for (Variable v : localIntegrated)
+            if (localIntegrated.size () > 0)
             {
-                result.append (pad3 + "temp->" + mangle (v) + " = " + mangle (v) + ";\n");
+                result.append (pad3 + "Integrated * temp = new Integrated;\n");
+                result.append (pad3 + "temp->next = stackIntegrated;\n");
+                result.append (pad3 + "stackIntegrated = temp;\n");
+                for (Variable v : localIntegrated)
+                {
+                    result.append (pad3 + "temp->" + mangle (v) + " = " + mangle (v) + ";\n");
+                }
+            }
+            // contained populations
+            for (EquationSet e : s.parts)
+            {
+                result.append (pad3 + mangle (e.name) + "_Population_Instance.pushIntegrated ();\n");
             }
             result.append (pad2 + "}\n");
             result.append ("\n");
         }
 
         // Unit popIntegrated
-        if (localIntegrated.size () > 0)
+        if (localIntegrated.size () > 0  ||  s.parts.size () > 0)
         {
             result.append (pad2 + "virtual void popIntegrated ()\n");
             result.append (pad2 + "{\n");
-            result.append (pad3 + "Integrated * temp = stackIntegrated;\n");
-            result.append (pad3 + "stackIntegrated = stackIntegrated->next;\n");
-            result.append (pad3 + "delete temp;\n");
+            if (localIntegrated.size () > 0)
+            {
+                result.append (pad3 + "Integrated * temp = stackIntegrated;\n");
+                result.append (pad3 + "stackIntegrated = stackIntegrated->next;\n");
+                result.append (pad3 + "delete temp;\n");
+            }
+            // contained populations
+            for (EquationSet e : s.parts)
+            {
+                result.append (pad3 + mangle (e.name) + "_Population_Instance.popIntegrated ();\n");
+            }
             result.append (pad2 + "}\n");
             result.append ("\n");
         }
 
         // Unit pushDerivative
-        if (localStackDerivative.size () > 0)
+        if (localStackDerivative.size () > 0  ||  s.parts.size () > 0)
         {
             result.append (pad2 + "virtual void pushDerivative ()\n");
             result.append (pad2 + "{\n");
-            result.append (pad3 + "Derivative * temp = new Derivative;\n");
-            result.append (pad3 + "temp->next = stackDerivative;\n");
-            result.append (pad3 + "stackDerivative = temp;\n");
-            for (Variable v : localStackDerivative)
+            if (localStackDerivative.size () > 0)
             {
-                result.append (pad3 + "temp->" + mangle (v) + " = " + mangle (v) + ";\n");
+                result.append (pad3 + "Derivative * temp = new Derivative;\n");
+                result.append (pad3 + "temp->next = stackDerivative;\n");
+                result.append (pad3 + "stackDerivative = temp;\n");
+                for (Variable v : localStackDerivative)
+                {
+                    result.append (pad3 + "temp->" + mangle (v) + " = " + mangle (v) + ";\n");
+                }
+            }
+            // contained populations
+            for (EquationSet e : s.parts)
+            {
+                result.append (pad3 + mangle (e.name) + "_Population_Instance.pushDerivative ();\n");
             }
             result.append (pad2 + "}\n");
             result.append ("\n");
         }
 
         // Unit multiplyAddToStack
-        if (localStackDerivative.size () > 0)
+        if (localStackDerivative.size () > 0  ||  s.parts.size () > 0)
         {
             result.append (pad2 + "virtual void multiplyAddToStack (float scalar)\n");
             result.append (pad2 + "{\n");
@@ -984,12 +1065,17 @@ public class SimulationC implements Simulation
             {
                 result.append (pad3 + "stackDerivative->" + mangle (v) + " += " + mangle (v) + " * scalar;\n");
             }
+            // contained populations
+            for (EquationSet e : s.parts)
+            {
+                result.append (pad3 + mangle (e.name) + "_Population_Instance.multiplyAddToStack (scalar);\n");
+            }
             result.append (pad2 + "}\n");
             result.append ("\n");
         }
 
         // Unit multiply
-        if (localStackDerivative.size () > 0)
+        if (localStackDerivative.size () > 0  ||  s.parts.size () > 0)
         {
             result.append (pad2 + "virtual void multiply (float scalar)\n");
             result.append (pad2 + "{\n");
@@ -997,22 +1083,35 @@ public class SimulationC implements Simulation
             {
                 result.append (pad3 + mangle (v) + " *= scalar;\n");
             }
+            // contained populations
+            for (EquationSet e : s.parts)
+            {
+                result.append (pad3 + mangle (e.name) + "_Population_Instance.multiply (scalar);\n");
+            }
             result.append (pad2 + "}\n");
             result.append ("\n");
         }
 
         // Unit addToMembers
-        if (localStackDerivative.size () > 0)
+        if (localStackDerivative.size () > 0  ||  s.parts.size () > 0)
         {
             result.append (pad2 + "virtual void addToMembers ()\n");
             result.append (pad2 + "{\n");
-            for (Variable v : localStackDerivative)
+            if (localStackDerivative.size () > 0)
             {
-                result.append (pad3 + mangle (v) + " += stackDerivative->" + mangle (v) + ";\n");
+                for (Variable v : localStackDerivative)
+                {
+                    result.append (pad3 + mangle (v) + " += stackDerivative->" + mangle (v) + ";\n");
+                }
+                result.append (pad3 + "Derivative * temp = stackDerivative;\n");
+                result.append (pad3 + "stackDerivative = stackDerivative->next;\n");
+                result.append (pad3 + "delete temp;\n");
             }
-            result.append (pad3 + "Derivative * temp = stackDerivative;\n");
-            result.append (pad3 + "stackDerivative = stackDerivative->next;\n");
-            result.append (pad3 + "delete temp;\n");
+            // contained populations
+            for (EquationSet e : s.parts)
+            {
+                result.append (pad3 + mangle (e.name) + "_Population_Instance.addToMembers ();\n");
+            }
             result.append (pad2 + "}\n");
             result.append ("\n");
         }
@@ -1029,38 +1128,34 @@ public class SimulationC implements Simulation
         // Unit getLive
         {
             Variable live = s.find (new Variable ("$live"));
-            if (live != null  &&  live.hasUsers)
+            if (live != null  &&  ! live.hasAttribute ("constant"))
             {
                 result.append (pad2 + "virtual float getLive ()\n");
                 result.append (pad2 + "{\n");
-                if (live.hasAttribute ("transient"))
+                if (! live.hasAttribute ("transient"))
                 {
-                    if (s.lethalConnection)
+                    result.append (pad3 + "if (" + resolve (live.reference, context, false) + " == 0) return 0;\n");
+                }
+                if (s.lethalConnection)
+                {
+                    for (Entry<String, EquationSet> c : s.connectionBindings.entrySet ())
                     {
-                        for (Entry<String, EquationSet> c : s.connectionBindings.entrySet ())
+                        VariableReference r = s.resolveReference (c.getKey () + ".$live");
+                        if (! r.variable.hasAttribute ("constant"))
                         {
-                            VariableReference r = s.resolveReference (c.getKey () + ".$live");
-                            if (! r.variable.hasAttribute ("constant"))
-                            {
-                                result.append (pad3 + "if (" + resolve (r, context, false) + " == 0) return 0;\n");
-                            }
+                            result.append (pad3 + "if (" + resolve (r, context, false) + " == 0) return 0;\n");
                         }
                     }
-
-                    if (s.lethalContainer)
-                    {
-                        VariableReference r = s.resolveReference ("$up.$live");
-                        result.append (pad3 + "return " + resolve (r, context, false) + ";\n");
-                    }
-                    else
-                    {
-                        result.append (pad3 + "return 1;\n");
-                    }
                 }
-                else  // stored somewhere  (We are unlikely to be "constant" if hasUsers is true.)
+                if (s.lethalContainer)
                 {
-                    result.append (pad3 + "return " + resolve (live.reference, context, false) + ";\n");
+                    VariableReference r = s.resolveReference ("$up.$live");
+                    if (! r.variable.hasAttribute ("constant"))
+                    {
+                        result.append (pad3 + "if (" + resolve (r, context, false) + " == 0) return 0;\n");
+                    }
                 }
+                result.append (pad3 + "return 1;\n");
                 result.append (pad2 + "}\n");
                 result.append ("\n");
             }
@@ -1383,7 +1478,7 @@ public class SimulationC implements Simulation
         result.append (pad2 + "virtual void init (Simulator & simulator)\n");
         result.append (pad2 + "{\n");
         s.setInit (true);
-        // Zero out members
+        //   Zero out members
         for (Variable v : globalMembers)
         {
             result.append (pad3 + mangle (v) + " = 0;\n");
@@ -1392,22 +1487,22 @@ public class SimulationC implements Simulation
         {
             result.append (pad3 + mangle ("next_", v) + " = 0;\n");
         }
-        // declare buffer variables
+        //   declare buffer variables
         for (Variable v : globalBufferedInternal)
         {
             result.append (pad3 + "float " + mangle ("next_", v) + ";\n");
         }
-        // no separate $ and non-$ phases, because only $variables work at the population level
+        //   no separate $ and non-$ phases, because only $variables work at the population level
         for (Variable v : globalInit)
         {
             multiconditional (s, v, context, pad3, result);
         }
-        // finalize
+        //   finalize
         for (Variable v : globalBuffered)
         {
             if (! v.name.equals ("$n")) result.append (pad3 + mangle (v) + " = " + mangle ("next_", v) + ";\n");
         }
-        // create instances
+        //   create instances
         {
             Variable n = s.find (new Variable ("$n", 0));
             if (n != null)
@@ -1423,7 +1518,7 @@ public class SimulationC implements Simulation
                 }
             }
         }
-        // make connections
+        //   make connections
         if (s.connectionBindings != null)
         {
             result.append (pad3 + "simulator.connect (this);\n");  // queue to evaluate our connections
@@ -1659,8 +1754,6 @@ public class SimulationC implements Simulation
 
 // TODO: study how conditionals interact with getXXX() functions
 // start with assumption that all $variables are static, then add dynamics later
-// if a $variable is dynamic, it ceases to be transitory, and requires different code; should test for this in each getXXX() generator
-// need a more in-depth test for dynamic in EquationSet::findDynamic()
 
         // Population getK
         if (s.connectionBindings != null)
@@ -1681,15 +1774,19 @@ public class SimulationC implements Simulation
         }
 
         // Population getLive
-        if (s.connectionBindings != null)
+        result.append (pad2 + "virtual float getLive ()\n");
+        result.append (pad2 + "{\n");
+        if (s.container == null)
         {
-            result.append (pad2 + "virtual float getLive ()\n");
-            result.append (pad2 + "{\n");
-            if (s.container == null) result.append (pad3 + "return 1;\n");  // TODO: Not strictly accurate for top-level population. Our finalize() should return 0 when the last part (usually a singleton) dies.
-            else                     result.append (pad3 + "return container->getLive ();\n");  // TODO: should use resolve()
-            result.append (pad2 + "}\n");
-            result.append ("\n");
+            result.append (pad3 + "return __24n;\n");  // We must be a PopulationCompartment, and as the top-level object we should die when our last instance dies.
         }
+        else
+        {
+            VariableReference live = s.resolveReference ("$up.$live");
+            result.append (pad3 + "return " + resolve (live, context, false) + ";\n");
+        }
+        result.append (pad2 + "}\n");
+        result.append ("\n");
 
         // Population getMax
         if (s.connectionBindings != null)
@@ -2009,10 +2106,10 @@ public class SimulationC implements Simulation
                 }
                 else  // ascend to our container
                 {
-                    if (current.backendData instanceof EquationSet)  // we are a Connection without a container pointer, so we must go through one of our referenced parts
+                    if (current.backendData instanceof String)  // we are a Connection without a container pointer, so we must go through one of our referenced parts
                     {
-                        EquationSet pathToContainer = (EquationSet) current.backendData;
-                        containers += mangle (pathToContainer.name) + "->";
+                        String pathToContainer = (String) current.backendData;
+                        containers += mangle (pathToContainer) + "->";
                     }
                     containers += "container->";
                 }
@@ -2027,10 +2124,10 @@ public class SimulationC implements Simulation
 
         if (r.resolution.isEmpty ()  &&  r.variable.hasAttribute ("global")  &&  ! context.global)
         {
-            if (current.backendData instanceof EquationSet)
+            if (current.backendData instanceof String)
             {
-                EquationSet pathToContainer = (EquationSet) current.backendData;
-                containers += mangle (pathToContainer.name) + "->";
+                String pathToContainer = (String) current.backendData;
+                containers += mangle (pathToContainer) + "->";
             }
             containers += "container->" + mangle (current.name) + "_Population_Instance.";
         }
@@ -2083,7 +2180,7 @@ public class SimulationC implements Simulation
             {
                 if (c.getValue ().container == s.container)
                 {
-                    s.backendData = c.getValue ();
+                    s.backendData = c.getKey ();
                     break;
                 }
             }

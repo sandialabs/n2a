@@ -57,9 +57,11 @@ public class EquationSet implements Comparable<EquationSet>
     public NavigableMap<String, EquationSet> connectionBindings;     // non-null iff this is a connection
     public boolean                           connected;
     public NavigableSet<EquationSet>         accountableConnections; // Connections which declare a $min or $max w.r.t. this part. Note: the member variable "connected" is a less constrained form of this information.
-    public Map<String, String>               metadata;               // TODO: better to refer metadata requests to source object (the Part). Part should implement a getNamedValue() function that refers requests up the inheritance chain.
+    /** @deprecated Better to refer metadata requests to source. Part/NDoc should implement a getNamedValue() function that refers requests up the inheritance chain. **/
+    public Map<String, String>               metadata;
     public List<Variable>                    ordered;
     public List<ArrayList<EquationSet>>      splits;                 // Enumeration of the $type splits this part can go through
+    public boolean                           lethalN;
     public boolean                           lethalP;
     public boolean                           lethalType;
     public boolean                           lethalConnection;
@@ -200,7 +202,7 @@ public class EquationSet implements Comparable<EquationSet>
             }
         }
 
-        // MAJOR HACK -- inject tracers, because UI can't save equations
+        // MAJOR HACK -- inject tracers, because UI currently can't save equations
         if (name.equals ("HHmod"))
         {
             EquationEntry ee = new EquationEntry ("trace0 = trace(V,\"V0\") @ $index==0");
@@ -832,6 +834,7 @@ public class EquationSet implements Comparable<EquationSet>
             v.equations = new TreeSet<EquationEntry> ();
             EquationEntry e = new EquationEntry (v, "");
             v.equations.add (e);
+            e.assignment = "=";
             e.expression = new ASTConstant (new Float (1));
         }
 
@@ -1148,6 +1151,7 @@ public class EquationSet implements Comparable<EquationSet>
         Determine which equation sets are capable of dying during structural dynamics.
         An equation set can die under the following circumstances:
         <ul>
+        <li>It has an assignment to $n that can decrease during normal simulation.
         <li>It has an assignment to $p which can be less than 1 during normal simulation.
         <li>It has a $type split which does not include the part as offspring.
         <li>It references parts that can die.
@@ -1170,6 +1174,26 @@ public class EquationSet implements Comparable<EquationSet>
             s.findLethalVariables ();
         }
 
+        // Determine if $n can decrease
+        Variable n = find (new Variable ("$n"));
+        if (n != null)
+        {
+            for (EquationEntry e : n.equations)
+            {
+                // Even if each expression is constant, $n could still change during operation if it is a multi-conditional.
+                if (e.conditional != null  &&  ! (e.conditional instanceof ASTConstant))
+                {
+                    lethalN = true;
+                    break;
+                }
+                if (! (e.expression instanceof ASTConstant))
+                {
+                    lethalN = true;
+                    break;
+                }
+            }
+        }
+
         // Determine if $p has an assignment less than 1
         Variable p = find (new Variable ("$p"));
         if (p != null)
@@ -1177,13 +1201,13 @@ public class EquationSet implements Comparable<EquationSet>
             // Determine if any equation is capable of setting $p to something besides 1
             for (EquationEntry e : p.equations)
             {
-                ASTNodeBase n = e.expression;
-                if (! (n instanceof ASTConstant))
+                ASTNodeBase expression = e.expression;
+                if (! (expression instanceof ASTConstant))
                 {
                     lethalP = true;
                     break;
                 }
-                if (new Float (((ASTConstant) n).getValue ().toString ()).floatValue () != 1.0f)
+                if (new Float (((ASTConstant) expression).getValue ().toString ()).floatValue () != 1.0f)
                 {
                     lethalP = true;
                     break;
@@ -1244,7 +1268,7 @@ public class EquationSet implements Comparable<EquationSet>
 
     public boolean canDie ()
     {
-        return lethalP  ||  lethalType  || lethalConnection  || lethalContainer;
+        return lethalN  ||  lethalP  ||  lethalType  || lethalConnection  || lethalContainer;
     }
 
     /**
@@ -1252,7 +1276,7 @@ public class EquationSet implements Comparable<EquationSet>
         $live is either constant, transient, or stored.
         It is constant (the default) if we can't die or no part depends on us.
         It is transient if we only die in response to the death of our container or a referenced part.
-        It is stored if we can die from $p or $type, that is, if the fact that we died is local knowledge.
+        It is stored if we can die from $n, $p or $type, that is, if the fact that we died is local knowledge.
         Depends on results of: findDeath()
     **/
     public void setLiveAttributes ()
@@ -1268,7 +1292,7 @@ public class EquationSet implements Comparable<EquationSet>
             if (canDie ()  &&  live.hasUsers)
             {
                 live.removeAttribute ("constant");
-                if (! lethalP  &&  ! lethalType)  // therefore must be (lethalConnection  ||  lethalContainer)
+                if (! (lethalN  ||  lethalP  ||  lethalType))  // therefore must be (lethalConnection  ||  lethalContainer)
                 {
                     live.addAttribute ("transient");
                 }
