@@ -182,10 +182,80 @@ public class SimulationC implements Simulation
         s.append ("using namespace std;\n");
         s.append ("using namespace fl;\n");
         s.append ("\n");
-        s.append ("class Wrapper\n");
+        s.append ("class Wrapper : public Part\n");
         s.append ("{\n");
         s.append ("public:\n");
         s.append (generateClasses (e, "  "));
+        s.append ("  virtual void init (Simulator & simulator)\n");
+        s.append ("  {\n");
+        s.append ("    _Model_Population_Instance.init (simulator);\n");
+        s.append ("  }\n");
+        s.append ("\n");
+        s.append ("  virtual void integrate (Simulator & simulator)\n");
+        s.append ("  {\n");
+        s.append ("    _Model_Population_Instance.integrate (simulator);\n");
+        s.append ("  }\n");
+        s.append ("\n");
+        s.append ("  virtual void prepare ()\n");
+        s.append ("  {\n");
+        s.append ("    _Model_Population_Instance.prepare ();\n");
+        s.append ("  }\n");
+        s.append ("\n");
+        s.append ("  virtual void update (Simulator & simulator)\n");
+        s.append ("  {\n");
+        s.append ("    _Model_Population_Instance.update (simulator);\n");
+        s.append ("  }\n");
+        s.append ("\n");
+        s.append ("  virtual bool finalize (Simulator & simulator)\n");
+        s.append ("  {\n");
+        s.append ("    _Model_Population_Instance.finalize (simulator);\n");
+        s.append ("    return _Model_Population_Instance.__24n;\n");  // The simulation stops when the last model instance dies.
+        s.append ("  }\n");
+        s.append ("\n");
+        s.append ("  virtual void prepareDerivative ()\n");
+        s.append ("  {\n");
+        s.append ("    _Model_Population_Instance.prepareDerivative ();\n");
+        s.append ("  }\n");
+        s.append ("\n");
+        s.append ("  virtual void updateDerivative (Simulator & simulator)\n");
+        s.append ("  {\n");
+        s.append ("    _Model_Population_Instance.updateDerivative (simulator);\n");
+        s.append ("  }\n");
+        s.append ("\n");
+        s.append ("  virtual void finalizeDerivative ()\n");
+        s.append ("  {\n");
+        s.append ("    _Model_Population_Instance.finalizeDerivative ();\n");
+        s.append ("  }\n");
+        s.append ("\n");
+        s.append ("  virtual void pushIntegrated ()\n");
+        s.append ("  {\n");
+        s.append ("    _Model_Population_Instance.pushIntegrated ();\n");
+        s.append ("  }\n");
+        s.append ("\n");
+        s.append ("  virtual void popIntegrated ()\n");
+        s.append ("  {\n");
+        s.append ("    _Model_Population_Instance.popIntegrated ();\n");
+        s.append ("  }\n");
+        s.append ("\n");
+        s.append ("  virtual void pushDerivative ()\n");
+        s.append ("  {\n");
+        s.append ("    _Model_Population_Instance.pushDerivative ();\n");
+        s.append ("  }\n");
+        s.append ("\n");
+        s.append ("  virtual void multiplyAddToStack (float scalar)\n");
+        s.append ("  {\n");
+        s.append ("    _Model_Population_Instance.multiplyAddToStack (scalar);\n");
+        s.append ("  }\n");
+        s.append ("\n");
+        s.append ("  virtual void multiply (float scalar)\n");
+        s.append ("  {\n");
+        s.append ("    _Model_Population_Instance.multiply (scalar);\n");
+        s.append ("  }\n");
+        s.append ("\n");
+        s.append ("  virtual void addToMembers ()\n");
+        s.append ("  {\n");
+        s.append ("    _Model_Population_Instance.addToMembers ();\n");
+        s.append ("  }\n");
         s.append ("};\n");
         s.append ("\n");
         s.append ("Wrapper wrapper;\n");
@@ -203,8 +273,8 @@ public class SimulationC implements Simulation
         s.append ("  {\n");
         s.append ("    " + integrator + " simulator;\n");
         s.append ("    wrapper._Model_Population_Instance.container = &wrapper;\n");
-        s.append ("    simulator.enqueue (&wrapper._Model_Population_Instance);\n");
-        s.append ("    wrapper._Model_Population_Instance.init (simulator);\n");
+        s.append ("    simulator.enqueue (&wrapper);\n");
+        s.append ("    wrapper.init (simulator);\n");
         s.append ("    simulator.run ();\n");
         s.append ("    writeHeaders ();\n");
         s.append ("  }\n");
@@ -1606,15 +1676,7 @@ public class SimulationC implements Simulation
             {
                 result.append (pad3 + "writeTrace ();\n");
             }
-            if (s.lethalContainer)
-            {
-                VariableReference r = s.resolveReference ("$up.$live");
-                result.append (pad3 + "return " + resolve (r, context, false) + ";\n");
-            }
-            else
-            {
-                result.append (pad3 + "return true;\n");
-            }
+            result.append (pad3 + "return true;\n");  // Doesn't matter what we return, because the value is always ignored.
             result.append (pad2 + "};\n");
             result.append ("\n");
         }
@@ -1772,21 +1834,6 @@ public class SimulationC implements Simulation
                 }
             }
         }
-
-        // Population getLive
-        result.append (pad2 + "virtual float getLive ()\n");
-        result.append (pad2 + "{\n");
-        if (s.container == null)
-        {
-            result.append (pad3 + "return __24n;\n");  // We must be a PopulationCompartment, and as the top-level object we should die when our last instance dies.
-        }
-        else
-        {
-            VariableReference live = s.resolveReference ("$up.$live");
-            result.append (pad3 + "return " + resolve (live, context, false) + ";\n");
-        }
-        result.append (pad2 + "}\n");
-        result.append ("\n");
 
         // Population getMax
         if (s.connectionBindings != null)

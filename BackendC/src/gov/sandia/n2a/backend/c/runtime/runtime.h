@@ -39,6 +39,7 @@ extern void  writeTrace   ();  ///< called only by top-level Population::finaliz
 extern void  writeHeaders ();  ///< called only by main() on termination of simulation
 
 
+class Simulatable;
 class Part;
 class Compartment;
 class Connection;
@@ -52,9 +53,8 @@ class RungeKutta;
 /**
     The universal interface through which the runtime accesses model
     components. All parts are collected in populations, and all populations
-    are members of parts. The top-level population contains at least one
-    instance of the top-level model, and is itself contained in a wrapper part
-    that is never accessed.
+    are members of parts. A wrapper part contains the top-level population,
+    which contains at least one instance of the top-level model.
 
     <p>Lifetime management: Generally, if a part contains populations, they
     appear as member variables that are destructed automatically. Parts
@@ -71,16 +71,10 @@ class RungeKutta;
     are responsible for maintaining refcounts on parts that we directly
     reference.
 **/
-class Part
+class Simulatable
 {
 public:
-    virtual ~Part ();
-
-    // Lifespan management
-    virtual void die     (); ///< Set $live=0 (in some form) and decrement $n of our population. If a connection with $min or $max, decrement connection counts in respective target compartments.
-    virtual void enqueue (); ///< Tells us we are going onto the simulator queue. Increment refcount on parts we directly access.
-    virtual void dequeue (); ///< Tells us we are leaving the simulator queue. Ask our population to put us on its dead list. Reduce refcount on parts we directly access, to indicate that they may be re-used.
-    virtual bool isFree  (); ///< @return true if the part is ready to use, false if the we are still waiting on other parts that reference us.
+    virtual ~Simulatable ();
 
     // Interface for computing simulation steps
     virtual void init               (Simulator & simulator);              ///< Initialize all variables. A part must increment $n of its population, enqueue each of its contained populations and call their init(). A population must create its instances, enqueue them and call init(). If this is a connection with $min or $max, increment count in respective target compartments.
@@ -102,16 +96,26 @@ public:
     virtual void multiply           (float scalar);      ///< members *= scalar
     virtual void addToMembers       ();                  ///< members += D0; pop D0
 
+    // Generic metadata
+    virtual void getNamedValue (const std::string & name, std::string & value);
+};
+
+class Part : public Simulatable
+{
+public:
+    // Lifespan management
+    virtual void die     (); ///< Set $live=0 (in some form) and decrement $n of our population. If a connection with $min or $max, decrement connection counts in respective target compartments.
+    virtual void enqueue (); ///< Tells us we are going onto the simulator queue. Increment refcount on parts we directly access.
+    virtual void dequeue (); ///< Tells us we are leaving the simulator queue. Ask our population to put us on its dead list. Reduce refcount on parts we directly access, to indicate that they may be re-used.
+    virtual bool isFree  (); ///< @return true if the part is ready to use, false if the we are still waiting on other parts that reference us.
+
     // Accessors for $variables
     virtual float getLive ();                                  ///< @return 1 if we are in normal simulation. 0 if we have died. Default is 1.
     virtual float getP    (float __24live);                    ///< Default is 1 (always create)
     virtual void  getXYZ  (float __24live, Vector3 & __24xyz); ///< Default is [0;0;0].
 
-    // Generic metadata
-    virtual void getNamedValue (const std::string & name, std::string & value);
-
     // Memory management
-    Part * next;  ///< All Parts exist on one primary linked list, either in the simulator or the population's dead list.
+    Part * next;  ///< All parts exist on one primary linked list, either in the simulator or the population's dead list.
 };
 
 class Compartment : public Part
@@ -143,7 +147,7 @@ public:
     <p>Lifetime management: An object of this class is responsible to destroy
     all part instances it contains.
 **/
-class Population : public Part
+class Population : public Simulatable
 {
 public:
     Population ();
@@ -204,7 +208,7 @@ public:
     virtual void integrate (); ///< Perform one time step across all the parts contained in all the populations
 
     // callbacks
-    virtual void enqueue (Part *);                                    ///< Put part onto the queue and calls Part::enqueue(). The only way to dequeue is to return false from Part::finalize().
+    virtual void enqueue (Part * part);                               ///< Put part onto the queue and calls Part::enqueue(). The only way to dequeue is to return false from Part::finalize().
     virtual void move    (float dt);                                  ///< Change simulation period for the part that makes the call. We know which part is currently executing, so no need to pass it as a parameter.
     virtual void resize  (PopulationCompartment * population, int n); ///< Schedule compartment to be resized at end of current cycle.
     virtual void connect (PopulationConnection * population);         ///< Schedule connection population to be evaluated at end of current cycle, after all resizing is done.

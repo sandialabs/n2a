@@ -77,11 +77,90 @@ void writeHeaders ()
 }
 
 
-// class Part ----------------------------------------------------------------
+// class Simulatable ---------------------------------------------------------
 
-Part::~Part ()
+Simulatable::~Simulatable ()
 {
 }
+
+void
+Simulatable::init (Simulator & simulator)
+{
+}
+
+void
+Simulatable::prepare ()
+{
+}
+
+void
+Simulatable::integrate (Simulator & simulator)
+{
+}
+
+void
+Simulatable::update (Simulator & simulator)
+{
+}
+
+bool
+Simulatable::finalize (Simulator & simulator)
+{
+    return true;
+}
+
+void
+Simulatable::prepareDerivative ()
+{
+}
+
+void
+Simulatable::updateDerivative (Simulator & simulator)
+{
+}
+
+void
+Simulatable::finalizeDerivative ()
+{
+}
+
+void
+Simulatable::pushIntegrated ()
+{
+}
+
+void
+Simulatable::popIntegrated ()
+{
+}
+
+void
+Simulatable::pushDerivative ()
+{
+}
+
+void
+Simulatable::multiplyAddToStack (float scalar)
+{
+}
+
+void
+Simulatable::multiply (float scalar)
+{
+}
+
+void
+Simulatable::addToMembers ()
+{
+}
+
+void
+Simulatable::getNamedValue (const string & name, string & value)
+{
+}
+
+
+// class Part ----------------------------------------------------------------
 
 void
 Part::die ()
@@ -104,77 +183,6 @@ Part::isFree ()
     return true;
 }
 
-void
-Part::init (Simulator & simulator)
-{
-}
-
-void
-Part::prepare ()
-{
-}
-
-void
-Part::integrate (Simulator & simulator)
-{
-}
-
-void
-Part::update (Simulator & simulator)
-{
-}
-
-bool
-Part::finalize (Simulator & simulator)
-{
-    return true;
-}
-
-void
-Part::prepareDerivative ()
-{
-}
-
-void
-Part::updateDerivative (Simulator & simulator)
-{
-}
-
-void
-Part::finalizeDerivative ()
-{
-}
-
-void
-Part::pushIntegrated ()
-{
-}
-
-void
-Part::popIntegrated ()
-{
-}
-
-void
-Part::pushDerivative ()
-{
-}
-
-void
-Part::multiplyAddToStack (float scalar)
-{
-}
-
-void
-Part::multiply (float scalar)
-{
-}
-
-void
-Part::addToMembers ()
-{
-}
-
 float
 Part::getLive ()
 {
@@ -193,11 +201,6 @@ Part::getXYZ (float __24live, Vector3 & xyz)
     xyz[0] = 0;
     xyz[1] = 0;
     xyz[2] = 0;
-}
-
-void
-Part::getNamedValue (const string & name, string & value)
-{
 }
 
 
