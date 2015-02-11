@@ -23,10 +23,13 @@ public class Main
 {
     public static void main (String[] args)
     {
+        // TEST COMMIT
         try
         {
             ArrayList<String> augmentedArgs = new ArrayList<String> ();
-            for (int i = 0; i < args.length; i++) augmentedArgs.add (args[i]);
+            for (int i = 0; i < args.length; i++) {
+                augmentedArgs.add (args[i]);
+            }
             augmentedArgs.add ("--plugin");
             augmentedArgs.add ("gov.sandia.n2a.N2APlugin");
             augmentedArgs.add ("--plugin");
