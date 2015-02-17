@@ -325,15 +325,16 @@ public class NDoc
 
         try
         {
+
+            // Recurse to children.  Would be null only if obj is a scalar.
+            Map<String, Object> gMap = toGenericMap (obj);
+            if (gMap != null) for (String key : gMap.keySet ()) saveRecursiveInternal (gMap.get (key), stack);
+			
             // Reload from database.
             ODocument toSave = null;
             if      (obj instanceof ODocument) toSave = (ODocument) obj;
             else if (obj instanceof NDoc)      toSave = ((NDoc) obj).source;
             if (toSave != null) toSave.save ();
-
-            // Recurse to children.  Would be null only if obj is a scalar.
-            Map<String, Object> gMap = toGenericMap (obj);
-            if (gMap != null) for (String key : gMap.keySet ()) saveRecursiveInternal (gMap.get (key), stack);
         }
         finally
         {
