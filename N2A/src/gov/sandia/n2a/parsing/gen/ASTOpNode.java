@@ -156,31 +156,35 @@ public class ASTOpNode extends ASTNodeBase {
     ////////////////
 
     @Override
-    public Object eval(EvaluationContext context) throws EvaluationException {
-        Function func = (Function) getValue();
-        if(func.isAssignment()) {
-            if(!(getChild(0) instanceof ASTVarNode) || ((ASTVarNode)getChild(0)).getOrder() != 0) {
-                throw new EvaluationException("Invalid left hand side for assignment.  Left hand side must be an order-0 variable.");
+    public Object eval (EvaluationContext context) throws EvaluationException
+    {
+        Function func = (Function) getValue ();
+        // TODO: isAssignment() is obsolete. When using EquationEntry, the AST should never contain an assignment operation, as they are parsed out.
+        if (func.isAssignment ())
+        {
+            if (! (getChild (0) instanceof ASTVarNode)  ||  ((ASTVarNode) getChild (0)).getOrder () != 0)
+            {
+                throw new EvaluationException ("Invalid left hand side for assignment. Left hand side must be an order-0 variable.");
             }
         }
-        Object[] params = new Object[getCount()];
-        for(int c = 0; c < getCount(); c++) {
 
+        int count = getCount ();
+        Object[] params = new Object[count];
+        for (int c = 0; c < count; c++)
+        {
             // We don't want eval to scream if left hand side of a
             // assignment variable hasn't been defined yet.  In
             // other words we don't need/want to evaluate "x" in:
             //    x = 3 + y
             // But we have to in:
             //    x *= 3 + y
-            if(func.getClass().equals(AssignmentFunction.class) && c == 0) {
-                params[c] = null;
-            } else {
-                params[c] = getChild(c).eval(context);
-            }
+            if (c == 0  &&  func.getClass ().equals (AssignmentFunction.class)) params[c] = null;
+            else                                                                params[c] = getChild (c).eval (context);
         }
-        Object result = func.eval(params);
-        if(func.isAssignment()) {
-            context.setValueForVariable(((ASTVarNode) getChild(0)).getVariableName(), result);
+        Object result = func.eval (params);
+        if (func.isAssignment ())
+        {
+            context.set (((ASTVarNode) getChild (0)).reference.variable, result);
         }
         return result;
     }

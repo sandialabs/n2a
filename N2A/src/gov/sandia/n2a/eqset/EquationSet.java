@@ -201,14 +201,21 @@ public class EquationSet implements Comparable<EquationSet>
                 v.replace (ee);
             }
         }
-
-        // MAJOR HACK -- inject tracers, because UI currently can't save equations
-        if (name.equals ("HHmod"))
+        //   Treat model output equations (in the old system) exactly the same as local equations.
+        eqs = source.getValid ("outputEqs", new ArrayList<NDoc> (), List.class);
+        for (NDoc e : eqs)
         {
-            EquationEntry ee = new EquationEntry ("trace0 = trace(V,\"V0\") @ $index==0");
-            add (ee.variable);
-            ee = new EquationEntry ("trace2 = trace(V,\"V2\") @ $index==2");
-            add (ee.variable);
+            EquationEntry ee = new EquationEntry (e);
+            if (ee.variable.name.length () == 0) throw new Exception ("Output equations which lack a variable assignment are no longer permitted.");
+            Variable v = variables.floor (ee.variable);
+            if (v == null  ||  ! v.equals (ee.variable))
+            {
+                add (ee.variable);
+            }
+            else
+            {
+                v.replace (ee);
+            }
         }
 
         // Metadata
@@ -819,7 +826,7 @@ public class EquationSet implements Comparable<EquationSet>
             s.addSpecials ();
         }
 
-        setInit (false);  // force $init to exist
+        setInit (0);  // force $init to exist
 
         Variable v = new Variable ("$dt", 0);
         if (add (v))
@@ -855,6 +862,7 @@ public class EquationSet implements Comparable<EquationSet>
             v = new Variable ("$index", 0);
             if (add (v))
             {
+                v.addAttribute ("initOnly");  // most backends will set $index before processing init equations
                 v.equations = new TreeSet<EquationEntry> ();
             }
 
@@ -908,7 +916,7 @@ public class EquationSet implements Comparable<EquationSet>
             }
             if (output)  // outputs must always exist!
             {
-                v.addAttribute ("output");  // we only get the "output" attribute when we are not otherwise referenced (hasUsers==false)
+                v.addAttribute ("dummy");  // we only get the "dummy" attribute when we are not otherwise referenced (hasUsers==false)
                 continue;
             }
 
@@ -972,79 +980,25 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
-        Add "@ $init" to any $variable that lacks conditionals.
-        This forces them to be evaluated only during the init phase.
-        Depends on results of: none  (possibly addSpecials(), but not in current form)
-    **/
-    public void addInit () throws ParseException
-    {
-        for (EquationSet s : parts)
-        {
-            s.addInit ();
-        }
-
-        for (Variable v : variables)
-        {
-            // Skip all non-$variables. Also skip $init and $up
-            if (v.name.startsWith ("$"))
-            {
-                if (v.name.startsWith ("$up."))  // A variable prefixed by $up is not a true $variable. Only $up by itself is.
-                {
-                    continue;
-                }
-                if (v.name.equals ("$init"))  // $init should have no conditionals whatsoever!
-                {
-                    continue;
-                }
-            }
-            else
-            {
-                continue;
-            }
-
-            boolean hasInit = false;
-            for (EquationEntry e : v.equations)
-            {
-                if (e.ifString.equals ("$init"))
-                {
-                    hasInit = true;
-                    break;
-                }
-            }
-            if (hasInit)
-            {
-                continue;
-            }
-
-            // Find an entry with no conditional
-            EquationEntry e = v.equations.floor (new EquationEntry (v, ""));
-            if (e != null  &&  e.ifString.equals (""))
-            {
-                e.ifString = "$init";
-                e.conditional = ExpressionParser.parse (e.ifString);
-            }
-        }
-    }
-
-    /**
         Change the value of the constant $init in the current equation set.
         Used to indicate if we are in the init phase or not.
     **/
-    public void setInit (boolean value)
+    public void setInit (float value)
     {
         Variable init = find (new Variable ("$init"));
         if (init == null)
         {
             EquationEntry e = new EquationEntry ("$init", 0);
             e.variable.addAttribute ("constant");
-            e.expression = new ASTConstant (new Float (value ? 1.0 : 0.0));
+            e.assignment = "=";
+            e.expression = new ASTConstant (new Float (value));
             add (e.variable);
         }
         else
         {
             EquationEntry e = init.equations.first ();
             ASTConstant c = (ASTConstant) e.expression;
-            c.setValue (new Float (value ? 1.0 : 0.0));
+            c.setValue (new Float (value));
         }
     }
 
@@ -1196,7 +1150,7 @@ public class EquationSet implements Comparable<EquationSet>
 
         // Determine if $p has an assignment less than 1
         Variable p = find (new Variable ("$p"));
-        if (p != null)
+        if (p != null  &&  ! p.hasAttribute ("initOnly"))
         {
             // Determine if any equation is capable of setting $p to something besides 1
             for (EquationEntry e : p.equations)
@@ -1277,13 +1231,13 @@ public class EquationSet implements Comparable<EquationSet>
         It is constant (the default) if we can't die or no part depends on us.
         It is transient if we only die in response to the death of our container or a referenced part.
         It is stored if we can die from $n, $p or $type, that is, if the fact that we died is local knowledge.
-        Depends on results of: findDeath()
+        Depends on results of: findDeath() (and indirectly on findInitOnly())
     **/
-    public void setLiveAttributes ()
+    public void setAttributesLive ()
     {
         for (EquationSet s : parts)
         {
-            s.setLiveAttributes ();
+            s.setAttributesLive ();
         }
 
         Variable live = find (new Variable ("$live"));
@@ -1292,9 +1246,13 @@ public class EquationSet implements Comparable<EquationSet>
             if (canDie ()  &&  live.hasUsers)
             {
                 live.removeAttribute ("constant");
-                if (! (lethalN  ||  lethalP  ||  lethalType))  // therefore must be (lethalConnection  ||  lethalContainer)
+                if (lethalN  ||  lethalP  ||  lethalType)
                 {
-                    live.addAttribute ("transient");
+                    live.addAttribute ("initOnly");  // Not exactly true. $live can change after init(), but only indirectly. This forces $live to be set during init().
+                }
+                else  // lethalConnection  ||  lethalContainer
+                {
+                    live.addAttribute ("accessor");
                 }
             }
             else
@@ -1412,7 +1370,6 @@ public class EquationSet implements Comparable<EquationSet>
             s.findConstants ();
         }
 
-        // TODO: create a new EvaluationContext class that works directly with Variables
         // TODO: use a single ec for entire EquationSet tree, not just current one
         // Perhaps create the ec and transform context in a higher function outside the recursion
         final EvaluationContext ec = new EvaluationContext ();
@@ -1544,6 +1501,27 @@ public class EquationSet implements Comparable<EquationSet>
 
         for (Variable v : variables)
         {
+            // Check for special variables that we wish not to store in connections.
+            if (connectionBindings != null  &&  v.order == 0)
+            {
+                if (v.name.equals ("$p"))
+                {
+                    if (! v.hasAny (new String [] {"externalRead", "externalWrite", "integrated"}))
+                    {
+                        v.addAttribute ("temporary");
+                        continue;
+                    }
+                }
+                else if (v.name.contains ("$project"))
+                {
+                    if (! v.hasAttribute ("constant"))
+                    {
+                        v.addAttribute ("temporary");
+                        continue;
+                    }
+                }
+            }
+
             if (v.equations.size () == 0) continue;
             EquationEntry f = v.equations.first ();
             boolean hasTemporary = f.assignment != null  &&  f.assignment.equals (":=");
@@ -1552,7 +1530,7 @@ public class EquationSet implements Comparable<EquationSet>
                 boolean foundTemporary = e.assignment != null  &&  e.assignment.equals (":=");  
                 if (foundTemporary != hasTemporary)
                 {
-                    throw new Exception ("A sub-expression has some conditional forms which don't use ':=' : " + v.container.prefix () + "." + v.name);
+                    throw new Exception ("Inconsisten use of ':=' by " + v.container.prefix () + "." + v.name);
                 }
                 if (hasTemporary)
                 {
@@ -1701,7 +1679,19 @@ public class EquationSet implements Comparable<EquationSet>
 
     /**
         Identify variables that only change during init.
-        Depends on results of: addSpecials(), addInit() -- but both are optional
+        For now, the criteria are:
+        <ul>
+        <li>only one equation -- Multiple equations imply the value could change
+        via conditional selection. This is merely a heuristic, as the actual logic
+        could work out such that the value doesn't change after init anyway.
+        <li>not any of {"integrated", "constant"}
+        <li>the conditional expression is 0 when $init=0 -- Only possible if there
+        actually is a conditional expression.
+        <li>if evaluated after init, the equation only depends on constants and other
+        initOnly variables
+        </ul>
+        TODO: need multiple passes to propagate initOnly through all dependencies
+        Depends on results of: addSpecials() -- so that $variables get processed
     **/
     public void findInitOnly ()
     {
@@ -1712,18 +1702,30 @@ public class EquationSet implements Comparable<EquationSet>
 
         for (Variable v : variables)
         {
-            boolean initOnly = true;
-            for (EquationEntry e : v.equations)
+            if (v.hasAny (new String[] {"initOnly", "constant", "integrated"})) continue;  // some variables get tagged "initOnly" by other means, so don't re-process
+            if (v.equations.size () != 1) continue;  // TODO: should a variable with no equations be considered initOnly?
+
+            // Determine if our single equation is guaranteed not to fire after the init step
+            EquationEntry e = v.equations.first ();
+            if (e.conditional != null)
             {
-                // TODO: this test is too narrow, because it doesn't really check the logic of the conditional statement
-                if (! e.ifString.equals ("$init"))
+                setInit (0);  // $init should be 0 in general
+                try
                 {
-                    initOnly = false;
-                    break;
+                    Object result = e.conditional.eval ();
+                    if (result != null  &&  result instanceof Number  &&  ((Number) result).floatValue () == 0)
+                    {
+                        v.addAttribute ("initOnly");
+                        continue;
+                    }
+                }
+                catch (EvaluationException exception)
+                {
                 }
             }
-            if (initOnly) v.addAttribute    ("initOnly");
-            else          v.removeAttribute ("initOnly");
+
+            // Determine if variable depends only on constants and initOnly variables
+            if (e.expression.isInitOnly ()) v.addAttribute ("initOnly");
         }
     }
 

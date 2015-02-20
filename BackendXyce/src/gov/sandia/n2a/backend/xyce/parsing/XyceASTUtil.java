@@ -68,67 +68,10 @@ public class XyceASTUtil {
         return result;
     }
 
-    public static boolean isConstant(String varname, EvaluationContext context)
-    {
-        Object evalResult;
-        try {
-            evalResult = context.getValueForVariable(varname);
-        }
-        catch (Exception Ex)
-        {
-            return false;
-        }
-        if (evalResult instanceof Number) {
-            return true;
-        } else {
-            return false;
-        }
-    }
-
     public static EvaluationContext getEvalContext(EquationEntry eq, EquationSet eqSet)
             throws XyceTranslationException
     {
-        return getEvalContext(getEqsForEvaluation(eq, eqSet));
-    }
-
-    public static EvaluationContext getEvalContext(Collection<EquationEntry> eqs)
-    {
-        EvaluationContext context = new EvaluationContext();
-        for (EquationEntry eq : eqs)
-        {
-            context.addEquation(eq.expression);
-        }
-        return context;
-    }
-
-    public static Collection<EquationEntry> getEqsForEvaluation(EquationEntry target, EquationSet eqSet)
-                    throws XyceTranslationException
-    {
-        Collection<EquationEntry> result = new ArrayList<EquationEntry>();
-        result.add(target);
-        Set<String> variables = getDependencies(target);
-        if (variables.size()>0)
-        {
-            for (String varName : variables)
-            {
-                // skip $ variables; those values have to be set separately
-                if (LanguageUtil.isSpecialVar(varName))
-                {
-                    continue;
-                }
-                Variable var = eqSet.find(new Variable(varName));
-                if ( var == null || var.equations.size() == 0) {
-                    throw new XyceTranslationException("cannot find equation for " + varName);
-                }
-                // TODO:  right now, can't handle multiple equations
-                if (var.equations.size() > 1) {
-                    throw new XyceTranslationException("multiple equations for " + varName);
-                }
-                EquationEntry eq = var.equations.first();
-                result.addAll(getEqsForEvaluation(eq, eqSet));
-            }
-        }
-        return result;
+        return new EvaluationContext ();  // TODO: it may be necessary to attach EquationSet to the context. Check how callers use the result.
     }
 
     public static Set<String> getDependencies(EquationEntry eq)
@@ -138,20 +81,15 @@ public class XyceASTUtil {
         return result;
     }
 
-    public static Set<String> getDependencies(ASTNodeBase tree, String name)
-    {
-        Set<String> result = tree.getVariables();
-        result.remove(name);
-        return result;
-    }
-
     public static Set<String> getVariables(EquationEntry eq, EvaluationContext context)
     {
         Set<String> result = new HashSet<String>();
         Set<String> symbols = getDependencies(eq);
         for (String var : symbols)
         {
-            if (!isConstant(var, context))
+            // TODO: Need to clean up entire Xyce backend to use Variables explicitly, rather than Strings
+            Variable v = eq.variable.container.find (new Variable (var));
+            if (v != null  &&  ! v.hasAttribute ("constant"))
             {
                 result.add(var);
             }
@@ -161,7 +99,7 @@ public class XyceASTUtil {
 
     public static Object tryEval(EquationEntry eq, EvaluationContext context, int partIndex)
     {
-        setContextIndex(context, partIndex);
+        setContextIndex (eq.variable.container, context, partIndex);
         return tryEval(eq, context);
     }
 
@@ -182,14 +120,15 @@ public class XyceASTUtil {
         return evalResult;
     }
 
-    public static void setContextIndex(EvaluationContext context, int index)
+    public static void setContextIndex(EquationSet s, EvaluationContext context, int index)
     {
-        context.setValueForVariable(LanguageUtil.$INDEX, index);
+        Variable v = s.find (new Variable (LanguageUtil.$INDEX));
+        context.set (v, index);
     }
 
     public static Object evaluateEq(EquationEntry eq, EvaluationContext context, int partIndex)
     {
-        setContextIndex(context, partIndex);
+        setContextIndex (eq.variable.container, context, partIndex);
         return evaluateEq(eq, context);
     }
 
@@ -209,13 +148,7 @@ public class XyceASTUtil {
     public static EvaluationContext getInstanceContext(EquationEntry eq, PartInstance pi, boolean init)
     {
         PartSetInterface pSet = pi.getPartSet();
-        EvaluationContext context = null;
-        try {
-            context = getEvalContext(pSet.getEqsForEvaluation(eq, pi, init));
-        }
-        catch (Exception ex) {
-            throw new RuntimeException("can't get evaluation context for " + eq.toString() + " and " + pi);
-        }
+        EvaluationContext context = new EvaluationContext ();
         pSet.setInstanceContext(context, pi, init);
         return context;
     }

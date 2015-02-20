@@ -164,6 +164,7 @@ public class Variable implements Comparable<Variable>
     **/
     public Variable dependsOn (Variable query)
     {
+        if (query.equals (this)) return null;  // Don't depend on ourself.
         visited = null;
         return dependsOnRecursive (query);
     }
@@ -180,12 +181,15 @@ public class Variable implements Comparable<Variable>
             p = p.visited;
         }
 
-        for (Variable u : uses)
+        if (uses != null)
         {
-            if (u.container != container) continue;  // Don't exit the current equation set.
-            u.visited = this;
-            Variable result = u.dependsOnRecursive (query);
-            if (result != null) return result;
+            for (Variable u : uses)
+            {
+                if (u.container != container) continue;  // Don't exit the current equation set.
+                u.visited = this;
+                Variable result = u.dependsOnRecursive (query);
+                if (result != null) return result;
+            }
         }
         
         return null;
@@ -279,7 +283,7 @@ public class Variable implements Comparable<Variable>
             <dt>integrated</dt>
                 <dd>this lower-ordered version of a variable is defined by a
                 higher-order derivative rather than a direct equation</dd>
-            <dt>transient</dt>
+            <dt>accessor</dt>
                 <dd>value is given by a function rather than stored</dd>
             <dt>preexistent</dt>
                 <dd>storage does not need to be created for the variable (in C)
@@ -296,10 +300,11 @@ public class Variable implements Comparable<Variable>
                 <dd>an equation in some other equation-set changes this variable</dd>
             <dt>cycle</dt>
                 <dd>needs a second storage location to break a cyclic dependency</dd>
-            <dt>output</dt>
-                <dd>an equation contains an output function, but the result itself
-                is not stored because it is never referenced. If it were stored,
-                then it would be normal equation that happens to contain an output function.</dd>
+            <dt>dummy</dt>
+                <dd>an equation has some important side-effect, but the result itself
+                is not stored because it is never referenced.</dd>
+            <dt>initOnly</dt>
+                <dd>value is set at init time, and never changed after that</dd>
         </dl>
     **/
     public void addAttribute (String attribute)

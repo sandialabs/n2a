@@ -338,19 +338,26 @@ public abstract class PartSetAbstract implements PartSetInterface
         throw new NetworkGenerationException("unexpected evaluation result for conditional " + tree.toString());
     }
 
+    public void setValueForVariable (EvaluationContext context, String name, Object value)
+    {
+        Variable v = eqns.find (new Variable (name));
+        // TODO: v may be null, in which case we should throw an exception. To minimize code changes at this time, we simply tolerate the NPE as our exception.
+        context.set (v, value);
+    }
+
     @Override
     public void setInstanceContext(EvaluationContext context, PartInstance pi, boolean init)
     {
         // TODO - this should set ALL special variables
-        context.setValueForVariable(LanguageUtil.$N, numInstances);
-        context.setValueForVariable(LanguageUtil.$INDEX, getIndex(pi));
+        setValueForVariable (context, LanguageUtil.$N, numInstances);
+        setValueForVariable (context, LanguageUtil.$INDEX, getIndex (pi));
         if (pi instanceof ConnectionInstance) {
             ConnectionInstance ci = (ConnectionInstance) pi;
             setConnectedContext(context, ci.A, ci.B);
         }
         if (pi instanceof CompartmentInstance) {
             CompartmentInstance ci = (CompartmentInstance) pi;
-            context.setValueForVariable(LanguageUtil.$COORDS, ci.getPosition());
+            setValueForVariable (context, LanguageUtil.$COORDS, ci.getPosition ());
         }
         // TODO:  handle init flag...
         // eventually, we want $init to be a boolean variable, which would have to be set
@@ -360,14 +367,17 @@ public abstract class PartSetAbstract implements PartSetInterface
     protected void setConnectedContext(EvaluationContext context, CompartmentInstance piA,
             CompartmentInstance piB)
     {
-        try {
-            context.setValueForVariable("A."+LanguageUtil.$N, piA.getPartSet().getN());
-            context.setValueForVariable("B."+LanguageUtil.$N, piB.getPartSet().getN());
-            context.setValueForVariable("A."+LanguageUtil.$INDEX, piA.getPartSet().getIndex(piA));
-            context.setValueForVariable("B."+LanguageUtil.$INDEX, piB.getPartSet().getIndex(piB));
-            context.setValueForVariable("A." + LanguageUtil.$COORDS, piA.getPosition());
-            context.setValueForVariable("B." + LanguageUtil.$COORDS, piB.getPosition());
-        } catch (Exception e) {
+        try
+        {
+            setValueForVariable (context, "A." + LanguageUtil.$N,      piA.getPartSet ().getN ());
+            setValueForVariable (context, "B." + LanguageUtil.$N,      piB.getPartSet ().getN ());
+            setValueForVariable (context, "A." + LanguageUtil.$INDEX,  piA.getPartSet ().getIndex (piA));
+            setValueForVariable (context, "B." + LanguageUtil.$INDEX,  piB.getPartSet ().getIndex (piB));
+            setValueForVariable (context, "A." + LanguageUtil.$COORDS, piA.getPosition ());
+            setValueForVariable (context, "B." + LanguageUtil.$COORDS, piB.getPosition ());
+        }
+        catch (Exception e)
+        {
             e.printStackTrace();
         }
     }

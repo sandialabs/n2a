@@ -49,6 +49,12 @@ public class ASTVarNode extends ASTNodeBase
     // CUSTOM //
     ////////////
 
+    public boolean isInitOnly ()
+    {
+        if (reference == null) return false;
+        return reference.variable.hasAttribute ("initOnly");
+    }
+
     public int getOrder ()
     {
         String name = (String) getValue ();
@@ -119,8 +125,11 @@ public class ASTVarNode extends ASTNodeBase
     ////////////////
 
     @Override
-    public Object eval(EvaluationContext context) throws EvaluationException {
-        return context.getValueForVariable(getVariableName());
+    public Object eval (EvaluationContext context) throws EvaluationException
+    {
+        Object result = context.get (reference.variable);
+        if (result == null) throw new EvaluationException ("Variable does not have a value in this context.");
+        return result;
     }
 }
 /* JavaCC - OriginalChecksum=07024c2825bef86ec21e5a3f8ff5a0ff (do not edit this line) */

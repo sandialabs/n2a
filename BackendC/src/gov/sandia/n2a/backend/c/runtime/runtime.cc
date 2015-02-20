@@ -84,6 +84,11 @@ Simulatable::~Simulatable ()
 }
 
 void
+Simulatable::clear ()
+{
+}
+
+void
 Simulatable::init (Simulator & simulator)
 {
 }
@@ -189,20 +194,6 @@ Part::getLive ()
     return 1;
 }
 
-float
-Part::getP (float __24live)
-{
-    return 1;
-}
-
-void
-Part::getXYZ (float __24live, Vector3 & xyz)
-{
-    xyz[0] = 0;
-    xyz[1] = 0;
-    xyz[2] = 0;
-}
-
 
 // class Population ----------------------------------------------------------
 
@@ -245,6 +236,7 @@ Population::allocate ()
         if ((*p)->isFree ())
         {
             result = *p;
+            result->clear ();
             *p = (*p)->next;
             break;
         }
@@ -308,6 +300,7 @@ PopulationCompartment::allocate ()
         if ((*p)->isFree ())
         {
             result = *p;
+            result->clear ();
 
             // remove from dead
             *p = (*p)->next;
@@ -401,7 +394,7 @@ PopulationConnection::connect (Simulator & simulator)
         {
             assert (i < Bn);
             KDTreeEntry & e = entries[i];
-            b->getXYZ (1, e);
+            b->getXYZ (e);
             e.part = b;
             entryPointers[i] = &e;
             b = b->after;
@@ -444,7 +437,7 @@ PopulationConnection::connect (Simulator & simulator)
             {
                 c->setPart (1, B->live.after);  // give a dummy B object, in case xyz call breaks rules about only accessing A
                 Vector3 xyz;
-                c->getXYZ (0, xyz);
+                c->project (0, 1, xyz);
                 vector<MatrixAbstract<float> *> result;
                 NN.find (xyz, result);
                 int count = result.size ();
@@ -455,7 +448,7 @@ PopulationConnection::connect (Simulator & simulator)
 
                     c->setPart (1, b);
                     if (Bmax  &&  c->getCount (1) >= Bmax) continue;  // no room in this B
-                    float create = c->getP (0);
+                    float create = c->getP (simulator);
                     if (create <= 0  ||  create < 1  &&  create < randf ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
                     c->init (simulator);
                     simulator.enqueue (c);
@@ -478,7 +471,7 @@ PopulationConnection::connect (Simulator & simulator)
 
                     c->setPart (1, b);
                     if (Bmax  &&  c->getCount (1) >= Bmax) continue;  // no room in this B
-                    float create = c->getP (0);
+                    float create = c->getP (simulator);
                     if (create <= 0  ||  create < 1  &&  create < randf ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
                     c->init (simulator);
                     simulator.enqueue (c);
@@ -528,7 +521,7 @@ PopulationConnection::connect (Simulator & simulator)
 
                     c->setPart (0, a);
                     if (Amax  &&  c->getCount (0) >= Amax) continue;
-                    float create = c->getP (0);
+                    float create = c->getP (simulator);
                     if (create <= 0  ||  create < 1  &&  create < randf ()) continue;
                     c->init (simulator);
                     simulator.enqueue (c);
@@ -610,6 +603,14 @@ PopulationConnection::getRadius ()
 
 // class Compartment ---------------------------------------------------------
 
+void
+Compartment::getXYZ (Vector3 & xyz)
+{
+    xyz[0] = 0;
+    xyz[1] = 0;
+    xyz[2] = 0;
+}
+
 
 // class Connection ----------------------------------------------------------
 
@@ -630,13 +631,29 @@ Connection::getCount (int i)
     return 0;
 }
 
+void
+Connection::project (int i, int j, Vector3 & xyz)
+{
+    xyz[0] = 0;
+    xyz[1] = 0;
+    xyz[2] = 0;
+}
+
+float
+Connection::getP (Simulator & simulator)
+{
+    return 1;
+}
+
 
 // class Simulator -----------------------------------------------------------
 
 Simulator::Simulator ()
 {
-    dt = 1e-4;
+    t     = 0;
+    dt    = 1e-4;
     queue = 0;
+    p     = &queue;
 }
 
 Simulator::~Simulator ()
@@ -652,14 +669,8 @@ Simulator::~Simulator ()
 void
 Simulator::run ()
 {
-    if (queue == 0) return;
-    // TODO: eliminate concept of duration; instead use equation: Model.$p=$t<duration
-    string value = "100";
-    queue->getNamedValue ("duration", value);  // The first part in the queue at the start of the run is presumably the top-level model.
-    float duration = atof (value.c_str ());
-
     t = 0;  // updated in middle of loop below, just before integration
-    while (queue != 0  &&  t <= duration)
+    while (queue)
     {
         // Evaluate connection populations that have requested it
         vector<PopulationConnection *>::iterator connectIterator;
@@ -726,7 +737,8 @@ void
 Simulator::move (float dt)
 {
     // TODO: select correct event and move current part to it. If no such event exists, create a new one.
-    this->dt = dt;  // TODO: when above is implemented, we will never change our own dt.
+    // When above is implemented, we will never change our own dt.
+    this->dt = dt;
 }
 
 void

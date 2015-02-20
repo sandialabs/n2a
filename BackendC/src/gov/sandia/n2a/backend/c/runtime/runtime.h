@@ -75,6 +75,7 @@ class Simulatable
 {
 public:
     virtual ~Simulatable ();
+    virtual void clear ();  ///< Zero out all member variables. Only necessary when a part is being recycled, as the constructor clears newly created parts.
 
     // Interface for computing simulation steps
     virtual void init               (Simulator & simulator);              ///< Initialize all variables. A part must increment $n of its population, enqueue each of its contained populations and call their init(). A population must create its instances, enqueue them and call init(). If this is a connection with $min or $max, increment count in respective target compartments.
@@ -110,9 +111,7 @@ public:
     virtual bool isFree  (); ///< @return true if the part is ready to use, false if the we are still waiting on other parts that reference us.
 
     // Accessors for $variables
-    virtual float getLive ();                                  ///< @return 1 if we are in normal simulation. 0 if we have died. Default is 1.
-    virtual float getP    (float __24live);                    ///< Default is 1 (always create)
-    virtual void  getXYZ  (float __24live, Vector3 & __24xyz); ///< Default is [0;0;0].
+    virtual float getLive (); ///< @return 1 if we are in normal simulation. 0 if we have died. Default is 1.
 
     // Memory management
     Part * next;  ///< All parts exist on one primary linked list, either in the simulator or the population's dead list.
@@ -121,6 +120,8 @@ public:
 class Compartment : public Part
 {
 public:
+    virtual void getXYZ (Vector3 & xyz); ///< Default is [0;0;0].
+
     int __24index; ///< Unique ID of this part.
     Compartment * before;
     Compartment * after;
@@ -128,13 +129,19 @@ public:
 
 /**
     Note that a Part can be both a Compartment and a Connection.
+
+    <p>All population indices are ordered by $from. If $from is not specified,
+    then the code generator will pick an arbitrary but consistent ordering.
 **/
 class Connection : public Part
 {
 public:
-    virtual void   setPart  (int i, Part * part); ///< Assign the part referenced by this connection. @param i follows same order as PopulationConnection::getTarget()
-    virtual Part * getPart  (int i);              ///< @return pointer to specific part referenced by this connection. @param i follows same order as PopulationConnection::getTarget()
-    virtual int    getCount (int i);              ///< @return Number of connections of this type attached to the part instance indexed by i. @param i follows same order as PopulationConnection::getTarget()
+    virtual void   setPart  (int i, Part * part);          ///< Assign the instance of population i referenced by this connection.
+    virtual Part * getPart  (int i);                       ///< @return Pointer to the instance of population i.
+    virtual int    getCount (int i);                       ///< @return Number of connections of this type attached to the part indexed by i.
+    virtual void   project  (int i, int j, Vector3 & xyz); ///< Determine position of connection in space of population j based on position in space of population i. Population i must already be bound, but population j is generally not bound.
+
+    virtual float getP (Simulator & simulator); ///< Default is 1 (always create)
 };
 
 /**

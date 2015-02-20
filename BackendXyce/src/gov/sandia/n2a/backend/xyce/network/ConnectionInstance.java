@@ -13,15 +13,6 @@ import java.util.Map;
 
 public class ConnectionInstance extends PartInstance
 {
-    // TODO - switching to user-specified rather than hard-coded aliases in progress
-    public ConnectionInstance(PartSetInterface pset, int serialNumber, Map<String,PartInstance> connections)
-    {
-        super(pset, serialNumber);
-        for (String alias : connections.keySet()) {
-            connectPI(alias, connections.get(alias));
-        }
-    }
-
     public CompartmentInstance A;
     public CompartmentInstance B;
     
@@ -34,8 +25,6 @@ public class ConnectionInstance extends PartInstance
         super(pset, serialNumber);
         A = newA;
         B = newB;
-        connectPI("A", newA);
-        connectPI("B", newB);
     }
 
     public List<PartInstance> getConnectedInstances()

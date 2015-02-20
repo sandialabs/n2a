@@ -7,93 +7,67 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.parsing.functions;
 
+import gov.sandia.n2a.eqset.EquationEntry;
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.parsing.SpecialVariables;
 import gov.sandia.n2a.parsing.gen.ASTNodeBase;
 
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
-import java.util.Stack;
 
-public class EvaluationContext {
+public class EvaluationContext
+{
+    public Map<Variable, Object> values = new HashMap<Variable, Object> ();
 
-
-    ////////////
-    // FIELDS //
-    ////////////
-
-    private Map<String, ASTNodeBase> equationRoots = new HashMap<String, ASTNodeBase>();
-    private Map<String, Object> evaluatedValues = new HashMap<String, Object>();
-    private Stack<String> evalFrames = new Stack<String>();
-    // TODO: Add an ASTNodeValueOverriderMap for evaluation similar to
-    // how the ASTRenderingContext has one for rendering.
-
-    private Map<String, Object> specialVariables = new HashMap<String, Object>();
-
-
-    //////////////////
-    // CONSTRUCTORS //
-    //////////////////
-
-    public EvaluationContext() {
-        this(new ASTNodeBase[0]);
-    }
-    public EvaluationContext(ASTNodeBase[] initialEqs) {
-        this(Arrays.asList(initialEqs));
-    }
-    public EvaluationContext(Iterable<ASTNodeBase> initialEqs) {
-        Iterator<ASTNodeBase> it = initialEqs.iterator();
-        while(it.hasNext()) {
-            addEquation(it.next());
-        }
-        populateSpecialVariables();
-    }
-    private void populateSpecialVariables() {
-        specialVariables.put(SpecialVariables.PI, Math.PI);
-        specialVariables.put(SpecialVariables.E, Math.E);
+    public EvaluationContext ()
+    {
     }
 
-    // Ability to add more equations to context.
-    public void addEquation(ASTNodeBase eq) {
-        // Yes compound assignment, no single symbol, yes non-zero order, no include order.
-        String varName = eq.getVariableName(true, false, true, false);
-        if(varName != null) {
-            equationRoots.put(varName, eq);
-        }
-    }
+    public Object get (Variable v) throws EvaluationException
+    {
+        if (! values.containsKey (v))
+        {
+            // Not stored, so try to compute the value.
+            values.put (v, null);  // If successful, we will replace this with the correct result. Otherwise, it remains null. This also functions as a guard against infinite recursion.
 
-
-    //////////////////////
-    // GET / SET VALUES //
-    //////////////////////
-
-    public Object getValueForVariable(String varName) throws EvaluationException {
-        if(evaluatedValues.containsKey(varName)) {
-            return evaluatedValues.get(varName);
-        }
-        // TODO: Think about whether to allow the redefinition of special variables.  Where to prevent?
-        if(specialVariables.containsKey(varName)) {
-            return specialVariables.get(varName);
-        }
-        ASTNodeBase eq = equationRoots.get(varName);
-        if(eq != null) {
-            if(evalFrames.contains(varName)) {
-                throw new EvaluationException("Infinite recursion detected while evaluating variable '" + varName + "'.");
+            // Select the default equation
+            boolean init = v.container.getInit ();
+            EquationEntry defaultEquation = null;
+            for (EquationEntry e : v.equations)
+            {
+                if (init  &&  e.ifString.equals ("$init"))  // TODO: also handle $init==1, or any other equivalent expression
+                {
+                    defaultEquation = e;
+                    break;
+                }
+                if (e.ifString.length () == 0)
+                {
+                    defaultEquation = e;
+                }
             }
-            evalFrames.push(varName);
-            try {
-                return eq.eval(this);
-            } finally {
-                evalFrames.pop();
+
+            boolean evaluated = false;
+            for (EquationEntry e : v.equations)  // Scan for first equation whose condition is nonzero
+            {
+                if (e == defaultEquation) continue;
+                Object result = e.conditional.eval (this);
+                if (result instanceof Number  &&  ((Number) result).floatValue () != 0)
+                {
+                    values.put (v, e.expression.eval (this));
+                    evaluated = true;
+                }
+            }
+            if (! evaluated  &&  defaultEquation != null)
+            {
+                values.put (v, defaultEquation.expression.eval (this));
             }
         }
-        // TODO: investigate does order matter?
-        // Might need equations themselves in map as well.
-        throw new EvaluationException("Could not locate the variable '" + varName + "'.");
+
+        return values.get (v);
     }
 
-    public void setValueForVariable(String varName, Object value) throws EvaluationException {
-        evaluatedValues.put(varName, value);
+    public void set (Variable v, Object value)
+    {
+        values.put (v, value);
     }
 }

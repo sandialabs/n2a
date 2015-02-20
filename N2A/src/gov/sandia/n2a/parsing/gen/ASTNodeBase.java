@@ -120,6 +120,20 @@ public abstract class ASTNodeBase extends SimpleNode {
         return false;
     }
 
+    /**
+        Determine if this node depends only on constants and Variables that remain constant after the init phase.
+    **/
+    public boolean isInitOnly ()
+    {
+        int children = getCount ();
+        for (int i = 0; i < children; i++)
+        {
+            if (! getChild (i).isInitOnly ()) return false;
+        }
+        // Implicitly, a node with no children is "initOnly"
+        return true;
+    }
+
     public ASTVarNode getVarNode() {
         if(isSingleSymbol()) {
             return (ASTVarNode) this;

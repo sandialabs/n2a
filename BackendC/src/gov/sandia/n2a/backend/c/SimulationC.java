@@ -144,31 +144,29 @@ public class SimulationC implements Simulation
 
         e.flatten ();
         e.addSpecials ();  // $dt, $index, $init, $live, $n, $t, $type
-        e.findConstants ();
         e.fillIntegratedVariables ();
         e.findIntegrated ();
-        e.addInit ();
         e.resolveLHS ();
         e.resolveRHS ();
+        e.findConstants ();
         e.removeUnused ();  // especially get rid of unneeded $variables created by addSpecials()
         e.collectSplits ();
-        e.findDeath ();
         findPathToContainer (e);
         e.findAccountableConnections ();
-        e.findTemporary ();
+        e.findTemporary ();  // for connections, makes $p and $project "temporary" under some circumstances
         e.determineOrder ();
         e.findDerivative ();
-        e.findInitOnly ();
+        e.addAttribute ("global",       0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
+        e.addAttribute ("preexistent", -1, false, new String[] {"$index"});
+        e.addAttribute ("preexistent",  0, true,  new String[] {"$dt", "$n", "$t"});
+        e.addAttribute ("simulator",    0, true,  new String[] {"$dt", "$t"});
+        replaceConstantWithInitOnly (e);  // for "preexistent" $variables ($dt, $n, $t)
+        e.findInitOnly ();  // propagate initOnly through ASTs
+        e.findDeath ();
+        e.setAttributesLive ();
         setFunctions (e);
-        e.setLiveAttributes ();
-        e.addAttribute    ("global",       0, false, new String[] {"$max", "$min", "$k", "$n", "$radius", "$from"});  // population-level variables
-        e.addAttribute    ("transient",    1, true,  new String[] {"$p", "$xyz"}); // variables which we prefer to calculate on-the-fly rather than store
-        e.addAttribute    ("transient",    1, false, new String[] {"$from"});
-        e.addAttribute    ("preexistent", -1, false, new String[] {"$index"});     // variables that already exist, either in the superclass or another class, so they don't require local storage 
-        e.addAttribute    ("preexistent",  0, true,  new String[] {"$dt", "$n", "$t"});
-        e.addAttribute    ("simulator",    0, true,  new String[] {"$dt", "$t"});  // variables that live in the simulator object
-        e.removeAttribute ("constant",     0, true,  new String[] {"$dt", "$n", "$t"});  // simple assignment to a $ variable makes it look like a constant
-        e.setInit (false);
+
+        e.setInit (0);
         System.out.println (e.flatList (true));
 
         StringBuilder s = new StringBuilder ();
@@ -189,6 +187,7 @@ public class SimulationC implements Simulation
         s.append ("  virtual void init (Simulator & simulator)\n");
         s.append ("  {\n");
         s.append ("    _Model_Population_Instance.init (simulator);\n");
+        s.append ("    writeTrace ();\n");  // After the above init() call will create all initial parts. There may be some calls to trace() in the init() functions, so we dump time step 0 now.
         s.append ("  }\n");
         s.append ("\n");
         s.append ("  virtual void integrate (Simulator & simulator)\n");
@@ -364,18 +363,20 @@ public class SimulationC implements Simulation
             if (v.name.equals ("$type")) type = v;
             if (v.hasAttribute ("global"))
             {
-                if (! v.hasAny (new String[] {"constant", "transient"}))
+                if (! v.hasAny (new String[] {"constant", "accessor"}))
                 {
-                    boolean initOnly = v.hasAttribute ("initOnly");
-                    if (! initOnly) globalUpdate.add (v);
+                    boolean initOnly               = v.hasAttribute ("initOnly");
                     boolean derivativeOrDependency = v.hasAttribute ("derivativeOrDependency");
+                    if (! initOnly) globalUpdate.add (v);
                     if (derivativeOrDependency) globalDerivative.add (v);
                     if (! v.hasAttribute ("reference"))
                     {
-                        globalInit.add (v);
-                        if (! v.hasAttribute ("temporary"))
+                        boolean temporary = v.hasAttribute ("temporary");
+                        boolean unusedTemporary = temporary  &&  ! v.hasUsers;
+                        if (! unusedTemporary) globalInit.add (v);
+                        if (! temporary)
                         {
-                            if (! v.hasAny (new String [] {"preexistent", "output"})) globalMembers.add (v);
+                            if (! v.hasAny (new String [] {"preexistent", "dummy"})) globalMembers.add (v);
                             if (v.order > 0) globalStackDerivative.add (v);
 
                             boolean external = false;
@@ -407,18 +408,20 @@ public class SimulationC implements Simulation
             }
             else
             {
-                if (! v.hasAny (new String[] {"constant", "transient"}))
+                if (! v.hasAny (new String[] {"constant", "accessor"}))
                 {
-                    boolean initOnly = v.hasAttribute ("initOnly");
-                    if (! initOnly) localUpdate.add (v);
+                    boolean initOnly               = v.hasAttribute ("initOnly");
                     boolean derivativeOrDependency = v.hasAttribute ("derivativeOrDependency");
+                    if (! initOnly) localUpdate.add (v);
                     if (derivativeOrDependency) localDerivative.add (v);
                     if (! v.hasAttribute ("reference"))
                     {
-                        if (! v.name.equals ("$index")) localInit.add (v);
-                        if (! v.hasAttribute ("temporary"))
+                        boolean temporary = v.hasAttribute ("temporary");
+                        boolean unusedTemporary = temporary  &&  ! v.hasUsers;
+                        if (! unusedTemporary  &&  ! v.name.equals ("$index")) localInit.add (v);
+                        if (! temporary)
                         {
-                            if (! v.hasAny (new String [] {"preexistent", "output"})) localMembers.add (v);
+                            if (! v.hasAny (new String [] {"preexistent", "dummy"})) localMembers.add (v);
                             if (v.order > 0) localStackDerivative.add (v);
 
                             boolean external = false;
@@ -468,27 +471,6 @@ public class SimulationC implements Simulation
         String pathToContainer = null;
         if (s.backendData instanceof String) pathToContainer = (String) s.backendData;
 
-        // Determine reference population
-        // This is extremely inefficient, but we are solving a very small problem
-        List<String> from = new ArrayList<String> ();
-        if (s.connectionBindings != null)
-        {
-            Variable v = s.find (new Variable ("$from"));
-            if (v != null)
-            {
-                EquationEntry e = v.equations.first ();
-                if (e != null  &&  e.expression != null)
-                {
-                    // TODO: load "from" with list in $from
-                }
-            }
-            // Assign positions to any remaining references
-            for (Entry<String, EquationSet> n : s.connectionBindings.entrySet ())
-            {
-                if (! from.contains (n.getKey ())) from.add (n.getKey ());
-            }
-        }
-        
         // Unit conversions
         Set<ArrayList<EquationSet>> conversions = s.getConversions ();
         for (ArrayList<EquationSet> pair : conversions)
@@ -519,8 +501,8 @@ public class SimulationC implements Simulation
             // TODO: Convert contained populations from matching populations in the source part?
 
             // Match variables between the two sets.
-            // TODO: a match between variables should be marked as a dependency. This might change some "output" variables into stored values.
-            String [] forbiddenAttributes = new String [] {"global", "constant", "transient", "reference", "temporary", "output", "preexistent"};
+            // TODO: a match between variables should be marked as a dependency. This might change some "dummy" variables into stored values.
+            String [] forbiddenAttributes = new String [] {"global", "constant", "accessor", "reference", "temporary", "dummy", "preexistent"};
             for (Variable v : dest.variables)
             {
                 if (v.name.equals ("$type"))
@@ -645,6 +627,10 @@ public class SimulationC implements Simulation
                     result.append (pad3 + prefix (s.container, e, "_") + "_count = 0;\n");
                 }
             }
+            for (Variable v : localMembers)
+            {
+                result.append (pad3 + mangle (v) + " = 0;\n");
+            }
             result.append (pad2 + "}\n");
             result.append ("\n");
         }
@@ -676,6 +662,19 @@ public class SimulationC implements Simulation
             result.append ("\n");
         }
 
+        // Unit clear
+        if (localMembers.size () > 0  ||  localBufferedExternal.size () > 0)
+        {
+            result.append (pad2 + "virtual void clear ()\n");
+            result.append (pad2 + "{\n");
+            for (Variable v : localMembers)
+            {
+                result.append (pad3 + mangle (v) + " = 0;\n");
+            }
+            result.append (pad2 + "}\n");
+            result.append ("\n");
+        }
+
         // Unit die
         if (s.canDie ())
         {
@@ -684,7 +683,7 @@ public class SimulationC implements Simulation
 
             // tag part as dead
             Variable live = s.find (new Variable ("$live"));
-            if (live != null  &&  ! live.hasAny (new String[] {"constant", "transient"}))  // $live is stored in this part
+            if (live != null  &&  ! live.hasAny (new String[] {"constant", "accessor"}))  // $live is stored in this part
             {
                 result.append (pad3 + resolve (live.reference, context, true) + " = 0;\n");
             }
@@ -717,12 +716,7 @@ public class SimulationC implements Simulation
         {
             result.append (pad2 + "virtual void init (Simulator & simulator)\n");
             result.append (pad2 + "{\n");
-            s.setInit (true);
-            // Zero out members
-            for (Variable v : localMembers)
-            {
-                result.append (pad3 + mangle (v) + " = 0;\n");
-            }
+            s.setInit (1);
             for (Variable v : localBufferedExternal)
             {
                 result.append (pad3 + mangle ("next_", v) + " = 0;\n");
@@ -775,7 +769,7 @@ public class SimulationC implements Simulation
                 result.append (pad3 + mangle (e.name) + "_Population_Instance.init (simulator);\n");
             }
 
-            s.setInit (false);
+            s.setInit (0);
             result.append (pad2 + "}\n");
             result.append ("\n");
         }
@@ -872,7 +866,7 @@ public class SimulationC implements Simulation
             }
 
             Variable live = s.find (new Variable ("$live"));
-            if (live != null  &&  ! live.hasAny (new String[] {"constant", "transient"}))  // $live is stored in this part
+            if (live != null  &&  ! live.hasAny (new String[] {"constant", "accessor"}))  // $live is stored in this part
             {
                 result.append (pad3 + "if (" + resolve (live.reference, context, false) + " == 0) return false;\n");  // early-out if we are already dead, to avoid another call to die()
             }
@@ -948,14 +942,12 @@ public class SimulationC implements Simulation
 
             if (s.lethalP)
             {
-                // TODO: be more clever about determining lethaP; current version thinks HHmodHHmod has lethalP because of expression involving $index
-                // If the conditional expression is constant, then it won't change after init(). If all the equations of a variable are this way, it should be marked as initOnly.
-                // An initOnly variable should not add a lethalX attribute to the equation set.
-                // In the case of $index, it is a stored value that never changes, that is, a constant at runtime but not at compile time.
-
                 Variable p = s.find (new Variable ("$p")); // lethalP implies that $p exists, so no need to check for null
-                result.append (pad3 + "float create = " + resolve (p.reference, context, false) + ";\n");
-                result.append (pad3 + "if (create == 0  ||  create < 1  &&  create < randf ())\n");
+                if (p.hasAttribute ("temporary"))
+                {
+                    multiconditional (s, p, context, pad3, result);
+                }
+                result.append (pad3 + "if (" + mangle ("$p") + " == 0  ||  " + mangle ("$p") + " < 1  &&  " + mangle ("$p") + " < randf ())\n");
                 result.append (pad3 + "{\n");
                 result.append (pad4 + "die ();\n");
                 result.append (pad4 + "return false;\n");
@@ -1202,7 +1194,7 @@ public class SimulationC implements Simulation
             {
                 result.append (pad2 + "virtual float getLive ()\n");
                 result.append (pad2 + "{\n");
-                if (! live.hasAttribute ("transient"))
+                if (! live.hasAttribute ("accessor"))
                 {
                     result.append (pad3 + "if (" + resolve (live.reference, context, false) + " == 0) return 0;\n");
                 }
@@ -1232,157 +1224,217 @@ public class SimulationC implements Simulation
         }
 
         // Unit getP
+        if (s.connectionBindings != null)
         {
             Variable p = s.find (new Variable ("$p", 0));
             if (p != null)
             {
-                result.append (pad2 + "virtual float getP (float " + mangle ("$live") + ")\n");
+                result.append (pad2 + "virtual float getP (Simulator & simulator)\n");
                 result.append (pad2 + "{\n");
 
-                if (p.hasAttribute ("constant"))
+                s.setInit (1);
+
+                // set $live to 0
+                Variable live = s.find (new Variable ("$live"));
+                Set<String> liveAttributes = live.attributes;
+                live.attributes = null;
+                live.addAttribute ("constant");
+                EquationEntry e = live.equations.first ();  // this should always be an equation we create; the user cannot declare $live (or $init for that matter)
+                ASTConstant c = (ASTConstant) e.expression;
+                c.setValue (new Float (0.0));
+
+                if (! p.hasAttribute ("constant"))
                 {
-                    result.append (pad3 + "return " + resolve (p.reference, context, false) + ";\n");
-                }
-                else
-                {
-                    Variable init = s.find (new Variable ("$init"));
-                    Variable live = s.find (new Variable ("$live"));
-
-                    Set<String> liveAttributes = live.attributes;
-                    live.attributes = null;
-                    live.addAttribute ("preexistent");
-
-                    if (p.dependsOn (init) != null)
-                    {
-                        result.append (pad3 + "float " + mangle (init) + " = 1.0f - " + mangle (live) + ";\n");
-                    }
-
-                    String whichPad;
-                    boolean hasTransient = p.hasAttribute ("transient");
-                    if (hasTransient)
-                    {
-                        result.append (pad3 + "float " + mangle (p) + " = 1;\n");  // TODO: eliminate this assignment; there should be a default values assigned by the multiconditional below
-                        p.removeAttribute ("transient");
-                        init.addAttribute ("preexistent");
-                        init.removeAttribute ("constant");
-                        whichPad = pad3;
-                    }
-                    else
-                    {
-                        result.append (pad3 + "if (" + mangle ("$live") + " == 0)\n");
-                        result.append (pad3 + "{\n");
-                        s.setInit (true);
-                        whichPad = pad4;
-                    }
-
                     // Generate any temporaries needed by $p
                     for (Variable t : s.variables)
                     {
                         if (t.hasAttribute ("temporary")  &&  p.dependsOn (t) != null)
                         {
-                            multiconditional (s, t, context, whichPad, result);
+                            multiconditional (s, t, context, pad3, result);
                         }
                     }
-                    multiconditional (s, p, context, whichPad, result);
-
-                    if (hasTransient)
-                    {
-                        p.addAttribute ("transient");
-                        init.removeAttribute ("preexistent");
-                        init.addAttribute ("constant");
-                    }
-                    else  // stored in object ($variables always have defaults and therefore never resolve up to container)
-                    {
-                        s.setInit (false);
-                        result.append (pad3 + "}\n");
-                    }
-
-                    live.attributes = liveAttributes;
-
-                    result.append (pad3 + "return " + mangle (p) + ";\n");
+                    multiconditional (s, p, context, pad3, result);  // $p is always calculated, because we are in a pseudo-init phase
                 }
+                result.append (pad3 + "return " + resolve (p.reference, context, false) + ";\n");
+
+                // restore $live
+                live.attributes = liveAttributes;
+                c.setValue (new Float (1.0));
+
+                s.setInit (0);
+
                 result.append (pad2 + "}\n");
                 result.append ("\n");
             }
         }
 
         // Unit getXYZ
+        if (s.connectionBindings == null)  // Connections can also have $xyz, but only compartments need to provide an accessor.
         {
             Variable xyz = s.find (new Variable ("$xyz", 0));
-            if (xyz != null  ||  s.connectionBindings != null)
+            if (xyz != null)
             {
-                result.append (pad2 + "virtual void getXYZ (float " + mangle ("$live") + ", Vector3 " + mangle ("xyz") + ")\n");
+                result.append (pad2 + "virtual void getXYZ (Vector3 & xyz)\n");
                 result.append (pad2 + "{\n");
-                if (xyz == null)  // This must therefore be a Connection, so we defer $xyz to our reference part.
+                if (xyz.hasAttribute ("temporary"))
                 {
-                    result.append (pad3 + mangle (from.get (0)) + "->getXYZ (" + mangle ("$live") + ", " + mangle ("xyz") + ");\n");
-                }
-                else
-                {
-                    if (xyz.hasAttribute ("constant"))
+                    // Generate any temporaries needed by $xyz
+                    for (Variable t : s.variables)
                     {
-                        // TODO: either modify resolve() to set Vector3 constants correctly, or fix this code
-                        result.append (pad3 + resolve (xyz.reference, context, false) + ";\n");
+                        if (t.hasAttribute ("temporary")  &&  xyz.dependsOn (t) != null)
+                        {
+                            multiconditional (s, t, context, pad4, result);
+                        }
                     }
-                    else
-                    {
-                        Variable init = s.find (new Variable ("$init"));
-                        Variable live = s.find (new Variable ("$live"));
-
-                        Set<String> liveAttributes = live.attributes;
-                        live.attributes = null;
-                        live.addAttribute ("preexistent");
-
-                        if (xyz.dependsOn (init) != null)
-                        {
-                            result.append (pad3 + "float " + mangle (init) + " = 1.0f - " + mangle (live) + ";\n");
-                        }
-
-                        boolean hasTransient = xyz.hasAttribute ("transient");
-                        if (hasTransient)
-                        {
-                            xyz.removeAttribute ("transient");
-                            init.addAttribute ("preexistent");
-                            init.removeAttribute ("constant");
-                        }
-                        else
-                        {
-                            result.append (pad3 + "if (" + mangle ("$live") + " == 0)\n");
-                            result.append (pad3 + "{\n");
-                            s.setInit (true);
-                        }
-
-                        // Generate any temporaries needed by $xyz
-                        for (Variable t : s.variables)
-                        {
-                            if (t.hasAttribute ("temporary")  &&  xyz.dependsOn (t) != null)
-                            {
-                                multiconditional (s, t, context, pad4, result);
-                            }
-                        }
-                        multiconditional (s, xyz, context, pad4, result);
-
-                        if (hasTransient)
-                        {
-                            xyz.addAttribute ("transient");
-                            init.addAttribute ("constant");
-                            init.removeAttribute ("preexistent");
-                        }
-                        else
-                        {
-                            s.setInit (false);
-                            result.append (pad3 + "}\n");
-                        }
-
-                        live.attributes = liveAttributes;
-                    }
+                    multiconditional (s, xyz, context, pad4, result);
                 }
+                result.append (pad3 + "xyz = " + resolve (xyz.reference, context, false) + ";\n");  // TODO: resolve() needs to handle vector constants
                 result.append (pad2 + "}\n");
                 result.append ("\n");
             }
         }
 
-        // Unit getPart and setPart
+        // Unit project
+        if (s.connectionBindings != null)
+        {
+            boolean hasProjectFrom = false;
+            boolean hasProjectTo   = false;
+            for (Entry<String, EquationSet> e : s.connectionBindings.entrySet ())
+            {
+                if (s.find (new Variable (e.getKey () + ".$projectFrom")) != null) hasProjectFrom = true;
+                if (s.find (new Variable (e.getKey () + ".$projectTo"  )) != null) hasProjectTo   = true;
+                // TODO: if only one of a pair of projections is present, create the other using point sampling
+            }
+
+            if (hasProjectFrom  ||  hasProjectTo)
+            {
+                Variable xyz = s.find (new Variable ("$xyz", 0));
+                boolean xyzStored    = false;
+                boolean xyzTemporary = false;
+                if (xyz != null)
+                {
+                    xyzTemporary = xyz.hasAttribute ("temporary");
+                    xyzStored = ! xyzTemporary;
+                }
+
+                result.append (pad2 + "virtual void project (int i, int j, Vector3 & xyz)\n");
+                result.append (pad2 + "{\n");
+
+                String localXYZ = "xyz";
+                if (hasProjectTo)
+                {
+                    localXYZ = "__24xyz";
+                    if (! xyzStored) result.append (pad3 + "Vector3 " + mangle (xyz) + ";\n");  // local temporary storage
+                }
+
+                // TODO: Handle the case where $xyz is explicitly specified with an equation.
+                // This should override all instances of $projectFrom.
+                // Or should it merely be the default when $projectFrom is missing?
+                result.append (pad3 + "switch (i)\n");
+                result.append (pad3 + "{\n");
+                boolean needDefault = false;
+                int i = 0;
+                for (Entry<String, EquationSet> e : s.connectionBindings.entrySet ())
+                {
+                    Variable projectFrom = s.find (new Variable (e.getKey () + ".$projectFrom"));
+                    if (projectFrom == null)
+                    {
+                        VariableReference fromXYZ = s.resolveReference (e.getKey () + ".$xyz");
+                        if (fromXYZ.variable == null)
+                        {
+                            needDefault = true;
+                        }
+                        else
+                        {
+                            result.append (pad4 + "case " + i + ": " + localXYZ + " = " + resolve (fromXYZ, context, false) + "; break;\n");
+                        }
+                    }
+                    else
+                    {
+                        result.append (pad4 + "case " + i + ":\n");
+                        result.append (pad4 + "{\n");
+                        if (projectFrom.hasAttribute ("temporary"))  // it could also be "constant", but no other type
+                        {
+                            for (Variable t : s.variables)
+                            {
+                                if (t.hasAttribute ("temporary")  &&  projectFrom.dependsOn (t) != null)
+                                {
+                                    multiconditional (s, t, context, pad5, result);
+                                }
+                            }
+                            multiconditional (s, projectFrom, context, pad5, result);
+                        }
+                        result.append (pad5 + localXYZ + " = " + resolve (projectFrom.reference, context, false) + ";\n");
+                        result.append (pad5 + "break;\n");
+                        result.append (pad4 + "}\n");
+                    }
+                    i++;
+                }
+                if (needDefault)
+                {
+                    result.append (pad4 + "default:\n");
+                    result.append (pad5 + localXYZ + "[0] = 0;\n");
+                    result.append (pad5 + localXYZ + "[1] = 0;\n");
+                    result.append (pad5 + localXYZ + "[2] = 0;\n");
+                }
+                result.append (pad3 + "}\n");
+                result.append ("\n");
+
+                if (xyzStored  &&  ! localXYZ.equals ("__24xyz"))
+                {
+                    result.append (pad3 + "__24xyz = " + localXYZ + ";\n");
+                }
+
+                if (hasProjectTo)
+                {
+                    if (xyzTemporary) xyz.removeAttribute ("temporary");
+                    result.append (pad3 + "switch (j)\n");
+                    result.append (pad3 + "{\n");
+                    needDefault = false;
+                    int j = 0;
+                    for (Entry<String, EquationSet> e : s.connectionBindings.entrySet ())
+                    {
+                        Variable projectTo = s.find (new Variable (e.getKey () + ".$projectTo"));
+                        if (projectTo == null)
+                        {
+                            needDefault = true;
+                        }
+                        else
+                        {
+                            result.append (pad4 + "case " + j + ":\n");
+                            result.append (pad4 + "{\n");
+                            if (projectTo.hasAttribute ("temporary"))
+                            {
+                                for (Variable t : s.variables)
+                                {
+                                    if (t.hasAttribute ("temporary")  &&  projectTo.dependsOn (t) != null)
+                                    {
+                                        multiconditional (s, t, context, pad5, result);
+                                    }
+                                }
+                                multiconditional (s, projectTo, context, pad5, result);
+                            }
+                            result.append (pad5 + "xyz = " + resolve (projectTo.reference, context, false) + ";\n");
+                            result.append (pad5 + "break;\n");
+                            result.append (pad4 + "}\n");
+                        }
+                        j++;
+                    }
+                    if (needDefault)
+                    {
+                        result.append (pad4 + "default:\n");
+                        result.append (pad5 + "xyz = __24xyz;\n");
+                    }
+                    result.append (pad3 + "}\n");
+                    if (xyzTemporary) xyz.addAttribute ("temporary");
+                }
+
+                result.append (pad2 + "}\n");
+                result.append ("\n");
+            }
+        }
+
+        // Unit setPart
         if (s.connectionBindings != null)
         {
             result.append (pad2 + "virtual void setPart (int i, Part * part)\n");
@@ -1398,12 +1450,16 @@ public class SimulationC implements Simulation
             result.append (pad3 + "}\n");
             result.append (pad2 + "}\n");
             result.append ("\n");
+        }
 
+        // Unit getPart
+        if (s.connectionBindings != null)
+        {
             result.append (pad2 + "virtual Part * getPart (int i)\n");
             result.append (pad2 + "{\n");
             result.append (pad3 + "switch (i)\n");
             result.append (pad3 + "{\n");
-            i = 0;
+            int i = 0;
             for (Entry<String, EquationSet> e : s.connectionBindings.entrySet ())
             {
                 result.append (pad4 + "case " + i++ + ": return " + mangle (e.getKey ()) + ";\n");
@@ -1417,6 +1473,8 @@ public class SimulationC implements Simulation
         // Unit class trailer
         result.append (pad + "};\n");
         result.append ("\n");
+
+        // -------------------------------------------------------------------
 
         // Population class header
         context.global = true;
@@ -1532,11 +1590,12 @@ public class SimulationC implements Simulation
             result.append (pad2 + "{\n");
             result.append (pad3 + "switch (i)\n");
             result.append (pad3 + "{\n");
+            int i = 0;
             for (Entry<String, EquationSet> e : s.connectionBindings.entrySet ())
             {
                 // TODO: Need a function to permute all descending paths to a class of populations.
                 // In the simplest form, it is a peer in our current container, so no iteration at all.
-                result.append (pad4 + "case " + from.indexOf (e.getKey ()) + ": return & container->" + mangle (e.getValue ().name) + "_Population_Instance;\n");
+                result.append (pad4 + "case " + i++ + ": return & container->" + mangle (e.getValue ().name) + "_Population_Instance;\n");
             }
             result.append (pad4 + "default: return 0;\n");
             result.append (pad3 + "}\n");
@@ -1547,7 +1606,7 @@ public class SimulationC implements Simulation
         // Population init
         result.append (pad2 + "virtual void init (Simulator & simulator)\n");
         result.append (pad2 + "{\n");
-        s.setInit (true);
+        s.setInit (1);
         //   Zero out members
         for (Variable v : globalMembers)
         {
@@ -1593,7 +1652,7 @@ public class SimulationC implements Simulation
         {
             result.append (pad3 + "simulator.connect (this);\n");  // queue to evaluate our connections
         }
-        s.setInit (false);
+        s.setInit (0);
         result.append (pad2 + "};\n");
         result.append ("\n");
 
@@ -1657,7 +1716,7 @@ public class SimulationC implements Simulation
         }
 
         // Population finalize
-        if (globalBufferedExternal.size () > 0  ||  s.container == null  ||  s.lethalContainer)
+        if (globalBufferedExternal.size () > 0  ||  s.container == null)
         {
             result.append (pad2 + "virtual bool finalize (Simulator & simulator)\n");
             result.append (pad2 + "{\n");
@@ -1838,41 +1897,75 @@ public class SimulationC implements Simulation
         // Population getMax
         if (s.connectionBindings != null)
         {
-            result.append (pad2 + "virtual int getMax (int i)\n");
-            result.append (pad2 + "{\n");
-            result.append (pad3 + "switch (i)\n");
-            result.append (pad3 + "{\n");
+            boolean needMax = false;
             for (Entry<String, EquationSet> n : s.connectionBindings.entrySet ())
             {
                 Variable v = s.find (new Variable (n.getKey () + ".$max"));
                 EquationEntry e = null;
                 if (v != null) e = v.equations.first ();
-                if (e != null) result.append (pad4 + "case " + from.indexOf (n.getKey ()) + ": return " + context.render (e.expression) + ";\n");
+                if (e != null)
+                {
+                    needMax = true;
+                    break;
+                }
             }
-            result.append (pad3 + "}\n");
-            result.append (pad3 + "return 0;\n");
-            result.append (pad2 + "}\n");
-            result.append ("\n");
+            if (needMax)
+            {
+                result.append (pad2 + "virtual int getMax (int i)\n");
+                result.append (pad2 + "{\n");
+                result.append (pad3 + "switch (i)\n");
+                result.append (pad3 + "{\n");
+                int i = 0;
+                for (Entry<String, EquationSet> n : s.connectionBindings.entrySet ())
+                {
+                    Variable v = s.find (new Variable (n.getKey () + ".$max"));
+                    EquationEntry e = null;
+                    if (v != null) e = v.equations.first ();
+                    if (e != null) result.append (pad4 + "case " + i + ": return " + context.render (e.expression) + ";\n");
+                    i++;
+                }
+                result.append (pad3 + "}\n");
+                result.append (pad3 + "return 0;\n");
+                result.append (pad2 + "}\n");
+                result.append ("\n");
+            }
         }
 
         // Population getMin
         if (s.connectionBindings != null)
         {
-            result.append (pad2 + "virtual int getMin (int i)\n");
-            result.append (pad2 + "{\n");
-            result.append (pad3 + "switch (i)\n");
-            result.append (pad3 + "{\n");
+            boolean needMin = false;
             for (Entry<String, EquationSet> n : s.connectionBindings.entrySet ())
             {
                 Variable v = s.find (new Variable (n.getKey () + ".$min"));
                 EquationEntry e = null;
                 if (v != null) e = v.equations.first ();
-                if (e != null) result.append (pad4 + "case " + from.indexOf (n.getKey ()) + ": return " + context.render (e.expression) + ";\n");
+                if (e != null)
+                {
+                    needMin = true;
+                    break;
+                }
             }
-            result.append (pad3 + "}\n");
-            result.append (pad3 + "return 0;\n");
-            result.append (pad2 + "}\n");
-            result.append ("\n");
+            if (needMin)
+            {
+                result.append (pad2 + "virtual int getMin (int i)\n");
+                result.append (pad2 + "{\n");
+                result.append (pad3 + "switch (i)\n");
+                result.append (pad3 + "{\n");
+                int i = 0;
+                for (Entry<String, EquationSet> n : s.connectionBindings.entrySet ())
+                {
+                    Variable v = s.find (new Variable (n.getKey () + ".$min"));
+                    EquationEntry e = null;
+                    if (v != null) e = v.equations.first ();
+                    if (e != null) result.append (pad4 + "case " + i + ": return " + context.render (e.expression) + ";\n");
+                    i++;
+                }
+                result.append (pad3 + "}\n");
+                result.append (pad3 + "return 0;\n");
+                result.append (pad2 + "}\n");
+                result.append ("\n");
+            }
         }
 
         // Population getRadius
@@ -1921,7 +2014,6 @@ public class SimulationC implements Simulation
 
     public void multiconditional (EquationSet s, Variable v, CRenderingContext context, String pad, StringBuilder result) throws Exception
     {
-        boolean initConstant = s.find (new Variable ("$init")).hasAttribute ("constant");
         boolean init = s.getInit ();
         boolean isType = v.name.equals ("$type");
 
@@ -1934,7 +2026,7 @@ public class SimulationC implements Simulation
         EquationEntry defaultEquation = null;
         for (EquationEntry e : v.equations)
         {
-            if (initConstant  &&  init  &&  e.ifString.equals ("$init"))
+            if (init  &&  e.ifString.equals ("$init"))  // TODO: also handle $init==1, or any other equivalent expression
             {
                 defaultEquation = e;
                 break;
@@ -1953,16 +2045,13 @@ public class SimulationC implements Simulation
             {
                 continue;
             }
-            if (initConstant)
+            if (init)
             {
-                if (init)
-                {
-                    if (e.ifString.length () == 0) continue;
-                }
-                else  // not init
-                {
-                    if (e.ifString.equals ("$init")) continue;
-                }
+                if (e.ifString.length () == 0) continue;
+            }
+            else  // not init
+            {
+                if (e.ifString.equals ("$init")) continue;
             }
             if (e.conditional != null)
             {
@@ -1990,7 +2079,7 @@ public class SimulationC implements Simulation
             }
             else
             {
-                if (v.hasAttribute ("output"))
+                if (v.hasAttribute ("dummy"))
                     result.append (pad +                                                                   context.render (e.expression) + ";\n");
                 else
                     result.append (pad + resolve (v.reference, context, true) + " " + e.assignment + " " + context.render (e.expression) + ";\n");
@@ -2026,7 +2115,7 @@ public class SimulationC implements Simulation
             }
             else
             {
-                if (v.hasAttribute ("output"))
+                if (v.hasAttribute ("dummy"))
                     result.append (pad +                                                                                 context.render (defaultEquation.expression) + ";\n");
                 else
                     result.append (pad + resolve (v.reference, context, true) + " " + defaultEquation.assignment + " " + context.render (defaultEquation.expression) + ";\n");
@@ -2189,14 +2278,11 @@ public class SimulationC implements Simulation
             if (! lvalue) return "simulator." + r.variable.name.substring (1);  // strip the $ and expect it to be a member of simulator, which must be passed into the current function
             // if lvalue, then fall through to the main case below 
         }
-        if (r.variable.hasAttribute ("transient"))
+        if (r.variable.hasAttribute ("accessor"))
         {
             if (lvalue) return "unresolved";
 
-            // TODO: Change the interface to these functions
-            if      (r.variable.name.equals ("$p"  )) name = "getP (1)";  // TODO: get actual value of $live
-            else if (r.variable.name.equals ("$xyz")) name = "getXYZ ()";
-            else if (r.variable.name.equals ("$ref")) name = "getRef ()";
+            if (r.variable.name.equals ("$live")) name = "getLive ()";
             else return "unresolved";
         }
         if (name.length () == 0)
@@ -2234,6 +2320,33 @@ public class SimulationC implements Simulation
         }
     }
 
+    /**
+        Convert "preexistent" $variables that appear to be "constant" into "initOnly",
+        so that they will be evaluated during init()
+    **/
+    public void replaceConstantWithInitOnly (EquationSet s)
+    {
+        for (EquationSet p : s.parts)
+        {
+            replaceConstantWithInitOnly (p);
+        }
+
+        for (Variable v : s.variables)
+        {
+            if (   v.order == 0
+                && v.name.startsWith ("$")
+                && v.hasAttribute ("preexistent")
+                && v.hasAttribute ("constant"))
+            {
+                v.removeAttribute ("constant");
+                v.addAttribute    ("initOnly");
+            }
+        }
+    }
+
+    /**
+        Tag variables that must be set via a function call so that they have a "next_" value.
+    **/
     public void setFunctions (EquationSet s)
     {
         for (EquationSet p : s.parts)
@@ -2245,7 +2358,6 @@ public class SimulationC implements Simulation
         {
             if (v.order == 0  &&  (v.name.equals ("$n")  ||  v.name.equals ("$dt")))
             {
-                // The idea is to force variables that get set via a function call to use a "next" value.
                 if (v.hasAttribute ("initOnly")) v.addAttribute ("cycle");
                 else                             v.addAttribute ("externalRead");
             }

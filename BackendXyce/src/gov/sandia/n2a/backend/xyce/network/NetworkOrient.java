@@ -48,7 +48,6 @@ public class NetworkOrient {
 //        e.addSpecials ();  // $index, $init - also adds $dt and $t, but no equations; messes me up
         e.findConstants ();
         e.findIntegrated ();
-        e.addInit ();
         e.resolveLHS ();
         e.resolveRHS ();
         e.findTemporary ();
@@ -58,7 +57,7 @@ public class NetworkOrient {
         e.addAttribute    ("transient",    1, true,  new String[] {"$p", "$ref", "$xyz"});
         e.addAttribute    ("preexistent",  0, true,  new String[] {"$dt", "$index"});
         e.removeAttribute ("constant",     0, true,  new String[] {"$dt"});
-        e.setInit (false);
+        e.setInit (0);
         System.out.println (e.flatList (true));
         return e;
     }

@@ -15,13 +15,11 @@ public abstract class PartInstance {
 
     public int serialNumber;
     private PartSetInterface pSet;
-    private HashMap<String, PartInstance> connectedPIs;
     
     public PartInstance(PartSetInterface pset, int newSerialNumber)
     {
         serialNumber = newSerialNumber;
         pSet = pset;
-        connectedPIs = new HashMap<String, PartInstance>();
     }
 
     public List<Integer> getSNs()
@@ -40,15 +38,5 @@ public abstract class PartInstance {
     public PartSetInterface getPartSet()
     {
         return this.pSet;
-    }
-
-    public void connectPI(String alias, PartInstance pi)
-    {
-        connectedPIs.put(alias, pi);
-    }
-
-    public PartInstance getPI(String alias) 
-    {
-        return connectedPIs.get(alias);
     }
 }
