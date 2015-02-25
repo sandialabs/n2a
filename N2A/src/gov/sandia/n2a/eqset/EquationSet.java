@@ -1685,19 +1685,24 @@ public class EquationSet implements Comparable<EquationSet>
         via conditional selection. This is merely a heuristic, as the actual logic
         could work out such that the value doesn't change after init anyway.
         <li>not any of {"integrated", "constant"}
-        <li>the conditional expression is 0 when $init=0 -- Only possible if there
+        <li>EITHER the conditional expression is 0 when $init=0 -- Only possible if there
         actually is a conditional expression.
-        <li>if evaluated after init, the equation only depends on constants and other
-        initOnly variables
+        <li>OR the equation only depends on constants and other initOnly variables
         </ul>
-        TODO: need multiple passes to propagate initOnly through all dependencies
-        Depends on results of: addSpecials() -- so that $variables get processed
     **/
     public void findInitOnly ()
     {
+        boolean changed = true;
+        while (changed) changed = findInitOnlyRecursive ();
+    }
+
+    public boolean findInitOnlyRecursive ()
+    {
+        boolean changed = false;
+
         for (EquationSet s : parts)
         {
-            s.findInitOnly ();
+            if (s.findInitOnlyRecursive ()) changed = true;
         }
 
         for (Variable v : variables)
@@ -1716,6 +1721,7 @@ public class EquationSet implements Comparable<EquationSet>
                     if (result != null  &&  result instanceof Number  &&  ((Number) result).floatValue () == 0)
                     {
                         v.addAttribute ("initOnly");
+                        changed = true;
                         continue;
                     }
                 }
@@ -1725,8 +1731,14 @@ public class EquationSet implements Comparable<EquationSet>
             }
 
             // Determine if variable depends only on constants and initOnly variables
-            if (e.expression.isInitOnly ()) v.addAttribute ("initOnly");
+            if (e.expression.isInitOnly ())
+            {
+                v.addAttribute ("initOnly");
+                changed = true;
+            }
         }
+
+        return changed;
     }
 
     /**
