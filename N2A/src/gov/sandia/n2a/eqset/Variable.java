@@ -124,7 +124,7 @@ public class Variable implements Comparable<Variable>
         }
         for (EquationEntry e : equations)
         {
-            if (e.expression != null)  // for example, a special variable or integrated value that is added automatically
+            if (e.expression != null)  // could be null if this is a special variable or integrated value that is added automatically
             {
                 e.expression = e.expression.transform (context);
             }

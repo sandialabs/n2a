@@ -1365,16 +1365,10 @@ public class EquationSet implements Comparable<EquationSet>
     **/
     public void findConstants ()
     {
-        for (EquationSet s : parts)
-        {
-            s.findConstants ();
-        }
-
-        // TODO: use a single ec for entire EquationSet tree, not just current one
-        // Perhaps create the ec and transform context in a higher function outside the recursion
-        final EvaluationContext ec = new EvaluationContext ();
         class CollapseConstants implements ASTNodeTransformer
         {
+            EvaluationContext ec = new EvaluationContext ();
+
             public ASTNodeBase transform (ASTNodeBase node)
             {
                 try
@@ -1464,27 +1458,28 @@ public class EquationSet implements Comparable<EquationSet>
 
         ASTTransformationContext context = new ASTTransformationContext ();
         CollapseConstants c = new CollapseConstants ();
-        context.add (ASTOpNode  .class, c);
-        context.add (ASTFunNode .class, c);
+        context.add (ASTOpNode .class, c);
+        context.add (ASTFunNode.class, c);
+
+        findConstantsRecursive (context);
+    }
+
+    public void findConstantsRecursive (ASTTransformationContext context)
+    {
+        for (EquationSet s : parts)
+        {
+            s.findConstantsRecursive (context);
+        }
 
         for (Variable v : variables)
         {
             v.transform (context);
 
             // Check if we have a constant
-            if (v.equations.size () != 1)
-            {
-                continue;
-            }
+            if (v.equations.size () != 1) continue;
             EquationEntry e = v.equations.first ();
-            if (e.conditional != null)
-            {
-                continue;
-            }
-            if (e.expression instanceof ASTConstant)
-            {
-                v.addAttribute ("constant");
-            }
+            if (e.conditional != null) continue;
+            if (e.expression instanceof ASTConstant) v.addAttribute ("constant");
         }
     }
 
