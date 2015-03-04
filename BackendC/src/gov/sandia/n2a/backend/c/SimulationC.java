@@ -31,12 +31,14 @@ import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.NavigableMap;
 import java.util.NavigableSet;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 import replete.util.FileUtil;
 
@@ -165,6 +167,7 @@ public class SimulationC implements Simulation
         e.findDeath ();
         e.setAttributesLive ();
         setFunctions (e);
+        findReferences (e);
 
         e.setInit (0);
         System.out.println (e.flatList (true));
@@ -342,6 +345,7 @@ public class SimulationC implements Simulation
         List<Variable> localBufferedExternalWriteDerivative  = new ArrayList<Variable> ();  // subset of external write that are derivatives
         List<Variable> localIntegrated                       = new ArrayList<Variable> ();  // must be pushed onto the integral stack
         List<Variable> localDerivative                       = new ArrayList<Variable> ();  // changed by updateDerivative
+        List<VariableReference> localReference               = new ArrayList<VariableReference> ();  // references to other equation sets which can die
         List<Variable> globalUpdate                          = new ArrayList<Variable> ();
         List<Variable> globalInit                            = new ArrayList<Variable> ();
         List<Variable> globalMembers                         = new ArrayList<Variable> ();
@@ -357,9 +361,10 @@ public class SimulationC implements Simulation
         List<Variable> globalIntegrated                      = new ArrayList<Variable> ();
         List<Variable> globalDerivative                      = new ArrayList<Variable> ();
         Variable type = null;  // type is always a local (instance) variable; a population *is* a type, so it can't change itself!
+        System.out.println (s.name);
         for (Variable v : s.ordered)  // we want the sub-lists to be ordered correctly
         {
-            System.out.println (v.nameString () + " " + v.attributeString ());
+            System.out.println ("  " + v.nameString () + " " + v.attributeString ());
             if (v.name.equals ("$type")) type = v;
             if (v.hasAttribute ("global"))
             {
@@ -414,7 +419,11 @@ public class SimulationC implements Simulation
                     boolean derivativeOrDependency = v.hasAttribute ("derivativeOrDependency");
                     if (! initOnly) localUpdate.add (v);
                     if (derivativeOrDependency) localDerivative.add (v);
-                    if (! v.hasAttribute ("reference"))
+                    if (v.hasAttribute ("reference"))
+                    {
+                        if (v.reference.variable.container.canDie ()) localReference.add (v.reference);
+                    }
+                    else
                     {
                         boolean temporary = v.hasAttribute ("temporary");
                         boolean unusedTemporary = temporary  &&  ! v.hasUsers;
@@ -467,9 +476,14 @@ public class SimulationC implements Simulation
             }
         }
 
-        // Determine how to access my container at run time
+        // Access backend data
         String pathToContainer = null;
-        if (s.backendData instanceof String) pathToContainer = (String) s.backendData;
+        if (s.backendData instanceof BackendData)
+        {
+            BackendData bed = (BackendData) s.backendData;
+            pathToContainer = bed.pathToContainer;
+            if (bed.liveReferences != null) localReference.addAll (bed.liveReferences);
+        }
 
         // Unit conversions
         Set<ArrayList<EquationSet>> conversions = s.getConversions ();
@@ -593,6 +607,11 @@ public class SimulationC implements Simulation
                 result.append (pad2 + "int " + prefix (s.container, e, "_") + "_count;\n");
             }
         }
+        boolean refcount = s.referenced  &&  s.canDie ();
+        if (refcount)
+        {
+            result.append (pad2 + "int refcount;\n");
+        }
         for (Variable v : localMembers)
         {
             result.append (pad2 + "float " + mangle (v) + ";\n");
@@ -604,7 +623,7 @@ public class SimulationC implements Simulation
         result.append ("\n");
 
         // Unit ctor
-        if (localStackDerivative.size () > 0  ||  localIntegrated.size () > 0  ||  ! s.parts.isEmpty ()  ||  s.accountableConnections != null)
+        if (localStackDerivative.size () > 0  ||  localIntegrated.size () > 0  ||  ! s.parts.isEmpty ()  ||  s.accountableConnections != null  ||  refcount)
         {
             result.append (pad2 + mangle (s.name) + " ()\n");
             result.append (pad2 + "{\n");
@@ -626,6 +645,10 @@ public class SimulationC implements Simulation
                 {
                     result.append (pad3 + prefix (s.container, e, "_") + "_count = 0;\n");
                 }
+            }
+            if (refcount)
+            {
+                result.append (pad3 + "refcount = 0;\n");
             }
             for (Variable v : localMembers)
             {
@@ -697,6 +720,19 @@ public class SimulationC implements Simulation
         }
 
         // Unit enqueue
+        if (localReference.size () > 0)
+        {
+            result.append (pad2 + "virtual void enqueue ()\n");
+            result.append (pad2 + "{\n");
+            TreeSet<String> touched = new TreeSet<String> ();  // String rather than EquationSet, because we may have references to several different instances of the same EquationSet, and all must be accounted
+            for (VariableReference r : localReference)
+            {
+                String container = resolveContainer (r, context, "");
+                if (touched.add (container)) result.append (pad3 + container + "refcount++;\n");
+            }
+            result.append (pad2 + "}\n");
+            result.append ("\n");
+        }
 
         // Unit dequeue
         {
@@ -705,11 +741,25 @@ public class SimulationC implements Simulation
             String container = "container->";
             if (pathToContainer != null) container = mangle (pathToContainer) + "->" + container;
             result.append (pad3 + container + mangle (s.name) + "_Population_Instance.remove (this);\n");
+            TreeSet<String> touched = new TreeSet<String> ();
+            for (VariableReference r : localReference)
+            {
+                container = resolveContainer (r, context, "");
+                if (touched.add (container)) result.append (pad3 + container + "refcount--;\n");
+            }
             result.append (pad2 + "}\n");
             result.append ("\n");
         }
 
         // Unit isFree
+        if (refcount)
+        {
+            result.append (pad2 + "virtual bool isFree ()\n");
+            result.append (pad2 + "{\n");
+            result.append (pad3 + "return refcount == 0;\n");
+            result.append (pad2 + "}\n");
+            result.append ("\n");
+        }
 
         // Unit init
         if (s.connectionBindings == null  ||  localInit.size () > 0  ||  s.parts.size () > 0)
@@ -2172,6 +2222,7 @@ public class SimulationC implements Simulation
         while (t != p)
         {
             t = t.container;
+            if (t == null) break;
             result = mangle (t.name) + separator + result;
         }
         return result;
@@ -2207,7 +2258,44 @@ public class SimulationC implements Simulation
             return "0";
         }
 
-        // Compute series of pointers to get to v.reference
+        String containers = resolveContainer (r, context, base);
+        String name = "";
+        if (r.variable.hasAttribute ("simulator"))
+        {
+            // We can't read $t or $dt from another object's simulator, unless is exactly the same as ours, in which case there is no point.
+            // We can't directly write $dt of another object.
+            // TODO: Need a way to tell another part to immediately accelerate
+            if (containers.length () > 0) return "unresolved";
+            if (! lvalue) return "simulator." + r.variable.name.substring (1);  // strip the $ and expect it to be a member of simulator, which must be passed into the current function
+            // if lvalue, then fall through to the main case below 
+        }
+        if (r.variable.hasAttribute ("accessor"))
+        {
+            if (lvalue) return "unresolved";
+
+            if (r.variable.name.equals ("$live")) name = "getLive ()";
+            else return "unresolved";
+        }
+        if (name.length () == 0)
+        {
+            if (lvalue  &&  r.variable.hasAny (new String[] {"cycle", "externalRead", "externalWrite"}))
+            {
+                name = mangle ("next_", r.variable);
+            }
+            else
+            {
+                name = mangle (r.variable);
+            }
+        }
+        return containers + name;
+    }
+
+    /**
+        Computer a series of pointers to get from current part to r.
+        Result does not include the variable name itself.
+    **/
+    public String resolveContainer (VariableReference r, CRenderingContext context, String base)
+    {
         String containers = base;
         EquationSet current = context.part;
         Iterator<Object> it = r.resolution.iterator ();
@@ -2224,17 +2312,11 @@ public class SimulationC implements Simulation
                         // No need to cast the population instance, because it is explicitly typed
                         containers += mangle (s.name) + "_Population_Instance.";
                     }
-                    else  // descend to an instance of the population
+                    else  // descend to an instance of the population.
                     {
-                        // similar to prefix(), but goes all the way up containment hierarchy
-                        String typeName = mangle (s.name);
-                        EquationSet p = s.container;
-                        while (p != null)
-                        {
-                            typeName = mangle (p.name) + "::" + typeName;
-                            p = p.container;
-                        }
-
+                        // Note: we can only descend a chain of singletons, as indexing is now removed from the N2A langauge.
+                        // This restriction does not apply to connections, as they have direct pointers to their targets.
+                        String typeName = prefix (null, s);  // fully qualified
                         // cast PopulationCompartment.live->after, because it is declared in runtime.h as simply a Compartment,
                         // but we need it to be the specific type of compartment we have generated.
                         containers = "((" + typeName + " *) " + containers + mangle (s.name) + "_Population_Instance.live->after)->";
@@ -2268,35 +2350,7 @@ public class SimulationC implements Simulation
             containers += "container->" + mangle (current.name) + "_Population_Instance.";
         }
 
-        String name = "";
-        if (r.variable.hasAttribute ("simulator"))
-        {
-            // We can't read $t or $dt from another object's simulator, unless is exactly the same as ours, in which case there is no point.
-            // We can't directly write $dt of another object.
-            // TODO: Need a way to tell another part to immediately accelerate
-            if (containers.length () > 0) return "unresolved";
-            if (! lvalue) return "simulator." + r.variable.name.substring (1);  // strip the $ and expect it to be a member of simulator, which must be passed into the current function
-            // if lvalue, then fall through to the main case below 
-        }
-        if (r.variable.hasAttribute ("accessor"))
-        {
-            if (lvalue) return "unresolved";
-
-            if (r.variable.name.equals ("$live")) name = "getLive ()";
-            else return "unresolved";
-        }
-        if (name.length () == 0)
-        {
-            if (lvalue  &&  r.variable.hasAny (new String[] {"cycle", "externalRead", "externalWrite"}))
-            {
-                name = mangle ("next_", r.variable);
-            }
-            else
-            {
-                name = mangle (r.variable);
-            }
-        }
-        return containers + name;
+        return containers;
     }
 
     public void findPathToContainer (EquationSet s)
@@ -2306,14 +2360,14 @@ public class SimulationC implements Simulation
             findPathToContainer (p);
         }
 
-        s.backendData = null;
         if (s.connectionBindings != null  &&  s.lethalContainer)  // and therefore needs to check its container
         {
             for (Entry<String, EquationSet> c : s.connectionBindings.entrySet ())
             {
                 if (c.getValue ().container == s.container)
                 {
-                    s.backendData = c.getKey ();
+                    if (! (s.backendData instanceof BackendData)) s.backendData = new BackendData ();
+                    ((BackendData) s.backendData).pathToContainer = c.getKey ();
                     break;
                 }
             }
@@ -2362,6 +2416,72 @@ public class SimulationC implements Simulation
                 else                             v.addAttribute ("externalRead");
             }
         }
+    }
+
+    public void findReferences (EquationSet s)
+    {
+        for (EquationSet p : s.parts)
+        {
+            findReferences (p);
+        }
+
+        if (s.lethalConnection  ||  s.lethalContainer)
+        {
+            LinkedList<Object>        resolution     = new LinkedList<Object> ();
+            NavigableSet<EquationSet> touched        = new TreeSet<EquationSet> ();
+            List<VariableReference>   liveReferences = new ArrayList<VariableReference> ();
+            findReferences (s, resolution, touched, liveReferences, false);
+            if (! (s.backendData instanceof BackendData)) s.backendData = new BackendData ();
+            ((BackendData) s.backendData).liveReferences = liveReferences;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public void findReferences (EquationSet s, LinkedList<Object> resolution, NavigableSet<EquationSet> touched, List<VariableReference> liveReferences, boolean terminate)
+    {
+        if (terminate)
+        {
+            Variable live = s.find (new Variable ("$live"));
+            if (live == null  ||  live.hasAttribute ("constant")) return;
+            if (live.hasAttribute ("initOnly"))
+            {
+                if (touched.add (s))
+                {
+                    VariableReference result = new VariableReference ();
+                    result.variable = live;
+                    result.resolution = (LinkedList<Object>) resolution.clone ();
+                    liveReferences.add (result);
+                    s.referenced = true;
+                }
+                return;
+            }
+            // The third possibility is "accessor", in which case we fall through ...
+        }
+
+        // Recurse up to container
+        if (s.lethalContainer)
+        {
+            resolution.add (s.container);
+            findReferences (s.container, resolution, touched, liveReferences, true);
+            resolution.removeLast ();
+        }
+
+        // Recurse into connections
+        if (s.lethalConnection)
+        {
+            for (Entry<String, EquationSet> e : s.connectionBindings.entrySet ())
+            {
+                resolution.add (e);
+                findReferences (e.getValue (), resolution, touched, liveReferences, true);
+                resolution.removeLast ();
+            }
+        }
+    }
+
+    public class BackendData
+    {
+        public String pathToContainer;
+        public List<VariableReference> liveReferences;  ///< references to all $live values that can kill us
     }
 
     class CRenderingContext extends ASTRenderingContext

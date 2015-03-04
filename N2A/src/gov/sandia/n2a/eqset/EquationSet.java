@@ -23,8 +23,6 @@ import gov.sandia.n2a.parsing.gen.ASTOpNode;
 import gov.sandia.n2a.parsing.gen.ASTRenderingContext;
 import gov.sandia.n2a.parsing.gen.ASTTransformationContext;
 import gov.sandia.n2a.parsing.gen.ASTVarNode;
-import gov.sandia.n2a.parsing.gen.ExpressionParser;
-import gov.sandia.n2a.parsing.gen.ParseException;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
@@ -56,16 +54,17 @@ public class EquationSet implements Comparable<EquationSet>
     public NavigableSet<EquationSet>         parts;
     public NavigableMap<String, EquationSet> connectionBindings;     // non-null iff this is a connection
     public boolean                           connected;
-    public NavigableSet<EquationSet>         accountableConnections; // Connections which declare a $min or $max w.r.t. this part. Note: the member variable "connected" is a less constrained form of this information.
+    public NavigableSet<EquationSet>         accountableConnections; // Connections which declare a $min or $max w.r.t. this part. Note: connected can be true even if accountableConnections is null.
     /** @deprecated Better to refer metadata requests to source. Part/NDoc should implement a getNamedValue() function that refers requests up the inheritance chain. **/
     public Map<String, String>               metadata;
     public List<Variable>                    ordered;
     public List<ArrayList<EquationSet>>      splits;                 // Enumeration of the $type splits this part can go through
-    public boolean                           lethalN;
-    public boolean                           lethalP;
-    public boolean                           lethalType;
-    public boolean                           lethalConnection;
-    public boolean                           lethalContainer;
+    public boolean                           lethalN;                // our population could shrink
+    public boolean                           lethalP;                // we could have a non-zero probability of dying in some cycle 
+    public boolean                           lethalType;             // we can be killed by a part split
+    public boolean                           lethalConnection;       // indicate we are a connection, and one of the parts we connect can die
+    public boolean                           lethalContainer;        // our parent could die
+    public boolean                           referenced;             // Some other equation set writes to one of our variables. If we can die, then exercise care not to reuse this part while other parts are still writing to it. Otherwise our reincarnated part might get written with values from our previous life.
     public Object                            backendData;            // holder for extra data associated with each equation set by a given backend
 
     public EquationSet (String name)
@@ -499,6 +498,7 @@ public class EquationSet implements Comparable<EquationSet>
                 v.addAttribute ("reference");
                 v.reference.variable.addAttribute ("externalWrite");
                 v.reference.variable.addDependency (v);  // v.reference.variable receives an external write from v, and therefore depends on it
+                v.reference.variable.container.referenced = true;
                 for (EquationEntry e : v.reference.variable.equations)  // because the equations of v.reference.variable must share its storage with us, they must respect unknown ordering and not simply write the value
                 {
                     e.assignment = "+=";
@@ -1113,7 +1113,7 @@ public class EquationSet implements Comparable<EquationSet>
         </ul>
         Each of these may call for different processing in the simulator, so various
         flags are set on each equation set to indicate the causes.
-        Depends on results of: addSpecials(), findConstants(), collectSplits()
+        Depends on results of: addSpecials(), findConstants(), collectSplits(), findInitOnly()
     **/
     public void findDeath ()
     {
@@ -1191,6 +1191,8 @@ public class EquationSet implements Comparable<EquationSet>
         {
             lethalContainer = true;
             somethingChanged = true;
+            Variable live = container.find (new Variable ("$live"));
+            if (live != null) live.hasUsers = true;
         }
 
         if (connectionBindings != null)
@@ -1687,8 +1689,7 @@ public class EquationSet implements Comparable<EquationSet>
     **/
     public void findInitOnly ()
     {
-        boolean changed = true;
-        while (changed) changed = findInitOnlyRecursive ();
+        while (findInitOnlyRecursive ()) {}
     }
 
     public boolean findInitOnlyRecursive ()
