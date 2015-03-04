@@ -378,8 +378,8 @@ PopulationConnection::connect (Simulator & simulator)
     if (A->old == A->live.after  &&  B->old == B->live.after) return;  // Only proceed if there are some new parts. Later, we might consider periodic scanning among old parts.
 
     // Prepare nearest neighbor search structures on B
-    float radius = getRadius ();
-    int   k      = getK ();
+    float radius = getRadius (1);
+    int   k      = getK (1);
     KDTreeEntry * entries = 0;
     vector<MatrixAbstract<float> *> entryPointers;
     KDTree NN;
@@ -577,7 +577,7 @@ PopulationConnection::connect (Simulator & simulator)
 }
 
 int
-PopulationConnection::getK ()
+PopulationConnection::getK (int i)
 {
     return 0;
 }
@@ -595,7 +595,7 @@ PopulationConnection::getMin (int i)
 }
 
 float
-PopulationConnection::getRadius ()
+PopulationConnection::getRadius (int i)
 {
     return 0;
 }

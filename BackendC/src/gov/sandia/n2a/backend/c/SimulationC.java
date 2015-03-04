@@ -1929,18 +1929,37 @@ public class SimulationC implements Simulation
         // Population getK
         if (s.connectionBindings != null)
         {
-            Variable v = s.find (new Variable ("$k"));
-            if (v != null)
+            boolean needK = false;
+            for (Entry<String, EquationSet> n : s.connectionBindings.entrySet ())
             {
-                EquationEntry e = v.equations.first ();
+                Variable v = s.find (new Variable (n.getKey () + ".$k"));
+                EquationEntry e = null;
+                if (v != null) e = v.equations.first ();
                 if (e != null)
                 {
-                    result.append (pad2 + "virtual int getK ()\n");
-                    result.append (pad2 + "{\n");
-                    result.append (pad3 + "return " + context.render (e.expression) + ";\n");
-                    result.append (pad2 + "}\n");
-                    result.append ("\n");
+                    needK = true;
+                    break;
                 }
+            }
+            if (needK)
+            {
+                result.append (pad2 + "virtual int getK (int i)\n");
+                result.append (pad2 + "{\n");
+                result.append (pad3 + "switch (i)\n");
+                result.append (pad3 + "{\n");
+                int i = 0;
+                for (Entry<String, EquationSet> n : s.connectionBindings.entrySet ())
+                {
+                    Variable v = s.find (new Variable (n.getKey () + ".$k"));
+                    EquationEntry e = null;
+                    if (v != null) e = v.equations.first ();
+                    if (e != null) result.append (pad4 + "case " + i + ": return " + context.render (e.expression) + ";\n");
+                    i++;
+                }
+                result.append (pad3 + "}\n");
+                result.append (pad3 + "return 0;\n");
+                result.append (pad2 + "}\n");
+                result.append ("\n");
             }
         }
 
@@ -2021,18 +2040,37 @@ public class SimulationC implements Simulation
         // Population getRadius
         if (s.connectionBindings != null)
         {
-            Variable v = s.find (new Variable ("$radius"));
-            if (v != null)
+            boolean needRadius = false;
+            for (Entry<String, EquationSet> n : s.connectionBindings.entrySet ())
             {
-                EquationEntry e = v.equations.first ();
+                Variable v = s.find (new Variable (n.getKey () + ".$radius"));
+                EquationEntry e = null;
+                if (v != null) e = v.equations.first ();
                 if (e != null)
                 {
-                    result.append (pad2 + "virtual int getRadius ()\n");
-                    result.append (pad2 + "{\n");
-                    result.append (pad3 + "return " + context.render (e.expression) + ";\n");
-                    result.append (pad2 + "}\n");
-                    result.append ("\n");
+                    needRadius = true;
+                    break;
                 }
+            }
+            if (needRadius)
+            {
+                result.append (pad2 + "virtual int getRadius (int i)\n");
+                result.append (pad2 + "{\n");
+                result.append (pad3 + "switch (i)\n");
+                result.append (pad3 + "{\n");
+                int i = 0;
+                for (Entry<String, EquationSet> n : s.connectionBindings.entrySet ())
+                {
+                    Variable v = s.find (new Variable (n.getKey () + ".$radius"));
+                    EquationEntry e = null;
+                    if (v != null) e = v.equations.first ();
+                    if (e != null) result.append (pad4 + "case " + i + ": return " + context.render (e.expression) + ";\n");
+                    i++;
+                }
+                result.append (pad3 + "}\n");
+                result.append (pad3 + "return 0;\n");
+                result.append (pad2 + "}\n");
+                result.append ("\n");
             }
         }
 

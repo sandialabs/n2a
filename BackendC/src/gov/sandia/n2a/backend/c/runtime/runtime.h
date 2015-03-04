@@ -192,13 +192,13 @@ public:
 class PopulationConnection : public Population
 {
 public:
-    virtual Population * getTarget (int i);                 ///< @return The end-point of a connection. These are ordered by $from, with indices starting at 0. An index that goes beyond the set of end-points returns a null pointer.
+    virtual Population * getTarget (int i);                 ///< @return The end-point of a connection. Index starts at 0. An index out of range returns a null pointer.
     virtual void         connect   (Simulator & simulator); ///< For a connection population, evaluate each possible connection (or some well-defined subset thereof).
 
-    virtual int   getK      ();
+    virtual int   getK      (int i);
     virtual int   getMax    (int i);
     virtual int   getMin    (int i);
-    virtual float getRadius ();
+    virtual float getRadius (int i);
 };
 
 /**

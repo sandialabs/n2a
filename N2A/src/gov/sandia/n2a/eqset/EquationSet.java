@@ -899,7 +899,7 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 continue;
             }
-            if (v.name.startsWith ("$")  &&  v.equations.size () > 0)  // even if a $variable has no direct users, we must respect any statements about it
+            if (v.equations.size () > 0  &&  (v.name.startsWith ("$")  ||  v.name.contains (".$")))  // even if a $variable has no direct users, we must respect any statements about it
             {
                 continue;
             }
@@ -1300,14 +1300,18 @@ public class EquationSet implements Comparable<EquationSet>
         }
         for (Variable v : variables)
         {
-            String name = v.name;
+            String vname = v.name;
             if (withOrder)
             {
-                name = v.nameString ();
+                vname = v.nameString ();
             }
-            if (names.contains (name))
+            for (String n : names)
             {
-                v.addAttribute (attribute);
+                if (n.equals (vname)  ||  vname.endsWith ("." + n))
+                {
+                    v.addAttribute (attribute);
+                    break;
+                }
             }
         }
     }
