@@ -173,12 +173,12 @@ Part::die ()
 }
 
 void
-Part::enqueue ()
+Part::enterSimulation ()
 {
 }
 
 void
-Part::dequeue ()
+Part::leaveSimulation ()
 {
 }
 
@@ -662,7 +662,7 @@ Simulator::~Simulator ()
     {
         Part * old = queue;
         queue = queue->next;
-        old->dequeue ();
+        old->leaveSimulation ();
     }
 }
 
@@ -706,7 +706,7 @@ Simulator::run ()
             {
                 Part * old = *p;
                 *p = (*p)->next;  // note that value of p itself remains unchanged, but its referent points to another part.
-                old->dequeue ();
+                old->leaveSimulation ();
             }
         }
 
@@ -730,7 +730,7 @@ Simulator::enqueue (Part * part)
 {
     part->next = queue;
     queue = part;
-    part->enqueue ();
+    part->enterSimulation ();
 }
 
 void

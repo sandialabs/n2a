@@ -105,10 +105,10 @@ class Part : public Simulatable
 {
 public:
     // Lifespan management
-    virtual void die     (); ///< Set $live=0 (in some form) and decrement $n of our population. If a connection with $min or $max, decrement connection counts in respective target compartments.
-    virtual void enqueue (); ///< Tells us we are going onto the simulator queue. Increment refcount on parts we directly access.
-    virtual void dequeue (); ///< Tells us we are leaving the simulator queue. Ask our population to put us on its dead list. Reduce refcount on parts we directly access, to indicate that they may be re-used.
-    virtual bool isFree  (); ///< @return true if the part is ready to use, false if the we are still waiting on other parts that reference us.
+    virtual void die             (); ///< Set $live=0 (in some form) and decrement $n of our population. If a connection with $min or $max, decrement connection counts in respective target compartments.
+    virtual void enterSimulation (); ///< Tells us we are going onto the simulator queue. Increment refcount on parts we directly access.
+    virtual void leaveSimulation (); ///< Tells us we are leaving the simulator queue. Ask our population to put us on its dead list. Reduce refcount on parts we directly access, to indicate that they may be re-used.
+    virtual bool isFree          (); ///< @return true if the part is ready to use, false if the we are still waiting on other parts that reference us.
 
     // Accessors for $variables
     virtual float getLive (); ///< @return 1 if we are in normal simulation. 0 if we have died. Default is 1.

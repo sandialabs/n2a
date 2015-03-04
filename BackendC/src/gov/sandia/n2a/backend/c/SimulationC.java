@@ -719,10 +719,10 @@ public class SimulationC implements Simulation
             result.append ("\n");
         }
 
-        // Unit enqueue
+        // Unit enterSimulation
         if (localReference.size () > 0)
         {
-            result.append (pad2 + "virtual void enqueue ()\n");
+            result.append (pad2 + "virtual void enterSimulation ()\n");
             result.append (pad2 + "{\n");
             TreeSet<String> touched = new TreeSet<String> ();  // String rather than EquationSet, because we may have references to several different instances of the same EquationSet, and all must be accounted
             for (VariableReference r : localReference)
@@ -734,9 +734,9 @@ public class SimulationC implements Simulation
             result.append ("\n");
         }
 
-        // Unit dequeue
+        // Unit leaveSimulation
         {
-            result.append (pad2 + "virtual void dequeue ()\n");
+            result.append (pad2 + "virtual void leaveSimulation ()\n");
             result.append (pad2 + "{\n");
             String container = "container->";
             if (pathToContainer != null) container = mangle (pathToContainer) + "->" + container;
