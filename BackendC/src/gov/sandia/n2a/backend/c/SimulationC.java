@@ -485,6 +485,20 @@ public class SimulationC implements Simulation
             if (bed.liveReferences != null) localReference.addAll (bed.liveReferences);
         }
 
+        List<String> accountableEndpoints = new ArrayList<String> ();
+        if (s.connectionBindings != null)
+        {
+            for (Entry<String, EquationSet> n : s.connectionBindings.entrySet ())
+            {
+                String alias = n.getKey ();
+                Variable       v = s.find (new Variable (alias + ".$max"));
+                if (v == null) v = s.find (new Variable (alias + ".$min"));
+                if (v != null) accountableEndpoints.add (alias);
+            }
+        }
+
+        boolean refcount = s.referenced  &&  s.canDie ();
+
         // Unit conversions
         Set<ArrayList<EquationSet>> conversions = s.getConversions ();
         for (ArrayList<EquationSet> pair : conversions)
@@ -602,12 +616,11 @@ public class SimulationC implements Simulation
         }
         if (s.accountableConnections != null)
         {
-            for (EquationSet e : s.accountableConnections)
+            for (EquationSet.AccountableConnection ac : s.accountableConnections)
             {
-                result.append (pad2 + "int " + prefix (s.container, e, "_") + "_count;\n");
+                result.append (pad2 + "int " + prefix (null, ac.connection, "_") + "_" + mangle (ac.alias) + "_count;\n");
             }
         }
-        boolean refcount = s.referenced  &&  s.canDie ();
         if (refcount)
         {
             result.append (pad2 + "int refcount;\n");
@@ -641,9 +654,9 @@ public class SimulationC implements Simulation
             }
             if (s.accountableConnections != null)
             {
-                for (EquationSet e : s.accountableConnections)
+                for (EquationSet.AccountableConnection ac : s.accountableConnections)
                 {
-                    result.append (pad3 + prefix (s.container, e, "_") + "_count = 0;\n");
+                    result.append (pad3 + "int " + prefix (null, ac.connection, "_") + "_" + mangle (ac.alias) + "_count = 0;\n");
                 }
             }
             if (refcount)
@@ -715,6 +728,11 @@ public class SimulationC implements Simulation
             Variable n = s.find (new Variable ("$n"));
             if (n != null) result.append (pad3 + resolve (n.reference, context, false) + "--;\n");  // $n must be an rvalue to avoid getting "next" prefix
 
+            for (String alias : accountableEndpoints)
+            {
+                result.append (pad3 + mangle (alias) + "->" + prefix (null, s, "_") + "_" + mangle (alias) + "_count--;\n");
+            }
+
             result.append (pad2 + "}\n");
             result.append ("\n");
         }
@@ -762,7 +780,7 @@ public class SimulationC implements Simulation
         }
 
         // Unit init
-        if (s.connectionBindings == null  ||  localInit.size () > 0  ||  s.parts.size () > 0)
+        if (s.connectionBindings == null  ||  localInit.size () > 0  ||  s.parts.size () > 0  ||  accountableEndpoints.size () > 0)
         {
             result.append (pad2 + "virtual void init (Simulator & simulator)\n");
             result.append (pad2 + "{\n");
@@ -812,6 +830,11 @@ public class SimulationC implements Simulation
             // instance counting
             Variable n = s.find (new Variable ("$n"));
             if (n != null) result.append (pad3 + resolve (n.reference, context, false) + "++;\n");
+
+            for (String alias : accountableEndpoints)
+            {
+                result.append (pad3 + mangle (alias) + "->" + prefix (null, s, "_") + "_" + mangle (alias) + "_count++;\n");
+            }
 
             // contained populations
             for (EquationSet e : s.parts)
@@ -1482,6 +1505,29 @@ public class SimulationC implements Simulation
                 result.append (pad2 + "}\n");
                 result.append ("\n");
             }
+        }
+
+        // Unit getCount
+        if (accountableEndpoints.size () > 0)
+        {
+            result.append (pad2 + "virtual int getCount (int i)\n");
+            result.append (pad2 + "{\n");
+            result.append (pad3 + "switch (i)\n");
+            result.append (pad3 + "{\n");
+            int i = 0;
+            for (Entry<String, EquationSet> n : s.connectionBindings.entrySet ())
+            {
+                String alias = n.getKey ();
+                if (accountableEndpoints.contains (alias))
+                {
+                    result.append (pad4 + "case " + i + ": return " + mangle (alias) + "->" + prefix (null, s, "_") + "_" + mangle (alias) + "_count;\n");
+                }
+                i++;
+            }
+            result.append (pad3 + "}\n");
+            result.append (pad3 + "return 0;\n");
+            result.append (pad2 + "}\n");
+            result.append ("\n");
         }
 
         // Unit setPart
@@ -2313,6 +2359,12 @@ public class SimulationC implements Simulation
 
             if (r.variable.name.equals ("$live")) name = "getLive ()";
             else return "unresolved";
+        }
+        if (r.variable.name.endsWith (".$count"))
+        {
+            if (lvalue) return "unresolved";
+            String alias = r.variable.name.substring (0, r.variable.name.lastIndexOf ("."));
+            name = mangle (alias) + "->" + prefix (null, r.variable.container, "_") + "_" + mangle (alias) + "_count";
         }
         if (name.length () == 0)
         {

@@ -47,25 +47,42 @@ import javax.swing.ImageIcon;
 
 public class EquationSet implements Comparable<EquationSet>
 {
-    public NDoc                              source;
-    public String                            name;
-    public EquationSet                       container;
-    public NavigableSet<Variable>            variables;
-    public NavigableSet<EquationSet>         parts;
-    public NavigableMap<String, EquationSet> connectionBindings;     // non-null iff this is a connection
-    public boolean                           connected;
-    public NavigableSet<EquationSet>         accountableConnections; // Connections which declare a $min or $max w.r.t. this part. Note: connected can be true even if accountableConnections is null.
+    public NDoc                                source;
+    public String                              name;
+    public EquationSet                         container;
+    public NavigableSet<Variable>              variables;
+    public NavigableSet<EquationSet>           parts;
+    public NavigableMap<String, EquationSet>   connectionBindings;     // non-null iff this is a connection
+    public boolean                             connected;
+    public NavigableSet<AccountableConnection> accountableConnections; // Connections which declare a $min or $max w.r.t. this part. Note: connected can be true even if accountableConnections is null.
     /** @deprecated Better to refer metadata requests to source. Part/NDoc should implement a getNamedValue() function that refers requests up the inheritance chain. **/
-    public Map<String, String>               metadata;
-    public List<Variable>                    ordered;
-    public List<ArrayList<EquationSet>>      splits;                 // Enumeration of the $type splits this part can go through
-    public boolean                           lethalN;                // our population could shrink
-    public boolean                           lethalP;                // we could have a non-zero probability of dying in some cycle 
-    public boolean                           lethalType;             // we can be killed by a part split
-    public boolean                           lethalConnection;       // indicate we are a connection, and one of the parts we connect can die
-    public boolean                           lethalContainer;        // our parent could die
-    public boolean                           referenced;             // Some other equation set writes to one of our variables. If we can die, then exercise care not to reuse this part while other parts are still writing to it. Otherwise our reincarnated part might get written with values from our previous life.
-    public Object                            backendData;            // holder for extra data associated with each equation set by a given backend
+    public Map<String, String>                 metadata;
+    public List<Variable>                      ordered;
+    public List<ArrayList<EquationSet>>        splits;                 // Enumeration of the $type splits this part can go through
+    public boolean                             lethalN;                // our population could shrink
+    public boolean                             lethalP;                // we could have a non-zero probability of dying in some cycle 
+    public boolean                             lethalType;             // we can be killed by a part split
+    public boolean                             lethalConnection;       // indicate we are a connection, and one of the parts we connect can die
+    public boolean                             lethalContainer;        // our parent could die
+    public boolean                             referenced;             // Some other equation set writes to one of our variables. If we can die, then exercise care not to reuse this part while other parts are still writing to it. Otherwise our reincarnated part might get written with values from our previous life.
+    public Object                              backendData;            // holder for extra data associated with each equation set by a given backend
+
+    public class AccountableConnection implements Comparable<AccountableConnection>
+    {
+        public EquationSet connection; // the connection, that is, the thing being accounted (the endpoint is the thing doing the accounting)
+        public String      alias;      // name within the connection that refers to the endpoint
+        public AccountableConnection (EquationSet connection, String alias)
+        {
+            this.connection = connection;
+            this.alias      = alias;
+        }
+        public int compareTo (AccountableConnection that)
+        {
+            int result = connection.compareTo (that.connection);
+            if (result != 0) return result;
+            return alias.compareTo (that.alias);
+        }
+    }
 
     public EquationSet (String name)
     {
@@ -1743,7 +1760,6 @@ public class EquationSet implements Comparable<EquationSet>
 
     /**
         Provide each part with a list of connections which access it and which define a $min or $max on the number of connections.
-        Depends on results of: findConstants()
     **/
     public void findAccountableConnections ()
     {
@@ -1755,12 +1771,13 @@ public class EquationSet implements Comparable<EquationSet>
         if (connectionBindings == null) return;
         for (Entry<String, EquationSet> c : connectionBindings.entrySet ())
         {
-            Variable max = find (new Variable (c.getKey () + ".$max"));
-            Variable min = find (new Variable (c.getKey () + ".$min"));
+            String alias = c.getKey ();
+            Variable max = find (new Variable (alias + ".$max"));
+            Variable min = find (new Variable (alias + ".$min"));
             if (max == null  &&  min == null) continue;
-            EquationSet s = c.getValue ();
-            if (s.accountableConnections == null) s.accountableConnections = new TreeSet<EquationSet> ();
-            s.accountableConnections.add (this);
+            EquationSet endpoint = c.getValue ();
+            if (endpoint.accountableConnections == null) endpoint.accountableConnections = new TreeSet<AccountableConnection> ();
+            endpoint.accountableConnections.add (new AccountableConnection (this, alias));
         }
     }
 
