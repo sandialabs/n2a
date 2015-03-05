@@ -7,8 +7,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.data;
 
-import gov.sandia.n2a.parsing.Annotation;
-import gov.sandia.n2a.parsing.ParsedEquation;
+import gov.sandia.n2a.language.Annotation;
+import gov.sandia.n2a.language.ParsedEquation;
 
 public class ParamUtil {
 

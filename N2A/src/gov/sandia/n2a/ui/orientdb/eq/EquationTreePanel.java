@@ -7,9 +7,9 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.orientdb.eq;
 
-import gov.sandia.n2a.parsing.EquationParser;
-import gov.sandia.n2a.parsing.ParsedEquation;
-import gov.sandia.n2a.parsing.gen.ParseException;
+import gov.sandia.n2a.language.EquationParser;
+import gov.sandia.n2a.language.ParsedEquation;
+import gov.sandia.n2a.language.gen.ParseException;
 import gov.sandia.n2a.ui.orientdb.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.orientdb.eq.tree.NodeEqReference;
 import gov.sandia.n2a.ui.orientdb.eq.tree.NodeEquation;

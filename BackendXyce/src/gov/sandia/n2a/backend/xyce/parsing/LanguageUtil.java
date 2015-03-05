@@ -11,8 +11,8 @@ import gov.sandia.n2a.eq.N2ALanguageException;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.parsing.Annotation;
-import gov.sandia.n2a.parsing.gen.ASTNodeBase;
+import gov.sandia.n2a.language.Annotation;
+import gov.sandia.n2a.language.gen.ASTNodeBase;
 
 import java.util.List;
 import java.util.NavigableSet;

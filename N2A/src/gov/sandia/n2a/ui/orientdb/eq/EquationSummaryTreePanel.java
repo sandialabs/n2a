@@ -9,8 +9,8 @@ package gov.sandia.n2a.ui.orientdb.eq;
 
 import gov.sandia.n2a.eqset.EquationAssembler;
 import gov.sandia.n2a.eqset.PartEquationMap;
-import gov.sandia.n2a.parsing.Annotation;
-import gov.sandia.n2a.parsing.ParsedEquation;
+import gov.sandia.n2a.language.Annotation;
+import gov.sandia.n2a.language.ParsedEquation;
 import gov.sandia.n2a.ui.orientdb.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.orientdb.eq.tree.NodeEquation;
 import gov.sandia.n2a.ui.orientdb.eq.tree.NodeIncluded;

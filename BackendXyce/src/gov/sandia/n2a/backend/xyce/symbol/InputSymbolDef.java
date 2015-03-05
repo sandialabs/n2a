@@ -10,7 +10,7 @@ package gov.sandia.n2a.backend.xyce.symbol;
 import gov.sandia.n2a.backend.xyce.Xyceisms;
 import gov.sandia.n2a.backend.xyce.network.PartSetInterface;
 import gov.sandia.n2a.eqset.EquationEntry;
-import gov.sandia.n2a.parsing.gen.ASTFunNode;
+import gov.sandia.n2a.language.gen.ASTFunNode;
 
 public abstract class InputSymbolDef extends DefaultSymbolDef
 {

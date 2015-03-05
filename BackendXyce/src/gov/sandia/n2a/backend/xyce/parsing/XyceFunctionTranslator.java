@@ -7,9 +7,9 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.xyce.parsing;
 
-import gov.sandia.n2a.parsing.gen.ASTNodeBase;
-import gov.sandia.n2a.parsing.gen.ASTNodeRenderer;
-import gov.sandia.n2a.parsing.gen.ASTRenderingContext;
+import gov.sandia.n2a.language.gen.ASTNodeBase;
+import gov.sandia.n2a.language.gen.ASTNodeRenderer;
+import gov.sandia.n2a.language.gen.ASTRenderingContext;
 
 public class XyceFunctionTranslator implements ASTNodeRenderer
 {

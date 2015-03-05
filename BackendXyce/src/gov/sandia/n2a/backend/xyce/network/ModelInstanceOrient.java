@@ -11,8 +11,8 @@ import gov.sandia.n2a.backend.xyce.XyceTranslationException;
 import gov.sandia.n2a.data.Model;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
-import gov.sandia.n2a.parsing.ParsedEquation;
-import gov.sandia.n2a.parsing.gen.ParseException;
+import gov.sandia.n2a.language.ParsedEquation;
+import gov.sandia.n2a.language.gen.ParseException;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 
 import java.util.ArrayList;

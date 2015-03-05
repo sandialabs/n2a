@@ -9,7 +9,7 @@ package gov.sandia.n2a.ui.orientdb.partadv;
 
 import gov.sandia.n2a.eqset.EquationAssembler;
 import gov.sandia.n2a.eqset.PartEquationMap;
-import gov.sandia.n2a.parsing.ParsedEquation;
+import gov.sandia.n2a.language.ParsedEquation;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 
 import java.util.ArrayList;

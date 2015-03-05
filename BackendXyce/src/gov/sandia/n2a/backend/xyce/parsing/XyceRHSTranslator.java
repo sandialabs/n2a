@@ -16,9 +16,9 @@ import gov.sandia.n2a.backend.xyce.symbol.FunctionSymbolDef;
 import gov.sandia.n2a.backend.xyce.symbol.SymbolDef;
 import gov.sandia.n2a.backend.xyce.symbol.SymbolManager;
 import gov.sandia.n2a.eq.EquationLanguageConstants;
-import gov.sandia.n2a.parsing.gen.ASTNodeBase;
-import gov.sandia.n2a.parsing.gen.ASTNodeRenderer;
-import gov.sandia.n2a.parsing.gen.ASTRenderingContext;
+import gov.sandia.n2a.language.gen.ASTNodeBase;
+import gov.sandia.n2a.language.gen.ASTNodeRenderer;
+import gov.sandia.n2a.language.gen.ASTRenderingContext;
 
 import java.util.ArrayList;
 import java.util.Collection;

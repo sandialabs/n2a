@@ -7,15 +7,15 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.eqset;
 
-import gov.sandia.n2a.parsing.Annotation;
-import gov.sandia.n2a.parsing.EquationParser;
-import gov.sandia.n2a.parsing.ParsedEquation;
-import gov.sandia.n2a.parsing.SpecialVariables;
-import gov.sandia.n2a.parsing.gen.ASTNodeBase;
-import gov.sandia.n2a.parsing.gen.ASTNodeRenderer;
-import gov.sandia.n2a.parsing.gen.ASTRenderingContext;
-import gov.sandia.n2a.parsing.gen.ASTVarNode;
-import gov.sandia.n2a.parsing.gen.ParseException;
+import gov.sandia.n2a.language.Annotation;
+import gov.sandia.n2a.language.EquationParser;
+import gov.sandia.n2a.language.ParsedEquation;
+import gov.sandia.n2a.language.SpecialVariables;
+import gov.sandia.n2a.language.gen.ASTNodeBase;
+import gov.sandia.n2a.language.gen.ASTNodeRenderer;
+import gov.sandia.n2a.language.gen.ASTRenderingContext;
+import gov.sandia.n2a.language.gen.ASTVarNode;
+import gov.sandia.n2a.language.gen.ParseException;
 import gov.sandia.umf.platform.UMF;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.util.NDocList;

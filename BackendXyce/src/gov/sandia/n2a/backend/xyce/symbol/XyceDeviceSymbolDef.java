@@ -20,10 +20,10 @@ import gov.sandia.n2a.backend.xyce.parsing.XyceRHSTranslator;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.parsing.gen.ASTNodeBase;
-import gov.sandia.n2a.parsing.gen.ASTRenderingContext;
-import gov.sandia.n2a.parsing.gen.ExpressionParser;
-import gov.sandia.n2a.parsing.gen.ParseException;
+import gov.sandia.n2a.language.gen.ASTNodeBase;
+import gov.sandia.n2a.language.gen.ASTRenderingContext;
+import gov.sandia.n2a.language.gen.ExpressionParser;
+import gov.sandia.n2a.language.gen.ParseException;
 
 import java.util.ArrayList;
 import java.util.HashMap;

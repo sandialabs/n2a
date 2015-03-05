@@ -7,12 +7,12 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.eqset;
 
-import gov.sandia.n2a.parsing.ParsedEquation;
-import gov.sandia.n2a.parsing.functions.AdditionFunction;
-import gov.sandia.n2a.parsing.functions.FunctionList;
-import gov.sandia.n2a.parsing.gen.ASTNodeBase;
-import gov.sandia.n2a.parsing.gen.ASTOpNode;
-import gov.sandia.n2a.parsing.gen.ASTTransformationContext;
+import gov.sandia.n2a.language.ParsedEquation;
+import gov.sandia.n2a.language.functions.AdditionFunction;
+import gov.sandia.n2a.language.functions.FunctionList;
+import gov.sandia.n2a.language.gen.ASTNodeBase;
+import gov.sandia.n2a.language.gen.ASTOpNode;
+import gov.sandia.n2a.language.gen.ASTTransformationContext;
 
 import java.util.ArrayList;
 import java.util.Comparator;

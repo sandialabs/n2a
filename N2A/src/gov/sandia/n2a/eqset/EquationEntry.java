@@ -7,10 +7,10 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.eqset;
 
-import gov.sandia.n2a.parsing.gen.ASTNodeBase;
-import gov.sandia.n2a.parsing.gen.ASTRenderingContext;
-import gov.sandia.n2a.parsing.gen.ExpressionParser;
-import gov.sandia.n2a.parsing.gen.ParseException;
+import gov.sandia.n2a.language.gen.ASTNodeBase;
+import gov.sandia.n2a.language.gen.ASTRenderingContext;
+import gov.sandia.n2a.language.gen.ExpressionParser;
+import gov.sandia.n2a.language.gen.ParseException;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 
 import java.util.TreeMap;

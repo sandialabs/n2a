@@ -8,8 +8,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.eq;
 
 import gov.sandia.n2a.eqset.PartEquationMap;
-import gov.sandia.n2a.parsing.Annotation;
-import gov.sandia.n2a.parsing.ParsedEquation;
+import gov.sandia.n2a.language.Annotation;
+import gov.sandia.n2a.language.ParsedEquation;
 
 import java.util.List;
 import java.util.Set;

@@ -9,9 +9,9 @@ package gov.sandia.n2a.data;
 
 import gov.sandia.n2a.eqset.EquationAssembler;
 import gov.sandia.n2a.eqset.PartEquationMap;
-import gov.sandia.n2a.parsing.ParsedEquation;
-import gov.sandia.n2a.parsing.gen.ASTNodeBase;
-import gov.sandia.n2a.parsing.gen.ParseException;
+import gov.sandia.n2a.language.ParsedEquation;
+import gov.sandia.n2a.language.gen.ASTNodeBase;
+import gov.sandia.n2a.language.gen.ParseException;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.ensemble.params.ParameterSet;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;

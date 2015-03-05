@@ -7,8 +7,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.data;
 
-import gov.sandia.n2a.parsing.ParsedEquation;
-import gov.sandia.n2a.parsing.gen.ParseException;
+import gov.sandia.n2a.language.ParsedEquation;
+import gov.sandia.n2a.language.gen.ParseException;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.plugins.Parameterizable;
 import gov.sandia.umf.platform.plugins.PlatformRecord;

@@ -14,11 +14,11 @@ import gov.sandia.n2a.backend.xyce.symbol.XyceDeviceSymbolDef;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.parsing.Annotation;
-import gov.sandia.n2a.parsing.functions.AdditionFunction;
-import gov.sandia.n2a.parsing.functions.EvaluationContext;
-import gov.sandia.n2a.parsing.gen.ASTNodeBase;
-import gov.sandia.n2a.parsing.gen.ASTOpNode;
+import gov.sandia.n2a.language.Annotation;
+import gov.sandia.n2a.language.functions.AdditionFunction;
+import gov.sandia.n2a.language.functions.EvaluationContext;
+import gov.sandia.n2a.language.gen.ASTNodeBase;
+import gov.sandia.n2a.language.gen.ASTOpNode;
 
 import java.util.ArrayList;
 import java.util.Collection;

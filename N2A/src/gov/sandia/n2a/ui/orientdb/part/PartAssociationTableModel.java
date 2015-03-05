@@ -7,7 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.orientdb.part;
 
-import gov.sandia.n2a.parsing.gen.ASTVarNode;
+import gov.sandia.n2a.language.gen.ASTVarNode;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.ui.CommonWarningMessage;
 

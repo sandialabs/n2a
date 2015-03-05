@@ -8,7 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.orientdb.eq.tree;
 
-import gov.sandia.n2a.parsing.Annotation;
+import gov.sandia.n2a.language.Annotation;
 import gov.sandia.umf.platform.AppState;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 

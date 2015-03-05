@@ -8,8 +8,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.backend.xyce.functions;
 
 import gov.sandia.n2a.backend.xyce.params.SineInputSpecification;
-import gov.sandia.n2a.parsing.functions.Function;
-import gov.sandia.n2a.parsing.functions.ParameterSet;
+import gov.sandia.n2a.language.functions.Function;
+import gov.sandia.n2a.language.functions.ParameterSet;
 
 public class XyceSineWaveFunction extends Function {
 
