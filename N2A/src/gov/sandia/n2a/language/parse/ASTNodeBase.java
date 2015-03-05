@@ -5,7 +5,7 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.language.gen;
+package gov.sandia.n2a.language.parse;
 
 import gov.sandia.n2a.language.functions.AssignmentFunction;
 import gov.sandia.n2a.language.functions.EvaluationContext;

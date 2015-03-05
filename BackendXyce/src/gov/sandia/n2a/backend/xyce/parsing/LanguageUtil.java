@@ -12,7 +12,7 @@ import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Annotation;
-import gov.sandia.n2a.language.gen.ASTNodeBase;
+import gov.sandia.n2a.language.parse.ASTNodeBase;
 
 import java.util.List;
 import java.util.NavigableSet;

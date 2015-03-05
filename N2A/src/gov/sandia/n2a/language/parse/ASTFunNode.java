@@ -11,7 +11,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
  * NODE_EXTENDS=,NODE_FACTORY=,SUPPORT_CLASS_VISIBILITY_PUBLIC=true
  */
 
-package gov.sandia.n2a.language.gen;
+package gov.sandia.n2a.language.parse;
 
 import gov.sandia.n2a.language.functions.EvaluationContext;
 import gov.sandia.n2a.language.functions.EvaluationException;

@@ -15,7 +15,7 @@ import gov.sandia.n2a.data.Part;
 import gov.sandia.n2a.data.PartOrient;
 import gov.sandia.n2a.language.ParsedEquation;
 import gov.sandia.n2a.language.SpecialVariables;
-import gov.sandia.n2a.language.gen.ASTVarNode;
+import gov.sandia.n2a.language.parse.ASTVarNode;
 import gov.sandia.n2a.ui.orientdb.eq.EquationSummaryFlatPanel;
 import gov.sandia.n2a.ui.orientdb.eq.EquationTreeEditContext;
 import gov.sandia.n2a.ui.orientdb.model.topotree.NodeBridge;

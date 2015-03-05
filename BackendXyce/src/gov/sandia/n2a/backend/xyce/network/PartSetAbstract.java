@@ -17,8 +17,8 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Annotation;
 import gov.sandia.n2a.language.functions.AdditionFunction;
 import gov.sandia.n2a.language.functions.EvaluationContext;
-import gov.sandia.n2a.language.gen.ASTNodeBase;
-import gov.sandia.n2a.language.gen.ASTOpNode;
+import gov.sandia.n2a.language.parse.ASTNodeBase;
+import gov.sandia.n2a.language.parse.ASTOpNode;
 
 import java.util.ArrayList;
 import java.util.Collection;

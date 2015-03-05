@@ -10,9 +10,9 @@ package gov.sandia.n2a.eqset;
 import gov.sandia.n2a.language.ParsedEquation;
 import gov.sandia.n2a.language.functions.AdditionFunction;
 import gov.sandia.n2a.language.functions.FunctionList;
-import gov.sandia.n2a.language.gen.ASTNodeBase;
-import gov.sandia.n2a.language.gen.ASTOpNode;
-import gov.sandia.n2a.language.gen.ASTTransformationContext;
+import gov.sandia.n2a.language.parse.ASTNodeBase;
+import gov.sandia.n2a.language.parse.ASTOpNode;
+import gov.sandia.n2a.language.parse.ASTTransformationContext;
 
 import java.util.ArrayList;
 import java.util.Comparator;

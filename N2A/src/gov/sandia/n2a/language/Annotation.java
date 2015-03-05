@@ -7,7 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language;
 
-import gov.sandia.n2a.language.gen.ASTNodeBase;
+import gov.sandia.n2a.language.parse.ASTNodeBase;
 
 public class Annotation {
 

@@ -10,7 +10,7 @@ package gov.sandia.n2a.language.functions;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.SpecialVariables;
-import gov.sandia.n2a.language.gen.ASTNodeBase;
+import gov.sandia.n2a.language.parse.ASTNodeBase;
 
 import java.util.HashMap;
 import java.util.Map;

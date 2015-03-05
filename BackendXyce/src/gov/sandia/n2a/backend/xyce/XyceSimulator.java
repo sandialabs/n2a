@@ -13,7 +13,7 @@ import gov.sandia.n2a.data.ModelOrient;
 import gov.sandia.n2a.data.ParamUtil;
 import gov.sandia.n2a.eqset.PartEquationMap;
 import gov.sandia.n2a.language.ParsedEquation;
-import gov.sandia.n2a.language.gen.ASTNodeBase;
+import gov.sandia.n2a.language.parse.ASTNodeBase;
 import gov.sandia.umf.platform.ensemble.params.specs.ParameterSpecification;
 import gov.sandia.umf.platform.plugins.Simulation;
 import gov.sandia.umf.platform.plugins.extpoints.Simulator;

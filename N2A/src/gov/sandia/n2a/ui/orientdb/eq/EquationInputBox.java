@@ -8,7 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.ui.orientdb.eq;
 
 import gov.sandia.n2a.language.EquationParser;
-import gov.sandia.n2a.language.gen.ExpressionParser;
+import gov.sandia.n2a.language.parse.ExpressionParser;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import java.awt.event.ActionEvent;
