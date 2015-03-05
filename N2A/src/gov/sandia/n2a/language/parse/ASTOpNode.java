@@ -13,14 +13,14 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.parse;
 
-import gov.sandia.n2a.language.functions.AssignmentFunction;
-import gov.sandia.n2a.language.functions.Associativity;
-import gov.sandia.n2a.language.functions.EvaluationContext;
-import gov.sandia.n2a.language.functions.EvaluationException;
-import gov.sandia.n2a.language.functions.Function;
-import gov.sandia.n2a.language.functions.FunctionList;
-import gov.sandia.n2a.language.functions.ListSubscriptExpression;
-import gov.sandia.n2a.language.functions.UnaryPlusFunction;
+import gov.sandia.n2a.language.op.AssignmentFunction;
+import gov.sandia.n2a.language.op.Associativity;
+import gov.sandia.n2a.language.op.EvaluationContext;
+import gov.sandia.n2a.language.op.EvaluationException;
+import gov.sandia.n2a.language.op.Function;
+import gov.sandia.n2a.language.op.FunctionList;
+import gov.sandia.n2a.language.op.ListSubscriptExpression;
+import gov.sandia.n2a.language.op.UnaryPlusFunction;
 
 
 public class ASTOpNode extends ASTNodeBase {

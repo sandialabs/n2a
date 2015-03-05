@@ -7,12 +7,12 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.eqset;
 
-import gov.sandia.n2a.language.functions.AdditionFunction;
-import gov.sandia.n2a.language.functions.DivisionFunction;
-import gov.sandia.n2a.language.functions.EvaluationContext;
-import gov.sandia.n2a.language.functions.EvaluationException;
-import gov.sandia.n2a.language.functions.MultiplicationFunction;
-import gov.sandia.n2a.language.functions.SubtractionFunction;
+import gov.sandia.n2a.language.op.AdditionFunction;
+import gov.sandia.n2a.language.op.DivisionFunction;
+import gov.sandia.n2a.language.op.EvaluationContext;
+import gov.sandia.n2a.language.op.EvaluationException;
+import gov.sandia.n2a.language.op.MultiplicationFunction;
+import gov.sandia.n2a.language.op.SubtractionFunction;
 import gov.sandia.n2a.language.parse.ASTConstant;
 import gov.sandia.n2a.language.parse.ASTFunNode;
 import gov.sandia.n2a.language.parse.ASTListNode;

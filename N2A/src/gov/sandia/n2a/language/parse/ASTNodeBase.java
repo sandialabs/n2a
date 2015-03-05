@@ -7,10 +7,10 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.parse;
 
-import gov.sandia.n2a.language.functions.AssignmentFunction;
-import gov.sandia.n2a.language.functions.EvaluationContext;
-import gov.sandia.n2a.language.functions.EvaluationException;
-import gov.sandia.n2a.language.functions.Function;
+import gov.sandia.n2a.language.op.AssignmentFunction;
+import gov.sandia.n2a.language.op.EvaluationContext;
+import gov.sandia.n2a.language.op.EvaluationException;
+import gov.sandia.n2a.language.op.Function;
 
 import java.util.HashSet;
 import java.util.Set;

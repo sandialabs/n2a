@@ -7,7 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.eqset;
 
-import gov.sandia.n2a.language.functions.FunctionList;
+import gov.sandia.n2a.language.op.FunctionList;
 import gov.sandia.n2a.language.parse.ASTOpNode;
 import gov.sandia.n2a.language.parse.ASTTransformationContext;
 
