@@ -766,7 +766,7 @@ Euler::integrate ()
     p = &queue;
     while (*p)
     {
-        (*p)->next->integrate (*this);
+        (*p)->integrate (*this);
         p = & (*p)->next;
     }
 }
@@ -787,10 +787,10 @@ RungeKutta::integrate ()
 
     // k1
     p = &queue;
-    while ((*p)->next)
+    while (*p)
     {
-        (*p)->next->pushIntegrated ();
-        (*p)->next->pushDerivative ();
+        (*p)->pushIntegrated ();
+        (*p)->pushDerivative ();
         p = & (*p)->next;
     }
 

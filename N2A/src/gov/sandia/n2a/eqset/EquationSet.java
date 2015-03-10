@@ -900,7 +900,9 @@ public class EquationSet implements Comparable<EquationSet>
         Remove any variables (particularly $variables) that are not referenced by some
         equation. These values do not input to any other calculation, and they are not
         displayed. Therefore they are a waste of time and space.
-        Depends on results of: resolveRHS(), fillIntegratedVariables()
+        Depends on results of:
+            resolveLHS(), resolveRHS(), fillIntegratedVariables(),
+            addSpecials() -- so we can remove any $variables added unnecessarily
     **/
     public void removeUnused ()
     {
@@ -912,14 +914,8 @@ public class EquationSet implements Comparable<EquationSet>
         TreeSet<Variable> temp = new TreeSet<Variable> (variables);
         for (Variable v : temp)
         {
-            if (v.hasUsers)
-            {
-                continue;
-            }
-            if (v.equations.size () > 0  &&  (v.name.startsWith ("$")  ||  v.name.contains (".$")))  // even if a $variable has no direct users, we must respect any statements about it
-            {
-                continue;
-            }
+            if (v.hasUsers  ||  v.hasAttribute ("externalWrite")) continue;
+            if (v.equations.size () > 0  &&  (v.name.startsWith ("$")  ||  v.name.contains (".$"))) continue;  // even if a $variable has no direct users, we must respect any statements about it
 
             // Scan AST for any special output functions.
             boolean output = false;
@@ -1724,7 +1720,7 @@ public class EquationSet implements Comparable<EquationSet>
 
         for (Variable v : variables)
         {
-            if (v.hasAny (new String[] {"initOnly", "constant", "integrated"})) continue;  // some variables get tagged "initOnly" by other means, so don't re-process
+            if (v.hasAny (new String[] {"initOnly", "constant", "integrated", "dummy"})) continue;  // Note: some variables get tagged "initOnly" by other means, so don't re-process
             if (v.equations.size () != 1) continue;  // TODO: should a variable with no equations be considered initOnly?
 
             // Determine if our single equation is guaranteed not to fire after the init step

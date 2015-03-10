@@ -150,6 +150,7 @@ public class SimulationC implements Simulation
         e.findIntegrated ();
         e.resolveLHS ();
         e.resolveRHS ();
+        // TODO: check for unresolved variables, and stop with a full list of them to the user
         e.findConstants ();
         e.removeUnused ();  // especially get rid of unneeded $variables created by addSpecials()
         e.collectSplits ();
@@ -170,7 +171,7 @@ public class SimulationC implements Simulation
         findReferences (e);
 
         e.setInit (0);
-        System.out.println (e.flatList (true));
+        System.out.println (e.flatList (false));
 
         StringBuilder s = new StringBuilder ();
 
@@ -319,9 +320,15 @@ public class SimulationC implements Simulation
         result.append (pad + "public:\n");
 
         // Unit sub-parts
+        // TODO: handle c++ declaration problem more systematically
+        // Right now, this is hacked to emit compartments first, then connections
         for (EquationSet p : s.parts)
         {
-            result.append (generateClasses (p, pad2));
+            if (p.connectionBindings == null) result.append (generateClasses (p, pad2));
+        }
+        for (EquationSet p : s.parts)
+        {
+            if (p.connectionBindings != null) result.append (generateClasses (p, pad2));
         }
 
         CRenderingContext context = new CRenderingContext (s);
