@@ -11,7 +11,7 @@ import gov.sandia.n2a.backend.xyce.Xyceisms;
 import gov.sandia.n2a.backend.xyce.network.PartInstance;
 import gov.sandia.n2a.backend.xyce.parsing.XyceASTUtil;
 import gov.sandia.n2a.eqset.EquationEntry;
-import gov.sandia.n2a.language.op.EvaluationContext;
+import gov.sandia.n2a.language.EvaluationContext;
 
 public class ConstantICSymbolDef extends DefaultSymbolDef {
 

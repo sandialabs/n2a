@@ -7,9 +7,9 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.eqset;
 
+import gov.sandia.n2a.language.FunctionList;
 import gov.sandia.n2a.language.ParsedEquation;
-import gov.sandia.n2a.language.op.AdditionFunction;
-import gov.sandia.n2a.language.op.FunctionList;
+import gov.sandia.n2a.language.op.Add;
 import gov.sandia.n2a.language.parse.ASTNodeBase;
 import gov.sandia.n2a.language.parse.ASTOpNode;
 import gov.sandia.n2a.language.parse.ASTTransformationContext;
@@ -242,7 +242,7 @@ public class PartEquationMap extends TreeMap<String, List<ParsedEquation>> {
         ASTNodeBase addRHS = newPE.getTree().getChild(1);
         // need a new + OpNode; the above pes' trees' RHSs should be its children
         // and this new node should replace origRHS in origPE
-        ASTOpNode top = new ASTOpNode(new AdditionFunction());
+        ASTOpNode top = new ASTOpNode(new Add());
         top.jjtAddChild(origRHS, 0);
         top.jjtAddChild(addRHS, 1);
         origPE.getTree().jjtAddChild(top,1);

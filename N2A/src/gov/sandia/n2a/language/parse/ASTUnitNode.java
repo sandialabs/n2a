@@ -9,8 +9,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 /* JavaCCOptions:MULTI=true,NODE_USES_PARSER=false,VISITOR=true,TRACK_TOKENS=false,NODE_PREFIX=AST,NODE_EXTENDS=,NODE_FACTORY=,SUPPORT_CLASS_VISIBILITY_PUBLIC=true */
 package gov.sandia.n2a.language.parse;
 
-import gov.sandia.n2a.language.op.EvaluationContext;
-import gov.sandia.n2a.language.op.EvaluationException;
+import gov.sandia.n2a.language.EvaluationContext;
+import gov.sandia.n2a.language.EvaluationException;
 
 import javax.measure.unit.Unit;
 

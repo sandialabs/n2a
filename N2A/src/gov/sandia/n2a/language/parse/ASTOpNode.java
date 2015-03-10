@@ -13,14 +13,12 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.parse;
 
-import gov.sandia.n2a.language.op.AssignmentFunction;
-import gov.sandia.n2a.language.op.Associativity;
-import gov.sandia.n2a.language.op.EvaluationContext;
-import gov.sandia.n2a.language.op.EvaluationException;
-import gov.sandia.n2a.language.op.Function;
-import gov.sandia.n2a.language.op.FunctionList;
-import gov.sandia.n2a.language.op.ListSubscriptExpression;
-import gov.sandia.n2a.language.op.UnaryPlusFunction;
+import gov.sandia.n2a.language.Associativity;
+import gov.sandia.n2a.language.EvaluationContext;
+import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.FunctionList;
+import gov.sandia.n2a.language.op.Assign;
 
 
 public class ASTOpNode extends ASTNodeBase {
@@ -70,10 +68,7 @@ public class ASTOpNode extends ASTNodeBase {
         // Long rendering
         if(!context.shortMode) {
             String ret = "";
-            if(value instanceof ListSubscriptExpression) {
-                ret += context.render (getChild (0));
-                ret += "[" + context.render (getChild(1)) + "]";
-            } else if(getCount() == 1) {
+            if(getCount() == 1) {
                 ret += value.toString();
                 ret += context.render (getChild (0));
             } else {
@@ -92,13 +87,8 @@ public class ASTOpNode extends ASTNodeBase {
 
         // Short rendering
         String ret = "";
-        if(value instanceof ListSubscriptExpression) {
-            ret += context.render (getChild (0));
-            ret += "[" + context.render (getChild (1)) + "]";
-        } else if(getCount() == 1) {
-            if(!(value instanceof UnaryPlusFunction)) {
-                ret += value.toString();
-            }
+        if(getCount() == 1) {
+            ret += value.toString();
             ret += context.render (getChild (0));
         } else {
             boolean useParens;
@@ -178,7 +168,7 @@ public class ASTOpNode extends ASTNodeBase {
             //    x = 3 + y
             // But we have to in:
             //    x *= 3 + y
-            if (c == 0  &&  func.getClass ().equals (AssignmentFunction.class)) params[c] = null;
+            if (c == 0  &&  func.getClass ().equals (Assign.class)) params[c] = null;
             else                                                                params[c] = getChild (c).eval (context);
         }
         Object result = func.eval (params);

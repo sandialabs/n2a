@@ -13,10 +13,10 @@ import gov.sandia.n2a.backend.xyce.network.PartSetInterface;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.language.op.EvaluationContext;
-import gov.sandia.n2a.language.op.EvaluationException;
-import gov.sandia.n2a.language.op.ExponentiationFunction;
-import gov.sandia.n2a.language.op.Function;
+import gov.sandia.n2a.language.EvaluationContext;
+import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.op.Power;
 import gov.sandia.n2a.language.op.UnknownFunction;
 import gov.sandia.n2a.language.parse.ASTFunNode;
 import gov.sandia.n2a.language.parse.ASTNodeBase;
@@ -55,7 +55,7 @@ public class XyceASTUtil {
         result.add (ASTOpNode.class, new ASTNodeRenderer() {
             @Override
             public String render (ASTNodeBase node, ASTRenderingContext context) {
-                if(node.getValue() instanceof ExponentiationFunction) {
+                if(node.getValue() instanceof Power) {
                     return context.render (node.getChild (0)) + " ** " + context.render (node.getChild (1));
                 }
                 return node.render (context);

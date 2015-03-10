@@ -7,12 +7,12 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.eqset;
 
-import gov.sandia.n2a.language.op.AdditionFunction;
-import gov.sandia.n2a.language.op.DivisionFunction;
-import gov.sandia.n2a.language.op.EvaluationContext;
-import gov.sandia.n2a.language.op.EvaluationException;
-import gov.sandia.n2a.language.op.MultiplicationFunction;
-import gov.sandia.n2a.language.op.SubtractionFunction;
+import gov.sandia.n2a.language.EvaluationContext;
+import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.op.Add;
+import gov.sandia.n2a.language.op.Divide;
+import gov.sandia.n2a.language.op.Multiply;
+import gov.sandia.n2a.language.op.Subtract;
 import gov.sandia.n2a.language.parse.ASTConstant;
 import gov.sandia.n2a.language.parse.ASTFunNode;
 import gov.sandia.n2a.language.parse.ASTListNode;
@@ -1407,7 +1407,7 @@ public class EquationSet implements Comparable<EquationSet>
                 }
 
                 // Otherwise try arithmetic simplifications
-                if (node.getValue () instanceof AdditionFunction)
+                if (node.getValue () instanceof Add)
                 {
                     Object c = node.getChild (0).getValue ();
                     if (c instanceof Number  &&  ((Number) c).doubleValue () == 0)
@@ -1420,7 +1420,7 @@ public class EquationSet implements Comparable<EquationSet>
                         return node.getChild (0);
                     }
                 }
-                if (node.getValue () instanceof SubtractionFunction)
+                if (node.getValue () instanceof Subtract)
                 {
                     Object c = node.getChild (0).getValue ();
                     if (c instanceof Number  &&  ((Number) c).doubleValue () == 0)
@@ -1433,7 +1433,7 @@ public class EquationSet implements Comparable<EquationSet>
                         return node.getChild (0);
                     }
                 }
-                if (node.getValue () instanceof DivisionFunction)
+                if (node.getValue () instanceof Divide)
                 {
                     Object c = node.getChild (1).getValue ();
                     if (c instanceof Number  &&  ((Number) c).doubleValue () == 1)
@@ -1441,7 +1441,7 @@ public class EquationSet implements Comparable<EquationSet>
                         return node.getChild (0);
                     }
                 }
-                if (node.getValue () instanceof MultiplicationFunction)
+                if (node.getValue () instanceof Multiply)
                 {
                     Object c = node.getChild (0).getValue ();
                     if (c instanceof Number)

@@ -13,8 +13,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.parse;
 
-import gov.sandia.n2a.language.op.EvaluationContext;
-import gov.sandia.n2a.language.op.EvaluationException;
+import gov.sandia.n2a.language.EvaluationContext;
+import gov.sandia.n2a.language.EvaluationException;
 
 
 // Unnecessary class used simply to encapsulate the entire

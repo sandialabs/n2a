@@ -12,7 +12,7 @@ import gov.sandia.n2a.backend.xyce.parsing.LanguageUtil;
 import gov.sandia.n2a.backend.xyce.parsing.XyceASTUtil;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
-import gov.sandia.n2a.language.op.EvaluationContext;
+import gov.sandia.n2a.language.EvaluationContext;
 
 import java.util.ArrayList;
 import java.util.Collection;

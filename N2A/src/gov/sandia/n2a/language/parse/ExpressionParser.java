@@ -11,8 +11,8 @@ package gov.sandia.n2a.language.parse;
 import java.lang.reflect.Field;
 import java.io.StringReader;
 
-import gov.sandia.n2a.language.op.Function;
-import gov.sandia.n2a.language.op.FunctionList;
+import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.FunctionList;
 import replete.util.ReflectionUtil;
 
 import javax.measure.unit.*;

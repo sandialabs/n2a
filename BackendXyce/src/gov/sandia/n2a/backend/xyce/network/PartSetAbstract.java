@@ -15,8 +15,8 @@ import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Annotation;
-import gov.sandia.n2a.language.op.AdditionFunction;
-import gov.sandia.n2a.language.op.EvaluationContext;
+import gov.sandia.n2a.language.EvaluationContext;
+import gov.sandia.n2a.language.op.Add;
 import gov.sandia.n2a.language.parse.ASTNodeBase;
 import gov.sandia.n2a.language.parse.ASTOpNode;
 

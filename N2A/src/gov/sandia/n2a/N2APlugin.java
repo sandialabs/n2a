@@ -8,8 +8,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a;
 
 import gov.sandia.n2a.exporters.LEMSExporter;
-import gov.sandia.n2a.language.op.Function;
-import gov.sandia.n2a.language.op.FunctionList;
+import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.FunctionList;
 import gov.sandia.n2a.records.ModelRecordHandler;
 import gov.sandia.n2a.records.PartRecordHandler;
 import gov.sandia.n2a.records.ReferenceRecordHandler;

@@ -7,10 +7,10 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.parse;
 
-import gov.sandia.n2a.language.op.AssignmentFunction;
-import gov.sandia.n2a.language.op.EvaluationContext;
-import gov.sandia.n2a.language.op.EvaluationException;
-import gov.sandia.n2a.language.op.Function;
+import gov.sandia.n2a.language.EvaluationContext;
+import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.op.Assign;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -69,7 +69,7 @@ public abstract class ASTNodeBase extends SimpleNode {
     public boolean isSimpleAssignment() {
         if(this instanceof ASTOpNode) {
             Function func = (Function) getValue();
-            if(func.getClass().equals(AssignmentFunction.class)) {
+            if(func.getClass().equals(Assign.class)) {
                 if(getChild(0) instanceof ASTVarNode) {
                     return true;
                 }
@@ -163,7 +163,7 @@ public abstract class ASTNodeBase extends SimpleNode {
             varNode = (ASTVarNode) this;
         } else if(this instanceof ASTOpNode) {
             Function func = (Function) getValue();
-            if(!func.getClass().equals(AssignmentFunction.class)) {
+            if(!func.getClass().equals(Assign.class)) {
                 if(!func.isAssignment() || !allowCompoundAssignment) {
                     return null;
                 }

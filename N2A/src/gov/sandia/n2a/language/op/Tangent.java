@@ -7,34 +7,31 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.op;
 
-import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.ParameterSet;
 
-public class UnknownFunction extends Function {
-
-    private String name;
-    public UnknownFunction(String nm) {
-        name = nm;
-    }
-
+public class Tangent extends Function {
     @Override
     public String getName() {
-        return name;
+        return "tan";
     }
 
     @Override
     public String getDescription() {
-        return null;
+        return "tangent";
     }
 
     @Override
     public ParameterSet[] getAllowedParameterSets() {
-        return null;
+        return new ParameterSet[] {
+            new ParameterSet(
+                "!RET", "val",
+                Number.class, Number.class)
+        };
     }
 
     @Override
     protected Object eval(Object[] args, int parameterSetIndex) {
-        throw new EvaluationException("Function '" + getName() + "' not implemented.");
+        return Math.tan(((Number) args[0]).doubleValue());
     }
 }

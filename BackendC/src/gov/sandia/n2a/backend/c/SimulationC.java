@@ -11,9 +11,8 @@ import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
-import gov.sandia.n2a.language.op.ExponentiationFunction;
-import gov.sandia.n2a.language.op.Function;
-import gov.sandia.n2a.language.op.ListSubscriptExpression;
+import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.op.Power;
 import gov.sandia.n2a.language.parse.ASTConstant;
 import gov.sandia.n2a.language.parse.ASTNodeBase;
 import gov.sandia.n2a.language.parse.ASTNodeRenderer;
@@ -2607,13 +2606,9 @@ public class SimulationC implements Simulation
         {
             ASTOpNode op = (ASTOpNode) node;
             Class<? extends Function> c = op.getFunction ().getClass ();
-            if (c == ExponentiationFunction.class)
+            if (c == Power.class)
             {
                 return "pow (" + context.render (op.getChild (0)) + ", " + context.render (op.getChild (1)) + ")";
-            }
-            else if (c == ListSubscriptExpression.class)
-            {
-                return context.render (op.getChild (0));  // suppress subscripts
             }
             else
             {
