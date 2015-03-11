@@ -43,7 +43,7 @@ public class SymbolDefFactory {
             return new SineWaveInputSymbolDef(eq, partSet);
         }
         // N2A pulse function not actually set up to use yet; not available as plugin extension point
-//        if (eq.toString().contains(new PulseFunction().getName())) {
+//        if (eq.toString().contains(new Pulse().getName())) {
 //            return new PulseSymbolDef(eq, partSet);
 //        }
         if (eq.toString().contains(LanguageUtil.$TIME)) 

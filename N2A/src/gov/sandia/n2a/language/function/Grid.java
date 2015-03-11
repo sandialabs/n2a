@@ -5,13 +5,13 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.functions;
+package gov.sandia.n2a.language.function;
 
 import gov.sandia.n2a.language.Function;
 
-public class GridFunction extends Function
+public class Grid extends Function
 {
-    public GridFunction ()
+    public Grid ()
     {
         name          = "grid";
         associativity = Associativity.LEFT_TO_RIGHT;

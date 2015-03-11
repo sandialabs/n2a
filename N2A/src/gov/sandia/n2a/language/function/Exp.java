@@ -5,21 +5,21 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.language.operator;
+package gov.sandia.n2a.language.function;
 
 import gov.sandia.n2a.language.Function;
 
-public class Sine extends Function
+public class Exp extends Function
 {
-    public Sine ()
+    public Exp ()
     {
-        name          = "sin";
+        name          = "exp";
         associativity = Associativity.LEFT_TO_RIGHT;
         precedence    = 1;
     }
 
     public Object eval (Object[] args)
     {
-        return Math.sin (((Number) args[0]).doubleValue ());
+        return Math.pow (Math.E, ((Number) args[0]).doubleValue ());
     }
 }

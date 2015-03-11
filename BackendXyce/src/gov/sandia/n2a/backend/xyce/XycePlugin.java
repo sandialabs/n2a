@@ -9,7 +9,7 @@ package gov.sandia.n2a.backend.xyce;
 
 import gov.sandia.n2a.backend.xyce.functions.XycePulseFunction;
 import gov.sandia.n2a.backend.xyce.functions.XyceSineWaveFunction;
-import gov.sandia.n2a.functions.GridFunction;
+import gov.sandia.n2a.language.function.Grid;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.ImageIcon;
@@ -53,8 +53,7 @@ public class XycePlugin implements Plugin {
         return new ExtensionPoint[] {
             new XyceSimulator(),
             new XycePulseFunction(),
-            new XyceSineWaveFunction(),
-            new GridFunction(),
+            new XyceSineWaveFunction()
         };
     }
 

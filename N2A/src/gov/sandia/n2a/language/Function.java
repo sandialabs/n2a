@@ -7,21 +7,27 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language;
 
+import gov.sandia.n2a.language.function.Cosine;
+import gov.sandia.n2a.language.function.Exp;
+import gov.sandia.n2a.language.function.Gaussian;
+import gov.sandia.n2a.language.function.Grid;
+import gov.sandia.n2a.language.function.Lognormal;
+import gov.sandia.n2a.language.function.Pulse;
+import gov.sandia.n2a.language.function.Sine;
+import gov.sandia.n2a.language.function.Tangent;
+import gov.sandia.n2a.language.function.Trace;
+import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.AND;
 import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.operator.Assign;
 import gov.sandia.n2a.language.operator.AssignAdd;
 import gov.sandia.n2a.language.operator.AssignAppend;
-import gov.sandia.n2a.language.operator.Cosine;
 import gov.sandia.n2a.language.operator.Divide;
 import gov.sandia.n2a.language.operator.EQ;
-import gov.sandia.n2a.language.operator.Exp;
 import gov.sandia.n2a.language.operator.GE;
 import gov.sandia.n2a.language.operator.GT;
-import gov.sandia.n2a.language.operator.Gauss;
 import gov.sandia.n2a.language.operator.LE;
 import gov.sandia.n2a.language.operator.LT;
-import gov.sandia.n2a.language.operator.Lognormal;
 import gov.sandia.n2a.language.operator.Modulo;
 import gov.sandia.n2a.language.operator.Multiply;
 import gov.sandia.n2a.language.operator.NE;
@@ -29,11 +35,7 @@ import gov.sandia.n2a.language.operator.NOT;
 import gov.sandia.n2a.language.operator.Negate;
 import gov.sandia.n2a.language.operator.OR;
 import gov.sandia.n2a.language.operator.Power;
-import gov.sandia.n2a.language.operator.Sine;
 import gov.sandia.n2a.language.operator.Subtract;
-import gov.sandia.n2a.language.operator.Tangent;
-import gov.sandia.n2a.language.operator.Trace;
-import gov.sandia.n2a.language.operator.Uniform;
 
 import java.util.List;
 import java.util.TreeSet;
@@ -90,20 +92,29 @@ public class Function implements ExtensionPoint, Comparable<Function>
 
     static
     {
+        // Functions
+        functions.add (new Cosine ());
+        functions.add (new Exp ());
+        functions.add (new Gaussian ());
+        functions.add (new Grid ());
+        functions.add (new Lognormal ());
+        functions.add (new Pulse ());
+        functions.add (new Sine ());
+        functions.add (new Tangent ());
+        functions.add (new Trace ());
+        functions.add (new Uniform ());
+
+        // Operators
         functions.add (new Add ());
         functions.add (new AND ());
         functions.add (new Assign ());
         functions.add (new AssignAdd ());
         functions.add (new AssignAppend ());
-        functions.add (new Cosine ());
         functions.add (new Divide ());
         functions.add (new EQ ());
-        functions.add (new Exp ());
-        functions.add (new Gauss ());
         functions.add (new GE ());
         functions.add (new GT ());
         functions.add (new LE ());
-        functions.add (new Lognormal ());
         functions.add (new LT ());
         functions.add (new Modulo ());
         functions.add (new Multiply ());
@@ -112,11 +123,7 @@ public class Function implements ExtensionPoint, Comparable<Function>
         functions.add (new NOT ());
         functions.add (new OR ());
         functions.add (new Power ());
-        functions.add (new Sine ());
         functions.add (new Subtract ());
-        functions.add (new Tangent ());
-        functions.add (new Trace ());
-        functions.add (new Uniform ());
     }
 
     public static void initFromPlugins ()

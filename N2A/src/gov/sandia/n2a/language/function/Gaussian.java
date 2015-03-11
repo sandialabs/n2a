@@ -5,14 +5,14 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.language.operator;
+package gov.sandia.n2a.language.function;
 
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 
-public class Gauss extends Function
+public class Gaussian extends Function
 {
-    public Gauss ()
+    public Gaussian ()
     {
         name          = "gaussian";
         associativity = Associativity.LEFT_TO_RIGHT;
