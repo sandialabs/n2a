@@ -9,31 +9,18 @@ package gov.sandia.n2a.backend.xyce.functions;
 
 import gov.sandia.n2a.backend.xyce.params.PulseInputSpecification;
 import gov.sandia.n2a.language.Function;
-import gov.sandia.n2a.language.ParameterSet;
 
-public class XycePulseFunction extends Function {
-
-    @Override
-    public String getName() {
-        return "pulse";
+public class XycePulseFunction extends Function
+{
+    public XycePulseFunction ()
+    {
+        name          = "pulse";
+        associativity = Associativity.LEFT_TO_RIGHT;
+        precedence    = 1;
     }
 
-    @Override
-    public String getDescription() {
-        return "pulse input";
-    }
-
-    @Override
-    public ParameterSet[] getAllowedParameterSets() {
-        return new ParameterSet[] {
-                new ParameterSet(
-                    "!RET", "initial", "pulse", "delay", "rise", "fall", "width", "period",
-                    PulseInputSpecification.class, Number.class, Number.class, Number.class, Number.class, Number.class, Number.class, Number.class)
-            };
-    }
-
-    @Override
-    protected Object eval(Object[] args, int parameterSetIndex) {
+    public Object eval (Object[] args)
+    {
         return new PulseInputSpecification(((Number) args[0]).doubleValue(), ((Number) args[1]).doubleValue(),
                 ((Number)args[2]).doubleValue(), ((Number)args[3]).doubleValue(), ((Number)args[4]).doubleValue(),
                 ((Number)args[5]).doubleValue(), ((Number)args[6]).doubleValue());

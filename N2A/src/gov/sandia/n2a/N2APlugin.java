@@ -9,7 +9,6 @@ package gov.sandia.n2a;
 
 import gov.sandia.n2a.exporters.LEMSExporter;
 import gov.sandia.n2a.language.Function;
-import gov.sandia.n2a.language.FunctionList;
 import gov.sandia.n2a.records.ModelRecordHandler;
 import gov.sandia.n2a.records.PartRecordHandler;
 import gov.sandia.n2a.records.ReferenceRecordHandler;
@@ -112,7 +111,8 @@ public class N2APlugin extends DefaultPlugin {
     }
 
     @Override
-    public void start() {
-        FunctionList.initFromPlugins();
+    public void start ()
+    {
+        Function.initFromPlugins ();
     }
 }

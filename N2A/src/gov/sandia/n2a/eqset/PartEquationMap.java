@@ -7,7 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.eqset;
 
-import gov.sandia.n2a.language.FunctionList;
+import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.ParsedEquation;
 import gov.sandia.n2a.language.op.Add;
 import gov.sandia.n2a.language.parse.ASTNodeBase;
@@ -176,7 +176,7 @@ public class PartEquationMap extends TreeMap<String, List<ParsedEquation>> {
 
     public boolean isPlusEqualsEq(ParsedEquation pe) {
         ASTNodeBase n = pe.getTree();
-        if(n instanceof ASTOpNode && ((ASTOpNode) n).getFunction().equals(FunctionList.get(FunctionList.OP_AASSIGN))) {
+        if(n instanceof ASTOpNode && ((ASTOpNode) n).getFunction().equals(Function.get("+="))) {
             return true;
         }
         return false;

@@ -8,35 +8,19 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.language.op;
 
 import gov.sandia.n2a.language.Function;
-import gov.sandia.n2a.language.ParameterSet;
 
-public class Assign extends Function {
-    @Override
-    public String getName() {
-        return "=";
+public class Assign extends Function
+{
+    public Assign ()
+    {
+        name          = "=";
+        associativity = Associativity.RIGHT_TO_LEFT;
+        precedence    = 12;
+        assignment    = true;
     }
 
-    @Override
-    public String getDescription() {
-        return "assignment";
-    }
-
-    @Override
-    public ParameterSet[] getAllowedParameterSets() {
-        return new ParameterSet[] {
-            new ParameterSet(
-                "!RET", "var", "val",
-                Object.class, Object.class, Object.class)
-        };
-    }
-
-    @Override
-    protected Object eval(Object[] args, int parameterTypeIndex) {
+    public Object eval (Object[] args)
+    {
         return args[1];
-    }
-
-    @Override
-    public boolean isAssignment() {
-        return true;
     }
 }

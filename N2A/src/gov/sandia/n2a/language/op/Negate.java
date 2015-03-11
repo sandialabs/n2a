@@ -7,31 +7,25 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.op;
 
+import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
-import gov.sandia.n2a.language.ParameterSet;
 
-public class Negate extends Function {
-    @Override
-    public String getName() {
+public class Negate extends Function
+{
+    public Negate ()
+    {
+        name          = "UM";  // as in "unary minus"
+        associativity = Associativity.RIGHT_TO_LEFT;
+        precedence    = 2;
+    }
+
+    public Object eval (Object[] args) throws EvaluationException
+    {
+        return ((Number) args[0]).doubleValue () * -1;
+    }
+
+    public String toString ()
+    {
         return "-";
-    }
-
-    @Override
-    public String getDescription() {
-        return "unary minus";
-    }
-
-    @Override
-    public ParameterSet[] getAllowedParameterSets() {
-        return new ParameterSet[] {
-            new ParameterSet(
-                "!RET", "val",
-                Number.class, Number.class)
-        };
-    }
-
-    @Override
-    protected Object eval(Object[] args, int parameterTypeIndex) {
-        return ((Number) args[0]).doubleValue() * -1;
     }
 }

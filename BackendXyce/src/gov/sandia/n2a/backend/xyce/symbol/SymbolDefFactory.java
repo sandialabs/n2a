@@ -28,10 +28,6 @@ public class SymbolDefFactory {
     {
         String varname = eq.variable.name;
 
-        if (XyceASTUtil.hasUnknownFunction(eq)) {
-            throw new XyceTranslationException("unrecognized function in equation " + eq);
-        }
-        
         if (eq.variable.order > 1)
         {
             throw new XyceTranslationException("Support for higher order differential equations not implemented yet (" + eq + ")");
@@ -40,10 +36,10 @@ public class SymbolDefFactory {
         {
             return new StateVar1SymbolDef(eq, partSet);
         }
-        if (eq.toString().contains(new XycePulseFunction().getName())) {
+        if (eq.toString().contains(new XycePulseFunction().name)) {
             return new XycePulseInputSymbolDef(eq, partSet);
         }
-        if (eq.toString().contains(new XyceSineWaveFunction().getName())) {
+        if (eq.toString().contains(new XyceSineWaveFunction().name)) {
             return new SineWaveInputSymbolDef(eq, partSet);
         }
         // N2A pulse function not actually set up to use yet; not available as plugin extension point

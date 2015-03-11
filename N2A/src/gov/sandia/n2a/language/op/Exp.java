@@ -8,30 +8,18 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.language.op;
 
 import gov.sandia.n2a.language.Function;
-import gov.sandia.n2a.language.ParameterSet;
 
-public class Exp extends Function {
-    @Override
-    public String getName() {
-        return "exp";
+public class Exp extends Function
+{
+    public Exp ()
+    {
+        name          = "exp";
+        associativity = Associativity.LEFT_TO_RIGHT;
+        precedence    = 1;
     }
 
-    @Override
-    public String getDescription() {
-        return "exponential";
-    }
-
-    @Override
-    public ParameterSet[] getAllowedParameterSets() {
-        return new ParameterSet[] {
-            new ParameterSet(
-                "!RET", "val",
-                Number.class, Number.class)
-        };
-    }
-
-    @Override
-    protected Object eval(Object[] args, int parameterSetIndex) {
-        return Math.pow(Math.E, ((Number) args[0]).doubleValue());
+    public Object eval (Object[] args)
+    {
+        return Math.pow (Math.E, ((Number) args[0]).doubleValue ());
     }
 }

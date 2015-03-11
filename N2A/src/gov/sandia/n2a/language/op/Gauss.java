@@ -7,38 +7,31 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.op;
 
+import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
-import gov.sandia.n2a.language.ParameterSet;
 
-public class Gauss extends Function {
-
-    @Override
-    public String getName() {
-        return "gaussian";
-    }
-
-    @Override
-    public String getDescription() {
-        return "gaussian distribution";
-    }
-
-    @Override
-    public ParameterSet[] getAllowedParameterSets() {
-        return new ParameterSet[] {
-                new ParameterSet(
-                    "!RET", "val1", "val2",
-                    Number.class, Number.class, Number.class)
-            };
-    }
-
-    @Override
-    protected Object eval (Object[] args, int parameterSetIndex)
+public class Gauss extends Function
+{
+    public Gauss ()
     {
-        double location = ((Number) args[0]).doubleValue ();
-        double scale    = ((Number) args[1]).doubleValue ();
-        double r = Math.sqrt (-2 * Math.log (Math.random ()));
-        double theta = 2 * Math.PI * Math.random ();
-        return location + (scale * r * Math.cos(theta));
+        name          = "gaussian";
+        associativity = Associativity.LEFT_TO_RIGHT;
+        precedence    = 1;
+    }
+
+    public Object eval (Object[] args) throws EvaluationException
+    {
+        int dimension = ((Number) args[0]).intValue ();
+        if (dimension == 3)
+        {
+            throw new EvaluationException ("gaussian(3) not yet implemented");
+        }
+        else
+        {
+            double r     = Math.sqrt (-2 * Math.log (Math.random ()));
+            double theta = 2 * Math.PI * Math.random ();
+            return r * Math.cos (theta);
+        }
     }
 
 }

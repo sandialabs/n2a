@@ -9,17 +9,18 @@ package gov.sandia.n2a.language.op;
 
 import gov.sandia.n2a.language.Function;
 
-public class NE extends Function
+public class AssignAppend extends Function
 {
-    public NE ()
+    public AssignAppend ()
     {
-        name          = "!=";
-        associativity = Associativity.LEFT_TO_RIGHT;
-        precedence    = 7;
+        name          = ":=";
+        associativity = Associativity.RIGHT_TO_LEFT;
+        precedence    = 12;
+        assignment    = true;
     }
 
     public Object eval (Object[] args)
     {
-        return args[0].equals (args[1]) ? 0.0 : 1.0;
+        return args[1];
     }
 }

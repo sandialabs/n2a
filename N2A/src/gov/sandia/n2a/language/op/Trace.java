@@ -9,47 +9,25 @@ package gov.sandia.n2a.language.op;
 
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
-import gov.sandia.n2a.language.ParameterSet;
 
 public class Trace extends Function
 {
-    @Override
-    public String getName ()
+    public Trace ()
     {
-        return "trace";
+        name          = "trace";
+        associativity = Associativity.LEFT_TO_RIGHT;
+        precedence    = 1;
+        output        = true;
     }
 
-    @Override
-    public String getDescription ()
-    {
-        return "outputs values to standard out, then passes them on to the rest of the expression";
-    }
-
-    @Override
-    public ParameterSet[] getAllowedParameterSets ()
-    {
-        return new ParameterSet[]
-        {
-            new ParameterSet ("!RET",       "val1",       "val2",
-                              Number.class, Number.class, String.class),
-            //new ParameterSet ("!RET",       "val1",
-            //                  Number.class, Number.class)
-        };
-    }
-
-    @Override
-    protected Object eval(Object[] args, int parameterSetIndex) 
-    {
-        if (parameterSetIndex == 0)
-        {
-            return ((Number) args[0]).doubleValue ();
-        }
-        throw new EvaluationException ("This form of trace() is not implemented.");
-    }
-
-    @Override
     public boolean isOutput ()
     {
         return true;
+    }
+
+    public Object eval (Object[] args) 
+    {
+        if (args.length != 2) throw new EvaluationException ("This form of trace() is not implemented.");
+        return args[0];
     }
 }

@@ -7,31 +7,19 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.op;
 
+import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
-import gov.sandia.n2a.language.ParameterSet;
 
-public class Modulo extends Function {
-    @Override
-    public String getName() {
-        return "%";
+public class Modulo extends Function
+{
+    public Modulo ()
+    {
+        name          = "%";
+        associativity = Associativity.LEFT_TO_RIGHT;
+        precedence    = 4;
     }
 
-    @Override
-    public String getDescription() {
-        return "arithmetic modulus";
-    }
-
-    @Override
-    public ParameterSet[] getAllowedParameterSets() {
-        return new ParameterSet[] {
-            new ParameterSet(
-                "!RET", "val1", "val2",
-                Number.class, Number.class, Number.class)
-        };
-    }
-
-    @Override
-    protected Object eval(Object[] args, int parameterTypeIndex)
+    public Object eval (Object[] args) throws EvaluationException
     {
         return ((Number) args[0]).doubleValue() % ((Number) args[1]).doubleValue();
     }

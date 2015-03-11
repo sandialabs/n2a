@@ -82,10 +82,12 @@ public abstract class ASTNodeBase extends SimpleNode {
     // to left hand side possibly being different!
     // Right now this IS allowed (should it be?):
     //  cos(x) = Expression
-    public boolean isAssignment() {
-        if(this instanceof ASTOpNode) {
-            Function func = (Function) getValue();
-            return func.isAssignment();
+    public boolean isAssignment ()
+    {
+        if (this instanceof ASTOpNode)
+        {
+            Function func = (Function) getValue ();
+            return func.assignment;
         }
         return false;
     }
@@ -164,7 +166,7 @@ public abstract class ASTNodeBase extends SimpleNode {
         } else if(this instanceof ASTOpNode) {
             Function func = (Function) getValue();
             if(!func.getClass().equals(Assign.class)) {
-                if(!func.isAssignment() || !allowCompoundAssignment) {
+                if(!func.assignment || !allowCompoundAssignment) {
                     return null;
                 }
             }
@@ -236,7 +238,7 @@ public abstract class ASTNodeBase extends SimpleNode {
         if(this instanceof ASTVarNode) {
             symbols.add(((ASTVarNode) this).getVariableName());
         } else if(this instanceof ASTFunNode) {
-            symbols.add(((ASTFunNode) this).getFunction().getName());
+            symbols.add(((ASTFunNode) this).getFunction().name);
         }
         for(int c = 0; c < getCount(); c++) {
             ASTNodeBase child = getChild(c);

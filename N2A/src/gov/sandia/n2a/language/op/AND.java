@@ -8,30 +8,20 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.language.op;
 
 import gov.sandia.n2a.language.Function;
-import gov.sandia.n2a.language.ParameterSet;
 
-public class AND extends Function {
-    @Override
-    public String getName() {
-        return "&&";
+public class AND extends Function
+{
+    public AND ()
+    {
+        name          = "&&";
+        associativity = Associativity.LEFT_TO_RIGHT;
+        precedence    = 8;
     }
 
-    @Override
-    public String getDescription() {
-        return "logical and";
-    }
-
-    @Override
-    public ParameterSet[] getAllowedParameterSets() {
-        return new ParameterSet[] {
-            new ParameterSet(
-                "!RET", "val1", "val2",
-                Boolean.class, Boolean.class, Boolean.class)
-        };
-    }
-
-    @Override
-    protected Object eval(Object[] args, int parameterTypeIndex) {
-        return (Boolean) args[0] && (Boolean) args[1];
+    public Object eval (Object[] args)
+    {
+        double arg0 = ((Number) args[0]).doubleValue ();
+        double arg1 = ((Number) args[1]).doubleValue ();
+        return (arg0 * arg1 != 0) ? 1.0 : 0.0;
     }
 }

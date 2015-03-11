@@ -7,52 +7,26 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.op;
 
+import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
-import gov.sandia.n2a.language.ParameterSet;
 
-public class Uniform extends Function {
-
-    @Override
-    public String getName() {
-        return "uniform";
-    }
-
-    @Override
-    public String getDescription() {
-        return "uniform distribution";
-    }
-
-    @Override
-    public ParameterSet[] getAllowedParameterSets() {
-        return new ParameterSet[] {
-                new ParameterSet(
-                    "!RET", "val1", "val2",
-                    Number.class, Number.class, Number.class),
-                new ParameterSet(
-                        "!RET", "val1",
-                        Number.class, Number.class),
-                new ParameterSet(
-                        "!RET",
-                        Number.class),
-                    
-            };
-    }
-
-    @Override
-    protected Object eval(Object[] args, int parameterSetIndex) 
+public class Uniform extends Function
+{
+    public Uniform ()
     {
-        if (parameterSetIndex == 0)
+        name          = "uniform";
+        associativity = Associativity.LEFT_TO_RIGHT;
+        precedence    = 1;
+    }
+
+    public Object eval (Object[] args)
+    {
+        if (args.length == 1)
         {
-            double a = ((Number) args[0]).doubleValue ();
-            double b = ((Number) args[1]).doubleValue ();
-            return a + (b - a) * Math.random ();
+            int dimension = ((Number) args[0]).intValue ();
+            if (dimension != 1) throw new EvaluationException ("Vector form of uniform distribution not yet implemented.");
+            // TODO: Add code to generate vectors with uniform distribution
         }
-        else if (parameterSetIndex == 1)
-        {
-            double b = ((Number) args[0]).doubleValue ();
-            return Math.random () * b;
-        }
-        // parameterSetIndex == 2, or anything else not in [0,1]
         return Math.random ();
     }
 }

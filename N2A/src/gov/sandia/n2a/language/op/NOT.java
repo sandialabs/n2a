@@ -7,31 +7,27 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.op;
 
+import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
-import gov.sandia.n2a.language.ParameterSet;
 
-public class NOT extends Function {
-    @Override
-    public String getName() {
-        return "!";
+public class NOT extends Function
+{
+    public NOT ()
+    {
+        name          = "!";
+        associativity = Associativity.LEFT_TO_RIGHT;
+        precedence    = 2;
     }
 
-    @Override
-    public String getDescription() {
-        return "logical not";
-    }
-
-    @Override
-    public ParameterSet[] getAllowedParameterSets() {
-        return new ParameterSet[] {
-            new ParameterSet(
-                "!RET", "val",
-                Boolean.class, Boolean.class)
-        };
-    }
-
-    @Override
-    protected Object eval(Object[] args, int parameterTypeIndex) {
-        return !((Boolean) args[0]);
+    public Object eval (Object[] args)
+    {
+        if (args[0] instanceof Number)
+        {
+            return (((Number) args[0]).doubleValue () == 0) ? 1.0 : 0.0;
+        }
+        else  // TODO: test for matrix class
+        {
+            throw new EvaluationException ("Matrix inversion not implemented");
+        }
     }
 }

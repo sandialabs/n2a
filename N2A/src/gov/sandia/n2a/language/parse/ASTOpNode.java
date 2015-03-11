@@ -13,11 +13,9 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.parse;
 
-import gov.sandia.n2a.language.Associativity;
 import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
-import gov.sandia.n2a.language.FunctionList;
 import gov.sandia.n2a.language.op.Assign;
 
 
@@ -66,76 +64,64 @@ public class ASTOpNode extends ASTNodeBase {
         Object value = getValue ();
 
         // Long rendering
-        if(!context.shortMode) {
+        if (!context.shortMode)
+        {
             String ret = "";
-            if(getCount() == 1) {
+            if (getCount () == 1)
+            {
                 ret += value.toString();
                 ret += context.render (getChild (0));
-            } else {
-                if(!(getParent() instanceof ASTStart)) {
-                    ret += "(";
-                }
+            }
+            else
+            {
+                if (!(getParent() instanceof ASTStart)) ret += "(";
                 ret += context.render (getChild (0));
                 ret += " " + value.toString() + " ";
                 ret += context.render (getChild (1));
-                if(!(getParent() instanceof ASTStart)) {
-                    ret += ")";
-                }
+                if (!(getParent() instanceof ASTStart)) ret += ")";
             }
             return ret;
         }
 
         // Short rendering
         String ret = "";
-        if(getCount() == 1) {
-            ret += value.toString();
+        if (getCount () == 1)
+        {
+            ret += value.toString ();
             ret += context.render (getChild (0));
-        } else {
+        }
+        else
+        {
             boolean useParens;
-            Function thisFunc = (Function) value;
-            int thisPrecLevel = FunctionList.getPrecedenceLevel(thisFunc);
-            Associativity thisAssoc = FunctionList.getAssociativity(thisFunc);
+            Function f = (Function) value;
 
             // Left-hand child
             useParens = false;
-            if(getChild(0) instanceof ASTOpNode) {
-                int rightPrecLevel = FunctionList.getPrecedenceLevel(
-                    (Function) getChild(0).getValue ());
-                if(thisPrecLevel > rightPrecLevel ||
-                        thisPrecLevel == rightPrecLevel &&
-                        thisAssoc == Associativity.RIGHT_TO_LEFT) {
-                    useParens = true;
-                }
+            if (getChild (0) instanceof ASTOpNode)
+            {
+                Function left = (Function) getChild (0).getValue ();
+                useParens =    f.precedence < left.precedence   // read "<" as "comes before" rather than "less"
+                            ||    f.precedence == left.precedence
+                               && f.associativity == Function.Associativity.RIGHT_TO_LEFT;
             }
-
-            if(useParens) {
-                ret += "(";
-            }
+            if (useParens) ret += "(";
             ret += context.render (getChild (0));
-            if(useParens) {
-                ret += ")";
-            }
+            if (useParens) ret += ")";
 
             ret += " " + value + " ";
 
             // Right-hand child
             useParens = false;
-            if(getChild(1) instanceof ASTOpNode) {
-                int rightPrecLevel = FunctionList.getPrecedenceLevel(
-                    (Function) getChild(1).getValue());
-                if(thisPrecLevel > rightPrecLevel ||
-                        thisPrecLevel == rightPrecLevel &&
-                        thisAssoc == Associativity.LEFT_TO_RIGHT) {
-                    useParens = true;
-                }
+            if (getChild (1) instanceof ASTOpNode)
+            {
+                Function right = (Function) getChild (1).getValue ();
+                useParens =    f.precedence < right.precedence
+                            ||    f.precedence == right.precedence
+                               && f.associativity == Function.Associativity.LEFT_TO_RIGHT;
             }
-            if(useParens) {
-                ret += "(";
-            }
+            if (useParens) ret += "(";
             ret += context.render (getChild (1));
-            if(useParens) {
-                ret += ")";
-            }
+            if (useParens) ret += ")";
         }
         return ret;
     }
@@ -149,8 +135,8 @@ public class ASTOpNode extends ASTNodeBase {
     public Object eval (EvaluationContext context) throws EvaluationException
     {
         Function func = (Function) getValue ();
-        // TODO: isAssignment() is obsolete. When using EquationEntry, the AST should never contain an assignment operation, as they are parsed out.
-        if (func.isAssignment ())
+        // TODO: func.assignment is obsolete. When using EquationEntry, the AST should never contain an assignment operation, as they are parsed out.
+        if (func.assignment)
         {
             if (! (getChild (0) instanceof ASTVarNode)  ||  ((ASTVarNode) getChild (0)).getOrder () != 0)
             {
@@ -172,7 +158,7 @@ public class ASTOpNode extends ASTNodeBase {
             else                                                                params[c] = getChild (c).eval (context);
         }
         Object result = func.eval (params);
-        if (func.isAssignment ())
+        if (func.assignment)
         {
             context.set (((ASTVarNode) getChild (0)).reference.variable, result);
         }

@@ -8,30 +8,18 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.language.op;
 
 import gov.sandia.n2a.language.Function;
-import gov.sandia.n2a.language.ParameterSet;
 
-public class Cosine extends Function {
-    @Override
-    public String getName() {
-        return "cos";
+public class Cosine extends Function
+{
+    public Cosine ()
+    {
+        name          = "cos";
+        associativity = Associativity.LEFT_TO_RIGHT;
+        precedence    = 1;
     }
 
-    @Override
-    public String getDescription() {
-        return "cosine";
-    }
-
-    @Override
-    public ParameterSet[] getAllowedParameterSets() {
-        return new ParameterSet[] {
-            new ParameterSet(
-                "!RET", "val",
-                Number.class, Number.class)
-        };
-    }
-
-    @Override
-    protected Object eval(Object[] args, int parameterSetIndex) {
-        return Math.cos(((Number) args[0]).doubleValue());
+    public Object eval (Object[] args)
+    {
+        return Math.cos (((Number) args[0]).doubleValue ());
     }
 }

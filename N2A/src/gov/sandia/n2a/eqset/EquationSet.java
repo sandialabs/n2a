@@ -9,6 +9,7 @@ package gov.sandia.n2a.eqset;
 
 import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.op.Add;
 import gov.sandia.n2a.language.op.Divide;
 import gov.sandia.n2a.language.op.Multiply;
@@ -1401,13 +1402,12 @@ public class EquationSet implements Comparable<EquationSet>
                 catch (EvaluationException exception)
                 {
                 }
-                if (! (node instanceof ASTOpNode))
-                {
-                    return node;
-                }
+                if (! (node instanceof ASTOpNode)) return node;
 
                 // Otherwise try arithmetic simplifications
-                if (node.getValue () instanceof Add)
+                Object operation = node.getValue ();
+                int operands = node.getCount ();
+                if (operation instanceof Add)
                 {
                     Object c = node.getChild (0).getValue ();
                     if (c instanceof Number  &&  ((Number) c).doubleValue () == 0)
@@ -1420,20 +1420,15 @@ public class EquationSet implements Comparable<EquationSet>
                         return node.getChild (0);
                     }
                 }
-                if (node.getValue () instanceof Subtract)
+                if (operation instanceof Subtract)
                 {
-                    Object c = node.getChild (0).getValue ();
-                    if (c instanceof Number  &&  ((Number) c).doubleValue () == 0)
-                    {
-                        return node.getChild (1);
-                    }
-                    c = node.getChild (1).getValue ();
+                    Object c = node.getChild (1).getValue ();
                     if (c instanceof Number  &&  ((Number) c).doubleValue () == 0)
                     {
                         return node.getChild (0);
                     }
                 }
-                if (node.getValue () instanceof Divide)
+                if (operation instanceof Divide)
                 {
                     Object c = node.getChild (1).getValue ();
                     if (c instanceof Number  &&  ((Number) c).doubleValue () == 1)
@@ -1441,7 +1436,7 @@ public class EquationSet implements Comparable<EquationSet>
                         return node.getChild (0);
                     }
                 }
-                if (node.getValue () instanceof Multiply)
+                if (operation instanceof Multiply)
                 {
                     Object c = node.getChild (0).getValue ();
                     if (c instanceof Number)

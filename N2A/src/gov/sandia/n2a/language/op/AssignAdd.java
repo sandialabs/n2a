@@ -7,19 +7,18 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.op;
 
-public class AssignAdd extends Add {
-    @Override
-    public String getName() {
-        return "+=";
+public class AssignAdd extends Add
+{
+    public AssignAdd ()
+    {
+        name          = "+=";
+        associativity = Associativity.RIGHT_TO_LEFT;
+        precedence    = 12;
+        assignment    = true;
     }
 
-    @Override
-    public String getDescription() {
-        return "addition assignment";
-    }
-
-    @Override
-    public boolean isAssignment() {
-        return true;
+    public Object eval (Object[] args)
+    {
+        return ((Number) args[0]).doubleValue () + ((Number) args[1]).doubleValue ();
     }
 }

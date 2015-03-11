@@ -12,7 +12,6 @@ import java.lang.reflect.Field;
 import java.io.StringReader;
 
 import gov.sandia.n2a.language.Function;
-import gov.sandia.n2a.language.FunctionList;
 import replete.util.ReflectionUtil;
 
 import javax.measure.unit.*;
@@ -241,7 +240,7 @@ GRAMMAR START
       try {
       jjtree.closeNodeScope(jjtn001,  2);
       jjtc001 = false;
-        jjtn001.jjtSetValue(FunctionList.get(t.image));
+        jjtn001.jjtSetValue(Function.get(t.image));
       } finally {
       if (jjtc001) {
         jjtree.closeNodeScope(jjtn001,  2);
@@ -319,7 +318,7 @@ GRAMMAR START
         AndExpression();
               jjtree.closeNodeScope(jjtn001,  2);
               jjtc001 = false;
-                jjtn001.jjtSetValue(FunctionList.get(FunctionList.OP_OR));
+                jjtn001.jjtSetValue(Function.get("||"));
       } catch (Throwable jjte001) {
           if (jjtc001) {
             jjtree.clearNodeScope(jjtn001);
@@ -362,7 +361,7 @@ GRAMMAR START
         EqualExpression();
               jjtree.closeNodeScope(jjtn001,  2);
               jjtc001 = false;
-                jjtn001.jjtSetValue(FunctionList.get(FunctionList.OP_AND));
+                jjtn001.jjtSetValue(Function.get("&&"));
       } catch (Throwable jjte001) {
           if (jjtc001) {
             jjtree.clearNodeScope(jjtn001);
@@ -408,7 +407,7 @@ GRAMMAR START
           RelationalExpression();
               jjtree.closeNodeScope(jjtn001,  2);
               jjtc001 = false;
-                jjtn001.jjtSetValue(FunctionList.get(FunctionList.OP_NE));
+                jjtn001.jjtSetValue(Function.get("!="));
         } catch (Throwable jjte001) {
           if (jjtc001) {
             jjtree.clearNodeScope(jjtn001);
@@ -438,7 +437,7 @@ GRAMMAR START
           RelationalExpression();
               jjtree.closeNodeScope(jjtn002,  2);
               jjtc002 = false;
-                jjtn002.jjtSetValue(FunctionList.get(FunctionList.OP_EQ));
+                jjtn002.jjtSetValue(Function.get("=="));
         } catch (Throwable jjte002) {
           if (jjtc002) {
             jjtree.clearNodeScope(jjtn002);
@@ -492,7 +491,7 @@ GRAMMAR START
           AdditiveExpression();
               jjtree.closeNodeScope(jjtn001,  2);
               jjtc001 = false;
-                jjtn001.jjtSetValue(FunctionList.get(FunctionList.OP_LT));
+                jjtn001.jjtSetValue(Function.get("<"));
         } catch (Throwable jjte001) {
           if (jjtc001) {
             jjtree.clearNodeScope(jjtn001);
@@ -522,7 +521,7 @@ GRAMMAR START
           AdditiveExpression();
               jjtree.closeNodeScope(jjtn002,  2);
               jjtc002 = false;
-                jjtn002.jjtSetValue(FunctionList.get(FunctionList.OP_GT));
+                jjtn002.jjtSetValue(Function.get(">"));
         } catch (Throwable jjte002) {
           if (jjtc002) {
             jjtree.clearNodeScope(jjtn002);
@@ -552,7 +551,7 @@ GRAMMAR START
           AdditiveExpression();
               jjtree.closeNodeScope(jjtn003,  2);
               jjtc003 = false;
-                jjtn003.jjtSetValue(FunctionList.get(FunctionList.OP_LE));
+                jjtn003.jjtSetValue(Function.get("<="));
         } catch (Throwable jjte003) {
           if (jjtc003) {
             jjtree.clearNodeScope(jjtn003);
@@ -582,7 +581,7 @@ GRAMMAR START
           AdditiveExpression();
               jjtree.closeNodeScope(jjtn004,  2);
               jjtc004 = false;
-                jjtn004.jjtSetValue(FunctionList.get(FunctionList.OP_GE));
+                jjtn004.jjtSetValue(Function.get(">="));
         } catch (Throwable jjte004) {
           if (jjtc004) {
             jjtree.clearNodeScope(jjtn004);
@@ -634,7 +633,7 @@ GRAMMAR START
           MultiplicativeExpression();
               jjtree.closeNodeScope(jjtn001,  2);
               jjtc001 = false;
-                jjtn001.jjtSetValue(FunctionList.get(FunctionList.OP_ADD));
+                jjtn001.jjtSetValue(Function.get("+"));
         } catch (Throwable jjte001) {
           if (jjtc001) {
             jjtree.clearNodeScope(jjtn001);
@@ -664,7 +663,7 @@ GRAMMAR START
           MultiplicativeExpression();
               jjtree.closeNodeScope(jjtn002,  2);
               jjtc002 = false;
-                jjtn002.jjtSetValue(FunctionList.get(FunctionList.OP_SUBTRACT));
+                jjtn002.jjtSetValue(Function.get("-"));
         } catch (Throwable jjte002) {
           if (jjtc002) {
             jjtree.clearNodeScope(jjtn002);
@@ -717,7 +716,7 @@ GRAMMAR START
           UnitExpression();
               jjtree.closeNodeScope(jjtn001,  2);
               jjtc001 = false;
-                jjtn001.jjtSetValue(FunctionList.get(FunctionList.OP_MULTIPLY));
+                jjtn001.jjtSetValue(Function.get("*"));
         } catch (Throwable jjte001) {
           if (jjtc001) {
             jjtree.clearNodeScope(jjtn001);
@@ -747,7 +746,7 @@ GRAMMAR START
           UnitExpression();
               jjtree.closeNodeScope(jjtn002,  2);
               jjtc002 = false;
-                jjtn002.jjtSetValue(FunctionList.get(FunctionList.OP_DIVIDE));
+                jjtn002.jjtSetValue(Function.get("/"));
         } catch (Throwable jjte002) {
           if (jjtc002) {
             jjtree.clearNodeScope(jjtn002);
@@ -777,7 +776,7 @@ GRAMMAR START
           UnitExpression();
               jjtree.closeNodeScope(jjtn003,  2);
               jjtc003 = false;
-                jjtn003.jjtSetValue(FunctionList.get(FunctionList.OP_MOD));
+                jjtn003.jjtSetValue(Function.get("%"));
         } catch (Throwable jjte003) {
           if (jjtc003) {
             jjtree.clearNodeScope(jjtn003);
@@ -862,7 +861,7 @@ GRAMMAR START
         PowerExpression();
           jjtree.closeNodeScope(jjtn001,  1);
           jjtc001 = false;
-            jjtn001.jjtSetValue(FunctionList.get(FunctionList.OP_UPLUS));
+            jjtn001.jjtSetValue(Function.get("+"));
       } catch (Throwable jjte001) {
       if (jjtc001) {
         jjtree.clearNodeScope(jjtn001);
@@ -892,7 +891,7 @@ GRAMMAR START
         PowerExpression();
           jjtree.closeNodeScope(jjtn002,  1);
           jjtc002 = false;
-            jjtn002.jjtSetValue(FunctionList.get(FunctionList.OP_UMINUS));
+            jjtn002.jjtSetValue(Function.get("UM"));
       } catch (Throwable jjte002) {
       if (jjtc002) {
         jjtree.clearNodeScope(jjtn002);
@@ -922,7 +921,7 @@ GRAMMAR START
         PowerExpression();
           jjtree.closeNodeScope(jjtn003,  1);
           jjtc003 = false;
-            jjtn003.jjtSetValue(FunctionList.get(FunctionList.OP_NOT));
+            jjtn003.jjtSetValue(Function.get("!"));
       } catch (Throwable jjte003) {
       if (jjtc003) {
         jjtree.clearNodeScope(jjtn003);
@@ -968,7 +967,7 @@ GRAMMAR START
         PrimaryExpression();
               jjtree.closeNodeScope(jjtn001,  2);
               jjtc001 = false;
-                jjtn001.jjtSetValue(FunctionList.get(FunctionList.OP_POWER));
+                jjtn001.jjtSetValue(Function.get("^"));
       } catch (Throwable jjte001) {
           if (jjtc001) {
             jjtree.clearNodeScope(jjtn001);
@@ -1127,7 +1126,7 @@ GRAMMAR START
       jj_consume_token(RRND);
       jjtree.closeNodeScope(jjtn000, true);
       jjtc000 = false;
-        jjtn000.jjtSetValue(FunctionList.getOrUnknown(t.image));
+        jjtn000.jjtSetValue(Function.get(t.image,true));
     } catch (Throwable jjte000) {
       if (jjtc000) {
         jjtree.clearNodeScope(jjtn000);

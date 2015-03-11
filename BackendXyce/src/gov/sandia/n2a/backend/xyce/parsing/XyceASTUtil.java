@@ -17,7 +17,6 @@ import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.op.Power;
-import gov.sandia.n2a.language.op.UnknownFunction;
 import gov.sandia.n2a.language.parse.ASTFunNode;
 import gov.sandia.n2a.language.parse.ASTNodeBase;
 import gov.sandia.n2a.language.parse.ASTNodeRenderer;
@@ -166,27 +165,5 @@ public class XyceASTUtil {
         EvaluationContext context = new EvaluationContext();
         pSet.setInstanceContext(context, pi, init);
         return cond.eval(context);
-    }
-
-    public static boolean hasUnknownFunction(EquationEntry eq)
-    {
-        return hasUnknownFunction(eq.expression);
-    }
-
-    public static boolean hasUnknownFunction(ASTNodeBase node)
-    {
-        boolean result = false;
-        // check this node
-        if (node instanceof ASTFunNode) {
-            Function func = (Function) node.getValue();
-            if (func instanceof UnknownFunction) {
-                return true;
-            }
-        }
-        // check children
-        for (int i=0; i<node.getCount(); i++) {
-            result = result && hasUnknownFunction(node.getChild(i));
-        }
-        return result;
     }
 }

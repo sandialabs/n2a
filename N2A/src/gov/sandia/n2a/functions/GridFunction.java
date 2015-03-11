@@ -8,34 +8,18 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.functions;
 
 import gov.sandia.n2a.language.Function;
-import gov.sandia.n2a.language.ParameterSet;
-
-
 
 public class GridFunction extends Function
 {
-    @Override
-    public String getName() {
-        return "grid";
+    public GridFunction ()
+    {
+        name          = "grid";
+        associativity = Associativity.LEFT_TO_RIGHT;
+        precedence    = 1;
     }
 
-    @Override
-    public String getDescription() {
-        return "grid position";
-    }
-
-    @Override
-    public ParameterSet[] getAllowedParameterSets() {
-        return new ParameterSet[] {
-                new ParameterSet(
-                    "!RET", "nx", "ny", "nz", "sx", "sy", "sz", "index",
-                    Object.class, Number.class, Number.class, Number.class,
-                    Number.class, Number.class, Number.class, Number.class)
-            };
-    }
-
-    @Override
-    protected Object eval(Object[] args, int parameterSetIndex) {
+    public Object eval (Object[] args)
+    {
         int row = ((Number)args[6]).intValue() / ((Number)args[0]).intValue();
         int col = ((Number)args[6]).intValue() % ((Number)args[1]).intValue();
         // let's simplify things by assuming one corner of the space is
@@ -48,5 +32,4 @@ public class GridFunction extends Function
         Number[] result = {xPosition,yPosition};
         return result;
     }
-
 }

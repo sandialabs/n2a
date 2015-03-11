@@ -8,31 +8,17 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.language.op;
 
 import gov.sandia.n2a.language.Function;
-import gov.sandia.n2a.language.ParameterSet;
 
-public class Lognormal extends Function {
-
-    @Override
-    public String getName() {
-        return "lognormal";
+public class Lognormal extends Function
+{
+    public Lognormal ()
+    {
+        name          = "lognormal";
+        associativity = Associativity.LEFT_TO_RIGHT;
+        precedence    = 1;
     }
 
-    @Override
-    public String getDescription() {
-        return "lognormal distribution";
-    }
-
-    @Override
-    public ParameterSet[] getAllowedParameterSets() {
-        return new ParameterSet[] {
-                new ParameterSet(
-                    "!RET", "val1", "val2",
-                    Number.class, Number.class, Number.class)
-            };
-    }
-
-    @Override
-    protected Object eval (Object[] args, int parameterSetIndex)
+    public Object eval (Object[] args)
     {
         double location = ((Number) args[0]).doubleValue ();
         double scale    = ((Number) args[1]).doubleValue ();

@@ -8,33 +8,18 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.language.op;
 
 import gov.sandia.n2a.language.Function;
-import gov.sandia.n2a.language.ParameterSet;
 
-public class EQ extends Function {
-    @Override
-    public String getName() {
-        return "==";
+public class EQ extends Function
+{
+    public EQ ()
+    {
+        name          = "==";
+        associativity = Associativity.LEFT_TO_RIGHT;
+        precedence    = 7;
     }
 
-    @Override
-    public String getDescription() {
-        return "equality comparison";
-    }
-
-    @Override
-    public ParameterSet[] getAllowedParameterSets() {
-        return new ParameterSet[] {
-            new ParameterSet(
-                "!RET", "val1", "val2",
-                Boolean.class, Object.class, Object.class)
-        };
-    }
-
-    @Override
-    protected Object eval(Object[] args, int parameterTypeIndex) {
-        if (args[0] instanceof Number && args[1] instanceof Number) {
-            return ((Number)args[0]).doubleValue() == ((Number)args[1]).doubleValue();
-        }
-        return args[0].equals(args[1]);
+    public Object eval (Object[] args)
+    {
+        return args[0].equals (args[1]) ? 1.0 : 0.0;
     }
 }
