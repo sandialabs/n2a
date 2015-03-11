@@ -9,7 +9,7 @@ package gov.sandia.n2a.eqset;
 
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.ParsedEquation;
-import gov.sandia.n2a.language.op.Add;
+import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.parse.ASTNodeBase;
 import gov.sandia.n2a.language.parse.ASTOpNode;
 import gov.sandia.n2a.language.parse.ASTTransformationContext;

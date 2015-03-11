@@ -5,21 +5,21 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.language.op;
+package gov.sandia.n2a.language.operator;
 
 import gov.sandia.n2a.language.Function;
 
-public class Add extends Function
+public class Tangent extends Function
 {
-    public Add ()
+    public Tangent ()
     {
-        name          = "+";
+        name          = "tan";
         associativity = Associativity.LEFT_TO_RIGHT;
-        precedence    = 5;
+        precedence    = 1;
     }
 
     public Object eval (Object[] args)
     {
-        return ((Number) args[0]).doubleValue() + ((Number) args[1]).doubleValue();
+        return Math.tan (((Number) args[0]).doubleValue ());
     }
 }

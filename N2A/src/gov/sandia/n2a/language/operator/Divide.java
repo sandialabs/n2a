@@ -5,23 +5,21 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.language.op;
+package gov.sandia.n2a.language.operator;
 
 import gov.sandia.n2a.language.Function;
 
-public class GT extends Function
+public class Divide extends Function
 {
-    public GT ()
+    public Divide ()
     {
-        name          = ">";
+        name          = "/";
         associativity = Associativity.LEFT_TO_RIGHT;
-        precedence    = 6;
+        precedence    = 4;
     }
 
     public Object eval (Object[] args)
     {
-        double arg0 = ((Number) args[0]).doubleValue ();
-        double arg1 = ((Number) args[1]).doubleValue ();
-        return (arg0 > arg1) ? 1.0 : 0.0;
+        return ((Number) args[0]).doubleValue() / ((Number) args[1]).doubleValue();
     }
 }

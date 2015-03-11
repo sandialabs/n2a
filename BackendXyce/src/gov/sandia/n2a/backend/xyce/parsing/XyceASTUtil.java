@@ -16,7 +16,7 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
-import gov.sandia.n2a.language.op.Power;
+import gov.sandia.n2a.language.operator.Power;
 import gov.sandia.n2a.language.parse.ASTFunNode;
 import gov.sandia.n2a.language.parse.ASTNodeBase;
 import gov.sandia.n2a.language.parse.ASTNodeRenderer;

@@ -16,7 +16,7 @@ package gov.sandia.n2a.language.parse;
 import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
-import gov.sandia.n2a.language.op.Assign;
+import gov.sandia.n2a.language.operator.Assign;
 
 
 public class ASTOpNode extends ASTNodeBase {
