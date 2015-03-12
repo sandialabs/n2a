@@ -7,11 +7,15 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.function;
 
+import java.util.Random;
+
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 
 public class Gaussian extends Function
 {
+    Random random = new Random ();  // TODO: should there be a single shared random number generator across an entire N2A runtime?
+
     public Gaussian ()
     {
         name          = "gaussian";
@@ -21,17 +25,17 @@ public class Gaussian extends Function
 
     public Object eval (Object[] args) throws EvaluationException
     {
-        int dimension = ((Number) args[0]).intValue ();
-        if (dimension == 3)
+        if (args.length > 1) throw new EvaluationException ("too many arguments to gaussian()");
+        if (args.length == 1)
         {
-            throw new EvaluationException ("gaussian(3) not yet implemented");
+            int dimension = ((Number) args[0]).intValue ();
+            if (dimension > 1)
+            {
+                Number[] result = new Number[dimension];
+                for (int i = 0; i < dimension; i++) result[i] = random.nextGaussian ();
+                return result;
+            }
         }
-        else
-        {
-            double r     = Math.sqrt (-2 * Math.log (Math.random ()));
-            double theta = 2 * Math.PI * Math.random ();
-            return r * Math.cos (theta);
-        }
+        return random.nextGaussian ();
     }
-
 }

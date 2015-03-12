@@ -7,6 +7,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.function;
 
+import java.util.ArrayList;
+
 import gov.sandia.n2a.language.Function;
 
 public class Grid extends Function
@@ -18,18 +20,43 @@ public class Grid extends Function
         precedence    = 1;
     }
 
+    public void swap (int[] array, int i, int j)
+    {
+        int temp = array[i];
+        array[i] = array[j];
+        array[j] = temp;
+    }
+
     public Object eval (Object[] args)
     {
-        int row = ((Number)args[6]).intValue() / ((Number)args[0]).intValue();
-        int col = ((Number)args[6]).intValue() % ((Number)args[1]).intValue();
-        // let's simplify things by assuming one corner of the space is
-        // at (0, 0), and having the distance to the edge of the defined space
-        // be the same as the distance between points within the space
-        double xStride = ((Number)args[3]).doubleValue() / (((Number)args[0]).intValue() + 1);
-        double yStride = ((Number)args[4]).doubleValue() / (((Number)args[1]).intValue() + 1);
-        double xPosition = (col+1) * xStride;
-        double yPosition = (row+1) * yStride;
-        Number[] result = {xPosition,yPosition};
+        // collect parameters into arrays
+        int index = ((Number) args[0]).intValue ();
+        int[] stride = new int[3];
+        stride[0] = ((Number) args[1]).intValue ();
+        stride[1] = ((Number) args[2]).intValue ();
+        stride[2] = ((Number) args[3]).intValue ();
+        double[] length = new double[3];
+        length[0] = ((Number) args[4]).doubleValue ();
+        length[1] = ((Number) args[5]).doubleValue ();
+        length[2] = ((Number) args[6]).doubleValue ();
+
+        // sort by largest stride
+        int[] major = new int[3];
+        major[0] = 0;
+        major[1] = 1;
+        major[2] = 2;
+        if (stride[major[0]] < stride[major[1]]) swap (major, 0, 1);
+        if (stride[major[1]] < stride[major[2]]) swap (major, 1, 2);
+        if (stride[major[0]] < stride[major[1]]) swap (major, 0, 1);
+
+        // compute xyz in stride order
+        Number[] result = new Number[3];
+        for (int i = 0; i < 3; i++)
+        {
+            int m = major[i];
+            result[m] = (index / stride[m]) * length[m];  // The division is an integer operation, so remainder is truncated.
+            index %= stride[m];
+        }
         return result;
     }
 }

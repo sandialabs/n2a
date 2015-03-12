@@ -7,6 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.function;
 
+import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 
 public class Pulse extends Function
@@ -18,29 +19,28 @@ public class Pulse extends Function
         precedence    = 1;
     }
 
-    public Object eval (Object[] args)
+    public Object eval (Object[] args) throws EvaluationException
     {
-        // TODO - default value for period, rise, and fall should be 0
-        double indepVar = ((Number) args[0]).doubleValue();
-        double width = ((Number) args[1]).doubleValue();
-        double period = ((Number) args[2]).doubleValue();
-        double rise = ((Number) args[3]).doubleValue();
-        double fall = ((Number) args[4]).doubleValue();
-        double result = 0.0;
-        if (period != 0) {
-            indepVar = indepVar % period;
+        if (args.length < 2) throw new EvaluationException ("pulse() requires at least two arguments");
+        double t      = ((Number) args[0]).doubleValue ();
+        double width  = ((Number) args[1]).doubleValue ();
+        double period = 0;
+        double rise   = 0;
+        double fall   = 0;
+        if (args.length >= 3) period = ((Number) args[2]).doubleValue ();
+        if (args.length >= 4) rise   = ((Number) args[3]).doubleValue ();
+        if (args.length >= 5) fall   = ((Number) args[4]).doubleValue ();
+
+        if (period == 0.0)
+        {
+            if (t < 0) return 0.0;
         }
-        if (indepVar>0) {
-            if (indepVar<rise) {
-                result = indepVar/rise;
-            }
-            else if (indepVar<width+rise) {
-                result = 1.0;
-            }
-            else if (indepVar<width+rise+fall)  {
-                result = 1.0 - (indepVar-width-rise)/fall;
-            }
-        }
-        return result;
+        else t %= period;
+        if (t < rise) return t / rise;
+        t -= rise;
+        if (t < width) return 1.0;
+        t -= width;
+        if (t < fall) return 1.0 - t / fall;
+        return 0.0;
     }
 }

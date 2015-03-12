@@ -7,11 +7,15 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.function;
 
+import java.util.Random;
+
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 
 public class Uniform extends Function
 {
+    Random random = new Random ();  // TODO: should there be a single shared random number generator across an entire N2A runtime?
+
     public Uniform ()
     {
         name          = "uniform";
@@ -19,14 +23,19 @@ public class Uniform extends Function
         precedence    = 1;
     }
 
-    public Object eval (Object[] args)
+    public Object eval (Object[] args) throws EvaluationException
     {
+        if (args.length > 1) throw new EvaluationException ("too many arguments to uniform()");
         if (args.length == 1)
         {
             int dimension = ((Number) args[0]).intValue ();
-            if (dimension != 1) throw new EvaluationException ("Vector form of uniform distribution not yet implemented.");
-            // TODO: Add code to generate vectors with uniform distribution
+            if (dimension > 1)
+            {
+                Number[] result = new Number[dimension];
+                for (int i = 0; i < dimension; i++) result[i] = random.nextDouble ();
+                return result;
+            }
         }
-        return Math.random ();
+        return random.nextDouble ();
     }
 }

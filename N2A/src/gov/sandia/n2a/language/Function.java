@@ -11,7 +11,6 @@ import gov.sandia.n2a.language.function.Cosine;
 import gov.sandia.n2a.language.function.Exp;
 import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Grid;
-import gov.sandia.n2a.language.function.Lognormal;
 import gov.sandia.n2a.language.function.Pulse;
 import gov.sandia.n2a.language.function.Sine;
 import gov.sandia.n2a.language.function.Tangent;
@@ -97,7 +96,6 @@ public class Function implements ExtensionPoint, Comparable<Function>
         functions.add (new Exp ());
         functions.add (new Gaussian ());
         functions.add (new Grid ());
-        functions.add (new Lognormal ());
         functions.add (new Pulse ());
         functions.add (new Sine ());
         functions.add (new Tangent ());
