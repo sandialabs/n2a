@@ -2,3 +2,6 @@ Replete
 /lib
 /bin
 ^.metadata$
+
+syntax: glob
+*.jj
