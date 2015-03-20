@@ -11,6 +11,9 @@ import java.util.Random;
 
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Matrix;
+import gov.sandia.n2a.language.type.Scalar;
 
 public class Uniform extends Function
 {
@@ -23,19 +26,19 @@ public class Uniform extends Function
         precedence    = 1;
     }
 
-    public Object eval (Object[] args) throws EvaluationException
+    public Type eval (Type[] args) throws EvaluationException
     {
         if (args.length > 1) throw new EvaluationException ("too many arguments to uniform()");
         if (args.length == 1)
         {
-            int dimension = ((Number) args[0]).intValue ();
+            int dimension = (int) Math.round (((Scalar) args[0]).value);
             if (dimension > 1)
             {
-                Number[] result = new Number[dimension];
-                for (int i = 0; i < dimension; i++) result[i] = random.nextDouble ();
+                Matrix result = new Matrix (dimension, 1);
+                for (int i = 0; i < dimension; i++) result.value[0][i] = random.nextDouble ();
                 return result;
             }
         }
-        return random.nextDouble ();
+        return new Scalar (random.nextDouble ());
     }
 }

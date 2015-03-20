@@ -9,6 +9,7 @@ package gov.sandia.n2a.language.function;
 
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Type;
 
 public class Trace extends Function
 {
@@ -25,7 +26,7 @@ public class Trace extends Function
         return true;
     }
 
-    public Object eval (Object[] args) 
+    public Type eval (Type[] args) 
     {
         if (args.length != 2) throw new EvaluationException ("This form of trace() is not implemented.");
         return args[0];

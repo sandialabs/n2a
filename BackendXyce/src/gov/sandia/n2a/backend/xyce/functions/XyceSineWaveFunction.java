@@ -7,9 +7,9 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.xyce.functions;
 
-import gov.sandia.n2a.backend.xyce.params.SineInputSpecification;
 import gov.sandia.n2a.language.Function;
-import gov.sandia.n2a.language.Function.Associativity;
+import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Scalar;
 
 public class XyceSineWaveFunction extends Function
 {
@@ -20,9 +20,8 @@ public class XyceSineWaveFunction extends Function
         precedence    = 1;
     }
 
-    public Object eval (Object[] args)
+    public Type eval (Type[] args)
     {
-        return new SineInputSpecification(((Number) args[0]).doubleValue(), ((Number) args[1]).doubleValue(),
-                ((Number)args[2]).doubleValue(), ((Number)args[3]).doubleValue(), ((Number)args[4]).doubleValue());
+        return new Scalar (0);
     }
 }

@@ -10,9 +10,12 @@ package gov.sandia.n2a.eqset;
 import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.operator.AND;
 import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.operator.Divide;
 import gov.sandia.n2a.language.operator.Multiply;
+import gov.sandia.n2a.language.operator.OR;
 import gov.sandia.n2a.language.operator.Subtract;
 import gov.sandia.n2a.language.parse.ASTConstant;
 import gov.sandia.n2a.language.parse.ASTFunNode;
@@ -24,12 +27,13 @@ import gov.sandia.n2a.language.parse.ASTOpNode;
 import gov.sandia.n2a.language.parse.ASTRenderingContext;
 import gov.sandia.n2a.language.parse.ASTTransformationContext;
 import gov.sandia.n2a.language.parse.ASTVarNode;
+import gov.sandia.n2a.language.type.Matrix;
+import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
-import java.lang.Number;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -410,14 +414,21 @@ public class EquationSet implements Comparable<EquationSet>
         {
             if (v.name.startsWith ("$up."))
             {
+                if (container == null) return null;  // Unresolved! We can't go up any farther.
                 v.name = v.name.substring (4);
                 v.reference.resolution.add (container);
-                return container.resolveEquationSet (v);  // TODO: Could result in a null pointer exception, if $up is used in top-level model. This usage is not permitted, so perhaps all we need is better error reporting.
+                return container.resolveEquationSet (v);
             }
-            else
-            {
-                return this;  // Other $variables are always treated as local, even if they are undefined. For example: you would never want to inherit $n from a container!
-            }
+            return this;  // Other $variables are always treated as local, even if they are undefined. For example: you would never want to inherit $n from a container!
+        }
+        if (   v.name.endsWith (".$k")
+            || v.name.endsWith (".$max")
+            || v.name.endsWith (".$min")
+            || v.name.endsWith (".$projectFrom")
+            || v.name.endsWith (".$projectTo")
+            || v.name.endsWith (".$radius"))
+        {
+            return this;
         }
 
         // Check namespace references. These take precedence over variable names.
@@ -443,26 +454,31 @@ public class EquationSet implements Comparable<EquationSet>
             }
         }
 
-        // Check variable names
-        if (variables.contains (v))
+        // Check connections
+        if (connectionBindings != null)
         {
-            return this;  // found it!
+            EquationSet alias = connectionBindings.get (v.name);
+            if (alias != null)
+            {
+                v.reference.resolution.add (connectionBindings.floorEntry (v.name));  // same kind of resolution path as if we went into connected part, but ...
+                v.name = "(connection)";                                              // don't match any variables within the connected part
+                return alias;                                                         // and terminate as if we found a variable there
+            }
         }
 
-        // Check if this is a direct reference to a part.
-        // Similar to a "down" reference, except no variable is involved.
+        // Check variable names
+        if (variables.contains (v)) return this;  // found it!
+
+        // Check if this is a direct reference to a child part.
+        // Similar to a "down" reference, except without a variable.
         EquationSet part = parts.floor (new EquationSet (v.name));
         if (part != null  &&  part.name.equals (v.name))
         {
-            v.name = "(part)";  // parentheses are illegal in a variable name, so this should clearly identify a direct part reference
-            return this;
+            return null; // formally, we don't allow a bare reference to a child population
         }
 
         // Look up the containment hierarchy
-        if (container == null)
-        {
-            return null;  // unresolved!!
-        }
+        if (container == null) return null;  // unresolved!!
         v.reference.resolution.add (container);
         return container.resolveEquationSet (v);
     }
@@ -549,12 +565,12 @@ public class EquationSet implements Comparable<EquationSet>
                     query.reference.variable = dest.find (query);
                     if (query.reference.variable == null)
                     {
-                        if (query.name.equals ("(part)"))
+                        if (query.name.equals ("(connection)"))
                         {
-                            // Create a placeholder for the part.
-                            // It will not be entered into the part's collection of variables.
-                            query.reference.variable = new Variable (query.name, 0);
-                            query.reference.variable.container = dest;
+                            query.reference.variable = new Variable ("(connection)");  // create a phantom variable.  TODO: should this be an attribute instead?
+                            query.reference.variable.container = dest;  // the container itself is really the target
+                            query.reference.variable.addAttribute ("initOnly"); // because instance variables are bound before the part is put into service, and remain constant for its entire life
+                            query.reference.variable.reference = query.reference;  // TODO: when $connect() is implemented, instances should become first class variables in the equation set, and this circular reference will be created by resolveLHS()
                         }
                     }
                     else
@@ -696,7 +712,7 @@ public class EquationSet implements Comparable<EquationSet>
                 if (ne.expression != null)
                 {
                     Object value = ne.expression.eval ();
-                    if (value instanceof Number  &&  ((Number) value).floatValue () != 1)
+                    if (value instanceof Scalar  &&  ((Scalar) value).value != 1)
                     {
                         continue;
                     }
@@ -849,7 +865,7 @@ public class EquationSet implements Comparable<EquationSet>
         Variable v = new Variable ("$dt", 0);
         if (add (v))
         {
-            v.equations = new TreeSet<EquationEntry> ();  // simpler to make an empty equation set than to test for null all the time
+            v.equations = new TreeSet<EquationEntry> ();
         }
 
         v = new Variable ("$live", 0);  // $live functions much the same as $init. See setInit().
@@ -860,7 +876,7 @@ public class EquationSet implements Comparable<EquationSet>
             EquationEntry e = new EquationEntry (v, "");
             v.equations.add (e);
             e.assignment = "=";
-            e.expression = new ASTConstant (new Float (1));
+            e.expression = new ASTConstant (new Scalar (1));
         }
 
         v = new Variable ("$t", 0);
@@ -892,7 +908,7 @@ public class EquationSet implements Comparable<EquationSet>
                 EquationEntry e = new EquationEntry (v, "");
                 v.equations.add (e);
                 e.assignment = "=";
-                e.expression = new ASTConstant (new Float (1));
+                e.expression = new ASTConstant (new Scalar (1));
             }
         }
     }
@@ -959,20 +975,11 @@ public class EquationSet implements Comparable<EquationSet>
             // Detect "reference" variables.
             // This code duplicates a lot of logic in resolveEquationSet(). It is useful to do this here
             // because resolveLHS() is overkill. 
-            if (v.name.startsWith ("$up."))
-            {
-                continue;
-            }
+            if (v.name.startsWith ("$up.")) continue;
             if (connectionBindings != null)
             {
                 String[] ns = v.name.split ("\\.", 2);
-                if (ns.length > 1)
-                {
-                    if (connectionBindings.get (ns[0]) != null)
-                    {
-                        continue;
-                    }
-                }
+                if (ns.length > 1  &&  connectionBindings.get (ns[0]) != null) continue;
             }
 
             // This may seem inefficient, but in general there will only be one order to process.
@@ -1005,14 +1012,14 @@ public class EquationSet implements Comparable<EquationSet>
             EquationEntry e = new EquationEntry ("$init", 0);
             e.variable.addAttribute ("constant");
             e.assignment = "=";
-            e.expression = new ASTConstant (new Float (value));
+            e.expression = new ASTConstant (new Scalar (value));
             add (e.variable);
         }
         else
         {
             EquationEntry e = init.equations.first ();
             ASTConstant c = (ASTConstant) e.expression;
-            c.setValue (new Float (value));
+            c.setValue (new Scalar (value));
         }
     }
 
@@ -1023,8 +1030,8 @@ public class EquationSet implements Comparable<EquationSet>
         EquationEntry e = init.equations.first ();
         ASTConstant c = (ASTConstant) e.expression;
         Object o = c.getValue ();
-        if (! (o instanceof Float)) return false;
-        return ((Float) o).floatValue () == 1.0;
+        if (! (o instanceof Scalar)) return false;
+        return ((Scalar) o).value == 1.0;
     }
 
     public static ArrayList<EquationSet> getSplitFrom (ASTNodeBase node) throws Exception
@@ -1170,16 +1177,16 @@ public class EquationSet implements Comparable<EquationSet>
             for (EquationEntry e : p.equations)
             {
                 ASTNodeBase expression = e.expression;
-                if (! (expression instanceof ASTConstant))
+                if (expression instanceof ASTConstant)
                 {
-                    lethalP = true;
-                    break;
+                    Object value = ((ASTConstant) expression).getValue ();
+                    if (value instanceof Scalar)
+                    {
+                        if (((Scalar) value).value == 1.0) continue;
+                    }
                 }
-                if (new Float (((ASTConstant) expression).getValue ().toString ()).floatValue () != 1.0f)
-                {
-                    lethalP = true;
-                    break;
-                }
+                lethalP = true;
+                break;
             }
         }
 
@@ -1276,6 +1283,89 @@ public class EquationSet implements Comparable<EquationSet>
                 live.addAttribute ("constant");  // should already be set constant, but no harm in doing it again
             }
         }
+    }
+
+    /**
+        Assign a Type to each variable.
+        Evaluates the entire equation set as if during the init phase. It
+        should be possible to assign a concrete value to each variable at that
+        time. If not, then the equation set has a bug at the user level.
+        Depends on results of: addSpecials(), fillIntegratedVariables(), resolveRHS(), resolveLHS()
+    **/
+    public void determineTypes ()
+    {
+        EvaluationContext context = new EvaluationContext ();
+        determineTypesInit (context);
+        while (determineTypesEval (context)) {}
+    }
+
+    public void determineTypesInit (EvaluationContext context)
+    {
+        for (EquationSet s : parts)
+        {
+            s.determineTypesInit (context);
+        }
+
+        for (Variable v : variables)
+        {
+            if (v.hasAttribute ("dummy")) continue;
+
+            if (v.name.contains ("$"))
+            {
+                if (v.name.equals ("$xyz")  ||  v.name.endsWith (".$projectFrom")  ||  v.name.endsWith (".$projectTo"))  // are there always dots before $projectFrom/To?
+                {
+                    v.reference.variable.type = new Matrix (3, 1);
+                }
+                else if (v.name.equals ("$init")  ||  v.name.equals ("$live"))
+                {
+                    v.reference.variable.type = new Scalar (1);
+                }
+                else
+                {
+                    v.reference.variable.type = new Scalar (0);
+                }
+            }
+            else if (v.hasAttribute ("constant"))
+            {
+                v.reference.variable.type = (Type) ((ASTConstant) v.equations.first ().expression).getValue ();
+            }
+            else
+            {
+                v.reference.variable.type = new Scalar (0);
+            }
+
+            context.set (v.reference.variable, v.reference.variable.type);
+        }
+    }
+
+    public boolean determineTypesEval (EvaluationContext context)
+    {
+        boolean changed = false;
+        for (Variable v : variables)
+        {
+            if (v.hasAny (new String[] {"constant", "dummy"})) continue;
+            if (v.name.startsWith ("$")  ||  v.name.contains (".$")) continue;
+
+            Type value;
+            if (v.hasAttribute ("integrated"))
+            {
+                value = find (new Variable (v.name, v.order + 1)).type;  // this should exist, so no need to verify result
+            }
+            else
+            {
+                value = context.get (v.reference.variable, false);
+            }
+            if (value.betterThan (v.type))  // v.type could be null, but betterThan() still works
+            {
+                v.type = value;
+                changed = true;
+            }
+        }
+        for (EquationSet s : parts)
+        {
+            if (s.determineTypesEval (context)) changed = true;
+        }
+        return changed;
     }
 
     public void addAttribute (String attribute, int connection, boolean withOrder, String[] names)
@@ -1375,11 +1465,15 @@ public class EquationSet implements Comparable<EquationSet>
         Also removes arithmetic operations that have no effect:
         <ul>
         <li>evaluate (node) == constant --> constant node
-        <li>node + 0 --> node
-        <li>node - 0 --> node
-        <li>node * 1 --> node
-        <li>node * 0 --> 0 (constant node)
-        <li>node / 1 --> node
+        <li>node + 0  --> node
+        <li>node || 0 --> node
+        <li>node || 1 --> 1 (constant node)
+        <li>node - 0  --> node
+        <li>node * 1  --> node
+        <li>node * 0  --> 0
+        <li>node && 1 --> node (note that * and && have the same effect, except && always outputs 0 or 1)
+        <li>node && 0 --> 0
+        <li>node / 1  --> node
         </ul>
         Depends on results of: resolveRHS()  (so that named constants can be found during evaluation)
     **/
@@ -1394,10 +1488,7 @@ public class EquationSet implements Comparable<EquationSet>
                 try
                 {
                     Object o = node.eval (ec);
-                    if (o != null)
-                    {
-                        return new ASTConstant (o);
-                    }
+                    if (o != null) return new ASTConstant (o);
                 }
                 catch (EvaluationException exception)
                 {
@@ -1406,63 +1497,72 @@ public class EquationSet implements Comparable<EquationSet>
 
                 // Otherwise try arithmetic simplifications
                 Object operation = node.getValue ();
-                int operands = node.getCount ();
                 if (operation instanceof Add)
                 {
                     Object c = node.getChild (0).getValue ();
-                    if (c instanceof Number  &&  ((Number) c).doubleValue () == 0)
-                    {
-                        return node.getChild (1);
-                    }
+                    if (c instanceof Scalar  &&  ((Scalar) c).value == 0) return node.getChild (1);
                     c = node.getChild (1).getValue ();
-                    if (c instanceof Number  &&  ((Number) c).doubleValue () == 0)
-                    {
-                        return node.getChild (0);
-                    }
+                    if (c instanceof Scalar  &&  ((Scalar) c).value == 0) return node.getChild (0);
                 }
                 if (operation instanceof Subtract)
                 {
                     Object c = node.getChild (1).getValue ();
-                    if (c instanceof Number  &&  ((Number) c).doubleValue () == 0)
-                    {
-                        return node.getChild (0);
-                    }
+                    if (c instanceof Scalar  &&  ((Scalar) c).value == 0) return node.getChild (0);
                 }
                 if (operation instanceof Divide)
                 {
                     Object c = node.getChild (1).getValue ();
-                    if (c instanceof Number  &&  ((Number) c).doubleValue () == 1)
-                    {
-                        return node.getChild (0);
-                    }
+                    if (c instanceof Scalar  &&  ((Scalar) c).value == 1) return node.getChild (0);
                 }
                 if (operation instanceof Multiply)
                 {
                     Object c = node.getChild (0).getValue ();
-                    if (c instanceof Number)
+                    if (c instanceof Scalar)
                     {
-                        double value = ((Number) c).doubleValue ();
-                        if (value == 0)
-                        {
-                            return new ASTConstant (new Double (0));
-                        }
-                        if (value == 1)
-                        {
-                            return node.getChild (1);
-                        }
+                        double value = ((Scalar) c).value;
+                        if (value == 0) return new ASTConstant (new Scalar (0));
+                        if (value == 1) return node.getChild (1);
                     }
                     c = node.getChild (1).getValue ();
-                    if (c instanceof Number)
+                    if (c instanceof Scalar)
                     {
-                        double value = ((Number) c).doubleValue ();
-                        if (value == 0)
-                        {
-                            return new ASTConstant (new Double (0));
-                        }
-                        if (value == 1)
-                        {
-                            return node.getChild (0);
-                        }
+                        double value = ((Scalar) c).value;
+                        if (value == 0) return new ASTConstant (new Scalar (0));
+                        if (value == 1) return node.getChild (0);
+                    }
+                }
+                if (operation instanceof AND)
+                {
+                    Object c = node.getChild (0).getValue ();
+                    if (c instanceof Scalar)
+                    {
+                        double value = ((Scalar) c).value;
+                        if (value == 0) return new ASTConstant (new Scalar (0));
+                        else            return node.getChild (1);
+                    }
+                    c = node.getChild (1).getValue ();
+                    if (c instanceof Scalar)
+                    {
+                        double value = ((Scalar) c).value;
+                        if (value == 0) return new ASTConstant (new Scalar (0));
+                        else            return node.getChild (0);
+                    }
+                }
+                if (operation instanceof OR)
+                {
+                    Object c = node.getChild (0).getValue ();
+                    if (c instanceof Scalar)
+                    {
+                        double value = ((Scalar) c).value;
+                        if (value == 0) return node.getChild (1);
+                        else            return new ASTConstant (new Scalar (1));
+                    }
+                    c = node.getChild (1).getValue ();
+                    if (c instanceof Scalar)
+                    {
+                        double value = ((Scalar) c).value;
+                        if (value == 0) return node.getChild (0);
+                        else            return new ASTConstant (new Scalar (1));
                     }
                 }
 
@@ -1648,10 +1748,7 @@ public class EquationSet implements Comparable<EquationSet>
 
         for (Variable v : variables)
         {
-            if (v.hasAttribute ("reference"))
-            {
-                continue;
-            }
+            if (v.hasAttribute ("reference")) continue;
             // Check if there is another equation that is exactly one order higher than us.
             // If so, then we must be integrated from it.
             if (find (new Variable (v.name, v.order + 1)) != null)
@@ -1726,7 +1823,7 @@ public class EquationSet implements Comparable<EquationSet>
                 try
                 {
                     Object result = e.conditional.eval ();
-                    if (result != null  &&  result instanceof Number  &&  ((Number) result).floatValue () == 0)
+                    if (result != null  &&  result instanceof Scalar  &&  ((Scalar) result).value == 0)
                     {
                         v.addAttribute ("initOnly");
                         changed = true;

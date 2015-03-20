@@ -18,6 +18,8 @@ for details.
 #define pointer_h
 
 
+#include "fl/archive.h"
+
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
@@ -480,7 +482,7 @@ namespace fl
 	 interface.  (We don't know the exact class of "memory", so we don't know
 	 how to contruct another instance of it a priori.  A clone() function
 	 encapsulates this knowledge in the wrapped class itself.)  That may be a
-	 reasonable thing to do, but it would also adds to the burden of using
+	 reasonable thing to do, but it would also add to the burden of using
 	 this tool.  On the other hand, it is simple enough to clone the object
 	 in client code.
   **/
@@ -508,6 +510,14 @@ namespace fl
 	~PointerPoly ()
 	{
 	  detach ();
+	}
+
+	static uint32_t serializeVersion;
+
+	void serialize (Archive & archive, uint32_t version)
+	{
+	  archive & memory;
+	  if (archive.in) memory->PointerPolyReferenceCount = 1;
 	}
 
 	PointerPoly & operator = (const PointerPoly & that)
@@ -601,6 +611,8 @@ namespace fl
 
 	T * memory;
   };
+
+  template<class T> uint32_t PointerPoly<T>::serializeVersion = 1;
 }
 
 

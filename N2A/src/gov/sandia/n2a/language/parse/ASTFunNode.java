@@ -16,6 +16,7 @@ package gov.sandia.n2a.language.parse;
 import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Type;
 
 
 public class ASTFunNode extends ASTNodeBase {
@@ -78,13 +79,13 @@ public class ASTFunNode extends ASTNodeBase {
     ////////////////
 
     @Override
-    public Object eval(EvaluationContext context) throws EvaluationException {
+    public Type eval(EvaluationContext context) throws EvaluationException
+    {
+        int count = getCount ();
         Function func = (Function) getValue();
-        Object[] params = new Object[getCount()];
-        for(int c = 0; c < getCount(); c++) {
-            params[c] = getChild(c).eval(context);
-        }
-        return func.eval(params);
+        Type[] params = new Type[count];
+        for (int c = 0; c < count; c++) params[c] = getChild (c).eval (context);
+        return func.eval (params);
     }
 }
 /* JavaCC - OriginalChecksum=3864973bbcee2074efabcc2468ad3a8c (do not edit this line) */

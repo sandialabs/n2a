@@ -74,19 +74,21 @@ public interface ExpressionParserConstants {
   /** RegularExpression Id. */
   int POWER = 34;
   /** RegularExpression Id. */
-  int LSQ = 35;
+  int TILDE = 35;
   /** RegularExpression Id. */
-  int RSQ = 36;
+  int LSQ = 36;
   /** RegularExpression Id. */
-  int LRND = 37;
+  int RSQ = 37;
   /** RegularExpression Id. */
-  int RRND = 38;
+  int LRND = 38;
   /** RegularExpression Id. */
-  int LBRC = 39;
+  int RRND = 39;
   /** RegularExpression Id. */
-  int RBRC = 40;
+  int LBRC = 40;
   /** RegularExpression Id. */
-  int UNITS = 41;
+  int RBRC = 41;
+  /** RegularExpression Id. */
+  int UNITS = 42;
 
   /** Lexical state. */
   int DEFAULT = 0;
@@ -130,6 +132,7 @@ public interface ExpressionParserConstants {
     "\"%\"",
     "\"!\"",
     "\"^\"",
+    "\"~\"",
     "\"[\"",
     "\"]\"",
     "\"(\"",

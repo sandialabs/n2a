@@ -16,6 +16,7 @@ package gov.sandia.n2a.language.parse;
 import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.operator.Assign;
 
 
@@ -132,32 +133,17 @@ public class ASTOpNode extends ASTNodeBase {
     ////////////////
 
     @Override
-    public Object eval (EvaluationContext context) throws EvaluationException
+    public Type eval (EvaluationContext context) throws EvaluationException
     {
         Function func = (Function) getValue ();
-        // TODO: func.assignment is obsolete. When using EquationEntry, the AST should never contain an assignment operation, as they are parsed out.
-        if (func.assignment)
-        {
-            if (! (getChild (0) instanceof ASTVarNode)  ||  ((ASTVarNode) getChild (0)).getOrder () != 0)
-            {
-                throw new EvaluationException ("Invalid left hand side for assignment. Left hand side must be an order-0 variable.");
-            }
-        }
-
         int count = getCount ();
-        Object[] params = new Object[count];
+        Type[] params = new Type[count];
         for (int c = 0; c < count; c++)
         {
-            // We don't want eval to scream if left hand side of a
-            // assignment variable hasn't been defined yet.  In
-            // other words we don't need/want to evaluate "x" in:
-            //    x = 3 + y
-            // But we have to in:
-            //    x *= 3 + y
             if (c == 0  &&  func.getClass ().equals (Assign.class)) params[c] = null;
-            else                                                                params[c] = getChild (c).eval (context);
+            else                                                    params[c] = getChild (c).eval (context);
         }
-        Object result = func.eval (params);
+        Type result = func.eval (params);
         if (func.assignment)
         {
             context.set (((ASTVarNode) getChild (0)).reference.variable, result);

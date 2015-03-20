@@ -11,6 +11,8 @@ package gov.sandia.n2a.language.parse;
 import java.lang.reflect.Field;
 import java.io.StringReader;
 import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.type.Scalar;
+import gov.sandia.n2a.language.type.Text;
 import replete.util.ReflectionUtil;
 import javax.measure.unit.*;
 
@@ -59,9 +61,9 @@ private int jjMoveStringLiteralDfa0_0(){
       case 38:
          return jjMoveStringLiteralDfa1_0(0x4000000L);
       case 40:
-         return jjStopAtPos(0, 37);
-      case 41:
          return jjStopAtPos(0, 38);
+      case 41:
+         return jjStopAtPos(0, 39);
       case 42:
          return jjStopAtPos(0, 30);
       case 43:
@@ -83,15 +85,17 @@ private int jjMoveStringLiteralDfa0_0(){
          jjmatchedKind = 20;
          return jjMoveStringLiteralDfa1_0(0x1000000L);
       case 91:
-         return jjStopAtPos(0, 35);
-      case 93:
          return jjStopAtPos(0, 36);
+      case 93:
+         return jjStopAtPos(0, 37);
       case 94:
          return jjStopAtPos(0, 34);
       case 123:
-         return jjStopAtPos(0, 39);
+         return jjStopAtPos(0, 40);
       case 124:
          return jjMoveStringLiteralDfa1_0(0x8000000L);
+      case 126:
+         return jjStopAtPos(0, 35);
       default :
          return jjMoveNfa_0(0, 0);
    }
@@ -476,7 +480,7 @@ private int jjMoveStringLiteralDfa0_1(){
    switch(curChar)
    {
       case 125:
-         return jjStopAtPos(0, 40);
+         return jjStopAtPos(0, 41);
       default :
          return jjMoveNfa_1(0, 0);
    }
@@ -502,7 +506,7 @@ private int jjMoveNfa_1(int startState, int curPos)
                case 0:
                   if ((0x3ffef0000000000L & l) == 0L)
                      break;
-                  kind = 41;
+                  kind = 42;
                   jjstateSet[jjnewStateCnt++] = 0;
                   break;
                default : break;
@@ -519,7 +523,7 @@ private int jjMoveNfa_1(int startState, int curPos)
                case 0:
                   if ((0x7fffffec7fffffeL & l) == 0L)
                      break;
-                  kind = 41;
+                  kind = 42;
                   jjstateSet[jjnewStateCnt++] = 0;
                   break;
                default : break;
@@ -576,7 +580,7 @@ public static final String[] jjstrLiteralImages = {
 "", null, null, null, null, null, null, null, null, null, null, null, null, 
 null, null, null, null, null, "\54", "\73", "\76", "\74", "\75\75", "\74\75", 
 "\76\75", "\41\75", "\46\46", "\174\174", "\53", "\55", "\52", "\57", "\45", "\41", 
-"\136", "\133", "\135", "\50", "\51", "\173", "\175", null, };
+"\136", "\176", "\133", "\135", "\50", "\51", "\173", "\175", null, };
 protected Token jjFillToken()
 {
    final Token t;
@@ -772,10 +776,10 @@ public static final String[] lexStateNames = {
 /** Lex State array. */
 public static final int[] jjnewLexState = {
    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-   -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 1, 0, -1, 
+   -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 1, 0, -1, 
 };
 static final long[] jjtoToken = {
-   0x3fffffc4681L, 
+   0x7fffffc4681L, 
 };
 static final long[] jjtoSkip = {
    0x7eL, 

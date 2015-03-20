@@ -16,6 +16,8 @@ package gov.sandia.n2a.language.parse;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Instance;
 
 public class ASTVarNode extends ASTNodeBase
 {
@@ -125,9 +127,13 @@ public class ASTVarNode extends ASTNodeBase
     ////////////////
 
     @Override
-    public Object eval (EvaluationContext context) throws EvaluationException
+    public Type eval (EvaluationContext context) throws EvaluationException
     {
-        Object result = context.get (reference.variable);
+        if (reference == null) throw new EvaluationException ("Unresolved: " + ((String) getValue ()));
+        if (reference.variable == null) System.out.println ("ref.var is null");
+        if (reference.variable.name == null) System.out.println ("ref.var.name is null");
+        if (reference.variable.name.equals ("(connection)")) return new Instance (reference.variable.container);
+        Type result = context.get (reference.variable);
         if (result == null) throw new EvaluationException ("Variable does not have a value in this context.");
         return result;
     }

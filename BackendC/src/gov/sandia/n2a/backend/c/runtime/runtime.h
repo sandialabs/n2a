@@ -11,22 +11,18 @@ typedef fl::MatrixFixed<float,3,1> Vector3;
 
 // Random number in [0, 1]
 inline float
-randf ()
+uniform1 ()
 {
   return (float) rand () / RAND_MAX;
 }
 
-/**
-    Generate square and triangular waves.
-    @return real values in [0,1].  Exact shape of wave depends on input parameters.
-    @param t Current time. First rise starts at time 0.
-    @param width Time from end of rise to start of fall.  That is, how long the output remains at 1.
-    @param period Amount of time between start of rise in one cycle and start of rise in next cycle.
-    If zero, function does not repeat.
-    @param rise How long to change from 0 to 1. Default is instantaneous.
-    @param fall How long to change from 1 to 0. Default is instantaneous.
-**/
-extern float pulse (float t, float width, float period = 0, float rise = 0, float fall = 0);
+// See the N2A language reference for details on the interface of these functions.
+extern float                   pulse     (float t, float width, float period = 0, float rise = 0, float fall = 0);
+extern float                   gaussian1 ();
+extern fl::MatrixResult<float> gaussian  (int dimension);
+extern fl::MatrixResult<float> uniform   (int dimension);
+extern fl::MatrixResult<float> grid      (int i, int nx, int ny = 1, int nz = 1);
+
 
 /**
     Logs values to be written to stdout at end of cycle.

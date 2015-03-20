@@ -55,6 +55,12 @@ namespace fl
   void
   MatrixAbstract<T>::copyFrom (const MatrixAbstract<T> & that, bool deep)
   {
+	if (that.classID () & MatrixResultID)
+	{
+	  copyFrom (* ((const MatrixResult<T> &) that).result, deep);  // remove one level of indirection
+	  return;
+	}
+
 	int h = that.rows ();
 	int w = that.columns ();
 	resize (h, w);
@@ -141,7 +147,7 @@ namespace fl
 	  {
 		for (int r = 0; r < h; r++)
 		{
-		  result += (*this) (r, c);
+		  result += std::abs ((*this) (r, c));
 		}
 	  }
 	  return result;
@@ -166,7 +172,7 @@ namespace fl
 	  {
 		for (int r = 0; r < h; r++)
 		{
-		  result += (T) std::pow ((*this) (r, c), (T) n);
+		  result += (T) std::pow (std::abs ((*this) (r, c)), (T) n);
 		}
 	  }
 	  return (T) std::pow (result, (T) (1.0 / n));
@@ -211,6 +217,7 @@ namespace fl
   MatrixResult<T>
   MatrixAbstract<T>::transposeTimes (const MatrixAbstract<T> & B) const
   {
+	if (B.classID () & MatrixResultID) return transposeTimes (* ((const MatrixResult<T> &) B).result);
 	return ~(*this) * B;
   }
 
@@ -249,6 +256,8 @@ namespace fl
   T
   MatrixAbstract<T>::dot (const MatrixAbstract<T> & B) const
   {
+	if (B.classID () & MatrixResultID) return dot (* ((const MatrixResult<T> &) B).result);
+
 	int h = std::min (rows (), B.rows ());
 	register T result = (T) 0;
 	for (int r = 0; r < h; r++) result += (*this)(r,0) * B(r,0);
@@ -302,6 +311,8 @@ namespace fl
   bool
   MatrixAbstract<T>::operator == (const MatrixAbstract<T> & B) const
   {
+	if (B.classID () & MatrixResultID) return operator == (* ((const MatrixResult<T> &) B).result);
+
 	int h = rows ();
 	int w = columns ();
 	if (B.rows () != h  ||  B.columns () != w)
@@ -323,6 +334,13 @@ namespace fl
 
   template<class T>
   MatrixResult<T>
+  MatrixAbstract<T>::operator ! () const
+  {
+	throw "Matrix inverse not implemented. Is LAPACK available?";
+  }
+
+  template<class T>
+  MatrixResult<T>
   MatrixAbstract<T>::operator ~ () const
   {
 	return new MatrixTranspose<T> (this->clone ());
@@ -332,6 +350,8 @@ namespace fl
   MatrixResult<T>
   MatrixAbstract<T>::operator ^ (const MatrixAbstract<T> & B) const
   {
+	if (B.classID () & MatrixResultID) return operator ^ (* ((const MatrixResult<T> &) B).result);
+
 	// This version is only good for 3 element vectors.  Need to choose
 	// a cross-product hack for higher dimensions
 
@@ -347,6 +367,8 @@ namespace fl
   MatrixResult<T>
   MatrixAbstract<T>::operator & (const MatrixAbstract<T> & B) const
   {
+	if (B.classID () & MatrixResultID) return operator & (* ((const MatrixResult<T> &) B).result);
+
 	int h = rows ();
 	int w = columns ();
 	int oh = std::min (h, B.rows ());
@@ -376,6 +398,7 @@ namespace fl
   MatrixResult<T>
   MatrixAbstract<T>::operator * (const MatrixAbstract<T> & B) const
   {
+	if (B.classID () & MatrixResultID) return operator * (* ((const MatrixResult<T> &) B).result);
 	return MatrixStrided<T> (*this) * MatrixStrided<T> (B);
   }
 
@@ -400,6 +423,8 @@ namespace fl
   MatrixResult<T>
   MatrixAbstract<T>::operator / (const MatrixAbstract<T> & B) const
   {
+	if (B.classID () & MatrixResultID) return operator / (* ((const MatrixResult<T> &) B).result);
+
 	int h = rows ();
 	int w = columns ();
 	int oh = std::min (h, B.rows ());
@@ -438,6 +463,8 @@ namespace fl
   MatrixResult<T>
   MatrixAbstract<T>::operator + (const MatrixAbstract<T> & B) const
   {
+	if (B.classID () & MatrixResultID) return operator + (* ((const MatrixResult<T> &) B).result);
+
 	int h = rows ();
 	int w = columns ();
 	int oh = std::min (h, B.rows ());
@@ -476,6 +503,8 @@ namespace fl
   MatrixResult<T>
   MatrixAbstract<T>::operator - (const MatrixAbstract<T> & B) const
   {
+	if (B.classID () & MatrixResultID) return operator - (* ((const MatrixResult<T> &) B).result);
+
 	int h = rows ();
 	int w = columns ();
 	int oh = std::min (h, B.rows ());
@@ -514,6 +543,7 @@ namespace fl
   MatrixAbstract<T> &
   MatrixAbstract<T>::operator ^= (const MatrixAbstract<T> & B)
   {
+	if (B.classID () & MatrixResultID) return operator ^= (* ((const MatrixResult<T> &) B).result);
 	copyFrom ((*this) ^ B);
 	return *this;
   }
@@ -522,6 +552,7 @@ namespace fl
   MatrixAbstract<T> &
   MatrixAbstract<T>::operator &= (const MatrixAbstract<T> & B)
   {
+	if (B.classID () & MatrixResultID) return operator &= (* ((const MatrixResult<T> &) B).result);
 	copyFrom ((*this) & B);
 	return *this;
   }
@@ -530,6 +561,7 @@ namespace fl
   MatrixAbstract<T> &
   MatrixAbstract<T>::operator *= (const MatrixAbstract<T> & B)
   {
+	if (B.classID () & MatrixResultID) return operator *= (* ((const MatrixResult<T> &) B).result);
 	copyFrom ((*this) * B);
 	return *this;
   }
@@ -546,6 +578,7 @@ namespace fl
   MatrixAbstract<T> &
   MatrixAbstract<T>::operator /= (const MatrixAbstract<T> & B)
   {
+	if (B.classID () & MatrixResultID) return operator /= (* ((const MatrixResult<T> &) B).result);
 	copyFrom ((*this) / B);
 	return *this;
   }
@@ -562,6 +595,7 @@ namespace fl
   MatrixAbstract<T> &
   MatrixAbstract<T>::operator += (const MatrixAbstract<T> & B)
   {
+	if (B.classID () & MatrixResultID) return operator += (* ((const MatrixResult<T> &) B).result);
 	copyFrom ((*this) + B);
 	return *this;
   }
@@ -578,6 +612,7 @@ namespace fl
   MatrixAbstract<T> &
   MatrixAbstract<T>::operator -= (const MatrixAbstract<T> & B)
   {
+	if (B.classID () & MatrixResultID) return operator -= (* ((const MatrixResult<T> &) B).result);
 	copyFrom ((*this) - B);
 	return *this;
   }
@@ -723,7 +758,7 @@ namespace fl
 		trim (line);
 		while (line.size ())
 		{
-		  int position = line.find_first_of (" \t");
+		  int position = line.find_first_of (", \t");
 		  element = line.substr (0, position);
 		  row.push_back (elementFromString<T> (element));
 		  if (position == std::string::npos) break;
@@ -1002,7 +1037,7 @@ namespace fl
 		T * columnEnd = i + rows_ * strideR;
 		while (i != columnEnd)
 		{
-		  result += *i;
+		  result += std::abs (*i);
 		  i += strideR;
 		}
 		i += stepC;
@@ -1039,7 +1074,7 @@ namespace fl
 		T * columnEnd = i + rows_ * strideR;
 		while (i != columnEnd)
 		{
-		  result += (T) std::pow (*i, (T) n);
+		  result += (T) std::pow (std::abs (*i), (T) n);
 		  i += strideR;
 		}
 		i += stepC;

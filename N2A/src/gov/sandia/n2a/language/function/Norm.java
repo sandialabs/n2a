@@ -13,31 +13,22 @@ import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Matrix;
 
-public class Cosine extends Function
+public class Norm extends Function
 {
-    public Cosine ()
+    public Norm ()
     {
-        name          = "cos";
+        name          = "norm";
         associativity = Associativity.LEFT_TO_RIGHT;
         precedence    = 1;
     }
 
     public Type eval (Type[] args)
     {
-        if (args[0] instanceof Scalar) return new Scalar (Math.cos (((Scalar) args[0]).value));
-        if (args[0] instanceof Matrix)
-        {
-            return ((Matrix) args[0]).visit
-            (
-                new Matrix.Visitor ()
-                {
-                    public double apply (double a)
-                    {
-                        return Math.cos (a);
-                    }
-                }
-            );
-        }
-        throw new EvaluationException ("type mismatch");
+        double n = -1;
+        Matrix A = null;
+        if (args[0] instanceof Scalar) n = ((Scalar) args[0]).value;
+        if (args[1] instanceof Matrix) A = (Matrix) args[1];
+        if (n < 0  ||  A == null) throw new EvaluationException ("type mismatch");
+        return new Scalar (A.norm (n));
     }
 }

@@ -7,6 +7,9 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.operator;
 
+import gov.sandia.n2a.language.Type;
+
+
 public class AssignAdd extends Add
 {
     public AssignAdd ()
@@ -17,8 +20,8 @@ public class AssignAdd extends Add
         assignment    = true;
     }
 
-    public Object eval (Object[] args)
+    public Type eval (Type[] args)
     {
-        return ((Number) args[0]).doubleValue () + ((Number) args[1]).doubleValue ();
+        return args[0].add (args[1]);
     }
 }

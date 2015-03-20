@@ -23,6 +23,7 @@ import gov.sandia.n2a.language.parse.ASTNodeRenderer;
 import gov.sandia.n2a.language.parse.ASTOpNode;
 import gov.sandia.n2a.language.parse.ASTRenderingContext;
 import gov.sandia.n2a.language.parse.ASTVarNode;
+import gov.sandia.n2a.language.type.Scalar;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -122,7 +123,7 @@ public class XyceASTUtil {
     public static void setContextIndex(EquationSet s, EvaluationContext context, int index)
     {
         Variable v = s.find (new Variable (LanguageUtil.$INDEX));
-        context.set (v, index);
+        context.set (v, new Scalar (index));
     }
 
     public static Object evaluateEq(EquationEntry eq, EvaluationContext context, int partIndex)

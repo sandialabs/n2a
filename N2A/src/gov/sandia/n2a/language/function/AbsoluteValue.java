@@ -13,18 +13,18 @@ import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Matrix;
 
-public class Cosine extends Function
+public class AbsoluteValue extends Function
 {
-    public Cosine ()
+    public AbsoluteValue ()
     {
-        name          = "cos";
+        name          = "abs";
         associativity = Associativity.LEFT_TO_RIGHT;
         precedence    = 1;
     }
 
     public Type eval (Type[] args)
     {
-        if (args[0] instanceof Scalar) return new Scalar (Math.cos (((Scalar) args[0]).value));
+        if (args[0] instanceof Scalar) return new Scalar (Math.abs (((Scalar) args[0]).value));
         if (args[0] instanceof Matrix)
         {
             return ((Matrix) args[0]).visit
@@ -33,7 +33,7 @@ public class Cosine extends Function
                 {
                     public double apply (double a)
                     {
-                        return Math.cos (a);
+                        return Math.abs (a);
                     }
                 }
             );

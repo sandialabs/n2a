@@ -9,64 +9,86 @@ package gov.sandia.n2a.language;
 
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.language.parse.ASTNodeBase;
+import gov.sandia.n2a.language.type.Scalar;
 
 import java.util.HashMap;
 import java.util.Map;
 
 public class EvaluationContext
 {
-    public Map<Variable, Object> values = new HashMap<Variable, Object> ();
+    public Map<Variable, Type> values = new HashMap<Variable, Type> ();
 
     public EvaluationContext ()
     {
     }
 
-    public Object get (Variable v) throws EvaluationException
+    public Type get (Variable v) throws EvaluationException
     {
-        if (! values.containsKey (v))
+        return get (v, true);
+    }
+
+    public Type get (Variable v, boolean shortcircuit) throws EvaluationException
+    {
+        if (values.containsKey (v))
         {
-            // Not stored, so try to compute the value.
-            values.put (v, null);  // If successful, we will replace this with the correct result. Otherwise, it remains null. This also functions as a guard against infinite recursion.
+            if (shortcircuit) return values.get (v);
+        }
+        else
+        {
+            values.put (v, null);  // If successful, we will replace this with the correct result. Otherwise, it remains null. This also guards against infinite recursion.
+        }
 
-            // Select the default equation
-            boolean init = v.container.getInit ();
-            EquationEntry defaultEquation = null;
-            for (EquationEntry e : v.equations)
-            {
-                if (init  &&  e.ifString.equals ("$init"))  // TODO: also handle $init==1, or any other equivalent expression
-                {
-                    defaultEquation = e;
-                    break;
-                }
-                if (e.ifString.length () == 0)
-                {
-                    defaultEquation = e;
-                }
-            }
+        boolean type = v.name.equals ("$type");  // requires special (complex) handling
 
-            boolean evaluated = false;
-            for (EquationEntry e : v.equations)  // Scan for first equation whose condition is nonzero
+        // Select the default equation
+        boolean init = v.container.getInit ();
+        EquationEntry defaultEquation = null;
+        for (EquationEntry e : v.equations)
+        {
+            if (init  &&  e.ifString.equals ("$init"))  // TODO: also handle $init==1, or any other equivalent expression
             {
-                if (e == defaultEquation) continue;
-                Object result = e.conditional.eval (this);
-                if (result instanceof Number  &&  ((Number) result).floatValue () != 0)
-                {
-                    values.put (v, e.expression.eval (this));
-                    evaluated = true;
-                }
+                defaultEquation = e;
+                break;
             }
-            if (! evaluated  &&  defaultEquation != null)
+            if (e.ifString.length () == 0)
             {
-                values.put (v, defaultEquation.expression.eval (this));
+                defaultEquation = e;
             }
         }
 
+        boolean evaluated = false;
+        Type result = null;
+        for (EquationEntry e : v.equations)  // Scan for first equation whose condition is nonzero
+        {
+            if (e == defaultEquation) continue;
+            Object doit = e.conditional.eval (this);
+            if (doit instanceof Scalar  &&  ((Scalar) doit).value != 0)
+            {
+                if (type) result = new Scalar (0);  // TODO: process $type split (when we create an internal N2A interpreter)
+                else      result = (Type) e.expression.eval (this);
+                evaluated = true;
+            }
+        }
+        if (! evaluated  &&  defaultEquation != null)
+        {
+            if (type) result = new Scalar (0);  // TODO: process $type split (when we create an internal N2A interpreter)
+            else      result = (Type) defaultEquation.expression.eval (this);
+        }
+        if (result != null)
+        {
+            values.put (v, result); // Note: If we fail to compute a new value, and the variable already had one, it will retain the old value.
+            return result;
+        }
         return values.get (v);
     }
 
-    public void set (Variable v, Object value)
+    public void set (Variable v, Type value)
     {
         values.put (v, value);
+    }
+
+    public void remove (Variable v)
+    {
+        values.remove (v);
     }
 }

@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.eqset;
 
 import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.parse.ASTOpNode;
 import gov.sandia.n2a.language.parse.ASTTransformationContext;
 
@@ -21,13 +22,14 @@ public class Variable implements Comparable<Variable>
 {
     public String                       name;
     public int                          order;      // of differential
+    public Type                         type;       // Stores an actual instance of the type. Necessary to get the size of Matrix. Otherwise, only class matters.
     public Set<String>                  attributes;
     public NavigableSet<EquationEntry>  equations;
     // resolution
     public EquationSet                  container;  // non-null iff this variable is contained in an EquationSet.variables collection
     public VariableReference            reference;  // points to variable that actually contains the data, which is usually us unless we are a proxy for a variable in another equation set. null if not resolved yet.
     // graph analysis
-    public List<Variable>               uses;       // Variables we depend on. Forms a digraph on Variable nodes.
+    public List<Variable>               uses;       // Variables we depend on. Forms a digraph (which may have cycles) on Variable nodes.
     public boolean                      hasUsers;   // Indicates that some variable depends on us. That is, we exist in some Variable.uses collection.
     public List<Variable>               before;     // Variables that must be evaluated after us. Generally the same as uses, unless we are a temporary, in which case the ordering is reversed. Note EquationSet.ordered
     public Variable                     visited;    // Points to the previous variable visited on the current path. Used to prevent infinite recursion. Only work on a single thread.

@@ -19,6 +19,9 @@ import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.parse.ASTNodeBase;
 import gov.sandia.n2a.language.parse.ASTOpNode;
+import gov.sandia.n2a.language.type.Matrix;
+import gov.sandia.n2a.language.type.Scalar;
+import gov.sandia.n2a.language.type.Text;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -342,7 +345,14 @@ public abstract class PartSetAbstract implements PartSetInterface
     {
         Variable v = eqns.find (new Variable (name));
         // TODO: v may be null, in which case we should throw an exception. To minimize code changes at this time, we simply tolerate the NPE as our exception.
-        context.set (v, value);
+        if (value instanceof Number) context.set (v, new Scalar (((Number) value).doubleValue ()));
+        if (value instanceof Number[])
+        {
+            Number[] n = (Number[]) value;
+            Matrix m = new Matrix (n.length, 1);
+            for (int i = 0; i < n.length; i++) m.value[0][i] = n[i].doubleValue ();
+        }
+        context.set (v, new Text (value.toString ()));  // Dirty fallback
     }
 
     @Override

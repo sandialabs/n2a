@@ -10,17 +10,17 @@ package gov.sandia.n2a.language.operator;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Type;
 
-public class EQ extends Function
+public class Transpose extends Function
 {
-    public EQ ()
+    public Transpose ()
     {
-        name          = "==";
-        associativity = Associativity.LEFT_TO_RIGHT;
-        precedence    = 7;
+        name          = "~";
+        associativity = Associativity.RIGHT_TO_LEFT;
+        precedence    = 2;
     }
 
     public Type eval (Type[] args)
     {
-        return args[0].EQ (args[1]);
+        return args[0].transpose ();
     }
 }

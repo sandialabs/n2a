@@ -68,8 +68,6 @@ namespace std
 
 #ifndef _MSC_VER
 
-# ifndef __MINGW32__
-
   inline int
   isinf (float a)
   {
@@ -82,8 +80,6 @@ namespace std
 	return isnanf (a);
   }
 
-# endif
-
 #else
 
   inline int
@@ -95,8 +91,7 @@ namespace std
   inline int
   isinf (double a)
   {
-	int c = _fpclass (a);
-	return c == _FPCLASS_PINF  ||  c == _FPCLASS_NINF;
+	return ! _finite (a);
   }
 
   inline double

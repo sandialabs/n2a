@@ -15,6 +15,7 @@ package gov.sandia.n2a.language.parse;
 
 import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.Type;
 
 public class ASTListNode extends ASTNodeBase {
 
@@ -71,12 +72,9 @@ public class ASTListNode extends ASTNodeBase {
     ////////////////
 
     @Override
-    public Object eval(EvaluationContext context) throws EvaluationException {
-        Object[] params = new Object[getCount()];
-        for(int c = 0; c < getCount(); c++) {
-            params[c] = getChild(c).eval(context);
-        }
-        return params;
+    public Type eval (EvaluationContext context) throws EvaluationException
+    {
+        throw new EvaluationException ("List is not a formal N2A Type.");
     }
 }
 /* JavaCC - OriginalChecksum=d551700b54e6299c518a2537b8744651 (do not edit this line) */

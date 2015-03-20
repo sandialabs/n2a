@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.language.operator;
 
 import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Type;
 
 public class Power extends Function
 {
@@ -18,8 +19,8 @@ public class Power extends Function
         precedence    = 3;
     }
 
-    public Object eval (Object[] args)
+    public Type eval (Type[] args)
     {
-        return Math.pow (((Number) args[0]).doubleValue (), ((Number) args[1]).doubleValue ());
+        return args[0].power (args[1]);
     }
 }

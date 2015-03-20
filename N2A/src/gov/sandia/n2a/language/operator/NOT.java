@@ -7,8 +7,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.operator;
 
-import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Type;
 
 public class NOT extends Function
 {
@@ -19,15 +19,8 @@ public class NOT extends Function
         precedence    = 2;
     }
 
-    public Object eval (Object[] args)
+    public Type eval (Type[] args)
     {
-        if (args[0] instanceof Number)
-        {
-            return (((Number) args[0]).doubleValue () == 0) ? 1.0 : 0.0;
-        }
-        else  // TODO: test for matrix class
-        {
-            throw new EvaluationException ("Matrix inversion not implemented");
-        }
+        return args[0].NOT ();
     }
 }

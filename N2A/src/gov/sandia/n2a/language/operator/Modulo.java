@@ -9,6 +9,7 @@ package gov.sandia.n2a.language.operator;
 
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Type;
 
 public class Modulo extends Function
 {
@@ -19,8 +20,8 @@ public class Modulo extends Function
         precedence    = 4;
     }
 
-    public Object eval (Object[] args) throws EvaluationException
+    public Type eval (Type[] args) throws EvaluationException
     {
-        return ((Number) args[0]).doubleValue() % ((Number) args[1]).doubleValue();
+        return args[0].modulo (args[1]);
     }
 }

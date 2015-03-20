@@ -22,6 +22,20 @@ for details.
 #include <string>
 #include <string.h>
 
+#ifdef _MSC_VER
+
+# define strtoll     _strtoi64
+# define strcasecmp  _stricmp
+# define strncasecmp _strnicmp
+# define wcscasecmp  _wcsicmp
+# define wcsncasecmp _wcsnicmp
+
+#else
+
+# include <strings.h>
+
+#endif
+
 
 namespace fl
 {
@@ -43,10 +57,27 @@ namespace fl
   }
 
   inline void
+  split (const std::wstring & source, const wchar_t * delimiter, std::wstring & first, std::wstring & second)
+  {
+	int index = source.find (delimiter);
+	if (index == std::wstring::npos)
+	{
+	  first = source;
+	  second.erase ();
+	}
+	else
+	{
+	  std::wstring temp = source;
+	  first = temp.substr (0, index);
+	  second = temp.substr (index + wcslen (delimiter));
+	}
+  }
+
+  inline void
   trim (std::string & target)
   {
-	int begin = target.find_first_not_of (' ');
-	int end = target.find_last_not_of (' ');
+	int begin = target.find_first_not_of (" \t");
+	int end   = target.find_last_not_of  (" \t");
 	if (begin == std::string::npos)
 	{
 	  // all spaces
@@ -76,21 +107,6 @@ namespace fl
 	}
   }
 }
-
-#ifdef _MSC_VER
-
-#define strtoll _strtoi64
-
-namespace std
-{
-  inline int
-  strcasecmp (const char * a, const char * b)
-  {
-	return _stricmp (a, b);
-  }
-}
-
-#endif
 
 
 #endif

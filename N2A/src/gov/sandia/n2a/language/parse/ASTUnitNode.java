@@ -11,6 +11,7 @@ package gov.sandia.n2a.language.parse;
 
 import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.Type;
 
 import javax.measure.unit.Unit;
 
@@ -103,25 +104,9 @@ public class ASTUnitNode extends ASTNodeBase {
     }
 
     @Override
-    public Object eval(EvaluationContext context) throws EvaluationException {
-        Object childValue = getChild(0).eval(context);
-        Unit<?> thisUnit = (Unit<?>) getValue();
-
-        if(childValue instanceof Double) {
-            return Amount.valueOf((Double) childValue, thisUnit);
-        } else if(childValue instanceof Long) {
-            return Amount.valueOf((Long) childValue, thisUnit);
-        } else if(childValue instanceof Amount) {
-            Amount<?> a = (Amount<?>) childValue;
-            if(a.getUnit().isCompatible(thisUnit)) {
-                return a.to(thisUnit);
-            }
-            throw new EvaluationException("The units '" + thisUnit +
-                "' are not compatible with child expression's units of '" + a.getUnit() + "'.");
-        }
-
-        throw new EvaluationException("Units cannot be used on any constant other than a double or long (" +
-            childValue == null ? "null" : childValue.getClass().getSimpleName() +").");
+    public Type eval (EvaluationContext context) throws EvaluationException
+    {
+        throw new EvaluationException ("The current (incomplete) implementation of units must be rewritten.");
     }
 }
 /* JavaCC - OriginalChecksum=4155bb5987a157303897ebe3631b23cd (do not edit this line) */

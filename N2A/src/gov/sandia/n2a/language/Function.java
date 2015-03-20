@@ -7,10 +7,12 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language;
 
+import gov.sandia.n2a.language.function.AbsoluteValue;
 import gov.sandia.n2a.language.function.Cosine;
 import gov.sandia.n2a.language.function.Exp;
 import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Grid;
+import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.Pulse;
 import gov.sandia.n2a.language.function.Sine;
 import gov.sandia.n2a.language.function.Tangent;
@@ -35,6 +37,7 @@ import gov.sandia.n2a.language.operator.Negate;
 import gov.sandia.n2a.language.operator.OR;
 import gov.sandia.n2a.language.operator.Power;
 import gov.sandia.n2a.language.operator.Subtract;
+import gov.sandia.n2a.language.operator.Transpose;
 
 import java.util.List;
 import java.util.TreeSet;
@@ -70,7 +73,7 @@ public class Function implements ExtensionPoint, Comparable<Function>
         //output        = false;
     }
 
-    public Object eval (Object[] args) throws EvaluationException
+    public Type eval (Type[] args) throws EvaluationException
     {
         throw new EvaluationException ("Function '" + name + "' not implemented.");
     }
@@ -92,10 +95,12 @@ public class Function implements ExtensionPoint, Comparable<Function>
     static
     {
         // Functions
+        functions.add (new AbsoluteValue ());
         functions.add (new Cosine ());
         functions.add (new Exp ());
         functions.add (new Gaussian ());
         functions.add (new Grid ());
+        functions.add (new Norm ());
         functions.add (new Pulse ());
         functions.add (new Sine ());
         functions.add (new Tangent ());
@@ -122,6 +127,7 @@ public class Function implements ExtensionPoint, Comparable<Function>
         functions.add (new OR ());
         functions.add (new Power ());
         functions.add (new Subtract ());
+        functions.add (new Transpose ());
     }
 
     public static void initFromPlugins ()

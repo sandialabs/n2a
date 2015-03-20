@@ -56,30 +56,26 @@ namespace fl
 	 This is not the most sophisticated serialization scheme.  It can't do
 	 everything.  If you want to do everything, use Boost.
 	 The rules for this method are:
-	 * Everything is either a primitive type or a subclass of Serializable.
-	 * Serializable is always polymorphic, with at least one virtual function:
-	   serialize(Archive).
+	 * Everything is either a primitive type or an object of a class that has
+	   a serialize(Archive,uint32_t) member function.
 	 * Select STL classes get special treatment, and are effectively primitive:
 	   string and vector.
-	 * Serializables are numbered sequentially in the archive, starting at zero.
-	 * Pointers are written as the index of the referenced Serializable.
-	 * Just before a Serializable class is used for the first time, a record
+	 * Objects are numbered sequentially in the archive, starting at zero.
+	 * Pointers are written as the index of the referenced object.
+	 * Just before a class is used for the first time, a record
 	   describing it appears in the archive.  This record contains only
 	   information that might be unknown at that point.  In particular,
-	   a reference to Serializable will only cause a version number to be
-	   written, while a pointer to Serializable will cause a class name to
-	   be written, followed by a version number.
+	   a reference to an object will cause only a version number to be
+	   written, as the class is known by the code. A pointer will cause a
+	   class name to be written, followed by a version number.
 	 * Classes are numbered sequentially in the archive, starting at zero.
-	 * If a pointer appears and its referenced Serializable has not yet
-	   appeared, then the referenced Serializable appears immediately after.
-	 * When a Serializable is written out to fulfill a pointer, the record
+	 * If a pointer appears and its referenced object has not yet
+	   appeared, then the referenced object will appear immediately after.
+	 * When an object is written out to fulfill a pointer, the record
 	   begins with a class index.
-	 * No reference class members are allowed.  Therefore, a Serializable is
+	 * No reference class members are allowed.  Therefore, an object is
 	   either already instantiated, or is instantiated based on its class
 	   index (using a static factory function).
-	 * To implement all this, every class'es serialize() function must begin
-	   with a call that registers both the static factory function and the
-	   version number of the class.
    **/
   class Archive
   {
@@ -211,8 +207,8 @@ namespace fl
 			std::map<std::string, ClassDescription *>::iterator a = alias.find (name);
 			if (a == alias.end ())
 			{
-			  sprintf (message, "Unregistered alias: %s", name.c_str ());
-			  throw message;
+			  std::cerr << "Unregistered alias: " << name << std::endl;
+			  throw "Polymorphic classes require explicit registration. See stderr for details.";
 			}
 			a->second->index = classIndex;
 			classesIn.push_back (a->second);
@@ -223,13 +219,13 @@ namespace fl
 		  ClassDescription * d = classesIn[classIndex];
 		  if (d->create == 0  ||  d->serialize == 0)
 		  {
-			sprintf (message, "Please explicitly register: %s", d->name.c_str ());
-			throw message;
+			std::cerr << "Please explicitly register: " << d->name << std::endl;
+			throw "Polymorphic classes require explicit registration. See stderr for details.";
 		  }
 		  data = (T *) d->create ();
 		  pointersOut.insert (std::make_pair (data, pointersOut.size ()));
 		  pointersIn.push_back (data);
-		  d->serialize (data, *this, d->version);
+		  d->serialize (const_cast<void *> ((const void *) data), *this, d->version);
 		}
 	  }
 	  else
@@ -239,7 +235,7 @@ namespace fl
 		  uint32_t nullPointer = 0xFFFFFFFF;
 		  return (*this) & nullPointer;
 		}
-		std::map<void *, uint32_t>::iterator p = pointersOut.find (data);
+		std::map<const void *, uint32_t>::iterator p = pointersOut.find (data);
 		if (p != pointersOut.end ()) (*this) & p->second;
 		else
 		{
@@ -250,8 +246,8 @@ namespace fl
 		  std::map<std::string, ClassDescription *>::iterator c = classesOut.find (typeidName);
 		  if (c == classesOut.end ())
 		  {
-			sprintf (message, "Unregistered class %s", typeidName.c_str ());
-			throw message;
+			std::cerr << "Unregistered class " << typeidName << std::endl;
+			throw "Polymorphic classes require explicit registration. See stderr for details.";
 		  }
 		  if (c->second->index < 0xFFFFFFFF) (*this) & c->second->index;
 		  else
@@ -265,10 +261,10 @@ namespace fl
 
 		  if (c->second->serialize == 0)
 		  {
-			sprintf (message, "Please explicitly register: %s", typeidName.c_str ());
-			throw message;
+			std::cerr << "Please explicitly register: " << typeidName << std::endl;
+			throw "Polymorphic classes require explicit registration. See stderr for details.";
 		  }
-		  c->second->serialize (data, *this, c->second->version);
+		  c->second->serialize (const_cast<void *> ((const void *) data), *this, c->second->version);
 		}
 	  }
 	  return *this;
@@ -319,14 +315,12 @@ namespace fl
 	std::ostream * out;
 	bool ownStream;
 
-	std::vector<void *>        pointersIn;   ///< mapping from serial # to pointer
-	std::map<void *, uint32_t> pointersOut;  ///< mapping from pointer to serial #; @todo change this to unordered_map when broadly available
+	std::vector<const void *>        pointersIn;   ///< mapping from serial # to pointer
+	std::map<const void *, uint32_t> pointersOut;  ///< mapping from pointer to serial #; @todo change this to unordered_map when broadly available
 
 	std::vector<ClassDescription *>           classesIn;   ///< mapping from serial # to class description; ClassDescription objects are held by classesOut
 	std::map<std::string, ClassDescription *> classesOut;  ///< mapping from RTTI name to class description; one-to-one
 	std::map<std::string, ClassDescription *> alias;       ///< mapping from user-assigned name to class description; can be many-to-one
-
-	char message[256];  ///< buffer for constructing detailed exceptions
   };
 
   // These are necessary, because any type that does not have an explicit

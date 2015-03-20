@@ -9,6 +9,8 @@ package gov.sandia.n2a.language.function;
 
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Scalar;
 
 public class Pulse extends Function
 {
@@ -19,28 +21,28 @@ public class Pulse extends Function
         precedence    = 1;
     }
 
-    public Object eval (Object[] args) throws EvaluationException
+    public Type eval (Type[] args) throws EvaluationException
     {
         if (args.length < 2) throw new EvaluationException ("pulse() requires at least two arguments");
-        double t      = ((Number) args[0]).doubleValue ();
-        double width  = ((Number) args[1]).doubleValue ();
+        double t      = ((Scalar) args[0]).value;
+        double width  = ((Scalar) args[1]).value;
         double period = 0;
         double rise   = 0;
         double fall   = 0;
-        if (args.length >= 3) period = ((Number) args[2]).doubleValue ();
-        if (args.length >= 4) rise   = ((Number) args[3]).doubleValue ();
-        if (args.length >= 5) fall   = ((Number) args[4]).doubleValue ();
+        if (args.length >= 3) period = ((Scalar) args[2]).value;
+        if (args.length >= 4) rise   = ((Scalar) args[3]).value;
+        if (args.length >= 5) fall   = ((Scalar) args[4]).value;
 
         if (period == 0.0)
         {
-            if (t < 0) return 0.0;
+            if (t < 0) return new Scalar (0);
         }
         else t %= period;
-        if (t < rise) return t / rise;
+        if (t < rise) return new Scalar (t / rise);
         t -= rise;
-        if (t < width) return 1.0;
+        if (t < width) return new Scalar (1);
         t -= width;
-        if (t < fall) return 1.0 - t / fall;
-        return 0.0;
+        if (t < fall) return new Scalar (1.0 - t / fall);
+        return new Scalar (0);
     }
 }

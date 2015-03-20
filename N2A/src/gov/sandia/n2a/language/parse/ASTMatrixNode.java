@@ -11,6 +11,10 @@ package gov.sandia.n2a.language.parse;
 
 import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Matrix;
+import gov.sandia.n2a.language.type.Scalar;
+import gov.sandia.n2a.language.type.Text;
 
 public class ASTMatrixNode extends ASTNodeBase
 {
@@ -102,15 +106,12 @@ public class ASTMatrixNode extends ASTNodeBase
     // EVALUATION //
     ////////////////
 
-    /**
-        @todo Settle on linear algebra library, then return a proper Matrix object.
-    **/
     @Override
-    public Object eval (EvaluationContext context) throws EvaluationException
+    public Type eval (EvaluationContext context) throws EvaluationException
     {
         int rows = getRows ();
         int cols = getColumns ();
-        Object[][] result = new Object[rows][cols];
+        Matrix result = new Matrix (rows, cols);
         for (int r = 0; r < rows; r++)
         {
             ASTNodeBase row = getChild (r);
@@ -118,11 +119,15 @@ public class ASTMatrixNode extends ASTNodeBase
             int c = 0;
             for (; c < count; c++)
             {
-                result[r][c] = row.getChild (c).eval (context);
+                Type o = row.getChild (c).eval (context);
+                if      (o instanceof Scalar) result.value[c][r] = ((Scalar) o).value;
+                else if (o instanceof Text  ) result.value[c][r] = Double.valueOf (((Text) o).value);
+                else if (o instanceof Matrix) result.value[c][r] = ((Matrix) o).value[0][0];
+                else throw new EvaluationException ("Can't construct matrix element from the given type.");
             }
             for (; c < cols; c++)
             {
-                result[r][c] = new Double (0);
+                result.value[c][r] = 0;
             }
         }
         return result;

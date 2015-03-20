@@ -40,25 +40,29 @@ for details.
 #endif
 
 
-// The linear algebra package has the following goals:
-// * Be simple and straightforward for a programmer to use.  It should be
-//   easy to express most common linear algebra calculations using
-//   overloaded operators.
-// * Work seamlessly with LAPACK.  To this end, storage is always column
-//   major.
-// * Be lightweight to compile.  We avoid putting much implementation in
-//   the headers, even though we are using templates.
-// * Be lightweight at run-time.  Eg: shallow copy semantics, and only a
-//   couple of variables that need to be copied.  Should limit total copying
-//   to 16 bytes or less.
+/**
+   @file
+   The linear algebra package has the following goals:
+   <ul>
+   <li>Be simple and straightforward for a programmer to use. It should be
+   easy to express most common linear algebra calculations using
+   overloaded operators.
+   <li>Work seamlessly with LAPACK. To this end, storage is always column
+   major.
+   <li>Be lightweight to compile. We avoid putting much implementation in
+   the headers, even though we are using templates.
+   <li>Be lightweight at run-time.  Eg: shallow copy semantics, and only a
+   couple of variables that need to be copied.  Should limit total copying
+   to 16 bytes or less.
+   </ul>
 
-// Other notes:
-// * In general, the implementation does not protect you from shooting yourself
-//   in the foot.  Specifically, there is no range checking or verification
-//   that memory addresses are valid.  All these do is make a bug easier to
-//   find (rather than eliminate it), and they cost at runtime.  In cases
-//   where there is some legitimate interpretation of bizarre parameter values,
-//   we assume the programmer meant that interpretation and plow on.
+   In general, the implementation does not protect you from shooting yourself
+   in the foot. Specifically, there is no range checking or verification
+   that memory addresses are valid. All these do is make a bug easier to
+   find (rather than eliminate it), and they cost at runtime. In cases
+   where there is some legitimate interpretation of bizarre parameter values,
+   we assume the programmer meant that interpretation and plow on.
+**/
 
 
 namespace fl
@@ -151,7 +155,7 @@ namespace fl
 	  return ! ((*this) == B);
 	}
 
-	Matrix<T> operator ! () const;  ///< Invert matrix if square, otherwise create pseudo-inverse.  Can't be virtual, because this forces a link dependency on LAPACK for any matrix class that uses it to implement inversion.
+	virtual MatrixResult<T> operator ! () const;  ///< Invert matrix if square, otherwise create pseudo-inverse.
 	virtual MatrixResult<T> operator ~ () const;  ///< Transpose matrix.
 
 	virtual MatrixResult<T> operator ^ (const MatrixAbstract & B) const;  ///< View both matrices as vectors and return cross product.  (Is there a better definition that covers 2D matrices?)
@@ -189,6 +193,12 @@ namespace fl
   MatrixResult<T> operator * (const T scalar, const MatrixAbstract<T> & A)
   {
 	return A * scalar;
+  }
+
+  template<class T>
+  MatrixResult<T> operator - (const MatrixAbstract<T> & A)
+  {
+	return A * (T) -1;
   }
 
   template<class T>
@@ -296,6 +306,7 @@ namespace fl
 	virtual MatrixResult<T> column (const int c) const                         {return result->column (c);}
 	virtual MatrixResult<T> region (const int firstRow = 0, const int firstColumn = 0, int lastRow = -1, int lastColumn = -1) const {return result->region (firstRow, firstColumn, lastRow, lastColumn);}
 
+	virtual MatrixResult<T> operator ! () const                                {return !(*result);}
 	virtual MatrixResult<T> operator ~ () const                                {return ~(*result);}
 
 	virtual MatrixResult<T> operator ^ (const MatrixAbstract<T> & B) const     {return *result ^ B;}
@@ -832,7 +843,9 @@ namespace fl
 	virtual MatrixResult<T> column (const int c) const;
 	virtual MatrixResult<T> region (const int firstRow = 0, const int firstColumn = 0, int lastRow = -1, int lastColumn = -1) const;
 
+	virtual MatrixResult<T> operator ! () const;
 	virtual MatrixResult<T> operator ~ () const;
+
 	virtual MatrixResult<T> operator * (const MatrixAbstract<T> & B) const;
 	virtual MatrixResult<T> operator * (const T scalar) const;
 	virtual MatrixResult<T> operator / (const T scalar) const;
@@ -848,22 +861,24 @@ namespace fl
 
   // For MS DLLs, declare that explicit specializations will be available
   // that are exported.
+# ifndef flNumeric_MS_EVIL
   extern template class SHARED MatrixFixed<float, 2,2>;
   extern template class SHARED MatrixFixed<float, 3,3>;
   extern template class SHARED MatrixFixed<double,2,2>;
   extern template class SHARED MatrixFixed<double,3,3>;
-
-  template<class T, int R, int C>
-  SHARED Matrix<T> operator ! (const MatrixFixed<T,R,C> & A);
+# endif
 
   template<class T>
-  SHARED MatrixFixed<T,2,2> operator ! (const MatrixFixed<T,2,2> & A);
+  SHARED T det (const MatrixFixed<T,2,2> & A);
 
   template<class T>
-  SHARED void geev (const MatrixFixed<T,2,2> & A, Matrix<T> & eigenvalues);
+  SHARED void geev (const MatrixFixed<T,2,2> & A, Matrix<T> & eigenvalues, bool destroyA = false);
 
   template<class T>
-  SHARED void geev (const MatrixFixed<T,2,2> & A, Matrix<std::complex<T> > & eigenvalues);
+  SHARED void geev (const MatrixFixed<T,2,2> & A, Matrix<T> & eigenvalues, Matrix<T> & eigenvectors, bool destroyA = false);
+
+  template<class T>
+  SHARED T det (const MatrixFixed<T,3,3> & A);
 }
 
 

@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.language.operator;
 
 import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Type;
 
 public class NE extends Function
 {
@@ -18,8 +19,8 @@ public class NE extends Function
         precedence    = 7;
     }
 
-    public Object eval (Object[] args)
+    public Type eval (Type[] args)
     {
-        return args[0].equals (args[1]) ? 0.0 : 1.0;
+        return args[0].NE (args[1]);
     }
 }

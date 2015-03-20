@@ -7,9 +7,10 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.function;
 
-import java.util.ArrayList;
-
 import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Matrix;
+import gov.sandia.n2a.language.type.Scalar;
 
 public class Grid extends Function
 {
@@ -27,36 +28,25 @@ public class Grid extends Function
         array[j] = temp;
     }
 
-    public Object eval (Object[] args)
+    public Type eval (Type[] args)
     {
         // collect parameters into arrays
-        int index = ((Number) args[0]).intValue ();
-        int[] stride = new int[3];
-        stride[0] = ((Number) args[1]).intValue ();
-        stride[1] = ((Number) args[2]).intValue ();
-        stride[2] = ((Number) args[3]).intValue ();
-        double[] length = new double[3];
-        length[0] = ((Number) args[4]).doubleValue ();
-        length[1] = ((Number) args[5]).doubleValue ();
-        length[2] = ((Number) args[6]).doubleValue ();
-
-        // sort by largest stride
-        int[] major = new int[3];
-        major[0] = 0;
-        major[1] = 1;
-        major[2] = 2;
-        if (stride[major[0]] < stride[major[1]]) swap (major, 0, 1);
-        if (stride[major[1]] < stride[major[2]]) swap (major, 1, 2);
-        if (stride[major[0]] < stride[major[1]]) swap (major, 0, 1);
+        int i = (int) Math.round (((Scalar) args[0]).value);
+        int nx = 1;
+        int ny = 1;
+        int nz = 1;
+        if (args.length >= 2) nx = (int) Math.round (((Scalar) args[1]).value);
+        if (args.length >= 3) nx = (int) Math.round (((Scalar) args[2]).value);
+        if (args.length >= 4) nx = (int) Math.round (((Scalar) args[3]).value);
+        int sy = ny * nz;
+        int sx = nx * sy;
 
         // compute xyz in stride order
-        Number[] result = new Number[3];
-        for (int i = 0; i < 3; i++)
-        {
-            int m = major[i];
-            result[m] = (index / stride[m]) * length[m];  // The division is an integer operation, so remainder is truncated.
-            index %= stride[m];
-        }
+        Matrix result = new Matrix (3, 1);
+        result.value[0][0] = ((i / sx) + 0.5) / nx;  // (i / sx) is an integer operation, so remainder is truncated.
+        i %= sx;
+        result.value[0][1] = ((i / sy) + 0.5) / ny;
+        result.value[0][2] = ((i % sy) + 0.5) / nz;
         return result;
     }
 }

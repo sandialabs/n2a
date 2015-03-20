@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.language.operator;
 
 import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Type;
 
 public class OR extends Function
 {
@@ -18,10 +19,8 @@ public class OR extends Function
         precedence    = 9;
     }
 
-    public Object eval (Object[] args)
+    public Type eval (Type[] args)
     {
-        double arg0 = ((Number) args[0]).doubleValue ();
-        double arg1 = ((Number) args[1]).doubleValue ();
-        return (Math.abs (arg0) + Math.abs (arg1) != 0) ? 1.0 : 0.0;
+        return args[0].OR (args[1]);
     }
 }

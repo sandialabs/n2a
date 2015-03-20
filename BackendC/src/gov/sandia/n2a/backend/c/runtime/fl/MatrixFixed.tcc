@@ -2,7 +2,7 @@
 Author: Fred Rothganger
 Created 2/29/08 to replace Matrix2x2.tcc and Matrix3x3.tcc
 
-Copyright 2009 Sandia Corporation.
+Copyright 2009, 2010 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the GNU Lesser General Public License.  See the file LICENSE
@@ -19,6 +19,149 @@ for details.
 
 namespace fl
 {
+  // Matrix inversion ---------------------------------------------------------
+
+  template <class T, int R, int C>
+  inline MatrixResult<T>
+  invert (const MatrixFixed<T,R,C> & A)
+  {
+	return A.MatrixAbstract<T>::operator ! ();
+  }
+
+
+  // class MatrixFixed<T,2,2> -------------------------------------------------
+
+  template <class T>
+  T
+  det (const MatrixFixed<T,2,2> & A)
+  {
+	return A.data[0][0] * A.data[1][1] - A.data[0][1] * A.data[1][0];
+  }
+
+  template <class T>
+  inline MatrixResult<T>
+  invert (const MatrixFixed<T,2,2> & A)
+  {
+	MatrixFixed<T,2,2> * result = new MatrixFixed<T,2,2>;
+
+	T q = det (A);
+	if (q == 0) throw "invert: Matrix is singular!";
+
+	result->data[0][0] = A.data[1][1] / q;
+	result->data[0][1] = A.data[0][1] / -q;
+	result->data[1][0] = A.data[1][0] / -q;
+	result->data[1][1] = A.data[0][0] / q;
+
+	return result;
+  }
+
+  template<class T>
+  void
+  geev (const MatrixFixed<T,2,2> & A, Matrix<T> & eigenvalues, bool destroyA)
+  {
+	// a = 1  :)
+	T b = A.data[0][0] + A.data[1][1];  // trace
+	T c = A.data[0][0] * A.data[1][1] - A.data[0][1] * A.data[1][0];  // determinant
+	T b4c = b * b - 4 * c;
+	if (b4c < 0) throw "geev: 2x2 matrix has immaginary eigenvalues, which we are not equipped to handle";
+	if (b4c > 0) b4c = sqrt (b4c);
+
+	eigenvalues.resize (2, 1);
+	eigenvalues (0, 0) = (b - b4c) / 2;
+	eigenvalues (1, 0) = (b + b4c) / 2;
+  }
+
+  template<class T>
+  void
+  geev (const MatrixFixed<T,2,2> & A, Matrix<T> & eigenvalues, Matrix<T> & eigenvectors, bool destroyA)
+  {
+	T b = A.data[0][0] + A.data[1][1];  // trace
+	T c = A.data[0][0] * A.data[1][1] - A.data[0][1] * A.data[1][0];  // determinant
+	T b4c = b * b - 4 * c;
+	if (b4c < 0) throw "geev: 2x2 matrix has immaginary eigenvalues, which we are not equipped to handle";
+	if (b4c > 0) b4c = sqrt (b4c);
+
+	eigenvalues.resize (2, 1);
+	eigenvalues[0] = (b - b4c) / 2;
+	eigenvalues[1] = (b + b4c) / 2;
+
+	eigenvectors.resize (2, 2);
+	if (A.data[0][1] != 0)
+	{
+	  T e00 = eigenvalues[0] - A.data[1][1];
+	  T e10 =                  A.data[0][1];
+	  T e01 = eigenvalues[1] - A.data[1][1];
+	  // e11 = e10
+	  T norm = sqrt (e00 * e00 + e10 * e10);
+	  eigenvectors(0,0) = e00 / norm;
+	  eigenvectors(1,0) = e10 / norm;
+	  norm = sqrt (e01 * e01 + e10 * e10);
+	  eigenvectors(0,1) = e01 / norm;
+	  eigenvectors(1,1) = e10 / norm;
+	}
+	else if (A.data[1][0] != 0)
+	{
+	  T e00 =                  A.data[1][0];
+	  T e10 = eigenvalues[0] - A.data[0][0];
+	  // e01 = e00
+	  T e11 = eigenvalues[1] - A.data[0][0];
+	  T norm = sqrt (e00 * e00 + e10 * e10);
+	  eigenvectors(0,0) = e00 / norm;
+	  eigenvectors(1,0) = e10 / norm;
+	  norm = sqrt (e00 * e00 + e11 * e11);
+	  eigenvectors(0,1) = e00 / norm;
+	  eigenvectors(1,1) = e11 / norm;
+	}
+	else
+	{
+	  eigenvectors.identity ();
+	}
+  }
+
+
+  // class MatrixFixed<T,3,3> -------------------------------------------------
+
+  template<class T>
+  T
+  det (const MatrixFixed<T,3,3> & A)
+  {
+	return   A.data[0][0] * A.data[1][1] * A.data[2][2]
+	       - A.data[0][0] * A.data[2][1] * A.data[1][2]
+	       - A.data[1][0] * A.data[0][1] * A.data[2][2]
+	       + A.data[1][0] * A.data[2][1] * A.data[0][2]
+	       + A.data[2][0] * A.data[0][1] * A.data[1][2]
+	       - A.data[2][0] * A.data[1][1] * A.data[0][2];
+  }
+
+  template<class T>
+  inline MatrixResult<T>
+  invert (const MatrixFixed<T,3,3> & A)
+  {
+	MatrixFixed<T,3,3> * result = new MatrixFixed<T,3,3>;
+
+	T q = det (A);
+	if (q == 0)
+	{
+	  throw "invert: Matrix is singular!";
+	}
+
+	// Ugly, but ensures we actually inline this code.
+#   define det22(data,r0,r1,c0,c1) (data[c0][r0] * data[c1][r1] - data[c1][r0] * data[c0][r1])
+
+	result->data[0][0] = det22 (A.data, 1, 2, 1, 2) / q;
+	result->data[0][1] = det22 (A.data, 1, 2, 2, 0) / q;
+	result->data[0][2] = det22 (A.data, 1, 2, 0, 1) / q;
+	result->data[1][0] = det22 (A.data, 0, 2, 2, 1) / q;
+	result->data[1][1] = det22 (A.data, 0, 2, 0, 2) / q;
+	result->data[1][2] = det22 (A.data, 0, 2, 1, 0) / q;
+	result->data[2][0] = det22 (A.data, 0, 1, 1, 2) / q;
+	result->data[2][1] = det22 (A.data, 0, 1, 2, 0) / q;
+	result->data[2][2] = det22 (A.data, 0, 1, 0, 1) / q;
+
+	return result;
+  }
+
+
   // class MatrixFixed<T,R,C> -------------------------------------------------
 
   template<class T, int R, int C>
@@ -115,6 +258,13 @@ namespace fl
 	int columns = lastColumn - firstColumn + 1;
 
 	return new MatrixStrided<T> (Pointer ((void *) data, R * C * sizeof (T)), offset, rows, columns, 1, C);
+  }
+
+  template<class T, int R, int C>
+  MatrixResult<T>
+  MatrixFixed<T,R,C>::operator ! () const
+  {
+	return invert (*this);
   }
 
   template<class T, int R, int C>

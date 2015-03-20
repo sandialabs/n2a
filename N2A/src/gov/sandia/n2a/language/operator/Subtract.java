@@ -7,8 +7,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.operator;
 
-import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Type;
 
 public class Subtract extends Function
 {
@@ -19,8 +19,8 @@ public class Subtract extends Function
         precedence    = 5;
     }
 
-    public Object eval (Object[] args) throws EvaluationException
+    public Type eval (Type[] args)
     {
-        return ((Number) args[0]).doubleValue () - ((Number) args[1]).doubleValue ();
+        return args[0].subtract (args[1]);
     }
 }

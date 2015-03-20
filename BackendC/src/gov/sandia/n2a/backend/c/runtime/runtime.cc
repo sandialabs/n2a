@@ -9,6 +9,9 @@
 // As an FL source file, Neighbor.cc has "using namespace" statements in it. Therefore it must come last.
 #include "Neighbor.cc"
 
+template class Matrix<float>;
+template class MatrixFixed<float,3,1>;
+
 
 // Functions -----------------------------------------------------------------
 
@@ -25,6 +28,60 @@ float pulse (float t, float width, float period, float rise, float fall)
     t -= width;
     if (t < fall) return 1.0 - t / fall;
     return 0.0;
+}
+
+// Box-Muller method (polar variant) for Gaussian random numbers.
+static bool haveNextGaussian = false;
+static float nextGaussian;
+float gaussian1 ()
+{
+    if (haveNextGaussian)
+    {
+        haveNextGaussian = false;
+        return nextGaussian;
+    }
+    else
+    {
+        float v1, v2, s;
+        do
+        {
+            v1 = uniform1 () * 2 - 1;   // between -1.0 and 1.0
+            v2 = uniform1 () * 2 - 1;
+            s = v1 * v1 + v2 * v2;
+        }
+        while (s >= 1 || s == 0);
+        float multiplier = sqrt (- 2 * log (s) / s);
+        nextGaussian = v2 * multiplier;
+        haveNextGaussian = true;
+        return v1 * multiplier;
+    }
+}
+
+MatrixResult<float> gaussian (int dimension)
+{
+    Vector<float> * result = new Vector<float> (dimension);
+    for (int i = 0; i < dimension; i++) (*result)[i] = gaussian1 ();
+    return result;
+}
+
+MatrixResult<float> uniform (int dimension)
+{
+    Vector<float> * result = new Vector<float> (dimension);
+    for (int i = 0; i < dimension; i++) (*result)[i] = uniform1 ();
+    return result;
+}
+
+MatrixResult<float> grid (int i, int nx, int ny, int nz)
+{
+    int sx = ny * nz;  // stride x
+
+    // compute xyz in stride order
+    Vector3 * result = new Vector3;
+    (*result)[0] = ((i / sx) + 0.5f) / nx;  // (i / sx) is an integer operation, so remainder is truncated.
+    i %= sx;
+    (*result)[1] = ((i / nz) + 0.5f) / ny;
+    (*result)[2] = ((i % nz) + 0.5f) / nz;
+    return result;
 }
 
 map<string, int> columnMap;  // TODO: should use unordered_map and a C11 compiler
@@ -449,7 +506,7 @@ PopulationConnection::connect (Simulator & simulator)
                     c->setPart (1, b);
                     if (Bmax  &&  c->getCount (1) >= Bmax) continue;  // no room in this B
                     float create = c->getP (simulator);
-                    if (create <= 0  ||  create < 1  &&  create < randf ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
+                    if (create <= 0  ||  create < 1  &&  create < uniform1 ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
                     c->init (simulator);
                     simulator.enqueue (c);
                     Acount++;
@@ -472,7 +529,7 @@ PopulationConnection::connect (Simulator & simulator)
                     c->setPart (1, b);
                     if (Bmax  &&  c->getCount (1) >= Bmax) continue;  // no room in this B
                     float create = c->getP (simulator);
-                    if (create <= 0  ||  create < 1  &&  create < randf ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
+                    if (create <= 0  ||  create < 1  &&  create < uniform1 ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
                     c->init (simulator);
                     simulator.enqueue (c);
                     c = (Connection *) this->create ();
@@ -522,7 +579,7 @@ PopulationConnection::connect (Simulator & simulator)
                     c->setPart (0, a);
                     if (Amax  &&  c->getCount (0) >= Amax) continue;
                     float create = c->getP (simulator);
-                    if (create <= 0  ||  create < 1  &&  create < randf ()) continue;
+                    if (create <= 0  ||  create < 1  &&  create < uniform1 ()) continue;
                     c->init (simulator);
                     simulator.enqueue (c);
                     c = (Connection *) this->create ();

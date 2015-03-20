@@ -10,6 +10,7 @@ package gov.sandia.n2a.language.parse;
 import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.operator.Assign;
 
 import java.util.HashSet;
@@ -323,8 +324,9 @@ public abstract class ASTNodeBase extends SimpleNode {
     //    y = x + z
     //    c = y ^ 2
 
-    public Object eval() throws EvaluationException {
-        return eval(new EvaluationContext());
+    public Type eval () throws EvaluationException
+    {
+        return eval (new EvaluationContext ());
     }
-    public abstract Object eval(EvaluationContext context) throws EvaluationException;
+    public abstract Type eval (EvaluationContext context) throws EvaluationException;
 }

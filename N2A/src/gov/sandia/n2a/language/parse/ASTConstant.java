@@ -15,6 +15,7 @@ package gov.sandia.n2a.language.parse;
 
 import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.Type;
 
 public class ASTConstant extends ASTNodeBase {
 
@@ -70,8 +71,9 @@ public class ASTConstant extends ASTNodeBase {
     // Currently will evaluate to a String or Double object
     // as those are the only constants we recognize in parsing.
     @Override
-    public Object eval(EvaluationContext context) throws EvaluationException {
-        return getValue();
+    public Type eval (EvaluationContext context) throws EvaluationException
+    {
+        return (Type) getValue ();
     }
 }
 /* JavaCC - OriginalChecksum=8707db8971df053468c80f231e54ed75 (do not edit this line) */

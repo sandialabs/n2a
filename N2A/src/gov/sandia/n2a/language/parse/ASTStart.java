@@ -15,6 +15,7 @@ package gov.sandia.n2a.language.parse;
 
 import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.Type;
 
 
 // Unnecessary class used simply to encapsulate the entire
@@ -64,8 +65,9 @@ public class ASTStart extends ASTNodeBase {
     ////////////////
 
     @Override
-    public Object eval(EvaluationContext context) throws EvaluationException {
-        return getChild(0).eval(context);
+    public Type eval (EvaluationContext context) throws EvaluationException
+    {
+        return getChild (0).eval (context);
     }
 }
 /* JavaCC - OriginalChecksum=a98231396689e1184618f64cb7d1e176 (do not edit this line) */
