@@ -52,7 +52,11 @@ public class ASTMatrixNode extends ASTNodeBase
         int count = getCount ();
         for (int i = 0; i < count; i++)
         {
-            result = Math.max (result, getChild (i).getCount ());
+            ASTNodeBase node = getChild (i);
+            int c = 0;
+            if (node instanceof ASTConstant) c = 1;
+            else                             c = node.getCount ();
+            result = Math.max (result, c);
         }
         return result;
     }
@@ -80,13 +84,21 @@ public class ASTMatrixNode extends ASTNodeBase
             ASTNodeBase row = getChild (r);
             int count = row.getCount ();
             int c = 0;
-            for (; c < count; c++)
+            if (row instanceof ASTConstant)
             {
-                if (c > 0)
+                result.append (context.render (row));
+                c = 1;
+            }
+            else
+            {
+                for (; c < count; c++)
                 {
-                    result.append (",");
+                    if (c > 0)
+                    {
+                        result.append (",");
+                    }
+                    result.append (context.render (row.getChild (c)));
                 }
-                result.append (context.render (row.getChild (c)));
             }
             for (; c < cols; c++)
             {
@@ -117,13 +129,25 @@ public class ASTMatrixNode extends ASTNodeBase
             ASTNodeBase row = getChild (r);
             int count = row.getCount ();
             int c = 0;
-            for (; c < count; c++)
+            if (row instanceof ASTConstant)
             {
-                Type o = row.getChild (c).eval (context);
+                Type o = row.eval (context);
                 if      (o instanceof Scalar) result.value[c][r] = ((Scalar) o).value;
                 else if (o instanceof Text  ) result.value[c][r] = Double.valueOf (((Text) o).value);
                 else if (o instanceof Matrix) result.value[c][r] = ((Matrix) o).value[0][0];
                 else throw new EvaluationException ("Can't construct matrix element from the given type.");
+                c = 1;
+            }
+            else
+            {
+                for (; c < count; c++)
+                {
+                    Type o = row.getChild (c).eval (context);
+                    if      (o instanceof Scalar) result.value[c][r] = ((Scalar) o).value;
+                    else if (o instanceof Text  ) result.value[c][r] = Double.valueOf (((Text) o).value);
+                    else if (o instanceof Matrix) result.value[c][r] = ((Matrix) o).value[0][0];
+                    else throw new EvaluationException ("Can't construct matrix element from the given type.");
+                }
             }
             for (; c < cols; c++)
             {

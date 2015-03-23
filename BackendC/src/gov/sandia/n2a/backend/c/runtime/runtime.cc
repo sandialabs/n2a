@@ -9,6 +9,7 @@
 // As an FL source file, Neighbor.cc has "using namespace" statements in it. Therefore it must come last.
 #include "Neighbor.cc"
 
+template class MatrixAbstract<float>;
 template class Matrix<float>;
 template class MatrixFixed<float,3,1>;
 

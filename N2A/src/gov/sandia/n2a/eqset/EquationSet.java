@@ -20,6 +20,7 @@ import gov.sandia.n2a.language.operator.Subtract;
 import gov.sandia.n2a.language.parse.ASTConstant;
 import gov.sandia.n2a.language.parse.ASTFunNode;
 import gov.sandia.n2a.language.parse.ASTListNode;
+import gov.sandia.n2a.language.parse.ASTMatrixNode;
 import gov.sandia.n2a.language.parse.ASTNodeBase;
 import gov.sandia.n2a.language.parse.ASTNodeRenderer;
 import gov.sandia.n2a.language.parse.ASTNodeTransformer;
@@ -1572,8 +1573,10 @@ public class EquationSet implements Comparable<EquationSet>
 
         ASTTransformationContext context = new ASTTransformationContext ();
         CollapseConstants c = new CollapseConstants ();
-        context.add (ASTOpNode .class, c);
-        context.add (ASTFunNode.class, c);
+        context.add (ASTOpNode    .class, c);
+        context.add (ASTFunNode   .class, c);
+        context.add (ASTMatrixNode.class, c);
+        context.add (ASTListNode  .class, c);
 
         findConstantsRecursive (context);
     }

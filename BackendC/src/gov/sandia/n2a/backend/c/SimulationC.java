@@ -2307,7 +2307,7 @@ public class SimulationC implements Simulation
                 ASTNodeBase row = m.getChild (r);
                 if (cols == 1)
                 {
-                    result.append (pad + matrixName + "[" + r + "] = " + context.render (row.getChild (0)) + ";\n");
+                    result.append (pad + matrixName + "[" + r + "] = " + context.render (row) + ";\n");
                 }
                 else
                 {
@@ -2331,7 +2331,6 @@ public class SimulationC implements Simulation
                 if (rows == 3  &&  cols == 1) result.append (pad + "static Vector3 " + matrixName + " = Matrix<float>");
                 else                          result.append (pad + "static Matrix<float> " + matrixName);
                 result.append (" (\"" + A + "\");\n");
-                return;
             }
         }
         else
