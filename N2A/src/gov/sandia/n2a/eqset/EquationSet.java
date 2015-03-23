@@ -39,7 +39,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
@@ -407,8 +409,9 @@ public class EquationSet implements Comparable<EquationSet>
         @param v Variable.name will be modified until it matches the name in the resolved EquationSet.
         Variable.reference must already exist.
         Any EquationSets visited after this one will be appended to Variable.reference.resolution.
+        @param create If the container can be resolved but the variable does not exist in it, then create one.
     **/
-    public EquationSet resolveEquationSet (Variable v)
+    public EquationSet resolveEquationSet (Variable v, boolean create)
     {
         // Check $variables
         if (v.name.startsWith ("$"))
@@ -418,7 +421,7 @@ public class EquationSet implements Comparable<EquationSet>
                 if (container == null) return null;  // Unresolved! We can't go up any farther.
                 v.name = v.name.substring (4);
                 v.reference.resolution.add (container);
-                return container.resolveEquationSet (v);
+                return container.resolveEquationSet (v, create);
             }
             return this;  // Other $variables are always treated as local, even if they are undefined. For example: you would never want to inherit $n from a container!
         }
@@ -443,7 +446,7 @@ public class EquationSet implements Comparable<EquationSet>
                 {
                     v.name = ns[1];
                     v.reference.resolution.add (connectionBindings.floorEntry (ns[0]));  // We need to add an Entry<> rather than simply the EquationSet in "alias".
-                    return alias.resolveEquationSet (v);
+                    return alias.resolveEquationSet (v, create);
                 }
             }
             EquationSet down = parts.floor (new EquationSet (ns[0]));
@@ -451,7 +454,7 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 v.name = ns[1];
                 v.reference.resolution.add (down);
-                return down.resolveEquationSet (v);
+                return down.resolveEquationSet (v, create);
             }
         }
 
@@ -478,10 +481,23 @@ public class EquationSet implements Comparable<EquationSet>
             return null; // formally, we don't allow a bare reference to a child population
         }
 
+        if (create)
+        {
+            // Create a self-referencing variable with no equations
+            // TODO: make sure we can handle an empty set of equations in C Backend
+            // TODO: what attributes or equations should this have?
+            Variable c = new Variable (v.name, v.order);
+            add (c);
+            c.reference = new VariableReference ();
+            c.reference.variable = c;
+            c.equations = new TreeSet<EquationEntry> ();
+            return this;
+        }
+
         // Look up the containment hierarchy
         if (container == null) return null;  // unresolved!!
         v.reference.resolution.add (container);
-        return container.resolveEquationSet (v);
+        return container.resolveEquationSet (v, create);
     }
 
     /**
@@ -501,7 +517,7 @@ public class EquationSet implements Comparable<EquationSet>
     {
         Variable query = new Variable (variableName);
         query.reference = new VariableReference ();
-        EquationSet dest = resolveEquationSet (query);
+        EquationSet dest = resolveEquationSet (query, false);
         if (dest != null) query.reference.variable = dest.find (query);
         return query.reference;
     }
@@ -522,11 +538,8 @@ public class EquationSet implements Comparable<EquationSet>
         {
             Variable query = new Variable (v.name, v.order);
             query.reference = new VariableReference ();
-            EquationSet dest = resolveEquationSet (query);
-            if (dest != null)
-            {
-                query.reference.variable = dest.find (query);
-            }
+            EquationSet dest = resolveEquationSet (query, true);
+            if (dest != null) query.reference.variable = dest.find (query);
             v.reference = query.reference;
             if (v.reference.variable != v  &&  v.reference.variable != null)
             {
@@ -545,23 +558,42 @@ public class EquationSet implements Comparable<EquationSet>
     /**
         Attach the appropriate Variable to each ASTVarNode.
     **/
-    public void resolveRHS ()
+    public void resolveRHS () throws Exception
+    {
+        LinkedList<String> unresolved = new LinkedList<String> ();
+        resolveRHSrecursive (unresolved);
+        if (unresolved.size () > 0)
+        {
+            StringBuilder message = new StringBuilder ();
+            message.append ("Unresolved variables:\n");
+            ListIterator<String> it = unresolved.listIterator ();
+            while (it.hasNext ()) message.append ("  " + it.next () + "\n");
+            throw new Exception (message.toString ());
+        }
+    }
+
+    public void resolveRHSrecursive (LinkedList<String> unresolved)
     {
         for (EquationSet s : parts)
         {
-            s.resolveRHS ();
+            s.resolveRHSrecursive (unresolved);
         }
     
         class Resolver implements ASTNodeTransformer
         {
             public Variable from;
+            public LinkedList<String> unresolved;
             public ASTNodeBase transform (ASTNodeBase node)
             {
                 ASTVarNode vn = (ASTVarNode) node;
                 Variable query = new Variable (vn.getVariableName (), vn.getOrder ());
                 query.reference = new VariableReference ();
-                EquationSet dest = resolveEquationSet (query);
-                if (dest != null)
+                EquationSet dest = resolveEquationSet (query, false);
+                if (dest == null)
+                {
+                    unresolved.add (vn.getVariableNameWithOrder ());
+                }
+                else
                 {
                     query.reference.variable = dest.find (query);
                     if (query.reference.variable == null)
@@ -572,6 +604,10 @@ public class EquationSet implements Comparable<EquationSet>
                             query.reference.variable.container = dest;  // the container itself is really the target
                             query.reference.variable.addAttribute ("initOnly"); // because instance variables are bound before the part is put into service, and remain constant for its entire life
                             query.reference.variable.reference = query.reference;  // TODO: when $connect() is implemented, instances should become first class variables in the equation set, and this circular reference will be created by resolveLHS()
+                        }
+                        else
+                        {
+                            unresolved.add (vn.getVariableNameWithOrder ());
                         }
                     }
                     else
@@ -594,6 +630,7 @@ public class EquationSet implements Comparable<EquationSet>
         for (Variable v : variables)
         {
             resolver.from = v;
+            resolver.unresolved = unresolved;
             v.transform (context);
         }
     }
