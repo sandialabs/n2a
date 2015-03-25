@@ -318,7 +318,7 @@ PopulationCompartment::PopulationCompartment ()
     live.before = &live;
     live.after  = &live;
     old         = &live;  // same as old=live.after
-    __24n       = 0;
+    n           = 0;
     nextIndex   = 0;
 }
 
@@ -393,7 +393,7 @@ PopulationCompartment::prepare ()
 void
 PopulationCompartment::resize (Simulator & simulator, int n)
 {
-    while (__24n < n)
+    while (this->n < n)
     {
         Part * p = allocate ();  // creates a part that knows how to find its population (that is, me)
         simulator.enqueue (p);
@@ -401,7 +401,7 @@ PopulationCompartment::resize (Simulator & simulator, int n)
     }
 
     Compartment * p = live.before;
-    while (__24n > n)
+    while (this->n > n)
     {
         if (p == &live) throw "Inconsistent $n";
         if (p->getLive ()) p->die ();  // decrement $n. Can't dequeue part until next simulator cycle, so need to store $live.
@@ -430,8 +430,8 @@ PopulationConnection::connect (Simulator & simulator)
     PopulationCompartment * A = dynamic_cast<PopulationCompartment *> (getTarget (0));
     PopulationCompartment * B = dynamic_cast<PopulationCompartment *> (getTarget (1));
     if (A == 0  ||  B == 0) return;  // Nothing to connect. This should never happen, though we might have a unary connection.
-    int An = A->__24n;
-    int Bn = B->__24n;
+    int An = A->n;
+    int Bn = B->n;
     if (An == 0  ||  Bn == 0) return;
     if (A->old == A->live.after  &&  B->old == B->live.after) return;  // Only proceed if there are some new parts. Later, we might consider periodic scanning among old parts.
 

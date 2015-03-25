@@ -54,7 +54,7 @@ public class ASTVarNode extends ASTNodeBase
     public boolean isInitOnly ()
     {
         if (reference == null) return false;
-        return reference.variable.hasAttribute ("initOnly");
+        return reference.variable.hasAny (new String[] {"initOnly", "constant"});
     }
 
     public int getOrder ()
@@ -130,9 +130,8 @@ public class ASTVarNode extends ASTNodeBase
     public Type eval (EvaluationContext context) throws EvaluationException
     {
         if (reference == null) throw new EvaluationException ("Unresolved: " + ((String) getValue ()));
-        if (reference.variable == null) System.out.println ("ref.var is null");
-        if (reference.variable.name == null) System.out.println ("ref.var.name is null");
         if (reference.variable.name.equals ("(connection)")) return new Instance (reference.variable.container);
+        if (reference.variable.hasAttribute ("constant")) return reference.variable.equations.first ().expression.eval (context);
         Type result = context.get (reference.variable);
         if (result == null) throw new EvaluationException ("Variable does not have a value in this context.");
         return result;

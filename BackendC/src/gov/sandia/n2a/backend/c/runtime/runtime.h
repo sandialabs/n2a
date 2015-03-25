@@ -181,7 +181,7 @@ public:
 
     Compartment   live;      ///< Parts currently on simulator queue (regardless of $live), linked via Compartment::before and after. Used for crossing populations to make connections.
     Compartment * old;       ///< Position in parts linked list of first old part. All parts before this were added in the current simulation cycle. If old==&live, then all parts are new.
-    int           __24n;     ///< Actual number of parts with $live==1. Maintained directly by parts as they are born or die.
+    int           n;         ///< Actual number of parts with $live==1. Maintained directly by parts as they are born or die.
     int           nextIndex; ///< Next available $index value. Indices are consumed only when add() is called. With garbage collection, there could be gaps in the set of used indices.
 };
 

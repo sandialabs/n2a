@@ -557,6 +557,7 @@ public class EquationSet implements Comparable<EquationSet>
 
     /**
         Attach the appropriate Variable to each ASTVarNode.
+        Depends on results of: resolveLHS() -- to create indirect variables and thus avoid unnecessary failure of resolution
     **/
     public void resolveRHS () throws Exception
     {
@@ -909,7 +910,7 @@ public class EquationSet implements Comparable<EquationSet>
         v = new Variable ("$live", 0);  // $live functions much the same as $init. See setInit().
         if (add (v))
         {
-            v.addAttribute ("constant");  // default. Actual values should be set by setLiveAttributes()
+            v.addAttribute ("constant");  // default. Actual values should be set by setAttributeLive()
             v.equations = new TreeSet<EquationEntry> ();
             EquationEntry e = new EquationEntry (v, "");
             v.equations.add (e);
@@ -1048,7 +1049,7 @@ public class EquationSet implements Comparable<EquationSet>
         if (init == null)
         {
             EquationEntry e = new EquationEntry ("$init", 0);
-            e.variable.addAttribute ("constant");
+            e.variable.addAttribute ("constant");  // TODO: should really be "initOnly", since it changes value during (at the end of) the init cycle.
             e.assignment = "=";
             e.expression = new ASTConstant (new Scalar (value));
             add (e.variable);
@@ -1111,18 +1112,13 @@ public class EquationSet implements Comparable<EquationSet>
             s.collectSplits ();
         }
 
-        if (splits == null)
-        {
-            splits = new ArrayList<ArrayList<EquationSet>> ();
-        }
+        if (splits == null) splits = new ArrayList<ArrayList<EquationSet>> ();
         for (Variable v : variables)
         {
-            if (v.reference == null  ||  v.reference.variable == null  ||  ! v.reference.variable.name.equals ("$type"))
-            {
-                continue;
-            }
+            if (v.reference == null  ||  v.reference.variable == null  ||  ! v.reference.variable.name.equals ("$type")) continue;
+
             EquationSet container = v.reference.variable.container;
-            if (container.splits == null)  // in case we are referencing $type in another equation set
+            if (container.splits == null)  // in case we are referencing $type in another equation set that has not yet been processed
             {
                 container.splits = new ArrayList<ArrayList<EquationSet>> ();
             }
@@ -1287,11 +1283,30 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
+        Determine if population can grow by a means other than setting $n, specifically by
+        $type splits that produce more than 1 offspring of our current type.
+        Depends on the results of: 
+    **/
+    public boolean canGrow ()
+    {
+        for (ArrayList<EquationSet> split : splits)
+        {
+            int count = 0;
+            for (EquationSet s : split)
+            {
+                if (s == this) count++;  // Direct object identity is OK here.
+            }
+            if (count >= 2) return true;
+        }
+        return false;
+    }
+
+    /**
         Determines the attributes of $live, based on whether other parts depend on it.
         $live is either constant, transient, or stored.
-        It is constant (the default) if we can't die or no part depends on us.
-        It is transient if we only die in response to the death of our container or a referenced part.
-        It is stored if we can die from $n, $p or $type, that is, if the fact that we died is local knowledge.
+        constant (the default) if we can't die or no part depends on us.
+        transient              if we only die in response to the death of our container or a referenced part.
+        stored                 if we can die from $n, $p or $type, that is, if the fact that we died is local knowledge.
         Depends on results of: findDeath() (and indirectly on findInitOnly())
     **/
     public void setAttributesLive ()
@@ -1304,9 +1319,12 @@ public class EquationSet implements Comparable<EquationSet>
         Variable live = find (new Variable ("$live"));
         if (live != null)
         {
+            live.removeAttribute ("constant");
+            live.removeAttribute ("initOnly");
+            live.removeAttribute ("accessor");
+
             if (canDie ()  &&  live.hasUsers)
             {
-                live.removeAttribute ("constant");
                 if (lethalN  ||  lethalP  ||  lethalType)
                 {
                     live.addAttribute ("initOnly");  // Not exactly true. $live can change after init(), but only indirectly. This forces $live to be set during init().
@@ -1525,8 +1543,16 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 try
                 {
-                    Object o = node.eval (ec);
-                    if (o != null) return new ASTConstant (o);
+                    Type o = node.eval (ec);
+                    if (o != null)
+                    {
+                        if (node instanceof ASTVarNode)
+                        {
+                            // Don't let $init get replaced by a simple constant
+                            if (((ASTVarNode) node).getValue ().equals ("$init")) return node;
+                        }
+                        return new ASTConstant (o);
+                    }
                 }
                 catch (EvaluationException exception)
                 {
@@ -1614,27 +1640,36 @@ public class EquationSet implements Comparable<EquationSet>
         context.add (ASTFunNode   .class, c);
         context.add (ASTMatrixNode.class, c);
         context.add (ASTListNode  .class, c);
+        context.add (ASTVarNode   .class, c);
 
-        findConstantsRecursive (context);
+        while (findConstantsRecursive (context)) {}
     }
 
-    public void findConstantsRecursive (ASTTransformationContext context)
+    public boolean findConstantsRecursive (ASTTransformationContext context)
     {
+        boolean result = false;
         for (EquationSet s : parts)
         {
-            s.findConstantsRecursive (context);
+            if (s.findConstantsRecursive (context)) result = true;
         }
 
         for (Variable v : variables)
         {
+            if (v.hasAny (new String[] {"constant", "initOnly"})) continue;
+
             v.transform (context);
 
             // Check if we have a constant
             if (v.equations.size () != 1) continue;
             EquationEntry e = v.equations.first ();
             if (e.conditional != null) continue;
-            if (e.expression instanceof ASTConstant) v.addAttribute ("constant");
+            if (e.expression instanceof ASTConstant)
+            {
+                v.addAttribute ("constant");
+                result = true;
+            }
         }
+        return result;
     }
 
     /**

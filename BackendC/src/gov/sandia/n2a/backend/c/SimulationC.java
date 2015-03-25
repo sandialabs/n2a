@@ -164,9 +164,9 @@ public class SimulationC implements Simulation
         e.findDerivative ();
         e.addAttribute ("global",       0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
         e.addAttribute ("preexistent", -1, false, new String[] {"$index"});
-        e.addAttribute ("preexistent",  0, true,  new String[] {"$dt", "$n", "$t"});
+        e.addAttribute ("preexistent",  0, true,  new String[] {"$dt", "$t"});
         e.addAttribute ("simulator",    0, true,  new String[] {"$dt", "$t"});
-        replaceConstantWithInitOnly (e);  // for "preexistent" $variables ($dt, $n, $t)
+        replaceConstantWithInitOnly (e);  // for "preexistent" $variables ($dt, $t)
         e.findInitOnly ();  // propagate initOnly through ASTs
         e.findDeath ();
         e.setAttributesLive ();
@@ -217,7 +217,7 @@ public class SimulationC implements Simulation
         s.append ("  virtual bool finalize (Simulator & simulator)\n");
         s.append ("  {\n");
         s.append ("    _Model_Population_Instance.finalize (simulator);\n");
-        s.append ("    return _Model_Population_Instance.__24n;\n");  // The simulation stops when the last model instance dies.
+        s.append ("    return _Model_Population_Instance.n;\n");  // The simulation stops when the last model instance dies.
         s.append ("  }\n");
         s.append ("\n");
         s.append ("  virtual void prepareDerivative ()\n");
@@ -539,7 +539,7 @@ public class SimulationC implements Simulation
             result.append (pad2 + "{\n");
             result.append (pad3 + mangle (dest.name) + " * to = " + mangle (dest.name) + "_Population_Instance->allocate ();\n");
             result.append (pad3 + "simulator.enqueue (to);\n");
-            result.append (pad3 + "to->init (simulator);\n");  // may be redundant with the following code ...
+            result.append (pad3 + "to->init (simulator);\n");  // sets all variables, so partially redundant with the following code ...
             // TODO: Convert contained populations from matching populations in the source part?
 
             // Match variables between the two sets.
@@ -739,8 +739,7 @@ public class SimulationC implements Simulation
             }
 
             // instance counting
-            Variable n = s.find (new Variable ("$n"));
-            if (n != null) result.append (pad3 + resolve (n.reference, context, false) + "--;\n");  // $n must be an rvalue to avoid getting "next" prefix
+            if (s.connectionBindings == null) result.append (pad3 + "container->" + mangle (s.name) + "_Population_Instance.n--;\n");
 
             for (String alias : accountableEndpoints)
             {
@@ -812,7 +811,7 @@ public class SimulationC implements Simulation
             for (Variable v : localInit)
             {
                 if (! v.name.startsWith ("$")) continue;
-                if (v.name.equals ("$type")) throw new Exception ("$type must be conditional, and it must never be assigned during init.");
+                if (v.name.equals ("$type")) throw new Exception ("$type must be conditional, and it must never be assigned during init.");  // TODO: Work out logic of $type better. This trap should not be here.
                 multiconditional (s, v, context, pad3, result);
             }
             // finalize $variables
@@ -842,8 +841,7 @@ public class SimulationC implements Simulation
             }
 
             // instance counting
-            Variable n = s.find (new Variable ("$n"));
-            if (n != null) result.append (pad3 + resolve (n.reference, context, false) + "++;\n");
+            if (s.connectionBindings == null) result.append (pad3 + "container->" + mangle (s.name) + "_Population_Instance.n++;\n");
 
             for (String alias : accountableEndpoints)
             {
@@ -962,10 +960,7 @@ public class SimulationC implements Simulation
             {
                 if (v.name.equals ("$dt"))
                 {
-                    result.append (pad3 + "if (" + mangle ("next_", v) + " != simulator.dt)\n");
-                    result.append (pad3 + "{\n");
-                    result.append (pad4 + "simulator.move (" + mangle ("next_", v) + ");\n");
-                    result.append (pad3 + "}\n");
+                    result.append (pad3 + "if (" + mangle ("next_", v) + " != simulator.dt) simulator.move (" + mangle ("next_", v) + ");\n");
                 }
                 else
                 {
@@ -1747,7 +1742,7 @@ public class SimulationC implements Simulation
         //   finalize
         for (Variable v : globalBuffered)
         {
-            if (! v.name.equals ("$n")) result.append (pad3 + mangle (v) + " = " + mangle ("next_", v) + ";\n");
+            result.append (pad3 + mangle (v) + " = " + mangle ("next_", v) + ";\n");
         }
         //   create instances
         {
@@ -1755,14 +1750,7 @@ public class SimulationC implements Simulation
             if (n != null)
             {
                 if (s.connectionBindings != null) throw new Exception ("$n is not applicable to connections");
-                if (n.hasAttribute ("constant"))
-                {
-                    result.append (pad3 + "resize (simulator, " + resolve (n.reference, context, false) + ");\n");
-                }
-                else
-                {
-                    result.append (pad3 + "resize (simulator, " + mangle ("next_", n) + ");\n");
-                }
+                result.append (pad3 + "resize (simulator, " + resolve (n.reference, context, false) + ");\n");
             }
         }
         //   make connections
@@ -1800,16 +1788,26 @@ public class SimulationC implements Simulation
         }
 
         // Population prepare
-        if (globalBufferedExternalWrite.size () > 0)
         {
-            result.append (pad2 + "virtual void prepare ()\n");
-            result.append (pad2 + "{\n");
-            for (Variable v : globalBufferedExternalWrite)
+            Variable n = s.find (new Variable ("$n", 0));
+            boolean updateN =    n != null
+                              && (s.lethalP  ||  s.lethalType  || s.canGrow ())
+                              && globalMembers.contains (n);
+            if (globalBufferedExternalWrite.size () > 0  || updateN)
             {
-                result.append (pad3 + mangle ("next_", v) + zero (v) + ";\n");
+                result.append (pad2 + "virtual void prepare ()\n");
+                result.append (pad2 + "{\n");
+                for (Variable v : globalBufferedExternalWrite)
+                {
+                    result.append (pad3 + mangle ("next_", v) + zero (v) + ";\n");
+                }
+                if (updateN)
+                {
+                    result.append (pad3 + "if (n != (int) " + mangle ("$n") + ") " + mangle ("$n") + " = n;\n");  // Why make it conditional? Because we want to preserve the non-integer value of $n for dynamics, as long as it is equivalent to the correct value.
+                }
+                result.append (pad2 + "};\n");
+                result.append ("\n");
             }
-            result.append (pad2 + "};\n");
-            result.append ("\n");
         }
 
         // Population update
@@ -1817,6 +1815,7 @@ public class SimulationC implements Simulation
         {
             result.append (pad2 + "virtual void update (Simulator & simulator)\n");
             result.append (pad2 + "{\n");
+
             for (Variable v : globalBufferedInternalUpdate)
             {
                 result.append (pad3 + type (v) + " " + mangle ("next_", v) + ";\n");
@@ -1829,6 +1828,13 @@ public class SimulationC implements Simulation
             {
                 result.append (pad3 + mangle (v) + " = " + mangle ("next_", v) + ";\n");
             }
+
+            Variable n = s.find (new Variable ("$n", 0));
+            if (n != null  &&  ! n.hasAny (new String[] {"constant", "initOnly", "externalWrite", "externalRead"}))  // This case should be mutually exclusive with the one below in finalize().
+            {
+                result.append (pad3 + "if (n != (int) " + mangle (n) + ") simulator.resize (this, " + mangle (n) + ");\n");
+            }
+
             result.append (pad2 + "};\n");
             result.append ("\n");
         }
@@ -1840,14 +1846,11 @@ public class SimulationC implements Simulation
             result.append (pad2 + "{\n");
             for (Variable v : globalBufferedExternal)
             {
-                if (v.name.equals ("$n"))
+                if (v.name.equals ("$n")  &&  v.order == 0)
                 {
-                    result.append (pad3 + "resize (simulator, " + mangle ("next_", v) + ");\n");  // each new instance will add to $n
+                    result.append (pad3 + "if (" + mangle (v) + " != " + mangle ("next_", v) + ") simulator.resize (this, " + mangle ("next_", v) + ");\n");
                 }
-                else
-                {
-                    result.append (pad3 + mangle (v) + " = " + mangle ("next_", v) + ";\n");
-                }
+                result.append (pad3 + mangle (v) + " = " + mangle ("next_", v) + ";\n");
             }
             if (s.container == null)  // This is the top-level population
             {
@@ -1990,10 +1993,6 @@ public class SimulationC implements Simulation
             result.append (pad2 + "};\n");
             result.append ("\n");
         }
-
-        // TODO: study how conditionals interact with getXXX() functions
-        // the code below assumes that everything is constant
-        // could also be dynamic, which implies a stored value
 
         // Population getK
         if (s.connectionBindings != null)
@@ -2612,7 +2611,7 @@ public class SimulationC implements Simulation
 
         for (Variable v : s.variables)
         {
-            if (v.order == 0  &&  (v.name.equals ("$n")  ||  v.name.equals ("$dt")))
+            if (v.name.equals ("$dt")  &&  v.order == 0)
             {
                 if (v.hasAttribute ("initOnly")) v.addAttribute ("cycle");
                 else                             v.addAttribute ("externalRead");

@@ -117,10 +117,7 @@ public class Variable implements Comparable<Variable>
 
     public void transform (ASTTransformationContext context)
     {
-        if (equations == null)
-        {
-            return;
-        }
+        if (equations == null) return;
         for (EquationEntry e : equations)
         {
             if (e.expression != null)  // could be null if this is a special variable or integrated value that is added automatically
