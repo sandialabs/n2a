@@ -16,21 +16,6 @@ template class MatrixFixed<float,3,1>;
 
 // Functions -----------------------------------------------------------------
 
-float pulse (float t, float width, float period, float rise, float fall)
-{
-    if (period == 0.0)
-    {
-        if (t < 0) return 0.0;
-    }
-    else t = fmod (t, period);
-    if (t < rise) return t / rise;
-    t -= rise;
-    if (t < width) return 1.0;
-    t -= width;
-    if (t < fall) return 1.0 - t / fall;
-    return 0.0;
-}
-
 // Box-Muller method (polar variant) for Gaussian random numbers.
 static bool haveNextGaussian = false;
 static float nextGaussian;
@@ -65,13 +50,6 @@ MatrixResult<float> gaussian (int dimension)
     return result;
 }
 
-MatrixResult<float> uniform (int dimension)
-{
-    Vector<float> * result = new Vector<float> (dimension);
-    for (int i = 0; i < dimension; i++) (*result)[i] = uniform1 ();
-    return result;
-}
-
 MatrixResult<float> grid (int i, int nx, int ny, int nz)
 {
     int sx = ny * nz;  // stride x
@@ -85,12 +63,80 @@ MatrixResult<float> grid (int i, int nx, int ny, int nz)
     return result;
 }
 
-map<string, int> columnMap;  // TODO: should use unordered_map and a C11 compiler
-vector<float>    columnValues;
-
-float trace (float value, const string & column)
+float matrix (Matrix<float> * handle, float row, float column)
 {
-    map<string, int>::iterator result = columnMap.find (column);
+    // Just assume handle is good.
+    if (row < 0  ||  row > 1  ||  column < 0  ||  column > 1) return 0;
+    row    = row    * handle->rows_    - 0.5;
+    column = column * handle->columns_ - 0.5;
+    int r = (int) floor (row);
+    int c = (int) floor (column);
+    if (r < 0)
+    {
+        if      (c < 0)                     return (*handle)(r+1,c+1);
+        else if (c >= handle->columns_ - 1) return (*handle)(r+1,c  );
+        else
+        {
+            float b = column - c;
+            return (1 - b) * (*handle)(r+1,c) + b * (*handle)(r+1,c+1);
+        }
+    }
+    else if (r >= handle->rows_ - 1)
+    {
+        if      (c < 0)                     return (*handle)(r,c+1);
+        else if (c >= handle->columns_ - 1) return (*handle)(r,c  );
+        else
+        {
+            float b = column - c;
+            return (1 - b) * (*handle)(r+1,c) + b * (*handle)(r+1,c+1);
+        }
+    }
+    else
+    {
+        float a = row - r;
+        float a1 = 1 - a;
+        if      (c < 0)                     return a1 * (*handle)(r,c+1) + a * (*handle)(r+1,c+1);
+        else if (c >= handle->columns_ - 1) return a1 * (*handle)(r,c  ) + a * (*handle)(r+1,c  );
+        else
+        {
+            float b = column - c;
+            return   (1 - b) * (a1 * (*handle)(r,c  ) + a * (*handle)(r+1,c  ))
+                   +      b  * (a1 * (*handle)(r,c+1) + a * (*handle)(r+1,c+1));
+        }
+    }
+}
+
+float pulse (float t, float width, float period, float rise, float fall)
+{
+    if (period == 0.0)
+    {
+        if (t < 0) return 0.0;
+    }
+    else t = fmod (t, period);
+    if (t < rise) return t / rise;
+    t -= rise;
+    if (t < width) return 1.0;
+    t -= width;
+    if (t < fall) return 1.0 - t / fall;
+    return 0.0;
+}
+
+MatrixResult<float> uniform (int dimension)
+{
+    Vector<float> * result = new Vector<float> (dimension);
+    for (int i = 0; i < dimension; i++) (*result)[i] = uniform1 ();
+    return result;
+}
+
+
+// trace ---------------------------------------------------------------------
+
+map<const char *, int> columnMap;  // TODO: should use unordered_map and a C11 compiler
+vector<float>          columnValues;
+
+float trace (float value, const char * column)
+{
+    map<const char *, int>::iterator result = columnMap.find (column);
     if (result == columnMap.end ())
     {
         columnMap.insert (make_pair (column, columnValues.size ()));
@@ -120,8 +166,8 @@ void writeHeaders ()
 {
     const int count = columnMap.size ();
     const int last = count - 1;
-    vector<string> headers (count);
-    map<string, int>::iterator it;
+    vector<const char *> headers (count);
+    map<const char *, int>::iterator it;
     for (it = columnMap.begin (); it != columnMap.end (); it++)
     {
         headers[it->second] = it->first;

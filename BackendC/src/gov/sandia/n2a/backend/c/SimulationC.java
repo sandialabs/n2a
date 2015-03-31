@@ -12,7 +12,9 @@ import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Norm;
+import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.Power;
 import gov.sandia.n2a.language.parse.ASTConstant;
 import gov.sandia.n2a.language.parse.ASTFunNode;
@@ -2730,6 +2732,32 @@ public class SimulationC implements Simulation
             if (func instanceof Norm)
             {
                 return "(" + context.render (node.getChild (1)) + ").norm (" + context.render (node.getChild (0)) + ")";
+            }
+            else if (func instanceof Gaussian)
+            {
+                if (node.getCount () == 1)
+                {
+                    Object parm0 = node.getChild (0).getValue ();
+                    if (parm0 instanceof Scalar)
+                    {
+                        int dimension = (int) ((Scalar) parm0).value;
+                        if (dimension > 1) return "gaussian (" + dimension + ")";
+                    }
+                }
+                return "gaussian1 ()";
+            }
+            else if (func instanceof Uniform)
+            {
+                if (node.getCount () == 1)
+                {
+                    Object parm0 = node.getChild (0).getValue ();
+                    if (parm0 instanceof Scalar)
+                    {
+                        int dimension = (int) ((Scalar) parm0).value;
+                        if (dimension > 1) return "uniform (" + dimension + ")";
+                    }
+                }
+                return "uniform1 ()";
             }
             else
             {

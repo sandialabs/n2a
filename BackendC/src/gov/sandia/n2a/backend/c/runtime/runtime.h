@@ -17,11 +17,12 @@ uniform1 ()
 }
 
 // See the N2A language reference for details on the interface of these functions.
-extern float                   pulse     (float t, float width, float period = 0, float rise = 0, float fall = 0);
 extern float                   gaussian1 ();
 extern fl::MatrixResult<float> gaussian  (int dimension);
-extern fl::MatrixResult<float> uniform   (int dimension);
 extern fl::MatrixResult<float> grid      (int i, int nx, int ny = 1, int nz = 1);
+extern float                   matrix    (const char * fileName, float row, float column);
+extern float                   pulse     (float t, float width, float period = 0, float rise = 0, float fall = 0);
+extern fl::MatrixResult<float> uniform   (int dimension);
 
 
 /**
@@ -30,7 +31,7 @@ extern fl::MatrixResult<float> grid      (int i, int nx, int ny = 1, int nz = 1)
     @param column Label for the value. Once allocated, it never goes away for the remainder of the simulation.
     @return The value provide as input. Thus, trace() can be inserted into any expression.
 **/
-extern float trace        (float value, const std::string & column);
+extern float trace        (float value, const char * column);
 extern void  writeTrace   ();  ///< called only by top-level Population::finalize()
 extern void  writeHeaders ();  ///< called only by main() on termination of simulation
 
