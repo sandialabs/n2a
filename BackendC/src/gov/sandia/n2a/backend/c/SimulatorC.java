@@ -45,10 +45,7 @@ public class SimulatorC implements Simulator
         {
             ModelOrient mo = (ModelOrient) model;
             EquationSet s = new EquationSet (mo.getSource ());
-            if (s.name.length () < 1)
-            {
-                s.name = "Model";
-            }
+            if (s.name.length () < 1) s.name = "Model";
             s.resolveLHS ();
             return s.getOutputParameters ();
         }
