@@ -52,6 +52,8 @@ public class SimulationC implements Simulation
 {
     static boolean rebuildRuntime = true;  // always rebuild runtime once per session
     public TreeMap<String, String> metadata = new TreeMap<String, String> ();
+    public HashMap<ASTNodeBase,String> matrixNames;
+
     /** @deprecated **/
     private ExecutionEnv execEnv;
     /** @deprecated **/
@@ -178,6 +180,8 @@ public class SimulationC implements Simulation
 
         e.setInit (0);
         System.out.println (e.flatList (false));
+
+        matrixNames = new HashMap<ASTNodeBase,String> ();
 
         StringBuilder s = new StringBuilder ();
 
@@ -365,6 +369,7 @@ public class SimulationC implements Simulation
         for (Variable v : s.ordered)  // we want the sub-lists to be ordered correctly
         {
             System.out.println ("  " + v.nameString () + " " + v.attributeString ());
+            generateMatrixConstants (v, result);
             if (v.name.equals ("$type")) bed.type = v;
             if (v.hasAttribute ("global"))
             {
@@ -884,6 +889,15 @@ public class SimulationC implements Simulation
         result.append ("\n");
 
         return result.toString ();
+    }
+
+    public void generateMatrixConstants (Variable v, StringBuilder result)
+    {
+        for (EquationEntry e : v.equations)
+        {
+            if (e.expression  != null) prepareMatrixConstants (e.expression,  result);
+            if (e.conditional != null) prepareMatrixConstants (e.conditional, result);
+        }
     }
 
     public String generateDefinitions (EquationSet s) throws Exception
@@ -2064,7 +2078,7 @@ public class SimulationC implements Simulation
                 result.append ("{\n");
                 // $xyz is either stored, "temporary", or "constant"
                 // If "temporary", then we compute it on the spot.
-                // If "constant", then we lay down a static matrix local to the function
+                // If "constant", then we use the static matrix created during variable analysis
                 // If stored, then simply copy into the return value.
                 if (xyz.hasAttribute ("temporary"))
                 {
@@ -2077,10 +2091,6 @@ public class SimulationC implements Simulation
                         }
                     }
                     multiconditional (s, xyz, context, "    ", result);
-                }
-                else if (xyz.hasAttribute ("constant"))
-                {
-                    prepareMatrices (xyz.equations.first ().expression, context, "  ", result);
                 }
                 result.append ("  xyz = " + resolve (xyz.reference, context, false) + ";\n");
                 result.append ("}\n");
@@ -2474,8 +2484,8 @@ public class SimulationC implements Simulation
             int rows = m.getRows ();
             int cols = m.getColumns ();
 
-            String matrixName = "MatrixVariable" + context.matrixNames.size ();
-            context.matrixNames.put (m, matrixName);
+            String matrixName = "MatrixVariable" + matrixNames.size ();
+            matrixNames.put (m, matrixName);
             if (rows == 3  &&  cols == 1) result.append (pad + "Vector3 " + matrixName + ";\n");
             else                          result.append (pad + "Matrix<float> " + matrixName + " (" + rows + ", " + cols + ");\n");
             for (int r = 0; r < rows; r++)
@@ -2494,7 +2504,16 @@ public class SimulationC implements Simulation
                 }
             }
         }
-        else if (node instanceof ASTConstant)
+        else
+        {
+            int count = node.getCount ();
+            for (int i = 0; i < count; i++) prepareMatrices (node.getChild (i), context, pad, result);
+        }
+    }
+
+    public void prepareMatrixConstants (ASTNodeBase node, StringBuilder result)
+    {
+        if (node instanceof ASTConstant)
         {
             Object m = node.getValue ();
             if (m instanceof Matrix)
@@ -2502,17 +2521,17 @@ public class SimulationC implements Simulation
                 Matrix A = (Matrix) m;
                 int rows = A.rows ();
                 int cols = A.columns ();
-                String matrixName = "MatrixConstant" + context.matrixNames.size ();
-                context.matrixNames.put (node, matrixName);
-                if (rows == 3  &&  cols == 1) result.append (pad + "static Vector3 " + matrixName + " = Matrix<float>");
-                else                          result.append (pad + "static Matrix<float> " + matrixName);
+                String matrixName = "MatrixConstant" + matrixNames.size ();
+                matrixNames.put (node, matrixName);
+                if (rows == 3  &&  cols == 1) result.append ("Vector3 " + matrixName + " = Matrix<float>");
+                else                          result.append ("Matrix<float> " + matrixName);
                 result.append (" (\"" + A + "\");\n");
             }
         }
         else
         {
             int count = node.getCount ();
-            for (int i = 0; i < count; i++) prepareMatrices (node.getChild (i), context, pad, result);
+            for (int i = 0; i < count; i++) prepareMatrixConstants (node.getChild (i), result);
         }
     }
 
@@ -2900,7 +2919,6 @@ public class SimulationC implements Simulation
     {
         public EquationSet part;
         public boolean global;  ///< Whether this is in the population object (true) or a part object (false)
-        public HashMap<ASTNodeBase,String> matrixNames = new HashMap<ASTNodeBase,String> ();
         public CRenderingContext (EquationSet part)
         {
             super (true);
@@ -2991,8 +3009,7 @@ public class SimulationC implements Simulation
             }
             else if (o instanceof Matrix)
             {
-                CRenderingContext crc = (CRenderingContext) context;
-                return crc.matrixNames.get (node);
+                return matrixNames.get (node);
             }
             // We should only be an explicit integer if the type is allowed by the N2A language at this point.
             return o.toString ();
@@ -3003,8 +3020,7 @@ public class SimulationC implements Simulation
     {
         public String render (ASTNodeBase node, ASTRenderingContext context)
         {
-            CRenderingContext c = (CRenderingContext) context;
-            return c.matrixNames.get (node);
+            return matrixNames.get (node);
         }
     }
 }
