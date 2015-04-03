@@ -14,6 +14,7 @@ import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Norm;
+import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.Power;
 import gov.sandia.n2a.language.parse.ASTConstant;
@@ -196,9 +197,9 @@ public class SimulationC implements Simulation
         s.append ("using namespace fl;\n");
         s.append ("\n");
         s.append ("class Wrapper;\n");
-        s.append (generateClassList (e));
+        generateClassList (e, s);
         s.append ("\n");
-        s.append (generateDeclarations (e));
+        generateDeclarations (e, s);
         s.append ("class Wrapper : public Part\n");
         s.append ("{\n");
         s.append ("public:\n");
@@ -291,7 +292,7 @@ public class SimulationC implements Simulation
         s.append ("  " + mangle (e.name) + ".addToMembers ();\n");
         s.append ("}\n");
         s.append ("\n");
-        s.append (generateDefinitions (e));
+        generateDefinitions (e, s);
         s.append ("\n");
 
         // Main
@@ -334,13 +335,11 @@ public class SimulationC implements Simulation
         return result;
     }
 
-    public String generateClassList (EquationSet s)
+    public void generateClassList (EquationSet s, StringBuilder result)
     {
-        StringBuilder result = new StringBuilder ();
         result.append ("class " + prefix (s) + "_Population;\n");
         result.append ("class " + prefix (s) + ";\n");
-        for (EquationSet p : s.parts) result.append (generateClassList (p));
-        return result.toString ();
+        for (EquationSet p : s.parts) generateClassList (p, result);
     }
 
     /**
@@ -357,10 +356,8 @@ public class SimulationC implements Simulation
         Note that the analysis is cached for later use when generating function
         definitions.
     **/
-    public String generateDeclarations (EquationSet s)
+    public void generateDeclarations (EquationSet s, StringBuilder result)
     {
-        StringBuilder result = new StringBuilder ();
-
         // Analyze variables
         if (! (s.backendData instanceof BackendData)) s.backendData = new BackendData ();
         BackendData bed = (BackendData) s.backendData;
@@ -369,7 +366,7 @@ public class SimulationC implements Simulation
         for (Variable v : s.ordered)  // we want the sub-lists to be ordered correctly
         {
             System.out.println ("  " + v.nameString () + " " + v.attributeString ());
-            generateMatrixConstants (v, result);
+            generateStatic (v, result);
             if (v.name.equals ("$type")) bed.type = v;
             if (v.hasAttribute ("global"))
             {
@@ -495,7 +492,7 @@ public class SimulationC implements Simulation
         bed.refcount = s.referenced  &&  s.canDie ();
 
         // Sub-parts
-        for (EquationSet p : s.parts) result.append (generateDeclarations (p));
+        for (EquationSet p : s.parts) generateDeclarations (p, result);
 
         // -------------------------------------------------------------------
 
@@ -887,23 +884,19 @@ public class SimulationC implements Simulation
         // Unit class trailer
         result.append ("};\n");
         result.append ("\n");
-
-        return result.toString ();
     }
 
-    public void generateMatrixConstants (Variable v, StringBuilder result)
+    public void generateStatic (Variable v, StringBuilder result)
     {
         for (EquationEntry e : v.equations)
         {
-            if (e.expression  != null) prepareMatrixConstants (e.expression,  result);
-            if (e.conditional != null) prepareMatrixConstants (e.conditional, result);
+            if (e.expression  != null) prepareStatic (e.expression,  result);
+            if (e.conditional != null) prepareStatic (e.conditional, result);
         }
     }
 
-    public String generateDefinitions (EquationSet s) throws Exception
+    public void generateDefinitions (EquationSet s, StringBuilder result) throws Exception
     {
-        StringBuilder result = new StringBuilder ();
-
         CRenderingContext context = new CRenderingContext (s);
         context.add (ASTVarNode   .class, new VariableMangler ());
         context.add (ASTOpNode    .class, new OpSubstituter ());
@@ -2351,9 +2344,7 @@ public class SimulationC implements Simulation
         }
 
         // Unit sub-parts
-        for (EquationSet p : s.parts) result.append (generateDefinitions (p));
-
-        return result.toString ();
+        for (EquationSet p : s.parts) generateDefinitions (p, result);
     }
 
     public void multiconditional (EquationSet s, Variable v, CRenderingContext context, String pad, StringBuilder result) throws Exception
@@ -2484,7 +2475,7 @@ public class SimulationC implements Simulation
             int rows = m.getRows ();
             int cols = m.getColumns ();
 
-            String matrixName = "MatrixVariable" + matrixNames.size ();
+            String matrixName = "Matrix" + matrixNames.size ();
             matrixNames.put (m, matrixName);
             if (rows == 3  &&  cols == 1) result.append (pad + "Vector3 " + matrixName + ";\n");
             else                          result.append (pad + "Matrix<float> " + matrixName + " (" + rows + ", " + cols + ");\n");
@@ -2511,7 +2502,7 @@ public class SimulationC implements Simulation
         }
     }
 
-    public void prepareMatrixConstants (ASTNodeBase node, StringBuilder result)
+    public void prepareStatic (ASTNodeBase node, StringBuilder result)
     {
         if (node instanceof ASTConstant)
         {
@@ -2521,18 +2512,40 @@ public class SimulationC implements Simulation
                 Matrix A = (Matrix) m;
                 int rows = A.rows ();
                 int cols = A.columns ();
-                String matrixName = "MatrixConstant" + matrixNames.size ();
+                String matrixName = "Matrix" + matrixNames.size ();
                 matrixNames.put (node, matrixName);
                 if (rows == 3  &&  cols == 1) result.append ("Vector3 " + matrixName + " = Matrix<float>");
                 else                          result.append ("Matrix<float> " + matrixName);
                 result.append (" (\"" + A + "\");\n");
             }
+            return;  // Don't try to descend tree from here
         }
-        else
+        else if (node instanceof ASTFunNode)
         {
-            int count = node.getCount ();
-            for (int i = 0; i < count; i++) prepareMatrixConstants (node.getChild (i), result);
+            // Handle all functions that need static handles
+            Function f = ((ASTFunNode) node).getFunction ();
+            if (f instanceof ReadMatrix)
+            {
+                if (node.getCount () == 3)
+                {
+                    ASTNodeBase c = node.getChild (0);
+                    if (c instanceof ASTConstant)
+                    {
+                        Object o = c.getValue ();
+                        if (o instanceof Text)
+                        {
+                            String matrixName = "Matrix" + matrixNames.size ();
+                            matrixNames.put (c, matrixName);
+                            result.append ("Matrix<float> * " + matrixName + " = matrixHelper (\"" + o + "\");\n");
+                        }
+                    }
+                }
+                return;
+            }
         }
+
+        int count = node.getCount ();
+        for (int i = 0; i < count; i++) prepareStatic (node.getChild (i), result);
     }
 
     public static String mangle (Variable v)
@@ -2986,10 +2999,13 @@ public class SimulationC implements Simulation
                 }
                 return "uniform1 ()";
             }
-            else
+            else if (func instanceof ReadMatrix)
             {
-                return node.render (context);
+                String matrixName = matrixNames.get (node.getChild (0));
+                return "matrix (" + matrixName + ", " + context.render (node.getChild (1)) + ", " + context.render (node.getChild (2)) + ")";
             }
+            // Fall through if none of the special cases match
+            return node.render (context);
         }
     }
 

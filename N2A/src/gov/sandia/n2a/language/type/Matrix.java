@@ -1,6 +1,10 @@
 package gov.sandia.n2a.language.type;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.Reader;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.util.ArrayList;
@@ -30,12 +34,27 @@ public class Matrix extends Type
         value = new double[columns][rows];
     }
 
-    public Matrix (Text that) throws EvaluationException
+    public Matrix (File path) throws EvaluationException
     {
         try
         {
-            StringReader stream = new StringReader (that.value);
+            load (new InputStreamReader (new FileInputStream (path)));
+        }
+        catch (IOException exception)
+        {
+            throw new EvaluationException ("Can't open matrix file");
+        }
+    }
 
+    public Matrix (Text that) throws EvaluationException
+    {
+        load (new StringReader (that.value));
+    }
+
+    public void load (Reader stream) throws EvaluationException
+    {
+        try
+        {
             ArrayList<ArrayList<Double>> temp = new ArrayList<ArrayList<Double>> ();
             int columns = 0;
             boolean transpose = false;
@@ -154,6 +173,16 @@ public class Matrix extends Type
     public int columns ()
     {
         return value.length;
+    }
+
+    public double getDouble (int row, int column)
+    {
+        return value[column][row];
+    }
+
+    public Scalar getScalar (int row, int column)
+    {
+        return new Scalar (value[column][row]);
     }
 
     public Type add (Type that) throws EvaluationException

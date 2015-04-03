@@ -65,6 +65,8 @@ MatrixResult<float> grid (int i, int nx, int ny, int nz)
 
 float matrix (Matrix<float> * handle, float row, float column)
 {
+    cerr << "matrix: " << row << " " << column << endl;
+    cerr << "  handle = " << *handle << endl;
     // Just assume handle is good.
     if (row < 0  ||  row > 1  ||  column < 0  ||  column > 1) return 0;
     row    = row    * handle->rows_    - 0.5;
@@ -106,6 +108,39 @@ float matrix (Matrix<float> * handle, float row, float column)
     }
 }
 
+map<string, Matrix<float> *> matrixMap;
+map<Matrix<float> *, string> matrixMapReverse;
+Matrix<float> * matrixHelper (const string & fileName, Matrix<float> * oldHandle)
+{
+    if (oldHandle)
+    {
+        map<Matrix<float> *, string>::iterator r = matrixMapReverse.find (oldHandle);
+        if (r != matrixMapReverse.end ())
+        {
+            if (r->second == fileName) return oldHandle;
+            delete oldHandle;
+            matrixMap       .erase (r->second);
+            matrixMapReverse.erase (r);
+        }
+    }
+
+    map<string, Matrix<float> *>::iterator i = matrixMap.find (fileName);
+    if (i != matrixMap.end ()) return i->second;
+
+    Matrix<float> * handle = new Matrix<float> ();
+    matrixMap.insert (make_pair (fileName, handle));
+    ifstream ifs (fileName.c_str ());
+    ifs >> (*handle);
+    if (! ifs.good ()) cerr << "Failed to open matrix file: " << fileName << endl;
+    else if (handle->rows () == 0  ||  handle->columns () == 0)
+    {
+        cerr << "Ill-formed matrix in file: " << fileName << endl;
+        handle->resize (1, 1);  // fallback matrix
+        handle->clear ();       // set to 0
+    }
+    return handle;
+}
+
 float pulse (float t, float width, float period, float rise, float fall)
 {
     if (period == 0.0)
@@ -131,12 +166,12 @@ MatrixResult<float> uniform (int dimension)
 
 // trace ---------------------------------------------------------------------
 
-map<const char *, int> columnMap;  // TODO: should use unordered_map and a C11 compiler
-vector<float>          columnValues;
+map<string, int> columnMap;  // TODO: should use unordered_map and a C11 compiler
+vector<float>    columnValues;
 
-float trace (float value, const char * column)
+float trace (float value, const string & column)
 {
-    map<const char *, int>::iterator result = columnMap.find (column);
+    map<string, int>::iterator result = columnMap.find (column);
     if (result == columnMap.end ())
     {
         columnMap.insert (make_pair (column, columnValues.size ()));
@@ -166,8 +201,8 @@ void writeHeaders ()
 {
     const int count = columnMap.size ();
     const int last = count - 1;
-    vector<const char *> headers (count);
-    map<const char *, int>::iterator it;
+    vector<string> headers (count);
+    map<string, int>::iterator it;
     for (it = columnMap.begin (); it != columnMap.end (); it++)
     {
         headers[it->second] = it->first;
