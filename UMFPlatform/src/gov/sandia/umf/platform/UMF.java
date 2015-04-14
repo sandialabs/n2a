@@ -257,18 +257,6 @@ public class UMF
                 AboutDialog.initializeLabels();
             };
         }.start();
-        
-        // capture memory info regularly
-        Timer t = new Timer(true);
-        int period = 5000;
-        t.schedule(new TimerTask()
-        {
-            @Override
-            public void run()
-            {
-                writeDebugInfo();
-            }
-        }, period, period);
     }
 
     private static ProductCustomization chooseProductCustomization(String prodCust) {
@@ -500,81 +488,6 @@ public class UMF
             }
         }
         logger.error("An unexpected error has occurred.", t);
-        new Thread() {
-            @Override
-            public void run() {
-                MailUtil.sendErrorMail(t);
-            }
-        }.start();
         LogManager.log(mainFrame, LogEntryType.ERROR, msg, t);
-    }
-    
-    private static void writeDebugInfo() {
-        OperatingSystemMXBean bean = ManagementFactory.getOperatingSystemMXBean();
-        long totalPhysicalMemory = -1;
-        try {
-            totalPhysicalMemory = (Long)
-                    ReflectionUtil.invoke("getTotalPhysicalMemorySize", bean);
-        }
-        catch(Exception e) {
-        }
-        long freePhysicalMemory = -1;
-        try {
-            freePhysicalMemory = (Long)
-                    ReflectionUtil.invoke("getFreePhysicalMemorySize", bean);
-        }
-        catch(Exception e) {
-        }
-        
-        double systemLoadAvg = bean.getSystemLoadAverage();
-        
-        // Runtime Memory
-        Runtime runtime = Runtime.getRuntime();
-        long totalRuntimeMemory = runtime.totalMemory();
-        long maxRuntimeMemory = runtime.maxMemory();
-        long freeRuntimeMemory = runtime.freeMemory();
-
-        long usedMemory = totalRuntimeMemory - freeRuntimeMemory;
-        long realFreeMemory = freeRuntimeMemory + maxRuntimeMemory - totalRuntimeMemory;
-
-        // Disk
-         File file = new File(".");
-         long totalDiskSpace = file.getTotalSpace();
-         long freeDiskSpace = file.getFreeSpace();
-
-         BufferedWriter writer = null;
-
-         File debugFile = new File (getAppLogDir (), "umf-debug.txt");
-         boolean exists = debugFile.exists();
-         try {
-
-             writer = new BufferedWriter(new FileWriter(debugFile, true));
-             if(!exists) {
-                 writer.write("time totphys freephys load totrun maxrun freerun used realfree totdisk freedisk\n");
-             }
-             writer.write(
-                     System.currentTimeMillis() + " " +
-                              totalPhysicalMemory + " " +
-                              freePhysicalMemory + " " +
-                              systemLoadAvg + " " +
-                              totalRuntimeMemory + " " +
-                              maxRuntimeMemory + " " +
-                              freeRuntimeMemory + " " +
-                              usedMemory + " " +
-                              realFreeMemory + " " +
-                              totalDiskSpace + " " +
-                              freeDiskSpace + "\n");
-         } catch(Exception e) {
-                   e.printStackTrace();
-                   
-         } finally {
-             if(writer != null) {
-                 try {
-                     writer.close();
-                 } catch(Exception e) {
-                     e.printStackTrace();
-                 }
-             }
-         }
     }
 }
