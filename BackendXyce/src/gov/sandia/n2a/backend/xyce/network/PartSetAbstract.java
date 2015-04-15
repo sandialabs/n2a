@@ -16,6 +16,7 @@ import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Annotation;
 import gov.sandia.n2a.language.EvaluationContext;
+import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.parse.ASTNodeBase;
 import gov.sandia.n2a.language.parse.ASTOpNode;
@@ -156,33 +157,16 @@ public abstract class PartSetAbstract implements PartSetInterface
 	 * @see gov.sandia.n2a.backend.xyce.network.PartSetInterface#getN()
 	 */
     @Override
-	public long getN() throws NetworkGenerationException
+	public long getN () throws NetworkGenerationException
     {
         if (numInstances == -1)
         {
-            try {
-                EquationEntry nEq = LanguageUtil.getNEq(eqns);
-                if (nEq == null) {
-                    numInstances = 1;
-                }
-                else {
-                    EvaluationContext context = XyceASTUtil.getEvalContext(nEq, eqns);
-                    Object evalResult = XyceASTUtil.evaluateEq(nEq, context);
-                    if (evalResult==null) {
-                        throw new NetworkGenerationException("cannot evaluate #instances equation " + nEq + " for " + getName());
-                    }
-                    if (evalResult instanceof Number) {
-                        numInstances = ((Number)evalResult).longValue();
-                    }
-                    else {
-                        throw new NetworkGenerationException("#instances equation does not evaluate to a number");
-                    }
-                }
-            }
-            catch (Exception ex) {
-                throw new NetworkGenerationException("cannot evaluate #instances equation for " + getName(),
-                        ex.getCause());
-            }
+            Variable n = eqns.find (new Variable ("$n"));
+            if (n == null) throw new NetworkGenerationException ("Attempt to access non-existent $n. Indicates a bug in Xyce backend.");
+            EquationEntry e = n.equations.first ();  // if $n exists, then it will have at least one equation. TODO: evaluate mutliconditional with $init=1
+            Type result = e.expression.eval ();
+            if (result instanceof Scalar) numInstances = (long) ((Scalar) result).value;
+            else throw new NetworkGenerationException ("#instances equation does not evaluate to a number");
         }
         return numInstances;
     }
@@ -255,31 +239,6 @@ public abstract class PartSetAbstract implements PartSetInterface
         }
         return getMatch(candidates, pi, init);
      }
-
-    @Override
-	public Collection<EquationEntry> getEqsForEvaluation(EquationEntry target, PartInstance pi, boolean init)
-            throws XyceTranslationException, NetworkGenerationException
-    {
-        Collection<EquationEntry> result = new ArrayList<EquationEntry>();
-        if (target.variable.order!=0) {
-            return result;   // target is diff eq; can't evaluate, so return empty list
-        }
-        result.add(target);
-        Set<String> variables = XyceASTUtil.getDependencies(target);
-        if (variables.size()>0)
-        {
-            for (String var : variables)
-            {
-                // skip $ variables; those values have to be set separately
-                if (LanguageUtil.isSpecialVar(var)) {
-                    continue;
-                }
-                EquationEntry eq = getEquation(eqns.find(new Variable(var)), pi, init);
-                result.addAll(getEqsForEvaluation(eq, pi, init));
-            }
-        }
-        return result;
-    }
 
     @Override
 	public EquationEntry getMatch(List<EquationEntry> candidates, PartInstance pi, boolean init)

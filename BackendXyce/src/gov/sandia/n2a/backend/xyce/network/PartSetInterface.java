@@ -44,9 +44,6 @@ public interface PartSetInterface {
     public abstract EquationEntry getEquation(Variable var, PartInstance pi, boolean init) 
             throws NetworkGenerationException, XyceTranslationException;
 
-    public abstract Collection<EquationEntry> getEqsForEvaluation(EquationEntry target, PartInstance pi, boolean init)
-            throws XyceTranslationException, NetworkGenerationException;
-
     public abstract EquationEntry getMatch(List<EquationEntry> candidates, PartInstance pi, boolean init) 
             throws NetworkGenerationException, XyceTranslationException;
 

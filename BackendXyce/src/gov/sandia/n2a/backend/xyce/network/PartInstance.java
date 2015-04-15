@@ -7,10 +7,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.xyce.network;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-
 public abstract class PartInstance {
 
     public int serialNumber;
@@ -20,19 +16,6 @@ public abstract class PartInstance {
     {
         serialNumber = newSerialNumber;
         pSet = pset;
-    }
-
-    public List<Integer> getSNs()
-    {
-        List<Integer> result = new ArrayList<Integer>();
-        result.add(serialNumber);
-        if (this instanceof ConnectionInstance)
-        {
-            ConnectionInstance ci = (ConnectionInstance)this;
-            result.add(ci.A.serialNumber);
-            result.add(ci.B.serialNumber);
-        }
-        return result;
     }
 
     public PartSetInterface getPartSet()

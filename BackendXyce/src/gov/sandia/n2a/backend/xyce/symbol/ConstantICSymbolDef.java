@@ -12,15 +12,17 @@ import gov.sandia.n2a.backend.xyce.network.PartInstance;
 import gov.sandia.n2a.backend.xyce.parsing.XyceASTUtil;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.language.EvaluationContext;
+import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Scalar;
 
 public class ConstantICSymbolDef extends DefaultSymbolDef {
 
-    private Number value;
+    private Scalar value;
 
-    public ConstantICSymbolDef(EquationEntry eq, Number firstValue, PartInstance firstPI)
+    public ConstantICSymbolDef(EquationEntry eq, Scalar firstValue, PartInstance firstPI)
     {
         super(eq, firstPI);
-        this.value = firstValue;
+        value = firstValue;
     }
 
     @Override
@@ -40,14 +42,14 @@ public class ConstantICSymbolDef extends DefaultSymbolDef {
         StringBuilder result = new StringBuilder();
         if (instanceSpecific) {
             EvaluationContext context = XyceASTUtil.getInstanceContext(eq, pi, true);
-            Object evalResult = XyceASTUtil.evaluateEq(eq, context);
-            if (!(evalResult instanceof Number)) {
+            Type evalResult = eq.expression.eval (context);
+            if (!(evalResult instanceof Scalar)) {
                 throw new RuntimeException("unexpected evaluation result for " + eq.toString());
             }
-            value = (Number)evalResult;
-            result.append(Xyceisms.setInitialCondition(name, pi.serialNumber, value));
+            value = (Scalar) evalResult;
+            result.append(Xyceisms.setInitialCondition(name, pi.serialNumber, value.value));
         } else {
-            result.append(Xyceisms.setInitialCondition(name, firstInstance.serialNumber, value));
+            result.append(Xyceisms.setInitialCondition(name, firstInstance.serialNumber, value.value));
             defWritten = true;
         }
         return result.toString();

@@ -5,14 +5,14 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.eq;
+package gov.sandia.n2a.language;
 
-public class N2ALanguageException extends Exception
+public class LanguageException extends Exception
 {
-    public N2ALanguageException(String msg) {
+    public LanguageException(String msg) {
         super(msg);
     }
-    public N2ALanguageException(String msg, Throwable cause) {
+    public LanguageException(String msg, Throwable cause) {
         super(msg, cause);
     }
 }

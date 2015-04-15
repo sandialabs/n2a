@@ -9,9 +9,6 @@ package gov.sandia.n2a.backend.xyce.network;
 
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
-import gov.sandia.n2a.eqset.MetadataAssembler;
-import gov.sandia.n2a.eqset.PartMetadataMap;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Random;

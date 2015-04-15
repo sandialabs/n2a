@@ -129,20 +129,7 @@ public class XyceASTUtil {
     public static Object evaluateEq(EquationEntry eq, EvaluationContext context, int partIndex)
     {
         setContextIndex (eq.variable.container, context, partIndex);
-        return evaluateEq(eq, context);
-    }
-
-    // This method assumes that instance-specific values in context have already been set.
-    public static Object evaluateEq(EquationEntry eq, EvaluationContext context)
-    {
-        Object evalResult = null;
-        try {
-            evalResult = eq.expression.eval(context);
-        }
-        catch (EvaluationException Ex) {
-            throw new RuntimeException(Ex.toString());
-        }
-       return evalResult;
+        return eq.expression.eval (context);
     }
 
     public static EvaluationContext getInstanceContext(EquationEntry eq, PartInstance pi, boolean init)
@@ -156,7 +143,7 @@ public class XyceASTUtil {
     public static Object evalInstanceEq(EquationEntry eq, PartInstance pi, boolean init)
     {
         EvaluationContext context = XyceASTUtil.getInstanceContext(eq, pi, init);
-        return evaluateEq(eq, context);
+        return eq.expression.eval (context);
     }
 
     public static Object evalConditional(ASTNodeBase cond, PartInstance pi, boolean init)

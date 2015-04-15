@@ -18,6 +18,8 @@ import gov.sandia.n2a.backend.xyce.parsing.XyceASTUtil;
 import gov.sandia.n2a.backend.xyce.parsing.XyceRHSTranslator;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.language.EvaluationContext;
+import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Scalar;
 
 import java.util.Set;
 
@@ -102,12 +104,9 @@ public class SymbolDefFactory {
             throw new XyceTranslationException("unable to determine first instance for " + eq);
         }
         EvaluationContext context = XyceASTUtil.getInstanceContext(eq, pi, true);
-        Object evalResult = XyceASTUtil.evaluateEq(eq, context);
-        if (evalResult instanceof Number) {
-            return new ConstantICSymbolDef(eq, ((Number) evalResult), pi);
-        } else {
-            throw new XyceTranslationException("unknown initial condition");
-        }
+        Type evalResult = eq.expression.eval (context);
+        if (evalResult instanceof Scalar) return new ConstantICSymbolDef(eq, (Scalar) evalResult, pi);
+        throw new XyceTranslationException ("unknown initial condition");
     }
 
 	private static SymbolDef tryFunctionDef(EquationEntry eq, EvaluationContext context, PartInstance pi) 

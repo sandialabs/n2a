@@ -15,7 +15,6 @@ import gov.sandia.n2a.backend.xyce.network.PartInstance;
 import gov.sandia.n2a.backend.xyce.symbol.FunctionSymbolDef;
 import gov.sandia.n2a.backend.xyce.symbol.SymbolDef;
 import gov.sandia.n2a.backend.xyce.symbol.SymbolManager;
-import gov.sandia.n2a.eq.EquationLanguageConstants;
 import gov.sandia.n2a.language.parse.ASTNodeBase;
 import gov.sandia.n2a.language.parse.ASTNodeRenderer;
 import gov.sandia.n2a.language.parse.ASTRenderingContext;
@@ -84,13 +83,13 @@ public class XyceRHSTranslator implements ASTNodeRenderer
             return postXlator.change(name.substring(REFPOST.length()));
         }
         // special variables don't get SymbolDefs; just translate directly
-        if (name.equals(EquationLanguageConstants.$TIME)) {
+        if (name.equals("$t")) {
             return "TIME";
         }
-        if (name.equals(EquationLanguageConstants.$INDEX)) {
+        if (name.equals("$index")) {
             return String.valueOf(pi.getPartSet().getIndex(pi));
         }
-        if (name.equals(EquationLanguageConstants.$N)) {
+        if (name.equals("$n")) {
             try {
                 return String.valueOf(pi.getPartSet().getN());
             } catch (NetworkGenerationException e) {
@@ -98,7 +97,7 @@ public class XyceRHSTranslator implements ASTNodeRenderer
                 e.printStackTrace();
             }
         }
-        if (name.equals(EquationLanguageConstants.$COORDS)) {
+        if (name.equals("$xyz")) {
             CompartmentInstance ci = (CompartmentInstance) pi;
             double x = ci.xPosition;
             double y = ci.yPosition;

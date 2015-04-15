@@ -13,6 +13,8 @@ import gov.sandia.n2a.backend.xyce.parsing.XyceASTUtil;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.language.EvaluationContext;
+import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Scalar;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -33,9 +35,6 @@ public class ConnectionSetOrient extends PartSetOrient {
     
     // default values; overwritten if the corresponding equations have been specified
     private double connProb = -1.0;
-    private int cardA = -1;    // TODO - can I get away from A/B?  do these relate to refLayer and other?
-    private int cardB = -1;
-    private int targetNum = -1;
 
     public ConnectionSetOrient(EquationSet eqs, Random rng, Map<String, CompartmentLayerOrient> layerMap,
             PartInstanceCounter counter)
@@ -75,49 +74,9 @@ public class ConnectionSetOrient extends PartSetOrient {
             // should be a fixed probability
             setConnectedContext(connContext, (CompartmentInstance)preLayer.getInstances().get(0), 
                     (CompartmentInstance)postLayer.getInstances().get(0));
-            Object evalResult = XyceASTUtil.evaluateEq(connEq, connContext);
-            if (evalResult instanceof Number) {
-                connProb = ((Number)evalResult).doubleValue();
-            }
+            Type evalResult = connEq.expression.eval (connContext);
+            if (evalResult instanceof Scalar) connProb = ((Scalar) evalResult).value;
         }
-        // connection cardinality
-        cardA = evalCardinality("A.");
-        cardB = evalCardinality("B.");
-        // target total number of connections
-        EquationEntry nEq = null;
-        EvaluationContext nContext = null;
-        try {
-            nEq = LanguageUtil.getNEq(eqns);
-            nContext = XyceASTUtil.getEvalContext(nEq, eqns);
-        } catch (Exception e) {
-            // no $n equation, but that's fine; nothing to do
-        }
-        if (nEq!=null) {
-            setConnectedContext(nContext, (CompartmentInstance)preLayer.getInstances().get(0), 
-                    (CompartmentInstance)postLayer.getInstances().get(0));
-            Object evalResult = XyceASTUtil.evaluateEq(nEq, nContext);
-            if (evalResult instanceof Number) {
-                targetNum = ((Number)evalResult).intValue();
-            }
-        }
-    }
-
-    private int evalCardinality(String prefix)
-    {
-        int result = -1;
-        try {
-            EquationEntry cardEq = LanguageUtil.getSinglePE(eqns, prefix+LanguageUtil.$CARD, false);
-            EvaluationContext context = XyceASTUtil.getEvalContext(cardEq, eqns);
-            Object evalResult = XyceASTUtil.evaluateEq(cardEq, context);
-            if (evalResult instanceof Number) {
-                result = ((Number)evalResult).intValue();
-            } else {
-                System.out.println("cardinality value " + cardEq + " not understood; ignoring");
-            }
-        } catch (Exception e) {
-//            System.out.println("could not find cardinality equation for " + prefix + "; ignoring");
-       }
-        return result;
     }
 
     private void createInstances()
@@ -141,28 +100,13 @@ public class ConnectionSetOrient extends PartSetOrient {
         }
     }
 
-    private void connectRefPre() throws NetworkGenerationException, XyceTranslationException
-    {
-        for (PartInstance part : preLayer.instances )
-        {
-            CompartmentInstance preInstance = (CompartmentInstance) part;
-            Collection<PartInstance> candidates = getCandidates(postLayer);
-            for (PartInstance candidate : candidates)
-            {
-                if (shouldConnect(preInstance, (CompartmentInstance)candidate)) {
-                    createConnection(preInstance, (CompartmentInstance)candidate);
-                }
-            }
-        }
-    }
-
+    // TODO: handle $min and $max (replaces earlier notion of $card)
     private void connectRefPost() throws NetworkGenerationException, XyceTranslationException
     {
         for (PartInstance part : postLayer.instances )
         {
             CompartmentInstance postInstance = (CompartmentInstance) part;
             Object[] candidates = getCandidates(preLayer).toArray();
-            int numConnections = 0;
             // randomize order of iterating through candidates, ensuring each only visited once
             int[] perm = new int[candidates.length];
             for (int i=0; i<candidates.length; i++) {
@@ -177,14 +121,7 @@ public class ConnectionSetOrient extends PartSetOrient {
                 CompartmentInstance candidate = (CompartmentInstance) candidates[t]; 
                 if (shouldConnect(candidate, postInstance)) {
                     createConnection(candidate, postInstance);
-                    numConnections++;
                 }
-                if (cardA>0 && numConnections==cardA) {    // TODO: check cardB also?
-                    break;
-                }
-            }
-            if (targetNum>0 && instances.size()==targetNum) {
-                break;
             }
         }
     }
@@ -197,29 +134,15 @@ public class ConnectionSetOrient extends PartSetOrient {
     private boolean shouldConnect(CompartmentInstance preInstance, CompartmentInstance postInstance)
             throws NetworkGenerationException, XyceTranslationException
     {
-        if (connProb == 1.0) {
-            return true;
-        }
-        double prob;
-        if (connProb > 0) {
-            prob = connProb;
-        }
-        else {
-            setConnectedContext(connContext, preInstance, postInstance);
-            Object evalResult = XyceASTUtil.evaluateEq(connEq, connContext);
-            if (evalResult == null) {
-                throw new NetworkGenerationException("Cannot evaluate " + connEq);
-            }
-            if (evalResult instanceof Boolean) {
-                return (Boolean) evalResult;
-            }
-            if (!(evalResult instanceof Number))
-            {
-                throw new NetworkGenerationException("connection equation does not evaluate to number");
-            }
-            prob = (((Number)evalResult).doubleValue());
-        }
-        return prob > rng.nextDouble();
+        if (connProb == 1.0) return true;
+        if (connProb == 0  ) return false;
+        if (connProb >= 0  ) return connProb > rng.nextDouble ();
+
+        setConnectedContext (connContext, preInstance, postInstance);
+        Type evalResult = connEq.expression.eval (connContext);
+        if (evalResult == null) throw new NetworkGenerationException ("Cannot evaluate " + connEq);
+        if (! (evalResult instanceof Scalar)) throw new NetworkGenerationException ("connection equation does not evaluate to number");
+        return ((Scalar) evalResult).value > rng.nextDouble ();
     }
 
     private Collection<PartInstance> getCandidates(CompartmentLayerOrient otherLayer)
@@ -228,13 +151,6 @@ public class ConnectionSetOrient extends PartSetOrient {
         // about downselecting the population to reduce computation.
         // but for now...
         return otherLayer.instances;
-    }
-
-    private CompartmentLayerOrient getRefLayer()
-    {
-        // TODO: evaluate $ref to do this??
-        // for now, assume postsynaptic layer is the 'reference'
-        return postLayer;
     }
 
     private void addInstance(ConnectionInstance instance) 

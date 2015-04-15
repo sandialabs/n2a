@@ -42,22 +42,22 @@ public class NetworkOrient {
     private EquationSet createEquationSet(NDoc model) throws Exception
     {
         EquationSet e = new EquationSet (model);
-        e.name = "Model";  // because the default is for top-level equation set to be anonymous
-//        e.flatten ();
-        // TODO - which of the rest of these are actually useful for me?
-//        e.addSpecials ();  // $index, $init - also adds $dt and $t, but no equations; messes me up
-        e.findConstants ();
+        if (e.name.length () < 1) e.name = "Model";  // because the default is for top-level equation set to be anonymous
+        e.flatten ();
+        e.addSpecials ();
+        e.fillIntegratedVariables ();
         e.findIntegrated ();
         e.resolveLHS ();
         e.resolveRHS ();
+        e.findConstants ();
+        e.removeUnused ();  // especially get rid of unneeded $variables created by addSpecials()
         e.findTemporary ();
-//        e.determineOrder ();	// I don't really use/need this
         e.findDerivative ();
-        e.addAttribute    ("global",       0, false, new String[] {"$max", "$min", "$k", "$n", "$radius", "$ref"});
-        e.addAttribute    ("transient",    1, true,  new String[] {"$p", "$ref", "$xyz"});
-        e.addAttribute    ("preexistent",  0, true,  new String[] {"$dt", "$index"});
-        e.removeAttribute ("constant",     0, true,  new String[] {"$dt"});
-        e.setInit (0);
+        e.addAttribute ("global",       0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
+        e.addAttribute ("preexistent", -1, false, new String[] {"$index"});
+        e.addAttribute ("preexistent",  0, true,  new String[] {"$dt", "$t"});
+        e.addAttribute ("simulator",    0, true,  new String[] {"$dt", "$t"});
+        e.setInit (1);  // Since Xyce only does static networks, all equations are evaluated as if during init cycle.
         System.out.println (e.flatList (true));
         return e;
     }
