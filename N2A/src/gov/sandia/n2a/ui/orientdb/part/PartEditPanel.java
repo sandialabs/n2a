@@ -7,16 +7,13 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.orientdb.part;
 
-import gov.sandia.n2a.ui.orientdb.partadv.AdvancedDetailPanel;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.connect.orientdb.ui.RecordEditDetailPanel;
 import gov.sandia.umf.platform.connect.orientdb.ui.TabbedRecordEditPanel;
 import gov.sandia.umf.platform.ui.UIController;
 
-import java.awt.Color;
 import java.awt.Component;
 
-import javax.swing.JLabel;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
@@ -32,15 +29,12 @@ public class PartEditPanel extends TabbedRecordEditPanel {
 
     // UI
 
-    private AdvancedDetailPanel pnlStackDetail;
     private GeneralDetailPanel pnlGeneralDetail;
     private ParentDetailPanel pnlParentDetail;
     private EquationDetailPanel pnlEquationDetail;
     private IncludeDetailPanel pnlIncludeDetail;
     private ConnectDetailPanel pnlConnectDetail;
-    private UsesDetailPanel pnlUsesDetailPanel;
     private NotesTagsDetailPanel pnlNotesTagsDetailPanel;
-    private SummaryDetailPanel pnlSummaryDetail;
 
 
     /////////////////
@@ -58,28 +52,6 @@ public class PartEditPanel extends TabbedRecordEditPanel {
         if(!((String) record.get("type", "COMPARTMENT")).equalsIgnoreCase("COMPARTMENT")) {
             addTab("Connects", createConnectPanel());
         }
-        addTab("Uses", createUsesPanel());
-//        addTab("Discussion", new NotImplementedPanel());
-//        addTab("Permissions", new NotImplementedPanel());
-//        addTab("References", new NotImplementedPanel());
-//        addTab("Change History", new NotImplementedPanel());
-        addTab("Summary", createSummaryPanel());
-        addTab("Advanced", createSuperPanel());
-
-        final JLabel lblSections = tabSections.getHeaderPanelAt(tabSections.indexOfTab("Summary")).getLabel();
-        final Color preColor = lblSections.getForeground();
-        pnlSummaryDetail.addSummaryUpdateStartListener(new ChangeListener() {
-            public void stateChanged(ChangeEvent e) {
-                lblSections.setForeground(new Color(24, 145, 28));
-            }
-        });
-        pnlSummaryDetail.addSummaryUpdateStopListener(new ChangeListener() {
-            public void stateChanged(ChangeEvent e) {
-                lblSections.setForeground(preColor);
-            }
-        });
-        final JLabel lblAdvanced = tabSections.getHeaderPanelAt(tabSections.indexOfTab("Advanced")).getLabel();
-        lblAdvanced.setForeground(Color.blue);
 
         Lay.BLtg(this,
             "N", createRecordControlsPanel(),
@@ -95,9 +67,6 @@ public class PartEditPanel extends TabbedRecordEditPanel {
         } else {
             makeClean();
         }
-
-        pnlSummaryDetail.setAllowSummaryUpdates(true);
-        updateSummary();
     }
 
 
@@ -108,14 +77,10 @@ public class PartEditPanel extends TabbedRecordEditPanel {
     @Override
     protected void doCancel() {
         super.doCancel();
-        if(record.isPersisted()) {
-            updateSummary();
-        }
     }
     @Override
     protected boolean doReload() {
         if(super.doReload()) {
-            updateSummary();
             return true;
         }
         return false;
@@ -130,16 +95,6 @@ public class PartEditPanel extends TabbedRecordEditPanel {
         }
         return null;
     }
-
-//    @Override
-//    public String attemptToSaveSynchronous() {
-//        if(pnlGeneralDetail.nameFieldHasFocus()) {
-//            pnlGeneralDetail.nameFieldFocusLost();
-//        }
-//        return super.attemptToSaveSynchronous();
-//    }
-
-    // Recursive needed at least for the advanced panel...
 
     @Override
     public String attemptToSaveSynchronous() {
@@ -181,11 +136,6 @@ public class PartEditPanel extends TabbedRecordEditPanel {
                 makeDirty();
             }
         });
-        pnlGeneralDetail.addNameChangedFocusLostListener(new ChangeListener() {
-            public void stateChanged(ChangeEvent e) {
-                updateSummary();
-            }
-        });
         return pnlGeneralDetail;
     }
 
@@ -194,7 +144,6 @@ public class PartEditPanel extends TabbedRecordEditPanel {
         pnlParentDetail.addContentChangedListener(new ChangeListener() {
             public void stateChanged(ChangeEvent e) {
                 makeDirty();
-                updateSummary();
             }
         });
         return pnlParentDetail;
@@ -205,7 +154,6 @@ public class PartEditPanel extends TabbedRecordEditPanel {
         pnlEquationDetail.addContentChangedListener(new ChangeListener() {
             public void stateChanged(ChangeEvent e) {
                 makeDirty();
-                updateSummary();
             }
         });
         return pnlEquationDetail;
@@ -216,7 +164,6 @@ public class PartEditPanel extends TabbedRecordEditPanel {
         pnlIncludeDetail.addContentChangedListener(new ChangeListener() {
             public void stateChanged(ChangeEvent e) {
                 makeDirty();
-                updateSummary();
             }
         });
         return pnlIncludeDetail;
@@ -226,15 +173,9 @@ public class PartEditPanel extends TabbedRecordEditPanel {
         pnlConnectDetail.addContentChangedListener(new ChangeListener() {
             public void stateChanged(ChangeEvent e) {
                 makeDirty();
-                updateSummary();
             }
         });
         return pnlConnectDetail;
-    }
-
-    private UsesDetailPanel createUsesPanel() {
-        pnlUsesDetailPanel = new UsesDetailPanel(uiController, record);
-        return pnlUsesDetailPanel;
     }
 
     private NotesTagsDetailPanel createNotesPanel() {
@@ -247,37 +188,10 @@ public class PartEditPanel extends TabbedRecordEditPanel {
         return pnlNotesTagsDetailPanel;
     }
 
-    private SummaryDetailPanel createSummaryPanel() {
-        pnlSummaryDetail = new SummaryDetailPanel(uiController, record);
-        pnlSummaryDetail.addEditEquationListener(new ChangeListener() {
-            public void stateChanged(ChangeEvent e) {
-                tabSections.setSelectedIndex(tabSections.indexOfTab("Equations"));
-                pnlEquationDetail.openForEditing(
-                    pnlSummaryDetail.getChangeOverrideEquation(),
-                    pnlSummaryDetail.getChangeOverridePrefix());
-            }
-        });
-        return pnlSummaryDetail;
-    }
-
-    private AdvancedDetailPanel createSuperPanel() {
-        pnlStackDetail = new AdvancedDetailPanel(uiController, record);
-        pnlStackDetail.addContentChangedListener(new ChangeListener() {
-            public void stateChanged(ChangeEvent e) {
-                makeDirty();
-            }
-        });
-        return pnlStackDetail;
-    }
-
 
     //////////
     // MISC //
     //////////
-
-    public void updateSummary() {
-        pnlSummaryDetail.reload();
-    }
 
     @Override
     public void doInitialFocus() {

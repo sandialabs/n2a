@@ -7,7 +7,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.orientdb.part;
 
-import gov.sandia.n2a.ui.orientdb.eq.EquationSummaryTreePanel;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.connect.orientdb.ui.RecordEditDetailPanel;
 import gov.sandia.umf.platform.ui.UIController;
@@ -32,25 +31,6 @@ import replete.util.Lay;
 public class ParentDetailPanel extends RecordEditDetailPanel {
 
 
-    /////////////////
-    // INNER CLASS //
-    /////////////////
-
-    // NOT USED YET
-    private class ParentExtraDetailsPanel extends JPanel {
-        private EquationSummaryTreePanel pnlSummary;
-        public ParentExtraDetailsPanel(NDoc parent) {
-            Lay.BLtg(this,
-                "N", Lay.hn(createLabelPanel("Parent Summary Details", "part-parent-summary"), "alignx=0,pref=[10,25]"),
-                "C", pnlSummary = new EquationSummaryTreePanel(uiController, parent, false)
-            );
-        }
-        public void rebuild() {
-            pnlSummary.rebuild();
-        }
-    }
-
-
     ////////////
     // FIELDS //
     ////////////
@@ -62,7 +42,6 @@ public class ParentDetailPanel extends RecordEditDetailPanel {
     // UI
 
     private JPanel pnlParentEmpty;
-    private ParentExtraDetailsPanel pnlParentDetails;
     private JButton btnChangeParent;
     private JButton btnRemoveParent;
     private JButton btnJumpToParent;
@@ -156,13 +135,7 @@ public class ParentDetailPanel extends RecordEditDetailPanel {
     }
 
     private void parentSet(NDoc parent) {
-        if(pnlParentDetails != null) {
-            remove(pnlParentDetails);
-        }
-        //pnlParentDetails = new ParentExtraDetailsPanel(parent);
-        //pnlParentDetails.rebuild();
         remove(pnlParentEmpty);
-        //add(pnlParentDetails, BorderLayout.CENTER);
 
         btnChangeParent.setText("&Change Parent");
         lblParentOverview.setText(SPC + parent.get("name"));
@@ -175,9 +148,6 @@ public class ParentDetailPanel extends RecordEditDetailPanel {
     }
 
     private void parentClear() {
-        if(pnlParentDetails != null) {
-            remove(pnlParentDetails);
-        }
         add(pnlParentEmpty, BorderLayout.CENTER);
 
         btnChangeParent.setText("Select &Parent");

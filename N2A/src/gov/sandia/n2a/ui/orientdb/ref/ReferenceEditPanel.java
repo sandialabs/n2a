@@ -27,7 +27,6 @@ public class ReferenceEditPanel extends TabbedRecordEditPanel {
     // UI
 
     private GeneralDetailPanel pnlGeneralDetail;
-    private UsesDetailPanel pnlUsesDetail;
     private NotesTagsDetailPanel pnlNotesTagsDetailPanel;
 
 
@@ -39,7 +38,6 @@ public class ReferenceEditPanel extends TabbedRecordEditPanel {
         super(uic, r);
 
         addTab("General", createGeneralPanel());
-//        addTab("Uses", createUsesPanel());
         addTab("Notes/Tags", createNotesPanel());
 
         Lay.BLtg(this,
@@ -96,11 +94,6 @@ public class ReferenceEditPanel extends TabbedRecordEditPanel {
             }
         });
         return pnlGeneralDetail;
-    }
-
-    private UsesDetailPanel createUsesPanel() {
-        pnlUsesDetail = new UsesDetailPanel(uiController, record);
-        return pnlUsesDetail;
     }
 
     private NotesTagsDetailPanel createNotesPanel() {

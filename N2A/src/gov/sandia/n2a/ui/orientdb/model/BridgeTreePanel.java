@@ -367,6 +367,7 @@ public class BridgeTreePanel extends ModelEditDetailPanel {
 
         List<Layer> layers = bridge.getLayers();
         Map<String, Layer> aliases = bridge.getAliasLayerMap();
+        System.out.println ("aliases = " + aliases);
         if(layers.size() == 1) {
             Layer layer = layers.get(0);
             String alias = aliases.keySet().toArray(new String[0])[0];

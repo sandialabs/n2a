@@ -72,40 +72,6 @@ public class ModelRecordHandler implements RecordHandler {
         return new ModelEditPanel(uiController, doc);
     }
 
-    private class ModelRecordPanel extends TabbedRecordEditPanel {
-
-
-        /////////////////
-        // CONSTRUCTOR //
-        /////////////////
-
-        public ModelRecordPanel(UIController uic, NDoc doc) {
-            super(uic, doc);
-            addTab("General", Lay.p());
-            addTab("Dimensions", Lay.p());
-            addTab("Topology", Lay.p());
-            addTab("Inputs", Lay.p());
-            addTab("Outputs", Lay.p());
-            Lay.BLtg(this,
-                "N", createRecordControlsPanel(),
-                "C", Lay.p(tabSections, "bg=180")
-            );
-        }
-
-        @Override
-        public String validationMessage() {
-            return null;
-        }
-
-        @Override
-        public void doInitialFocus() {
-        }
-
-        @Override
-        protected void reloadWorker() {
-        }
-    }
-
     @Override
     public boolean includeRecordInSearchResults(NDoc record) {
         boolean isTemplate = (Boolean) record.getValid("model-template-for-run-ensemble", false, Boolean.class);

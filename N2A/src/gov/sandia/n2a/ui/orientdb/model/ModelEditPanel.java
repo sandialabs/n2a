@@ -12,9 +12,6 @@ import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.connect.orientdb.ui.TabbedRecordEditPanel;
 import gov.sandia.umf.platform.ui.UIController;
 
-import java.awt.Color;
-
-import javax.swing.JLabel;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
@@ -35,14 +32,10 @@ public class ModelEditPanel extends TabbedRecordEditPanel {
     // UI
 
     private GeneralDetailPanel pnlGeneralDetail;
-    private DimensionsDetailPanel pnlDimensionsDetail;
     private TopologyDetailPanel pnlTopoDetail;
-//    private InputEquationDetailPanel pnlInputEqDetail;
     private OutputEquationDetailPanel pnlOutputEqDetail;
-//    private ModelEquationDetailPanel pnlModelEqDetail;
     private NotesTagsDetailPanel pnlNotesTagsDetailPanel;
     private RunDetailPanel pnlRunDetailPanel;
-    private SummaryDetailPanel pnlSummaryDetail;
 
 
     /////////////////
@@ -54,31 +47,10 @@ public class ModelEditPanel extends TabbedRecordEditPanel {
         model = new ModelOrient(m);
 
         addTab("General", createGeneralPanel());
-//        addTab("Dimensions", createDimensionsPanel());
         addTab("Topology", createTopologyPanel());
-//        addTab("Inputs", createInputsPanel());
         addTab("Outputs", createOutputsPanel());
-//        addTab("Equations", createEquationsPanel());
         addTab("Notes/Tags", createNotesPanel());
-//        addTab("Discussion", new NotImplementedPanel());
-//        addTab("Permissions", new NotImplementedPanel());
-//        addTab("References", new NotImplementedPanel());
-//        addTab("Change History", new NotImplementedPanel());
         addTab("Runs", createRunsPanel());
-        addTab("Summary", createSummaryPanel());
-
-        final JLabel lbl = tabSections.getHeaderPanelAt(tabSections.indexOfTab("Summary")).getLabel();
-        final Color preColor = lbl.getForeground();
-        pnlSummaryDetail.addSummaryUpdateStartListener(new ChangeListener() {
-            public void stateChanged(ChangeEvent e) {
-                lbl.setForeground(new Color(24, 145, 28));
-            }
-        });
-        pnlSummaryDetail.addSummaryUpdateStopListener(new ChangeListener() {
-            public void stateChanged(ChangeEvent e) {
-                lbl.setForeground(preColor);
-            }
-        });
 
         Lay.BLtg(this,
             "N", createRecordControlsPanel(),
@@ -94,9 +66,6 @@ public class ModelEditPanel extends TabbedRecordEditPanel {
         } else {
             makeClean();
         }
-
-        pnlSummaryDetail.setAllowSummaryUpdates(true);
-        updateSummary();
     }
 
 
@@ -107,14 +76,10 @@ public class ModelEditPanel extends TabbedRecordEditPanel {
     @Override
     protected void doCancel() {
         super.doCancel();
-        if(model.isPersisted()) {
-            updateSummary();
-        }
     }
     @Override
     protected boolean doReload() {
         if(super.doReload()) {
-            updateSummary();
             return true;
         }
         return false;
@@ -170,46 +135,19 @@ public class ModelEditPanel extends TabbedRecordEditPanel {
                 makeDirty();
             }
         });
-        pnlGeneralDetail.addNameChangedFocusLostListener(new ChangeListener() {
-            public void stateChanged(ChangeEvent e) {
-                updateSummary();
-            }
-        });
         return pnlGeneralDetail;
-    }
-
-    private DimensionsDetailPanel createDimensionsPanel() {
-        pnlDimensionsDetail = new DimensionsDetailPanel(uiController, model);
-        pnlDimensionsDetail.addContentChangedListener(new ChangeListener() {
-            public void stateChanged(ChangeEvent e) {
-                updateSummary();
-                makeDirty();
-            }
-        });
-        return pnlDimensionsDetail;
     }
 
     private TopologyDetailPanel createTopologyPanel() {
         pnlTopoDetail = new TopologyDetailPanel(uiController, model);
         pnlTopoDetail.addContentChangedListener(new ChangeListener() {
             public void stateChanged(ChangeEvent e) {
-                updateSummary();
                 makeDirty();
             }
         });
         return pnlTopoDetail;
     }
 
-//    private InputEquationDetailPanel createInputsPanel() {
-//        pnlInputEqDetail = new InputEquationDetailPanel(uiController, model);
-//        pnlInputEqDetail.addContentChangedListener(new ChangeListener() {
-//            public void stateChanged(ChangeEvent e) {
-//                makeDirty();
-//            }
-//        });
-//        return pnlInputEqDetail;
-//    }
-//
     private OutputEquationDetailPanel createOutputsPanel() {
         pnlOutputEqDetail = new OutputEquationDetailPanel(uiController, model);
         pnlOutputEqDetail.addContentChangedListener(new ChangeListener() {
@@ -219,16 +157,6 @@ public class ModelEditPanel extends TabbedRecordEditPanel {
         });
         return pnlOutputEqDetail;
     }
-
-//    private ModelEquationDetailPanel createEquationsPanel() {
-//        pnlModelEqDetail = new ModelEquationDetailPanel(uiController, model);
-//        pnlModelEqDetail.addContentChangedListener(new ChangeListener() {
-//            public void stateChanged(ChangeEvent e) {
-//                makeDirty();
-//            }
-//        });
-//        return pnlModelEqDetail;
-//    }
 
     private NotesTagsDetailPanel createNotesPanel() {
         pnlNotesTagsDetailPanel = new NotesTagsDetailPanel(uiController, model);
@@ -250,19 +178,10 @@ public class ModelEditPanel extends TabbedRecordEditPanel {
         return pnlRunDetailPanel;
     }
 
-    private SummaryDetailPanel createSummaryPanel() {
-        pnlSummaryDetail = new SummaryDetailPanel(uiController, model);
-        return pnlSummaryDetail;
-    }
-
 
     //////////
     // MISC //
     //////////
-
-    public void updateSummary() {
-        pnlSummaryDetail.reload();
-    }
 
     @Override
     public void doInitialFocus() {
