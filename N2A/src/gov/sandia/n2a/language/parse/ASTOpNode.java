@@ -15,7 +15,7 @@ package gov.sandia.n2a.language.parse;
 
 import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
-import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 
 
@@ -49,8 +49,8 @@ public class ASTOpNode extends ASTNodeBase {
     // CUSTOM //
     ////////////
 
-    public Function getFunction() {
-        return (Function) getValue();
+    public Operator getFunction() {
+        return (Operator) getValue();
     }
 
     @Override
@@ -93,16 +93,16 @@ public class ASTOpNode extends ASTNodeBase {
         else
         {
             boolean useParens;
-            Function f = (Function) value;
+            Operator f = (Operator) value;
 
             // Left-hand child
             useParens = false;
             if (getChild (0) instanceof ASTOpNode)
             {
-                Function left = (Function) getChild (0).getValue ();
+                Operator left = (Operator) getChild (0).getValue ();
                 useParens =    f.precedence < left.precedence   // read "<" as "comes before" rather than "less"
                             ||    f.precedence == left.precedence
-                               && f.associativity == Function.Associativity.RIGHT_TO_LEFT;
+                               && f.associativity == Operator.Associativity.RIGHT_TO_LEFT;
             }
             if (useParens) ret += "(";
             ret += context.render (getChild (0));
@@ -114,10 +114,10 @@ public class ASTOpNode extends ASTNodeBase {
             useParens = false;
             if (getChild (1) instanceof ASTOpNode)
             {
-                Function right = (Function) getChild (1).getValue ();
+                Operator right = (Operator) getChild (1).getValue ();
                 useParens =    f.precedence < right.precedence
                             ||    f.precedence == right.precedence
-                               && f.associativity == Function.Associativity.LEFT_TO_RIGHT;
+                               && f.associativity == Operator.Associativity.LEFT_TO_RIGHT;
             }
             if (useParens) ret += "(";
             ret += context.render (getChild (1));
@@ -134,7 +134,7 @@ public class ASTOpNode extends ASTNodeBase {
     @Override
     public Type eval (EvaluationContext context) throws EvaluationException
     {
-        Function func = (Function) getValue ();
+        Operator func = (Operator) getValue ();
         int count = getCount ();
         Type[] params = new Type[count];
         for (int c = 0; c < count; c++) params[c] = getChild (c).eval (context);

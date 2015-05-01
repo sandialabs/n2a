@@ -11,7 +11,7 @@ import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
-import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.ReadMatrix;
@@ -2523,7 +2523,7 @@ public class SimulationC implements Simulation
         else if (node instanceof ASTFunNode)
         {
             // Handle all functions that need static handles
-            Function f = ((ASTFunNode) node).getFunction ();
+            Operator f = ((ASTFunNode) node).getFunction ();
             if (f instanceof ReadMatrix)
             {
                 if (node.getCount () == 3)
@@ -2952,7 +2952,7 @@ public class SimulationC implements Simulation
     {
         public String render (ASTNodeBase node, ASTRenderingContext context)
         {
-            Function operator = ((ASTOpNode) node).getFunction ();
+            Operator operator = ((ASTOpNode) node).getFunction ();
             if (operator instanceof Power)
             {
                 return "pow (" + context.render (node.getChild (0)) + ", " + context.render (node.getChild (1)) + ")";
@@ -2968,7 +2968,7 @@ public class SimulationC implements Simulation
     {
         public String render (ASTNodeBase node, ASTRenderingContext context)
         {
-            Function func = ((ASTFunNode) node).getFunction ();
+            Operator func = ((ASTFunNode) node).getFunction ();
             if (func instanceof Norm)
             {
                 return "(" + context.render (node.getChild (1)) + ").norm (" + context.render (node.getChild (0)) + ")";

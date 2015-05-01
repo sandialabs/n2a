@@ -23,7 +23,6 @@ package gov.sandia.n2a.language.parse;
 import java.lang.reflect.Field;
 import java.io.StringReader;
 
-import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 
@@ -273,7 +272,7 @@ void AssignExpression() : {
 {    
     LOOKAHEAD(Variable() <ASSIGN>) Variable() t = <ASSIGN> CommaExpression()
     {
-        jjtThis.jjtSetValue(Function.get(t.image));
+        jjtThis.jjtSetValue(t.image);
     } #OpNode(2)
       |
     CommaExpression()
@@ -293,7 +292,7 @@ void OrExpression() : {}
     (
         (<OR> AndExpression()
             {
-                jjtThis.jjtSetValue(Function.get("||"));
+                jjtThis.jjtSetValue("||");
             }
         ) #OpNode(2)
     )*
@@ -305,7 +304,7 @@ void AndExpression() : {}
     (
         (<AND> EqualExpression()
             {
-                jjtThis.jjtSetValue(Function.get("&&"));
+                jjtThis.jjtSetValue("&&");
             }
         ) #OpNode(2)
     )*
@@ -317,13 +316,13 @@ void EqualExpression() : {}
     (
         (<NE> RelationalExpression()
             {
-                jjtThis.jjtSetValue(Function.get("!="));
+                jjtThis.jjtSetValue("!=");
             }
         ) #OpNode(2)
           |
         (<EQ> RelationalExpression()
             {
-                jjtThis.jjtSetValue(Function.get("=="));
+                jjtThis.jjtSetValue("==");
             }
         ) #OpNode(2)
     )*
@@ -335,25 +334,25 @@ void RelationalExpression() : {}
     (
         (<LT> AdditiveExpression()
             {
-                jjtThis.jjtSetValue(Function.get("<"));
+                jjtThis.jjtSetValue("<");
             }
         ) #OpNode(2)
           |
         (<GT> AdditiveExpression()
             {
-                jjtThis.jjtSetValue(Function.get(">"));
+                jjtThis.jjtSetValue(">");
             }
         ) #OpNode(2)
           |
         (<LE> AdditiveExpression()
             {
-                jjtThis.jjtSetValue(Function.get("<="));
+                jjtThis.jjtSetValue("<=");
             }
         ) #OpNode(2)
           |
         (<GE> AdditiveExpression()
             {
-                jjtThis.jjtSetValue(Function.get(">="));
+                jjtThis.jjtSetValue(">=");
             }
         ) #OpNode(2)
     )*
@@ -365,13 +364,13 @@ void AdditiveExpression() : {}
     (
         (<PLUS> MultiplicativeExpression()
             {
-                jjtThis.jjtSetValue(Function.get("+"));
+                jjtThis.jjtSetValue("+");
             }
         ) #OpNode(2)
           |
         (<MINUS> MultiplicativeExpression()
             {
-                jjtThis.jjtSetValue(Function.get("-"));
+                jjtThis.jjtSetValue("-");
             }
         ) #OpNode(2)
     )*
@@ -383,19 +382,19 @@ void MultiplicativeExpression() : {}
     (
         (<MUL> UnitExpression()
             {
-                jjtThis.jjtSetValue(Function.get("*"));
+                jjtThis.jjtSetValue("*");
             }
         ) #OpNode(2)
           |
         (<DIV> UnitExpression()
             {
-                jjtThis.jjtSetValue(Function.get("/"));
+                jjtThis.jjtSetValue("/");
             }
         ) #OpNode(2)
           |
         (<MOD> UnitExpression()
             {
-                jjtThis.jjtSetValue(Function.get("%"));
+                jjtThis.jjtSetValue("%");
             }
         ) #OpNode(2)
     )*
@@ -424,19 +423,19 @@ void UnaryExpression() : {}
 {
     (<MINUS> PowerExpression()
         {
-            jjtThis.jjtSetValue(Function.get("UM"));
+            jjtThis.jjtSetValue("UM");
         }
     ) #OpNode(1)
       |
     (<NOT> PowerExpression()
         {
-            jjtThis.jjtSetValue(Function.get("!"));
+            jjtThis.jjtSetValue("!");
         }
     ) #OpNode(1)
       |
     (<TILDE> PowerExpression()
         {
-            jjtThis.jjtSetValue(Function.get("~"));
+            jjtThis.jjtSetValue("~");
         }
     ) #OpNode(1)
       |
@@ -451,7 +450,7 @@ void PowerExpression() : {}
     [
         (<POWER> PrimaryExpression()
             {
-                jjtThis.jjtSetValue(Function.get("^"));
+                jjtThis.jjtSetValue("^");
             }
         ) #OpNode(2)
     ]
@@ -493,7 +492,7 @@ void Function() #FunNode : {
 {
     t = <IDENTIFIER> <LRND> [CommaExpression()] <RRND>
     {
-        jjtThis.jjtSetValue(Function.get(t.image,true));
+        jjtThis.jjtSetValue(t.image);
     }
 }
 

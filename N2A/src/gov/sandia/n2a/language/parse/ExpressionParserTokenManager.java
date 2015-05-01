@@ -10,7 +10,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.language.parse;
 import java.lang.reflect.Field;
 import java.io.StringReader;
-import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 import replete.util.ReflectionUtil;

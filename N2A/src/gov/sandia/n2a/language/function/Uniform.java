@@ -10,12 +10,12 @@ package gov.sandia.n2a.language.function;
 import java.util.Random;
 
 import gov.sandia.n2a.language.EvaluationException;
-import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 
-public class Uniform extends Function
+public class Uniform extends Operator
 {
     Random random = new Random ();  // TODO: should there be a single shared random number generator across an entire N2A runtime?
 

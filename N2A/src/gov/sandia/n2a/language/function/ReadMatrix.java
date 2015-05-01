@@ -11,13 +11,13 @@ import java.io.File;
 import java.util.HashMap;
 
 import gov.sandia.n2a.language.EvaluationException;
-import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 
-public class ReadMatrix extends Function
+public class ReadMatrix extends Operator
 {
     public HashMap<String,Matrix> matrices = new HashMap<String,Matrix> ();  // TODO: in an interpreter, need some way to reset cached data at start of each run
 

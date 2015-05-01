@@ -7,7 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.eqset;
 
-import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.parse.ASTOpNode;
 import gov.sandia.n2a.language.parse.ASTTransformationContext;
@@ -99,7 +99,7 @@ public class Variable implements Comparable<Variable>
                 if (e.compareTo (e2) == 0)  // conditionals are exactly the same
                 {
                     // merge ASTs
-                    ASTOpNode node = new ASTOpNode (Function.get (e.assignment.substring (0, 1)));
+                    ASTOpNode node = new ASTOpNode (Operator.get (e.assignment.substring (0, 1)));
                     node.setChild (e2.expression, 0);
                     node.setChild (e .expression, 1);
                     e2.expression = node;

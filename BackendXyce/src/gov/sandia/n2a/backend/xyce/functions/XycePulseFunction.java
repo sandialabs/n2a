@@ -7,11 +7,11 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.xyce.functions;
 
-import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Scalar;
 
-public class XycePulseFunction extends Function
+public class XycePulseFunction extends Operator
 {
     public XycePulseFunction ()
     {

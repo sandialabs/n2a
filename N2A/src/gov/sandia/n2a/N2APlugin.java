@@ -8,7 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a;
 
 import gov.sandia.n2a.exporters.LEMSExporter;
-import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.records.ModelRecordHandler;
 import gov.sandia.n2a.records.PartRecordHandler;
 import gov.sandia.n2a.records.ReferenceRecordHandler;
@@ -106,13 +106,13 @@ public class N2APlugin extends DefaultPlugin {
     @SuppressWarnings("unchecked")
     public Class<? extends ExtensionPoint>[] getExtensionPoints() {
         return new Class[] {
-           Function.class
+           Operator.class
         };
     }
 
     @Override
     public void start ()
     {
-        Function.initFromPlugins ();
+        Operator.initFromPlugins ();
     }
 }

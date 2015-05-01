@@ -12,7 +12,6 @@ package gov.sandia.n2a.language.parse;
 import java.lang.reflect.Field;
 import java.io.StringReader;
 
-import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 
@@ -192,7 +191,7 @@ ASTOpNode jjtn001 = new ASTOpNode(JJTOPNODE);
       try {
 jjtree.closeNodeScope(jjtn001,  2);
       jjtc001 = false;
-jjtn001.jjtSetValue(Function.get(t.image));
+jjtn001.jjtSetValue(t.image);
       } finally {
 if (jjtc001) {
         jjtree.closeNodeScope(jjtn001,  2);
@@ -271,7 +270,7 @@ ASTOpNode jjtn001 = new ASTOpNode(JJTOPNODE);
         AndExpression();
 jjtree.closeNodeScope(jjtn001,  2);
               jjtc001 = false;
-jjtn001.jjtSetValue(Function.get("||"));
+jjtn001.jjtSetValue("||");
       } catch (Throwable jjte001) {
 if (jjtc001) {
             jjtree.clearNodeScope(jjtn001);
@@ -315,7 +314,7 @@ ASTOpNode jjtn001 = new ASTOpNode(JJTOPNODE);
         EqualExpression();
 jjtree.closeNodeScope(jjtn001,  2);
               jjtc001 = false;
-jjtn001.jjtSetValue(Function.get("&&"));
+jjtn001.jjtSetValue("&&");
       } catch (Throwable jjte001) {
 if (jjtc001) {
             jjtree.clearNodeScope(jjtn001);
@@ -362,7 +361,7 @@ ASTOpNode jjtn001 = new ASTOpNode(JJTOPNODE);
           RelationalExpression();
 jjtree.closeNodeScope(jjtn001,  2);
               jjtc001 = false;
-jjtn001.jjtSetValue(Function.get("!="));
+jjtn001.jjtSetValue("!=");
         } catch (Throwable jjte001) {
 if (jjtc001) {
             jjtree.clearNodeScope(jjtn001);
@@ -393,7 +392,7 @@ ASTOpNode jjtn002 = new ASTOpNode(JJTOPNODE);
           RelationalExpression();
 jjtree.closeNodeScope(jjtn002,  2);
               jjtc002 = false;
-jjtn002.jjtSetValue(Function.get("=="));
+jjtn002.jjtSetValue("==");
         } catch (Throwable jjte002) {
 if (jjtc002) {
             jjtree.clearNodeScope(jjtn002);
@@ -449,7 +448,7 @@ ASTOpNode jjtn001 = new ASTOpNode(JJTOPNODE);
           AdditiveExpression();
 jjtree.closeNodeScope(jjtn001,  2);
               jjtc001 = false;
-jjtn001.jjtSetValue(Function.get("<"));
+jjtn001.jjtSetValue("<");
         } catch (Throwable jjte001) {
 if (jjtc001) {
             jjtree.clearNodeScope(jjtn001);
@@ -480,7 +479,7 @@ ASTOpNode jjtn002 = new ASTOpNode(JJTOPNODE);
           AdditiveExpression();
 jjtree.closeNodeScope(jjtn002,  2);
               jjtc002 = false;
-jjtn002.jjtSetValue(Function.get(">"));
+jjtn002.jjtSetValue(">");
         } catch (Throwable jjte002) {
 if (jjtc002) {
             jjtree.clearNodeScope(jjtn002);
@@ -511,7 +510,7 @@ ASTOpNode jjtn003 = new ASTOpNode(JJTOPNODE);
           AdditiveExpression();
 jjtree.closeNodeScope(jjtn003,  2);
               jjtc003 = false;
-jjtn003.jjtSetValue(Function.get("<="));
+jjtn003.jjtSetValue("<=");
         } catch (Throwable jjte003) {
 if (jjtc003) {
             jjtree.clearNodeScope(jjtn003);
@@ -542,7 +541,7 @@ ASTOpNode jjtn004 = new ASTOpNode(JJTOPNODE);
           AdditiveExpression();
 jjtree.closeNodeScope(jjtn004,  2);
               jjtc004 = false;
-jjtn004.jjtSetValue(Function.get(">="));
+jjtn004.jjtSetValue(">=");
         } catch (Throwable jjte004) {
 if (jjtc004) {
             jjtree.clearNodeScope(jjtn004);
@@ -596,7 +595,7 @@ ASTOpNode jjtn001 = new ASTOpNode(JJTOPNODE);
           MultiplicativeExpression();
 jjtree.closeNodeScope(jjtn001,  2);
               jjtc001 = false;
-jjtn001.jjtSetValue(Function.get("+"));
+jjtn001.jjtSetValue("+");
         } catch (Throwable jjte001) {
 if (jjtc001) {
             jjtree.clearNodeScope(jjtn001);
@@ -627,7 +626,7 @@ ASTOpNode jjtn002 = new ASTOpNode(JJTOPNODE);
           MultiplicativeExpression();
 jjtree.closeNodeScope(jjtn002,  2);
               jjtc002 = false;
-jjtn002.jjtSetValue(Function.get("-"));
+jjtn002.jjtSetValue("-");
         } catch (Throwable jjte002) {
 if (jjtc002) {
             jjtree.clearNodeScope(jjtn002);
@@ -682,7 +681,7 @@ ASTOpNode jjtn001 = new ASTOpNode(JJTOPNODE);
           UnitExpression();
 jjtree.closeNodeScope(jjtn001,  2);
               jjtc001 = false;
-jjtn001.jjtSetValue(Function.get("*"));
+jjtn001.jjtSetValue("*");
         } catch (Throwable jjte001) {
 if (jjtc001) {
             jjtree.clearNodeScope(jjtn001);
@@ -713,7 +712,7 @@ ASTOpNode jjtn002 = new ASTOpNode(JJTOPNODE);
           UnitExpression();
 jjtree.closeNodeScope(jjtn002,  2);
               jjtc002 = false;
-jjtn002.jjtSetValue(Function.get("/"));
+jjtn002.jjtSetValue("/");
         } catch (Throwable jjte002) {
 if (jjtc002) {
             jjtree.clearNodeScope(jjtn002);
@@ -744,7 +743,7 @@ ASTOpNode jjtn003 = new ASTOpNode(JJTOPNODE);
           UnitExpression();
 jjtree.closeNodeScope(jjtn003,  2);
               jjtc003 = false;
-jjtn003.jjtSetValue(Function.get("%"));
+jjtn003.jjtSetValue("%");
         } catch (Throwable jjte003) {
 if (jjtc003) {
             jjtree.clearNodeScope(jjtn003);
@@ -830,7 +829,7 @@ ASTOpNode jjtn001 = new ASTOpNode(JJTOPNODE);
         PowerExpression();
 jjtree.closeNodeScope(jjtn001,  1);
           jjtc001 = false;
-jjtn001.jjtSetValue(Function.get("UM"));
+jjtn001.jjtSetValue("UM");
       } catch (Throwable jjte001) {
 if (jjtc001) {
         jjtree.clearNodeScope(jjtn001);
@@ -861,7 +860,7 @@ ASTOpNode jjtn002 = new ASTOpNode(JJTOPNODE);
         PowerExpression();
 jjtree.closeNodeScope(jjtn002,  1);
           jjtc002 = false;
-jjtn002.jjtSetValue(Function.get("!"));
+jjtn002.jjtSetValue("!");
       } catch (Throwable jjte002) {
 if (jjtc002) {
         jjtree.clearNodeScope(jjtn002);
@@ -892,7 +891,7 @@ ASTOpNode jjtn003 = new ASTOpNode(JJTOPNODE);
         PowerExpression();
 jjtree.closeNodeScope(jjtn003,  1);
           jjtc003 = false;
-jjtn003.jjtSetValue(Function.get("~"));
+jjtn003.jjtSetValue("~");
       } catch (Throwable jjte003) {
 if (jjtc003) {
         jjtree.clearNodeScope(jjtn003);
@@ -939,7 +938,7 @@ ASTOpNode jjtn001 = new ASTOpNode(JJTOPNODE);
         PrimaryExpression();
 jjtree.closeNodeScope(jjtn001,  2);
               jjtc001 = false;
-jjtn001.jjtSetValue(Function.get("^"));
+jjtn001.jjtSetValue("^");
       } catch (Throwable jjte001) {
 if (jjtc001) {
             jjtree.clearNodeScope(jjtn001);
@@ -1102,7 +1101,7 @@ if (jjtc000) {
       jj_consume_token(RRND);
 jjtree.closeNodeScope(jjtn000, true);
       jjtc000 = false;
-jjtn000.jjtSetValue(Function.get(t.image,true));
+jjtn000.jjtSetValue(t.image);
     } catch (Throwable jjte000) {
 if (jjtc000) {
         jjtree.clearNodeScope(jjtn000);
@@ -1204,6 +1203,12 @@ if (jjtc000) {
     try { return !jj_3_6(); }
     catch(LookaheadSuccess ls) { return true; }
     finally { jj_save(5, xla); }
+  }
+
+  private boolean jj_3R_24()
+ {
+    if (jj_3R_30()) return true;
+    return false;
   }
 
   private boolean jj_3_2()
@@ -1663,12 +1668,6 @@ if (jjtc000) {
  {
     if (jj_scan_token(MINUS)) return true;
     if (jj_3R_38()) return true;
-    return false;
-  }
-
-  private boolean jj_3R_24()
- {
-    if (jj_3R_30()) return true;
     return false;
   }
 
