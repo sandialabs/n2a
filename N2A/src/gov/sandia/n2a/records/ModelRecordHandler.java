@@ -7,7 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.records;
 
-import gov.sandia.n2a.ui.orientdb.model.ModelEditPanel;
+import gov.sandia.n2a.ui.model.ModelEditPanel;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.connect.orientdb.ui.RecordEditPanel;
 import gov.sandia.umf.platform.connect.orientdb.ui.TabbedRecordEditPanel;

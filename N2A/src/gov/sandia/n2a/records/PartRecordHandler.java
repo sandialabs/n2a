@@ -8,7 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.records;
 
 import gov.sandia.n2a.ui.images.ImageUtil;
-import gov.sandia.n2a.ui.orientdb.part.PartEditPanel;
+import gov.sandia.n2a.ui.part.PartEditPanel;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.connect.orientdb.ui.RecordEditPanel;
 import gov.sandia.umf.platform.plugins.Parameterizable;
