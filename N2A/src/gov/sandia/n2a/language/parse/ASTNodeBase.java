@@ -9,10 +9,7 @@ package gov.sandia.n2a.language.parse;
 
 import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
-import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Type;
-import gov.sandia.n2a.language.operator.Assign;
-
 import java.util.HashSet;
 import java.util.Set;
 
@@ -60,53 +57,6 @@ public abstract class ASTNodeBase extends SimpleNode {
         return source;
     }
 
-    // Returns whether or not the expression tree is in the form:
-    //   Variable = Expression
-    //   Variable' = Expression
-    // The top node must be an OpNode with the function = and the left
-    // child of that node must be a VarNode.
-    // Right now, this is NOT allowed (should it be?):
-    //   cos(x) = Expression
-    public boolean isSimpleAssignment() {
-        if(this instanceof ASTOpNode) {
-            Function func = (Function) getValue();
-            if(func.getClass().equals(Assign.class)) {
-                if(getChild(0) instanceof ASTVarNode) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    // TODO: isSimpleAssignment & isAssignment do different things due
-    // to left hand side possibly being different!
-    // Right now this IS allowed (should it be?):
-    //  cos(x) = Expression
-    public boolean isAssignment ()
-    {
-        if (this instanceof ASTOpNode)
-        {
-            Function func = (Function) getValue ();
-            return func.assignment;
-        }
-        return false;
-    }
-
-    public boolean isSingleSymbol(){
-        return this instanceof ASTVarNode;
-    }
-    
-    public boolean isListVar() {
-        if (this instanceof ASTOpNode) {
-            ASTNodeBase right = getChild(1);
-            if (right instanceof ASTListNode) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     public boolean containsOutput ()
     {
         if (this instanceof ASTFunNode)
@@ -135,60 +85,6 @@ public abstract class ASTNodeBase extends SimpleNode {
         }
         // Implicitly, a node with no children is "initOnly"
         return true;
-    }
-
-    public ASTVarNode getVarNode() {
-        if(isSingleSymbol()) {
-            return (ASTVarNode) this;
-        } else if(isAssignment() || isListVar()) {
-            ASTNodeBase left = getChild(0);
-            if(left instanceof ASTVarNode) {  // Need additional check for isAssignment.
-                return (ASTVarNode) left;
-            }
-        }
-        return null;
-    }
-
-    // Returns the name of the variable on the left-hand
-    // side of an assignment operator, or null if that is
-    // not applicable for this node.  The arguments further
-    // allow you to specify whether or not you want compound
-    // assignments to be allowed (x += 3) and whether or
-    // not you want non-zero order variables allowed (x' = 4y).
-    public String getVariableName(boolean allowCompoundAssignment, boolean allowSingleSymbol, boolean allowNonZeroOrder, boolean includeOrder) {
-
-        ASTVarNode varNode;
-
-        if(this instanceof ASTVarNode) {
-            if(!allowSingleSymbol) {
-                return null;
-            }
-            varNode = (ASTVarNode) this;
-        } else if(this instanceof ASTOpNode) {
-            Function func = (Function) getValue();
-            if(!func.getClass().equals(Assign.class)) {
-                if(!func.assignment || !allowCompoundAssignment) {
-                    return null;
-                }
-            }
-
-            ASTNodeBase left = getChild(0);
-            if(!(left instanceof ASTVarNode)) {
-                return null;
-            }
-
-            varNode = (ASTVarNode) left;
-        } else {
-            return null;
-        }
-
-        if(!allowNonZeroOrder && varNode.getOrder() != 0) {
-            return null;
-        }
-        if(includeOrder) {
-            return varNode.getVariableNameWithOrder();
-        }
-        return varNode.getVariableName();
     }
 
 

@@ -17,7 +17,6 @@ import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Type;
-import gov.sandia.n2a.language.operator.Assign;
 
 
 public class ASTOpNode extends ASTNodeBase {
@@ -138,17 +137,8 @@ public class ASTOpNode extends ASTNodeBase {
         Function func = (Function) getValue ();
         int count = getCount ();
         Type[] params = new Type[count];
-        for (int c = 0; c < count; c++)
-        {
-            if (c == 0  &&  func.getClass ().equals (Assign.class)) params[c] = null;
-            else                                                    params[c] = getChild (c).eval (context);
-        }
-        Type result = func.eval (params);
-        if (func.assignment)
-        {
-            context.set (((ASTVarNode) getChild (0)).reference.variable, result);
-        }
-        return result;
+        for (int c = 0; c < count; c++) params[c] = getChild (c).eval (context);
+        return func.eval (params);
     }
 }
 /* JavaCC - OriginalChecksum=fdb37a0358564ff530164781a4b1ce67 (do not edit this line) */

@@ -21,9 +21,6 @@ import gov.sandia.n2a.language.function.Trace;
 import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.AND;
 import gov.sandia.n2a.language.operator.Add;
-import gov.sandia.n2a.language.operator.Assign;
-import gov.sandia.n2a.language.operator.AssignAdd;
-import gov.sandia.n2a.language.operator.AssignAppend;
 import gov.sandia.n2a.language.operator.Divide;
 import gov.sandia.n2a.language.operator.EQ;
 import gov.sandia.n2a.language.operator.GE;
@@ -112,9 +109,6 @@ public class Function implements ExtensionPoint, Comparable<Function>
         // Operators
         functions.add (new Add ());
         functions.add (new AND ());
-        functions.add (new Assign ());
-        functions.add (new AssignAdd ());
-        functions.add (new AssignAppend ());
         functions.add (new Divide ());
         functions.add (new EQ ());
         functions.add (new GE ());
