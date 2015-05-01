@@ -14,24 +14,19 @@ import gov.sandia.n2a.backend.xyce.symbol.XyceDeviceSymbolDef;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.language.Annotation;
 import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.Type;
-import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.parse.ASTNodeBase;
-import gov.sandia.n2a.language.parse.ASTOpNode;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
 import java.util.Random;
-import java.util.Set;
 
 public abstract class PartSetAbstract implements PartSetInterface
 {

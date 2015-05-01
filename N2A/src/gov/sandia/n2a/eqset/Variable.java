@@ -48,10 +48,7 @@ public class Variable implements Comparable<Variable>
 
     public void add (EquationEntry e)
     {
-        if (equations == null)
-        {
-            equations = new TreeSet<EquationEntry> ();
-        }
+        if (equations == null) equations = new TreeSet<EquationEntry> ();
         equations.add (e);
         e.variable = this;
     }

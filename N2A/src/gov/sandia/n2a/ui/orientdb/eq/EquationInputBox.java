@@ -7,8 +7,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.orientdb.eq;
 
-import gov.sandia.n2a.language.EquationParser;
-import gov.sandia.n2a.language.parse.ExpressionParser;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import java.awt.event.ActionEvent;
@@ -25,9 +23,6 @@ import javax.swing.JPanel;
 import javax.swing.SwingConstants;
 import javax.swing.Timer;
 import javax.swing.UIManager;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
-
 import replete.gui.controls.SelectAllTextField;
 import replete.gui.controls.mnemonics.MButton;
 import replete.gui.windows.Dialogs;
@@ -54,28 +49,6 @@ public class EquationInputBox extends EscapeDialog {
             Lay.hn(lblError, "fg=red,plain");
         }
     });
-    private Timer validateTimer = new Timer(1500, new ActionListener() {
-        public void actionPerformed(ActionEvent e) {
-            validateEquation();
-        }
-    });
-
-    private boolean validateEquation() {
-        String err = " ";
-        try {
-            if(isAnnotation) {
-                ExpressionParser.parse(txtEqn.getText());
-            } else {
-                EquationParser.parse(txtEqn.getText());
-            }
-        } catch(Exception ex) {
-            err = ex.getMessage();
-        }
-        lblError.setText("<html>" + err + "</html>");
-        Lay.hn(lblError, "fg=[255,102,0],italic");
-        flashTimer.restart();
-        return err.equals(" ");
-    }
 
     public EquationInputBox(JFrame parent, boolean isEdit, boolean annot, String initVal) {
         super(parent, "", true);
@@ -100,14 +73,8 @@ public class EquationInputBox extends EscapeDialog {
         JButton btnOK = new MButton(isEdit ? "Ch&ange" : "&Add", ImageUtil.getImage(icon));
         btnOK.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent arg0) {
-                validateTimer.stop();
-                if(validateEquation()) {
-                    result = Result.OK;
-                    dispose();
-                } else {
-                    txtEqn.requestFocusInWindow();
-                    txtEqn.selectAll();
-                }
+                result = Result.OK;
+                dispose();
             }
         });
         JButton btnCancel = new MButton("&Cancel", ImageUtil.getImage("cancel.gif"));
@@ -117,8 +84,7 @@ public class EquationInputBox extends EscapeDialog {
             }
         });
 
-        String message = isAnnotation ? "Please enter a value for this annotation." :
-            "Please enter a value for this equation.  You may include annotations if desired.";
+        String message = "Please enter a value for this " + (isAnnotation ? "annotation." : "equation.");
         lblError = Lay.lb(" ", "alignx=0.0,eb=5lbr,fg=red");
         lblError.setFont(lblError.getFont().deriveFont(10));
         Lay.hn(txtEqn, "maxH=" + txtEqn.getPreferredSize().height + 10);
@@ -133,19 +99,6 @@ public class EquationInputBox extends EscapeDialog {
         JLabel lblIcon = new JLabel(getIconForType(JOptionPane.QUESTION_MESSAGE));
         lblIcon.setVerticalAlignment(SwingConstants.TOP);
         flashTimer.setRepeats(false);
-        validateTimer.setRepeats(false);
-
-        txtEqn.getDocument().addDocumentListener(new DocumentListener() {
-            public void removeUpdate(DocumentEvent e) {
-                updateValidationTimer();
-            }
-            public void insertUpdate(DocumentEvent e) {
-                updateValidationTimer();
-            }
-            public void changedUpdate(DocumentEvent e) {
-                updateValidationTimer();
-            }
-        });
 
         getRootPane().setDefaultButton(btnOK);
         if(isEdit) {
@@ -167,10 +120,6 @@ public class EquationInputBox extends EscapeDialog {
             "S", Lay.FL("R", btnOK, btnCancel),
             "size=[450,175],center"
         );
-    }
-
-    private void updateValidationTimer() {
-        validateTimer.restart();
     }
 
     // Stolen from BasicOptionPaneUI (related to JOptionPane).

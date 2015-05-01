@@ -7,12 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.data;
 
-import gov.sandia.n2a.eqset.EquationAssembler;
-import gov.sandia.n2a.eqset.MetadataAssembler;
-import gov.sandia.n2a.eqset.PartEquationMap;
-import gov.sandia.n2a.eqset.PartMetadataMap;
-import gov.sandia.n2a.language.ParsedEquation;
-import gov.sandia.n2a.language.parse.ParseException;
+import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
@@ -51,7 +46,8 @@ public class PartOrient implements Part {
         source.set("eqs", list);
     }
     @Override
-    public void setSelectedParameters(ParameterDomain domain) {
+    public void setSelectedParameters (ParameterDomain domain)
+    {
         List<NDoc> eqns = getEqs();
         for(Parameter param : domain.getParameters()) {
             System.out.println("   " + param);
@@ -83,31 +79,17 @@ public class PartOrient implements Part {
         }
         return result.toString();
     }
-    private NDoc findEq(List<NDoc> eqns, Parameter param) {
-        String[] parts = param.getKey().toString().split(" ");
-        for (NDoc eq : eqns) {
-            ParsedEquation pe = null;
-            try {
-                pe = new ParsedEquation(eq);
-            } catch (ParseException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
+    private NDoc findEq(List<NDoc> eqns, Parameter param)
+    {
+        for (NDoc eq : eqns)
+        {
+            try
+            {
+                EquationEntry ee = new EquationEntry (eq);
+                if (ee.variable.nameString ().equals (param.getKey ().toString ())) return eq;
             }
-            if (pe.getVarNameWithOrder().equals(parts[0])) {
-                if (parts.length == 1) {
-                   // There shouldn't be multiple equations with the same varname if
-                   // ParameterDomain has only the varname as the Parameter key
-                    return eq;
-                }
-                // If there are more parts to parameter key, need to check the
-                // assignment operator and all annotations - the equation that's
-                // in this part may not be the same equation the Parameter is supposed to set
-                String extra = ParamUtil.getExtra(pe);
-                int paramExtraIndex = param.getKey().toString().indexOf(parts[1]);
-                String paramExtra = param.getKey().toString().substring(paramExtraIndex);
-                if (extra.equals(paramExtra)) {
-                     return eq;
-                }
+            catch (Exception e)
+            {
             }
         }
         return null;
@@ -120,14 +102,6 @@ public class PartOrient implements Part {
     @Override
     public NDoc getSource() {
         return source;
-    }
-    @Override
-    public PartEquationMap getAssembledEquations() {
-        return EquationAssembler.getAssembledPartEquations(source);
-    }
-    @Override
-    public PartMetadataMap getAssembledMetadata() {
-       return MetadataAssembler.getAssembledPartMetadata(source);
     }
     @Override
     public Part copy() {

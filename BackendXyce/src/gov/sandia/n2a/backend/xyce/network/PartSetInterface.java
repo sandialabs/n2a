@@ -10,11 +10,9 @@ package gov.sandia.n2a.backend.xyce.network;
 import gov.sandia.n2a.backend.xyce.XyceTranslationException;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
-import gov.sandia.n2a.eqset.PartMetadataMap;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.EvaluationContext;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 

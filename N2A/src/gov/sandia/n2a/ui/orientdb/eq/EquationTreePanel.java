@@ -7,9 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.orientdb.eq;
 
-import gov.sandia.n2a.language.EquationParser;
-import gov.sandia.n2a.language.ParsedEquation;
-import gov.sandia.n2a.language.parse.ParseException;
+import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.ui.orientdb.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.orientdb.eq.tree.NodeEqReference;
 import gov.sandia.n2a.ui.orientdb.eq.tree.NodeEquation;
@@ -308,32 +306,34 @@ public class EquationTreePanel extends JPanel {
         }
     };
 
-    ActionListener importListener = new ActionListener() {
-        public void actionPerformed(ActionEvent e) {
-            CommonFileChooser fc = CommonFileChooser.getChooser("Import Equations");
-            if(fc.showOpen(EquationTreePanel.this)) {
-                String content = FileUtil.getTextContent(fc.getSelectedFile());
-                String[] lines = content.split("\n");
-                List<ParsedEquation> good = new ArrayList<ParsedEquation>();
-                List<String> invalid = new ArrayList<String>();
-                for(String line : lines) {
-                    line = line.trim();
-                    if(line.equals("") || line.startsWith("#")) {
-                        continue;
+    ActionListener importListener = new ActionListener ()
+    {
+        public void actionPerformed (ActionEvent e)
+        {
+            CommonFileChooser fc = CommonFileChooser.getChooser ("Import Equations");
+            if (fc.showOpen (EquationTreePanel.this))
+            {
+                String content = FileUtil.getTextContent (fc.getSelectedFile ());
+                String[] lines = content.split ("\n");
+                List<EquationEntry> good = new ArrayList<EquationEntry> ();
+                List<String> invalid = new ArrayList<String> ();
+                for (String line : lines)
+                {
+                    line = line.trim ();
+                    if (line.isEmpty ()  ||  line.startsWith ("#")) continue;
+                    try
+                    {
+                        EquationEntry peq = new EquationEntry (line);
+                        if (peq.variable.name.isEmpty ()) invalid.add (line);  // TODO: Behavior should be discussed
+                        else                              good   .add (peq);
                     }
-                    try {
-                        ParsedEquation peq = EquationParser.parse(line);
-                        if(peq.getVarName() == null) {
-                            invalid.add(line);  // TODO: Behavior should be discussed
-                        } else {
-                            good.add(peq);
-                        }
-                    } catch(ParseException ex) {
-                        invalid.add(line);
+                    catch (Exception ex)
+                    {
+                        invalid.add (line);
                     }
                 }
 
-                context.addEquations(good);
+                context.addEquations (good);
                 checkEnabledButtons();
 
                 if(invalid.size() != 0) {
@@ -419,22 +419,27 @@ public class EquationTreePanel extends JPanel {
 
     // So other components can ask this panel to open a dialog
     // for editing an equation.
-    public void openForEditing(NDoc openEq, String prefix) {
-        ParsedEquation openPeq;
-        try {
-            openPeq = EquationParser.parse((String) openEq.getValid("value", String.class));
-        } catch(ParseException e) {
+    public void openForEditing (NDoc openEq, String prefix)
+    {
+        EquationEntry openPeq;
+        try
+        {
+            openPeq = new EquationEntry (openEq);
+        }
+        catch (Exception e)
+        {
             UMF.handleUnexpectedError(null, e, "Could not open equation for editing.");
             return;
         }
 
-        String openVar = openPeq.getVarName();
+        String openVar = openPeq.variable.name;
 
         for(int i = 0; i < root.getChildCount(); i++) {
             TNode nEq = (TNode) root.getChildAt(i);
             NodeEquation uEq = (NodeEquation) nEq.getUserObject();
             NDoc eq = uEq.getEq();
-            if(eq == openEq || uEq.getParsed().getVarName().equals(openVar)) {   // TODO: Review this and document.
+            if (eq == openEq  ||  uEq.getParsed().variable.name.equals (openVar))   // TODO: Review this and document.
+            {
                 TreePath newPath = new TreePath(new Object[]{root, nEq});
                 treEqs.expandPath(newPath);
                 treEqs.setSelectionPath(newPath);
@@ -447,6 +452,7 @@ public class EquationTreePanel extends JPanel {
         treEqs.clearSelection();
         context.addEquation((prefix == null ? "" : prefix + ".") + openEq.get("value"));
     }
+
     public void postLayout() {
         TModel model = (TModel) treEqs.getModel();
         model.reload();

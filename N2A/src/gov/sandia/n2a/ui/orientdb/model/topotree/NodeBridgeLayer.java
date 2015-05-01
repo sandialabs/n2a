@@ -8,7 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.orientdb.model.topotree;
 
-import gov.sandia.n2a.data.Layer;
+import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import javax.swing.Icon;
@@ -16,47 +16,34 @@ import javax.swing.ImageIcon;
 
 import replete.gui.controls.simpletree.NodeBase;
 
-public class NodeBridgeLayer extends NodeBase {
-
-
-    ////////////
-    // FIELDS //
-    ////////////
-
-    // Const
-
+public class NodeBridgeLayer extends NodeBase
+{
     protected static ImageIcon icon = ImageUtil.getImage("layer.gif");
 
-    // Core
+    public String name;
+    public String alias;
 
-    protected Layer layer;
-    protected String alias;
-
-
-    /////////////////
-    // CONSTRUCTOR //
-    /////////////////
-
-    public NodeBridgeLayer(Layer ly, String al) {
-        layer = ly;
-        alias = al;
+    public NodeBridgeLayer (String name, String alias)
+    {
+        this.name  = name;
+        this.alias = alias;
     }
 
-
-    ////////////////
-    // OVERRIDDEN //
-    ////////////////
-
     @Override
-    public boolean isCollapsible() {
+    public boolean isCollapsible ()
+    {
         return true;
     }
+
     @Override
-    public Icon getIcon(boolean expanded) {
+    public Icon getIcon (boolean expanded)
+    {
         return icon;
     }
+
     @Override
-    public String toString() {
-        return layer.getName() + " (equation alias: " + alias + ")";
+    public String toString ()
+    {
+        return alias + " = " + name;
     }
 }

@@ -99,24 +99,22 @@ public class NDoc
         return result;
     }
 
+    // Returns default value if doesn't exist, value otherwise.
+    public <T> T get (String field, Object deflt)
+    {
+        T result = (T) wrapGetValue (source.field (field));
+        OrientDatasource.releaseDB ();
+        if (result == null) result = (T) deflt;
+        return result;
+    }
+
     // Returns null if doesn't exist, or value is not cast-able to given type,
     // value otherwise.
     public <T> T getValid (String field, Class clazz)
     {
         T result = (T) wrapGetValue (source.field (field));
+        OrientDatasource.releaseDB ();
         if (result != null  &&  ! clazz.isAssignableFrom (result.getClass ())) result = null;
-        OrientDatasource.releaseDB ();
-        return null;
-    }
-
-    // Returns default value if doesn't exist, value otherwise.
-    public <T> T get (String field, Object deflt)
-    {
-        T result;
-        List<String> fieldList = Arrays.asList (source.fieldNames ());
-        if (fieldList.contains (field)) result = (T) wrapGetValue (source.field (field));
-        else                            result = (T) deflt;
-        OrientDatasource.releaseDB ();
         return result;
     }
 
@@ -124,18 +122,10 @@ public class NDoc
     // to given type.
     public <T> T getValid (String field, Object deflt, Class clazz)
     {
-        T result;
-        List<String> fieldList = Arrays.asList (source.fieldNames ());
-        if (fieldList.contains (field))
-        {
-            result = (T) wrapGetValue (source.field (field));
-            if (result != null  &&  ! clazz.isAssignableFrom (result.getClass ())) result = null;
-        }
-        else
-        {
-            result = (T) deflt;
-        }
+        T result = (T) wrapGetValue (source.field (field));
         OrientDatasource.releaseDB ();
+        if (result != null  &&  ! clazz.isAssignableFrom (result.getClass ())) result = null;
+        if (result == null) result = (T) deflt;
         return result;
     }
 

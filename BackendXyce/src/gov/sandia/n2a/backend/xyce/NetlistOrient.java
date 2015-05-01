@@ -18,7 +18,6 @@ import gov.sandia.n2a.backend.xyce.symbol.SymbolDef;
 import gov.sandia.n2a.backend.xyce.symbol.SymbolManager;
 import gov.sandia.n2a.backend.xyce.symbol.XyceDeviceSymbolDef;
 import gov.sandia.n2a.eqset.EquationEntry;
-import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.language.parse.ASTNodeBase;
 import gov.sandia.n2a.language.parse.ASTVarNode;
 import gov.sandia.n2a.language.parse.ParseException;

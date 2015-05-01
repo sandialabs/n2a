@@ -10,11 +10,7 @@ package gov.sandia.n2a.backend.xyce.parsing;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.language.Annotation;
 import gov.sandia.n2a.language.LanguageException;
-import gov.sandia.n2a.language.parse.ASTNodeBase;
-
-import java.util.List;
 import java.util.NavigableSet;
 import java.util.Set;
 
@@ -64,14 +60,6 @@ public class LanguageUtil {
             }
         }
         return false;
-    }
-
-    public static Annotation getSelectionAnn(EquationEntry eq)
-    {
-        if (hasAnnotation(eq, ANN_SELECT)) {
-            return new Annotation(eq.conditional);
-        }
-        return null;
     }
 
     public static boolean isSpecialVar(String var) {

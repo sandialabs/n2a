@@ -7,8 +7,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.data;
 
-import gov.sandia.n2a.eqset.PartEquationMap;
-import gov.sandia.n2a.eqset.PartMetadataMap;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 
@@ -25,10 +23,6 @@ public interface Part {
     List<NDoc> getEqs();
 
     NDoc getSource();
-
-    PartEquationMap getAssembledEquations();
-
-    PartMetadataMap getAssembledMetadata();
 
     Part copy();
 

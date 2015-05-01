@@ -7,21 +7,12 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.xyce;
 
-import gov.sandia.n2a.data.Bridge;
-import gov.sandia.n2a.data.Layer;
 import gov.sandia.n2a.data.ModelOrient;
-import gov.sandia.n2a.data.ParamUtil;
-import gov.sandia.n2a.eqset.PartEquationMap;
-import gov.sandia.n2a.language.ParsedEquation;
-import gov.sandia.n2a.language.parse.ASTNodeBase;
+import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.umf.platform.ensemble.params.specs.ParameterSpecification;
 import gov.sandia.umf.platform.plugins.Simulation;
 import gov.sandia.umf.platform.plugins.extpoints.Simulator;
-import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
-import gov.sandia.umf.platform.ui.images.ImageUtil;
-
-import java.util.List;
 
 public class XyceSimulator implements Simulator {
 
@@ -40,46 +31,19 @@ public class XyceSimulator implements Simulator {
     }
 
     @Override
-    public ParameterDomain getOutputVariables (Object model) {
-        ModelOrient modelO = (ModelOrient) model;
-
-        ParameterDomain layersDomain  = new ParameterDomain("Layers");
-        for(Layer layer : modelO.getLayers()) {
-            ParameterDomain layerDomain = new ParameterDomain(layer.getName(), ImageUtil.getImage("layer.gif"));
-            layersDomain.addSubdomain(layerDomain);
-            PartEquationMap map = layer.getDerivedPart().getAssembledEquations();
-            translateParamMapToDomain(map, layerDomain);
+    public ParameterDomain getOutputVariables (Object model)
+    {
+        try
+        {
+            ModelOrient mo = (ModelOrient) model;
+            EquationSet s = new EquationSet (mo.getSource ());
+            if (s.name.length () < 1) s.name = "Model";
+            s.resolveLHS ();
+            return s.getOutputParameters ();
         }
-
-        ParameterDomain bridgesDomain  = new ParameterDomain("Bridges");
-        for(Bridge bridge : modelO.getBridges()) {
-            ParameterDomain bridgeDomain = new ParameterDomain(bridge.getName(), ImageUtil.getImage("bridge.gif"));
-            bridgesDomain.addSubdomain(bridgeDomain);
-            PartEquationMap map = bridge.getDerivedPart().getAssembledEquations();
-            translateParamMapToDomain(map, bridgeDomain);
-        }
-
-        ParameterDomain domains = new ParameterDomain();
-        domains.addSubdomain(layersDomain);
-        domains.addSubdomain(bridgesDomain);
-        return domains;
-    }
-
-    private void translateParamMapToDomain(PartEquationMap map, ParameterDomain bridgeDomain) {
-        for(String var : map.keySet()) {
-            List<ParsedEquation> eqs = map.get(var);
-            for(ParsedEquation eq : eqs) {
-                ASTNodeBase tree = eq.getTree();
-                if(tree.getCount() == 2) {
-                    ASTNodeBase right = tree.getChild(1);
-                    String key = eq.getVarNameWithOrder();
-                    if(eqs.size() != 1) {
-                        key += ParamUtil.getExtra(eq);
-                    }
-                    Parameter p = new Parameter(key, right.toReadableShort());
-                    bridgeDomain.addParameter(p);
-                }
-            }
+        catch (Exception error)
+        {
+            return null;
         }
     }
 

@@ -132,10 +132,7 @@ public class EquationSet implements Comparable<EquationSet>
             if (((String) a.get ("type")).equalsIgnoreCase ("include"))
             {
                 String aname = a.get ("name");  // TODO: default alias name should be assigned at creation time, not filled in here!
-                if (aname == null)
-                {
-                    throw new Exception ("Need to set include name in DB");
-                }
+                if (aname == null) throw new Exception ("Need to set include name in DB");
                 NDoc dest = a.get ("dest");
                 parts.add (new EquationSet (aname, this, dest));
             }
@@ -857,7 +854,7 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
-        Assembles that list of all variables that can be used in an output expression.
+        Assembles list of all variables that can be used in an output expression.
         Depends on results of: resolveLHS() (optional, enables us to remove "reference" variables)
     **/
     public ParameterDomain getOutputParameters ()
@@ -875,10 +872,11 @@ public class EquationSet implements Comparable<EquationSet>
 
         for (Variable v : variables)
         {
-            if (! v.hasAttribute ("reference"))
-            {
-                result.addParameter (new Parameter (v.nameString (), ""));
-            }
+            if (v.hasAttribute ("reference")) continue;
+
+            String defaultValue = "";
+            if (v.equations.size () > 0) defaultValue = v.equations.first ().expression.toReadableShort ();
+            result.addParameter (new Parameter (v.nameString (), defaultValue));
         }
         for (EquationSet s : parts)
         {

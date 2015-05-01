@@ -16,6 +16,7 @@ package gov.sandia.n2a.language.parse;
 import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Text;
 
 public class ASTConstant extends ASTNodeBase {
 
@@ -48,19 +49,18 @@ public class ASTConstant extends ASTNodeBase {
     ////////////
 
     @Override
-    public String toString() {
-        return getValue().toString();
+    public String toString ()
+    {
+        return getValue ().toString ();
     }
 
     @Override
-    public String render(ASTRenderingContext context)
+    public String render (ASTRenderingContext context)
     {
-        // Long & Short rendering
         Object value = getValue ();
-        if(value instanceof String) {
-            return "\"" + value.toString() + "\"";
-        }
-        return value.toString();
+        // We could also check for String here, but if String ever does appear then something somewhere broke the rules.
+        if (value instanceof Text) return "\"" + value.toString () + "\"";
+        return value.toString ();
     }
 
 

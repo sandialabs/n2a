@@ -8,8 +8,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.orientdb.eq.tree;
 
-import gov.sandia.n2a.language.Annotation;
-import gov.sandia.umf.platform.AppState;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import javax.swing.Icon;
@@ -17,57 +15,58 @@ import javax.swing.ImageIcon;
 
 import replete.gui.controls.simpletree.NodeBase;
 
-public class NodeAnnotation extends NodeBase {
+public class NodeAnnotation extends NodeBase
+{
+    public static ImageIcon icon = ImageUtil.getImage ("about.gif");
 
-
-    ////////////
-    // FIELDS //
-    ////////////
-
-    // Const
-
-    protected static ImageIcon icon = ImageUtil.getImage("about.gif");
-
-    // Core
-
-    protected Annotation annot;  // Parsing-Related Object
+    public String name;
+    public String value;
 
 
     /////////////////
     // CONSTRUCTOR //
     /////////////////
 
-    public NodeAnnotation(Annotation a) {
-        annot = a;
+    public NodeAnnotation (String namedValue)
+    {
+        setAnnotation (namedValue);
     }
 
-
-    //////////////////////////
-    // ACCESSORS / MUTATORS //
-    //////////////////////////
-
-    public Annotation getAnnotation() {
-        return annot;
-    }
-    public void setAnnotation(Annotation eq) {
-        annot = eq;
+    public NodeAnnotation (String name, String value)
+    {
+        this.name  = name;
+        this.value = value;
     }
 
+    public void setAnnotation (String namedValue)
+    {
+        String[] parts = namedValue.split ("=", 2);
+        if (parts.length < 2)
+        {
+            name = namedValue;
+            value = null;
+        }
+        else
+        {
+            name = parts[0];
+            value = parts[1];
+        }
+    }
 
     ////////////////
     // OVERRIDDEN //
     ////////////////
 
     @Override
-    public Icon getIcon(boolean expanded) {
+    public Icon getIcon (boolean expanded)
+    {
         return icon;
     }
 
     @Override
-    public String toString() {
-        if(AppState.getState().isEqnFormat()) {
-            return annot.getTree().toReadableShort();
-        }
-        return annot.getTree().getSource();
+    public String toString ()
+    {
+        if (value == null  ||  value.isEmpty ()) return name;
+        return name + " = " + value;
     }
 }

@@ -13,7 +13,11 @@ import gov.sandia.n2a.language.parse.ExpressionParser;
 import gov.sandia.n2a.language.parse.ParseException;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 public class EquationEntry implements Comparable<EquationEntry>
 {
@@ -44,6 +48,12 @@ public class EquationEntry implements Comparable<EquationEntry>
     {
         this ((String) source.get ("value"));
         this.source = source;
+        Map<String, String> namedValues = source.getValid ("$metadata", new TreeMap<String, String> (), Map.class);
+        if (namedValues.size () > 0)
+        {
+            metadata = new TreeMap<String,String> ();
+            metadata.putAll (namedValues);
+        }
     }
 
     public EquationEntry (String raw) throws Exception
@@ -66,18 +76,12 @@ public class EquationEntry implements Comparable<EquationEntry>
             if (convertFrom < parts.length)  // there exists some metadata to convert
             {
                 metadata = new TreeMap<String, String> ();
-            }
-            for (int i = convertFrom; i < parts.length; i++)
-            {
-                String[] nv = parts[i].split ("=", 2);
-                nv[0].trim ();
-                if (nv.length > 1)
+                for (int i = convertFrom; i < parts.length; i++)
                 {
-                    metadata.put (nv[0], nv[1].trim ());
-                }
-                else
-                {
-                    metadata.put (nv[0], "");
+                    String[] nv = parts[i].split ("=", 2);
+                    nv[0].trim ();
+                    if (nv.length > 1) metadata.put (nv[0], nv[1].trim ());
+                    else               metadata.put (nv[0], "");
                 }
             }
         }
@@ -132,24 +136,30 @@ public class EquationEntry implements Comparable<EquationEntry>
 
     public void setNamedValue (String name, String value)
     {
-        if (metadata == null)
-        {
-            metadata = new TreeMap<String, String> ();
-        }
+        if (metadata == null) metadata = new TreeMap<String, String> ();
         metadata.put (name, value);
+    }
+
+    /**
+        Safe method to access metadata for iteration
+    **/
+    public Set<Entry<String,String>> getMetadata ()
+    {
+        if (metadata == null) metadata = new TreeMap<String, String> ();
+        return metadata.entrySet ();
     }
 
     public String render (ASTRenderingContext context)
     {
         String result = variable.nameString ();
-        result = result + " " + assignment;
+        result += " " + assignment;
         if (expression  != null)
         {
-            result = result + " "   + context.render (expression);
+            result += " "   + context.render (expression);
         }
         if (conditional != null)
         {
-            result = result + " @ " + context.render (conditional);
+            result += " @ " + context.render (conditional);
         }
         return result;
     }

@@ -7,8 +7,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.data;
 
-import gov.sandia.n2a.language.ParsedEquation;
-import gov.sandia.n2a.language.parse.ParseException;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.plugins.Parameterizable;
 import gov.sandia.umf.platform.plugins.PlatformRecord;
@@ -36,7 +34,6 @@ public interface Model extends PlatformRecord, Parameterizable/*, UMFRunnable*/ 
     public List<NDoc> getInputEqs();
     public void setOutputEqs(List<NDoc> equations);
     public List<NDoc> getOutputEqs();
-    public List<ParsedEquation> getParsedOutputEqs() throws ParseException;
     public List<Run> getRuns();
     public NDoc getSource();
     public ParameterDomain getAllParameters();

@@ -8,9 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.orientdb.eq.tree;
 
-import gov.sandia.n2a.language.EquationParser;
-import gov.sandia.n2a.language.ParsedEquation;
-import gov.sandia.umf.platform.AppState;
+import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
@@ -37,7 +35,7 @@ public class NodeEquation extends NodeBase {
     protected NDoc eq;        // DB-Related Object
     protected boolean overriding;
     protected boolean overridden;
-    protected ParsedEquation peq;  // Sync'ed with current DB record.
+    protected EquationEntry peq;  // Sync'ed with current DB record.
     // Right now there's no way to enforce that the 'value' of the 'eq'
     // object hasn't changed since the last update.  But code should
     // use the 'setEqValue' method as opposed to something like
@@ -48,15 +46,26 @@ public class NodeEquation extends NodeBase {
     // CONSTRUCTOR //
     /////////////////
 
-    public NodeEquation(NDoc e) {
+    public NodeEquation (NDoc e)
+    {
         eq = e;
-        updateParsedEquation();
+        updateParsedEquation ();
     }
 
-    private void updateParsedEquation() {
-        try {
-            peq = EquationParser.parse((String) eq.get("value"));
-        } catch(Exception e) {
+    public NodeEquation (EquationEntry e)
+    {
+        peq = e;
+        eq = e.source;
+    }
+
+    private void updateParsedEquation ()
+    {
+        try
+        {
+            peq = new EquationEntry (eq);
+        }
+        catch (Exception e)
+        {
             peq = null;
         }
     }
@@ -73,7 +82,8 @@ public class NodeEquation extends NodeBase {
         eq.set("value", newValue);
         updateParsedEquation();
     }
-    public ParsedEquation getParsed() {
+    public EquationEntry getParsed ()
+    {
         return peq;
     }
     public void setOverriding(boolean ov) {
@@ -102,20 +112,9 @@ public class NodeEquation extends NodeBase {
         return (overridden ? Color.red : (overriding ? grn : Color.black));
     }
     @Override
-    public String toString() {
-        if(peq == null) {
-            return "<Error (eq='" + eq + "')>";
-        }
-
-        String eqText;
-        if(AppState.getState().isEqnFormat()) {
-            eqText = peq.getTree().toReadableShort();
-        } else {
-            eqText = peq.getTree().getSource();    // Done this way to remove annotations.
-        }
-
-        return eqText +
-            (overriding && !overridden ? "  [overriding]" : "") +
-            (overridden ? "  [overridden]" : "");
+    public String toString ()
+    {
+        if (peq == null) return "<Error (eq='" + eq + "')>";
+        return peq.toString ();
     }
 }

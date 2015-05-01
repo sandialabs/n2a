@@ -130,10 +130,12 @@ public class XyceDeviceSymbolDef implements SymbolDef {
         // These equations don't have to be translated like others;
         // device already implements them or doesn't need them.
         // Parameter and input equations DO have to be processed/understood elsewhere
-        if (eq.metadata != null) {
-            for (String metaKey : eq.metadata.keySet()) {
-                if (metaKey.equals(IGNORE_TAG) || metaKey.equals(NODE_TAG) || 
-                    metaKey.equals(IVAR_TAG)) {
+        if (eq.metadata != null)
+        {
+            for (String metaKey : eq.metadata.keySet ())
+            {
+                if (metaKey.equals (IGNORE_TAG)  ||  metaKey.equals(NODE_TAG) ||  metaKey.equals(IVAR_TAG))
+                {
                     return true;
                 }
             }
@@ -307,23 +309,14 @@ public class XyceDeviceSymbolDef implements SymbolDef {
         {
             for (EquationEntry eq : v.equations)
             {
-                if (eq.metadata == null) {
-                    continue;
-                }
-                for (String metaKey : eq.metadata.keySet()) {
-                    String value = eq.metadata.get(metaKey).replace("\"", "");
-                    if (metaKey.equals(PARAM_TAG)) {
-                        checkParamAssociation(eq, value);
-                    }
-                    else if (metaKey.equals(NODE_TAG)) {
-                        checkNodeAssociation(eq, value);
-                    }
-                    else if (metaKey.equals(IVAR_TAG)) {
-                        checkIVarAssociation(eq, value);
-                    }
-                    else if (metaKey.equals(INPUT_TAG)) {
-                        inputs.put(Integer.parseInt(value)-1, eq);
-                    }
+                if (eq.metadata == null) continue;
+                for (String metaKey : eq.metadata.keySet())
+                {
+                    String value = eq.metadata.get (metaKey).replace ("\"", "");
+                    if      (metaKey.equals (PARAM_TAG)) checkParamAssociation (eq, value);
+                    else if (metaKey.equals (NODE_TAG )) checkNodeAssociation  (eq, value);
+                    else if (metaKey.equals (IVAR_TAG )) checkIVarAssociation  (eq, value);
+                    else if (metaKey.equals (INPUT_TAG)) inputs.put (Integer.parseInt (value) - 1, eq);
                 }
             }
         }

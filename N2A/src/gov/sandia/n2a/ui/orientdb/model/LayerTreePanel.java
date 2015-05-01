@@ -12,13 +12,15 @@ import gov.sandia.n2a.data.LayerOrient;
 import gov.sandia.n2a.data.ModelOrient;
 import gov.sandia.n2a.data.Part;
 import gov.sandia.n2a.data.PartOrient;
-import gov.sandia.n2a.language.ParsedEquation;
-import gov.sandia.n2a.language.SpecialVariables;
+import gov.sandia.n2a.eqset.EquationEntry;
+import gov.sandia.n2a.eqset.EquationSet;
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.parse.ASTVarNode;
-import gov.sandia.n2a.ui.orientdb.eq.EquationSummaryFlatPanel;
 import gov.sandia.n2a.ui.orientdb.eq.EquationTreeEditContext;
+import gov.sandia.n2a.ui.orientdb.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.orientdb.eq.tree.NodeEquation;
 import gov.sandia.n2a.ui.orientdb.eq.tree.NodePart;
+import gov.sandia.n2a.ui.orientdb.model.topotree.NodeBridgeLayer;
 import gov.sandia.n2a.ui.orientdb.model.topotree.NodeCompEquations;
 import gov.sandia.n2a.ui.orientdb.model.topotree.NodeLayer;
 import gov.sandia.n2a.ui.orientdb.model.topotree.NodeLayerEquations;
@@ -39,7 +41,7 @@ import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
+import java.util.Map.Entry;
 
 import javax.swing.Box;
 import javax.swing.JButton;
@@ -49,10 +51,12 @@ import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 
 import replete.gui.controls.IconButton;
 import replete.gui.controls.mnemonics.MMenuItem;
+import replete.gui.controls.simpletree.NodeBase;
 import replete.gui.controls.simpletree.SimpleTree;
 import replete.gui.controls.simpletree.TNode;
 import replete.gui.windows.Dialogs;
@@ -241,32 +245,38 @@ public class LayerTreePanel extends ModelEditDetailPanel {
         }
     };
 
-    private MouseListener contextMenuListener = new MouseAdapter() {
+    private MouseListener contextMenuListener = new MouseAdapter ()
+    {
         @Override
-        public void mouseReleased(MouseEvent e) {
-            if(SwingUtilities.isRightMouseButton(e) && e.getClickCount() == 1) {
-                TreePath selPath = treLayers.getPathForLocation(e.getX(), e.getY());
-                if(selPath == null) {
-                    return;
+        public void mouseReleased (MouseEvent e)
+        {
+            if (SwingUtilities.isRightMouseButton (e)  &&  e.getClickCount () == 1)
+            {
+                TreePath selPath = treLayers.getPathForLocation (e.getX (), e.getY ());
+                if (selPath == null) return;
+                TNode nAny = (TNode) selPath.getLastPathComponent ();
+                Object any = nAny.getUserObject ();
+                if (any instanceof NodeLayer)
+                {
+                    treLayers.setSelectionPath (selPath);
+                    openPart = ((NodeLayer) any).getLayer ().getDerivedPart ().getParent ();
+                    mnuOpenPopup.show (treLayers, e.getX (), e.getY ());
                 }
-                TNode nAny = (TNode) selPath.getLastPathComponent();
-                if(nAny.getUserObject() instanceof NodeLayer) {
-                    treLayers.setSelectionPath(selPath);
-                    openPart = ((NodeLayer) nAny.getUserObject()).getLayer().getDerivedPart().getParent();
-                    mnuOpenPopup.show(treLayers, e.getX(), e.getY());
-                } else if(nAny.getUserObject() instanceof NodeEquation) {
-                    treLayers.setSelectionPath(selPath);
-                    if(((TNode)nAny.getParent()).getUserObject() instanceof NodeLayerEquations) {
-                        editEq = ((NodeEquation) nAny.getUserObject()).getEq();
+                else if (any instanceof NodeEquation)
+                {
+                    treLayers.setSelectionPath (selPath);
+                    editEq = ((NodeEquation) any).getEq ();
+                    NodeBase parent = (NodeBase) ((TNode) nAny.getParent ()).getUserObject ();
+                    if (parent instanceof NodeLayerEquations)
+                    {
                         editPrefix = null;
-                        mnuChangePopup.show(treLayers, e.getX(), e.getY());
-                    } else {
-                        editEq = ((NodeEquation) nAny.getUserObject()).getEq();
-                        NodePart parentPart = (NodePart) ((TNode)nAny.getParent()).getUserObject();
-                        if(parentPart.getAlias() != null) {
-                            editPrefix = parentPart.getAlias();   // Means is included part.
-                        }
-                        mnuOverridePopup.show(treLayers, e.getX(), e.getY());
+                        mnuChangePopup.show (treLayers, e.getX (), e.getY ());
+                    }
+                    else if (parent instanceof NodePart)
+                    {
+                        // TODO: fully implement editing of override equations
+                        editPrefix = ((NodePart) parent).part.name;
+                        mnuOverridePopup.show (treLayers, e.getX(), e.getY());
                     }
                 }
             }
@@ -331,10 +341,11 @@ public class LayerTreePanel extends ModelEditDetailPanel {
                         }
                         try {
                             Part childPart = new PartOrient(
-                                SpecialVariables.LAYER_DP,
+                                "$LayerDerivedPart",
                                 User.getName(),
-                                SpecialVariables.LAYER_DP,
-                                "compartment", chosenPart);
+                                "$LayerDerivedPart",
+                                "compartment",
+                                chosenPart);
                             Layer newLayer = new LayerOrient(
                                 name, childPart, model);
                             TNode nLay = addLayer(newLayer);
@@ -391,11 +402,16 @@ public class LayerTreePanel extends ModelEditDetailPanel {
         eqContext.setEquations(nLayerEq, dPart.getEqs());
 
         // Create parent part equation section.
-        TNode nComp = new TNode(new NodeCompEquations());
-        treLayers.append(nLay, nComp);
-
-        Set<ParsedEquation> eqs = EquationSummaryFlatPanel.createFlatEquationListFromPart(dPart.getParent().getSource());
-        EquationSummaryFlatPanel.setFlatEquationListOnNode(treLayers.getModel(), nComp, eqs);
+        TNode nComp = new TNode (new NodeCompEquations ());
+        treLayers.append (nLay, nComp);
+        try
+        {
+            insertEquationTree (treLayers.getModel (), nComp, new EquationSet (dPart.getParent ().getSource ()));
+        }
+        catch (Exception error)
+        {
+            System.out.println ("Exception during equation tree construction: " + error);
+        }
 
         // Expand
         TreePath newPath = new TreePath(new Object[]{root, nLay});
@@ -403,6 +419,38 @@ public class LayerTreePanel extends ModelEditDetailPanel {
         // TODO: Select?
 
         return nLay;
+    }
+
+    public static void insertEquationTree (DefaultTreeModel treeModel, TNode targetNode, EquationSet s)
+    {
+        if (s.connectionBindings != null)
+        {
+            for (Entry<String,EquationSet> a : s.connectionBindings.entrySet ())
+            {
+                TNode node = new TNode (new NodeBridgeLayer (a.getValue ().name, a.getKey ()));
+                treeModel.insertNodeInto (node, targetNode, targetNode.getChildCount ());
+            }
+        }
+        for (Variable v : s.variables)
+        {
+            if (v.equations == null) continue;
+            for (EquationEntry e : v.equations)
+            {
+                TNode node = new TNode (new NodeEquation (e));
+                treeModel.insertNodeInto (node, targetNode, targetNode.getChildCount ());
+                for (Entry<String,String> nv : e.getMetadata ())
+                {
+                    TNode subnode = new TNode (new NodeAnnotation (nv.getKey (), nv.getValue ()));
+                    treeModel.insertNodeInto (subnode, node, node.getChildCount ());
+                }
+            }
+        }
+        for (EquationSet p : s.parts)
+        {
+            TNode node = new TNode (new NodePart (p));
+            treeModel.insertNodeInto (node, targetNode, targetNode.getChildCount ());
+            insertEquationTree (treeModel, node, p);
+        }
     }
 
     public List<Layer> getSelectedLayers() {

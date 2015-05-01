@@ -7,11 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.data;
 
-import gov.sandia.n2a.eqset.EquationAssembler;
-import gov.sandia.n2a.eqset.PartEquationMap;
-import gov.sandia.n2a.language.ParsedEquation;
-import gov.sandia.n2a.language.parse.ASTNodeBase;
-import gov.sandia.n2a.language.parse.ParseException;
+import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.ensemble.params.ParameterSet;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
@@ -20,9 +16,7 @@ import gov.sandia.umf.platform.plugins.Run;
 import gov.sandia.umf.platform.plugins.RunEnsemble;
 import gov.sandia.umf.platform.plugins.RunEnsembleOrient;
 import gov.sandia.umf.platform.plugins.RunOrient;
-import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
-import gov.sandia.umf.platform.ui.images.ImageUtil;
 import gov.sandia.umf.platform.ui.orientdb.general.TermValue;
 
 import java.util.ArrayList;
@@ -296,15 +290,6 @@ public class ModelOrient implements Model {
     }
 
     @Override
-    public List<ParsedEquation> getParsedOutputEqs() throws ParseException {
-        List<ParsedEquation> result = new ArrayList<ParsedEquation>();
-        for (NDoc doc :  getOutputEqs()) {
-            result.add(EquationAssembler.getParsedEquation(doc));
-        }
-        return result;
-    }
-
-    @Override
     public void setInputEqs(List<NDoc> equations) {
         source.set("inputEqs", equations);
     }
@@ -325,44 +310,18 @@ public class ModelOrient implements Model {
     }
 
     @Override
-    public ParameterDomain getAllParameters() {
-        ParameterDomain layersDomain  = new ParameterDomain("Layers");
-        for(Layer layer : getLayers()) {
-            ParameterDomain layerDomain = new ParameterDomain(layer.getName(), ImageUtil.getImage("layer.gif"));
-            layersDomain.addSubdomain(layerDomain);
-            PartEquationMap map = layer.getDerivedPart().getAssembledEquations();
-            translateParamMapToDomain(map, layerDomain);
+    public ParameterDomain getAllParameters ()
+    {
+        try
+        {
+            EquationSet s = new EquationSet (getSource ());
+            if (s.name.length () < 1) s.name = "Model";
+            s.resolveLHS ();
+            return s.getOutputParameters ();
         }
-
-        ParameterDomain bridgesDomain  = new ParameterDomain("Bridges");
-        for(Bridge bridge : getBridges()) {
-            ParameterDomain bridgeDomain = new ParameterDomain(bridge.getName(), ImageUtil.getImage("bridge.gif"));
-            bridgesDomain.addSubdomain(bridgeDomain);
-            PartEquationMap map = bridge.getDerivedPart().getAssembledEquations();
-            translateParamMapToDomain(map, bridgeDomain);
-        }
-
-        ParameterDomain domains = new ParameterDomain();
-        domains.addSubdomain(layersDomain);
-        domains.addSubdomain(bridgesDomain);
-        return domains;
-    }
-
-    private void translateParamMapToDomain(PartEquationMap map, ParameterDomain bridgeDomain) {
-        for(String var : map.keySet()) {
-            List<ParsedEquation> eqs = map.get(var);
-            for(ParsedEquation eq : eqs) {
-                ASTNodeBase tree = eq.getTree();
-                if(tree.getCount() == 2) {
-                    ASTNodeBase right = tree.getChild(1);
-                    String key = eq.getVarNameWithOrder();
-                    if(eqs.size() != 1) {
-                        key += ParamUtil.getExtra(eq);
-                    }
-                    Parameter p = new Parameter(key, right.toReadableShort());
-                    bridgeDomain.addParameter(p);
-                }
-            }
+        catch (Exception error)
+        {
+            return null;
         }
     }
 

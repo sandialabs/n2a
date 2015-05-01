@@ -13,10 +13,8 @@ import gov.sandia.n2a.data.Layer;
 import gov.sandia.n2a.data.ModelOrient;
 import gov.sandia.n2a.data.Part;
 import gov.sandia.n2a.data.PartOrient;
-import gov.sandia.n2a.language.ParsedEquation;
-import gov.sandia.n2a.language.SpecialVariables;
+import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.language.parse.ASTVarNode;
-import gov.sandia.n2a.ui.orientdb.eq.EquationSummaryFlatPanel;
 import gov.sandia.n2a.ui.orientdb.eq.EquationTreeEditContext;
 import gov.sandia.n2a.ui.orientdb.model.topotree.NodeBridge;
 import gov.sandia.n2a.ui.orientdb.model.topotree.NodeBridgeEquations;
@@ -41,8 +39,6 @@ import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-
 import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.ListSelectionModel;
@@ -308,10 +304,11 @@ public class BridgeTreePanel extends ModelEditDetailPanel {
                     }
                     try {
                         Part childConn = new PartOrient(
-                            SpecialVariables.BRIDGE_DP,
+                            "$BridgeDerivedPart",
                             User.getName(),
-                            SpecialVariables.BRIDGE_DP,
-                            "connection", chosenConn);
+                            "$BridgeDerivedPart",
+                            "connection",
+                            chosenConn);
                         Bridge bridge = new BridgeOrient(
                             layers,
                             name, model, childConn);
@@ -367,14 +364,13 @@ public class BridgeTreePanel extends ModelEditDetailPanel {
 
         List<Layer> layers = bridge.getLayers();
         Map<String, Layer> aliases = bridge.getAliasLayerMap();
-        System.out.println ("aliases = " + aliases);
         if(layers.size() == 1) {
             Layer layer = layers.get(0);
             String alias = aliases.keySet().toArray(new String[0])[0];
-            TNode nLayer = new TNode(new NodeBridgeLayer(layer, alias));
+            TNode nLayer = new TNode(new NodeBridgeLayer(layer.getName (), alias));
             treBridges.append(nLayers, nLayer);
             alias = aliases.keySet().toArray(new String[0])[1];
-            nLayer = new TNode(new NodeBridgeLayer(layer, alias));
+            nLayer = new TNode(new NodeBridgeLayer(layer.getName (), alias));
             treBridges.append(nLayers, nLayer);
         } else {
             for(Layer layer : layers) {
@@ -386,7 +382,7 @@ public class BridgeTreePanel extends ModelEditDetailPanel {
                         break;
                     }
                 }
-                TNode nLayer = new TNode(new NodeBridgeLayer(layer, chosenAlias));
+                TNode nLayer = new TNode(new NodeBridgeLayer(layer.getName (), chosenAlias));
                 treBridges.append(nLayers, nLayer);
             }
         }
@@ -401,9 +397,14 @@ public class BridgeTreePanel extends ModelEditDetailPanel {
         // Create parent part equation section.
         TNode nComp = new TNode(new NodeConnEquations());
         treBridges.append(nBridge, nComp);
-
-        Set<ParsedEquation> eqs = EquationSummaryFlatPanel.createFlatEquationListFromPart(dPart.getParent().getSource());
-        EquationSummaryFlatPanel.setFlatEquationListOnNode(treBridges.getModel(), nComp, eqs);
+        try
+        {
+            LayerTreePanel.insertEquationTree (treBridges.getModel (), nComp, new EquationSet (dPart.getParent ().getSource ()));
+        }
+        catch (Exception error)
+        {
+            System.out.println ("Exception during equation tree construction: " + error);
+        }
 
         // Expand
         TreePath newPath = new TreePath(new Object[]{root, nBridge});
