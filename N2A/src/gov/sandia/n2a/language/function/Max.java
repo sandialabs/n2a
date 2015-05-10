@@ -12,10 +12,10 @@ import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
-import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Matrix;
+import gov.sandia.n2a.language.type.Scalar;
 
-public class Exp extends Function
+public class Max extends Function
 {
     public static Factory factory ()
     {
@@ -23,38 +23,29 @@ public class Exp extends Function
         {
             public String name ()
             {
-                return "exp";
+                return "max";
             }
 
             public Operator createInstance ()
             {
-                return new Exp ();
+                return new Max ();
             }
         };
     }
 
     public Type eval (EvaluationContext context)
     {
-        Type arg = operands[0].eval (context);
-        if (arg instanceof Scalar) return new Scalar (Math.exp (((Scalar) arg).value));
-        if (arg instanceof Matrix)
+        Type arg0 = operands[0].eval (context);
+        Type arg1 = operands[1].eval (context);
+        if (arg0 instanceof Scalar  &&  arg1 instanceof Scalar)
         {
-            return ((Matrix) arg).visit
-            (
-                new Matrix.Visitor ()
-                {
-                    public double apply (double a)
-                    {
-                        return Math.exp (a);
-                    }
-                }
-            );
+            return new Scalar (Math.max (((Scalar) arg0).value, ((Scalar) arg1).value));
         }
         throw new EvaluationException ("type mismatch");
     }
 
     public String toString ()
     {
-        return "exp";
+        return "max";
     }
 }

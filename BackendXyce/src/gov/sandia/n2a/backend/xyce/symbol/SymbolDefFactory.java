@@ -8,8 +8,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.backend.xyce.symbol;
 
 import gov.sandia.n2a.backend.xyce.XyceTranslationException;
-import gov.sandia.n2a.backend.xyce.functions.XycePulseFunction;
-import gov.sandia.n2a.backend.xyce.functions.XyceSineWaveFunction;
 import gov.sandia.n2a.backend.xyce.network.NetworkGenerationException;
 import gov.sandia.n2a.backend.xyce.network.PartInstance;
 import gov.sandia.n2a.backend.xyce.network.PartSetInterface;
@@ -32,22 +30,21 @@ public class SymbolDefFactory {
 
         if (eq.variable.order > 1)
         {
-            throw new XyceTranslationException("Support for higher order differential equations not implemented yet (" + eq + ")");
+            throw new XyceTranslationException ("Support for higher order differential equations not implemented yet (" + eq + ")");
         }
         if (eq.variable.order == 1)
         {
-            return new StateVar1SymbolDef(eq, partSet);
+            return new StateVar1SymbolDef (eq, partSet);
         }
-        if (eq.toString().contains(new XycePulseFunction().name)) {
-            return new XycePulseInputSymbolDef(eq, partSet);
+        if (eq.toString ().contains ("pulse"))
+        {
+            return new XycePulseInputSymbolDef (eq, partSet);
+            //return new PulseSymbolDef (eq, partSet);  // TODO: create translation function to map N2A standard pulse() and Xyce standard
         }
-        if (eq.toString().contains(new XyceSineWaveFunction().name)) {
-            return new SineWaveInputSymbolDef(eq, partSet);
+        if (eq.toString ().contains ("sinewave"))
+        {
+            return new SineWaveInputSymbolDef (eq, partSet);
         }
-        // N2A pulse function not actually set up to use yet; not available as plugin extension point
-//        if (eq.toString().contains(new Pulse().getName())) {
-//            return new PulseSymbolDef(eq, partSet);
-//        }
         if (eq.toString().contains(LanguageUtil.$TIME)) 
         {
             if (varname.startsWith(XyceRHSTranslator.REFPRE) ||

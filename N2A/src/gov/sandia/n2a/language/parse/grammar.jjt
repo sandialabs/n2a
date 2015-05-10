@@ -39,57 +39,11 @@ public class ExpressionParser
             throw new IllegalArgumentException ("Line to parse cannot be null.");
         }
 
-        // The following classes perform some obvious transformations to the AST before returning it:
-        // List[A (only one node)] --> A
-        // Variable[List[A B C ...]] --> Variable[A B C ...]
-        // Function[List[A B C ...]] --> Function[A B C ...]
-
-        class CollapseList implements ASTNodeTransformer
-        {
-            public ASTNodeBase transform (ASTNodeBase node)
-            {
-                if (node.getCount () == 1)
-                {
-                    return node.getChild (0);
-                }
-                return node;
-            }
-        }
-
-        class MakeListIntoChildren implements ASTNodeTransformer
-        {
-            public ASTNodeBase transform (ASTNodeBase node)
-            {
-                if (node.getCount () == 1)
-                {
-                    ASTNodeBase list = node.getChild (0);
-                    if (list instanceof ASTListNode)
-                    {
-                        node.clearChildren ();
-                        int count = list.getCount ();
-                        for (int i = 0; i < count; i++)
-                        {
-                            node.setChild (list.getChild (i), i);
-                        }
-                    }
-                }
-                return node;
-            }
-        }
-
-        ASTTransformationContext context = new ASTTransformationContext ();
-        MakeListIntoChildren l = new MakeListIntoChildren ();
-        context.add (ASTFunNode .class, l);
-        context.add (ASTVarNode .class, l);
-        context.add (ASTListNode.class, new CollapseList ());
-
         try
         {
             ExpressionParser parser = new ExpressionParser (new StringReader (line + "\n"));
             Node startNode = parser.Start ();
             ASTNodeBase result = (ASTNodeBase) startNode.jjtGetChild(0);
-            result = result.transform (context);
-            result.setSource (line);
             return result;
         }
         catch (ParseException p)
@@ -486,7 +440,7 @@ void Variable() #VarNode : {
     }
 }
 
-void Function() #FunNode : {
+void Function() #OpNode : {
     Token t;
 }
 {

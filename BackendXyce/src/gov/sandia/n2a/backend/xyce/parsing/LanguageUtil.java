@@ -10,9 +10,14 @@ package gov.sandia.n2a.backend.xyce.parsing;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.LanguageException;
+import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.Visitor;
+import gov.sandia.n2a.language.function.Gaussian;
+import gov.sandia.n2a.language.function.Uniform;
+
 import java.util.NavigableSet;
-import java.util.Set;
 
 public class LanguageUtil {
     public static final String $TIME = "$t";
@@ -26,12 +31,9 @@ public class LanguageUtil {
     public static final String ANN_INIT = "$init";
     public static final String ANN_SELECT = "where";
 
-    public static boolean hasAnnotation(EquationEntry eq, String annName) 
+    public static boolean hasAnnotation (EquationEntry eq, String annName) 
     {
-        if (eq.conditional == null) {
-           return false;
-        }
-        return eq.conditional.getSymbols().contains(annName);
+        return eq.metadata.containsKey (annName);
     }
     
     public static boolean isInitEq(EquationEntry eq)
@@ -44,22 +46,36 @@ public class LanguageUtil {
         return hasAnnotation(eq, ANN_SELECT) || isInstanceDependent(eq);
     }
 
-    public static boolean isInstanceDependent(EquationEntry eq)
+    public static boolean isInstanceDependent (EquationEntry eq)
     {
-        Set<String> symbols = eq.expression.getSymbols();
-        // TODO - better way to specify that anything involving a distribution is instance-specific?
-        if (symbols.contains("uniform") ||
-                symbols.contains("gaussian") ||
-                symbols.contains("lognormal")) {
-                return true;
-        }
-        for (String symbol : symbols) {
-            if (symbol.contains($INDEX) ||
-                symbol.contains($COORDS) ) {
+        class InstanceVisitor extends Visitor
+        {
+            public boolean result = false;
+
+            public boolean visit (Operator op)
+            {
+                if (result) return false;  // no need to dig deeper
+                if (op instanceof AccessVariable)
+                {
+                    AccessVariable av = (AccessVariable) op;
+                    if (av.name.equals ("$index")) result = true;
+                    if (av.name.equals ("$xyz"  )) result = true;
+                }
+                else if (op instanceof Gaussian)
+                {
+                    result = true;
+                }
+                else if (op instanceof Uniform)
+                {
+                    result = true;
+                }
                 return true;
             }
-        }
-        return false;
+        };
+
+        InstanceVisitor visitor = new InstanceVisitor ();
+        eq.expression.visit (visitor);
+        return visitor.result;
     }
 
     public static boolean isSpecialVar(String var) {

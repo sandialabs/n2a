@@ -9,22 +9,23 @@ package gov.sandia.n2a.backend.c;
 
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
+import gov.sandia.n2a.eqset.EquationSet.Conversion;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
+import gov.sandia.n2a.language.AccessVariable;
+import gov.sandia.n2a.language.BuildMatrix;
+import gov.sandia.n2a.language.Constant;
+import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.Renderer;
+import gov.sandia.n2a.language.Split;
+import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.Power;
-import gov.sandia.n2a.language.parse.ASTConstant;
-import gov.sandia.n2a.language.parse.ASTFunNode;
-import gov.sandia.n2a.language.parse.ASTMatrixNode;
-import gov.sandia.n2a.language.parse.ASTNodeBase;
-import gov.sandia.n2a.language.parse.ASTNodeRenderer;
-import gov.sandia.n2a.language.parse.ASTOpNode;
-import gov.sandia.n2a.language.parse.ASTRenderingContext;
-import gov.sandia.n2a.language.parse.ASTVarNode;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
@@ -52,8 +53,8 @@ import replete.util.FileUtil;
 public class SimulationC implements Simulation
 {
     static boolean rebuildRuntime = true;  // always rebuild runtime once per session
-    public TreeMap<String, String> metadata = new TreeMap<String, String> ();
-    public HashMap<ASTNodeBase,String> matrixNames;
+    public TreeMap<String,String> metadata = new TreeMap<String, String> ();
+    public HashMap<Operator,String> matrixNames;
 
     /** @deprecated **/
     private ExecutionEnv execEnv;
@@ -182,7 +183,7 @@ public class SimulationC implements Simulation
         e.setInit (0);
         System.out.println (e.flatList (false));
 
-        matrixNames = new HashMap<ASTNodeBase,String> ();
+        matrixNames = new HashMap<Operator,String> ();
 
         StringBuilder s = new StringBuilder ();
 
@@ -353,7 +354,7 @@ public class SimulationC implements Simulation
         declare buffer classes for integration and derivation, then member variables,
         and finally member functions as appropriate based on the analysis done at the
         beginning.
-        Note that the analysis is cached for later use when generating function
+        Note that the analysis is cached in s.backendData for later use when generating function
         definitions.
     **/
     public void generateDeclarations (EquationSet s, StringBuilder result)
@@ -870,11 +871,11 @@ public class SimulationC implements Simulation
         }
 
         // Conversions
-        Set<ArrayList<EquationSet>> conversions = s.getConversions ();
-        for (ArrayList<EquationSet> pair : conversions)
+        Set<Conversion> conversions = s.getConversions ();
+        for (Conversion pair : conversions)
         {
-            EquationSet source = pair.get (0);
-            EquationSet dest   = pair.get (1);
+            EquationSet source = pair.from;
+            EquationSet dest   = pair.to;
             result.append ("  void " + mangle (source.name) + "_2_" + mangle (dest.name) + " (" + mangle (source.name) + " * from, Simulator & simulator, int " + mangle ("$type") + ");\n");
         }
 
@@ -886,23 +887,65 @@ public class SimulationC implements Simulation
         result.append ("\n");
     }
 
-    public void generateStatic (Variable v, StringBuilder result)
+    public void generateStatic (Variable v, final StringBuilder result)
     {
+        Visitor visitor = new Visitor ()
+        {
+            public boolean visit (Operator op)
+            {
+                if (op instanceof Constant)
+                {
+                    Type m = ((Constant) op).value;
+                    if (m instanceof Matrix)
+                    {
+                        Matrix A = (Matrix) m;
+                        int rows = A.rows ();
+                        int cols = A.columns ();
+                        String matrixName = "Matrix" + matrixNames.size ();
+                        matrixNames.put (op, matrixName);
+                        if (rows == 3  &&  cols == 1) result.append ("Vector3 " + matrixName + " = Matrix<float>");
+                        else                          result.append ("Matrix<float> " + matrixName);
+                        result.append (" (\"" + A + "\");\n");
+                    }
+                    return false;  // Don't try to descend tree from here
+                }
+                if (op instanceof Function)
+                {
+                    // Handle all functions that need static handles
+                    Function f = (Function) op;
+                    if (f instanceof ReadMatrix)
+                    {
+                        if (f.operands.length == 3)
+                        {
+                            Operator c = f.operands[0];
+                            if (c instanceof Constant)
+                            {
+                                Type o = ((Constant) c).value;
+                                if (o instanceof Text)
+                                {
+                                    String matrixName = "Matrix" + matrixNames.size ();
+                                    matrixNames.put (c, matrixName);
+                                    result.append ("Matrix<float> * " + matrixName + " = matrixHelper (\"" + o + "\");\n");
+                                }
+                            }
+                        }
+                        return false;
+                    }
+                }
+                return true;
+            }
+        };
+
         for (EquationEntry e : v.equations)
         {
-            if (e.expression  != null) prepareStatic (e.expression,  result);
-            if (e.conditional != null) prepareStatic (e.conditional, result);
+            if (e.expression  != null) e.expression .visit (visitor);
+            if (e.conditional != null) e.conditional.visit (visitor);
         }
     }
 
     public void generateDefinitions (EquationSet s, StringBuilder result) throws Exception
     {
-        CRenderingContext context = new CRenderingContext (s);
-        context.add (ASTVarNode   .class, new VariableMangler ());
-        context.add (ASTOpNode    .class, new OpSubstituter ());
-        context.add (ASTFunNode   .class, new FuncSubstituter ());
-        context.add (ASTConstant  .class, new ConstantRenderer ());
-        context.add (ASTMatrixNode.class, new MatrixRenderer ());
+        CRenderer context = new CRenderer (result, s);
 
         // Access backend data
         BackendData bed = (BackendData) s.backendData;
@@ -1001,7 +1044,7 @@ public class SimulationC implements Simulation
         //   no separate $ and non-$ phases, because only $variables work at the population level
         for (Variable v : bed.globalInit)
         {
-            multiconditional (s, v, context, "  ", result);
+            multiconditional (v, context, "  ");
         }
         //   finalize
         for (Variable v : bed.globalBuffered)
@@ -1080,7 +1123,7 @@ public class SimulationC implements Simulation
             }
             for (Variable v : bed.globalUpdate)
             {
-                multiconditional (s, v, context, "  ", result);
+                multiconditional (v, context, "  ");
             }
             for (Variable v : bed.globalBufferedInternalUpdate)
             {
@@ -1143,7 +1186,7 @@ public class SimulationC implements Simulation
             }
             for (Variable v : bed.globalDerivative)
             {
-                multiconditional (s, v, context, "  ", result);
+                multiconditional (v, context, "  ");
             }
             for (Variable v : bed.globalBufferedInternalDerivative)
             {
@@ -1265,7 +1308,12 @@ public class SimulationC implements Simulation
                 Variable v = s.find (new Variable (n.getKey () + ".$k"));
                 EquationEntry e = null;
                 if (v != null) e = v.equations.first ();
-                if (e != null) result.append ("    case " + i + ": return " + context.render (e.expression) + ";\n");
+                if (e != null)
+                {
+                    result.append ("    case " + i + ": return ");
+                    e.expression.render (context);
+                    result.append (";\n");
+                }
                 i++;
             }
             result.append ("  }\n");
@@ -1287,7 +1335,12 @@ public class SimulationC implements Simulation
                 Variable v = s.find (new Variable (n.getKey () + ".$max"));
                 EquationEntry e = null;
                 if (v != null) e = v.equations.first ();
-                if (e != null) result.append ("    case " + i + ": return " + context.render (e.expression) + ";\n");
+                if (e != null)
+                {
+                    result.append ("    case " + i + ": return ");
+                    e.expression.render (context);
+                    result.append (";\n");
+                }
                 i++;
             }
             result.append ("  }\n");
@@ -1309,7 +1362,12 @@ public class SimulationC implements Simulation
                 Variable v = s.find (new Variable (n.getKey () + ".$min"));
                 EquationEntry e = null;
                 if (v != null) e = v.equations.first ();
-                if (e != null) result.append ("    case " + i + ": return " + context.render (e.expression) + ";\n");
+                if (e != null)
+                {
+                    result.append ("    case " + i + ": return ");
+                    e.expression.render (context);
+                    result.append (";\n");
+                }
                 i++;
             }
             result.append ("  }\n");
@@ -1331,7 +1389,12 @@ public class SimulationC implements Simulation
                 Variable v = s.find (new Variable (n.getKey () + ".$radius"));
                 EquationEntry e = null;
                 if (v != null) e = v.equations.first ();
-                if (e != null) result.append ("    case " + i + ": return " + context.render (e.expression) + ";\n");
+                if (e != null)
+                {
+                    result.append ("    case " + i + ": return ");
+                    e.expression.render (context);
+                    result.append (";\n");
+                }
                 i++;
             }
             result.append ("  }\n");
@@ -1523,7 +1586,7 @@ public class SimulationC implements Simulation
             {
                 if (! v.name.startsWith ("$")) continue;
                 if (v.name.equals ("$type")) throw new Exception ("$type must be conditional, and it must never be assigned during init.");  // TODO: Work out logic of $type better. This trap should not be here.
-                multiconditional (s, v, context, "  ", result);
+                multiconditional (v, context, "  ");
             }
             // finalize $variables
             for (Variable v : bed.localBuffered)  // more than just localBufferedInternal, because we must finalize members as well
@@ -1542,7 +1605,7 @@ public class SimulationC implements Simulation
             for (Variable v : bed.localInit)
             {
                 if (v.name.startsWith ("$")) continue;
-                multiconditional (s, v, context, "  ", result);
+                multiconditional (v, context, "  ");
             }
             // finalize non-$variables
             for (Variable v : bed.localBuffered)
@@ -1634,7 +1697,7 @@ public class SimulationC implements Simulation
             }
             for (Variable v : bed.localUpdate)
             {
-                multiconditional (s, v, context, "  ", result);
+                multiconditional (v, context, "  ");
             }
             for (Variable v : bed.localBufferedInternalUpdate)
             {
@@ -1738,7 +1801,7 @@ public class SimulationC implements Simulation
                 Variable p = s.find (new Variable ("$p")); // lethalP implies that $p exists, so no need to check for null
                 if (p.hasAttribute ("temporary"))
                 {
-                    multiconditional (s, p, context, "  ", result);
+                    multiconditional (p, context, "  ");
                 }
                 result.append ("  if (" + mangle ("$p") + " == 0  ||  " + mangle ("$p") + " < 1  &&  " + mangle ("$p") + " < uniform1 ())\n");
                 result.append ("  {\n");
@@ -1810,7 +1873,7 @@ public class SimulationC implements Simulation
             }
             for (Variable v : bed.localDerivative)
             {
-                multiconditional (s, v, context, "  ", result);
+                multiconditional (v, context, "  ");
             }
             for (Variable v : bed.localBufferedInternalDerivative)
             {
@@ -2033,8 +2096,8 @@ public class SimulationC implements Simulation
                 live.attributes = null;
                 live.addAttribute ("constant");
                 EquationEntry e = live.equations.first ();  // this should always be an equation we create; the user cannot declare $live (or $init for that matter)
-                ASTConstant c = (ASTConstant) e.expression;
-                c.setValue (new Scalar (0));
+                Scalar liveValue = (Scalar) ((Constant) e.expression).value;
+                liveValue.value = 0;
 
                 if (! p.hasAttribute ("constant"))
                 {
@@ -2043,16 +2106,16 @@ public class SimulationC implements Simulation
                     {
                         if (t.hasAttribute ("temporary")  &&  p.dependsOn (t) != null)
                         {
-                            multiconditional (s, t, context, "  ", result);
+                            multiconditional (t, context, "  ");
                         }
                     }
-                    multiconditional (s, p, context, "  ", result);  // $p is always calculated, because we are in a pseudo-init phase
+                    multiconditional (p, context, "  ");  // $p is always calculated, because we are in a pseudo-init phase
                 }
                 result.append ("  return " + resolve (p.reference, context, false) + ";\n");
 
                 // restore $live
                 live.attributes = liveAttributes;
-                c.setValue (new Scalar (1));
+                liveValue.value = 1;
 
                 s.setInit (0);
 
@@ -2080,10 +2143,10 @@ public class SimulationC implements Simulation
                     {
                         if (t.hasAttribute ("temporary")  &&  xyz.dependsOn (t) != null)
                         {
-                            multiconditional (s, t, context, "    ", result);
+                            multiconditional (t, context, "    ");
                         }
                     }
-                    multiconditional (s, xyz, context, "    ", result);
+                    multiconditional (xyz, context, "    ");
                 }
                 result.append ("  xyz = " + resolve (xyz.reference, context, false) + ";\n");
                 result.append ("}\n");
@@ -2145,10 +2208,10 @@ public class SimulationC implements Simulation
                         {
                             if (t.hasAttribute ("temporary")  &&  projectFrom.dependsOn (t) != null)
                             {
-                                multiconditional (s, t, context, "      ", result);
+                                multiconditional (t, context, "      ");
                             }
                         }
-                        multiconditional (s, projectFrom, context, "      ", result);
+                        multiconditional (projectFrom, context, "      ");
                     }
                     result.append ("      " + localXYZ + " = " + resolve (projectFrom.reference, context, false) + ";\n");
                     result.append ("      break;\n");
@@ -2195,10 +2258,10 @@ public class SimulationC implements Simulation
                             {
                                 if (t.hasAttribute ("temporary")  &&  projectTo.dependsOn (t) != null)
                                 {
-                                    multiconditional (s, t, context, "      ", result);
+                                    multiconditional (t, context, "      ");
                                 }
                             }
-                            multiconditional (s, projectTo, context, "      ", result);
+                            multiconditional (projectTo, context, "      ");
                         }
                         result.append ("      xyz = " + resolve (projectTo.reference, context, false) + ";\n");
                         result.append ("      break;\n");
@@ -2279,11 +2342,11 @@ public class SimulationC implements Simulation
         }
 
         // Unit conversions
-        Set<ArrayList<EquationSet>> conversions = s.getConversions ();
-        for (ArrayList<EquationSet> pair : conversions)
+        Set<Conversion> conversions = s.getConversions ();
+        for (Conversion pair : conversions)
         {
-            EquationSet source = pair.get (0);
-            EquationSet dest   = pair.get (1);
+            EquationSet source = pair.from;
+            EquationSet dest   = pair.to;
             boolean connectionSource = source.connectionBindings != null;
             boolean connectionDest   = dest  .connectionBindings != null;
             if (connectionSource != connectionDest)
@@ -2347,12 +2410,12 @@ public class SimulationC implements Simulation
         for (EquationSet p : s.parts) generateDefinitions (p, result);
     }
 
-    public void multiconditional (EquationSet s, Variable v, CRenderingContext context, String pad, StringBuilder result) throws Exception
+    public void multiconditional (Variable v, CRenderer context, String pad) throws Exception
     {
-        boolean init = s.getInit ();
+        boolean init = context.part.getInit ();
         boolean isType = v.name.equals ("$type");
 
-        if (v.hasAttribute ("temporary")) result.append (pad + type (v) + " " + mangle (v) + ";\n");
+        if (v.hasAttribute ("temporary")) context.result.append (pad + type (v) + " " + mangle (v) + ";\n");
 
         // Select the default equation
         EquationEntry defaultEquation = null;
@@ -2369,7 +2432,7 @@ public class SimulationC implements Simulation
         // Dump matrices needed by conditions
         for (EquationEntry e : v.equations)
         {
-            if (e.conditional != null) prepareMatrices (e.conditional, context, pad, result);
+            if (e.conditional != null) prepareMatrices (e.conditional, context, pad);
         }
 
         // Write the conditional equations
@@ -2399,8 +2462,10 @@ public class SimulationC implements Simulation
                     haveIf = true;
                     padIf = pad + "  ";
                 }
-                result.append (pad + ifString + context.render (e.conditional) + ")\n");
-                result.append (pad + "{\n");
+                context.result.append (pad + ifString);
+                e.conditional.render (context);
+                context.result.append (")\n");
+                context.result.append (pad + "{\n");
             }
             if (isType)
             {
@@ -2408,18 +2473,19 @@ public class SimulationC implements Simulation
                 // was actually triggered. During finalize(), this will select a piece of code that implements
                 // this particular split. Afterward, $type will be set to an appropriate index within the split,
                 // per the N2A language document.
-                ArrayList<EquationSet> split = EquationSet.getSplitFrom (e.expression);
-                int index = s.splits.indexOf (split);
-                result.append (padIf + resolve (v.reference, context, true) + " = " + (index + 1) + ";\n");
+                if (! (e.expression instanceof Split)) throw new Exception ("Unexpected expression for $type");
+                int index = context.part.splits.indexOf (((Split) e.expression).parts);
+                context.result.append (padIf + resolve (v.reference, context, true) + " = " + (index + 1) + ";\n");
             }
             else
             {
-                prepareMatrices (e.expression, context, pad, result);
-                result.append (padIf);
-                if (! v.hasAttribute ("dummy")) result.append (resolve (v.reference, context, true) + " " + e.assignment + " ");
-                result.append (context.render (e.expression) + ";\n");
+                prepareMatrices (e.expression, context, pad);
+                context.result.append (padIf);
+                if (! v.hasAttribute ("dummy")) context.result.append (resolve (v.reference, context, true) + " " + e.assignment + " ");
+                e.expression.render (context);
+                context.result.append (";\n");
             }
-            if (haveIf) result.append (pad + "}\n");
+            if (haveIf) context.result.append (pad + "}\n");
         }
 
         // Write the default equation
@@ -2427,16 +2493,16 @@ public class SimulationC implements Simulation
         {
             if (isType)
             {
-                if (haveIf) result.append (pad + "else\n  ");
-                result.append (padIf + resolve (v.reference, context, true) + " = 0;\n");  // always reset $type to 0
+                if (haveIf) context.result.append (pad + "else\n  ");
+                context.result.append (padIf + resolve (v.reference, context, true) + " = 0;\n");  // always reset $type to 0
             }
             else
             {
                 // externalWrite variables already have a default action in the prepare() method, so only deal with cycle and externalRead
                 if (v.reference.variable == v  &&  v.equations.size () > 0  &&  v.hasAny (new String[] {"cycle", "externalRead"})  &&  ! v.hasAttribute ("initOnly"))
                 {
-                    if (haveIf) result.append (pad + "else\n  ");
-                    result.append (padIf + resolve (v.reference, context, true) + " = " + resolve (v.reference, context, false) + ";\n");  // copy previous value
+                    if (haveIf) context.result.append (pad + "else\n  ");
+                    context.result.append (padIf + resolve (v.reference, context, true) + " = " + resolve (v.reference, context, false) + ";\n");  // copy previous value
                 }
             }
         }
@@ -2444,108 +2510,67 @@ public class SimulationC implements Simulation
         {
             if (haveIf)
             {
-                result.append (pad + "else\n");
-                result.append (pad + "{\n");
+                context.result.append (pad + "else\n");
+                context.result.append (pad + "{\n");
             }
             if (isType)
             {
-                ArrayList<EquationSet> split = EquationSet.getSplitFrom (defaultEquation.expression);
-                int index = s.splits.indexOf (split);
-                result.append (padIf + resolve (v.reference, context, true) + " = " + (index + 1) + ";\n");
+                ArrayList<EquationSet> split = ((Split) defaultEquation.expression).parts;
+                int index = context.part.splits.indexOf (split);
+                context.result.append (padIf + resolve (v.reference, context, true) + " = " + (index + 1) + ";\n");
             }
             else
             {
-                prepareMatrices (defaultEquation.expression, context, pad, result);
-                result.append (padIf);
-                if (! v.hasAttribute ("dummy")) result.append (resolve (v.reference, context, true) + " " + defaultEquation.assignment + " ");
-                result.append (context.render (defaultEquation.expression) + ";\n");
+                prepareMatrices (defaultEquation.expression, context, pad);
+                context.result.append (padIf);
+                if (! v.hasAttribute ("dummy")) context.result.append (resolve (v.reference, context, true) + " " + defaultEquation.assignment + " ");
+                defaultEquation.expression.render (context);
+                context.result.append (";\n");
             }
-            if (haveIf) result.append (pad + "}\n");
+            if (haveIf) context.result.append (pad + "}\n");
         }
     }
 
-    /**
-        @TODO Generate matrix constants as static class members. Requires a separate pass, so remove from this function.
-    **/
-    public void prepareMatrices (ASTNodeBase node, CRenderingContext context, String pad, StringBuilder result) throws Exception
+    public void prepareMatrices (Operator op, final CRenderer context, final String pad) throws Exception
     {
-        if (node instanceof ASTMatrixNode)
+        Visitor visitor = new Visitor ()
         {
-            ASTMatrixNode m = (ASTMatrixNode) node;
-            int rows = m.getRows ();
-            int cols = m.getColumns ();
+            public boolean visit (Operator op)
+            {
+                if (op instanceof BuildMatrix)
+                {
+                    BuildMatrix m = (BuildMatrix) op;
+                    int rows = m.getRows ();
+                    int cols = m.getColumns ();
 
-            String matrixName = "Matrix" + matrixNames.size ();
-            matrixNames.put (m, matrixName);
-            if (rows == 3  &&  cols == 1) result.append (pad + "Vector3 " + matrixName + ";\n");
-            else                          result.append (pad + "Matrix<float> " + matrixName + " (" + rows + ", " + cols + ");\n");
-            for (int r = 0; r < rows; r++)
-            {
-                ASTNodeBase row = m.getChild (r);
-                if (cols == 1)
-                {
-                    result.append (pad + matrixName + "[" + r + "] = " + context.render (row) + ";\n");
-                }
-                else
-                {
-                    for (int c = 0; c < cols; c++)
+                    String matrixName = "Matrix" + matrixNames.size ();
+                    matrixNames.put (m, matrixName);
+                    if (rows == 3  &&  cols == 1) context.result.append (pad + "Vector3 " + matrixName + ";\n");
+                    else                          context.result.append (pad + "Matrix<float> " + matrixName + " (" + rows + ", " + cols + ");\n");
+                    for (int r = 0; r < rows; r++)
                     {
-                        result.append (pad + matrixName + "(" + r + "," + c + ") = " + context.render (row.getChild (c)) + ";\n");
-                    }
-                }
-            }
-        }
-        else
-        {
-            int count = node.getCount ();
-            for (int i = 0; i < count; i++) prepareMatrices (node.getChild (i), context, pad, result);
-        }
-    }
-
-    public void prepareStatic (ASTNodeBase node, StringBuilder result)
-    {
-        if (node instanceof ASTConstant)
-        {
-            Object m = node.getValue ();
-            if (m instanceof Matrix)
-            {
-                Matrix A = (Matrix) m;
-                int rows = A.rows ();
-                int cols = A.columns ();
-                String matrixName = "Matrix" + matrixNames.size ();
-                matrixNames.put (node, matrixName);
-                if (rows == 3  &&  cols == 1) result.append ("Vector3 " + matrixName + " = Matrix<float>");
-                else                          result.append ("Matrix<float> " + matrixName);
-                result.append (" (\"" + A + "\");\n");
-            }
-            return;  // Don't try to descend tree from here
-        }
-        else if (node instanceof ASTFunNode)
-        {
-            // Handle all functions that need static handles
-            Operator f = ((ASTFunNode) node).getFunction ();
-            if (f instanceof ReadMatrix)
-            {
-                if (node.getCount () == 3)
-                {
-                    ASTNodeBase c = node.getChild (0);
-                    if (c instanceof ASTConstant)
-                    {
-                        Object o = c.getValue ();
-                        if (o instanceof Text)
+                        if (cols == 1)
                         {
-                            String matrixName = "Matrix" + matrixNames.size ();
-                            matrixNames.put (c, matrixName);
-                            result.append ("Matrix<float> * " + matrixName + " = matrixHelper (\"" + o + "\");\n");
+                            context.result.append (pad + matrixName + "[" + r + "] = ");
+                            m.operands[0][r].render (context);
+                            context.result.append (";\n");
+                        }
+                        else
+                        {
+                            for (int c = 0; c < cols; c++)
+                            {
+                                context.result.append (pad + matrixName + "(" + r + "," + c + ") = ");
+                                m.operands[c][r].render (context);
+                                context.result.append (";\n");
+                            }
                         }
                     }
+                    return false;
                 }
-                return;
+                return true;
             }
-        }
-
-        int count = node.getCount ();
-        for (int i = 0; i < count; i++) prepareStatic (node.getChild (i), result);
+        };
+        op.visit (visitor);
     }
 
     public static String mangle (Variable v)
@@ -2619,12 +2644,7 @@ public class SimulationC implements Simulation
         return result;
     }
 
-    public String resolve (VariableReference r, CRenderingContext context)
-    {
-        return resolve (r, context, false, "");
-    }
-
-    public String resolve (VariableReference r, CRenderingContext context, boolean lvalue)
+    public String resolve (VariableReference r, CRenderer context, boolean lvalue)
     {
         return resolve (r, context, lvalue, "");
     }
@@ -2635,14 +2655,19 @@ public class SimulationC implements Simulation
         @param lvalue Indicates that this will receive a value assignment. The other case is an rvalue, which will simply be read.
         @param base Injects a pointer at the beginning of the resolution path.
     **/
-    public String resolve (VariableReference r, CRenderingContext context, boolean lvalue, String base)
+    public String resolve (VariableReference r, CRenderer context, boolean lvalue, String base)
     {
         if (r == null  ||  r.variable == null) return "unresolved";
 
         if (r.variable.hasAttribute ("constant"))
         {
             EquationEntry e = r.variable.equations.first ();
-            return context.render (e.expression);  // should simply render an ASTConstant
+            StringBuilder temp = context.result;
+            StringBuilder result = new StringBuilder ();
+            context.result = result;
+            e.expression.render (context);
+            context.result = temp;
+            return result.toString ();
         }
         if (r.variable.name.equals ("$dt")  &&  ! lvalue  &&  context.part.getInit ())  // force $dt==0 during init phase
         {
@@ -2698,10 +2723,10 @@ public class SimulationC implements Simulation
     }
 
     /**
-        Computer a series of pointers to get from current part to r.
+        Compute a series of pointers to get from current part to r.
         Result does not include the variable name itself.
     **/
-    public String resolveContainer (VariableReference r, CRenderingContext context, String base)
+    public String resolveContainer (VariableReference r, CRenderer context, String base)
     {
         String containers = base;
         EquationSet current = context.part;
@@ -2928,115 +2953,128 @@ public class SimulationC implements Simulation
         boolean needRadius;
     }
 
-    class CRenderingContext extends ASTRenderingContext
+    class CRenderer extends Renderer
     {
         public EquationSet part;
         public boolean global;  ///< Whether this is in the population object (true) or a part object (false)
-        public CRenderingContext (EquationSet part)
+
+        public CRenderer (StringBuilder result, EquationSet part)
         {
-            super (true);
+            super (result);
             this.part = part;
         }
-    }
 
-    class VariableMangler implements ASTNodeRenderer
-    {
-        public String render (ASTNodeBase node, ASTRenderingContext context)
+        public boolean render (Operator op)
         {
-            ASTVarNode vn = (ASTVarNode) node;
-            return resolve (vn.reference, (CRenderingContext) context, false);
-        }
-    }
-
-    class OpSubstituter implements ASTNodeRenderer
-    {
-        public String render (ASTNodeBase node, ASTRenderingContext context)
-        {
-            Operator operator = ((ASTOpNode) node).getFunction ();
-            if (operator instanceof Power)
+            if (op instanceof AccessVariable)
             {
-                return "pow (" + context.render (node.getChild (0)) + ", " + context.render (node.getChild (1)) + ")";
+                AccessVariable av = (AccessVariable) op;
+                result.append (resolve (av.reference, this, false));
+                return true;
             }
-            else
+            if (op instanceof Power)
             {
-                return node.render (context);
+                Power p = (Power) op;
+                result.append ("pow (");
+                p.operand0.render (this);
+                result.append (", ");
+                p.operand1.render (this);
+                result.append (")");
+                return true;
             }
-        }
-    }
-
-    class FuncSubstituter implements ASTNodeRenderer
-    {
-        public String render (ASTNodeBase node, ASTRenderingContext context)
-        {
-            Operator func = ((ASTFunNode) node).getFunction ();
-            if (func instanceof Norm)
+            if (op instanceof Norm)
             {
-                return "(" + context.render (node.getChild (1)) + ").norm (" + context.render (node.getChild (0)) + ")";
+                Norm n = (Norm) op;
+                result.append ("(");
+                n.operands[1].render (this);
+                result.append (").norm (");
+                n.operands[0].render (this);
+                result.append (")");
+                return true;
             }
-            else if (func instanceof Gaussian)
+            if (op instanceof Gaussian)
             {
-                if (node.getCount () == 1)
+                Gaussian g = (Gaussian) op;
+                if (g.operands.length >= 1)
                 {
-                    Object parm0 = node.getChild (0).getValue ();
-                    if (parm0 instanceof Scalar)
+                    int dimension = 3;  // We don't render this number directly. It is merely an indicator.
+                    Operator o = g.operands[0];
+                    if (o instanceof Constant)
                     {
-                        int dimension = (int) ((Scalar) parm0).value;
-                        if (dimension > 1) return "gaussian (" + dimension + ")";
+                        Type d = ((Constant) o).value;
+                        if (d instanceof Scalar) dimension = (int) ((Scalar) d).value;
+                    }
+                    if (dimension > 1)
+                    {
+                        result.append ("gaussian (");
+                        o.render (this);
+                        result.append (")");
+                        return true;
                     }
                 }
-                return "gaussian1 ()";
+                result.append ("gaussian1 ()");
+                return true;
             }
-            else if (func instanceof Uniform)
+            if (op instanceof Uniform)
             {
-                if (node.getCount () == 1)
+                Uniform u = (Uniform) op;
+                if (u.operands.length >= 1)
                 {
-                    Object parm0 = node.getChild (0).getValue ();
-                    if (parm0 instanceof Scalar)
+                    int dimension = 3;
+                    Operator o = u.operands[0];
+                    if (o instanceof Constant)
                     {
-                        int dimension = (int) ((Scalar) parm0).value;
-                        if (dimension > 1) return "uniform (" + dimension + ")";
+                        Type d = ((Constant) o).value;
+                        if (d instanceof Scalar) dimension = (int) ((Scalar) d).value;
+                    }
+                    if (dimension > 1)
+                    {
+                        result.append ("uniform (");
+                        o.render (this);
+                        result.append (")");
+                        return true;
                     }
                 }
-                return "uniform1 ()";
+                result.append ("uniform1 ()");
+                return true;
             }
-            else if (func instanceof ReadMatrix)
+            if (op instanceof ReadMatrix)
             {
-                String matrixName = matrixNames.get (node.getChild (0));
-                return "matrix (" + matrixName + ", " + context.render (node.getChild (1)) + ", " + context.render (node.getChild (2)) + ")";
+                ReadMatrix r = (ReadMatrix) op;
+                result.append ("matrix (" + matrixNames.get (r.operands[0]) + ", ");
+                r.operands[1].render (this);
+                result.append (", ");
+                r.operands[2].render (this);
+                result.append (")");
+                return true;
             }
-            // Fall through if none of the special cases match
-            return node.render (context);
-        }
-    }
-
-    class ConstantRenderer implements ASTNodeRenderer
-    {
-        public String render (ASTNodeBase node, ASTRenderingContext context)
-        {
-            ASTConstant c = (ASTConstant) node;
-            Object o = c.getValue ();
-            if (o instanceof Scalar)
+            if (op instanceof Constant)
             {
-                return o.toString () + "f";  // Tell c compiler that our type is float, not double. TODO: let user select numeric type of runtime
+                Constant c = (Constant) op;
+                Type o = c.value;
+                if (o instanceof Scalar)
+                {
+                    result.append (o.toString () + "f");  // Tell c compiler that our type is float, not double. TODO: let user select numeric type of runtime
+                    return true;
+                }
+                if (o instanceof Text)
+                {
+                    result.append ("\"" + o.toString () + "\"");
+                    return true;
+                }
+                if (o instanceof Matrix)
+                {
+                    result.append (matrixNames.get (op));
+                    return true;
+                }
+                return false;
             }
-            else if (o instanceof Text)
+            if (op instanceof BuildMatrix)
             {
-                return "\"" + o.toString () + "\"";
+                result.append (matrixNames.get (op));
+                return true;
             }
-            else if (o instanceof Matrix)
-            {
-                return matrixNames.get (node);
-            }
-            // We should only be an explicit integer if the type is allowed by the N2A language at this point.
-            return o.toString ();
-        }
-    }
-
-    class MatrixRenderer implements ASTNodeRenderer
-    {
-        public String render (ASTNodeBase node, ASTRenderingContext context)
-        {
-            return matrixNames.get (node);
+            return false;
         }
     }
 }

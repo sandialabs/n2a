@@ -7,20 +7,46 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.operator;
 
+import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.Type;
 
-public class Power extends Operator
+public class Power extends OperatorBinary
 {
-    public Power ()
+    public static Factory factory ()
     {
-        name          = "^";
-        associativity = Associativity.LEFT_TO_RIGHT;
-        precedence    = 3;
+        return new Factory ()
+        {
+            public String name ()
+            {
+                return "^";
+            }
+
+            public Operator createInstance ()
+            {
+                return new Power ();
+            }
+        };
     }
 
-    public Type eval (Type[] args)
+    public Associativity associativity ()
     {
-        return args[0].power (args[1]);
+        return Associativity.RIGHT_TO_LEFT;  // TODO: need to implement this in the parser
+    }
+
+    public int precedence ()
+    {
+        return 3;
+    }
+
+    public Type eval (EvaluationContext context)
+    {
+        return operand0.eval (context).power (operand1.eval (context));
+    }
+
+    public String toString ()
+    {
+        return "^";
     }
 }

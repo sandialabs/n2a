@@ -15,16 +15,17 @@ import gov.sandia.n2a.backend.xyce.network.PartInstance;
 import gov.sandia.n2a.backend.xyce.symbol.FunctionSymbolDef;
 import gov.sandia.n2a.backend.xyce.symbol.SymbolDef;
 import gov.sandia.n2a.backend.xyce.symbol.SymbolManager;
-import gov.sandia.n2a.language.parse.ASTNodeBase;
-import gov.sandia.n2a.language.parse.ASTNodeRenderer;
-import gov.sandia.n2a.language.parse.ASTRenderingContext;
-
+import gov.sandia.n2a.language.AccessVariable;
+import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.Renderer;
+import gov.sandia.n2a.language.function.Uniform;
+import gov.sandia.n2a.language.operator.Power;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
-public class XyceRHSTranslator implements ASTNodeRenderer
+public class XyceRHSTranslator extends Renderer
 {
     public static final String REFPRE = "A.";
     public static final String REFPOST = "B.";
@@ -54,17 +55,31 @@ public class XyceRHSTranslator implements ASTNodeRenderer
             }
         }
 
-    public String render(ASTNodeBase node, ASTRenderingContext context)
+    public boolean render (Operator op)
     {
-        // start with variable name as it appears on RHS of equation
-        String ret = change(node.getValue().toString());
-        for(int a = 0; a < node.getCount(); a++) {
-            ret += context.render (node.getChild (a));
-            if(a != node.getCount() - 1) {
-                ret += ", ";
-            }
+        if (op instanceof AccessVariable)
+        {
+            AccessVariable av = (AccessVariable) op;
+            result.append (change (av.name));
+            return true;
         }
-        return ret;
+        if (op instanceof Uniform)
+        {
+            // TODO: check for unsupported parameters and issue warning
+            result.append ("rand()");
+            return true;
+        }
+        if (op instanceof Power)
+        {
+            Power p = (Power) op;
+            result.append ("(");
+            p.operand0.render (this);
+            result.append (") ** (");
+            p.operand1.render (this);
+            result.append (")");
+            return true;
+        }
+        return false;
     }
 
     public String change(String name)

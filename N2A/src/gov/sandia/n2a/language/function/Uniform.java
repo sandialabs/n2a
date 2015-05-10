@@ -9,29 +9,40 @@ package gov.sandia.n2a.language.function;
 
 import java.util.Random;
 
+import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 
-public class Uniform extends Operator
+public class Uniform extends Function
 {
     Random random = new Random ();  // TODO: should there be a single shared random number generator across an entire N2A runtime?
 
-    public Uniform ()
+    public static Factory factory ()
     {
-        name          = "uniform";
-        associativity = Associativity.LEFT_TO_RIGHT;
-        precedence    = 1;
+        return new Factory ()
+        {
+            public String name ()
+            {
+                return "uniform";
+            }
+
+            public Operator createInstance ()
+            {
+                return new Uniform ();
+            }
+        };
     }
 
-    public Type eval (Type[] args) throws EvaluationException
+    public Type eval (EvaluationContext context) throws EvaluationException
     {
-        if (args.length > 1) throw new EvaluationException ("too many arguments to uniform()");
-        if (args.length == 1)
+        if (operands.length > 1) throw new EvaluationException ("too many arguments to gaussian()");
+        if (operands.length == 1)
         {
-            int dimension = (int) Math.round (((Scalar) args[0]).value);
+            int dimension = (int) Math.round (((Scalar) operands[0].eval (context)).value);
             if (dimension > 1)
             {
                 Matrix result = new Matrix (dimension, 1);
@@ -39,6 +50,12 @@ public class Uniform extends Operator
                 return result;
             }
         }
+        // operands.length == 0
         return new Scalar (random.nextDouble ());
+    }
+
+    public String toString ()
+    {
+        return "uniform";
     }
 }

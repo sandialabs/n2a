@@ -512,10 +512,9 @@ public class Matrix extends Type
         StringWriter stream = new StringWriter ();
 
         int columns = value.length;
+        if (columns == 0) return "[]";
         int rows    = value[0].length;
-
-        // The code below assumes a non-empty matrix, so early out if it is empty.
-        if (rows == 0  ||  columns == 0) return "[]";
+        if (rows    == 0) return "[]";
 
         stream.append ("[");
         int r = 0;

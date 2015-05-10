@@ -7,20 +7,46 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.operator;
 
+import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.OperatorUnary;
 import gov.sandia.n2a.language.Type;
 
-public class Transpose extends Operator
+public class Transpose extends OperatorUnary
 {
-    public Transpose ()
+    public static Factory factory ()
     {
-        name          = "~";
-        associativity = Associativity.RIGHT_TO_LEFT;
-        precedence    = 2;
+        return new Factory ()
+        {
+            public String name ()
+            {
+                return "~";
+            }
+
+            public Operator createInstance ()
+            {
+                return new Transpose ();
+            }
+        };
     }
 
-    public Type eval (Type[] args)
+    public Associativity associativity ()
     {
-        return args[0].transpose ();
+        return Associativity.RIGHT_TO_LEFT;
+    }
+
+    public int precedence ()
+    {
+        return 2;
+    }
+
+    public Type eval (EvaluationContext context)
+    {
+        return operand.eval (context).transpose ();
+    }
+
+    public String toString ()
+    {
+        return "~";
     }
 }

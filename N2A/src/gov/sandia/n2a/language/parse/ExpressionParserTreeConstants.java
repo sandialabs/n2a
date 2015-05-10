@@ -10,8 +10,7 @@ public interface ExpressionParserTreeConstants
   public int JJTUNITNODE = 4;
   public int JJTMATRIXNODE = 5;
   public int JJTVARNODE = 6;
-  public int JJTFUNNODE = 7;
-  public int JJTCONSTANT = 8;
+  public int JJTCONSTANT = 7;
 
 
   public String[] jjtNodeName = {
@@ -22,8 +21,7 @@ public interface ExpressionParserTreeConstants
     "UnitNode",
     "MatrixNode",
     "VarNode",
-    "FunNode",
     "Constant",
   };
 }
-/* JavaCC - OriginalChecksum=755e04ef4d62170926e6d52138eaba2b (do not edit this line) */
+/* JavaCC - OriginalChecksum=6761bc502cf13ebf3d6b87be402f0f2d (do not edit this line) */

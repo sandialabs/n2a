@@ -7,20 +7,46 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.operator;
 
+import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.OperatorUnary;
 import gov.sandia.n2a.language.Type;
 
-public class NOT extends Operator
+public class NOT extends OperatorUnary
 {
-    public NOT ()
+    public static Factory factory ()
     {
-        name          = "!";
-        associativity = Associativity.LEFT_TO_RIGHT;
-        precedence    = 2;
+        return new Factory ()
+        {
+            public String name ()
+            {
+                return "!";
+            }
+
+            public Operator createInstance ()
+            {
+                return new NOT ();
+            }
+        };
     }
 
-    public Type eval (Type[] args)
+    public Associativity associativity ()
     {
-        return args[0].NOT ();
+        return Associativity.RIGHT_TO_LEFT;
+    }
+
+    public int precedence ()
+    {
+        return 2;
+    }
+
+    public Type eval (EvaluationContext context)
+    {
+        return operand.eval (context).NOT ();
+    }
+
+    public String toString ()
+    {
+        return "!";
     }
 }

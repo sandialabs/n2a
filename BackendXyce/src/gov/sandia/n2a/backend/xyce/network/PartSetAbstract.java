@@ -15,6 +15,7 @@ import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.EvaluationContext;
+import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.parse.ASTNodeBase;
 import gov.sandia.n2a.language.type.Matrix;
@@ -159,7 +160,7 @@ public abstract class PartSetAbstract implements PartSetInterface
             Variable n = eqns.find (new Variable ("$n"));
             if (n == null) throw new NetworkGenerationException ("Attempt to access non-existent $n. Indicates a bug in Xyce backend.");
             EquationEntry e = n.equations.first ();  // if $n exists, then it will have at least one equation. TODO: evaluate mutliconditional with $init=1
-            Type result = e.expression.eval ();
+            Type result = e.expression.eval (new EvaluationContext ());
             if (result instanceof Scalar) numInstances = (long) ((Scalar) result).value;
             else throw new NetworkGenerationException ("#instances equation does not evaluate to a number");
         }
@@ -281,7 +282,7 @@ public abstract class PartSetAbstract implements PartSetInterface
     private boolean conditionApplies(EquationEntry eq, PartInstance pi, boolean init)
             throws XyceTranslationException, NetworkGenerationException
     {
-        ASTNodeBase tree = eq.conditional;
+        Operator tree = eq.conditional;
         Object evalResult = XyceASTUtil.evalConditional(tree, pi, init);
         if (evalResult == null) {
             throw new NetworkGenerationException("can't evaluate conditional " + tree.toString());

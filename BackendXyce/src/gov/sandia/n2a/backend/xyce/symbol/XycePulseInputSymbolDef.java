@@ -13,6 +13,8 @@ import gov.sandia.n2a.backend.xyce.network.PartSetInterface;
 import gov.sandia.n2a.backend.xyce.parsing.XyceASTUtil;
 import gov.sandia.n2a.backend.xyce.parsing.XyceRHSTranslator;
 import gov.sandia.n2a.eqset.EquationEntry;
+import gov.sandia.n2a.language.Constant;
+import gov.sandia.n2a.language.Operator;
 
 import java.util.ArrayList;
 
@@ -23,21 +25,25 @@ public class XycePulseInputSymbolDef extends InputSymbolDef
     }
 
     @Override
-     public String getDefinition(SymbolManager symMgr, PartInstance pi) 
+    public String getDefinition (SymbolManager symMgr, PartInstance pi) 
     {
-        StringBuilder result = new StringBuilder();
         int SN = pi.serialNumber;
         ArrayList<String> params = new ArrayList<String>(7);
-        for(int a = 0; a < funcNode.getCount(); a++) {
-            Object param = funcNode.getChild(a).getValue();
-            if (param instanceof Number) {
-                params.add(param.toString());
-            } else {
+        for(int a = 0; a < funcNode.operands.length; a++)
+        {
+            Operator param = funcNode.operands[a];
+            if (param instanceof Constant)
+            {
+                params.add (param.toString ());
+            }
+            else
+            {
                 // param is an expression; need to get the entire string at this subtree and translate it
-                params.add(XyceASTUtil.getReadableShort(funcNode.getChild(a),
+                params.add(XyceASTUtil.getReadableShort(param,
                         new XyceRHSTranslator(symMgr, pi, null, false)));
             }
         }
+        StringBuilder result = new StringBuilder();
         result.append(Xyceisms.voltagePulse(inputVar, SN, params));
         return result.toString();
     }

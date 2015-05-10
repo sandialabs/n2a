@@ -7,10 +7,13 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.eqset;
 
-import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.OperatorBinary;
+import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
-import gov.sandia.n2a.language.parse.ASTOpNode;
-import gov.sandia.n2a.language.parse.ASTTransformationContext;
+import gov.sandia.n2a.language.function.Max;
+import gov.sandia.n2a.language.function.Min;
+import gov.sandia.n2a.language.operator.Add;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -93,17 +96,31 @@ public class Variable implements Comparable<Variable>
         if (equations == null) equations = new TreeSet<EquationEntry> ();
         for (EquationEntry e : v.equations)
         {
-            if (e.assignment.matches ("[+-]="))
+            if (e.assignment.matches ("[+<>]="))
             {
                 EquationEntry e2 = equations.floor (e);
                 if (e.compareTo (e2) == 0)  // conditionals are exactly the same
                 {
-                    // merge ASTs
-                    ASTOpNode node = new ASTOpNode (Operator.get (e.assignment.substring (0, 1)));
-                    node.setChild (e2.expression, 0);
-                    node.setChild (e .expression, 1);
-                    e2.expression = node;
-                    continue;
+                    // merge expressions
+                    if (e.assignment.startsWith ("+"))
+                    {
+                        OperatorBinary op = new Add ();
+                        op.operand0 = e2.expression;
+                        op.operand1 = e .expression;
+                        e2.expression = op;
+                        continue;
+                    }
+
+                    Function f = null;
+                    if      (e.assignment.startsWith ("<")) f = new Min ();
+                    else if (e.assignment.startsWith (">")) f = new Max ();
+                    if (f != null)
+                    {
+                        f.operands[0] = e2.expression;
+                        f.operands[1] = e .expression;
+                        e2.expression = f;
+                        continue;
+                    }
                 }
             }
             e.variable = this;
@@ -112,19 +129,36 @@ public class Variable implements Comparable<Variable>
         v.equations.clear ();
     }
 
-    public void transform (ASTTransformationContext context)
+    public void transform (Transformer transformer)
     {
         if (equations == null) return;
         for (EquationEntry e : equations)
         {
             if (e.expression != null)  // could be null if this is a special variable or integrated value that is added automatically
             {
-                e.expression = e.expression.transform (context);
+                e.expression = e.expression.transform (transformer);
             }
             if (e.conditional != null)
             {
-                e.conditional = e.conditional.transform (context);
-                e.ifString = e.conditional.toReadableShort ();
+                e.conditional = e.conditional.transform (transformer);
+                e.ifString = e.conditional.render ();
+            }
+        }
+    }
+
+    public void simplify ()
+    {
+        if (equations == null) return;
+        for (EquationEntry e : equations)
+        {
+            if (e.expression != null)
+            {
+                e.expression = e.expression.simplify (this);
+            }
+            if (e.conditional != null)
+            {
+                e.conditional = e.conditional.simplify (this);
+                e.ifString = e.conditional.render ();
             }
         }
     }
@@ -252,10 +286,7 @@ public class Variable implements Comparable<Variable>
     {
         if (hasAttribute ("derivativeOrDependency")) return;
         addAttribute ("derivativeOrDependency");
-        if (uses == null)
-        {
-            return;
-        }
+        if (uses == null) return;
         for (Variable u : uses)
         {
             if (u.hasAttribute ("temporary")) u.visitTemporaries ();
@@ -270,6 +301,8 @@ public class Variable implements Comparable<Variable>
                 <dd>shared by all instances of a part</dd>
             <dt>constant</dt>
                 <dd>value is known at generation time, so can be hard-coded</dd>
+            <dt>initOnly</dt>
+                <dd>value is set at init time, and never changed after that.</dd>
             <dt>reference</dt>
                 <dd>the actual value of the variable is stored in a different
                 equation set</dd>
@@ -296,8 +329,6 @@ public class Variable implements Comparable<Variable>
             <dt>dummy</dt>
                 <dd>an equation has some important side-effect, but the result itself
                 is not stored because it is never referenced.</dd>
-            <dt>initOnly</dt>
-                <dd>value is set at init time, and never changed after that</dd>
         </dl>
     **/
     public void addAttribute (String attribute)

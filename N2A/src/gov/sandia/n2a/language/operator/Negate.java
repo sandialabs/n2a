@@ -7,21 +7,42 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.operator;
 
+import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.OperatorUnary;
 import gov.sandia.n2a.language.Type;
 
-public class Negate extends Operator
+public class Negate extends OperatorUnary
 {
-    public Negate ()
+    public static Factory factory ()
     {
-        name          = "UM";  // as in "unary minus"
-        associativity = Associativity.RIGHT_TO_LEFT;
-        precedence    = 2;
+        return new Factory ()
+        {
+            public String name ()
+            {
+                return "UM";
+            }
+
+            public Operator createInstance ()
+            {
+                return new Negate ();
+            }
+        };
     }
 
-    public Type eval (Type[] args)
+    public Associativity associativity ()
     {
-        return args[0].negate ();
+        return Associativity.RIGHT_TO_LEFT;
+    }
+
+    public int precedence ()
+    {
+        return 2;
+    }
+
+    public Type eval (EvaluationContext context)
+    {
+        return operand.eval (context).negate ();
     }
 
     public String toString ()

@@ -7,28 +7,40 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.function;
 
-import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.EvaluationContext;
+import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Matrix;
 
-public class Norm extends Operator
+public class Norm extends Function
 {
-    public Norm ()
+    public static Factory factory ()
     {
-        name          = "norm";
-        associativity = Associativity.LEFT_TO_RIGHT;
-        precedence    = 1;
+        return new Factory ()
+        {
+            public String name ()
+            {
+                return "norm";
+            }
+
+            public Operator createInstance ()
+            {
+                return new Norm ();
+            }
+        };
     }
 
-    public Type eval (Type[] args)
+    public Type eval (EvaluationContext context)
     {
-        double n = -1;
-        Matrix A = null;
-        if (args[0] instanceof Scalar) n = ((Scalar) args[0]).value;
-        if (args[1] instanceof Matrix) A = (Matrix) args[1];
-        if (n < 0  ||  A == null) throw new EvaluationException ("type mismatch");
+        double n = ((Scalar) operands[0].eval (context)).value;
+        Matrix A =  (Matrix) operands[1].eval (context);
         return new Scalar (A.norm (n));
+    }
+
+    public String toString ()
+    {
+        return "norm";
     }
 }

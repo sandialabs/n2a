@@ -7,7 +7,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.xyce;
 
-import gov.sandia.n2a.backend.xyce.functions.XycePulseFunction;
 import gov.sandia.n2a.backend.xyce.functions.XyceSineWaveFunction;
 import gov.sandia.n2a.language.function.Grid;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -49,11 +48,12 @@ public class XycePlugin implements Plugin {
         };
     }
 
-    public ExtensionPoint[] getExtensions() {
-        return new ExtensionPoint[] {
+    public ExtensionPoint[] getExtensions ()
+    {
+        return new ExtensionPoint[]
+        {
             new XyceSimulator(),
-            new XycePulseFunction(),
-            new XyceSineWaveFunction()
+            XyceSineWaveFunction.factory ()
         };
     }
 

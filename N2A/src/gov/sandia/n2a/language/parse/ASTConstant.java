@@ -13,18 +13,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.parse;
 
-import gov.sandia.n2a.language.EvaluationContext;
-import gov.sandia.n2a.language.EvaluationException;
-import gov.sandia.n2a.language.Type;
-import gov.sandia.n2a.language.type.Text;
-
 public class ASTConstant extends ASTNodeBase {
-
-
-    ////////////////////
-    // AUTO-GENERATED //
-    ////////////////////
-
     public ASTConstant(Object value) {
         super(value, ExpressionParserTreeConstants.JJTCONSTANT);
     }
@@ -41,39 +30,6 @@ public class ASTConstant extends ASTNodeBase {
     @Override
     public Object jjtAccept(ExpressionParserVisitor visitor, Object data) throws ParseException {
         return visitor.visit(this, data);
-    }
-
-
-    ////////////
-    // CUSTOM //
-    ////////////
-
-    @Override
-    public String toString ()
-    {
-        return getValue ().toString ();
-    }
-
-    @Override
-    public String render (ASTRenderingContext context)
-    {
-        Object value = getValue ();
-        // We could also check for String here, but if String ever does appear then something somewhere broke the rules.
-        if (value instanceof Text) return "\"" + value.toString () + "\"";
-        return value.toString ();
-    }
-
-
-    ////////////////
-    // EVALUATION //
-    ////////////////
-
-    // Currently will evaluate to a String or Double object
-    // as those are the only constants we recognize in parsing.
-    @Override
-    public Type eval (EvaluationContext context) throws EvaluationException
-    {
-        return (Type) getValue ();
     }
 }
 /* JavaCC - OriginalChecksum=8707db8971df053468c80f231e54ed75 (do not edit this line) */

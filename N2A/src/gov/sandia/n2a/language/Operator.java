@@ -7,6 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language;
 
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.function.AbsoluteValue;
 import gov.sandia.n2a.language.function.Cosine;
 import gov.sandia.n2a.language.function.Exp;
@@ -36,18 +37,27 @@ import gov.sandia.n2a.language.operator.OR;
 import gov.sandia.n2a.language.operator.Power;
 import gov.sandia.n2a.language.operator.Subtract;
 import gov.sandia.n2a.language.operator.Transpose;
+import gov.sandia.n2a.language.parse.ASTConstant;
+import gov.sandia.n2a.language.parse.ASTListNode;
+import gov.sandia.n2a.language.parse.ASTMatrixNode;
+import gov.sandia.n2a.language.parse.ASTNodeBase;
+import gov.sandia.n2a.language.parse.ASTOpNode;
+import gov.sandia.n2a.language.parse.ASTVarNode;
+import gov.sandia.n2a.language.parse.ExpressionParser;
+import gov.sandia.n2a.language.parse.ParseException;
 
 import java.util.List;
 import java.util.TreeMap;
+
 import replete.plugins.ExtensionPoint;
 import replete.plugins.PluginManager;
 
 public class Operator
 {
-    public enum Associativity
+    public interface Factory extends ExtensionPoint
     {
-        LEFT_TO_RIGHT,
-        RIGHT_TO_LEFT
+        public String   name ();  ///< Unique string for searching in the table of registered operators. Used explicitly by parser.
+        public Operator createInstance ();  ///< Operators may be instantiated with specific operands. The operands must be set separately based on category (Unary, Binary, Function)
     }
 
     /// Example implementation of function to register Operator
@@ -67,6 +77,16 @@ public class Operator
         };
     }
 
+    public void getOperandsFrom (ASTNodeBase node) throws ParseException
+    {
+    }
+
+    public enum Associativity
+    {
+        LEFT_TO_RIGHT,
+        RIGHT_TO_LEFT
+    }
+
     public Associativity associativity ()
     {
         return Associativity.LEFT_TO_RIGHT;
@@ -78,9 +98,52 @@ public class Operator
     }
 
     /// Indicates if we produce some side effect that informs the user.
-    public boolean output ()
+    public boolean isOutput ()
     {
         return false;
+    }
+
+    /**
+        Determine if this node depends only on constants and Variables that remain constant after the init phase.
+    **/
+    public boolean isInitOnly ()
+    {
+        return true;
+    }
+
+    public void visit (Visitor visitor)
+    {
+        visitor.visit (this);
+    }
+
+    public Operator transform (Transformer transformer)
+    {
+        Operator result = transformer.transform (this);
+        if (result != null) return result;
+        return this;
+    }
+
+    /**
+        Remove operators that have no effect due to specific values of their operands (for example: x*1).
+        Replaces constant expressions (including any AccessVariable that points to a Constant) to a single Constant.
+        Note: a Transformer could do this work, but a direct implementation is more elegant.
+    **/
+    public Operator simplify (Variable from)
+    {
+        return this;
+    }
+
+    public String render ()
+    {
+        Renderer renderer = new Renderer ();
+        render (renderer);
+        return renderer.result.toString ();
+    }
+
+    public void render (Renderer renderer)
+    {
+        if (renderer.render (this)) return;
+        renderer.result.append (toString ());
     }
 
     public Type eval (EvaluationContext context) throws EvaluationException
@@ -95,13 +158,8 @@ public class Operator
         return "unknown";
     }
 
+    
     // Static interface ------------------------------------------------------
-
-    public interface Factory extends ExtensionPoint
-    {
-        public String   name ();  ///< Unique string for searching in the table of registered operators. Used explicitly by parser.
-        public Operator createInstance ();  ///< Operators may be instantiated with specific operands. The operands must be set separately based on category (Unary, Binary, Function)
-    }
 
     public static TreeMap<String,Factory> operators = new TreeMap<String,Factory> ();
 
@@ -152,10 +210,30 @@ public class Operator
         for (ExtensionPoint e : extensions) register ((Factory) e);
     }
 
-    public static Operator get (String name)
+    public static Operator parse (String line) throws ParseException
     {
-        Factory f = operators.get (name);
-        if (f != null) return f.createInstance ();
-        return new Operator ();  // poisoned operator
+        return getFrom (ExpressionParser.parse (line));
+    }
+
+    public static Operator getFrom (ASTNodeBase node) throws ParseException
+    {
+        Operator result;
+        if (node instanceof ASTOpNode)
+        {
+            Factory f = operators.get (node.jjtGetValue ().toString ());
+            if (f == null) result = new Operator ();  // poisoned operator
+            else           result = f.createInstance ();
+        }
+        else if (node instanceof ASTVarNode   ) result = new AccessVariable ();
+        else if (node instanceof ASTConstant  ) result = new Constant ();
+        else if (node instanceof ASTMatrixNode) result = new BuildMatrix ();
+        else if (node instanceof ASTListNode  )
+        {
+            if (node.jjtGetNumChildren () == 1) return getFrom ((ASTNodeBase) node.jjtGetChild (0));
+            result = new Split ();  // Lists can exist elsewhere besides a $type split, but they should be processed out by getOperandsFrom(ASTNodeBase).
+        }
+        else result = new Operator ();
+        result.getOperandsFrom (node);
+        return result;
     }
 }

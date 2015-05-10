@@ -18,6 +18,7 @@ import gov.sandia.n2a.backend.xyce.symbol.SymbolDef;
 import gov.sandia.n2a.backend.xyce.symbol.SymbolManager;
 import gov.sandia.n2a.backend.xyce.symbol.XyceDeviceSymbolDef;
 import gov.sandia.n2a.eqset.EquationEntry;
+import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.parse.ASTNodeBase;
 import gov.sandia.n2a.language.parse.ASTVarNode;
 import gov.sandia.n2a.language.parse.ParseException;
@@ -198,27 +199,32 @@ public class NetlistOrient {
         return false;
     }
 
-    private void appendOutputs()
-            throws Exception
+    private void appendOutputs () throws Exception
     {
         writer.append("\n* outputs\n");
         List<EquationEntry> eqs = null;
-        try {
-            eqs = mi.getOutputEqs();
-        } catch (ParseException e) {
+        try
+        {
+            eqs = mi.getOutputEqs ();
+        }
+        catch (ParseException e)
+        {
             throw new XyceTranslationException("could not parse output equations");
         }
-        if (eqs.size() == 0) {
-            appendDefaultOutput();
+        if (eqs.size() == 0)
+        {
+            appendDefaultOutput ();
             return;
         }
         boolean first = true;
-        for (EquationEntry eq : eqs) {
-            if (first) {
+        for (EquationEntry eq : eqs)
+        {
+            if (first)
+            {
               writer.append(".print tran ");
               first = false;
             }
-                writer.append(getOutputVar(eq));
+            writer.append(getOutputVar(eq));
         }
         writer.append("\n");
     }
@@ -243,27 +249,12 @@ public class NetlistOrient {
         // TODO - rework this whole thing; eq.expression may not work because it's supposed to be RHS of an equation
         String fullName = "";
         int index = -1;
-        ASTNodeBase topNode = eq.expression;
-        if (topNode.getCount()>0) {
-            // expect left child to be the part before the brackets, and right child the part inside the brackets
-            try {
-                fullName = ((ASTVarNode) eq.expression.getChild(0)).getVariableNameWithOrder();
-                Number ind = (Number) (eq.expression.getChild(1).getChild(0)).getValue();
-                index = ind.intValue();
-            } catch (Exception e) {
-                throw new XyceTranslationException("could not parse output variable " + eq.toString());
-            }
-        }
-        else if (topNode instanceof ASTVarNode) {
-            fullName = ((ASTVarNode) topNode).getVariableNameWithOrder();
-            // ignore output variable corresponding to sim time; Xyce outputs that by default
-            if (fullName.equals(LanguageUtil.$TIME)) {
-                return "";
-            }
-        }
-        else {
-            throw new XyceTranslationException("could not parse output variable " + eq.toString());
-        }
+
+        // TODO: translate trace() statements into outputs
+        // The original code at this location checked for a variable name and a subscript which indicated which instance to access.
+        // N2A no longer supports this style of output. Instead, a trace() function call combined with a condition indicate which
+        // value to output (and what to label the column).
+
         String[] names = fullName.split("[.]");
         if (names.length != 2) {
             throw new XyceTranslationException("output variable name not in expected format; " + eq.toString() +

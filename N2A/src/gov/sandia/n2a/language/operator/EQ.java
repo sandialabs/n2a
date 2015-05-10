@@ -7,20 +7,41 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.operator;
 
+import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.Type;
 
-public class EQ extends Operator
+public class EQ extends OperatorBinary
 {
-    public EQ ()
+    public static Factory factory ()
     {
-        name          = "==";
-        associativity = Associativity.LEFT_TO_RIGHT;
-        precedence    = 7;
+        return new Factory ()
+        {
+            public String name ()
+            {
+                return "==";
+            }
+
+            public Operator createInstance ()
+            {
+                return new EQ ();
+            }
+        };
     }
 
-    public Type eval (Type[] args)
+    public int precedence ()
     {
-        return args[0].EQ (args[1]);
+        return 7;
+    }
+
+    public Type eval (EvaluationContext context)
+    {
+        return operand0.eval (context).EQ (operand1.eval (context));
+    }
+
+    public String toString ()
+    {
+        return "==";
     }
 }

@@ -13,21 +13,11 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.parse;
 
-import gov.sandia.n2a.language.EvaluationContext;
-import gov.sandia.n2a.language.EvaluationException;
-import gov.sandia.n2a.language.Type;
-
 
 // Unnecessary class used simply to encapsulate the entire
 // tree during the parsing process.
 
 public class ASTStart extends ASTNodeBase {
-
-
-    ////////////////////
-    // AUTO-GENERATED //
-    ////////////////////
-
     public ASTStart(int id) {
         super(id);
     }
@@ -40,34 +30,6 @@ public class ASTStart extends ASTNodeBase {
     @Override
     public Object jjtAccept(ExpressionParserVisitor visitor, Object data) throws ParseException {
         return visitor.visit(this, data);
-    }
-
-
-    ////////////
-    // CUSTOM //
-    ////////////
-
-    @Override
-    public String toString() {
-        return "START";
-    }
-
-    @Override
-    public String render(ASTRenderingContext context)
-    {
-        // Long & Short rendering
-        return toString();
-    }
-
-
-    ////////////////
-    // EVALUATION //
-    ////////////////
-
-    @Override
-    public Type eval (EvaluationContext context) throws EvaluationException
-    {
-        return getChild (0).eval (context);
     }
 }
 /* JavaCC - OriginalChecksum=a98231396689e1184618f64cb7d1e176 (do not edit this line) */

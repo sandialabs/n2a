@@ -27,11 +27,8 @@ public class ExpressionParserDefaultVisitor implements ExpressionParserVisitor{
   public Object visit(ASTVarNode node, Object data) throws ParseException{
     return defaultVisit(node, data);
   }
-  public Object visit(ASTFunNode node, Object data) throws ParseException{
-    return defaultVisit(node, data);
-  }
   public Object visit(ASTConstant node, Object data) throws ParseException{
     return defaultVisit(node, data);
   }
 }
-/* JavaCC - OriginalChecksum=7304c0752be30565e363a05b42355efe (do not edit this line) */
+/* JavaCC - OriginalChecksum=f0392dd75052399d79c4296b835e9113 (do not edit this line) */

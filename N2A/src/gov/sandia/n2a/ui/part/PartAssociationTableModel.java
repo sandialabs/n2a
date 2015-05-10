@@ -161,28 +161,35 @@ public class PartAssociationTableModel extends MinimalAbstractTableModel {
     };
 
     @Override
-    public void setValueAt(Object value, int rowIndex, int columnIndex) {
-        NDoc assoc = assocs.get(rowIndex);
-        String name = ((String) value).trim();
-        if(name.equals("")) {
+    public void setValueAt(Object value, int rowIndex, int columnIndex)
+    {
+        NDoc assoc = assocs.get (rowIndex);
+        String name = ((String) value).trim ();
+        if (name.equals (""))
+        {
             Dialogs.showWarning("Cannot have a blank alias.");
-        } else {
+        }
+        else
+        {
             boolean exists = false;
-            for(NDoc xa : assocs) {
-                if(xa != assoc && xa.get("name") != null && xa.get("name").equals(name)) {
+            for (NDoc xa : assocs)
+            {
+                if (xa != assoc  &&  xa.get ("name") != null  &&  xa.get ("name").equals (name))
+                {
                     exists = true;
+                    break;
                 }
             }
-            if(exists) {
+            if (exists)
+            {
                 Dialogs.showWarning("Must have unique aliases.");
-            } else {
-                if(!ASTVarNode.isValidVariableName(name)) {
-                    CommonWarningMessage.showInvalidVariable("Include alias");
-                } else {
-                    if(assoc.get("name") == null || !assoc.get("name").equals(name)) {
-                        assoc.set("name", name);
-                        fireTableDataChanged();
-                    }
+            }
+            else
+            {
+                if (assoc.get ("name") == null || !assoc.get ("name").equals (name))
+                {
+                    assoc.set ("name", name);
+                    fireTableDataChanged ();
                 }
             }
         }

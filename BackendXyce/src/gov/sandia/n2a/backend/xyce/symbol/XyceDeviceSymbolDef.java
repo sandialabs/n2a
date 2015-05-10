@@ -20,9 +20,7 @@ import gov.sandia.n2a.backend.xyce.parsing.XyceRHSTranslator;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.language.parse.ASTNodeBase;
-import gov.sandia.n2a.language.parse.ASTRenderingContext;
-import gov.sandia.n2a.language.parse.ExpressionParser;
+import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.parse.ParseException;
 
 import java.util.ArrayList;
@@ -173,11 +171,14 @@ public class XyceDeviceSymbolDef implements SymbolDef {
             String eqName = Xyceisms.referenceVariable(inputEq, pi.serialNumber);
             String instanceVarName = getInstanceVarname(varnames.get(inputNode), pi);
             XyceRHSTranslator xlator = new XyceRHSTranslator(symMgr, pi, new ArrayList<String>(), false);
-            try {
-                ASTNodeBase ast = ExpressionParser.parse(inputEq);
+            try
+            {
+                Operator ast = Operator.parse (inputEq);
                 String translatedEq = XyceASTUtil.getReadableShort(ast, xlator);
                 result.append(Xyceisms.updateDiffEq(eqName, instanceVarName, translatedEq));
-            } catch (ParseException e) {
+            }
+            catch (ParseException e)
+            {
                 // Auto-generated catch block
                 // just don't append this input equation if we can't parse
                 e.printStackTrace();

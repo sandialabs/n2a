@@ -13,15 +13,15 @@ import gov.sandia.n2a.backend.xyce.network.PartSetInterface;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.Renderer;
+import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.operator.Power;
-import gov.sandia.n2a.language.parse.ASTFunNode;
 import gov.sandia.n2a.language.parse.ASTNodeBase;
-import gov.sandia.n2a.language.parse.ASTNodeRenderer;
 import gov.sandia.n2a.language.parse.ASTOpNode;
-import gov.sandia.n2a.language.parse.ASTRenderingContext;
 import gov.sandia.n2a.language.parse.ASTVarNode;
 import gov.sandia.n2a.language.type.Scalar;
 
@@ -34,38 +34,16 @@ public class XyceASTUtil {
 
 	// TODO - much of this is not Xyce-specific; should be moved or named appropriately
 
-    public static String getRightHandSideReadableShort(EquationEntry eq, ASTNodeRenderer xlator)
+    public static String getRightHandSideReadableShort(EquationEntry eq, Renderer xlator)
     {
-        ASTRenderingContext context = getRenderingContext(xlator);
-        return context.render (eq.expression);
+        eq.expression.render (xlator);
+        return xlator.result.toString ();
     }
 
-    public static String getReadableShort(ASTNodeBase subtree, ASTNodeRenderer xlator)
+    public static String getReadableShort(Operator subtree, Renderer xlator)
     {
-        ASTRenderingContext context = getRenderingContext(xlator);
-        return context.render (subtree);
-    }
-
-    public static ASTRenderingContext getRenderingContext(ASTNodeRenderer xlator)
-    {
-        ASTRenderingContext result = new ASTRenderingContext (true);
-        result.add (ASTVarNode.class, xlator);
-
-        // Add value overrider for changing ^ to **.
-        result.add (ASTOpNode.class, new ASTNodeRenderer() {
-            @Override
-            public String render (ASTNodeBase node, ASTRenderingContext context) {
-                if(node.getValue() instanceof Power) {
-                    return context.render (node.getChild (0)) + " ** " + context.render (node.getChild (1));
-                }
-                return node.render (context);
-            }
-        });
-
-        // Add function translator - so far, just for uniform() -> rand()
-        result.add (ASTFunNode.class, new XyceFunctionTranslator());
-
-        return result;
+        subtree.render (xlator);
+        return xlator.result.toString ();
     }
 
     public static EvaluationContext getEvalContext(EquationEntry eq, EquationSet eqSet)
@@ -74,26 +52,26 @@ public class XyceASTUtil {
         return new EvaluationContext ();  // TODO: it may be necessary to attach EquationSet to the context. Check how callers use the result.
     }
 
-    public static Set<String> getDependencies(EquationEntry eq)
+    public static Set<String> getVariables (final EquationEntry eq, EvaluationContext context)
     {
-        Set<String> result = eq.expression.getVariables();
-        result.remove(eq.variable.name);
-        return result;
-    }
-
-    public static Set<String> getVariables(EquationEntry eq, EvaluationContext context)
-    {
-        Set<String> result = new HashSet<String>();
-        Set<String> symbols = getDependencies(eq);
-        for (String var : symbols)
+        final Set<String> result = new HashSet<String>();
+        Visitor visitor = new Visitor ()
         {
-            // TODO: Need to clean up entire Xyce backend to use Variables explicitly, rather than Strings
-            Variable v = eq.variable.container.find (new Variable (var));
-            if (v != null  &&  ! v.hasAttribute ("constant"))
+            public boolean visit (Operator op)
             {
-                result.add(var);
+                if (op instanceof AccessVariable)
+                {
+                    // TODO: Need to clean up entire Xyce backend to use Variables explicitly, rather than Strings
+                    AccessVariable av = (AccessVariable) op;
+                    if (! av.name.equals (eq.variable.name)  &&  av.reference != null  &&  av.reference.variable != null  &&  ! av.reference.variable.hasAttribute ("constant"))
+                    {
+                        result.add (av.name);
+                    }
+                }
+                return true;
             }
-        }
+        };
+        eq.expression.visit (visitor);
         return result;
     }
 
@@ -146,12 +124,12 @@ public class XyceASTUtil {
         return eq.expression.eval (context);
     }
 
-    public static Object evalConditional(ASTNodeBase cond, PartInstance pi, boolean init)
+    public static Object evalConditional(Operator tree, PartInstance pi, boolean init)
     {
         // get context...
         PartSetInterface pSet = pi.getPartSet();
         EvaluationContext context = new EvaluationContext();
         pSet.setInstanceContext(context, pi, init);
-        return cond.eval(context);
+        return tree.eval(context);
     }
 }

@@ -104,9 +104,10 @@ public class N2APlugin extends DefaultPlugin {
 
     @Override
     @SuppressWarnings("unchecked")
-    public Class<? extends ExtensionPoint>[] getExtensionPoints() {
+    public Class<? extends ExtensionPoint>[] getExtensionPoints ()
+    {
         return new Class[] {
-           Operator.class
+           Operator.Factory.class
         };
     }
 

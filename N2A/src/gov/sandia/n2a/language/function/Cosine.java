@@ -7,27 +7,39 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.function;
 
+import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Matrix;
 
-public class Cosine extends Operator
+public class Cosine extends Function
 {
-    public Cosine ()
+    public static Factory factory ()
     {
-        name          = "cos";
-        associativity = Associativity.LEFT_TO_RIGHT;
-        precedence    = 1;
+        return new Factory ()
+        {
+            public String name ()
+            {
+                return "cos";
+            }
+
+            public Operator createInstance ()
+            {
+                return new Cosine ();
+            }
+        };
     }
 
-    public Type eval (Type[] args)
+    public Type eval (EvaluationContext context)
     {
-        if (args[0] instanceof Scalar) return new Scalar (Math.cos (((Scalar) args[0]).value));
-        if (args[0] instanceof Matrix)
+        Type arg = operands[0].eval (context);
+        if (arg instanceof Scalar) return new Scalar (Math.cos (((Scalar) arg).value));
+        if (arg instanceof Matrix)
         {
-            return ((Matrix) args[0]).visit
+            return ((Matrix) arg).visit
             (
                 new Matrix.Visitor ()
                 {
@@ -39,5 +51,10 @@ public class Cosine extends Operator
             );
         }
         throw new EvaluationException ("type mismatch");
+    }
+
+    public String toString ()
+    {
+        return "cos";
     }
 }

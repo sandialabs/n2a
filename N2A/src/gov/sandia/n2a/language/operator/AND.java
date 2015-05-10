@@ -7,20 +7,72 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.operator;
 
+import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.language.Constant;
+import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Scalar;
 
-public class AND extends Operator
+public class AND extends OperatorBinary
 {
-    public AND ()
+    public static Factory factory ()
     {
-        name          = "&&";
-        associativity = Associativity.LEFT_TO_RIGHT;
-        precedence    = 8;
+        return new Factory ()
+        {
+            public String name ()
+            {
+                return "&&";
+            }
+
+            public Operator createInstance ()
+            {
+                return new AND ();
+            }
+        };
     }
 
-    public Type eval (Type[] args)
+    public int precedence ()
     {
-        return args[0].AND (args[1]);
+        return 8;
+    }
+
+    public Operator simplify (Variable from)
+    {
+        Operator result = super.simplify (from);
+        if (result != this) return result;
+
+        if (operand0 instanceof Constant)
+        {
+            Type c0 = ((Constant) operand0).value;
+            if (c0 instanceof Scalar)
+            {
+                double value = ((Scalar) c0).value;
+                if (value == 0) return new Constant (new Scalar (0));
+                else            return operand1;
+            }
+        }
+        else if (operand1 instanceof Constant)
+        {
+            Type c1 = ((Constant) operand1).value;
+            if (c1 instanceof Scalar)
+            {
+                double value = ((Scalar) c1).value;
+                if (value == 0) return new Constant (new Scalar (0));
+                else            return operand0;
+            }
+        }
+        return this;
+    }
+
+    public Type eval (EvaluationContext context)
+    {
+        return operand0.eval (context).AND (operand1.eval (context));
+    }
+
+    public String toString ()
+    {
+        return "&&";
     }
 }

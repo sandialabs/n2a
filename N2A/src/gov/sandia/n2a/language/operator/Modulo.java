@@ -7,21 +7,41 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.operator;
 
-import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.Type;
 
-public class Modulo extends Operator
+public class Modulo extends OperatorBinary
 {
-    public Modulo ()
+    public static Factory factory ()
     {
-        name          = "%";
-        associativity = Associativity.LEFT_TO_RIGHT;
-        precedence    = 4;
+        return new Factory ()
+        {
+            public String name ()
+            {
+                return "%";
+            }
+
+            public Operator createInstance ()
+            {
+                return new Modulo ();
+            }
+        };
     }
 
-    public Type eval (Type[] args) throws EvaluationException
+    public int precedence ()
     {
-        return args[0].modulo (args[1]);
+        return 4;
+    }
+
+    public Type eval (EvaluationContext context)
+    {
+        return operand0.eval (context).modulo (operand1.eval (context));
+    }
+
+    public String toString ()
+    {
+        return "%";
     }
 }

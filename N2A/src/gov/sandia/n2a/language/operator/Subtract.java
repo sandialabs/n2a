@@ -7,20 +7,57 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.operator;
 
+import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.language.Constant;
+import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Scalar;
 
-public class Subtract extends Operator
+public class Subtract extends OperatorBinary
 {
-    public Subtract ()
+    public static Factory factory ()
     {
-        name          = "-";
-        associativity = Associativity.LEFT_TO_RIGHT;
-        precedence    = 5;
+        return new Factory ()
+        {
+            public String name ()
+            {
+                return "-";
+            }
+
+            public Operator createInstance ()
+            {
+                return new Subtract ();
+            }
+        };
     }
 
-    public Type eval (Type[] args)
+    public int precedence ()
     {
-        return args[0].subtract (args[1]);
+        return 5;
+    }
+
+    public Operator simplify (Variable from)
+    {
+        Operator result = super.simplify (from);
+        if (result != this) return result;
+
+        if (operand1 instanceof Constant)
+        {
+            Type c1 = ((Constant) operand1).value;
+            if (c1 instanceof Scalar  &&  ((Scalar) c1).value == 0) return operand0;
+        }
+        return this;
+    }
+
+    public Type eval (EvaluationContext context)
+    {
+        return operand0.eval (context).subtract (operand1.eval (context));
+    }
+
+    public String toString ()
+    {
+        return "-";
     }
 }

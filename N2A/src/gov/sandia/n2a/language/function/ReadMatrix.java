@@ -10,32 +10,41 @@ package gov.sandia.n2a.language.function;
 import java.io.File;
 import java.util.HashMap;
 
-import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.EvaluationContext;
+import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 
-public class ReadMatrix extends Operator
+public class ReadMatrix extends Function
 {
     public HashMap<String,Matrix> matrices = new HashMap<String,Matrix> ();  // TODO: in an interpreter, need some way to reset cached data at start of each run
 
-    public ReadMatrix ()
+    public static Factory factory ()
     {
-        name          = "matrix";
-        associativity = Associativity.LEFT_TO_RIGHT;
-        precedence    = 1;
-        output        = true;
+        return new Factory ()
+        {
+            public String name ()
+            {
+                return "matrix";
+            }
+
+            public Operator createInstance ()
+            {
+                return new ReadMatrix ();
+            }
+        };
     }
 
-    public Type eval (Type[] args) 
+    public Type eval (EvaluationContext context)
     {
-        double row    = ((Scalar) args[1]).value;
-        double column = ((Scalar) args[2]).value;
+        double row    = ((Scalar) operands[1].eval (context)).value;
+        double column = ((Scalar) operands[2].eval (context)).value;
         if (row < 0  ||  row > 1  ||  column < 0  ||  column > 1) return new Scalar (0);
 
-        String path = ((Text) args[0]).value;
+        String path = ((Text) operands[0].eval (context)).value;
         if (! matrices.containsKey (path)) matrices.put (path, new Matrix (new File (path)));
         Matrix A = matrices.get (path);
 
@@ -78,5 +87,10 @@ public class ReadMatrix extends Operator
                                    +      b  * (a1 * A.getDouble (r, c+1) + a * A.getDouble (r+1, c+1)));
             }
         }
+    }
+
+    public String toString ()
+    {
+        return "matrix";
     }
 }

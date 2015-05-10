@@ -10,18 +10,18 @@ package gov.sandia.n2a.backend.xyce.symbol;
 import gov.sandia.n2a.backend.xyce.Xyceisms;
 import gov.sandia.n2a.backend.xyce.network.PartSetInterface;
 import gov.sandia.n2a.eqset.EquationEntry;
-import gov.sandia.n2a.language.parse.ASTFunNode;
+import gov.sandia.n2a.language.Function;
 
 public abstract class InputSymbolDef extends DefaultSymbolDef
 {
-    ASTFunNode funcNode;
+    Function funcNode;
     String inputVar;
 
     public InputSymbolDef(EquationEntry eq, PartSetInterface pSet) 
     {
         super(eq,pSet);
         this.inputVar = eq.variable.name;
-        funcNode = (ASTFunNode) eq.expression;
+        funcNode = (Function) eq.expression;
     }
 
     @Override

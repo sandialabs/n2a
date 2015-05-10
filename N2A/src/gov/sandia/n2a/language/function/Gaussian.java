@@ -9,29 +9,40 @@ package gov.sandia.n2a.language.function;
 
 import java.util.Random;
 
+import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;;
 
-public class Gaussian extends Operator
+public class Gaussian extends Function
 {
     Random random = new Random ();  // TODO: should there be a single shared random number generator across an entire N2A runtime?
 
-    public Gaussian ()
+    public static Factory factory ()
     {
-        name          = "gaussian";
-        associativity = Associativity.LEFT_TO_RIGHT;
-        precedence    = 1;
+        return new Factory ()
+        {
+            public String name ()
+            {
+                return "gaussian";
+            }
+
+            public Operator createInstance ()
+            {
+                return new Gaussian ();
+            }
+        };
     }
 
-    public Type eval (Type[] args) throws EvaluationException
+    public Type eval (EvaluationContext context) throws EvaluationException
     {
-        if (args.length > 1) throw new EvaluationException ("too many arguments to gaussian()");
-        if (args.length == 1)
+        if (operands.length > 1) throw new EvaluationException ("too many arguments to gaussian()");
+        if (operands.length == 1)
         {
-            int dimension = (int) Math.round (((Scalar) args[0]).value);
+            int dimension = (int) Math.round (((Scalar) operands[0].eval (context)).value);
             if (dimension > 1)
             {
                 Matrix result = new Matrix (dimension, 1);
@@ -39,6 +50,12 @@ public class Gaussian extends Operator
                 return result;
             }
         }
+        // operands.length == 0
         return new Scalar (random.nextGaussian ());
+    }
+
+    public String toString ()
+    {
+        return "gaussian";
     }
 }

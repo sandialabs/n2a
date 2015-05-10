@@ -7,18 +7,27 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.function;
 
-import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.EvaluationContext;
+import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 
-public class Trace extends Operator
+public class Trace extends Function
 {
-    public Trace ()
+    public static Factory factory ()
     {
-        name          = "trace";
-        associativity = Associativity.LEFT_TO_RIGHT;
-        precedence    = 1;
-        output        = true;
+        return new Factory ()
+        {
+            public String name ()
+            {
+                return "trace";
+            }
+
+            public Operator createInstance ()
+            {
+                return new Trace ();
+            }
+        };
     }
 
     public boolean isOutput ()
@@ -26,9 +35,14 @@ public class Trace extends Operator
         return true;
     }
 
-    public Type eval (Type[] args) 
+    public Type eval (EvaluationContext context)
     {
-        if (args.length != 2) throw new EvaluationException ("This form of trace() is not implemented.");
-        return args[0];
+        // TODO: implement trace() for internal simulator
+        return operands[0].eval (context);
+    }
+
+    public String toString ()
+    {
+        return "trace";
     }
 }

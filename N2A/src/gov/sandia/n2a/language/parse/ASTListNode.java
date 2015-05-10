@@ -13,17 +13,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.parse;
 
-import gov.sandia.n2a.language.EvaluationContext;
-import gov.sandia.n2a.language.EvaluationException;
-import gov.sandia.n2a.language.Type;
-
 public class ASTListNode extends ASTNodeBase {
-
-
-    ////////////////////
-    // AUTO-GENERATED //
-    ////////////////////
-
     public ASTListNode(Object value) {
         super(value, ExpressionParserTreeConstants.JJTLISTNODE);
     }
@@ -40,41 +30,6 @@ public class ASTListNode extends ASTNodeBase {
     @Override
     public Object jjtAccept(ExpressionParserVisitor visitor, Object data) throws ParseException {
         return visitor.visit(this, data);
-    }
-
-
-    ////////////
-    // CUSTOM //
-    ////////////
-
-    @Override
-    public String toString() {
-        return getValue().toString();
-    }
-
-    @Override
-    public String render(ASTRenderingContext context)
-    {
-        // Long & Short rendering
-        String ret = "";
-        for(int a = 0; a < getCount(); a++) {
-            ret += context.render (getChild (a));
-            if(a != getCount() - 1) {
-                ret += ", ";
-            }
-        }
-        return ret;
-    }
-
-
-    ////////////////
-    // EVALUATION //
-    ////////////////
-
-    @Override
-    public Type eval (EvaluationContext context) throws EvaluationException
-    {
-        throw new EvaluationException ("List is not a formal N2A Type.");
     }
 }
 /* JavaCC - OriginalChecksum=d551700b54e6299c518a2537b8744651 (do not edit this line) */

@@ -13,21 +13,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.parse;
 
-import gov.sandia.n2a.eqset.VariableReference;
-import gov.sandia.n2a.language.EvaluationContext;
-import gov.sandia.n2a.language.EvaluationException;
-import gov.sandia.n2a.language.Type;
-import gov.sandia.n2a.language.type.Instance;
-
 public class ASTVarNode extends ASTNodeBase
 {
-    public VariableReference reference;  // non-null when this node has been resolved in the context of an EquationSet
-
-
-    ////////////////////
-    // AUTO-GENERATED //
-    ////////////////////
-
     public ASTVarNode(Object value) {
         super(value, ExpressionParserTreeConstants.JJTVARNODE);
     }
@@ -44,97 +31,6 @@ public class ASTVarNode extends ASTNodeBase
     @Override
     public Object jjtAccept(ExpressionParserVisitor visitor, Object data) throws ParseException {
         return visitor.visit(this, data);
-    }
-
-
-    ////////////
-    // CUSTOM //
-    ////////////
-
-    public boolean isInitOnly ()
-    {
-        if (reference == null) return false;
-        return reference.variable.hasAny (new String[] {"initOnly", "constant"});
-    }
-
-    public int getOrder ()
-    {
-        String name = (String) getValue ();
-        int order = 0;
-        while (name.endsWith ("'"))
-        {
-            order++;
-            name = name.substring (0, name.length () - 1);
-        }
-        return order;
-    }
-
-    public String getVariableName ()
-    {
-        String name = (String) getValue ();
-        String[] pieces = name.split ("'", 2);
-        return pieces[0];
-    }
-
-    public String getVariableNameWithOrder ()
-    {
-        return (String) getValue ();
-    }
-
-    @Override
-    public String toString ()
-    {
-        return (String) getValue ();
-    }
-
-    @Override
-    public String render(ASTRenderingContext context)
-    {
-        // Long & Short rendering
-        return (String) getValue ();
-    }
-
-    // This method should produce the same validation as what
-    // the JTree grammar contains.
-    public static boolean isValidVariableName(String name) {
-        return isValidVariableName(name, false, false, false);
-    }
-    public static boolean isValidVariableName(String name, boolean allowDot, boolean allowDollar, boolean allowTickMark) {
-        String letter = "A-Za-z_";
-        if(allowDollar) {
-            letter += "\\$";
-        }
-        String digit = "0-9";
-        String tickMark = "'";
-
-        String pattern;
-        if(allowDot) {
-            pattern = "[" + letter + "]([" + letter + digit + "]|\\.[" + letter + "])*";
-        } else {
-            pattern = "[" + letter + "][" + letter + digit + "]*";
-        }
-
-        if(allowTickMark) {
-            pattern += tickMark + "*";
-        }
-
-        return name.matches(pattern);
-    }
-
-
-    ////////////////
-    // EVALUATION //
-    ////////////////
-
-    @Override
-    public Type eval (EvaluationContext context) throws EvaluationException
-    {
-        if (reference == null) throw new EvaluationException ("Unresolved: " + ((String) getValue ()));
-        if (reference.variable.name.equals ("(connection)")) return new Instance (reference.variable.container);
-        if (reference.variable.hasAttribute ("constant")) return reference.variable.equations.first ().expression.eval (context);
-        Type result = context.get (reference.variable);
-        if (result == null) throw new EvaluationException ("Variable does not have a value in this context.");
-        return result;
     }
 }
 /* JavaCC - OriginalChecksum=07024c2825bef86ec21e5a3f8ff5a0ff (do not edit this line) */

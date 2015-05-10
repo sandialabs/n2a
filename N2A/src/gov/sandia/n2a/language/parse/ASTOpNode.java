@@ -13,19 +13,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.parse;
 
-import gov.sandia.n2a.language.EvaluationContext;
-import gov.sandia.n2a.language.EvaluationException;
-import gov.sandia.n2a.language.Operator;
-import gov.sandia.n2a.language.Type;
-
 
 public class ASTOpNode extends ASTNodeBase {
-
-
-    ////////////////////
-    // AUTO-GENERATED //
-    ////////////////////
-
     public ASTOpNode(Object value) {
         super(value, ExpressionParserTreeConstants.JJTOPNODE);
     }
@@ -42,103 +31,6 @@ public class ASTOpNode extends ASTNodeBase {
     @Override
     public Object jjtAccept(ExpressionParserVisitor visitor, Object data) throws ParseException {
         return visitor.visit(this, data);
-    }
-
-
-    ////////////
-    // CUSTOM //
-    ////////////
-
-    public Operator getFunction() {
-        return (Operator) getValue();
-    }
-
-    @Override
-    public String toString() {
-        return getValue().toString();
-    }
-
-    @Override
-    public String render(ASTRenderingContext context)
-    {
-        Object value = getValue ();
-
-        // Long rendering
-        if (!context.shortMode)
-        {
-            String ret = "";
-            if (getCount () == 1)
-            {
-                ret += value.toString();
-                ret += context.render (getChild (0));
-            }
-            else
-            {
-                if (!(getParent() instanceof ASTStart)) ret += "(";
-                ret += context.render (getChild (0));
-                ret += " " + value.toString() + " ";
-                ret += context.render (getChild (1));
-                if (!(getParent() instanceof ASTStart)) ret += ")";
-            }
-            return ret;
-        }
-
-        // Short rendering
-        String ret = "";
-        if (getCount () == 1)
-        {
-            ret += value.toString ();
-            ret += context.render (getChild (0));
-        }
-        else
-        {
-            boolean useParens;
-            Operator f = (Operator) value;
-
-            // Left-hand child
-            useParens = false;
-            if (getChild (0) instanceof ASTOpNode)
-            {
-                Operator left = (Operator) getChild (0).getValue ();
-                useParens =    f.precedence < left.precedence   // read "<" as "comes before" rather than "less"
-                            ||    f.precedence == left.precedence
-                               && f.associativity == Operator.Associativity.RIGHT_TO_LEFT;
-            }
-            if (useParens) ret += "(";
-            ret += context.render (getChild (0));
-            if (useParens) ret += ")";
-
-            ret += " " + value + " ";
-
-            // Right-hand child
-            useParens = false;
-            if (getChild (1) instanceof ASTOpNode)
-            {
-                Operator right = (Operator) getChild (1).getValue ();
-                useParens =    f.precedence < right.precedence
-                            ||    f.precedence == right.precedence
-                               && f.associativity == Operator.Associativity.LEFT_TO_RIGHT;
-            }
-            if (useParens) ret += "(";
-            ret += context.render (getChild (1));
-            if (useParens) ret += ")";
-        }
-        return ret;
-    }
-
-
-    ////////////////
-    // EVALUATION //
-    ////////////////
-
-    @Override
-    public Type eval (EvaluationContext context) throws EvaluationException
-    {
-        Operator func = (Operator) getValue ();
-        int count = getCount ();
-        Type[] params = new Type[count];
-        for (int c = 0; c < count; c++) params[c] = getChild (c).eval (context);
-        return func.eval (params);
     }
 }
 /* JavaCC - OriginalChecksum=fdb37a0358564ff530164781a4b1ce67 (do not edit this line) */

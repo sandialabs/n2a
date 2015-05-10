@@ -7,20 +7,41 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.operator;
 
+import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.Type;
 
-public class LE extends Operator
+public class LE extends OperatorBinary
 {
-    public LE ()
+    public static Factory factory ()
     {
-        name          = "<=";
-        associativity = Associativity.LEFT_TO_RIGHT;
-        precedence    = 6;
+        return new Factory ()
+        {
+            public String name ()
+            {
+                return "<=";
+            }
+
+            public Operator createInstance ()
+            {
+                return new LE ();
+            }
+        };
     }
 
-    public Type eval (Type[] args)
+    public int precedence ()
     {
-        return args[0].LE (args[1]);
+        return 6;
+    }
+
+    public Type eval (EvaluationContext context)
+    {
+        return operand0.eval (context).LE (operand1.eval (context));
+    }
+
+    public String toString ()
+    {
+        return "<=";
     }
 }

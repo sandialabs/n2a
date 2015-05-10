@@ -7,21 +7,38 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.xyce.functions;
 
+import gov.sandia.n2a.language.EvaluationContext;
+import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Scalar;
 
-public class XyceSineWaveFunction extends Operator
+public class XyceSineWaveFunction extends Function
 {
-    public XyceSineWaveFunction ()
+    public static Factory factory ()
     {
-        name          = "sinewave";
-        associativity = Associativity.LEFT_TO_RIGHT;
-        precedence    = 1;
+        return new Factory ()
+        {
+            public String name ()
+            {
+                return "sinewave";
+            }
+
+            public Operator createInstance ()
+            {
+                return new XyceSineWaveFunction ();
+            }
+        };
     }
 
-    public Type eval (Type[] args)
+    public Type eval (EvaluationContext context)
     {
+        // TODO: implement equivalent of Xyce sinewave function
         return new Scalar (0);
+    }
+
+    public String toString ()
+    {
+        return "sinewave";
     }
 }

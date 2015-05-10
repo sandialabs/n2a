@@ -7,9 +7,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.eqset;
 
-import gov.sandia.n2a.language.parse.ASTNodeBase;
-import gov.sandia.n2a.language.parse.ASTRenderingContext;
-import gov.sandia.n2a.language.parse.ExpressionParser;
+import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.parse.ParseException;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 
@@ -17,7 +16,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.TreeSet;
 
 public class EquationEntry implements Comparable<EquationEntry>
 {
@@ -25,8 +23,8 @@ public class EquationEntry implements Comparable<EquationEntry>
     public Variable                variable;
     public String                  ifString;  // only for sorting
     public String                  assignment;
-    public ASTNodeBase             expression;
-    public ASTNodeBase             conditional;
+    public Operator                expression;
+    public Operator                conditional;
     public TreeMap<String, String> metadata;
 
     public EquationEntry (String name, int order)
@@ -70,8 +68,8 @@ public class EquationEntry implements Comparable<EquationEntry>
             }
             else
             {
-                conditional = ExpressionParser.parse (parts[1]);
-                ifString = conditional.toReadableShort ();
+                conditional = Operator.parse (parts[1]);
+                ifString = conditional.render ();
             }
             if (convertFrom < parts.length)  // there exists some metadata to convert
             {
@@ -89,7 +87,7 @@ public class EquationEntry implements Comparable<EquationEntry>
         if (parts.length > 1)
         {
             String name = parts[0];
-            expression = ExpressionParser.parse (parts[1]);
+            expression = Operator.parse (parts[1]);
             if (name.endsWith ("*") || name.endsWith ("/") || name.endsWith ("-"))
             {
                 throw new ParseException ("Only += and := are allowed");
@@ -117,7 +115,7 @@ public class EquationEntry implements Comparable<EquationEntry>
         {
             variable = new Variable ("", 0);
             assignment = "";
-            expression = ExpressionParser.parse (parts[0]);
+            expression = Operator.parse (parts[0]);
         }
         variable.add (this);
     }
@@ -149,25 +147,27 @@ public class EquationEntry implements Comparable<EquationEntry>
         return metadata.entrySet ();
     }
 
-    public String render (ASTRenderingContext context)
+    public void render (Renderer renderer)
     {
-        String result = variable.nameString ();
-        result += " " + assignment;
+        renderer.result.append (variable.nameString () + " " + assignment);
         if (expression  != null)
         {
-            result += " "   + context.render (expression);
+            renderer.result.append (" ");
+            expression.render (renderer);
         }
         if (conditional != null)
         {
-            result += " @ " + context.render (conditional);
+            renderer.result.append (" @ ");
+            conditional.render (renderer);
         }
-        return result;
     }
 
     @Override
     public String toString ()
     {
-        return render (new ASTRenderingContext (true));
+        Renderer renderer = new Renderer ();
+        render (renderer);
+        return renderer.result.toString ();
     }
 
     public int compareTo (EquationEntry that)

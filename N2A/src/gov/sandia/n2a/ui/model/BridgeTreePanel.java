@@ -14,7 +14,6 @@ import gov.sandia.n2a.data.ModelOrient;
 import gov.sandia.n2a.data.Part;
 import gov.sandia.n2a.data.PartOrient;
 import gov.sandia.n2a.eqset.EquationSet;
-import gov.sandia.n2a.language.parse.ASTVarNode;
 import gov.sandia.n2a.ui.eq.EquationTreeEditContext;
 import gov.sandia.n2a.ui.model.topotree.NodeBridge;
 import gov.sandia.n2a.ui.model.topotree.NodeBridgeEquations;
@@ -25,7 +24,6 @@ import gov.sandia.n2a.ui.model.topotree.NodeLayer;
 import gov.sandia.n2a.ui.model.topotree.NodeRoot;
 import gov.sandia.umf.platform.UMF;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
-import gov.sandia.umf.platform.ui.CommonWarningMessage;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 import gov.sandia.umf.platform.ui.search.SearchType;
@@ -291,10 +289,6 @@ public class BridgeTreePanel extends ModelEditDetailPanel {
                 dfltValue = name;
                 if(name != null) {
                     name = name.trim();
-                    if(!ASTVarNode.isValidVariableName(name)) {
-                        CommonWarningMessage.showInvalidVariable("Bridge name");
-                        continue;
-                    }
                     if(model.existsLayerName(name)) {
                         Dialogs.showWarning("This name is already used by a layer.");
                         continue;

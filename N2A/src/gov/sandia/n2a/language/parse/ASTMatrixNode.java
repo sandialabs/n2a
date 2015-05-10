@@ -9,19 +9,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 /* JavaCCOptions:MULTI=true,NODE_USES_PARSER=false,VISITOR=true,TRACK_TOKENS=false,NODE_PREFIX=AST,NODE_EXTENDS=,NODE_FACTORY=,SUPPORT_CLASS_VISIBILITY_PUBLIC=true */
 package gov.sandia.n2a.language.parse;
 
-import gov.sandia.n2a.language.EvaluationContext;
-import gov.sandia.n2a.language.EvaluationException;
-import gov.sandia.n2a.language.Type;
-import gov.sandia.n2a.language.type.Matrix;
-import gov.sandia.n2a.language.type.Scalar;
-import gov.sandia.n2a.language.type.Text;
-
 public class ASTMatrixNode extends ASTNodeBase
 {
-    ////////////////////
-    // AUTO-GENERATED //
-    ////////////////////
-
     public ASTMatrixNode(int id) {
         super(id);
     }
@@ -34,127 +23,6 @@ public class ASTMatrixNode extends ASTNodeBase
     @Override
     public Object jjtAccept(ExpressionParserVisitor visitor, Object data) throws ParseException {
         return visitor.visit(this, data);
-    }
-
-
-    ////////////
-    // CUSTOM //
-    ////////////
-
-    public int getRows ()
-    {
-        return getCount ();
-    }
-
-    public int getColumns ()
-    {
-        int result = 0;
-        int count = getCount ();
-        for (int i = 0; i < count; i++)
-        {
-            ASTNodeBase node = getChild (i);
-            int c = 0;
-            if (node instanceof ASTConstant) c = 1;
-            else                             c = node.getCount ();
-            result = Math.max (result, c);
-        }
-        return result;
-    }
-
-    @Override
-    public String toString ()
-    {
-        return getValue().toString ();
-    }
-
-    @Override
-    public String render (ASTRenderingContext context)
-    {
-        // Long & Short rendering
-        int rows = getRows ();
-        int cols = getColumns ();
-        StringBuilder result = new StringBuilder ();
-        result.append ("[");
-        for (int r = 0; r < rows; r++)
-        {
-            if (r > 0)
-            {
-                result.append (";");
-            }
-            ASTNodeBase row = getChild (r);
-            int count = row.getCount ();
-            int c = 0;
-            if (row instanceof ASTConstant)
-            {
-                result.append (context.render (row));
-                c = 1;
-            }
-            else
-            {
-                for (; c < count; c++)
-                {
-                    if (c > 0)
-                    {
-                        result.append (",");
-                    }
-                    result.append (context.render (row.getChild (c)));
-                }
-            }
-            for (; c < cols; c++)
-            {
-                if (c > 0)
-                {
-                    result.append (",");
-                }
-                result.append ("0");
-            }
-        }
-        result.append ("]");
-        return result.toString ();
-    }
-
-
-    ////////////////
-    // EVALUATION //
-    ////////////////
-
-    @Override
-    public Type eval (EvaluationContext context) throws EvaluationException
-    {
-        int rows = getRows ();
-        int cols = getColumns ();
-        Matrix result = new Matrix (rows, cols);
-        for (int r = 0; r < rows; r++)
-        {
-            ASTNodeBase row = getChild (r);
-            int count = row.getCount ();
-            int c = 0;
-            if (row instanceof ASTConstant)
-            {
-                Type o = row.eval (context);
-                if      (o instanceof Scalar) result.value[c][r] = ((Scalar) o).value;
-                else if (o instanceof Text  ) result.value[c][r] = Double.valueOf (((Text) o).value);
-                else if (o instanceof Matrix) result.value[c][r] = ((Matrix) o).value[0][0];
-                else throw new EvaluationException ("Can't construct matrix element from the given type.");
-                c = 1;
-            }
-            else
-            {
-                for (; c < count; c++)
-                {
-                    Type o = row.getChild (c).eval (context);
-                    if      (o instanceof Scalar) result.value[c][r] = ((Scalar) o).value;
-                    else if (o instanceof Text  ) result.value[c][r] = Double.valueOf (((Text) o).value);
-                    else if (o instanceof Matrix) result.value[c][r] = ((Matrix) o).value[0][0];
-                    else throw new EvaluationException ("Can't construct matrix element from the given type.");
-                }
-            }
-            for (; c < cols; c++)
-            {
-                result.value[c][r] = 0;
-            }
-        }
-        return result;
     }
 }
 /* JavaCC - OriginalChecksum=f0cd9fdeb1bb8b5b8c935f3373ed6fd0 (do not edit this line) */
