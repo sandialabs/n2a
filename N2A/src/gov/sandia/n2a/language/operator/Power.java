@@ -7,10 +7,10 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.operator;
 
-import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Instance;
 
 public class Power extends OperatorBinary
 {
@@ -40,7 +40,7 @@ public class Power extends OperatorBinary
         return 3;
     }
 
-    public Type eval (EvaluationContext context)
+    public Type eval (Instance context)
     {
         return operand0.eval (context).power (operand1.eval (context));
     }

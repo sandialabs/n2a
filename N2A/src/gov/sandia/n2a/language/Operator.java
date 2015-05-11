@@ -45,6 +45,7 @@ import gov.sandia.n2a.language.parse.ASTOpNode;
 import gov.sandia.n2a.language.parse.ASTVarNode;
 import gov.sandia.n2a.language.parse.ExpressionParser;
 import gov.sandia.n2a.language.parse.ParseException;
+import gov.sandia.n2a.language.type.Instance;
 
 import java.util.List;
 import java.util.TreeMap;
@@ -52,7 +53,7 @@ import java.util.TreeMap;
 import replete.plugins.ExtensionPoint;
 import replete.plugins.PluginManager;
 
-public class Operator
+public class Operator implements Cloneable
 {
     public interface Factory extends ExtensionPoint
     {
@@ -81,6 +82,19 @@ public class Operator
     {
     }
 
+    public Operator deepCopy ()
+    {
+        Operator result = null;
+        try
+        {
+            result = (Operator) this.clone ();
+        }
+        catch (CloneNotSupportedException e)
+        {
+        }
+        return result;
+    }
+
     public enum Associativity
     {
         LEFT_TO_RIGHT,
@@ -101,14 +115,6 @@ public class Operator
     public boolean isOutput ()
     {
         return false;
-    }
-
-    /**
-        Determine if this node depends only on constants and Variables that remain constant after the init phase.
-    **/
-    public boolean isInitOnly ()
-    {
-        return true;
     }
 
     public void visit (Visitor visitor)
@@ -146,10 +152,11 @@ public class Operator
         renderer.result.append (toString ());
     }
 
-    public Type eval (EvaluationContext context) throws EvaluationException
+    public Type eval (Instance context) throws EvaluationException
     {
-        // Note: All allowable operators must be implemented by the internal simulator.
-        // This includes operators provided extensions. No free-form functions are allowed.
+        // If an external simulator provides a function, then its backend must provide the
+        // internal simulator with an equivalent capability. Thus, generic functions are
+        // not allowed. Every legitimate function must be defined by an extension.
         throw new EvaluationException ("Operator not implemented.");
     }
 

@@ -11,7 +11,7 @@ import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.AccessVariable;
-import gov.sandia.n2a.language.LanguageException;
+import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Gaussian;
@@ -84,43 +84,43 @@ public class LanguageUtil {
 
     // used when there should only be only one PE for a particular variable name
     public static EquationEntry getSinglePE(EquationSet eqSet, String varname, boolean required)
-            throws LanguageException
+            throws EvaluationException
     {
         Variable var = eqSet.find(new Variable(varname));
         if (var == null) {
             if (required) {
-                throw new LanguageException(varname + " not specified");
+                throw new EvaluationException(varname + " not specified");
             } else {
                 return null;
             }
         }
         NavigableSet<EquationEntry> eqs = var.equations;
         if (required && (eqs == null || eqs.size()==0)) {
-            throw new LanguageException(varname + " not specified");
+            throw new EvaluationException(varname + " not specified");
         }
         if (eqs == null) {
             return null;
         }
         if (eqs.size()>1) {
-            throw new LanguageException("multiple equations are not allowed for " + varname);
+            throw new EvaluationException("multiple equations are not allowed for " + varname);
         }
         return eqs.first();
     }
 
     public static EquationEntry getPositionEq(EquationSet eqSet)
-            throws LanguageException
+            throws EvaluationException
     {
         return getSinglePE(eqSet, $COORDS, false);
     }
 
     public static EquationEntry getConnectionEq(EquationSet eqSet)
-            throws LanguageException
+            throws EvaluationException
     {
         return getSinglePE(eqSet, $PCONNECT, false);
     }
 
     public static EquationEntry getNEq(EquationSet eqSet)
-            throws LanguageException
+            throws EvaluationException
     {
         return getSinglePE(eqSet, $N, false);
     }

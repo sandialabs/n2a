@@ -10,10 +10,10 @@ package gov.sandia.n2a.language.function;
 import java.io.File;
 import java.util.HashMap;
 
-import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
@@ -38,7 +38,7 @@ public class ReadMatrix extends Function
         };
     }
 
-    public Type eval (EvaluationContext context)
+    public Type eval (Instance context)
     {
         double row    = ((Scalar) operands[1].eval (context)).value;
         double column = ((Scalar) operands[2].eval (context)).value;

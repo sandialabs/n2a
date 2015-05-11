@@ -27,6 +27,20 @@ public class Function extends Operator
         for (int i = 0; i < count; i++) operands[i] = Operator.getFrom ((ASTNodeBase) l.jjtGetChild (i));
     }
 
+    public Operator deepCopy ()
+    {
+        Function result = null;
+        try
+        {
+            result = (Function) this.clone ();
+            for (int i = 0; i < operands.length; i++) result.operands[i] = operands[i].deepCopy ();
+        }
+        catch (CloneNotSupportedException e)
+        {
+        }
+        return result;
+    }
+
     public boolean isOutput ()
     {
         for (int i = 0; i < operands.length; i++)
@@ -34,16 +48,6 @@ public class Function extends Operator
             if (operands[i].isOutput ()) return true;
         }
         return false;
-    }
-
-    public boolean isInitOnly ()
-    {
-        for (int i = 0; i < operands.length; i++)
-        {
-            if (! operands[i].isInitOnly ()) return false;
-        }
-        // A function with no operands is "initOnly"
-        return true;
     }
 
     public void visit (Visitor visitor)

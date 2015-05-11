@@ -10,10 +10,9 @@ package gov.sandia.n2a.backend.xyce.network;
 import gov.sandia.n2a.backend.xyce.XyceTranslationException;
 import gov.sandia.n2a.backend.xyce.parsing.LanguageUtil;
 import gov.sandia.n2a.backend.xyce.parsing.XyceASTUtil;
-import gov.sandia.n2a.data.Part;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
-import gov.sandia.n2a.language.EvaluationContext;
+import gov.sandia.n2a.language.type.Instance;
 
 import java.awt.geom.Point2D;
 import java.util.Random;
@@ -66,7 +65,7 @@ public class CompartmentLayerOrient extends PartSetOrient {
         if (eq==null) {
             return getDefaultPosition();
         }
-        EvaluationContext context = XyceASTUtil.getEvalContext(eq, eqns);
+        Instance context = XyceASTUtil.getEvalContext(eq, eqns);
         Object evalResult = XyceASTUtil.evaluateEq(eq, context, index);
         if (evalResult == null) {
             throw new NetworkGenerationException("Cannot evaluate " + eq);

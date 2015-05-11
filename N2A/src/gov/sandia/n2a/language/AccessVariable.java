@@ -41,12 +41,6 @@ public class AccessVariable extends Operator
         name = node.jjtGetValue ().toString ();
     }
 
-    public boolean isInitOnly ()
-    {
-        if (reference == null) return false;
-        return reference.variable.hasAny (new String[] {"initOnly", "constant"});
-    }
-
     public Operator simplify (Variable from)
     {
         if (reference == null  ||  reference.variable == null) return this;  // unresolved!
@@ -69,7 +63,7 @@ public class AccessVariable extends Operator
         return this;
     }
 
-    public Type eval (EvaluationContext context)
+    public Type eval (Instance context)
     {
         if (reference == null) throw new EvaluationException ("Unresolved: " + name);
         if (reference.variable.name.equals ("(connection)")) return new Instance (reference.variable.container);

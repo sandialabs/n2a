@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.language;
 
 import gov.sandia.n2a.language.parse.ASTNodeBase;
+import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Text;
 
 public class Constant extends Operator
@@ -35,7 +36,7 @@ public class Constant extends Operator
         else                       renderer.result.append (value.toString ());
     }
 
-    public Type eval (EvaluationContext context)
+    public Type eval (Instance context)
     {
         return value;
     }

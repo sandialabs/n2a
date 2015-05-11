@@ -23,14 +23,24 @@ public class OperatorBinary extends Operator
         operand1 = Operator.getFrom ((ASTNodeBase) node.jjtGetChild (1));
     }
 
+    public Operator deepCopy ()
+    {
+        OperatorBinary result = null;
+        try
+        {
+            result = (OperatorBinary) this.clone ();
+            result.operand0 = operand0.deepCopy ();
+            result.operand1 = operand1.deepCopy ();
+        }
+        catch (CloneNotSupportedException e)
+        {
+        }
+        return result;
+    }
+
     public boolean isOutput ()
     {
         return operand0.isOutput ()  ||  operand1.isOutput ();
-    }
-
-    public boolean isInitOnly ()
-    {
-        return operand0.isInitOnly ()  &&  operand1.isInitOnly ();
     }
 
     public void visit (Visitor visitor)

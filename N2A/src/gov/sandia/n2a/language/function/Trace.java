@@ -7,10 +7,10 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.function;
 
-import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Instance;
 
 public class Trace extends Function
 {
@@ -35,7 +35,7 @@ public class Trace extends Function
         return true;
     }
 
-    public Type eval (EvaluationContext context)
+    public Type eval (Instance context)
     {
         // TODO: implement trace() for internal simulator
         return operands[0].eval (context);

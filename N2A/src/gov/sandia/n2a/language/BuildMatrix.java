@@ -11,6 +11,7 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.parse.ASTConstant;
 import gov.sandia.n2a.language.parse.ASTNodeBase;
 import gov.sandia.n2a.language.parse.ParseException;
+import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
@@ -48,6 +49,29 @@ public class BuildMatrix extends Operator
                 }
             }
         }
+    }
+
+    public Operator deepCopy ()
+    {
+        BuildMatrix result = null;
+        try
+        {
+            result = (BuildMatrix) this.clone ();
+            int columns = operands.length;
+            if (columns == 0) return result;
+            int rows = operands[0].length;
+            for (int c = 0; c < columns; c++)
+            {
+                for (int r = 0; r < rows; r++)
+                {
+                    if (operands[c][r] != null) result.operands[c][r] = operands[c][r].deepCopy ();
+                }
+            }
+        }
+        catch (CloneNotSupportedException e)
+        {
+        }
+        return result;
     }
 
     public int getRows ()
@@ -175,7 +199,7 @@ public class BuildMatrix extends Operator
         renderer.result.append ("]");
     }
 
-    public Type eval (EvaluationContext context) throws EvaluationException
+    public Type eval (Instance context) throws EvaluationException
     {
         int columns = operands.length;
         if (columns == 0) return new Matrix ();

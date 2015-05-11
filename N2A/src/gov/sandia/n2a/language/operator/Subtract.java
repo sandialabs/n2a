@@ -9,10 +9,10 @@ package gov.sandia.n2a.language.operator;
 
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Constant;
-import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 
 public class Subtract extends OperatorBinary
@@ -51,7 +51,7 @@ public class Subtract extends OperatorBinary
         return this;
     }
 
-    public Type eval (EvaluationContext context)
+    public Type eval (Instance context)
     {
         return operand0.eval (context).subtract (operand1.eval (context));
     }

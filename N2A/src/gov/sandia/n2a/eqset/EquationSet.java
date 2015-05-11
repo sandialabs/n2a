@@ -9,13 +9,14 @@ package gov.sandia.n2a.eqset;
 
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
-import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Split;
 import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.Visitor;
+import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
@@ -735,7 +736,16 @@ public class EquationSet implements Comparable<EquationSet>
                 // Otherwise, we check the actual value.
                 if (ne.expression != null)
                 {
-                    Type value = ne.expression.eval (new EvaluationContext ());  // TODO: maybe we should fetch this from the EvaluationContext instead. That would ensure we check the conditional.
+                    class InstanceBypass extends Instance
+                    {
+                        public Type get (Variable v) throws EvaluationException
+                        {
+                            if (v.name.equals ("$n"   )) return super.get (v);
+                            if (v.name.equals ("$init")) return new Scalar (1);  // we evaluate $n in init cycle
+                            return new Scalar (0);  // During init all other vars are 0, even if they have an initialization conditioned on $init. IE: those values won't be seen until after the init cycle.
+                        }
+                    };
+                    Type value = new InstanceBypass ().get (n);  // by not using Operator.eval(Instance) directly, we also check the conditional.
                     if (value instanceof Scalar  &&  ((Scalar) value).value != 1) continue;
                 }
                 s.variables.remove (n);  // We don't want $n in the merged set.
@@ -1308,16 +1318,23 @@ public class EquationSet implements Comparable<EquationSet>
     **/
     public void determineTypes ()
     {
-        EvaluationContext context = new EvaluationContext ();
-        determineTypesInit (context);
-        while (determineTypesEval (context)) {}
+        determineTypesInit ();
+
+        Instance instance = new Instance ()
+        {
+            public Type get (Variable v) throws EvaluationException
+            {
+                return v.type;
+            }
+        };
+        while (determineTypesEval (instance)) {}
     }
 
-    public void determineTypesInit (EvaluationContext context)
+    public void determineTypesInit ()
     {
         for (EquationSet s : parts)
         {
-            s.determineTypesInit (context);
+            s.determineTypesInit ();
         }
 
         for (Variable v : variables)
@@ -1347,12 +1364,10 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 v.reference.variable.type = new Scalar (0);
             }
-
-            context.set (v.reference.variable, v.reference.variable.type);
         }
     }
 
-    public boolean determineTypesEval (EvaluationContext context)
+    public boolean determineTypesEval (Instance instance)
     {
         boolean changed = false;
         for (Variable v : variables)
@@ -1367,7 +1382,7 @@ public class EquationSet implements Comparable<EquationSet>
             }
             else
             {
-                value = context.get (v.reference.variable, false);
+                value = instance.get (v.reference.variable);
             }
             if (value.betterThan (v.type))  // v.type could be null, but betterThan() still works
             {
@@ -1377,7 +1392,7 @@ public class EquationSet implements Comparable<EquationSet>
         }
         for (EquationSet s : parts)
         {
-            if (s.determineTypesEval (context)) changed = true;
+            if (s.determineTypesEval (instance)) changed = true;
         }
         return changed;
     }
@@ -1724,24 +1739,56 @@ public class EquationSet implements Comparable<EquationSet>
             EquationEntry e = v.equations.first ();
             if (e.conditional != null)
             {
-                setInit (0);  // $init should be 0 in general
-                try
+                Transformer replaceInit = new Transformer ()
                 {
-                    Type result = e.conditional.eval (new EvaluationContext ());
-                    if (result != null  &&  result instanceof Scalar  &&  ((Scalar) result).value == 0)
+                    public Operator transform (Operator op)
+                    {
+                        if (op instanceof AccessVariable)
+                        {
+                            AccessVariable av = (AccessVariable) op;
+                            if (av.name.equals ("$init")) return new Constant (new Scalar (0));  // set $init to 0
+                        }
+                        return null;
+                    }
+                };
+                Operator test = e.conditional.deepCopy ().transform (replaceInit).simplify (v);
+                if (test instanceof Constant)
+                {
+                    Constant c = (Constant) test;
+                    if (c.value instanceof Scalar  &&  ((Scalar) c.value).value == 0)
                     {
                         v.addAttribute ("initOnly");
                         changed = true;
                         continue;
                     }
                 }
-                catch (EvaluationException exception)
-                {
-                }
             }
 
             // Determine if variable depends only on constants and initOnly variables
-            if (e.expression.isInitOnly ())
+            // TODO: recurse past variables, rather than doing repeated iterations of findInitOnlyRecursive()
+            class VisitInitOnly extends Visitor
+            {
+                boolean isInitOnly = true;  // until something falsifies it
+                public boolean visit (Operator op)
+                {
+                    if (isInitOnly)
+                    {
+                        if (op instanceof AccessVariable)
+                        {
+                            // Since constants have already been located (via simplify),
+                            // we can be certain that any symbolic constant has already been
+                            // located and replaced. Therefore, only the "initOnly" attribute
+                            // matters here.
+                            AccessVariable av = (AccessVariable) op;
+                            if (av.reference == null  ||  av.reference.variable == null  ||  ! av.reference.variable.hasAttribute ("initOnly")) isInitOnly = false;
+                        }
+                    }
+                    return isInitOnly;
+                }
+            }
+            VisitInitOnly visitor = new VisitInitOnly ();
+            e.expression.visit (visitor);
+            if (visitor.isInitOnly)
             {
                 v.addAttribute ("initOnly");
                 changed = true;

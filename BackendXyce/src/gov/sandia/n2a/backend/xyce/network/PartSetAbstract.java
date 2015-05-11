@@ -14,10 +14,11 @@ import gov.sandia.n2a.backend.xyce.symbol.XyceDeviceSymbolDef;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.language.EvaluationContext;
+import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.parse.ASTNodeBase;
+import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
@@ -159,8 +160,16 @@ public abstract class PartSetAbstract implements PartSetInterface
         {
             Variable n = eqns.find (new Variable ("$n"));
             if (n == null) throw new NetworkGenerationException ("Attempt to access non-existent $n. Indicates a bug in Xyce backend.");
-            EquationEntry e = n.equations.first ();  // if $n exists, then it will have at least one equation. TODO: evaluate mutliconditional with $init=1
-            Type result = e.expression.eval (new EvaluationContext ());
+            class InstanceBypass extends Instance
+            {
+                public Type get (Variable v) throws EvaluationException
+                {
+                    if (v.name.equals ("$n"   )) return super.get (v);
+                    if (v.name.equals ("$init")) return new Scalar (1);  // we evaluate $n in init cycle
+                    return new Scalar (0);  // During init all other vars are 0, even if they have an initialization conditioned on $init. IE: those values won't be seen until after the init cycle.
+                }
+            };
+            Type result = new InstanceBypass ().get (n);  // by not using Operator.eval(Instance) directly, we also check the conditional.
             if (result instanceof Scalar) numInstances = (long) ((Scalar) result).value;
             else throw new NetworkGenerationException ("#instances equation does not evaluate to a number");
         }
@@ -296,7 +305,7 @@ public abstract class PartSetAbstract implements PartSetInterface
         throw new NetworkGenerationException("unexpected evaluation result for conditional " + tree.toString());
     }
 
-    public void setValueForVariable (EvaluationContext context, String name, Object value)
+    public void setValueForVariable (Instance context, String name, Object value)
     {
         Variable v = eqns.find (new Variable (name));
         // TODO: v may be null, in which case we should throw an exception. To minimize code changes at this time, we simply tolerate the NPE as our exception.
@@ -311,7 +320,7 @@ public abstract class PartSetAbstract implements PartSetInterface
     }
 
     @Override
-    public void setInstanceContext(EvaluationContext context, PartInstance pi, boolean init)
+    public void setInstanceContext(Instance context, PartInstance pi, boolean init)
     {
         // TODO - this should set ALL special variables
         setValueForVariable (context, LanguageUtil.$N, numInstances);
@@ -329,7 +338,7 @@ public abstract class PartSetAbstract implements PartSetInterface
         // right now, we have @init as an annotation, handled above
     }
 
-    protected void setConnectedContext(EvaluationContext context, CompartmentInstance piA,
+    protected void setConnectedContext(Instance context, CompartmentInstance piA,
             CompartmentInstance piB)
     {
         try

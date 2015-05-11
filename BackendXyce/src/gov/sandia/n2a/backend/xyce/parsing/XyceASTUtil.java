@@ -14,19 +14,13 @@ import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.AccessVariable;
-import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Visitor;
-import gov.sandia.n2a.language.operator.Power;
-import gov.sandia.n2a.language.parse.ASTNodeBase;
-import gov.sandia.n2a.language.parse.ASTOpNode;
-import gov.sandia.n2a.language.parse.ASTVarNode;
+import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -46,13 +40,13 @@ public class XyceASTUtil {
         return xlator.result.toString ();
     }
 
-    public static EvaluationContext getEvalContext(EquationEntry eq, EquationSet eqSet)
+    public static Instance getEvalContext(EquationEntry eq, EquationSet eqSet)
             throws XyceTranslationException
     {
-        return new EvaluationContext ();  // TODO: it may be necessary to attach EquationSet to the context. Check how callers use the result.
+        return new Instance ();
     }
 
-    public static Set<String> getVariables (final EquationEntry eq, EvaluationContext context)
+    public static Set<String> getVariables (final EquationEntry eq, Instance context)
     {
         final Set<String> result = new HashSet<String>();
         Visitor visitor = new Visitor ()
@@ -75,13 +69,13 @@ public class XyceASTUtil {
         return result;
     }
 
-    public static Object tryEval(EquationEntry eq, EvaluationContext context, int partIndex)
+    public static Object tryEval(EquationEntry eq, Instance context, int partIndex)
     {
         setContextIndex (eq.variable.container, context, partIndex);
         return tryEval(eq, context);
     }
 
-    public static Object tryEval(EquationEntry eq, EvaluationContext context)
+    public static Object tryEval(EquationEntry eq, Instance context)
     {
         Object evalResult = null;
         try {
@@ -98,29 +92,29 @@ public class XyceASTUtil {
         return evalResult;
     }
 
-    public static void setContextIndex(EquationSet s, EvaluationContext context, int index)
+    public static void setContextIndex(EquationSet s, Instance context, int index)
     {
         Variable v = s.find (new Variable (LanguageUtil.$INDEX));
         context.set (v, new Scalar (index));
     }
 
-    public static Object evaluateEq(EquationEntry eq, EvaluationContext context, int partIndex)
+    public static Object evaluateEq(EquationEntry eq, Instance context, int partIndex)
     {
         setContextIndex (eq.variable.container, context, partIndex);
         return eq.expression.eval (context);
     }
 
-    public static EvaluationContext getInstanceContext(EquationEntry eq, PartInstance pi, boolean init)
+    public static Instance getInstanceContext(EquationEntry eq, PartInstance pi, boolean init)
     {
         PartSetInterface pSet = pi.getPartSet();
-        EvaluationContext context = new EvaluationContext ();
+        Instance context = new Instance ();
         pSet.setInstanceContext(context, pi, init);
         return context;
     }
 
     public static Object evalInstanceEq(EquationEntry eq, PartInstance pi, boolean init)
     {
-        EvaluationContext context = XyceASTUtil.getInstanceContext(eq, pi, init);
+        Instance context = XyceASTUtil.getInstanceContext(eq, pi, init);
         return eq.expression.eval (context);
     }
 
@@ -128,7 +122,7 @@ public class XyceASTUtil {
     {
         // get context...
         PartSetInterface pSet = pi.getPartSet();
-        EvaluationContext context = new EvaluationContext();
+        Instance context = new Instance();
         pSet.setInstanceContext(context, pi, init);
         return tree.eval(context);
     }

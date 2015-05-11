@@ -7,10 +7,10 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.function;
 
-import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 
 public class Pulse extends Function
@@ -31,7 +31,7 @@ public class Pulse extends Function
         };
     }
 
-    public Type eval (EvaluationContext context)
+    public Type eval (Instance context)
     {
         double t      = ((Scalar) operands[0].eval (context)).value;
         double width  = ((Scalar) operands[1].eval (context)).value;

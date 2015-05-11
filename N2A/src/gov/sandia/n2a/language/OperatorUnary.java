@@ -21,14 +21,23 @@ public class OperatorUnary extends Operator
         operand = Operator.getFrom ((ASTNodeBase) node.jjtGetChild (0));
     }
 
+    public Operator deepCopy ()
+    {
+        OperatorUnary result = null;
+        try
+        {
+            result = (OperatorUnary) this.clone ();
+            result.operand = operand.deepCopy ();
+        }
+        catch (CloneNotSupportedException e)
+        {
+        }
+        return result;
+    }
+
     public boolean isOutput ()
     {
         return operand.isOutput ();
-    }
-
-    public boolean isInitOnly ()
-    {
-        return operand.isInitOnly ();
     }
 
     public void visit (Visitor visitor)

@@ -9,11 +9,11 @@ package gov.sandia.n2a.language.function;
 
 import java.util.Random;
 
-import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;;
 
@@ -37,7 +37,7 @@ public class Gaussian extends Function
         };
     }
 
-    public Type eval (EvaluationContext context) throws EvaluationException
+    public Type eval (Instance context) throws EvaluationException
     {
         if (operands.length > 1) throw new EvaluationException ("too many arguments to gaussian()");
         if (operands.length == 1)

@@ -11,8 +11,8 @@ import gov.sandia.n2a.backend.xyce.Xyceisms;
 import gov.sandia.n2a.backend.xyce.network.PartInstance;
 import gov.sandia.n2a.backend.xyce.parsing.XyceASTUtil;
 import gov.sandia.n2a.eqset.EquationEntry;
-import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 
 public class ConstantICSymbolDef extends DefaultSymbolDef {
@@ -41,7 +41,7 @@ public class ConstantICSymbolDef extends DefaultSymbolDef {
         }
         StringBuilder result = new StringBuilder();
         if (instanceSpecific) {
-            EvaluationContext context = XyceASTUtil.getInstanceContext(eq, pi, true);
+            Instance context = XyceASTUtil.getInstanceContext(eq, pi, true);
             Type evalResult = eq.expression.eval (context);
             if (!(evalResult instanceof Scalar)) {
                 throw new RuntimeException("unexpected evaluation result for " + eq.toString());

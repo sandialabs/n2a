@@ -7,10 +7,10 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.xyce.functions;
 
-import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 
 public class XyceSineWaveFunction extends Function
@@ -31,7 +31,7 @@ public class XyceSineWaveFunction extends Function
         };
     }
 
-    public Type eval (EvaluationContext context)
+    public Type eval (Instance context)
     {
         // TODO: implement equivalent of Xyce sinewave function
         return new Scalar (0);

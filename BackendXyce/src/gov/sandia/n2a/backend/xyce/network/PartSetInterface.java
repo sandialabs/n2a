@@ -11,7 +11,7 @@ import gov.sandia.n2a.backend.xyce.XyceTranslationException;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.language.EvaluationContext;
+import gov.sandia.n2a.language.type.Instance;
 
 import java.util.List;
 import java.util.Map;
@@ -45,7 +45,7 @@ public interface PartSetInterface {
     public abstract EquationEntry getMatch(List<EquationEntry> candidates, PartInstance pi, boolean init) 
             throws NetworkGenerationException, XyceTranslationException;
 
-    public abstract void setInstanceContext(EvaluationContext context, PartInstance pi, boolean init);
+    public abstract void setInstanceContext(Instance context, PartInstance pi, boolean init);
 
     public abstract List<PartInstance> getInstances();
 

@@ -15,8 +15,8 @@ import gov.sandia.n2a.backend.xyce.parsing.LanguageUtil;
 import gov.sandia.n2a.backend.xyce.parsing.XyceASTUtil;
 import gov.sandia.n2a.backend.xyce.parsing.XyceRHSTranslator;
 import gov.sandia.n2a.eqset.EquationEntry;
-import gov.sandia.n2a.language.EvaluationContext;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 
 import java.util.Set;
@@ -67,7 +67,7 @@ public class SymbolDefFactory {
         } catch (NetworkGenerationException e) {
             throw new XyceTranslationException("unable to determine first instance for " + eq);
         }
-        EvaluationContext context = XyceASTUtil.getInstanceContext(eq, pi, false);
+        Instance context = XyceASTUtil.getInstanceContext(eq, pi, false);
         Object evalResult = XyceASTUtil.tryEval(eq, context);
         if (evalResult == null)
         {
@@ -100,13 +100,13 @@ public class SymbolDefFactory {
         } catch (NetworkGenerationException e) {
             throw new XyceTranslationException("unable to determine first instance for " + eq);
         }
-        EvaluationContext context = XyceASTUtil.getInstanceContext(eq, pi, true);
+        Instance context = XyceASTUtil.getInstanceContext(eq, pi, true);
         Type evalResult = eq.expression.eval (context);
         if (evalResult instanceof Scalar) return new ConstantICSymbolDef(eq, (Scalar) evalResult, pi);
         throw new XyceTranslationException ("unknown initial condition");
     }
 
-	private static SymbolDef tryFunctionDef(EquationEntry eq, EvaluationContext context, PartInstance pi) 
+	private static SymbolDef tryFunctionDef(EquationEntry eq, Instance context, PartInstance pi) 
             throws XyceTranslationException 
     {
         // TODO - try to determine whether everything in AST is defined already?
