@@ -1319,15 +1319,7 @@ public class EquationSet implements Comparable<EquationSet>
     public void determineTypes ()
     {
         determineTypesInit ();
-
-        Instance instance = new Instance ()
-        {
-            public Type get (Variable v) throws EvaluationException
-            {
-                return v.type;
-            }
-        };
-        while (determineTypesEval (instance)) {}
+        while (determineTypesEval ()) {}
     }
 
     public void determineTypesInit ()
@@ -1367,10 +1359,10 @@ public class EquationSet implements Comparable<EquationSet>
         }
     }
 
-    public boolean determineTypesEval (Instance instance)
+    public boolean determineTypesEval ()
     {
         boolean changed = false;
-        for (Variable v : variables)
+        for (final Variable v : variables)
         {
             if (v.hasAny (new String[] {"constant", "dummy"})) continue;
             if (v.name.startsWith ("$")  ||  v.name.contains (".$")) continue;
@@ -1382,9 +1374,19 @@ public class EquationSet implements Comparable<EquationSet>
             }
             else
             {
+                Instance instance = new Instance ()
+                {
+                    public Type get (Variable target) throws EvaluationException
+                    {
+                        // Force us to reevaluate v, but all other vars are treated as if their current value is Variable.type
+                        if (target == v.reference.variable) return super.get (target);
+                        return target.type;
+                    }
+                };
                 value = instance.get (v.reference.variable);
             }
-            if (value.betterThan (v.type))  // v.type could be null, but betterThan() still works
+            // value can be null, for example, when the variable has no equations
+            if (value != null  &&  value.betterThan (v.type))
             {
                 v.type = value;
                 changed = true;
@@ -1392,7 +1394,7 @@ public class EquationSet implements Comparable<EquationSet>
         }
         for (EquationSet s : parts)
         {
-            if (s.determineTypesEval (instance)) changed = true;
+            if (s.determineTypesEval ()) changed = true;
         }
         return changed;
     }
