@@ -8,7 +8,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.umf.platform.execenvs;
 
 import gov.sandia.umf.platform.execenvs.beans.AllJobInfo;
-import gov.sandia.umf.platform.plugins.RunEnsemble;
 import gov.sandia.umf.platform.plugins.RunState;
 
 import java.io.File;
@@ -59,7 +58,6 @@ public abstract class ExecutionEnv
      * @return Path to linkable object file.
      */
     public abstract String       buildRuntime      (String sourceFile)                 throws Exception;
-    public abstract void         submitBatch       (RunEnsemble re)                    throws Exception;
     /**
      * Starts the simulation on the host system.
      * Sets up piping of the program's stdout and stderr to files "out" and "err" respectively.

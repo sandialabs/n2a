@@ -16,7 +16,6 @@ public interface Simulation extends Parameterizable {
     public void setSelectedParameters(ParameterDomain domain);
     public RunState prepare(Object run, ParameterSpecGroupSet groups, ExecutionEnv env) throws Exception;
     public boolean resourcesAvailable();
-    public void submit(ExecutionEnv env, RunState runState) throws Exception;
     public void submit() throws Exception;
     public RunState execute(Object run, ParameterSpecGroupSet groups, ExecutionEnv env) throws Exception;
 }

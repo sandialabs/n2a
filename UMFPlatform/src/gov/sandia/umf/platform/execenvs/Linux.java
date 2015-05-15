@@ -61,32 +61,6 @@ public class Linux extends LocalMachineEnv
         return result;
     }
 
-    public void submitBatch(RunEnsemble re) throws Exception 
-    {
-        File dir = new File (getNamedValue ("directory.jobs"));
-        String jobName = "ensemble" + new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ());
-        File script = new File(dir, jobName);
-        FileUtil.writeTextContent (script, "#!/bin/bash\n");
-        for (Run run : re.getRuns())
-        {
-            String cmd = run.getState().getNamedValue("command");
-            String jobDir  = run.getState().getNamedValue ("jobDir");
-            File out = new File (jobDir, "out");
-            File err = new File (jobDir, "err");
-            FileUtil.writeTextContent (script, 
-                    cmd + " > '" + out.getAbsolutePath () + "' 2> '" + err.getAbsolutePath () + "' \n", 
-                    true);
-        }
-        String [] commandParm = {"chmod", "u+x", script.getAbsolutePath ()};
-        Process p = Runtime.getRuntime ().exec (commandParm);
-        System.out.println (FileUtil.getTextContent (p.getErrorStream ()));
-        p.waitFor ();
-        commandParm = new String[] {script.getAbsolutePath ()};
-////        Runtime.getRuntime ().exec (commandParm);
-        logger.debug(System.currentTimeMillis() + " batch job submission err:" + 
-                Arrays.toString(ProcessUtil.getError(commandParm)));
-    }
-
     @Override
     public void submitJob (RunState run) throws Exception
     {

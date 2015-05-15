@@ -54,12 +54,6 @@ public class RedSkyLoginEnv extends RedSkyEnv
         return super.getNamedValue (name, defaultValue);
     }
 
-    @Override
-    public void submitBatch(RunEnsemble re) throws Exception {
-        // TODO Auto-generated method stub
-        
-    }
-
 	@Override
 	public long getProcMem(Integer procNum) {
 		// TODO Auto-generated method stub

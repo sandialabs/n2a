@@ -8,7 +8,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.umf.platform.plugins.extpoints;
 
 import gov.sandia.umf.platform.ensemble.params.specs.ParameterSpecification;
-import gov.sandia.umf.platform.plugins.Parameterizable;
 import gov.sandia.umf.platform.plugins.Simulation;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 import replete.plugins.ExtensionPoint;
@@ -50,7 +49,7 @@ public interface Simulator extends ExtensionPoint
     /**
         Instantiate a specific simulation.
         @todo There should be only two interfaces that a back-end deals with.
-        One is the ExtensionPoint (this class), and the other is a instance of a simulation.
+        One is the ExtensionPoint (this class), and the other is an instance of a simulation.
         Right now we have an extra layer called "Simulation". This should be refactored into
         RunState and Simulator. Simulator should be stateless, and contain all methods that
         have to do with constructing a simulation. RunState should contain all state that

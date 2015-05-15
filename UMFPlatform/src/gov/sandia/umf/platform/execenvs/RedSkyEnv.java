@@ -22,9 +22,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
-import replete.gui.windows.Dialogs;
 import replete.util.FileUtil;
-import replete.util.User;
 
 public abstract class RedSkyEnv extends ExecutionEnv
 {

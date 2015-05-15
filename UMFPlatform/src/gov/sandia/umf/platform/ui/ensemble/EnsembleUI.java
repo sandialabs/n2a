@@ -200,12 +200,6 @@ public class EnsembleUI {
             return null;
         }
         @Override
-        public void submit(ExecutionEnv env, RunState runState)
-                throws Exception {
-            // TODO Auto-generated method stub
-            
-        }
-        @Override
         public boolean resourcesAvailable() {
             // TODO Auto-generated method stub
             return false;

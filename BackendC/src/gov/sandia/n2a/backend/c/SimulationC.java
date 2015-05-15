@@ -56,9 +56,7 @@ public class SimulationC implements Simulation
     public TreeMap<String,String> metadata = new TreeMap<String, String> ();
     public HashMap<Operator,String> matrixNames;
 
-    /** @deprecated **/
     private ExecutionEnv execEnv;
-    /** @deprecated **/
     private RunState runState;
 
     @Override
@@ -78,17 +76,10 @@ public class SimulationC implements Simulation
         }
     }
 
-    /** @deprecated Please separate job-related information from backend classes. RunState or something similar to it should be sufficient for this. **/
     @Override
     public void submit () throws Exception
     {
         execEnv.submitJob (runState);
-    }
-
-    @Override
-    public void submit (ExecutionEnv env, RunState runState) throws Exception
-    {
-        env.submitJob (runState);
     }
 
     @Override
@@ -100,9 +91,10 @@ public class SimulationC implements Simulation
     @Override
     public RunState prepare (Object run, ParameterSpecGroupSet groups, ExecutionEnv env) throws Exception
     {
-        // from prepare method
         RunStateC result = new RunStateC ();
         result.model = ((RunOrient) run).getModel ();
+        execEnv = env;
+        runState = result;
 
         // Ensure runtime is built
         String runtimeDir = env.getNamedValue ("c.directory");
@@ -165,7 +157,7 @@ public class SimulationC implements Simulation
         e.collectSplits ();
         findPathToContainer (e);
         e.findAccountableConnections ();
-        e.findTemporary ();  // for connections, makes $p and $project "temporary" under some circumstances
+        e.findTemporary ();  // for connections, makes $p and $project "temporary" under some circumstances. TODO: make sure this doesn't violate evaluation order rules
         e.determineOrder ();
         e.findDerivative ();
         e.addAttribute ("global",       0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
@@ -177,7 +169,7 @@ public class SimulationC implements Simulation
         e.findDeath ();
         e.setAttributesLive ();
         setFunctions (e);
-        findReferences (e);
+        findLiveReferences (e);
         e.determineTypes ();
 
         e.setInit (0);
@@ -245,6 +237,7 @@ public class SimulationC implements Simulation
         s.append ("bool Wrapper::finalize (Simulator & simulator)\n");
         s.append ("{\n");
         s.append ("  " + mangle (e.name) + ".finalize (simulator);\n");
+        s.append ("  writeTrace ();\n");
         s.append ("  return " + mangle (e.name) + ".n;\n");  // The simulation stops when the last model instance dies.
         s.append ("}\n");
         s.append ("\n");
@@ -332,7 +325,7 @@ public class SimulationC implements Simulation
     public RunState execute (Object run, ParameterSpecGroupSet groups, ExecutionEnv env) throws Exception
     {
         RunState result = prepare (run, groups, env);
-        submit (env, result);
+        env.submitJob (result);
         return result;
     }
 
@@ -1099,6 +1092,10 @@ public class SimulationC implements Simulation
         {
             result.append ("void " + ns + "prepare ()\n");
             result.append ("{\n");
+            if (s.connectionBindings == null)
+            {
+                result.append ("  old = live.after;\n");  // copied from PopulationCompartment::prepare() in runtime.cc, to avoid a function call
+            }
             for (Variable v : bed.globalBufferedExternalWrite)
             {
                 result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
@@ -1152,10 +1149,6 @@ public class SimulationC implements Simulation
                     result.append ("  if (" + mangle (v) + " != " + mangle ("next_", v) + ") simulator.resize (this, " + mangle ("next_", v) + ");\n");
                 }
                 result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
-            }
-            if (s.container == null)  // This is the top-level population
-            {
-                result.append ("  writeTrace ();\n");
             }
             result.append ("  return true;\n");  // Doesn't matter what we return, because the value is always ignored.
             result.append ("};\n");
@@ -2850,11 +2843,11 @@ public class SimulationC implements Simulation
         }
     }
 
-    public void findReferences (EquationSet s)
+    public void findLiveReferences (EquationSet s)
     {
         for (EquationSet p : s.parts)
         {
-            findReferences (p);
+            findLiveReferences (p);
         }
 
         if (s.lethalConnection  ||  s.lethalContainer)
@@ -2862,12 +2855,12 @@ public class SimulationC implements Simulation
             LinkedList<Object>        resolution     = new LinkedList<Object> ();
             NavigableSet<EquationSet> touched        = new TreeSet<EquationSet> ();
             if (! (s.backendData instanceof BackendData)) s.backendData = new BackendData ();
-            findReferences (s, resolution, touched, ((BackendData) s.backendData).localReference, false);
+            findLiveReferences (s, resolution, touched, ((BackendData) s.backendData).localReference, false);
         }
     }
 
     @SuppressWarnings("unchecked")
-    public void findReferences (EquationSet s, LinkedList<Object> resolution, NavigableSet<EquationSet> touched, List<VariableReference> localReference, boolean terminate)
+    public void findLiveReferences (EquationSet s, LinkedList<Object> resolution, NavigableSet<EquationSet> touched, List<VariableReference> localReference, boolean terminate)
     {
         if (terminate)
         {
@@ -2892,7 +2885,7 @@ public class SimulationC implements Simulation
         if (s.lethalContainer)
         {
             resolution.add (s.container);
-            findReferences (s.container, resolution, touched, localReference, true);
+            findLiveReferences (s.container, resolution, touched, localReference, true);
             resolution.removeLast ();
         }
 
@@ -2902,7 +2895,7 @@ public class SimulationC implements Simulation
             for (Entry<String, EquationSet> e : s.connectionBindings.entrySet ())
             {
                 resolution.add (e);
-                findReferences (e.getValue (), resolution, touched, localReference, true);
+                findLiveReferences (e.getValue (), resolution, touched, localReference, true);
                 resolution.removeLast ();
             }
         }
