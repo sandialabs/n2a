@@ -14,6 +14,8 @@ import gov.sandia.n2a.language.parse.ASTListNode;
 import gov.sandia.n2a.language.parse.ASTNodeBase;
 import gov.sandia.n2a.language.parse.ASTVarNode;
 import gov.sandia.n2a.language.parse.ParseException;
+import gov.sandia.n2a.language.type.Instance;
+import gov.sandia.n2a.language.type.Scalar;
 
 public class Split extends Operator
 {
@@ -32,6 +34,12 @@ public class Split extends Operator
             if (! (n instanceof ASTVarNode)) throw new ParseException ("AST for type list has unexpected form");
             names[i] = n.jjtGetValue ().toString ();
         }
+    }
+
+    public Type eval (Instance context) throws EvaluationException
+    {
+        int index = context.equations.splits.indexOf (parts);
+        return new Scalar (index + 1);
     }
 
     public String toString ()

@@ -17,7 +17,6 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
-import gov.sandia.n2a.language.parse.ASTNodeBase;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
@@ -160,18 +159,17 @@ public abstract class PartSetAbstract implements PartSetInterface
         {
             Variable n = eqns.find (new Variable ("$n"));
             if (n == null) throw new NetworkGenerationException ("Attempt to access non-existent $n. Indicates a bug in Xyce backend.");
-            class InstanceBypass extends Instance
+            Instance bypass = new Instance ()
             {
                 public Type get (Variable v) throws EvaluationException
                 {
-                    if (v.name.equals ("$n"   )) return super.get (v);
                     if (v.name.equals ("$init")) return new Scalar (1);  // we evaluate $n in init cycle
                     return new Scalar (0);  // During init all other vars are 0, even if they have an initialization conditioned on $init. IE: those values won't be seen until after the init cycle.
                 }
             };
-            Type result = new InstanceBypass ().get (n);  // by not using Operator.eval(Instance) directly, we also check the conditional.
+            Type result = n.eval (bypass);
             if (result instanceof Scalar) numInstances = (long) ((Scalar) result).value;
-            else throw new NetworkGenerationException ("#instances equation does not evaluate to a number");
+            else numInstances = 1;
         }
         return numInstances;
     }

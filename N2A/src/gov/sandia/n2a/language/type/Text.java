@@ -32,6 +32,11 @@ public class Text extends Type
         value = that.toString ();
     }
 
+    public void clear ()
+    {
+        value = "";
+    }
+
     public Type add (Type that)
     {
         return new Text (value + that.toString ());

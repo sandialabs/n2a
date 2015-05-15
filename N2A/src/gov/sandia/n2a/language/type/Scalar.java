@@ -36,6 +36,11 @@ public class Scalar extends Type
         if (that.value.length > 0) value = that.value[0][0];
     }
 
+    public void clear ()
+    {
+        value = 0;
+    }
+
     public Type add (Type that) throws EvaluationException
     {
         if (that instanceof Scalar ) return new Scalar (value + ((Scalar) that).value);

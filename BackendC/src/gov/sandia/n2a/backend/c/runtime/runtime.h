@@ -125,12 +125,6 @@ public:
     Compartment * after;
 };
 
-/**
-    Note that a Part can be both a Compartment and a Connection.
-
-    <p>All population indices are ordered by $from. If $from is not specified,
-    then the code generator will pick an arbitrary but consistent ordering.
-**/
 class Connection : public Part
 {
 public:

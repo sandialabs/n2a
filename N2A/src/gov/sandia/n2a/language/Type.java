@@ -6,6 +6,11 @@ package gov.sandia.n2a.language;
 **/
 public abstract class Type
 {
+    public void clear () throws EvaluationException
+    {
+        throw new EvaluationException ("Operation not supported on this type.");
+    }
+
     public Type add (Type that) throws EvaluationException
     {
         throw new EvaluationException ("Operation not supported on this type.");

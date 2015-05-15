@@ -63,14 +63,9 @@ public class AccessVariable extends Operator
         return this;
     }
 
-    public Type eval (Instance context)
+    public Type eval (Instance instance)
     {
-        if (reference == null) throw new EvaluationException ("Unresolved: " + name);
-        if (reference.variable.name.equals ("(connection)")) return new Instance (reference.variable.container);
-        if (reference.variable.hasAttribute ("constant")) return reference.variable.equations.first ().expression.eval (context);
-        Type result = context.get (reference.variable);
-        if (result == null) throw new EvaluationException ("Variable does not have a value in this context.");
-        return result;
+        return instance.get (reference.variable);
     }
 
     public String toString ()

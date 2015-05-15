@@ -7,6 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.eqset;
 
+import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.Transformer;
@@ -14,6 +15,8 @@ import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.function.Max;
 import gov.sandia.n2a.language.function.Min;
 import gov.sandia.n2a.language.operator.Add;
+import gov.sandia.n2a.language.type.Instance;
+import gov.sandia.n2a.language.type.Scalar;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,6 +40,13 @@ public class Variable implements Comparable<Variable>
     public List<Variable>               before;     // Variables that must be evaluated after us. Generally the same as uses, unless we are a temporary, in which case the ordering is reversed. Note EquationSet.ordered
     public Variable                     visited;    // Points to the previous variable visited on the current path. Used to prevent infinite recursion. Only work on a single thread.
     public int                          priority;   // For evaluation order.
+
+    // Internal backend
+    public int      readIndex;  // Position in Instance.values to read
+    public boolean  readTemp;   // Read the temp Instance rather than the main one
+    public int      writeIndex; // Position Instance.values to write
+    public boolean  writeTemp;  // Write the temp Instance rather than the main one
+    public Variable derivative; // The variable from which we are integrated, if any.
 
     public Variable (String name)
     {
@@ -161,6 +171,19 @@ public class Variable implements Comparable<Variable>
                 e.ifString = e.conditional.render ();
             }
         }
+        // TODO: Re-sort the equations? Delete any that have constant 0 for their condition?
+    }
+
+    public Type eval (Instance instance) throws EvaluationException
+    {
+        // Assume that EquationEntry orders itself to put the default equations last, and particularly an unconditional equation after one with $init
+        for (EquationEntry e : equations)  // Scan for first equation whose condition is nonzero
+        {
+            if (e.conditional == null) return e.expression.eval (instance);
+            Object doit = e.conditional.eval (instance);
+            if (doit instanceof Scalar  &&  ((Scalar) doit).value != 0) return e.expression.eval (instance);
+        }
+        return null;
     }
 
     public void addDependency (Variable whatWeNeed)

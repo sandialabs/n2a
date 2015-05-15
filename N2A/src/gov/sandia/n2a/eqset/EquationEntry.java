@@ -21,7 +21,7 @@ public class EquationEntry implements Comparable<EquationEntry>
 {
     public NDoc                    source;  // Reference to the source DB object
     public Variable                variable;
-    public String                  ifString;  // only for sorting
+    public String                  ifString;  // only for sorting. TODO: get rid of ifString. Instead, convert conditional to a canonical form with well-defined sort order. This will enable us to combine logically equivalent conditions, as well prioritize more restrictive conditions.
     public String                  assignment;
     public Operator                expression;
     public Operator                conditional;
@@ -172,21 +172,20 @@ public class EquationEntry implements Comparable<EquationEntry>
 
     public int compareTo (EquationEntry that)
     {
-        return ifString.compareTo (that.ifString);
+        if (ifString.equals (that.ifString)) return  0;
+        if (     ifString.isEmpty ())        return  1;
+        if (that.ifString.isEmpty ())        return -1;
+        if (     ifString.equals ("$init"))  return  1;
+        if (that.ifString.equals ("$init"))  return -1;
+        return that.ifString.length () - ifString.length ();  // as a heuristic, sort longer ifStrings first
     }
 
     @Override
     public boolean equals (Object that)
     {
-        if (this == that)
-        {
-            return true;
-        }
+        if (this == that) return true;
         EquationEntry e = (EquationEntry) that;
-        if (e == null)
-        {
-            return false;
-        }
+        if (e == null) return false;
         return compareTo (e) == 0;
     }
 }

@@ -736,16 +736,15 @@ public class EquationSet implements Comparable<EquationSet>
                 // Otherwise, we check the actual value.
                 if (ne.expression != null)
                 {
-                    class InstanceBypass extends Instance
+                    Instance bypass = new Instance ()
                     {
                         public Type get (Variable v) throws EvaluationException
                         {
-                            if (v.name.equals ("$n"   )) return super.get (v);
                             if (v.name.equals ("$init")) return new Scalar (1);  // we evaluate $n in init cycle
                             return new Scalar (0);  // During init all other vars are 0, even if they have an initialization conditioned on $init. IE: those values won't be seen until after the init cycle.
                         }
                     };
-                    Type value = new InstanceBypass ().get (n);  // by not using Operator.eval(Instance) directly, we also check the conditional.
+                    Type value = n.eval (bypass);
                     if (value instanceof Scalar  &&  ((Scalar) value).value != 1) continue;
                 }
                 s.variables.remove (n);  // We don't want $n in the merged set.
@@ -1378,14 +1377,11 @@ public class EquationSet implements Comparable<EquationSet>
                 {
                     public Type get (Variable target) throws EvaluationException
                     {
-                        // Force us to reevaluate v, but all other vars are treated as if their current value is Variable.type
-                        if (target == v.reference.variable) return super.get (target);
                         return target.type;
                     }
                 };
-                value = instance.get (v.reference.variable);
+                value = v.reference.variable.eval (instance);  // can return null if no equation's condition is true
             }
-            // value can be null, for example, when the variable has no equations
             if (value != null  &&  value.betterThan (v.type))
             {
                 v.type = value;
@@ -1421,17 +1417,11 @@ public class EquationSet implements Comparable<EquationSet>
 
         if (connectionBindings == null)
         {
-            if (connection == 1)
-            {
-                return;
-            }
+            if (connection == 1) return;
         }
         else
         {
-            if (connection == -1)
-            {
-                return;
-            }
+            if (connection == -1) return;
         }
         for (Variable v : variables)
         {
@@ -1564,10 +1554,7 @@ public class EquationSet implements Comparable<EquationSet>
                     e.assignment = "=";  // replace := with = for use in code generation
                 }
             }
-            if (hasTemporary)
-            {
-                v.addAttribute ("temporary");
-            }
+            if (hasTemporary) v.addAttribute ("temporary");
         }
     }
 
