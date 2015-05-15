@@ -161,9 +161,6 @@ public class UMF
 
         // Set some global application properties.
         Application.setName("Unified Modeling Framework");
-        Application.setVersion(VersionConstants.MAJOR + "." +
-                               VersionConstants.MINOR + "." +
-                               VersionConstants.SERVICE);
         Application.setTitle("Unified Modeling Framework");
 
         XStreamWrapper.addAlias(SerializationResult.class.getSimpleName(), SerializationResult.class);

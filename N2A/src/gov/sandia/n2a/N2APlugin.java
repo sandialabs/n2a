@@ -42,11 +42,9 @@ public class N2APlugin extends DefaultPlugin {
     }
 
     @Override
-    public String getVersion() {
-        return VersionConstants.MAJOR + "." +
-               VersionConstants.MINOR + "." +
-               VersionConstants.SERVICE + "." +
-               VersionConstants.BUILD;
+    public String getVersion ()
+    {
+        return "0.9";
     }
 
     @Override

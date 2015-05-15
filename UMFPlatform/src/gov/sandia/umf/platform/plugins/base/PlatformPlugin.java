@@ -7,7 +7,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.plugins.base;
 
-import gov.sandia.umf.platform.VersionConstants;
 import gov.sandia.umf.platform.plugins.extpoints.Analyzer;
 import gov.sandia.umf.platform.plugins.extpoints.Exporter;
 import gov.sandia.umf.platform.plugins.extpoints.MenuItems;
@@ -36,11 +35,9 @@ public class PlatformPlugin extends DefaultPlugin {
     }
 
     @Override
-    public String getVersion() {
-        return VersionConstants.MAJOR + "." +
-               VersionConstants.MINOR + "." +
-               VersionConstants.SERVICE + "." +
-               VersionConstants.BUILD;
+    public String getVersion ()
+    {
+        return "0.9";
     }
 
     @Override

@@ -22,10 +22,7 @@ public class PluginC extends DefaultPlugin
 
     public String getVersion()
     {
-        return VersionConstants.MAJOR + "." +
-               VersionConstants.MINOR + "." +
-               VersionConstants.SERVICE + "." +
-               VersionConstants.BUILD;
+        return "0.9";
     }
 
     public String getProvider ()
