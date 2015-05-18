@@ -11,56 +11,75 @@ import java.util.LinkedList;
 
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.language.EvaluationException;
-import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 
 public class PopulationCompartment extends Population
 {
-    LinkedList<Part> membersNew;
-    LinkedList<Part> membersOld;
+    // We create a null-terminated doubly-linked list. This is little more complicated
+    // to manage than a fully-circular list, but it is worth the complexity to avoid
+    // extra storage for the head.
+    Compartment head; ///< List of all instances of this population. Mainly used for creating connections.
+    Compartment tail; ///< Last member in list. Used for reverse iteration.
+    Compartment old;  ///< First old part in list. All parts before this were added during current cycle. If old == null, then all parts are new.
     int n;  /// current number of live members
     int nextIndex;
     LinkedList<Integer> availableIndex;
 
-    public PopulationCompartment (EquationSet equations, Instance container)
+    public PopulationCompartment (EquationSet equations, Part container)
     {
         super (equations, container);
     }
 
-    public void add (Part p)
+    public void insert (Compartment p)
     {
         n++;
 
-        InternalSimulation.BackendData bed = (InternalSimulation.BackendData) equations.backendData;
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
+        if (bed.index != null)
+        {
+            int index;
+            if (availableIndex == null)
+            {
+                index = nextIndex++;
+            }
+            else
+            {
+                index = availableIndex.remove ();
+                if (availableIndex.size () < 1) availableIndex = null;
+            }
+            p.set (bed.index, new Scalar (index));
+        }
 
-        if (availableIndex == null) availableIndex = new LinkedList<Integer> ();
-        int index;
-        if (availableIndex.size () > 0) index = availableIndex.remove ();
-        else                            index = nextIndex++;
-        p.set (bed.index, new Scalar (index));
-
-        if (membersNew == null) membersNew = new LinkedList<Part> ();
-        membersNew.add (p);
+        if (tail == null) tail = p;
+        if (head != null) head.before = p;
+        p.after  = head;
+        p.before = null;
+        head     = p;
     }
 
-    public void remove (Part p)
+    public void remove (Compartment p)
     {
         n--;  // presuming that p is actually here
 
-        InternalSimulation.BackendData bed = (InternalSimulation.BackendData) equations.backendData;
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
+        if (bed.index != null)
+        {
+            if (availableIndex == null) availableIndex = new LinkedList<Integer> ();
+            availableIndex.add ((int) ((Scalar) p.get (bed.index)).value);
+        }
 
-        if (availableIndex == null) availableIndex = new LinkedList<Integer> ();
-        availableIndex.add ((int) ((Scalar) p.get (bed.index)).value);
-
-        if (membersOld != null  &&  membersOld.remove (p)) return;
-        if (membersNew != null)     membersNew.remove (p);
+        if (p == tail) tail = p.before;
+        if (p == head) head = p.after;
+        if (p == old ) old  = p.after;
+        if (p.after  != null) p.after.before = p.before;
+        if (p.before != null) p.before.after = p.after;
     }
 
     public void init (Euler simulator)
     {
         super.init (simulator);
 
-        InternalSimulation.BackendData bed = (InternalSimulation.BackendData) equations.backendData;
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
         int requestedN = 1;
         if (bed.n.hasAttribute ("constant")) requestedN = (int) ((Scalar) bed.n.eval (this)).value;
         else                                 requestedN = (int) ((Scalar) get (bed.n)).value;
@@ -71,15 +90,10 @@ public class PopulationCompartment extends Population
     {
         super.prepare ();
 
-        if (membersNew != null  &&  membersNew.size () > 0)
-        {
-            if (membersOld == null) membersOld = new LinkedList<Part> ();
-            membersOld.addAll (membersNew);
-            membersNew.clear ();
-        }
+        old = head;
 
-        InternalSimulation.BackendData bed = (InternalSimulation.BackendData) equations.backendData;
-        if (bed.countChangesWithoutN)
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
+        if (bed.populationChangesWithoutN)
         {
             int requestedN = (int) ((Scalar) get (bed.n)).value;
             if (requestedN != n) set (bed.n, new Scalar (n));  // conditional so we can preserve fractional requested $n unless it is very wrong
@@ -90,7 +104,7 @@ public class PopulationCompartment extends Population
     {
         super.update (simulator);
 
-        InternalSimulation.BackendData bed = (InternalSimulation.BackendData) equations.backendData;
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
         if (! bed.n.hasAny (new String[] {"constant", "initOnly", "externalWrite", "externalRead"}))  // This case should be mutually exclusive with the one in Population.finish().
         {
             int requestedN = (int) ((Scalar) get (bed.n)).value;
@@ -100,7 +114,7 @@ public class PopulationCompartment extends Population
 
     public boolean finish (Euler simulator)
     {
-        InternalSimulation.BackendData bed = (InternalSimulation.BackendData) equations.backendData;
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
         if (bed.globalBufferedExternal.contains (bed.n))
         {
             double oldN = ((Scalar) get      (bed.n)).value;
@@ -112,29 +126,24 @@ public class PopulationCompartment extends Population
 
     public void resize (Euler simulator, int requestedN)
     {
-        InternalSimulation.BackendData bed = (InternalSimulation.BackendData) equations.backendData;
-
         while (n < requestedN)
         {
-            Part p = new Part (equations, container);
-            add (p);  // sets $index; increments n
+            Compartment p = new Compartment (equations, this);
+            insert (p);  // sets $index; increments n
             simulator.enqueue (p);
             p.init (simulator);
         }
 
-        while (n > requestedN)
+        if (n > requestedN)
         {
-            if (membersOld.size () > 0)
+            Compartment r = tail;  // reverse iterator
+            while (n > requestedN)
             {
-                Part p = membersOld.getFirst ();
-                if (((Scalar) p.get (bed.live)).value != 0) p.die ();  // Part.die() is responsible to call remove(). p itself won't dequeue until next simulator cycle.
+                if (r == null) throw new EvaluationException ("Internal inconsistency in population count.");
+                Compartment p = r;
+                r = r.before;
+                p.die ();  // Part.die() is responsible to call remove(). p itself won't dequeue until next simulator cycle.
             }
-            else if (membersNew.size () > 0)
-            {
-                Part p = membersNew.getFirst ();
-                if (((Scalar) p.get (bed.live)).value != 0) p.die ();
-            }
-            else throw new EvaluationException ("Inconsistent $n");
         }
     }
 }

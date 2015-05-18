@@ -212,7 +212,7 @@ void writeHeaders ()
         cout << headers[i];
         if (i < last) cout << "\t";
     }
-    cout << endl;
+    if (last >= 0) cout << endl;
 }
 
 

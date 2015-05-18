@@ -7,8 +7,12 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.type;
 
+import java.util.Iterator;
+
+import gov.sandia.n2a.backend.internal.Connection;
+import gov.sandia.n2a.backend.internal.Part;
 import gov.sandia.n2a.backend.internal.Euler;
-import gov.sandia.n2a.backend.internal.InternalSimulation;
+import gov.sandia.n2a.backend.internal.Population;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.EvaluationException;
@@ -20,14 +24,35 @@ import gov.sandia.n2a.language.Type;
 public class Instance extends Type
 {
     public EquationSet equations;
-    public Instance container;
-    public float[] valuesFloat;  // memory is the premium resource, not time or accuracy
-    public Type[]  valuesType;
+    public Instance    container;
+    public float[]     valuesFloat;  // memory is the premium resource, not accuracy
+    public Type[]      valuesType;
 
     public void allocate (int countFloat, int countType)
     {
         if (countFloat > 0) valuesFloat = new float[countFloat];
         if (countType  > 0) valuesType  = new Type [countType ];
+    }
+
+    public void resolve (Variable v)
+    {
+        if (v != v.reference.variable)
+        {
+            Instance result = this;
+            Iterator<Object> it = v.reference.resolution.iterator ();
+            while (it.hasNext ())
+            {
+                int i = ((Integer) it.next ()).intValue ();
+                if      (i > 0) result = ((Part)       result).populations[i-1];
+                else if (i < 0) result = ((Connection) result).endpoints [-i-1];
+                else  // i == 0
+                {
+                    if (result instanceof Population) result = result.container;
+                    else                              result = result.container.container;  // Parts must dereference their Population to get to their true container.
+                }
+            }
+            valuesType[v.readIndex] = result;
+        }
     }
 
     public Type get (Variable v)
@@ -54,7 +79,7 @@ public class Instance extends Type
 
     public Type getFinal (Variable v)
     {
-        // Don't check for v.reference.variable != v, because getFinal() should never be called in that case.
+        // Don't check for reference, because getFinal() should never be called in that case.
         if (v.type instanceof Scalar) return new Scalar (valuesFloat[v.writeIndex]);
         Type result = valuesType[v.writeIndex];
         if (result == null) return v.type;
@@ -66,52 +91,6 @@ public class Instance extends Type
         // Note the change from writeIndex to readIndex. That's key purpose of this method.
         if (v.type instanceof Scalar) valuesFloat[v.readIndex] = (float) ((Scalar) value).value;
         else                          valuesType [v.readIndex] = value;
-    }
-
-    /**
-        Provides a set of temporary values for use within a single function.
-        This handles formal temporaries (those with := as an assignment), as well as buffering for cyclic dependencies.
-        Note: buffered variables that are accessed by external equation sets have two entries in the
-        main table of values, since many different function invocations may access them before they are finalized.
-    **/
-    public class Temp extends Instance
-    {
-        public Instance wrapped;
-        public Euler simulator;
-        public Scalar init;
-        public InternalSimulation.BackendData bed;
-        public Temp (Instance wrapped, Euler simulator, boolean global, boolean init)
-        {
-            this.wrapped = wrapped;
-            this.simulator = simulator;
-            this.init = new Scalar (init ? 1 : 0);
-            bed = (InternalSimulation.BackendData) wrapped.equations.backendData;
-            if (global) allocate (bed.countGlobalTempFloat, bed.countGlobalTempType);
-            else        allocate (bed.countLocalTempFloat,  bed.countLocalTempType);
-        }
-        public Type get (Variable v)
-        {
-            if (v == bed.init) return init;
-            if (v == bed.t   ) return simulator.t;
-            if (v == bed.dt  ) return simulator.dt;
-            if (v.readTemp) return super.get (v);
-            return wrapped.get (v);
-        }
-        public void set (Variable v, Type value)
-        {
-            if (v.writeTemp) super.set (v, value);
-            else             wrapped.set (v, value);
-        }
-        public Type getFinal (Variable v)
-        {
-            if (v.writeTemp) return super.get (v);
-            return wrapped.getFinal (v);
-        }
-        public void setFinal (Variable v, Type value)
-        {
-            if (v.readTemp) super.setFinal (v, value);
-            wrapped.setFinal (v, value);
-        }
     }
 
     public void init (Euler simulator)

@@ -2359,6 +2359,17 @@ public class SimulationC implements Simulation
             result.append ("void " + ns + mangle (source.name) + "_2_" + mangle (dest.name) + " (" + mangle (source.name) + " * from, Simulator & simulator, int " + mangle ("$type") + ")\n");
             result.append ("{\n");
             result.append ("  " + mangle (dest.name) + " * to = " + mangle (dest.name) + ".allocate ();\n");
+            if (connectionDest)
+            {
+                // Match connection bindings
+                for (Entry<String, EquationSet> c : dest.connectionBindings.entrySet ())
+                {
+                    String name = c.getKey ();
+                    Entry<String, EquationSet> d = source.connectionBindings.floorEntry (name);
+                    if (d == null  ||  ! d.getKey ().equals (name)) throw new Exception ("Unfulfilled connection binding during $type change.");
+                    result.append ("  to->" + mangle (name) + " = from->" + mangle (name) + ";\n");
+                }
+            }
             result.append ("  simulator.enqueue (to);\n");
             result.append ("  to->init (simulator);\n");  // sets all variables, so partially redundant with the following code ...
             // TODO: Convert contained populations from matching populations in the source part?
@@ -2381,17 +2392,6 @@ public class SimulationC implements Simulation
                 if (v2 != null  &&  v2.equals (v))
                 {
                     result.append ("  to->" + mangle (v) + " = " + resolve (v2.reference, context, false, "from->") + ";\n");
-                }
-            }
-            // Match connection bindings
-            if (connectionDest)
-            {
-                for (Entry<String, EquationSet> c : dest.connectionBindings.entrySet ())
-                {
-                    String name = c.getKey ();
-                    Entry<String, EquationSet> d = source.connectionBindings.floorEntry (name);
-                    if (d == null  ||  ! d.getKey ().equals (name)) throw new Exception ("Unfulfilled connection binding during $type change.");
-                    result.append ("  to->" + mangle (name) + " = from->" + mangle (name) + ";\n");
                 }
             }
 
@@ -2749,10 +2749,10 @@ public class SimulationC implements Simulation
                 }
                 else  // ascend to our container
                 {
-                    if (current.backendData instanceof String)  // we are a Connection without a container pointer, so we must go through one of our referenced parts
+                    BackendData bed = (BackendData) current.backendData;
+                    if (bed.pathToContainer != null)  // we are a Connection without a container pointer, so we must go through one of our referenced parts
                     {
-                        String pathToContainer = (String) current.backendData;
-                        containers += mangle (pathToContainer) + "->";
+                        containers += mangle (bed.pathToContainer) + "->";
                     }
                     containers += "container->";
                 }
@@ -2767,10 +2767,10 @@ public class SimulationC implements Simulation
 
         if (r.resolution.isEmpty ()  &&  r.variable.hasAttribute ("global")  &&  ! context.global)
         {
-            if (current.backendData instanceof String)
+            BackendData bed = (BackendData) current.backendData;
+            if (bed.pathToContainer != null)
             {
-                String pathToContainer = (String) current.backendData;
-                containers += mangle (pathToContainer) + "->";
+                containers += mangle (bed.pathToContainer) + "->";
             }
             containers += "container->" + mangle (current.name) + ".";
         }

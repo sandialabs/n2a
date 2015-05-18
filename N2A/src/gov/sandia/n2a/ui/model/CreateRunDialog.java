@@ -93,7 +93,7 @@ public class CreateRunDialog extends EscapeDialog implements HelpCapableWindow {
         for(ExtensionPoint ext : exts) {
         	SimWrapper sw = new SimWrapper((Simulator)ext);
         	simModel.addElement(sw);
-        	if(sw.s.getName().contains("Xyce")) {
+        	if(sw.s.getName().contains("C")) {
         		selSW = sw;
         	}
         }

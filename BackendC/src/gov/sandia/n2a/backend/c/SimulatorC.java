@@ -20,7 +20,7 @@ public class SimulatorC implements Simulator
     @Override
     public String getName ()
     {
-        return "C - Single threaded";
+        return "C";
     }
 
     @Override

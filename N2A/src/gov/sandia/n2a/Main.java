@@ -30,6 +30,8 @@ public class Main
             augmentedArgs.add ("--plugin");
             augmentedArgs.add ("gov.sandia.n2a.N2APlugin");
             augmentedArgs.add ("--plugin");
+            augmentedArgs.add ("gov.sandia.n2a.backend.internal.InternalPlugin");
+            augmentedArgs.add ("--plugin");
             augmentedArgs.add ("gov.sandia.n2a.backend.xyce.XycePlugin");
             augmentedArgs.add ("--plugin");
             augmentedArgs.add ("gov.sandia.n2a.backend.c.PluginC");

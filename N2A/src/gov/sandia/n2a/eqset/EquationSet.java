@@ -1105,7 +1105,8 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
-        Convenience function to assemble splits into (from,to) pairs for type conversion.
+        Convenience function to assemble any splits that occur within this container
+        into (from,to) pairs for type conversion.
         Depends on results of: collectSplits()
     **/
     public Set<Conversion> getConversions ()
@@ -1119,6 +1120,23 @@ public class EquationSet implements Comparable<EquationSet>
                 {
                     result.add (new Conversion (p, s));
                 }
+            }
+        }
+        return result;
+    }
+
+    /**
+        Convenience function to assemble a list of types that this equation set
+        can change into. This is somewhat like the inner loop of getConversions().
+    **/
+    public Set<EquationSet> getConversionTargets ()
+    {
+        Set<EquationSet> result = new TreeSet<EquationSet> ();
+        for (ArrayList<EquationSet> split : splits)
+        {
+            for (EquationSet s : split)
+            {
+                result.add (s);
             }
         }
         return result;
@@ -1272,7 +1290,7 @@ public class EquationSet implements Comparable<EquationSet>
         Determines the attributes of $live, based on whether other parts depend on it.
         $live is either constant, transient, or stored.
         constant (the default) if we can't die or no part depends on us.
-        transient              if we only die in response to the death of our container or a referenced part.
+        accessor               if we only die in response to the death of our container or a referenced part.
         stored                 if we can die from $n, $p or $type, that is, if the fact that we died is local knowledge.
         Depends on results of: findDeath() (and indirectly on findInitOnly())
     **/
@@ -1330,30 +1348,28 @@ public class EquationSet implements Comparable<EquationSet>
 
         for (Variable v : variables)
         {
-            if (v.hasAttribute ("dummy")) continue;
-
-            if (v.name.contains ("$"))
+            if (v.name.contains ("$")  &&  ! v.name.startsWith ("$up."))
             {
                 if (v.name.equals ("$xyz")  ||  v.name.endsWith (".$projectFrom")  ||  v.name.endsWith (".$projectTo"))  // are there always dots before $projectFrom/To?
                 {
-                    v.reference.variable.type = new Matrix (3, 1);
+                    v.type = new Matrix (3, 1);
                 }
                 else if (v.name.equals ("$init")  ||  v.name.equals ("$live"))
                 {
-                    v.reference.variable.type = new Scalar (1);
+                    v.type = new Scalar (1);
                 }
                 else
                 {
-                    v.reference.variable.type = new Scalar (0);
+                    v.type = new Scalar (0);
                 }
             }
             else if (v.hasAttribute ("constant"))
             {
-                v.reference.variable.type = ((Constant) v.equations.first ().expression).value;
+                v.type = ((Constant) v.equations.first ().expression).value;
             }
             else
             {
-                v.reference.variable.type = new Scalar (0);
+                v.type = new Scalar (0);
             }
         }
     }
@@ -1363,8 +1379,8 @@ public class EquationSet implements Comparable<EquationSet>
         boolean changed = false;
         for (final Variable v : variables)
         {
-            if (v.hasAny (new String[] {"constant", "dummy"})) continue;
-            if (v.name.startsWith ("$")  ||  v.name.contains (".$")) continue;
+            if (v.hasAny (new String[] {"constant"})) continue;
+            if ((v.name.startsWith ("$")  ||  v.name.contains (".$"))  &&  ! v.name.startsWith ("$up.")) continue;
 
             Type value;
             if (v.hasAttribute ("integrated"))
@@ -1377,14 +1393,15 @@ public class EquationSet implements Comparable<EquationSet>
                 {
                     public Type get (Variable target) throws EvaluationException
                     {
-                        return target.type;
+                        return target.reference.variable.type;
                     }
                 };
-                value = v.reference.variable.eval (instance);  // can return null if no equation's condition is true
+                value = v.eval (instance);  // can return null if no equation's condition is true
             }
-            if (value != null  &&  value.betterThan (v.type))
+            if (value != null  &&  value.betterThan (v.reference.variable.type))
             {
-                v.type = value;
+                v.reference.variable.type = value;
+                v.type = value;  // convenience, so that a reference knows its type, not merely its target
                 changed = true;
             }
         }

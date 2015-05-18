@@ -42,11 +42,13 @@ public class Variable implements Comparable<Variable>
     public int                          priority;   // For evaluation order.
 
     // Internal backend
+    // TODO: put this in a beckendData field, similar to EquationSet.backendData. The problem with this is the extra overhead to unpack the object.
     public int      readIndex;  // Position in Instance.values to read
     public boolean  readTemp;   // Read the temp Instance rather than the main one
     public int      writeIndex; // Position Instance.values to write
     public boolean  writeTemp;  // Write the temp Instance rather than the main one
     public Variable derivative; // The variable from which we are integrated, if any.
+    public boolean  global;     // redundant with "global" attribute; for faster execution, since it is a frequently checked
 
     public Variable (String name)
     {

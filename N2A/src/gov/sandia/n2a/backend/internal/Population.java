@@ -9,6 +9,7 @@ package gov.sandia.n2a.backend.internal;
 
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 
@@ -18,20 +19,22 @@ import gov.sandia.n2a.language.type.Scalar;
 **/
 public class Population extends Instance
 {
-    public Population (EquationSet equations, Instance container)
+    public Population (EquationSet equations, Part container)
     {
         this.equations = equations;
         this.container = container;
-        InternalSimulation.BackendData bed = (InternalSimulation.BackendData) equations.backendData;
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
         allocate (bed.countGlobalFloat, bed.countGlobalType);
     }
 
     public void init (Euler simulator)
     {
-        Instance.Temp temp = new Instance.Temp (this, simulator, true, true);
+        InstanceTemporaries temp = new InstanceTemporaries (this, simulator, true, true);
+        for (Variable v : temp.bed.globalReference) resolve (v);
         for (Variable v : temp.bed.globalInit)
         {
-            temp.set (v, v.eval (temp));
+            Type result = v.eval (temp);
+            if (result != null) temp.set (v, result);
         }
         for (Variable v : temp.bed.globalBuffered)
         {
@@ -41,7 +44,7 @@ public class Population extends Instance
 
     public void integrate (Euler simulator)
     {
-        Instance.Temp temp = new Instance.Temp (this, simulator, true, false);
+        InstanceTemporaries temp = new InstanceTemporaries (this, simulator, true, false);
         for (Variable v : temp.bed.globalIntegrated)
         {
             double a  = ((Scalar) temp.get (v           )).value;
@@ -52,7 +55,7 @@ public class Population extends Instance
 
     public void prepare ()
     {
-        InternalSimulation.BackendData bed = (InternalSimulation.BackendData) equations.backendData;
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
         for (Variable v : bed.globalBufferedExternalWrite)
         {
             set (v, v.type);  // v.type should be pre-loaded with zero-equivalent values
@@ -61,10 +64,16 @@ public class Population extends Instance
 
     public void update (Euler simulator)
     {
-        Instance.Temp temp = new Instance.Temp (this, simulator, true, false);
+        InstanceTemporaries temp = new InstanceTemporaries (this, simulator, true, false);
         for (Variable v : temp.bed.globalUpdate)
         {
-            temp.set (v, v.eval (temp));
+            Type result = v.eval (temp);
+            if (result == null)  // no condition matched
+            {
+                if (v.readIndex != v.writeIndex) temp.set (v, temp.get (v));  // default action for buffered vars is to copy old value
+                continue;
+            }
+            temp.set (v, result);
         }
         for (Variable v : temp.bed.globalBufferedInternalUpdate)
         {
@@ -74,12 +83,11 @@ public class Population extends Instance
 
     public boolean finish (Euler simulator)
     {
-        InternalSimulation.BackendData bed = (InternalSimulation.BackendData) equations.backendData;
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
         for (Variable v : bed.globalBufferedExternal)
         {
             setFinal (v, getFinal (v));
         }
-        // TODO: write trace somewhere, probably in top-level wrapper for model
         return true;
     }
 }

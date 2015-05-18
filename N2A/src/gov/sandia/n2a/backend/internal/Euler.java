@@ -14,6 +14,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
+import java.util.Random;
 import java.util.TreeMap;
 import java.util.Map.Entry;
 
@@ -25,11 +26,13 @@ import java.util.Map.Entry;
 **/
 public class Euler
 {
+    public Wrapper wrapper;  // holds top-level model
     public Scalar t  = new Scalar (0);
     public Scalar dt = new Scalar (1e-4);
-    List<Instance>                     queue        = new LinkedList<Instance> ();
-    Map<PopulationCompartment,Integer> resizeQueue  = new TreeMap<PopulationCompartment,Integer> ();
-    List<PopulationConnection>         connectQueue = new LinkedList<PopulationConnection> ();
+    public List<Instance>                     queue        = new LinkedList<Instance> ();
+    public Map<PopulationCompartment,Integer> resizeQueue  = new TreeMap<PopulationCompartment,Integer> ();
+    public List<PopulationConnection>         connectQueue = new LinkedList<PopulationConnection> ();
+    public Random uniform = new Random ();
 
     public void run ()
     {
@@ -59,11 +62,18 @@ public class Euler
             }
             resizeQueue.clear ();
         }
+
+        wrapper.writeHeaders ();
     }
 
     public void integrate ()
     {
         for (Instance i : queue) i.integrate (this);
+    }
+
+    public void move (double value)
+    {
+        dt.value = value;
     }
 
     public void enqueue (Instance i)

@@ -18,7 +18,7 @@ public class XyceSimulator implements Simulator {
 
     @Override
     public String getName() {
-        return "Xyce2";
+        return "Xyce";
     }
 
     @Override
