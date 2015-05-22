@@ -19,7 +19,7 @@ import gov.sandia.n2a.language.type.Scalar;
 **/
 public class Population extends Instance
 {
-    public Population (EquationSet equations, Part container)
+    protected Population (EquationSet equations, Part container)
     {
         this.equations = equations;
         this.container = container;
@@ -30,11 +30,11 @@ public class Population extends Instance
     public void init (Euler simulator)
     {
         InstanceTemporaries temp = new InstanceTemporaries (this, simulator, true, true);
-        for (Variable v : temp.bed.globalReference) resolve (v);
+        resolve (temp.bed.globalReference);
         for (Variable v : temp.bed.globalInit)
         {
             Type result = v.eval (temp);
-            if (result != null) temp.set (v, result);
+            if (result != null  &&  v.writeIndex >= 0) temp.set (v, result);
         }
         for (Variable v : temp.bed.globalBuffered)
         {
@@ -44,12 +44,12 @@ public class Population extends Instance
 
     public void integrate (Euler simulator)
     {
-        InstanceTemporaries temp = new InstanceTemporaries (this, simulator, true, false);
-        for (Variable v : temp.bed.globalIntegrated)
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
+        for (Variable v : bed.globalIntegrated)
         {
-            double a  = ((Scalar) temp.get (v           )).value;
-            double aa = ((Scalar) temp.get (v.derivative)).value;
-            temp.setFinal (v, new Scalar (a + aa * simulator.dt.value));
+            double a  = ((Scalar) get (v           )).value;
+            double aa = ((Scalar) get (v.derivative)).value;
+            setFinal (v, new Scalar (a + aa * simulator.dt));
         }
     }
 
@@ -70,10 +70,36 @@ public class Population extends Instance
             Type result = v.eval (temp);
             if (result == null)  // no condition matched
             {
-                if (v.readIndex != v.writeIndex) temp.set (v, temp.get (v));  // default action for buffered vars is to copy old value
-                continue;
+                if (v.reference.variable == v  &&  v.equations.size () > 0  &&  v.readIndex != v.writeIndex) temp.set (v, temp.get (v));
             }
-            temp.set (v, result);
+            else if (v.reference.variable.writeIndex >= 0)  // ensure this is not a "dummy" variable
+            {
+                if (v.assignment == Variable.REPLACE)
+                {
+                    temp.set (v, result);
+                }
+                else
+                {
+                    // the rest of these require knowing the current value of the working result, which is most likely external buffered
+                    Type current = temp.getFinal (v.reference);
+                    if      (v.assignment == Variable.ADD)
+                    {
+                        temp.set (v, current.add (result));
+                    }
+                    else if (v.assignment == Variable.MULTIPLY)
+                    {
+                        temp.set (v, current.multiply (result));
+                    }
+                    else if (v.assignment == Variable.MAX)
+                    {
+                        if (((Scalar) result.GT (current)).value != 0) temp.set (v, result);
+                    }
+                    else if (v.assignment == Variable.MIN)
+                    {
+                        if (((Scalar) result.LT (current)).value != 0) temp.set (v, result);
+                    }
+                }
+            }
         }
         for (Variable v : temp.bed.globalBufferedInternalUpdate)
         {

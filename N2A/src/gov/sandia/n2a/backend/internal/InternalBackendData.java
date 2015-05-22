@@ -9,28 +9,38 @@ package gov.sandia.n2a.backend.internal;
 
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.VariableReference;
+import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.type.Scalar;
+
+import java.util.Comparator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 public class InternalBackendData
 {
     public Object backendData;  ///< Other backends may use Internal as a preprocessor, and may need to store additional data not covered here.
 
     public List<Variable> localUpdate                  = new ArrayList<Variable> ();  // updated during regular call to update()
-    public List<Variable> localInit                    = new ArrayList<Variable> ();  // set by init()
+    public List<Variable> localInitRegular             = new ArrayList<Variable> ();  // non-$variables set by init()
+    public List<Variable> localInitSpecial             = new ArrayList<Variable> ();  // $variables set by init()
     public List<Variable> localMembers                 = new ArrayList<Variable> ();  // stored inside the object
-    public List<Variable> localBuffered                = new ArrayList<Variable> ();  // needs buffering (temporaries)
+    public List<Variable> localBufferedRegular         = new ArrayList<Variable> ();  // non-$variables that need buffering (temporaries)
+    public List<Variable> localBufferedSpecial         = new ArrayList<Variable> ();  // $variables that need buffering (temporaries)
     public List<Variable> localBufferedInternal        = new ArrayList<Variable> ();  // subset of buffered that are due to dependencies strictly within the current equation-set
     public List<Variable> localBufferedInternalUpdate  = new ArrayList<Variable> ();  // subset of buffered internal that can execute outside of init()
     public List<Variable> localBufferedExternal        = new ArrayList<Variable> ();  // subset of buffered that are due to some external access
     public List<Variable> localBufferedExternalWrite   = new ArrayList<Variable> ();  // subset of external that are due to external write
     public List<Variable> localIntegrated              = new ArrayList<Variable> ();  // store the result of integration of some other variable (the derivative)
-    public List<Variable> localReference               = new ArrayList<Variable> ();  // variables that point to storage external to their part
     public List<Variable> globalUpdate                 = new ArrayList<Variable> ();
     public List<Variable> globalInit                   = new ArrayList<Variable> ();
     public List<Variable> globalMembers                = new ArrayList<Variable> ();
@@ -40,7 +50,9 @@ public class InternalBackendData
     public List<Variable> globalBufferedExternal       = new ArrayList<Variable> ();
     public List<Variable> globalBufferedExternalWrite  = new ArrayList<Variable> ();
     public List<Variable> globalIntegrated             = new ArrayList<Variable> ();
-    public List<Variable> globalReference              = new ArrayList<Variable> ();
+
+    public TreeSet<VariableReference> localReference   = new TreeSet<VariableReference> (new ReferenceComparator ());
+    public TreeSet<VariableReference> globalReference  = new TreeSet<VariableReference> (new ReferenceComparator ());
 
     // The following arrays have exactly the same order as EquationSet.connectionBindings
     // This includes the $variables in the next group below.
@@ -65,6 +77,11 @@ public class InternalBackendData
     public boolean populationChangesWithoutN;
     public int     populationIndex;  // in container.populations
 
+    public int liveStorage;
+    public static final int LIVE_STORED   = 0;
+    public static final int LIVE_ACCESSOR = 1;
+    public static final int LIVE_CONSTANT = 2;
+
     // Size of storage blocks to allocate for part.
     // This is made more complicated by the fact that not everything is a simple float.
     // Some variables must be stored as objects. Thus there are two kinds of blocks.
@@ -78,6 +95,19 @@ public class InternalBackendData
     public int countGlobalFloat;
     public int countGlobalType;
 
+    // for debugging
+    // We could use ArrayList.size() instead of the corresponding count* values above.
+    public List<String> namesLocalTempFloat  = new ArrayList<String> ();
+    public List<String> namesLocalTempType   = new ArrayList<String> ();
+    public List<String> namesLocalFloat      = new ArrayList<String> ();
+    public List<String> namesLocalType       = new ArrayList<String> ();
+    public List<String> namesGlobalTempFloat = new ArrayList<String> ();
+    public List<String> namesGlobalTempType  = new ArrayList<String> ();
+    public List<String> namesGlobalFloat     = new ArrayList<String> ();
+    public List<String> namesGlobalType      = new ArrayList<String> ();
+
+    public Map<EquationSet,Conversion> conversions = new TreeMap<EquationSet,Conversion> ();  // maps from new part type to appropriate conversion record
+
     public class Conversion
     {
         // These two arrays are filled in parallel, such that index i in one matches i in the other.
@@ -85,7 +115,40 @@ public class InternalBackendData
         ArrayList<Variable> to   = new ArrayList<Variable> ();
         int[] bindings;  // to index = bindings[from index]
     }
-    public Map<EquationSet,Conversion> conversions = new TreeMap<EquationSet,Conversion> ();  // maps from new part type to appropriate conversion record
+
+    class ReferenceComparator implements Comparator<VariableReference>
+    {
+        public int compare (VariableReference arg0, VariableReference arg1)
+        {
+            int count = arg0.resolution.size ();
+            int result = count - arg1.resolution.size ();
+            if (result != 0) return result;
+
+            for (int i = 0; i < count; i++)
+            {
+                Object o0 = arg0.resolution.get (i);
+                Object o1 = arg1.resolution.get (i);
+                if (! o0.getClass ().equals (o1.getClass ())) return o0.getClass ().hashCode () - o1.getClass ().hashCode ();
+
+                if (o0 instanceof EquationSet)
+                {
+                    result = ((EquationSet) o0).compareTo ((EquationSet) o1);
+                    if (result != 0) return result;
+                }
+                else if (o0 instanceof Entry<?,?>)
+                {
+                    Entry<?,?> e0 = (Entry<?,?>) o0;
+                    Entry<?,?> e1 = (Entry<?,?>) o1;
+                    result = ((String     ) e0.getKey   ()).compareTo ((String     ) e1.getKey   ());
+                    if (result != 0) return result;
+                    result = ((EquationSet) e0.getValue ()).compareTo ((EquationSet) e1.getValue ());
+                    if (result != 0) return result;
+                }
+            }
+
+            return 0;
+        }
+    }
 
     public void analyze (EquationSet s)
     {
@@ -109,13 +172,45 @@ public class InternalBackendData
             if (v.hasAttribute ("global"))
             {
                 v.global = true;
-                if (! v.hasAny (new String[] {"constant", "accessor"}))
+                v.visit (new Visitor ()
+                {
+                    public boolean visit (Operator op)
+                    {
+                        if (op instanceof AccessVariable)
+                        {
+                            AccessVariable av = (AccessVariable) op;
+                            if (av.reference.resolution.size () > 0)
+                            {
+                                if (globalReference.add (av.reference))
+                                {
+                                    av.reference.index = countGlobalType++;
+                                    namesGlobalType.add ("reference to " + av.reference.variable.container.name);
+                                }
+                                else
+                                {
+                                    av.reference.index = globalReference.floor (av.reference).index;
+                                }
+                            }
+                            return false;
+                        }
+                        return true;
+                    }
+                });
+                if (! v.hasAny (new String[] {"constant", "accessor", "readOnly"}))
                 {
                     boolean initOnly = v.hasAttribute ("initOnly");
                     if (! initOnly) globalUpdate.add (v);
                     if (v.hasAttribute ("reference"))
                     {
-                        globalReference.add (v);
+                        if (globalReference.add (v.reference))
+                        {
+                            v.reference.index = countGlobalType++;
+                            namesGlobalType.add ("reference to " + v.reference.variable.container.name);
+                        }
+                        else
+                        {
+                            v.reference.index = globalReference.floor (v.reference).index;
+                        }
                     }
                     else
                     {
@@ -124,10 +219,7 @@ public class InternalBackendData
                         if (! unusedTemporary) globalInit.add (v);
                         if (! temporary)
                         {
-                            if (! v.hasAny (new String [] {"preexistent", "dummy"}))
-                            {
-                                globalMembers.add (v);
-                            }
+                            if (! v.hasAny (new String [] {"preexistent", "dummy"})) globalMembers.add (v);
 
                             boolean external = false;
                             if (v.hasAttribute ("externalWrite"))
@@ -155,19 +247,61 @@ public class InternalBackendData
             }
             else
             {
-                if (! v.hasAny (new String[] {"constant", "accessor"}))
+                v.visit (new Visitor ()
+                {
+                    public boolean visit (Operator op)
+                    {
+                        if (op instanceof AccessVariable)
+                        {
+                            AccessVariable av = (AccessVariable) op;
+                            if (av.reference.resolution.size () > 0)
+                            {
+                                if (localReference.add (av.reference))
+                                {
+                                    av.reference.index = countLocalType++;
+                                    namesLocalType.add ("reference to " + av.reference.variable.container.name);
+                                }
+                                else
+                                {
+                                    av.reference.index = localReference.floor (av.reference).index;
+                                }
+                            }
+                            return false;
+                        }
+                        return true;
+                    }
+                });
+                if (! v.hasAny (new String[] {"constant", "accessor", "readOnly"}))
                 {
                     boolean initOnly = v.hasAttribute ("initOnly");
                     if (! initOnly) localUpdate.add (v);
                     if (v.hasAttribute ("reference"))
                     {
-                        localReference.add (v);
+                        if (localReference.add (v.reference))
+                        {
+                            v.reference.index = countLocalType++;
+                            namesLocalType.add ("reference to " + v.reference.variable.container.name);
+                        }
+                        else
+                        {
+                            v.reference.index = localReference.floor (v.reference).index;
+                        }
                     }
                     else
                     {
                         boolean temporary = v.hasAttribute ("temporary");
                         boolean unusedTemporary = temporary  &&  ! v.hasUsers;
-                        if (! unusedTemporary  &&  ! v.name.equals ("$index")) localInit.add (v);
+                        if (! unusedTemporary)
+                        {
+                            if (v.name.startsWith ("$"))
+                            {
+                                if (! v.name.equals ("$index")  &&  ! v.name.equals ("$live")) localInitSpecial.add (v);
+                            }
+                            else
+                            {
+                                localInitRegular.add (v);
+                            }
+                        }
                         if (! temporary)
                         {
                             if (! v.hasAny (new String [] {"preexistent", "dummy"})) localMembers.add (v);
@@ -185,7 +319,8 @@ public class InternalBackendData
                             }
                             if (external  ||  v.hasAttribute ("cycle"))
                             {
-                                localBuffered.add (v);
+                                if (v.name.startsWith ("$")) localBufferedSpecial.add (v);
+                                else                         localBufferedRegular.add (v);
                                 if (! external)
                                 {
                                     localBufferedInternal.add (v);
@@ -202,14 +337,8 @@ public class InternalBackendData
             if (v.hasAttribute ("integrated"))  // Do we need to guard against reference, constant, transient?
             {
                 v.derivative = s.variables.floor (new Variable (v.name, v.order + 1));  // cache our derivative, so we don't need to look it up repeatedly at runtime
-                if (v.hasAttribute ("global"))
-                {
-                    globalIntegrated.add (v);
-                }
-                else
-                {
-                    localIntegrated.add (v);
-                }
+                if (v.hasAttribute ("global")) globalIntegrated.add (v);
+                else                            localIntegrated.add (v);
             }
         }
 
@@ -235,17 +364,33 @@ public class InternalBackendData
             connectionTargets = new int[count];
             accountableEndpoints = new Variable[count];
             int i = 0;
-            for (Entry<String, EquationSet> n : s.connectionBindings.entrySet ())
+            for (Entry<String, EquationSet> c : s.connectionBindings.entrySet ())
             {
-                k     [i] = s.find (new Variable (n.getKey () + ".$k"     ));
-                max   [i] = s.find (new Variable (n.getKey () + ".$max"   ));
-                min   [i] = s.find (new Variable (n.getKey () + ".$min"   ));
-                radius[i] = s.find (new Variable (n.getKey () + ".$radius"));
+                String alias = c.getKey ();
+                k     [i] = s.find (new Variable (alias + ".$k"     ));
+                max   [i] = s.find (new Variable (alias + ".$max"   ));
+                min   [i] = s.find (new Variable (alias + ".$min"   ));
+                radius[i] = s.find (new Variable (alias + ".$radius"));
+
+                if (min[i] != null  ||  max[i] != null)
+                {
+                    // Create a variable to wrap the count field in the target part
+                    // The target part does not add this to its formal variables,
+                    // nor do we resolve the variable in the target part. Rather, we
+                    // keep a pointer to the target in the connection part and know how
+                    // to directly access the count field.
+                    InternalBackendData endpointBed = (InternalBackendData) c.getValue ().backendData;
+                    Variable ae = new Variable ("");  // identity doesn't matter at this point
+                    ae.type = new Scalar (0);
+                    ae.readIndex = ae.writeIndex = endpointBed.countLocalFloat++;
+                    namesLocalFloat.add ("$count");
+                    accountableEndpoints[i] = ae;
+                }
 
                 int j = 0;
-                for (EquationSet t : s.parts)  // TODO: this assumes that all connections to peer populations under same container; need a more flexible way of locating target populations
+                for (EquationSet peer : s.container.parts)  // TODO: this assumes that all connections to peer populations under same container; need a more flexible way of locating target populations
                 {
-                    if (t == n.getValue ())
+                    if (peer == c.getValue ())
                     {
                         connectionTargets[i] = j;
                         break;
@@ -253,58 +398,97 @@ public class InternalBackendData
                     j++;
                 }
 
-                String alias = n.getKey ();
-                Variable       v = s.find (new Variable (alias + ".$max"));
-                if (v == null) v = s.find (new Variable (alias + ".$min"));
-                if (v != null)
-                {
-                    InternalBackendData endpointBed = (InternalBackendData) n.getValue ().backendData;
-                    Variable ae = new Variable ("");  // identity doesn't matter at this point
-                    ae.type = new Scalar (0);
-                    ae.readIndex = ae.writeIndex = endpointBed.countLocalFloat++;
-                    accountableEndpoints[i] = ae;
-                }
-
                 i++;
             }
         }
 
         // Set index on variables
-        // Initially readIndex = writeIndex = 0, and readTemp = writeTemp = false
+        // Initially readIndex = writeIndex = -1, and readTemp = writeTemp = false
+
         //   Locals
         for (Variable v : localMembers)
         {
-            if (v.type instanceof Scalar  &&  v.reference.variable == v) v.readIndex = v.writeIndex = countLocalFloat++;
-            else                                                         v.readIndex = v.writeIndex = countLocalType++;
+            if (v.type instanceof Scalar  &&  v.reference.variable == v)
+            {
+                v.readIndex = v.writeIndex = countLocalFloat++;
+                namesLocalFloat.add (v.nameString ());
+            }
+            else
+            {
+                v.readIndex = v.writeIndex = countLocalType++;
+                namesLocalType.add (v.nameString ());
+            }
         }
         for (Variable v : localBufferedExternal)
         {
-            if (v.type instanceof Scalar  &&  v.reference.variable == v) v.writeIndex = countLocalFloat++;
-            else                                                         v.writeIndex = countLocalType++;
+            if (v.type instanceof Scalar  &&  v.reference.variable == v)
+            {
+                v.writeIndex = countLocalFloat++;
+                namesLocalFloat.add ("next_" + v.nameString ());
+            }
+            else
+            {
+                v.writeIndex = countLocalType++;
+                namesLocalType.add ("next_" + v.nameString ());
+            }
         }
         for (Variable v : localBufferedInternal)
         {
             v.writeTemp = true;
-            if (v.type instanceof Scalar  &&  v.reference.variable == v) v.writeIndex = countLocalTempFloat++;
-            else                                                         v.writeIndex = countLocalTempType++;
+            if (v.type instanceof Scalar  &&  v.reference.variable == v)
+            {
+                v.writeIndex = countLocalTempFloat++;
+                namesLocalTempFloat.add ("next_" + v.nameString ());
+            }
+            else
+            {
+                v.writeIndex = countLocalTempType++;
+                namesLocalTempType.add ("next_" + v.nameString ());
+            }
         }
+
         //   Globals
         for (Variable v : globalMembers)
         {
-            if (v.type instanceof Scalar  &&  v.reference.variable == v) v.readIndex = v.writeIndex = countGlobalFloat++;
-            else                                                         v.readIndex = v.writeIndex = countGlobalType++;
+            if (v.type instanceof Scalar  &&  v.reference.variable == v)
+            {
+                v.readIndex = v.writeIndex = countGlobalFloat++;
+                namesGlobalFloat.add (v.nameString ());
+            }
+            else
+            {
+                v.readIndex = v.writeIndex = countGlobalType++;
+                namesGlobalType.add (v.nameString ());
+            }
         }
         for (Variable v : globalBufferedExternal)
         {
-            if (v.type instanceof Scalar  &&  v.reference.variable == v) v.writeIndex = countGlobalFloat++;
-            else                                                         v.writeIndex = countGlobalType++;
+            if (v.type instanceof Scalar  &&  v.reference.variable == v)
+            {
+                v.writeIndex = countGlobalFloat++;
+                namesGlobalFloat.add ("next_" + v.nameString ());
+            }
+            else
+            {
+                v.writeIndex = countGlobalType++;
+                namesGlobalType.add ("next_" + v.nameString ());
+            }
         }
         for (Variable v : globalBufferedInternal)
         {
             v.writeTemp = true;
-            if (v.type instanceof Scalar  &&  v.reference.variable == v) v.writeIndex = countGlobalTempFloat++;
-            else                                                         v.writeIndex = countGlobalTempType++;
+            if (v.type instanceof Scalar  &&  v.reference.variable == v)
+            {
+                v.writeIndex = countGlobalTempFloat++;
+                namesGlobalTempFloat.add ("next_" + v.nameString ());
+            }
+            else
+            {
+                v.writeIndex = countGlobalTempType++;
+                namesGlobalTempType.add ("next_" + v.nameString ());
+            }
         }
+
         //   fully temporary values
         for (Variable v : s.variables)
         {
@@ -312,17 +496,45 @@ public class InternalBackendData
             v.readTemp = v.writeTemp = true;
             if (v.hasAttribute ("global"))
             {
-                if (v.type instanceof Scalar  &&  v.reference.variable == v) v.readIndex = v.writeIndex = countGlobalTempFloat++;
-                else                                                         v.readIndex = v.writeIndex = countGlobalTempType++;
+                if (v.type instanceof Scalar  &&  v.reference.variable == v)
+                {
+                    v.readIndex = v.writeIndex = countGlobalTempFloat++;
+                    namesGlobalTempFloat.add (v.nameString ());
+                }
+                else
+                {
+                    v.readIndex = v.writeIndex = countGlobalTempType++;
+                    namesGlobalTempType.add (v.nameString ());
+                }
             }
             else
             {
-                if (v.type instanceof Scalar  &&  v.reference.variable == v) v.readIndex = v.writeIndex = countLocalTempFloat++;
-                else                                                         v.readIndex = v.writeIndex = countLocalTempType++;
+                if (v.type instanceof Scalar  &&  v.reference.variable == v)
+                {
+                    v.readIndex = v.writeIndex = countLocalTempFloat++;
+                    namesLocalTempFloat.add (v.nameString ());
+                }
+                else
+                {
+                    v.readIndex = v.writeIndex = countLocalTempType++;
+                    namesLocalTempType.add (v.nameString ());
+                }
             }
         }
 
-        populationChangesWithoutN = s.lethalP  ||  s.lethalType  ||  s.canGrow (); 
+        populationChangesWithoutN = s.lethalP  ||  s.lethalType  ||  s.canGrow ();
+        if (populationChangesWithoutN  &&  (n == null  ||  n.hasAttribute ("constant")))
+        {
+            populationChangesWithoutN = false;  // suppress updates to $n, since it's not stored
+            if (n != null  &&  n.hasUsers) System.err.println ("Warning: $n can change (due to structural dynamics) but it was detected as a constant. Equations that depend on $n may give incorrect results.");
+        }
+
+        if      (live.hasAttribute ("constant")) liveStorage = LIVE_CONSTANT;
+        else if (live.hasAttribute ("accessor")) liveStorage = LIVE_ACCESSOR;
+        else                                     liveStorage = LIVE_STORED;  // $live is "initOnly"
+
+        translateReferences (s, localReference);
+        translateReferences (s, globalReference);
 
         // Type conversions
         String [] forbiddenAttributes = new String [] {"global", "constant", "accessor", "reference", "temporary", "dummy", "preexistent"};
@@ -380,6 +592,79 @@ public class InternalBackendData
 
             // TODO: Match populations?
             // Currently, any contained populations do not carry over to new instance. Instead, it must create them from scratch.
+        }
+    }
+
+    /**
+         Convert resolutions to a form that can be processed quickly at runtime
+         Plan: replace the resolution path with a set of objects that will make
+         the process fast at runtime.
+         There are 3 ways to leave a part
+         1) Ascend to its container
+         2) Descend into a contained population -- need the index of population
+         3) Go to a connected part -- need the index of the endpoint
+         For simplicity, we only store a single integer.
+         i <  0 -- select endpoint index -i-1
+         i == 0 -- ascend to container
+         i >  0 -- select population index i-1
+    **/
+    public void translateReferences (EquationSet s, TreeSet<VariableReference> references)
+    {
+        for (VariableReference r : references)
+        {
+            LinkedList<Object> newResolution = new LinkedList<Object> ();
+            EquationSet current = s;
+            Iterator<Object> it = r.resolution.iterator ();
+            while (it.hasNext ())
+            {
+                Object o = it.next ();
+                if (o instanceof EquationSet)  // We are following the containment hierarchy.
+                {
+                    EquationSet next = (EquationSet) o;
+                    if (next == current.container)  // ascend to our container
+                    {
+                        newResolution.add (0);
+                    }
+                    else  // descend into one of our contained populations
+                    {
+                        if (! it.hasNext ()  &&  r.variable.hasAttribute ("global"))  // descend to the population object itself
+                        {
+                            int i = 1;
+                            for (EquationSet p : current.parts)
+                            {
+                                if (p == next)
+                                {
+                                    newResolution.add (i);
+                                    break;
+                                }
+                                i++;
+                            }
+                            if (i > current.parts.size ()) throw new EvaluationException ("Could not find population.");
+                        }
+                        else  // descend to an instance of the population.
+                        {
+                            throw new EvaluationException ("Can't reference into specific instance of a population.");
+                        }
+                    }
+                    current = next;
+                }
+                else if (o instanceof Entry<?,?>)  // We are following a part reference (which means we are a connection)
+                {
+                    int i = 1;
+                    for (Entry<String,EquationSet> c : current.connectionBindings.entrySet ())
+                    {
+                        if (c.equals (o))
+                        {
+                            newResolution.add (-i);
+                            break;
+                        }
+                        i++;
+                    }
+                    if (i > current.connectionBindings.size ()) throw new EvaluationException ("Could not find connection.");
+                    current = (EquationSet) ((Entry<?,?>) o).getValue ();
+                }
+            }
+            r.resolution = newResolution;
         }
     }
 }

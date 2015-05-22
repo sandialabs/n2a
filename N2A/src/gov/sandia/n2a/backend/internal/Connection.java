@@ -47,6 +47,7 @@ public class Connection extends Part
     public void init (Euler simulator)
     {
         // update accountable endpoints
+        // Note: these do not require resolve(). Instead, they access their target directly through the endpoints array.
         InternalBackendData bed = (InternalBackendData) equations.backendData;
         int count = bed.accountableEndpoints.length;
         for (int i = 0; i < count; i++)

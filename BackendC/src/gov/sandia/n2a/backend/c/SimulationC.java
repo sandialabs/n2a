@@ -164,11 +164,11 @@ public class SimulationC implements Simulation
         e.addAttribute ("preexistent", -1, false, new String[] {"$index"});
         e.addAttribute ("preexistent",  0, true,  new String[] {"$dt", "$t"});
         e.addAttribute ("simulator",    0, true,  new String[] {"$dt", "$t"});
-        replaceConstantWithInitOnly (e);  // for "preexistent" $variables ($dt, $t)
+        e.replaceConstantWithInitOnly ();  // for "preexistent" $variables ($dt, $t)
         e.findInitOnly ();  // propagate initOnly through ASTs
         e.findDeath ();
         e.setAttributesLive ();
-        setFunctions (e);
+        e.setFunctions ();
         findLiveReferences (e);
         e.determineTypes ();
 
@@ -1577,7 +1577,12 @@ public class SimulationC implements Simulation
             // $variables
             for (Variable v : bed.localInit)
             {
+                if (v.name.equals ("$live")) multiconditional (v, context, "  ");  // force $live to be ahead of everything else, because $live must be true during all of init cycle
+            }
+            for (Variable v : bed.localInit)
+            {
                 if (! v.name.startsWith ("$")) continue;
+                if (v.name.equals ("$live")) continue;
                 if (v.name.equals ("$type")) throw new Exception ("$type must be conditional, and it must never be assigned during init.");  // TODO: Work out logic of $type better. This trap should not be here.
                 multiconditional (v, context, "  ");
             }
@@ -2795,50 +2800,6 @@ public class SimulationC implements Simulation
                     ((BackendData) s.backendData).pathToContainer = c.getKey ();
                     break;
                 }
-            }
-        }
-    }
-
-    /**
-        Convert "preexistent" $variables that appear to be "constant" into "initOnly",
-        so that they will be evaluated during init()
-    **/
-    public void replaceConstantWithInitOnly (EquationSet s)
-    {
-        for (EquationSet p : s.parts)
-        {
-            replaceConstantWithInitOnly (p);
-        }
-
-        for (Variable v : s.variables)
-        {
-            if (   v.order == 0
-                && v.name.startsWith ("$")
-                && v.hasAttribute ("preexistent")
-                && v.hasAttribute ("constant"))
-            {
-                v.removeAttribute ("constant");
-                v.addAttribute    ("initOnly");
-            }
-        }
-    }
-
-    /**
-        Tag variables that must be set via a function call so that they have a "next_" value.
-    **/
-    public void setFunctions (EquationSet s)
-    {
-        for (EquationSet p : s.parts)
-        {
-            setFunctions (p);
-        }
-
-        for (Variable v : s.variables)
-        {
-            if (v.name.equals ("$dt")  &&  v.order == 0)
-            {
-                if (v.hasAttribute ("initOnly")) v.addAttribute ("cycle");
-                else                             v.addAttribute ("externalRead");
             }
         }
     }

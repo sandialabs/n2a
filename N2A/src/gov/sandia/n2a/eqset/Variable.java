@@ -12,6 +12,7 @@ import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Max;
 import gov.sandia.n2a.language.function.Min;
 import gov.sandia.n2a.language.operator.Add;
@@ -31,6 +32,7 @@ public class Variable implements Comparable<Variable>
     public Type                         type;       // Stores an actual instance of the type. Necessary to get the size of Matrix. Otherwise, only class matters.
     public Set<String>                  attributes;
     public NavigableSet<EquationEntry>  equations;
+    public int                          assignment; // TODO: this should probably replace EquationEntry.assignment
     // resolution
     public EquationSet                  container;  // non-null iff this variable is contained in an EquationSet.variables collection
     public VariableReference            reference;  // points to variable that actually contains the data, which is usually us unless we are a proxy for a variable in another equation set. null if not resolved yet.
@@ -43,12 +45,19 @@ public class Variable implements Comparable<Variable>
 
     // Internal backend
     // TODO: put this in a beckendData field, similar to EquationSet.backendData. The problem with this is the extra overhead to unpack the object.
-    public int      readIndex;  // Position in Instance.values to read
-    public boolean  readTemp;   // Read the temp Instance rather than the main one
-    public int      writeIndex; // Position Instance.values to write
-    public boolean  writeTemp;  // Write the temp Instance rather than the main one
-    public Variable derivative; // The variable from which we are integrated, if any.
-    public boolean  global;     // redundant with "global" attribute; for faster execution, since it is a frequently checked
+    public int      readIndex  = -1; // Position in Instance.values to read
+    public boolean  readTemp;        // Read the temp Instance rather than the main one
+    public int      writeIndex = -1; // Position Instance.values to write
+    public boolean  writeTemp;       // Write the temp Instance rather than the main one
+    public Variable derivative;      // The variable from which we are integrated, if any.
+    public boolean  global;          // redundant with "global" attribute; for faster execution, since it is a frequently checked
+
+    // Assignment modes
+    public static final int REPLACE  = 0;  // =
+    public static final int ADD      = 1;  // +=
+    public static final int MULTIPLY = 2;  // *=
+    public static final int MAX      = 3;  // >=
+    public static final int MIN      = 4;  // <=
 
     public Variable (String name)
     {
@@ -61,11 +70,28 @@ public class Variable implements Comparable<Variable>
         this.order = order;
     }
 
+    public void determineAssignment ()
+    {
+        // Only change the assignment mode if we actually encounter an equation
+        for (EquationEntry e : equations)
+        {
+            if (e.assignment == null  ||  e.assignment.isEmpty ()) continue;
+            if      (e.assignment.equals ( "=")) assignment = REPLACE;
+            else if (e.assignment.equals ("+=")) assignment = ADD;
+            else if (e.assignment.equals ("*=")) assignment = MULTIPLY;
+            else if (e.assignment.equals (">=")) assignment = MAX;
+            else if (e.assignment.equals ("*=")) assignment = MIN;
+            else continue;
+            break;  // stop on the first valid equation
+        }
+    }
+
     public void add (EquationEntry e)
     {
         if (equations == null) equations = new TreeSet<EquationEntry> ();
         equations.add (e);
         e.variable = this;
+        determineAssignment ();
     }
 
     /**
@@ -83,6 +109,7 @@ public class Variable implements Comparable<Variable>
         }
         equations.add (e);
         e.variable = this;
+        determineAssignment ();
     }
 
     /**
@@ -101,6 +128,7 @@ public class Variable implements Comparable<Variable>
         }
         equations.addAll (v.equations);
         v.equations.clear ();
+        determineAssignment ();
     }
 
     public void mergeExpressions (Variable v)
@@ -139,6 +167,17 @@ public class Variable implements Comparable<Variable>
             equations.add (e);  // any pre-existing equation takes precedence over this one
         }
         v.equations.clear ();
+        determineAssignment ();
+    }
+
+    public void visit (Visitor visitor)
+    {
+        if (equations == null) return;
+        for (EquationEntry e : equations)
+        {
+            if (e.expression  != null) e.expression .visit (visitor);
+            if (e.conditional != null) e.conditional.visit (visitor);
+        }
     }
 
     public void transform (Transformer transformer)
@@ -185,6 +224,7 @@ public class Variable implements Comparable<Variable>
             Object doit = e.conditional.eval (instance);
             if (doit instanceof Scalar  &&  ((Scalar) doit).value != 0) return e.expression.eval (instance);
         }
+        if (name.equals ("$type")) return new Scalar (0);  // $type should not have a default equation. Instead, always reset to 0.
         return null;
     }
 
@@ -328,6 +368,8 @@ public class Variable implements Comparable<Variable>
                 <dd>value is known at generation time, so can be hard-coded</dd>
             <dt>initOnly</dt>
                 <dd>value is set at init time, and never changed after that.</dd>
+            <dt>readOnly</dt>
+                <dd>the value can change, but it should never be written to directly.</dd>
             <dt>reference</dt>
                 <dd>the actual value of the variable is stored in a different
                 equation set</dd>

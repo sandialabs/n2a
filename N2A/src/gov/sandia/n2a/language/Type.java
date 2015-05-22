@@ -6,7 +6,10 @@ package gov.sandia.n2a.language;
 **/
 public abstract class Type
 {
-    public void clear () throws EvaluationException
+    /**
+        @return A copy of this type with the same structure, but with a value equivalent to 0.
+    **/
+    public Type clear () throws EvaluationException
     {
         throw new EvaluationException ("Operation not supported on this type.");
     }

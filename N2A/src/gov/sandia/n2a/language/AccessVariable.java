@@ -65,7 +65,7 @@ public class AccessVariable extends Operator
 
     public Type eval (Instance instance)
     {
-        return instance.get (reference.variable);
+        return instance.get (reference);
     }
 
     public String toString ()

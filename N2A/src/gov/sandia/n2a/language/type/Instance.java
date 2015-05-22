@@ -8,13 +8,17 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.language.type;
 
 import java.util.Iterator;
+import java.util.List;
+import java.util.TreeSet;
 
 import gov.sandia.n2a.backend.internal.Connection;
+import gov.sandia.n2a.backend.internal.InternalBackendData;
 import gov.sandia.n2a.backend.internal.Part;
 import gov.sandia.n2a.backend.internal.Euler;
 import gov.sandia.n2a.backend.internal.Population;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Type;
 
@@ -34,12 +38,12 @@ public class Instance extends Type
         if (countType  > 0) valuesType  = new Type [countType ];
     }
 
-    public void resolve (Variable v)
+    public void resolve (TreeSet<VariableReference> references)
     {
-        if (v != v.reference.variable)
+        for (VariableReference r : references)
         {
             Instance result = this;
-            Iterator<Object> it = v.reference.resolution.iterator ();
+            Iterator<Object> it = r.resolution.iterator ();
             while (it.hasNext ())
             {
                 int i = ((Integer) it.next ()).intValue ();
@@ -51,24 +55,38 @@ public class Instance extends Type
                     else                              result = result.container.container;  // Parts must dereference their Population to get to their true container.
                 }
             }
-            valuesType[v.readIndex] = result;
+            valuesType[r.index] = result;
         }
     }
 
+    /**
+        Fetches a value from a referenced instance.
+    **/
+    public Type get (VariableReference r)
+    {
+        if (r.index >= 0) return ((Instance) valuesType[r.index]).get (r.variable);
+        return get (r.variable);
+    }
+
+    /**
+        Fetches a value local to this instance.
+    **/
     public Type get (Variable v)
     {
-        if (v.reference.variable != v) return ((Instance) valuesType[v.readIndex]).get (v.reference.variable);
         if (v.type instanceof Scalar) return new Scalar (valuesFloat[v.readIndex]);
         Type result = valuesType[v.readIndex];
         if (result == null) return v.type;  // assumes that we never modify the returned object, and that previously it was set to the equivalent of 0
         return result;
     }
 
+    /**
+        Stores a value, either local or referenced.
+    **/
     public void set (Variable v, Type value)
     {
         if (v.reference.variable != v)
         {
-            ((Instance) valuesType[v.readIndex]).set (v.reference.variable, value);
+            ((Instance) valuesType[v.reference.index]).set (v.reference.variable, value);
         }
         else
         {
@@ -77,18 +95,32 @@ public class Instance extends Type
         }
     }
 
+    /**
+        Fetch a value from reference for the purpose of moving into storage to keep past the end of current cycle.
+    **/
+    public Type getFinal (VariableReference r)
+    {
+        if (r.index >= 0) return ((Instance) valuesType[r.index]).getFinal (r.variable);
+        return getFinal (r.variable);
+    }
+
+    /**
+        Fetch a local temporary value for the purpose of moving into storage to keep past the end of current cycle.
+    **/
     public Type getFinal (Variable v)
     {
-        // Don't check for reference, because getFinal() should never be called in that case.
         if (v.type instanceof Scalar) return new Scalar (valuesFloat[v.writeIndex]);
         Type result = valuesType[v.writeIndex];
         if (result == null) return v.type;
         return result;
     }
 
+    /**
+        Stores a local value to keep past the end of current cycle.
+    **/
     public void setFinal (Variable v, Type value)
     {
-        // Note the change from writeIndex to readIndex. That's key purpose of this method.
+        // Note the change from writeIndex to readIndex.
         if (v.type instanceof Scalar) valuesFloat[v.readIndex] = (float) ((Scalar) value).value;
         else                          valuesType [v.readIndex] = value;
     }
@@ -160,8 +192,63 @@ public class Instance extends Type
         return new Scalar (0);
     }
 
+    public void dumpValues (boolean global, boolean temp)
+    {
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
+        List<String> namesFloat;
+        List<String> namesType;
+        if (global)
+        {
+            if (temp)
+            {
+                namesFloat = bed.namesGlobalTempFloat;
+                namesType  = bed.namesGlobalTempType;
+            }
+            else
+            {
+                namesFloat = bed.namesGlobalFloat;
+                namesType  = bed.namesGlobalType;
+            }
+        }
+        else  // local
+        {
+            if (temp)
+            {
+                namesFloat = bed.namesLocalTempFloat;
+                namesType  = bed.namesLocalTempType;
+            }
+            else
+            {
+                namesFloat = bed.namesLocalFloat;
+                namesType  = bed.namesLocalType;
+            }
+        }
+
+        System.out.print ("[");
+        if (valuesFloat != null)
+        {
+            for (int i = 0; i < valuesFloat.length; i++)
+            {
+                System.out.print (namesFloat.get (i) + "=");
+                System.out.print (valuesFloat[i]);
+                if (i < valuesFloat.length - 1) System.out.print (",");
+            }
+        }
+        System.out.print ("][");
+        if (valuesType != null)
+        {
+            for (int i = 0; i < valuesType.length; i++)
+            {
+                System.out.print (namesType.get (i) + "=");
+                System.out.print (valuesType[i]);
+                if (i < valuesType.length - 1) System.out.print (",");
+            }
+        }
+        System.out.print ("]");
+    }
+
     public String toString ()
     {
-        return equations.name;
+        return equations.name + "@" + hashCode ();
     }
 }

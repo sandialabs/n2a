@@ -1321,7 +1321,7 @@ public class EquationSet implements Comparable<EquationSet>
             }
             else
             {
-                live.addAttribute ("constant");  // should already be set constant, but no harm in doing it again
+                live.addAttribute ("constant");
             }
         }
     }
@@ -1580,14 +1580,12 @@ public class EquationSet implements Comparable<EquationSet>
         the need for buffering. If there are no cyclic dependencies, then this problem can
         be solved exactly. If there are cycles, then this method uses a simple heuristic:
         prioritize variables with the largest number of dependencies.
-        Depends on results of: resolveRHS(), findTemporary()
+        Depends on results of: resolveRHS(), findTemporary(),
+                               addSpecials() -- to $variables in the correct order along with everything else
     **/
     public void determineOrder ()
     {
-        for (EquationSet s : parts)
-        {
-            s.determineOrder ();
-        }
+        for (EquationSet p : parts) p.determineOrder ();
 
         // Reset variables for analysis
         ordered = new ArrayList<Variable> ();
@@ -1598,20 +1596,16 @@ public class EquationSet implements Comparable<EquationSet>
         }
 
         // Determine order constraints for each variable separately
-        for (Variable v : variables)
-        {
-            v.setBefore ();
-        }
+        for (Variable v : variables) v.setBefore ();
 
         // Assign depth in dependency tree, processing variables with the most ordering constraints first
-        class CompareDependency implements Comparator<Variable>
+        PriorityQueue<Variable> queueDependency = new PriorityQueue<Variable> (variables.size (), new Comparator<Variable> ()
         {
             public int compare (Variable a, Variable b)
             {
                 return b.before.size () - a.before.size ();
             }
-        }
-        PriorityQueue<Variable> queueDependency = new PriorityQueue<Variable> (variables.size (), new CompareDependency ());
+        });
         queueDependency.addAll (variables);
         for (Variable v = queueDependency.poll (); v != null; v = queueDependency.poll ())
         {
@@ -1620,14 +1614,13 @@ public class EquationSet implements Comparable<EquationSet>
         }
 
         // Assemble dependency tree into flat list
-        class ComparePriority implements Comparator<Variable>
+        PriorityQueue<Variable> queuePriority = new PriorityQueue<Variable> (variables.size (), new Comparator<Variable> ()
         {
             public int compare (Variable a, Variable b)
             {
                 return a.priority - b.priority;
             }
-        }
-        PriorityQueue<Variable> queuePriority = new PriorityQueue<Variable> (variables.size (), new ComparePriority ());
+        });
         queuePriority.addAll (variables);
         for (Variable v = queuePriority.poll (); v != null; v = queuePriority.poll ())
         {
@@ -1639,10 +1632,7 @@ public class EquationSet implements Comparable<EquationSet>
         for (int index = 0; index < count; index++)
         {
             Variable v = ordered.get (index);
-            if (v.uses == null)
-            {
-                continue;
-            }
+            if (v.uses == null) continue;
             for (Variable u : v.uses)
             {
                 if (   u.container == this  // must be in same equation set for order to matter
@@ -1706,6 +1696,27 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
+        Convert "preexistent" $variables that appear to be "constant" into "initOnly",
+        so that they will be evaluated during init()
+    **/
+    public void replaceConstantWithInitOnly ()
+    {
+        for (EquationSet p : parts) p.replaceConstantWithInitOnly ();
+
+        for (Variable v : variables)
+        {
+            if (   v.order == 0
+                && v.name.startsWith ("$")
+                && v.hasAttribute ("preexistent")
+                && v.hasAttribute ("constant"))
+            {
+                v.removeAttribute ("constant");
+                v.addAttribute    ("initOnly");
+            }
+        }
+    }
+
+    /**
         Identify variables that only change during init.
         For now, the criteria are:
         <ul>
@@ -1720,7 +1731,7 @@ public class EquationSet implements Comparable<EquationSet>
             <li>$variables are defined first, so non-$variables can depend on them
             </ul>
         </ul>
-        Depends on results of: findConstants()
+        Depends on results of: findConstants(), replaceConstantsWithInitOnly()
     **/
     public void findInitOnly ()
     {
@@ -1802,6 +1813,25 @@ public class EquationSet implements Comparable<EquationSet>
         }
 
         return changed;
+    }
+
+    /**
+        Tag variables that must be set via a function call.
+        We add either the "cycle" or "externalRead" attribute, to force the value into
+        temporary storage.
+    **/
+    public void setFunctions ()
+    {
+        for (EquationSet p : parts) p.setFunctions ();
+
+        for (Variable v : variables)
+        {
+            if (v.name.equals ("$dt")  &&  v.order == 0)
+            {
+                if (v.hasAttribute ("initOnly")) v.addAttribute ("cycle");
+                else                             v.addAttribute ("externalRead");
+            }
+        }
     }
 
     /**

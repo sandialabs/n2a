@@ -32,9 +32,9 @@ public class Text extends Type
         value = that.toString ();
     }
 
-    public void clear ()
+    public Type clear ()
     {
-        value = "";
+        return new Text ();
     }
 
     public Type add (Type that)

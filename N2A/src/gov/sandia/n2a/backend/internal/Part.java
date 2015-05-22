@@ -43,7 +43,8 @@ public class Part extends Instance
             int i = 0;
             for (EquationSet s : equations.parts)
             {
-                populations[i++] = new Population (s, this);
+                if (s.connectionBindings == null) populations[i++] = new PopulationCompartment (s, this);
+                else                              populations[i++] = new PopulationConnection  (s, this);
             }
         }
     }
@@ -58,41 +59,46 @@ public class Part extends Instance
     {
         // set $live to false, if it is stored in this part
         InternalBackendData bed = (InternalBackendData) equations.backendData;
-        if (! bed.live.hasAny (new String[] {"constant", "accessor"}))
+        if (bed.liveStorage == InternalBackendData.LIVE_STORED)
         {
             set (bed.live, new Scalar (0));
         }
     }
 
+    public void resolve ()
+    {
+        resolve (((InternalBackendData) equations.backendData).localReference);
+    }
+
+    /**
+        Note: specifically for Parts, call resolve() before calling init(). This is to
+        accommodate the connection process, which must probe values in a part (which
+        may include references) before calling init().
+    **/
     public void init (Euler simulator)
     {
         InstanceTemporaries temp = new InstanceTemporaries (this, simulator, false, true);
 
-        for (Variable v : temp.bed.localReference) resolve (v);
-
         // $variables
-        for (Variable v : temp.bed.localInit)
+        if (temp.bed.liveStorage == InternalBackendData.LIVE_STORED) set (temp.bed.live, new Scalar (1));  // force $live to be set before anything else
+        for (Variable v : temp.bed.localInitSpecial)
         {
-            if (! v.name.startsWith ("$")) continue;
             Type result = v.eval (temp);
-            if (result != null) temp.set (v, result);
+            if (result != null  &&  v.writeIndex >= 0) temp.set (v, result);
         }
-        for (Variable v : temp.bed.localBuffered)
+        for (Variable v : temp.bed.localBufferedSpecial)
         {
-            if (! v.name.startsWith ("$")) continue;
             temp.setFinal (v, temp.getFinal (v));
         }
 
         // non-$variables
-        for (Variable v : temp.bed.localInit)
+        for (Variable v : temp.bed.localInitRegular)
         {
-            if (v.name.startsWith ("$")) continue;
             Type result = v.eval (temp);
-            if (result != null) temp.set (v, result);
+            if (result != null  &&  v.writeIndex >= 0) temp.set (v, result);
         }
-        for (Variable v : temp.bed.localBuffered)
+        for (Variable v : temp.bed.localBufferedRegular)
         {
-            if (v.name.startsWith ("$")) continue;
             temp.setFinal (v, temp.getFinal (v));
         }
 
@@ -103,12 +109,12 @@ public class Part extends Instance
 
     public void integrate (Euler simulator)
     {
-        InstanceTemporaries temp = new InstanceTemporaries (this, simulator, true, false);
-        for (Variable v : temp.bed.localIntegrated)
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
+        for (Variable v : bed.localIntegrated)
         {
-            double a  = ((Scalar) temp.get (v           )).value;
-            double aa = ((Scalar) temp.get (v.derivative)).value;
-            temp.setFinal (v, new Scalar (a + aa * simulator.dt.value));
+            double a  = ((Scalar) get (v           )).value;
+            double aa = ((Scalar) get (v.derivative)).value;
+            setFinal (v, new Scalar (a + aa * simulator.dt));
         }
 
         if (populations != null) for (Population p : populations) p.integrate (simulator);
@@ -127,16 +133,45 @@ public class Part extends Instance
 
     public void update (Euler simulator)
     {
-        InstanceTemporaries temp = new InstanceTemporaries (this, simulator, true, false);
+        InstanceTemporaries temp = new InstanceTemporaries (this, simulator, false, false);
         for (Variable v : temp.bed.localUpdate)
         {
             Type result = v.eval (temp);
             if (result == null)  // no condition matched
             {
-                if (v.readIndex != v.writeIndex) temp.set (v, temp.get (v));  // default action for buffered vars is to copy old value
-                continue;
+                // Note: $type is explicitly evaluated to 0 in Variable.eval(), so it never returns null, even when no conditions match.
+
+                // If variable is buffered, then we must copy its value to ensure it gets copied back
+                if (v.reference.variable == v  &&  v.equations.size () > 0  &&  v.readIndex != v.writeIndex) temp.set (v, temp.get (v));
             }
-            temp.set (v, result);
+            else if (v.reference.variable.writeIndex >= 0)  // ensure this is not a "dummy" variable
+            {
+                if (v.assignment == Variable.REPLACE)
+                {
+                    temp.set (v, result);
+                }
+                else
+                {
+                    // the rest of these require knowing the current value of the working result, which is most likely external buffered
+                    Type current = temp.getFinal (v.reference);
+                    if      (v.assignment == Variable.ADD)
+                    {
+                        temp.set (v, current.add (result));
+                    }
+                    else if (v.assignment == Variable.MULTIPLY)
+                    {
+                        temp.set (v, current.multiply (result));
+                    }
+                    else if (v.assignment == Variable.MAX)
+                    {
+                        if (((Scalar) result.GT (current)).value != 0) temp.set (v, result);
+                    }
+                    else if (v.assignment == Variable.MIN)
+                    {
+                        if (((Scalar) result.LT (current)).value != 0) temp.set (v, result);
+                    }
+                }
+            }
         }
         for (Variable v : temp.bed.localBufferedInternalUpdate)
         {
@@ -148,11 +183,10 @@ public class Part extends Instance
 
     public boolean finish (Euler simulator)
     {
-        // TODO: be sure to set $type to the position in the split for each new part. Make sure $type gets zeroed after one cycle
         if (populations != null) for (Population p : populations) p.finish (simulator);
 
         InternalBackendData bed = (InternalBackendData) equations.backendData;
-        if (! bed.live.hasAny (new String[] {"constant", "accessor"}))  // $live is stored in this part
+        if (bed.liveStorage == InternalBackendData.LIVE_STORED)
         {
             if (((Scalar) get (bed.live)).value == 0) return false;  // early-out if we are already dead, to avoid another call to die()
         }
@@ -186,6 +220,7 @@ public class Part extends Instance
                             Part p = convert (other);
 
                             simulator.enqueue (p);
+                            p.resolve ();
                             p.init (simulator);  // accountable connections are updated here
 
                             // Copy over variables
@@ -236,31 +271,20 @@ public class Part extends Instance
             int count = equations.connectionBindings.size ();
             for (int i = 0; i < count; i++)
             {
-                Part endpoint = getPart (i);
-                EquationSet other = endpoint.equations;
-                InternalBackendData otherBed = (InternalBackendData) other.backendData;
-                if (! otherBed.live.hasAttribute ("constant"))
+                if (! getPart (i).getLive ())
                 {
-                    if (((Scalar) endpoint.get (otherBed.live)).value == 0)
-                    {
-                        die ();
-                        return false;
-                    }
+                    die ();
+                    return false;
                 }
             }
         }
 
         if (equations.lethalContainer)
         {
-            Part containerPart = (Part) container.container;
-            InternalBackendData containerBed = (InternalBackendData) containerPart.equations.backendData;
-            if (! containerBed.live.hasAttribute ("constant"))  // Should we also guard against null here?
+            if (! ((Part) container.container).getLive ())
             {
-                if (((Scalar) containerPart.get (containerBed.live)).value == 0)
-                {
-                    die ();
-                    return false;
-                }
+                die ();
+                return false;
             }
         }
 
@@ -273,6 +297,40 @@ public class Part extends Instance
     public Part getPart (int i)
     {
         throw new EvaluationException ("Internal error: only Connections can hold references to other Parts.");
+    }
+
+    public boolean getLive ()
+    {
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
+        if (bed.liveStorage == InternalBackendData.LIVE_CONSTANT) return true;  // constant implies always live
+        if (bed.liveStorage == InternalBackendData.LIVE_STORED)
+        {
+            if (((Scalar) get (bed.live)).value == 0) return false;
+        }
+
+        if (equations.lethalConnection)
+        {
+            int count = equations.connectionBindings.size ();
+            for (int i = 0; i < count; i++)
+            {
+                if (! getPart (i).getLive ())
+                {
+                    die ();
+                    return false;
+                }
+            }
+        }
+
+        if (equations.lethalContainer)
+        {
+            if (! ((Part) container.container).getLive ())
+            {
+                die ();
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public Matrix getXYZ (Euler simulator)

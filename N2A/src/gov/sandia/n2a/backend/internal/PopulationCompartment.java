@@ -93,7 +93,7 @@ public class PopulationCompartment extends Population
         old = head;
 
         InternalBackendData bed = (InternalBackendData) equations.backendData;
-        if (bed.populationChangesWithoutN)
+        if (bed.populationChangesWithoutN)  // This flag will not be set if $n is not stored. (It would be better to force $n to be stored if this flag should be set, but the will require more tricky pre-processing.)
         {
             int requestedN = (int) ((Scalar) get (bed.n)).value;
             if (requestedN != n) set (bed.n, new Scalar (n));  // conditional so we can preserve fractional requested $n unless it is very wrong
@@ -131,6 +131,7 @@ public class PopulationCompartment extends Population
             Compartment p = new Compartment (equations, this);
             insert (p);  // sets $index; increments n
             simulator.enqueue (p);
+            p.resolve ();
             p.init (simulator);
         }
 

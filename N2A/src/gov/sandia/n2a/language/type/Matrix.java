@@ -192,19 +192,13 @@ public class Matrix extends Type
         return new Scalar (value[column][row]);
     }
 
-    public void clear ()
+    public Type clear ()
     {
         int w = value.length;
-        if (w < 1) return;
+        if (w < 1) return new Matrix ();
         int h = value[0].length;
-        if (h < 1) return;
-        for (int c = 0; c < w; c++)
-        {
-            for (int r = 0; r < h; r++)
-            {
-                value[c][r] = 0;
-            }
-        }
+        if (h < 1) return new Matrix ();
+        return new Matrix (h, w);
     }
 
     public Type add (Type that) throws EvaluationException

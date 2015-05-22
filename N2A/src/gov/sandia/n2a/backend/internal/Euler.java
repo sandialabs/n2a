@@ -8,8 +8,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.backend.internal;
 
 import gov.sandia.n2a.language.type.Instance;
-import gov.sandia.n2a.language.type.Scalar;
-
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
@@ -27,8 +25,8 @@ import java.util.Map.Entry;
 public class Euler
 {
     public Wrapper wrapper;  // holds top-level model
-    public Scalar t  = new Scalar (0);
-    public Scalar dt = new Scalar (1e-4);
+    public double t  = 0;
+    public double dt = 1e-4;
     public List<Instance>                     queue        = new LinkedList<Instance> ();
     public Map<PopulationCompartment,Integer> resizeQueue  = new TreeMap<PopulationCompartment,Integer> ();
     public List<PopulationConnection>         connectQueue = new LinkedList<PopulationConnection> ();
@@ -36,7 +34,7 @@ public class Euler
 
     public void run ()
     {
-        t.value = 0;  // updated in middle of loop below, just before integration
+        t = 0;  // updated in middle of loop below, just before integration
         while (! queue.isEmpty ())
         {
             // Evaluate connection populations that have requested it
@@ -44,7 +42,7 @@ public class Euler
             connectQueue.clear ();
 
             // Update parts
-            t.value += dt.value;
+            t += dt;
             integrate ();
             for (Instance i : queue) i.prepare ();
             for (Instance i : queue) i.update (this);
@@ -73,7 +71,7 @@ public class Euler
 
     public void move (double value)
     {
-        dt.value = value;
+        dt = value;
     }
 
     public void enqueue (Instance i)
@@ -89,5 +87,15 @@ public class Euler
     public void connect (PopulationConnection p)
     {
         connectQueue.add (p);
+    }
+
+    public void debugQueue ()
+    {
+        ListIterator<Instance> it = queue.listIterator ();
+        while (it.hasNext ())
+        {
+            Instance i = it.next ();
+            System.out.println (i.getClass ().getSimpleName ());
+        }
     }
 }

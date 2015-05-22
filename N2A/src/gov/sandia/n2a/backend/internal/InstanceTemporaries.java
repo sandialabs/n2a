@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.backend.internal;
 
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
@@ -35,11 +36,17 @@ public class InstanceTemporaries extends Instance
         else        allocate (bed.countLocalTempFloat,  bed.countLocalTempType);
     }
 
+    public Type get (VariableReference r)
+    {
+        if (r.index >= 0) return ((Instance) wrapped.valuesType[r.index]).get (r.variable);
+        return get (r.variable);
+    }
+
     public Type get (Variable v)
     {
         if (v == bed.init) return init;
-        if (v == bed.t   ) return simulator.t;
-        if (v == bed.dt  ) return simulator.dt;
+        if (v == bed.t   ) return new Scalar (simulator.t);
+        if (v == bed.dt  ) return new Scalar (simulator.dt);
 
         if (v.readTemp) return super.get (v);
         return               wrapped.get (v);
@@ -49,6 +56,12 @@ public class InstanceTemporaries extends Instance
     {
         if (v.writeTemp) super.set (v, value);
         else           wrapped.set (v, value);
+    }
+
+    public Type getFinal (VariableReference r)
+    {
+        if (r.index >= 0) return ((Instance) wrapped.valuesType[r.index]).getFinal (r.variable);
+        return getFinal (r.variable);
     }
 
     public Type getFinal (Variable v)

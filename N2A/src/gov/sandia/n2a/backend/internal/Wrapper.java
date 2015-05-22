@@ -7,6 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.internal;
 
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -21,6 +22,8 @@ public class Wrapper extends Part
     // Some global data associated with this run
     public Map<String,Integer> columnMap    = new HashMap<String,Integer> ();  ///< For trace(). Maps from column name to column position.
     public List<Float>         columnValues = new ArrayList<Float> ();         ///< For trace(). Holds current value for each column.
+    public PrintStream         out = System.out;
+    public PrintStream         err = System.err;
 
     public Wrapper (EquationSet model)
     {
@@ -32,6 +35,7 @@ public class Wrapper extends Part
     public void init (Euler simulator)
     {
         populations[0].init (simulator);
+        writeTrace ();
     }
 
     public void integrate (Euler simulator)
@@ -62,11 +66,11 @@ public class Wrapper extends Part
         for (int i = 0; i <= last; i++)
         {
             Float c = columnValues.get (i);
-            if (! c.isNaN ()) System.out.print (c);  // TODO: redirect to the output file
-            if (i < last) System.out.print ("\t");
+            if (! c.isNaN ()) out.print (c);
+            if (i < last) out.print ("\t");
             columnValues.set (i, Float.NaN);
         }
-        if (last >= 0) System.out.println ();
+        if (last >= 0) out.println ();
     }
 
     public void writeHeaders ()
@@ -80,9 +84,9 @@ public class Wrapper extends Part
         }
         for (int i = 0; i < count; i++)
         {
-            System.out.print (headers[i]);
-            if (i < last) System.out.print ("\t");
+            out.print (headers[i]);
+            if (i < last) out.print ("\t");
         }
-        if (last >= 0) System.out.println ();
+        if (last >= 0) out.println ();
     }
 }
