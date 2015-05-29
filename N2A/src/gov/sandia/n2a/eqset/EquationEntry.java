@@ -9,6 +9,7 @@ package gov.sandia.n2a.eqset;
 
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Renderer;
+import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.parse.ParseException;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 
@@ -145,6 +146,12 @@ public class EquationEntry implements Comparable<EquationEntry>
     {
         if (metadata == null) metadata = new TreeMap<String, String> ();
         return metadata.entrySet ();
+    }
+
+    public void visit (Visitor visitor)
+    {
+        if (expression  != null) expression .visit (visitor);
+        if (conditional != null) conditional.visit (visitor);
     }
 
     public void render (Renderer renderer)

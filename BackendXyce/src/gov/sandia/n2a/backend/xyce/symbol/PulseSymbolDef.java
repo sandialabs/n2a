@@ -7,12 +7,17 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.xyce.symbol;
 
-import gov.sandia.n2a.backend.xyce.Xyceisms;
-import gov.sandia.n2a.backend.xyce.network.PartInstance;
-import gov.sandia.n2a.backend.xyce.network.PartSetInterface;
-import gov.sandia.n2a.eqset.EquationEntry;
+import java.util.ArrayList;
 
-public class PulseSymbolDef extends DefaultSymbolDef
+import gov.sandia.n2a.backend.xyce.XyceBackendData;
+import gov.sandia.n2a.backend.xyce.Xyceisms;
+import gov.sandia.n2a.backend.xyce.parsing.XyceRenderer;
+import gov.sandia.n2a.eqset.EquationEntry;
+import gov.sandia.n2a.language.Constant;
+import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.type.Instance;
+
+public class PulseSymbolDef extends InputSymbolDef
 {
     // a more generic pulse than XycePulseInputSymbolDef
     // shows up in equations as pulse(var, width, period, rise, fall)
@@ -28,38 +33,37 @@ public class PulseSymbolDef extends DefaultSymbolDef
     private double xOffset;
     private double yOffset;
 
-    public PulseSymbolDef(EquationEntry eq, PartSetInterface partSet)
+    public PulseSymbolDef (EquationEntry eq)
     {
-        super(eq, partSet);
-        // TODO - parse out variables above  
+        super (eq);
     }
 
     @Override
-    public String getDefinition(SymbolManager symMgr, PartInstance pi) 
+    public String getDefinition (XyceRenderer renderer) 
     {
-        // TODO - actually need translator (XyceRHSTranslator) to handle translation of 'pulse'
-        // to either a Xyce pulse or a function that mimics a pulse
-        // but how will it know which to use, and the Xyce pulse variables?
-        // Why did I think translator would handle this?  Translator primarily used BY SymbolDefs,
-        // in response to Netlist::writeDefinition call to SymbolDef::getDefinition
-
-
-        StringBuilder result = new StringBuilder();
-        int SN = pi.serialNumber;
-        if (!instanceSpecific) { 
-            SN = firstInstance.serialNumber;
+        int SN = renderer.pi.hashCode ();
+        ArrayList<String> params = new ArrayList<String>(7);
+        for(int a = 0; a < funcNode.operands.length; a++)
+        {
+            Operator param = funcNode.operands[a];
+            if (param instanceof Constant)
+            {
+                params.add (param.toString ());
+            }
+            else
+            {
+                XyceBackendData bed = (XyceBackendData) eq.variable.container.backendData;
+                // param is an expression; need to get the entire string at this subtree and translate it
+                params.add (XyceASTUtil.getReadableShort (param, new XyceRenderer (bed, pi, null, false)));
+            }
         }
-        // TODO - need different pulse function - V instead of I, order of nodes switched
-//            result.append(Xyceisms.pulse(inputVar, stateVar, SN, newSpec));
-        return result.toString();
+
+        return Xyceisms.voltagePulse (eq.variable.name, SN, params);
     }
 
     @Override
-    public String getReference(int SN) 
+    public String getReference (XyceRenderer renderer) 
     {
-        if (instanceSpecific) {
-            return Xyceisms.referenceStateVar(name, SN);
-        }
-        return Xyceisms.referenceStateVar(name, firstInstance.serialNumber);
+        return Xyceisms.referenceStateVar (eq.variable.name, renderer.pi.hashCode ());
     }
 }

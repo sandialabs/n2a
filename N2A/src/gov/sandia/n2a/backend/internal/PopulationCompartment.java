@@ -18,12 +18,12 @@ public class PopulationCompartment extends Population
     // We create a null-terminated doubly-linked list. This is little more complicated
     // to manage than a fully-circular list, but it is worth the complexity to avoid
     // extra storage for the head.
-    Compartment head; ///< List of all instances of this population. Mainly used for creating connections.
-    Compartment tail; ///< Last member in list. Used for reverse iteration.
-    Compartment old;  ///< First old part in list. All parts before this were added during current cycle. If old == null, then all parts are new.
-    int n;  /// current number of live members
-    int nextIndex;
-    LinkedList<Integer> availableIndex;
+    public Compartment head; ///< List of all instances of this population. Mainly used for creating connections.
+    public Compartment tail; ///< Last member in list. Used for reverse iteration.
+    public Compartment old;  ///< First old part in list. All parts before this were added during current cycle. If old == null, then all parts are new.
+    public int n;  /// current number of live members
+    public int nextIndex;
+    public LinkedList<Integer> availableIndex;
 
     public PopulationCompartment (EquationSet equations, Part container)
     {

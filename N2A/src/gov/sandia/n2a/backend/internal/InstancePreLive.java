@@ -16,7 +16,7 @@ public class InstancePreLive extends InstanceTemporaries
 {
     public InstancePreLive (Instance wrapped, Euler simulator)
     {
-        super (wrapped, simulator, false, true);
+        super (wrapped, simulator, true);
     }
 
     public Type get (Variable v)

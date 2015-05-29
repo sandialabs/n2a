@@ -45,6 +45,14 @@ public class InternalSimulation implements Simulation
     }
 
     @Override
+    public RunState execute (Object run, ParameterSpecGroupSet groups, ExecutionEnv env) throws Exception
+    {
+        RunState result = prepare (run, groups, env);
+        submit ();
+        return result;
+    }
+
+    @Override
     public void submit () throws Exception
     {
         Runnable run = new Runnable ()
@@ -105,6 +113,31 @@ public class InternalSimulation implements Simulation
         // TODO: fix run ensembles to put metadata directly in a special derived part
         e.metadata.putAll (metadata);  // parameters pushed by run system override any we already have
 
+        digestModel (e);
+        runState.digestedModel = e;
+        env.setFileContents (sourceFileName, e.flatList (false));
+
+        return runState;
+    }
+
+    /**
+        Utility function to enable other backends to use Internal to prepare static network structures.
+        @return An Euler (simulator) object which contains the constructed network.
+    **/
+    public static Euler constructStaticNetwork (EquationSet e) throws Exception
+    {
+        digestModel (e);
+        Wrapper wrapper = new Wrapper (e);
+        Euler simulator = new Euler ();
+        simulator.wrapper = wrapper;
+        simulator.enqueue (wrapper);
+        wrapper.init (simulator);
+        simulator.finishInitCycle ();
+        return simulator;
+    }
+
+    public static void digestModel (EquationSet e) throws Exception
+    {
         e.flatten ();
         e.addSpecials ();  // $dt, $index, $init, $live, $n, $t, $type
         e.fillIntegratedVariables ();
@@ -129,37 +162,24 @@ public class InternalSimulation implements Simulation
         e.setFunctions ();
         e.determineTypes ();
 
-        env.setFileContents (sourceFileName, e.flatList (false));
-
         createBackendData (e);
         analyze (e);
         clearVariables (e);
-        runState.digestedModel = e;
-
-        return runState;
     }
 
-    @Override
-    public RunState execute (Object run, ParameterSpecGroupSet groups, ExecutionEnv env) throws Exception
-    {
-        RunState result = prepare (run, groups, env);
-        submit ();
-        return result;
-    }
-
-    public void createBackendData (EquationSet s)
+    public static void createBackendData (EquationSet s)
     {
         if (! (s.backendData instanceof InternalBackendData)) s.backendData = new InternalBackendData ();
         for (EquationSet p : s.parts) createBackendData (p);
     }
 
-    public void analyze (EquationSet s)
+    public static void analyze (EquationSet s)
     {
         ((InternalBackendData) s.backendData).analyze (s);
         for (EquationSet p : s.parts) analyze (p);
     }
 
-    public void clearVariables (EquationSet s)
+    public static void clearVariables (EquationSet s)
     {
         for (EquationSet p : s.parts) clearVariables (p);
         for (Variable v : s.variables) v.type = v.type.clear ();  // So we can use these as backup when stored value is null.

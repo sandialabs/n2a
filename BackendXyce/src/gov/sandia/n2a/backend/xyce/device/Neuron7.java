@@ -9,14 +9,14 @@ package gov.sandia.n2a.backend.xyce.device;
 
 import java.util.Arrays;
 
-public class Neuron7XyceDevice extends XyceDevice
+public class Neuron7 extends XyceDevice
 {
     String[] nodes = {""};
     String[] modelParams = {"MEMC", "VT", "VR", "VP", "K", "A", "B", "C", "D", "FALLRATE", "USCALE" };
     String[] instanceParams = {"MEMC", "VT", "VR", "VP", "K", "A", "B", "C", "D", "FALLRATE", "USCALE" };
     String[] ivars = {"U"};
 
-    public Neuron7XyceDevice()
+    public Neuron7()
     {
         name = "neuron";
         level = 7;

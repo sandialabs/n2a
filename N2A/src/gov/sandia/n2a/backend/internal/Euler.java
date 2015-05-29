@@ -64,6 +64,19 @@ public class Euler
         wrapper.writeHeaders ();
     }
 
+    /**
+        Do all processing that occurs while $t==0.
+        When a model completes its init() function, all its sub-parts get recursively added to the simulator queue.
+        The only thing left to do is make the connections, which occurs in the main loop above just before $t is incremented.
+        This function exists specifically to support other backends that use Internal to prepare network structures. 
+        This should not be called if run() will be called.
+     */
+    public void finishInitCycle ()
+    {
+        for (PopulationConnection p : connectQueue) p.connect (this);
+        connectQueue.clear ();
+    }
+
     public void integrate ()
     {
         for (Instance i : queue) i.integrate (this);

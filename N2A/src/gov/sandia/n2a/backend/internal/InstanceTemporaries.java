@@ -26,14 +26,14 @@ public class InstanceTemporaries extends Instance
     public Scalar init;
     public InternalBackendData bed;
 
-    public InstanceTemporaries (Instance wrapped, Euler simulator, boolean global, boolean init)
+    public InstanceTemporaries (Instance wrapped, Euler simulator, boolean init)
     {
         this.wrapped = wrapped;
         this.simulator = simulator;
         this.init = new Scalar (init ? 1 : 0);
         bed = (InternalBackendData) wrapped.equations.backendData;
-        if (global) allocate (bed.countGlobalTempFloat, bed.countGlobalTempType);
-        else        allocate (bed.countLocalTempFloat,  bed.countLocalTempType);
+        if (wrapped instanceof Population) allocate (bed.countGlobalTempFloat, bed.countGlobalTempType);
+        else                               allocate (bed.countLocalTempFloat,  bed.countLocalTempType);
     }
 
     public Type get (VariableReference r)

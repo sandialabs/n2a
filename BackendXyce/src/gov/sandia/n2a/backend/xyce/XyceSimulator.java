@@ -14,20 +14,24 @@ import gov.sandia.umf.platform.plugins.Simulation;
 import gov.sandia.umf.platform.plugins.extpoints.Simulator;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 
-public class XyceSimulator implements Simulator {
-
+public class XyceSimulator implements Simulator
+{
     @Override
-    public String getName() {
+    public String getName ()
+    {
         return "Xyce";
     }
 
     @Override
-    public String[] getCompatibleModelTypes() {
+    public String[] getCompatibleModelTypes ()
+    {
         return new String[] {"n2a"};
     }
 
-    public ParameterDomain getSimulatorParameters () {
-        return new XyceSimulation().getAllParameters();
+    @Override
+    public ParameterDomain getSimulatorParameters ()
+    {
+        return new XyceSimulation ().getAllParameters ();
     }
 
     @Override
@@ -48,28 +52,14 @@ public class XyceSimulator implements Simulator {
     }
 
     @Override
-    public boolean canHandleRunEnsembleParameter(Object model, Object key,
-            ParameterSpecification spec) {
-    // disabling this functionality until we resolve issues with xyce .step
-        // key should be strings like "model.layers.hh.V"
-//        ParameterKeyPath keyPath = (ParameterKeyPath) key;
-//        String top = (String) keyPath.get(0);
-//        if (!top.equals("Model")) {
-//            return false;
-//        }
-//        String paramName = (String) keyPath.get(3);
-//        if (paramName.startsWith("$") || paramName.endsWith("'")) {
-//            return false;
-//        }
-//        // at this point, parameter OK; check the spec
-//        if (spec instanceof StepParameterSpecification) {
-//            return true;
-//        }
+    public boolean canHandleRunEnsembleParameter (Object model, Object key, ParameterSpecification spec)
+    {
         return false;
     }
 
     @Override
-    public Simulation createSimulation() {
-        return new XyceSimulation();
+    public Simulation createSimulation ()
+    {
+        return new XyceSimulation ();
     }
 }

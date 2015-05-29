@@ -77,7 +77,7 @@ public class Part extends Instance
     **/
     public void init (Euler simulator)
     {
-        InstanceTemporaries temp = new InstanceTemporaries (this, simulator, false, true);
+        InstanceTemporaries temp = new InstanceTemporaries (this, simulator, true);
 
         // $variables
         if (temp.bed.liveStorage == InternalBackendData.LIVE_STORED) set (temp.bed.live, new Scalar (1));  // force $live to be set before anything else
@@ -133,7 +133,7 @@ public class Part extends Instance
 
     public void update (Euler simulator)
     {
-        InstanceTemporaries temp = new InstanceTemporaries (this, simulator, false, false);
+        InstanceTemporaries temp = new InstanceTemporaries (this, simulator, false);
         for (Variable v : temp.bed.localUpdate)
         {
             Type result = v.eval (temp);
@@ -252,7 +252,7 @@ public class Part extends Instance
             double p;
             if (bed.p.hasAttribute ("temporary"))
             {
-                InstanceTemporaries temp = new InstanceTemporaries (this, simulator, false, false);
+                InstanceTemporaries temp = new InstanceTemporaries (this, simulator, false);
                 p = ((Scalar) bed.p.eval (temp)).value;
             }
             else
@@ -340,7 +340,7 @@ public class Part extends Instance
         {
             if (bed.xyz.hasAny (new String[] {"constant", "temporary"}))
             {
-                InstanceTemporaries temp = new InstanceTemporaries (this, simulator, false, true);  // getXYZ() calls occur only during the init cycle, specifically when testing a connection
+                InstanceTemporaries temp = new InstanceTemporaries (this, simulator, true);  // getXYZ() calls occur only during the init cycle, specifically when testing a connection
                 return (Matrix) bed.xyz.eval (temp);
             }
             return (Matrix) get (bed.xyz);

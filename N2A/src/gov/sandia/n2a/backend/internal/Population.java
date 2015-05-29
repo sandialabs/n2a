@@ -29,7 +29,7 @@ public class Population extends Instance
 
     public void init (Euler simulator)
     {
-        InstanceTemporaries temp = new InstanceTemporaries (this, simulator, true, true);
+        InstanceTemporaries temp = new InstanceTemporaries (this, simulator, true);
         resolve (temp.bed.globalReference);
         for (Variable v : temp.bed.globalInit)
         {
@@ -64,7 +64,7 @@ public class Population extends Instance
 
     public void update (Euler simulator)
     {
-        InstanceTemporaries temp = new InstanceTemporaries (this, simulator, true, false);
+        InstanceTemporaries temp = new InstanceTemporaries (this, simulator, false);
         for (Variable v : temp.bed.globalUpdate)
         {
             Type result = v.eval (temp);

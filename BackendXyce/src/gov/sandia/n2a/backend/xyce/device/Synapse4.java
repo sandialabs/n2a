@@ -9,17 +9,16 @@ package gov.sandia.n2a.backend.xyce.device;
 
 import java.util.Arrays;
 
-public class Neuron9XyceDevice extends XyceDevice
+public class Synapse4 extends XyceDevice
 {
-    String[] nodes = {"", "0"};
-    String[] modelParams = {"CMEM", "GMEM", "ELEAK", "VREST", "GNA", "ENA", "GK", "EK" };
-    String[] instanceParams = {};
-    String[] ivars = {"N", "M", "H"};
-
-    public Neuron9XyceDevice()
+    String[] nodes = {"", ""};
+    String[] modelParams = {"TAU1","TAU2","EREV","VTHRESH","DELAY","GMAX"};
+    String[] ivars = {"A0", "B0", "T0"};
+    
+    public Synapse4()
     {
-        name = "neuron";
-        level = 9;
+        name = "synapse";
+        level = 4;
         defaultNodes = Arrays.asList(nodes);
         modelParameterNames = Arrays.asList(modelParams);
         internalVariables = Arrays.asList(ivars);
@@ -28,6 +27,6 @@ public class Neuron9XyceDevice extends XyceDevice
     @Override
     public String getCapacitanceVar()
     {
-        return "CMEM";
+        return "";
     }
 }

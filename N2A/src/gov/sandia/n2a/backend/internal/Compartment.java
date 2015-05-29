@@ -11,8 +11,8 @@ import gov.sandia.n2a.eqset.EquationSet;
 
 public class Compartment extends Part
 {
-    Compartment before;
-    Compartment after;
+    public Compartment before;
+    public Compartment after;
 
     public Compartment (EquationSet equations, PopulationCompartment container)
     {

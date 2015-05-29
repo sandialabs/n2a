@@ -8,67 +8,71 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.backend.xyce.symbol;
 
 import gov.sandia.n2a.backend.xyce.Xyceisms;
-import gov.sandia.n2a.backend.xyce.network.PartInstance;
-import gov.sandia.n2a.backend.xyce.parsing.LanguageUtil;
-import gov.sandia.n2a.backend.xyce.parsing.XyceASTUtil;
-import gov.sandia.n2a.backend.xyce.parsing.XyceRHSTranslator;
+import gov.sandia.n2a.backend.xyce.parsing.XyceRenderer;
 import gov.sandia.n2a.eqset.EquationEntry;
+import gov.sandia.n2a.eqset.VariableReference;
+import gov.sandia.n2a.language.AccessVariable;
+import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.Visitor;
+import java.util.ArrayList;
+import java.util.List;
 
-import java.util.HashSet;
-import java.util.Set;
+public class FunctionSymbolDef extends SymbolDef
+{
+    public List<VariableReference> args = new ArrayList<VariableReference> ();
 
-public class FunctionSymbolDef extends DefaultSymbolDef {
-
-    private Set<String> functionArgs = new HashSet<String>();
-
-    public FunctionSymbolDef(EquationEntry eq, Set<String> args, PartInstance pi)
+    public FunctionSymbolDef (final EquationEntry eq)
     {
-        super(eq, pi);
-        functionArgs = args;
-        if (functionArgs.contains(LanguageUtil.$TIME)) {
-            functionArgs.remove(LanguageUtil.$TIME);
+        super (eq);
+
+        // Determine what variables this function depends on.
+        eq.visit (new Visitor ()
+        {
+            public boolean visit (Operator op)
+            {
+                if (op instanceof AccessVariable)
+                {
+                    AccessVariable av = (AccessVariable) op;
+                    if (   ! av.name.equals (eq.variable.name)
+                        && av.reference != null
+                        && av.reference.variable != null
+                        && ! av.reference.variable.hasAttribute ("constant")
+                        && ! av.name.equals ("$t"))  // since $t is always directly available as TIME
+                    {
+                        args.add (av.reference);
+                    }
+                }
+                return true;
+            }
+        });
+
+        if (args.size () == 0)
+        {
+            // if there aren't any arguments, something's wrong - this could have been a constant
+            throw new EvaluationException ("Trying to create .func for " + eq.variable.name + " but there are no arguments");
         }
     }
 
     @Override
-    public String getDefinition(SymbolManager symMgr, PartInstance pi) 
+    public String getDefinition (XyceRenderer renderer) 
     {
-        if (defWritten ) {
-            return "";
-        }
-        if (instanceSpecific) {
-            String translatedEq = XyceASTUtil.getRightHandSideReadableShort(eq,
-                new XyceRHSTranslator(symMgr, pi, functionArgs, false));
-            return Xyceisms.defineFunction(eq.variable.name, pi.serialNumber, functionArgs, translatedEq);
-        } else {
-            String translatedEq = XyceASTUtil.getRightHandSideReadableShort(eq,
-                    new XyceRHSTranslator(symMgr, firstInstance, functionArgs, false));
-            defWritten = true;
-            return Xyceisms.defineFunction(eq.variable.name, firstInstance.serialNumber, functionArgs, translatedEq);
-        }
+        List<String> formalArguments = new ArrayList<String> ();
+        for (VariableReference r : args) formalArguments.add (r.variable.name);  // TODO: will this produce a list of unique formal arguments? Do the var names need to be fully qualified?
+        return Xyceisms.defineFunction (eq.variable.name, renderer.pi.hashCode (), formalArguments, renderer.change (eq.expression));
     }
 
     @Override
-    public String getReference(int SN) 
+    public String getReference (XyceRenderer renderer)
     {
-        // This method should not be used; translator code handles references
-        // to functions itself, because the function arguments have to be translated also
-        // and this method doesn't have access to the necessary symbols
-        // But try to keep going anyway
-        System.out.println("Warning:  call to getReference for function defined by pe " + eq);
-        return "";
-    }
-
-    public Set<String> getFunctionArgs()
-    {
-        return functionArgs;
-    }
-    
-    public int getSN(int SN)
-    {
-        if (instanceSpecific) {
-            return SN;
+        // need to know what argument(s) this function
+        // takes, and translate those as well -
+        // unless they're in the exception list, as for defining the function
+        List<String> newArgs = new ArrayList<String> ();
+        for (VariableReference r : args)
+        {
+            newArgs.add (renderer.change (r));
         }
-        return firstInstance.serialNumber;
+        return Xyceisms.referenceFunction (eq.variable.name, newArgs, renderer.pi.hashCode ());
     }
 }

@@ -18,12 +18,12 @@ public class Xyceisms {
     // functions, etc. used in the right hand side of an expression
     ////////////////////
 
-    public static String referenceVariable(String varname, int serialNumber)
+    public static String referenceVariable (String varname, int serialNumber)
     {
             return varname + "_" + serialNumber;
     }
 
-    public static String referenceStateVar(String varname, int serialNumber)
+    public static String referenceStateVar (String varname, int serialNumber)
     {
         return "V("+ varname + "_" + serialNumber + "_node)";
     }
@@ -239,10 +239,10 @@ public class Xyceisms {
     // should have recognized device parameter names as keys, and expressions as values
     public static String getParamList(Map<String,String> params)
     {
-        StringBuilder paramString = new StringBuilder();
-        for (String name : params.keySet())
+        StringBuilder paramString = new StringBuilder ();
+        for (String name : params.keySet ())
         {
-            paramString.append(name + "={" + params.get(name) + "} ");
+            paramString.append (name + "={" + params.get (name) + "} ");
         }
         return paramString.toString();
     }

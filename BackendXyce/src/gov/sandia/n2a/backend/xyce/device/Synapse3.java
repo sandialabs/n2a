@@ -9,7 +9,7 @@ package gov.sandia.n2a.backend.xyce.device;
 
 import java.util.Arrays;
 
-public class Synapse3XyceDevice extends XyceDevice
+public class Synapse3 extends XyceDevice
 {
     String[] nodes = {"", ""};
     String[] modelParams = {"TAU1","TAU2","EREV","VTHRESH","DELAY","GMAX",
@@ -17,7 +17,7 @@ public class Synapse3XyceDevice extends XyceDevice
             "WMIN", "WMAX", "WINIT", "P"};
     String[] ivars = {"A0", "B0", "T0", "W", "VL1", "VL2", "VL3"};
 
-    public Synapse3XyceDevice()
+    public Synapse3()
     {
         name = "synapse";
         level = 3;

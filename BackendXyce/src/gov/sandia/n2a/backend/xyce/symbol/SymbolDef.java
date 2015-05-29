@@ -7,10 +7,25 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.xyce.symbol;
 
-import gov.sandia.n2a.backend.xyce.network.PartInstance;
+import gov.sandia.n2a.backend.xyce.parsing.XyceRenderer;
+import gov.sandia.n2a.eqset.EquationEntry;
 
-public interface SymbolDef 
+public class SymbolDef 
 {
-    public String getDefinition(SymbolManager symMgr, PartInstance pi);
-    public String getReference(int SN);
+    public EquationEntry eq;
+
+    public SymbolDef (EquationEntry eq)
+    {
+        this.eq = eq;
+    }
+
+    public String getDefinition (XyceRenderer renderer)
+    {
+        return "";
+    }
+
+    public String getReference (XyceRenderer renderer)
+    {
+        return "";
+    }
 }

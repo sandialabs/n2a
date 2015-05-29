@@ -173,11 +173,7 @@ public class Variable implements Comparable<Variable>
     public void visit (Visitor visitor)
     {
         if (equations == null) return;
-        for (EquationEntry e : equations)
-        {
-            if (e.expression  != null) e.expression .visit (visitor);
-            if (e.conditional != null) e.conditional.visit (visitor);
-        }
+        for (EquationEntry e : equations) e.visit (visitor);
     }
 
     public void transform (Transformer transformer)
@@ -225,6 +221,20 @@ public class Variable implements Comparable<Variable>
             if (doit instanceof Scalar  &&  ((Scalar) doit).value != 0) return e.expression.eval (instance);
         }
         if (name.equals ("$type")) return new Scalar (0);  // $type should not have a default equation. Instead, always reset to 0.
+        return null;
+    }
+
+    /**
+        Similar to eval(), but simply returns the selected equation.
+    **/
+    public EquationEntry select (Instance instance) throws EvaluationException
+    {
+        for (EquationEntry e : equations)
+        {
+            if (e.conditional == null) return e;
+            Object doit = e.conditional.eval (instance);
+            if (doit instanceof Scalar  &&  ((Scalar) doit).value != 0) return e;
+        }
         return null;
     }
 

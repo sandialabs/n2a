@@ -8,25 +8,23 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.backend.xyce.symbol;
 
 import gov.sandia.n2a.backend.xyce.Xyceisms;
-import gov.sandia.n2a.backend.xyce.network.PartSetInterface;
+import gov.sandia.n2a.backend.xyce.parsing.XyceRenderer;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.language.Function;
 
-public abstract class InputSymbolDef extends DefaultSymbolDef
+public abstract class InputSymbolDef extends SymbolDef
 {
     Function funcNode;
-    String inputVar;
 
-    public InputSymbolDef(EquationEntry eq, PartSetInterface pSet) 
+    public InputSymbolDef (EquationEntry eq) 
     {
-        super(eq,pSet);
-        this.inputVar = eq.variable.name;
+        super (eq);
         funcNode = (Function) eq.expression;
     }
 
     @Override
-    public String getReference(int SN) 
+    public String getReference (XyceRenderer renderer)
     {
-        return Xyceisms.referenceStateVar(inputVar, SN);
+        return Xyceisms.referenceStateVar (eq.variable.name, renderer.pi.hashCode ());
     }
 }
