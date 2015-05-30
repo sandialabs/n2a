@@ -5,16 +5,15 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.backend.xyce.symbol;
+package gov.sandia.n2a.backend.xyce.netlist;
 
-import gov.sandia.n2a.backend.xyce.Xyceisms;
-import gov.sandia.n2a.backend.xyce.parsing.XyceRenderer;
 import gov.sandia.n2a.eqset.EquationEntry;
+
 import java.util.ArrayList;
 
-public class SineWaveInputSymbolDef extends InputSymbolDef 
+public class SymbolSinewave extends SymbolInput 
 {
-    public SineWaveInputSymbolDef (EquationEntry eq)
+    public SymbolSinewave (EquationEntry eq)
     {
         super (eq);
     }

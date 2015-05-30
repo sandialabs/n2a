@@ -5,11 +5,9 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.backend.xyce.symbol;
+package gov.sandia.n2a.backend.xyce.netlist;
 
-import gov.sandia.n2a.backend.xyce.Xyceisms;
 import gov.sandia.n2a.backend.xyce.device.XyceDevice;
-import gov.sandia.n2a.backend.xyce.parsing.XyceRenderer;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
@@ -27,7 +25,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 
-// Create a XyceDeviceSymbolDef from equations and metadata.
+// Create a SymbolDevice from equations and metadata.
 // The nodes involved in a device (other than ground) are typically state variables
 // Need correspondence between varnames that other Parts might reference
 // and nodes that this device uses (device references state vars, doesn't
@@ -48,7 +46,7 @@ import java.util.Map.Entry;
 //        map of device params to expressions from equations
 //    needs to be able to take SN and write out appropriate instance-specific netlist line -
 
-public class XyceDeviceSymbolDef
+public class SymbolDevice
 {
     public static final String DEVICE_TAG = "xyce.device";
     public static final String PARAM_TAG  = "xyce.param";
@@ -85,7 +83,7 @@ public class XyceDeviceSymbolDef
     public Map<String,String> model;  ///< The paremeters and their values that were written out in the single .model line for this part. Used to determine if an instance-specific parm is needed or not.
     public String             modelName;
 
-    public XyceDeviceSymbolDef (EquationSet s) throws EvaluationException
+    public SymbolDevice (EquationSet s) throws EvaluationException
     {
         eqSet = s;
 
@@ -110,6 +108,7 @@ public class XyceDeviceSymbolDef
         {
             for (EquationEntry eq : v.equations)
             {
+                // TODO: xyce metadata should really be in the variable, not the equation. This is an issue with N2A storage structure in general.
                 if (eq.metadata == null) continue;
                 for (String metaKey : eq.metadata.keySet ())
                 {

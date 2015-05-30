@@ -5,24 +5,23 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.backend.xyce.symbol;
+package gov.sandia.n2a.backend.xyce.netlist;
 
-import gov.sandia.n2a.backend.xyce.Xyceisms;
-import gov.sandia.n2a.backend.xyce.parsing.XyceRenderer;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Visitor;
+
 import java.util.ArrayList;
 import java.util.List;
 
-public class FunctionSymbolDef extends SymbolDef
+public class SymbolFunc extends Symbol
 {
     public List<VariableReference> args = new ArrayList<VariableReference> ();
 
-    public FunctionSymbolDef (final EquationEntry eq)
+    public SymbolFunc (final EquationEntry eq)
     {
         super (eq);
 

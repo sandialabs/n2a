@@ -5,12 +5,10 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.backend.xyce.parsing;
+package gov.sandia.n2a.backend.xyce.netlist;
 
 import gov.sandia.n2a.backend.internal.Euler;
 import gov.sandia.n2a.backend.xyce.XyceBackendData;
-import gov.sandia.n2a.backend.xyce.Xyceisms;
-import gov.sandia.n2a.backend.xyce.symbol.SymbolDef;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Operator;
@@ -23,7 +21,7 @@ import gov.sandia.n2a.language.type.Scalar;
 
 import java.util.Collection;
 
-public class XyceRenderer extends Renderer  // TODO: rename to XyceRenderer; pass as parameter to SymbolDef functions
+public class XyceRenderer extends Renderer  // TODO: rename to XyceRenderer; pass as parameter to Symbol functions
 {
     public Euler                         simulator;
     public Instance                      pi;
@@ -120,7 +118,7 @@ public class XyceRenderer extends Renderer  // TODO: rename to XyceRenderer; pas
             }
             // Any variables not in the above 2 categories fall through to regular processing ...
         }
-        SymbolDef def = bed.variableSymbols.get (r.variable);
+        Symbol def = bed.variableSymbols.get (r.variable);
         return def.getReference (this);
     }
 

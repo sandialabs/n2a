@@ -11,8 +11,8 @@ import gov.sandia.n2a.backend.internal.Euler;
 import gov.sandia.n2a.backend.internal.InstanceTemporaries;
 import gov.sandia.n2a.backend.internal.InternalSimulation;
 import gov.sandia.n2a.backend.internal.Population;
-import gov.sandia.n2a.backend.xyce.parsing.XyceRenderer;
-import gov.sandia.n2a.backend.xyce.symbol.SymbolDef;
+import gov.sandia.n2a.backend.xyce.netlist.Symbol;
+import gov.sandia.n2a.backend.xyce.netlist.XyceRenderer;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
@@ -226,7 +226,7 @@ class XyceSimulation implements Simulation
                 // TODO: how to switch between multiple conditions that can be true during normal operation? IE: how to make Xyce code conditional?
                 // Perhaps gate each condition (through a transistor?) and sum them at a single node.
                 EquationEntry e = v.select (temp);  // e can be null
-                SymbolDef def = bed.equationSymbols.get (e);
+                Symbol def = bed.equationSymbols.get (e);
                 if (def == null) continue;
                 writer.append (def.getDefinition (renderer));
 

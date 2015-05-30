@@ -5,12 +5,10 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.backend.xyce.symbol;
+package gov.sandia.n2a.backend.xyce.netlist;
 
 import java.util.ArrayList;
 
-import gov.sandia.n2a.backend.xyce.Xyceisms;
-import gov.sandia.n2a.backend.xyce.parsing.XyceRenderer;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
@@ -19,7 +17,7 @@ import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.function.Pulse;
 import gov.sandia.n2a.language.type.Scalar;
 
-public class PulseSymbolDef extends InputSymbolDef
+public class SymbolPulse extends SymbolInput
 {
     // a more generic pulse than XycePulseInputSymbolDef
     // shows up in equations as pulse(var, width, period, rise, fall)
@@ -35,7 +33,7 @@ public class PulseSymbolDef extends InputSymbolDef
     public Operator width;
     public Operator period;
 
-    public PulseSymbolDef (EquationEntry eq)
+    public SymbolPulse (EquationEntry eq)
     {
         super (eq);
 

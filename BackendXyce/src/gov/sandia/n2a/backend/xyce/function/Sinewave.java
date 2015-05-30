@@ -5,7 +5,7 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.backend.xyce.functions;
+package gov.sandia.n2a.backend.xyce.function;
 
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -13,7 +13,7 @@ import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 
-public class XyceSineWaveFunction extends Function
+public class Sinewave extends Function
 {
     public static Factory factory ()
     {
@@ -26,14 +26,14 @@ public class XyceSineWaveFunction extends Function
 
             public Operator createInstance ()
             {
-                return new XyceSineWaveFunction ();
+                return new Sinewave ();
             }
         };
     }
 
     public Type eval (Instance context)
     {
-        // TODO: implement equivalent of Xyce sinewave function
+        // TODO: implement equivalent of Xyce sinewave function; alternately, define a generic sinewave function in N2A, similar to generic pulse()
         return new Scalar (0);
     }
 

@@ -5,18 +5,16 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.backend.xyce.symbol;
+package gov.sandia.n2a.backend.xyce.netlist;
 
-import gov.sandia.n2a.backend.xyce.Xyceisms;
-import gov.sandia.n2a.backend.xyce.parsing.XyceRenderer;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Scalar;
 
-public class ConstantICSymbolDef extends SymbolDef
+public class SymbolConstantIC extends Symbol
 {
-    public ConstantICSymbolDef (EquationEntry eq)
+    public SymbolConstantIC (EquationEntry eq)
     {
         super (eq);
     }

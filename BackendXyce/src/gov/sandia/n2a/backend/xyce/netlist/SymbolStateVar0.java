@@ -5,13 +5,11 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.backend.xyce.symbol;
+package gov.sandia.n2a.backend.xyce.netlist;
 
-import gov.sandia.n2a.backend.xyce.Xyceisms;
-import gov.sandia.n2a.backend.xyce.parsing.XyceRenderer;
 import gov.sandia.n2a.eqset.EquationEntry;
 
-public class StateVar0SymbolDef extends SymbolDef
+public class SymbolStateVar0 extends Symbol
 {
     // For state variables defined by an order 0 equation - 
     // no time derivative
@@ -19,7 +17,7 @@ public class StateVar0SymbolDef extends SymbolDef
     // where the variable belongs to a connected part rather than
     // this one
 
-    public StateVar0SymbolDef (EquationEntry eq)
+    public SymbolStateVar0 (EquationEntry eq)
     {
         super(eq);
     }

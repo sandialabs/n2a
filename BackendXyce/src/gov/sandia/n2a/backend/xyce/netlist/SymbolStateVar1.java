@@ -5,20 +5,18 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.backend.xyce.symbol;
+package gov.sandia.n2a.backend.xyce.netlist;
 
 import gov.sandia.n2a.backend.internal.Connection;
-import gov.sandia.n2a.backend.xyce.Xyceisms;
-import gov.sandia.n2a.backend.xyce.parsing.XyceRenderer;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.type.Instance;
 
 /// For state variables defined by a first-order differential equation
-public class StateVar1SymbolDef extends SymbolDef 
+public class SymbolStateVar1 extends Symbol 
 {
-    public StateVar1SymbolDef (EquationEntry eq)
+    public SymbolStateVar1 (EquationEntry eq)
     {
         super (eq);
     }

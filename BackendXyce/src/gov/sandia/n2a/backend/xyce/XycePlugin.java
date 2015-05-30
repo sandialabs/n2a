@@ -7,7 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.xyce;
 
-import gov.sandia.n2a.backend.xyce.functions.XyceSineWaveFunction;
+import gov.sandia.n2a.backend.xyce.function.Sinewave;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.ImageIcon;
@@ -47,7 +47,7 @@ public class XycePlugin extends DefaultPlugin
         return new ExtensionPoint[]
         {
             new XyceSimulator(),
-            XyceSineWaveFunction.factory ()
+            Sinewave.factory ()
         };
     }
 }
