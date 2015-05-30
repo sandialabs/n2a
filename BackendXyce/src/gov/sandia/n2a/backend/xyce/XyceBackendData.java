@@ -59,11 +59,11 @@ public class XyceBackendData
                 {
                     handler = new StateVar1SymbolDef (eq);
                 }
-                else if (eq.expression instanceof Pulse)
+                else if (eq.toString ().contains ("pulse"))  // TODO: this is a bad test. Use a visitor to detect the Pulse class
                 {
                     handler = new PulseSymbolDef (eq);
                 }
-                else if (eq.expression instanceof XyceSineWaveFunction)
+                else if (eq.toString ().contains ("sinewave"))  // TODO: this is a bad test. Use a visitor to detect the XyceSineWaveFunction class
                 {
                     handler = new SineWaveInputSymbolDef (eq);
                 }

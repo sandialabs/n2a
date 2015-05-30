@@ -7,15 +7,9 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.xyce.symbol;
 
-import gov.sandia.n2a.backend.xyce.XyceBackendData;
 import gov.sandia.n2a.backend.xyce.Xyceisms;
-import gov.sandia.n2a.backend.xyce.parsing.XyceASTUtil;
 import gov.sandia.n2a.backend.xyce.parsing.XyceRenderer;
 import gov.sandia.n2a.eqset.EquationEntry;
-import gov.sandia.n2a.language.Constant;
-import gov.sandia.n2a.language.Operator;
-import gov.sandia.n2a.language.type.Instance;
-
 import java.util.ArrayList;
 
 public class SineWaveInputSymbolDef extends InputSymbolDef 
@@ -26,25 +20,14 @@ public class SineWaveInputSymbolDef extends InputSymbolDef
     }
 
     @Override
-    public String getDefinition (Instance pi) 
+    public String getDefinition (XyceRenderer renderer) 
     {
-        int SN = pi.hashCode ();
         ArrayList<String> params = new ArrayList<String> (5);
         for (int a = 0; a < funcNode.operands.length; a++)
         {
-            Operator param = funcNode.operands[a];
-            if (param instanceof Constant)
-            {
-                params.add (param.toString ());
-            }
-            else
-            {
-                XyceBackendData bed = (XyceBackendData) eq.variable.container.backendData;
-                // param is an expression; need to get the entire string at this subtree and translate it
-                params.add (XyceASTUtil.getReadableShort (param, new XyceRenderer (bed, pi, null, false)));
-            }
+            params.add (renderer.change (funcNode.operands[a]));
         }
 
-        return Xyceisms.voltageSinWave (eq.variable.name, SN, params);
+        return Xyceisms.voltageSinWave (eq.variable.name, renderer.pi.hashCode (), params);
     }
 }

@@ -131,8 +131,10 @@ public class Operator implements Cloneable
 
     /**
         Remove operators that have no effect due to specific values of their operands (for example: x*1).
-        Replaces constant expressions (including any AccessVariable that points to a Constant) to a single Constant.
+        Replaces constant expressions (including any AccessVariable that points to a Constant) with a single Constant.
         Note: a Transformer could do this work, but a direct implementation is more elegant.
+        @param from The Variable that contains the current expression. Used, in conjunction with Variable.visited, to
+        prevent infinite recursion. It is safe to pass a value of null, since this terminates recursion check.
     **/
     public Operator simplify (Variable from)
     {

@@ -7,16 +7,11 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.xyce.symbol;
 
-import gov.sandia.n2a.backend.xyce.XyceBackendData;
 import gov.sandia.n2a.backend.xyce.Xyceisms;
-import gov.sandia.n2a.backend.xyce.parsing.XyceASTUtil;
 import gov.sandia.n2a.backend.xyce.parsing.XyceRenderer;
 import gov.sandia.n2a.eqset.EquationEntry;
-import gov.sandia.n2a.language.type.Instance;
 
-import java.util.ArrayList;
-
-public class StateVar0SymbolDef extends DefaultSymbolDef
+public class StateVar0SymbolDef extends SymbolDef
 {
     // For state variables defined by an order 0 equation - 
     // no time derivative
@@ -30,16 +25,14 @@ public class StateVar0SymbolDef extends DefaultSymbolDef
     }
 
     @Override
-    public String getDefinition (Instance pi)
+    public String getDefinition (XyceRenderer renderer)
     {
-        XyceBackendData bed = (XyceBackendData) eq.variable.container.backendData;
-        String translatedEq = XyceASTUtil.getRightHandSideReadableShort (eq, new XyceRenderer (bed, pi, new ArrayList<String> (), false));
-        return Xyceisms.defineStateVar (eq.variable.name, pi.hashCode (), translatedEq);
+        return Xyceisms.defineStateVar (eq.variable.name, renderer.pi.hashCode (), renderer.change (eq.expression));
     }
 
     @Override
-    public String getReference (Instance pi)
+    public String getReference (XyceRenderer renderer)
     {
-        return Xyceisms.referenceStateVar (eq.variable.name, pi.hashCode ());
+        return Xyceisms.referenceStateVar (eq.variable.name, renderer.pi.hashCode ());
     }
 }

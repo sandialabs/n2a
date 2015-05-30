@@ -9,6 +9,7 @@ package gov.sandia.n2a.backend.xyce.parsing;
 
 import gov.sandia.n2a.backend.internal.Euler;
 import gov.sandia.n2a.backend.xyce.XyceBackendData;
+import gov.sandia.n2a.backend.xyce.Xyceisms;
 import gov.sandia.n2a.backend.xyce.symbol.SymbolDef;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.AccessVariable;
@@ -102,15 +103,31 @@ public class XyceRenderer extends Renderer  // TODO: rename to XyceRenderer; pas
         if (r.variable.name.equals ("$dt")) return new Double (simulator.dt).toString ();
 
         if (r.variable.hasAttribute ("initOnly")) return pi.get (r).toString ();
-        // constants should already be substituted in everywhere, so don't worry about them
-        
+        if (r.variable.hasAttribute ("constant")) return r.variable.equations.first ().expression.toString ();
+
         // finally, actual translation of some user-defined symbol!
         XyceBackendData bed = (XyceBackendData) pi.equations.backendData;
-        SymbolDef def = bed.variableSymbols.get (r.variable);  // for a reference, it should be sufficient to know the handler for *any* of the equations
+        if (bed.deviceSymbol != null)  // A device may have some variable that require special handling
+        {
+            if (bed.deviceSymbol.ivars.containsKey (r.variable))
+            {
+                // example n(y%synapse%syn_w), where 'w' is the varname passed in
+                return "n(y%" + bed.deviceSymbol.device.getDeviceTypeName () + "%" + pi.equations.name + "-" + pi.hashCode () + "_" + bed.deviceSymbol.ivars.get (r.variable) + ")";
+            }
+            if (bed.deviceSymbol.varnames.contains (r.variable))
+            {
+                return Xyceisms.referenceStateVar (r.variable.name, pi.hashCode ());
+            }
+            // Any variables not in the above 2 categories fall through to regular processing ...
+        }
+        SymbolDef def = bed.variableSymbols.get (r.variable);
         return def.getReference (this);
     }
 
-    /// Convenience function to reset the result field (a StringBuilder) and render an Operator and its descendents.
+    /**
+        Convenience function to reset the result field (a StringBuilder) and render an Operator and its descendents.
+        This should never be called in the middle of another render.
+    **/
     public String change (Operator op)
     {
         result = new StringBuilder ();

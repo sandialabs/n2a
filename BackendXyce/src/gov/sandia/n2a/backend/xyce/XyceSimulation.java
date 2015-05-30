@@ -9,7 +9,6 @@ package gov.sandia.n2a.backend.xyce;
 
 import gov.sandia.n2a.backend.internal.Euler;
 import gov.sandia.n2a.backend.internal.InstanceTemporaries;
-import gov.sandia.n2a.backend.internal.InternalBackendData;
 import gov.sandia.n2a.backend.internal.InternalSimulation;
 import gov.sandia.n2a.backend.internal.Population;
 import gov.sandia.n2a.backend.xyce.parsing.XyceRenderer;
@@ -17,7 +16,6 @@ import gov.sandia.n2a.backend.xyce.symbol.SymbolDef;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Visitor;
@@ -253,23 +251,26 @@ class XyceSimulation implements Simulation
                 e.expression.visit (traceFinder);
                 for (Operator trace : traceFinder.traces)
                 {
-                    Instance targetInstance = i;
-                    if (traceFinder.target.variable.container != i.equations)
+                    writer.append (".print tran {");  // We don't know if contents is .func, expression or a node, so always wrap in braces.
+                    if (trace instanceof AccessVariable)
                     {
-                        targetInstance = (Instance) i.valuesType[traceFinder.target.index];
+                        AccessVariable av = (AccessVariable) trace;
+                        writer.append (renderer.change (av.reference));
                     }
-                    XyceBackendData targetBed = (XyceBackendData) targetInstance.equations.backendData;
-                    if (targetBed.deviceSymbol != null)
+                    else  // trace is an expression
                     {
-                        writer.append (targetBed.deviceSymbol.getTracer (traceFinder.target.variable, targetInstance));
+                        if (e.expression instanceof Trace  &&  ((Trace) e.expression).operands[0] == trace)  // this trace wraps the entire equation
+                        {
+                            // simply print the LHS variable, similar to the AccessVariable case above
+                            writer.append (renderer.change (v.reference));
+                        }
+                        else
+                        {
+                            // arbitrary expression
+                            writer.append (renderer.change (trace));
+                        }
                     }
-                    else
-                    {
-                        XyceRenderer xlator = new XyceRenderer (targetBed, targetInstance, null, false);
-                        // TODO: we can actually trace an arbitrary expression, so full support for trace() is possible
-                        writer.append ("{" + xlator.change (traceFinder.target.variable.name) + "} ");
-                        //writer.append (Xyceisms.referenceStateVar (traceFinder.target.variable.name, targetInstance.hashCode ()));
-                    }
+                    writer.append ("}\n");  // one .print line per variable
                 }
             }
         }
