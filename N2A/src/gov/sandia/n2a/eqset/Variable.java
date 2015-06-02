@@ -486,29 +486,17 @@ public class Variable implements Comparable<Variable>
     public int compareTo (Variable that)
     {
         int result = name.compareTo (that.name);
-        if (result != 0)
-        {
-            return result;
-        }
-        if (order >= 0  &&  that.order >= 0)
-        {
-            return order - that.order;  // ascending order; necessary for generating integrate() function in C-backend
-        }
+        if (result != 0) return result;
+        if (order >= 0  &&  that.order >= 0) return order - that.order;  // ascending order; necessary for generating integrate() function in C-backend
         return 0;
     }
 
     @Override
     public boolean equals (Object that)
     {
-        if (this == that)
-        {
-            return true;
-        }
+        if (this == that) return true;
         Variable e = (Variable) that;
-        if (e == null)
-        {
-            return false;
-        }
+        if (e == null) return false;
         return compareTo (e) == 0;
     }
 }

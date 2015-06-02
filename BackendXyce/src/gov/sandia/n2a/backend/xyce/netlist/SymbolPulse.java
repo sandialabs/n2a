@@ -17,7 +17,7 @@ import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.function.Pulse;
 import gov.sandia.n2a.language.type.Scalar;
 
-public class SymbolPulse extends SymbolInput
+public class SymbolPulse extends Symbol
 {
     // a more generic pulse than XycePulseInputSymbolDef
     // shows up in equations as pulse(var, width, period, rise, fall)
@@ -112,11 +112,5 @@ public class SymbolPulse extends SymbolInput
         params.add (renderer.change (period));
 
         return Xyceisms.voltagePulse (eq.variable.name, renderer.pi.hashCode (), params);
-    }
-
-    @Override
-    public String getReference (XyceRenderer renderer) 
-    {
-        return Xyceisms.referenceStateVar (eq.variable.name, renderer.pi.hashCode ());
     }
 }

@@ -738,9 +738,9 @@ public class EquationSet implements Comparable<EquationSet>
                 {
                     Instance bypass = new Instance ()
                     {
-                        public Type get (Variable v) throws EvaluationException
+                        public Type get (VariableReference r) throws EvaluationException
                         {
-                            if (v.name.equals ("$init")) return new Scalar (1);  // we evaluate $n in init cycle
+                            if (r.variable.name.equals ("$init")) return new Scalar (1);  // we evaluate $n in init cycle
                             return new Scalar (0);  // During init all other vars are 0, even if they have an initialization conditioned on $init. IE: those values won't be seen until after the init cycle.
                         }
                     };
@@ -1391,9 +1391,10 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 Instance instance = new Instance ()
                 {
-                    public Type get (Variable target) throws EvaluationException
+                    // all AccessVariable objects will reach here first, and get back the Variable.type field
+                    public Type get (VariableReference r) throws EvaluationException
                     {
-                        return target.reference.variable.type;
+                        return r.variable.type;
                     }
                 };
                 value = v.eval (instance);  // can return null if no equation's condition is true

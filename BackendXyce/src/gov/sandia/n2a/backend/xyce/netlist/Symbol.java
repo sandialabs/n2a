@@ -23,8 +23,15 @@ public class Symbol
         return "";
     }
 
+    /**
+        Output code necessary to retrieve the value of this symbol.
+        Note that this function is not called until external references are resolved
+        (via recursion in XyceRenderer), so no need to worry about resolving them here.
+        Default action is to access the voltage of a node. Specific symbol types may
+        override this.
+    **/
     public String getReference (XyceRenderer renderer)
     {
-        return "";
+        return Xyceisms.referenceStateVar (eq.variable.name, renderer.pi.hashCode ());
     }
 }

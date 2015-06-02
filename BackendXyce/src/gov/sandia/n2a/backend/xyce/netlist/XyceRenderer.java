@@ -118,7 +118,7 @@ public class XyceRenderer extends Renderer  // TODO: rename to XyceRenderer; pas
             }
             // Any variables not in the above 2 categories fall through to regular processing ...
         }
-        Symbol def = bed.variableSymbols.get (r.variable);
+        Symbol def = bed.variableSymbols.get (r.variable.name);
         return def.getReference (this);
     }
 

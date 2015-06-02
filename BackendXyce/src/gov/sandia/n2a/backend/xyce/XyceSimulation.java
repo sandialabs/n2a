@@ -9,6 +9,7 @@ package gov.sandia.n2a.backend.xyce;
 
 import gov.sandia.n2a.backend.internal.Euler;
 import gov.sandia.n2a.backend.internal.InstanceTemporaries;
+import gov.sandia.n2a.backend.internal.InternalBackendData;
 import gov.sandia.n2a.backend.internal.InternalSimulation;
 import gov.sandia.n2a.backend.internal.Population;
 import gov.sandia.n2a.backend.xyce.netlist.Symbol;
@@ -88,13 +89,14 @@ class XyceSimulation implements Simulation
         String cirFile = env.file (jobDir, "model");
         String prnFile = env.file (jobDir, "result");  // "prn" doesn't work, at least on windows
 
-        BufferedWriter writer = new BufferedWriter (new FileWriter (cirFile));
-
         EquationSet e = new EquationSet (runRecord.getModel ());
         if (e.name.length () < 1) e.name = "Model";  // because the default is for top-level equation set to be anonymous
         Euler simulator = InternalSimulation.constructStaticNetwork (e);
         analyze (e);
+
+        FileWriter writer = new FileWriter (cirFile);
         generateNetlist (simulator, writer);
+        writer.close ();
 
         // save job info 
         XyceRunState runState = new XyceRunState();
@@ -187,11 +189,12 @@ class XyceSimulation implements Simulation
     {
         for (EquationSet p : s.parts) analyze (p);
         XyceBackendData bed = new XyceBackendData ();
+        bed.internal = (InternalBackendData) s.backendData;
         s.backendData = bed;
         bed.analyze (s);
     }
 
-    public void generateNetlist (Euler simulator, BufferedWriter writer) throws Exception
+    public void generateNetlist (Euler simulator, FileWriter writer) throws Exception
     {
         Population toplevel = simulator.wrapper.populations[0];
         XyceRenderer renderer = new XyceRenderer (simulator);
@@ -219,7 +222,7 @@ class XyceSimulation implements Simulation
                 writer.append (bed.deviceSymbol.getDefinition (renderer));
             }
 
-            InstanceTemporaries temp = new InstanceTemporaries (i, simulator, false);
+            InstanceTemporaries temp = new InstanceTemporaries (i, simulator, false, bed.internal);
             for (final Variable v : i.equations.variables)
             {
                 // Compute variable v

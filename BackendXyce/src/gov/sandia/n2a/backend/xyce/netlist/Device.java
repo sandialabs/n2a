@@ -25,7 +25,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 
-// Create a SymbolDevice from equations and metadata.
+// Create a Device from equations and metadata.
 // The nodes involved in a device (other than ground) are typically state variables
 // Need correspondence between varnames that other Parts might reference
 // and nodes that this device uses (device references state vars, doesn't
@@ -46,7 +46,7 @@ import java.util.Map.Entry;
 //        map of device params to expressions from equations
 //    needs to be able to take SN and write out appropriate instance-specific netlist line -
 
-public class SymbolDevice
+public class Device
 {
     public static final String DEVICE_TAG = "xyce.device";
     public static final String PARAM_TAG  = "xyce.param";
@@ -83,7 +83,7 @@ public class SymbolDevice
     public Map<String,String> model;  ///< The paremeters and their values that were written out in the single .model line for this part. Used to determine if an instance-specific parm is needed or not.
     public String             modelName;
 
-    public SymbolDevice (EquationSet s) throws EvaluationException
+    public Device (EquationSet s) throws EvaluationException
     {
         eqSet = s;
 

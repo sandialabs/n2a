@@ -26,12 +26,23 @@ public class InstanceTemporaries extends Instance
     public Scalar init;
     public InternalBackendData bed;
 
+    /**
+        For use by Internal simulator, where EquationSet.backendData is guaranteed to be InternalBackendData.
+    **/
     public InstanceTemporaries (Instance wrapped, Euler simulator, boolean init)
     {
-        this.wrapped = wrapped;
+        this (wrapped, simulator, init, (InternalBackendData) wrapped.equations.backendData);
+    }
+
+    /**
+        For use by other backends, which may have chained EquationSet.backendData.
+    **/
+    public InstanceTemporaries (Instance wrapped, Euler simulator, boolean init, InternalBackendData bed)
+    {
+        this.wrapped   = wrapped;
         this.simulator = simulator;
-        this.init = new Scalar (init ? 1 : 0);
-        bed = (InternalBackendData) wrapped.equations.backendData;
+        this.init      = new Scalar (init ? 1 : 0);
+        this.bed       = bed;
         if (wrapped instanceof Population) allocate (bed.countGlobalTempFloat, bed.countGlobalTempType);
         else                               allocate (bed.countLocalTempFloat,  bed.countLocalTempType);
     }

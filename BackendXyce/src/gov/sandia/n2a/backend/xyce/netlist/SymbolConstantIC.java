@@ -22,13 +22,12 @@ public class SymbolConstantIC extends Symbol
     @Override
     public String getReference (XyceRenderer renderer) 
     {
-        // TODO: double-check how references are done. Should handle external references as well as instance and population vars.
-        // That is, we should use the hashCode() of the actual target Instance.
         return Xyceisms.referenceVariable (eq.variable.name, renderer.pi.hashCode ());
     }
 
     public String getDefinition (XyceRenderer renderer)
     {
+        // Note: this is done for every instance, so they can have different initial values for the same variable.
         Type stored = renderer.pi.get (eq.variable);
         if (! (stored instanceof Scalar)) throw new EvaluationException ("unexpected evaluation result for " + eq.toString ());
         return Xyceisms.setInitialCondition (eq.variable.name, renderer.pi.hashCode (), ((Scalar) stored).value);

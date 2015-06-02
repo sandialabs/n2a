@@ -27,10 +27,4 @@ public class SymbolStateVar0 extends Symbol
     {
         return Xyceisms.defineStateVar (eq.variable.name, renderer.pi.hashCode (), renderer.change (eq.expression));
     }
-
-    @Override
-    public String getReference (XyceRenderer renderer)
-    {
-        return Xyceisms.referenceStateVar (eq.variable.name, renderer.pi.hashCode ());
-    }
 }

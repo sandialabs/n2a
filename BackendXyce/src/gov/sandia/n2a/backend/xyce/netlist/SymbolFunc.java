@@ -36,7 +36,7 @@ public class SymbolFunc extends Symbol
                     if (   ! av.name.equals (eq.variable.name)
                         && av.reference != null
                         && av.reference.variable != null
-                        && ! av.reference.variable.hasAttribute ("constant")
+                        && ! av.reference.variable.hasAttribute ("constant")  // since constants are directly substituted
                         && ! av.name.equals ("$t"))  // since $t is always directly available as TIME
                     {
                         args.add (av.reference);
