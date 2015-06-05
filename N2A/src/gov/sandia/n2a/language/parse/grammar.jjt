@@ -17,92 +17,26 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.parse;
 
-import java.lang.reflect.Field;
-import java.io.StringReader;
-
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 
-import replete.util.ReflectionUtil;
+import java.io.StringReader;
 
 public class ExpressionParser
 {
     public static SimpleNode parse (String line) throws ParseException
     {
-        if (line == null)
-        {
-            throw new IllegalArgumentException ("Line to parse cannot be null.");
-        }
-
         try
         {
             ExpressionParser parser = new ExpressionParser (new StringReader (line + "\n"));
             Node startNode = parser.Start ();
-            SimpleNode result = (SimpleNode) startNode.jjtGetChild(0);
+            SimpleNode result = (SimpleNode) startNode.jjtGetChild (0);
             return result;
-        }
-        catch (ParseException p)
-        {
-            // This is so any possible ParseException has its message
-            // properly appended with the original equation text.
-            ReflectionUtil.set ("detailMessage", p, p.getMessage ().trim () + "\nSource Line: " + line);
-            throw p;
         }
         catch (TokenMgrError t)
         {
-            ParseException p = new ParseException (t.getMessage () + "\nSource Line: " + line);
-            try
-            {
-                Field f = Throwable.class.getDeclaredField ("cause");
-                f.setAccessible (true);
-                f.set (p, t);
-            }
-            catch (Exception e) {}
-            throw p;
+            throw new ParseException ("Lexical error");
         }
-    }
-    
-    private String replaceEscape(String inputStr) {
-        int len = inputStr.length();
-        int p = 0;
-        int i;
-        String metachars = "tnrbf\u005c\u005c\u005c"'";
-        String chars = "\u005ct\u005cn\u005cr\u005cb\u005cf\u005c\u005c\u005c"'";
-
-        StringBuffer output = new StringBuffer();
-
-        while((i = inputStr.indexOf('\u005c\u005c', p)) != -1) {
-            output.append(inputStr.substring(p, i));
-
-            if(i + 1 == len)
-                break;
-
-            // find metacharacter
-            char metac = inputStr.charAt(i + 1);
-
-            // find the index of the metac
-            int k = metachars.indexOf(metac);
-            if(k == -1) {
-                // didn't find the metachar, leave sequence as found.
-                // This code should be unreachable if the parser
-                // is functioning properly because strings containing
-                // unknown escape characters should not be accepted.
-                output.append('\u005c\u005c');
-                output.append(metac);
-            } else {
-                // its corresponding true char
-                output.append(chars.charAt(k));
-            }
-
-            // skip over both escape character & metacharacter
-            p = i + 2;
-        }
-
-        // add the end of the input string to the output
-        if(p < len)
-            output.append(inputStr.substring(p));
-
-        return output.toString();
     }
 }
 PARSER_END(ExpressionParser)
@@ -216,7 +150,7 @@ ASTStart Start() #Start : {}
     }
 }
 
-void CommaExpression() #ListNode : {}
+void CommaExpression() #List : {}
 {
     OrExpression() (<COMMA> OrExpression())*
     {
@@ -232,7 +166,7 @@ void OrExpression() : {}
             {
                 jjtThis.jjtSetValue("||");
             }
-        ) #OpNode(2)
+        ) #Operator(2)
     )*
 }
 
@@ -244,7 +178,7 @@ void AndExpression() : {}
             {
                 jjtThis.jjtSetValue("&&");
             }
-        ) #OpNode(2)
+        ) #Operator(2)
     )*
 }
 
@@ -256,13 +190,13 @@ void EqualExpression() : {}
             {
                 jjtThis.jjtSetValue("!=");
             }
-        ) #OpNode(2)
+        ) #Operator(2)
           |
         (<EQ> RelationalExpression()
             {
                 jjtThis.jjtSetValue("==");
             }
-        ) #OpNode(2)
+        ) #Operator(2)
     )*
 }
 
@@ -274,25 +208,25 @@ void RelationalExpression() : {}
             {
                 jjtThis.jjtSetValue("<");
             }
-        ) #OpNode(2)
+        ) #Operator(2)
           |
         (<GT> AdditiveExpression()
             {
                 jjtThis.jjtSetValue(">");
             }
-        ) #OpNode(2)
+        ) #Operator(2)
           |
         (<LE> AdditiveExpression()
             {
                 jjtThis.jjtSetValue("<=");
             }
-        ) #OpNode(2)
+        ) #Operator(2)
           |
         (<GE> AdditiveExpression()
             {
                 jjtThis.jjtSetValue(">=");
             }
-        ) #OpNode(2)
+        ) #Operator(2)
     )*
 }
 
@@ -304,13 +238,13 @@ void AdditiveExpression() : {}
             {
                 jjtThis.jjtSetValue("+");
             }
-        ) #OpNode(2)
+        ) #Operator(2)
           |
         (<MINUS> MultiplicativeExpression()
             {
                 jjtThis.jjtSetValue("-");
             }
-        ) #OpNode(2)
+        ) #Operator(2)
     )*
 }
 
@@ -322,61 +256,61 @@ void MultiplicativeExpression() : {}
             {
                 jjtThis.jjtSetValue("*");
             }
-        ) #OpNode(2)
+        ) #Operator(2)
           |
         (<HADAMUL> PowerExpression()
             {
                 jjtThis.jjtSetValue("&");
             }
-        ) #OpNode(2)
+        ) #Operator(2)
           |
         (<DIV> PowerExpression()
             {
                 jjtThis.jjtSetValue("/");
             }
-        ) #OpNode(2)
+        ) #Operator(2)
           |
         (<MOD> PowerExpression()
             {
                 jjtThis.jjtSetValue("%");
             }
-        ) #OpNode(2)
+        ) #Operator(2)
     )*
 }
 
-// TODO: Make this rule recursive and right-associative
-// In other words: a^b^c is parsed as a^(b^c)
+// TODO: Make this rule right-associative. This is, a^b^c is parsed as a^(b^c).
 void PowerExpression() : {}
 {
     UnaryExpression()
-    [
+    (
         (<POWER> UnaryExpression()
             {
                 jjtThis.jjtSetValue("^");
             }
-        ) #OpNode(2)
-    ]
+        ) #Operator(2)
+    )*
 }
 
+// TODO: Make this rule recursive and right-associative.
 void UnaryExpression() : {}
 {
     (<MINUS> PrimaryExpression()
         {
             jjtThis.jjtSetValue("UM");
         }
-    ) #OpNode(1)
+    ) #Operator(1)
       |
     (<NOT> PrimaryExpression()
         {
             jjtThis.jjtSetValue("!");
         }
-    ) #OpNode(1)
+    ) #Operator(1)
       |
     (<TILDE> PrimaryExpression()
         {
             jjtThis.jjtSetValue("~");
         }
-    ) #OpNode(1)
+    ) #Operator(1)
       |
     PrimaryExpression()
 }
@@ -392,16 +326,13 @@ void PrimaryExpression() : {}
     MatrixExpression()
 }
 
-void MatrixExpression() #MatrixNode : {
-    jjtThis.jjtSetValue("MATRIX");
-}
+// TODO: Make () an operation that applies to any expression, not just variables and functions.
+void MatrixExpression() #Matrix : {}
 {
     <LSQ> CommaExpression() (<SEMI> CommaExpression())* <RSQ>
 }
 
-void Identifier() #Identifier : {
-    Token t;
-}
+void Identifier() #Identifier : {Token t;}
 {
     t = <IDENTIFIER> [<LRND> CommaExpression() <RRND>]
     {
@@ -409,19 +340,17 @@ void Identifier() #Identifier : {
     }
 }
 
-void Constant() #Constant : {
-    Token t;
-}
+void Constant() #Constant : {Token t;}
 {
     t = <STRING_LITERAL>
     {
-        String temp = t.image.substring(1, t.image.length() - 1);
-        temp = replaceEscape(temp);
-        jjtThis.jjtSetValue(new Text (temp));
+        Text text = new Text (t.image.substring (1, t.image.length() - 1));
+        text.removeEscapes ();
+        jjtThis.jjtSetValue (text);
     }
       |
     t = <FLOATING_POINT_LITERAL>
     {
-        jjtThis.jjtSetValue(new Scalar (Double.parseDouble (t.image)));
+        jjtThis.jjtSetValue (new Scalar (Double.parseDouble (t.image)));
     }
 }

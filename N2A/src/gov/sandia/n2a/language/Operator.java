@@ -40,10 +40,10 @@ import gov.sandia.n2a.language.operator.Subtract;
 import gov.sandia.n2a.language.operator.Transpose;
 import gov.sandia.n2a.language.parse.ASTConstant;
 import gov.sandia.n2a.language.parse.ASTIdentifier;
-import gov.sandia.n2a.language.parse.ASTListNode;
-import gov.sandia.n2a.language.parse.ASTMatrixNode;
+import gov.sandia.n2a.language.parse.ASTList;
+import gov.sandia.n2a.language.parse.ASTMatrix;
 import gov.sandia.n2a.language.parse.SimpleNode;
-import gov.sandia.n2a.language.parse.ASTOpNode;
+import gov.sandia.n2a.language.parse.ASTOperator;
 import gov.sandia.n2a.language.parse.ExpressionParser;
 import gov.sandia.n2a.language.parse.ParseException;
 import gov.sandia.n2a.language.type.Instance;
@@ -229,7 +229,7 @@ public class Operator implements Cloneable
     public static Operator getFrom (SimpleNode node) throws ParseException
     {
         Operator result;
-        if (node instanceof ASTOpNode)
+        if (node instanceof ASTOperator)
         {
             Factory f = operators.get (node.jjtGetValue ().toString ());
             result = f.createInstance ();
@@ -247,9 +247,9 @@ public class Operator implements Cloneable
                 else           result = f.createInstance ();
             }
         }
-        else if (node instanceof ASTConstant  ) result = new Constant ();
-        else if (node instanceof ASTMatrixNode) result = new BuildMatrix ();
-        else if (node instanceof ASTListNode  )
+        else if (node instanceof ASTConstant) result = new Constant ();
+        else if (node instanceof ASTMatrix  ) result = new BuildMatrix ();
+        else if (node instanceof ASTList)
         {
             if (node.jjtGetNumChildren () == 1) return getFrom ((SimpleNode) node.jjtGetChild (0));
             result = new Split ();  // Lists can exist elsewhere besides a $type split, but they should be processed out by getOperandsFrom(SimpleNode).

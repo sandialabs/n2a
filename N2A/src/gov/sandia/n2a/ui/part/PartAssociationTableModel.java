@@ -7,10 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.part;
 
-import gov.sandia.n2a.language.parse.ASTVarNode;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
-import gov.sandia.umf.platform.ui.CommonWarningMessage;
-
 import java.util.ArrayList;
 import java.util.List;
 

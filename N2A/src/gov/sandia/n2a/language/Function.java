@@ -8,7 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.language;
 
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.language.parse.ASTListNode;
+import gov.sandia.n2a.language.parse.ASTList;
 import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.parse.ParseException;
 
@@ -20,8 +20,8 @@ public class Function extends Operator
     {
         if (node.jjtGetNumChildren () != 1) throw new ParseException ("AST for function has unexpected form");
         Object o = node.jjtGetChild (0);
-        if (! (o instanceof ASTListNode)) throw new ParseException ("AST for function has unexpected form");
-        ASTListNode l = (ASTListNode) o;
+        if (! (o instanceof ASTList)) throw new ParseException ("AST for function has unexpected form");
+        ASTList l = (ASTList) o;
         int count = l.jjtGetNumChildren ();
         operands = new Operator[count];
         for (int i = 0; i < count; i++) operands[i] = Operator.getFrom ((SimpleNode) l.jjtGetChild (i));

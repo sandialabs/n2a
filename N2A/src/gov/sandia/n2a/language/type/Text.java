@@ -37,6 +37,74 @@ public class Text extends Type
         return new Text ();
     }
 
+    public void addEscapes ()
+    {
+        StringBuffer result = new StringBuffer ();
+        for (int i = 0; i < value.length (); i++)
+        {
+            char ch = value.charAt (i);
+            switch (ch)
+            {
+                case '\b': result.append ("\\b" ); break;
+                case '\t': result.append ("\\t" ); break;
+                case '\n': result.append ("\\n" ); break;
+                case '\f': result.append ("\\f" ); break;
+                case '\r': result.append ("\\r" ); break;
+                case '\"': result.append ("\\\""); break;
+                case '\'': result.append ("\\\'"); break;
+                case '\\': result.append ("\\\\"); break;
+                default:
+                    if (ch < 0x20 || ch > 0x7e)
+                    {
+                        String s = "0000" + Integer.toString (ch, 16);
+                        result.append ("\\u" + s.substring (s.length () - 4, s.length ()));
+                    }
+                    else
+                    {
+                        result.append (ch);
+                    }
+            }
+        }
+        value = result.toString ();
+    }
+
+    public void removeEscapes ()
+    {
+        StringBuffer result = new StringBuffer ();
+        for (int i = 0; i < value.length (); i++)
+        {
+            char ch = value.charAt (i);
+            if (ch != '\\')
+            {
+                result.append (ch);
+            }
+            else if (++i < value.length ())  // Note: a bare backslash at the end of the line simply disappears.
+            {
+                ch = value.charAt (i);
+                switch (ch)
+                {
+                    case 'b' : result.append ("\b"); break;
+                    case 't' : result.append ("\t"); break;
+                    case 'n' : result.append ("\n"); break;
+                    case 'f' : result.append ("\f"); break;
+                    case 'r' : result.append ("\r"); break;
+                    case '"' : result.append ("\""); break;
+                    case '\'': result.append ("'" ); break;
+                    case '\\': result.append ("\\"); break;
+                    case 'u' :
+                        int i4 = i + 4;
+                        if (i4 < value.length ())
+                        {
+                            result.append (Character.toChars (Integer.parseInt (value.substring (i, i4), 16)));
+                            i = i4;
+                        }
+                    // no default; invalid escapes simply disappear
+                }
+            }
+        }
+        value = result.toString ();
+    }
+
     public Type add (Type that)
     {
         return new Text (value + that.toString ());
