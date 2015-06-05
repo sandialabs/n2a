@@ -2,6 +2,7 @@ Replete
 /lib
 /bin
 ^.metadata$
+/gov/sandia/n2a/language/parse
 
 syntax: glob
 *.jj
