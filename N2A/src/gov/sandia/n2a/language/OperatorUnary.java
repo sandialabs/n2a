@@ -8,17 +8,17 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.language;
 
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.language.parse.ASTNodeBase;
+import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.parse.ParseException;
 
 public class OperatorUnary extends Operator
 {
     public Operator operand;
 
-    public void getOperandsFrom (ASTNodeBase node) throws ParseException
+    public void getOperandsFrom (SimpleNode node) throws ParseException
     {
         if (node.jjtGetNumChildren () != 1) throw new ParseException ("AST for operator has unexpected form");
-        operand = Operator.getFrom ((ASTNodeBase) node.jjtGetChild (0));
+        operand = Operator.getFrom ((SimpleNode) node.jjtGetChild (0));
     }
 
     public Operator deepCopy ()

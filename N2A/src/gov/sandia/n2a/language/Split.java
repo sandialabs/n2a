@@ -10,9 +10,9 @@ package gov.sandia.n2a.language;
 import java.util.ArrayList;
 
 import gov.sandia.n2a.eqset.EquationSet;
+import gov.sandia.n2a.language.parse.ASTIdentifier;
 import gov.sandia.n2a.language.parse.ASTListNode;
-import gov.sandia.n2a.language.parse.ASTNodeBase;
-import gov.sandia.n2a.language.parse.ASTVarNode;
+import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.parse.ParseException;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
@@ -22,7 +22,7 @@ public class Split extends Operator
     public String[]               names;  ///< Untranslated part names
     public ArrayList<EquationSet> parts;  ///< List of parts to split the current one into
 
-    public void getOperandsFrom (ASTNodeBase node) throws ParseException
+    public void getOperandsFrom (SimpleNode node) throws ParseException
     {
         if (! (node instanceof ASTListNode)) throw new ParseException ("AST for type list has unexpected form");
         ASTListNode l = (ASTListNode) node;
@@ -30,8 +30,8 @@ public class Split extends Operator
         names = new String[count];
         for (int i = 0; i < count; i++)
         {
-            ASTNodeBase n = (ASTNodeBase) l.jjtGetChild (i);
-            if (! (n instanceof ASTVarNode)) throw new ParseException ("AST for type list has unexpected form");
+            SimpleNode n = (SimpleNode) l.jjtGetChild (i);
+            if (! (n instanceof ASTIdentifier)) throw new ParseException ("AST for type list has unexpected form");
             names[i] = n.jjtGetValue ().toString ();
         }
     }

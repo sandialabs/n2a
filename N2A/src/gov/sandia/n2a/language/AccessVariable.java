@@ -10,7 +10,7 @@ package gov.sandia.n2a.language;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
-import gov.sandia.n2a.language.parse.ASTNodeBase;
+import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.type.Instance;
 
 public class AccessVariable extends Operator
@@ -36,7 +36,7 @@ public class AccessVariable extends Operator
         return pieces[0];
     }
 
-    public void getOperandsFrom (ASTNodeBase node)
+    public void getOperandsFrom (SimpleNode node)
     {
         name = node.jjtGetValue ().toString ();
     }

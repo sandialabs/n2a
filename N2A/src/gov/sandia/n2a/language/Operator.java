@@ -30,6 +30,7 @@ import gov.sandia.n2a.language.operator.LE;
 import gov.sandia.n2a.language.operator.LT;
 import gov.sandia.n2a.language.operator.Modulo;
 import gov.sandia.n2a.language.operator.Multiply;
+import gov.sandia.n2a.language.operator.MultiplyElementwise;
 import gov.sandia.n2a.language.operator.NE;
 import gov.sandia.n2a.language.operator.NOT;
 import gov.sandia.n2a.language.operator.Negate;
@@ -38,11 +39,11 @@ import gov.sandia.n2a.language.operator.Power;
 import gov.sandia.n2a.language.operator.Subtract;
 import gov.sandia.n2a.language.operator.Transpose;
 import gov.sandia.n2a.language.parse.ASTConstant;
+import gov.sandia.n2a.language.parse.ASTIdentifier;
 import gov.sandia.n2a.language.parse.ASTListNode;
 import gov.sandia.n2a.language.parse.ASTMatrixNode;
-import gov.sandia.n2a.language.parse.ASTNodeBase;
+import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.parse.ASTOpNode;
-import gov.sandia.n2a.language.parse.ASTVarNode;
 import gov.sandia.n2a.language.parse.ExpressionParser;
 import gov.sandia.n2a.language.parse.ParseException;
 import gov.sandia.n2a.language.type.Instance;
@@ -78,7 +79,7 @@ public class Operator implements Cloneable
         };
     }
 
-    public void getOperandsFrom (ASTNodeBase node) throws ParseException
+    public void getOperandsFrom (SimpleNode node) throws ParseException
     {
     }
 
@@ -194,23 +195,24 @@ public class Operator implements Cloneable
         register (Uniform      .factory ());
 
         // Operators
-        register (Add      .factory ());
-        register (AND      .factory ());
-        register (Divide   .factory ());
-        register (EQ       .factory ());
-        register (GE       .factory ());
-        register (GT       .factory ());
-        register (LE       .factory ());
-        register (LT       .factory ());
-        register (Modulo   .factory ());
-        register (Multiply .factory ());
-        register (NE       .factory ());
-        register (Negate   .factory ());
-        register (NOT      .factory ());
-        register (OR       .factory ());
-        register (Power    .factory ());
-        register (Subtract .factory ());
-        register (Transpose.factory ());
+        register (Add                .factory ());
+        register (AND                .factory ());
+        register (Divide             .factory ());
+        register (EQ                 .factory ());
+        register (GE                 .factory ());
+        register (GT                 .factory ());
+        register (LE                 .factory ());
+        register (LT                 .factory ());
+        register (Modulo             .factory ());
+        register (Multiply           .factory ());
+        register (MultiplyElementwise.factory ());
+        register (NE                 .factory ());
+        register (Negate             .factory ());
+        register (NOT                .factory ());
+        register (OR                 .factory ());
+        register (Power              .factory ());
+        register (Subtract           .factory ());
+        register (Transpose          .factory ());
     }
 
     public static void initFromPlugins ()
@@ -224,22 +226,33 @@ public class Operator implements Cloneable
         return getFrom (ExpressionParser.parse (line));
     }
 
-    public static Operator getFrom (ASTNodeBase node) throws ParseException
+    public static Operator getFrom (SimpleNode node) throws ParseException
     {
         Operator result;
         if (node instanceof ASTOpNode)
         {
             Factory f = operators.get (node.jjtGetValue ().toString ());
-            if (f == null) result = new Operator ();  // poisoned operator
-            else           result = f.createInstance ();
+            result = f.createInstance ();
         }
-        else if (node instanceof ASTVarNode   ) result = new AccessVariable ();
+        else if (node instanceof ASTIdentifier)
+        {
+            if (node.jjtGetNumChildren () == 0)
+            {
+                result = new AccessVariable ();
+            }
+            else
+            {
+                Factory f = operators.get (node.jjtGetValue ().toString ());
+                if (f == null) result = new AccessElement ();  // It's either this or an undefined function. In the second case, variable access will fail.
+                else           result = f.createInstance ();
+            }
+        }
         else if (node instanceof ASTConstant  ) result = new Constant ();
         else if (node instanceof ASTMatrixNode) result = new BuildMatrix ();
         else if (node instanceof ASTListNode  )
         {
-            if (node.jjtGetNumChildren () == 1) return getFrom ((ASTNodeBase) node.jjtGetChild (0));
-            result = new Split ();  // Lists can exist elsewhere besides a $type split, but they should be processed out by getOperandsFrom(ASTNodeBase).
+            if (node.jjtGetNumChildren () == 1) return getFrom ((SimpleNode) node.jjtGetChild (0));
+            result = new Split ();  // Lists can exist elsewhere besides a $type split, but they should be processed out by getOperandsFrom(SimpleNode).
         }
         else result = new Operator ();
         result.getOperandsFrom (node);

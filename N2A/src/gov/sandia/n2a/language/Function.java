@@ -9,14 +9,14 @@ package gov.sandia.n2a.language;
 
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.parse.ASTListNode;
-import gov.sandia.n2a.language.parse.ASTNodeBase;
+import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.parse.ParseException;
 
 public class Function extends Operator
 {
     public Operator[] operands;
 
-    public void getOperandsFrom (ASTNodeBase node) throws ParseException
+    public void getOperandsFrom (SimpleNode node) throws ParseException
     {
         if (node.jjtGetNumChildren () != 1) throw new ParseException ("AST for function has unexpected form");
         Object o = node.jjtGetChild (0);
@@ -24,7 +24,7 @@ public class Function extends Operator
         ASTListNode l = (ASTListNode) o;
         int count = l.jjtGetNumChildren ();
         operands = new Operator[count];
-        for (int i = 0; i < count; i++) operands[i] = Operator.getFrom ((ASTNodeBase) l.jjtGetChild (i));
+        for (int i = 0; i < count; i++) operands[i] = Operator.getFrom ((SimpleNode) l.jjtGetChild (i));
     }
 
     public Operator deepCopy ()

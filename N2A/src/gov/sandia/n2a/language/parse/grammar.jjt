@@ -3,10 +3,7 @@ options
     STATIC = false;
     JAVA_UNICODE_ESCAPE = true;
     MULTI = true;
-    VISITOR = true;
-    VISITOR_EXCEPTION = "ParseException";
     NODE_DEFAULT_VOID = true;          // Only create Node classes for the #Tokens
-    NODE_CLASS = "ASTNodeBase";
 }
 
 PARSER_BEGIN(ExpressionParser)
@@ -28,11 +25,9 @@ import gov.sandia.n2a.language.type.Text;
 
 import replete.util.ReflectionUtil;
 
-import javax.measure.unit.*;
-
 public class ExpressionParser
 {
-    public static ASTNodeBase parse (String line) throws ParseException
+    public static SimpleNode parse (String line) throws ParseException
     {
         if (line == null)
         {
@@ -43,7 +38,7 @@ public class ExpressionParser
         {
             ExpressionParser parser = new ExpressionParser (new StringReader (line + "\n"));
             Node startNode = parser.Start ();
-            ASTNodeBase result = (ASTNodeBase) startNode.jjtGetChild(0);
+            SimpleNode result = (SimpleNode) startNode.jjtGetChild(0);
             return result;
         }
         catch (ParseException p)
@@ -163,28 +158,29 @@ TOKENS
     < #AASSIGN: "+=" > |
     < #CASSIGN: ":=" > |
     
-    < COMMA: ","  > |
-    < SEMI:  ";"  > |
-    < GT:    ">"  > |
-    < LT:    "<"  > |
-    < EQ:    "==" > |
-    < LE:    "<=" > |
-    < GE:    ">=" > |
-    < NE:    "!=" > |
-    < AND:   "&&" > |
-    < OR:    "||" > |
-    < PLUS:  "+"  > |
-    < MINUS: "-"  > |
-    < MUL:   "*"  > |
-    < DIV:   "/"  > |
-    < MOD:   "%"  > |
-    < NOT:   "!"  > |
-    < POWER: "^"  > |
-    < TILDE: "~"  > |
-    < LSQ:   "["  > |
-    < RSQ:   "]"  > |
-    < LRND:  "("  > |
-    < RRND:  ")"  >
+    < COMMA:   ","  > |
+    < SEMI:    ";"  > |
+    < GT:      ">"  > |
+    < LT:      "<"  > |
+    < EQ:      "==" > |
+    < LE:      "<=" > |
+    < GE:      ">=" > |
+    < NE:      "!=" > |
+    < AND:     "&&" > |
+    < OR:      "||" > |
+    < PLUS:    "+"  > |
+    < MINUS:   "-"  > |
+    < MUL:     "*"  > |
+    < HADAMUL: "&"  > |
+    < DIV:     "/"  > |
+    < MOD:     "%"  > |
+    < NOT:     "!"  > |
+    < POWER:   "^"  > |
+    < TILDE:   "~"  > |
+    < LSQ:     "["  > |
+    < RSQ:     "]"  > |
+    < LRND:    "("  > |
+    < RRND:    ")"  >
 }
 
 /* Switches to the IN_UNITS lexical state for different parsing of the unit expressions */
@@ -214,22 +210,10 @@ GRAMMAR START
 
 ASTStart Start() #Start : {}
 {
-    AssignExpression() <EOF>
+    CommaExpression() <EOF>
     {
         return jjtThis;
     }
-}
-
-void AssignExpression() : {
-    Token t;
-}
-{    
-    LOOKAHEAD(Variable() <ASSIGN>) Variable() t = <ASSIGN> CommaExpression()
-    {
-        jjtThis.jjtSetValue(t.image);
-    } #OpNode(2)
-      |
-    CommaExpression()
 }
 
 void CommaExpression() #ListNode : {}
@@ -332,21 +316,27 @@ void AdditiveExpression() : {}
 
 void MultiplicativeExpression() : {}
 {
-    UnitExpression()
+    PowerExpression()
     (
-        (<MUL> UnitExpression()
+        (<MUL> PowerExpression()
             {
                 jjtThis.jjtSetValue("*");
             }
         ) #OpNode(2)
           |
-        (<DIV> UnitExpression()
+        (<HADAMUL> PowerExpression()
+            {
+                jjtThis.jjtSetValue("&");
+            }
+        ) #OpNode(2)
+          |
+        (<DIV> PowerExpression()
             {
                 jjtThis.jjtSetValue("/");
             }
         ) #OpNode(2)
           |
-        (<MOD> UnitExpression()
+        (<MOD> PowerExpression()
             {
                 jjtThis.jjtSetValue("%");
             }
@@ -354,55 +344,13 @@ void MultiplicativeExpression() : {}
     )*
 }
 
-/* Unary Expression With Units:
-   Units act as a post-fix operator with precedence
-   higher than +, -, *, /, and %, but lower than 
-   ^, unary minus, unary plus, and element []. */
-   
-void UnitExpression() : {
-    Token t;
-}
-{
-    LOOKAHEAD(UnaryExpression() <LBRC>)
-    (UnaryExpression() <LBRC> t = <UNITS> <RBRC>
-        {
-            jjtThis.jjtSetValue(Unit.valueOf(t.image));
-        }
-    ) #UnitNode
-      | 
-    UnaryExpression()
-}
-
-void UnaryExpression() : {}
-{
-    (<MINUS> PowerExpression()
-        {
-            jjtThis.jjtSetValue("UM");
-        }
-    ) #OpNode(1)
-      |
-    (<NOT> PowerExpression()
-        {
-            jjtThis.jjtSetValue("!");
-        }
-    ) #OpNode(1)
-      |
-    (<TILDE> PowerExpression()
-        {
-            jjtThis.jjtSetValue("~");
-        }
-    ) #OpNode(1)
-      |
-    PowerExpression()
-}
-
 // TODO: Make this rule recursive and right-associative
 // In other words: a^b^c is parsed as a^(b^c)
 void PowerExpression() : {}
 {
-    PrimaryExpression()
+    UnaryExpression()
     [
-        (<POWER> PrimaryExpression()
+        (<POWER> UnaryExpression()
             {
                 jjtThis.jjtSetValue("^");
             }
@@ -410,13 +358,34 @@ void PowerExpression() : {}
     ]
 }
 
+void UnaryExpression() : {}
+{
+    (<MINUS> PrimaryExpression()
+        {
+            jjtThis.jjtSetValue("UM");
+        }
+    ) #OpNode(1)
+      |
+    (<NOT> PrimaryExpression()
+        {
+            jjtThis.jjtSetValue("!");
+        }
+    ) #OpNode(1)
+      |
+    (<TILDE> PrimaryExpression()
+        {
+            jjtThis.jjtSetValue("~");
+        }
+    ) #OpNode(1)
+      |
+    PrimaryExpression()
+}
+
 void PrimaryExpression() : {}
 {
     Constant()
       |
-    LOOKAHEAD({getToken(1).kind == IDENTIFIER && getToken(2).kind == LRND}) Function()
-      |
-    Variable()
+    Identifier()
       |
     <LRND> OrExpression() <RRND> 
       |
@@ -430,21 +399,11 @@ void MatrixExpression() #MatrixNode : {
     <LSQ> CommaExpression() (<SEMI> CommaExpression())* <RSQ>
 }
 
-void Variable() #VarNode : {
+void Identifier() #Identifier : {
     Token t;
 }
 {
-    t = <IDENTIFIER> [<LSQ> CommaExpression() <RSQ>]
-    {
-        jjtThis.jjtSetValue(t.image);
-    }
-}
-
-void Function() #OpNode : {
-    Token t;
-}
-{
-    t = <IDENTIFIER> <LRND> [CommaExpression()] <RRND>
+    t = <IDENTIFIER> [<LRND> CommaExpression() <RRND>]
     {
         jjtThis.jjtSetValue(t.image);
     }

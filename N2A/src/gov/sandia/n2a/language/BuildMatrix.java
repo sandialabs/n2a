@@ -9,7 +9,7 @@ package gov.sandia.n2a.language;
 
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.parse.ASTConstant;
-import gov.sandia.n2a.language.parse.ASTNodeBase;
+import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.parse.ParseException;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
@@ -20,13 +20,13 @@ public class BuildMatrix extends Operator
 {
     public Operator[][] operands;  // stored in column-major order; that is, access as operands[column][row]
 
-    public void getOperandsFrom (ASTNodeBase node) throws ParseException
+    public void getOperandsFrom (SimpleNode node) throws ParseException
     {
         int rows = node.jjtGetNumChildren ();
         int cols = 0;
         for (int r = 0; r < rows; r++)
         {
-            ASTNodeBase row = (ASTNodeBase) node.jjtGetChild (r);
+            SimpleNode row = (SimpleNode) node.jjtGetChild (r);
             int c = 1;
             if (! (row instanceof ASTConstant)) c = row.jjtGetNumChildren ();
             cols = Math.max (cols, c);
@@ -35,7 +35,7 @@ public class BuildMatrix extends Operator
         operands = new Operator[cols][rows];
         for (int r = 0; r < rows; r++)
         {
-            ASTNodeBase row = (ASTNodeBase) node.jjtGetChild (r);
+            SimpleNode row = (SimpleNode) node.jjtGetChild (r);
             if (row instanceof ASTConstant)
             {
                 operands[0][r] = Operator.getFrom (row);
@@ -45,7 +45,7 @@ public class BuildMatrix extends Operator
                 int currentCols = row.jjtGetNumChildren ();
                 for (int c = 0; c < currentCols; c++)
                 {
-                    operands[c][r] = Operator.getFrom ((ASTNodeBase) row.jjtGetChild (c));
+                    operands[c][r] = Operator.getFrom ((SimpleNode) row.jjtGetChild (c));
                 }
             }
         }
@@ -83,6 +83,13 @@ public class BuildMatrix extends Operator
     public int getColumns ()
     {
         return operands.length;
+    }
+
+    public Operator getElement (int row, int column)
+    {
+        if (operands.length         <= column) return null;
+        if (operands[column].length <= row   ) return null;
+        return operands[column][row];
     }
 
     public void visit (Visitor visitor)

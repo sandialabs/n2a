@@ -323,9 +323,67 @@ public class Matrix extends Type
         throw new EvaluationException ("type mismatch");
     }
 
+    public Type multiplyElementwise (Type that) throws EvaluationException
+    {
+        if (that instanceof Matrix)
+        {
+            double[][] B = ((Matrix) that).value;
+            int w = value.length;
+            int h = value[0].length;
+            int ow = Math.min (w, B.length);
+            int oh = Math.min (h, B[0].length);
+            Matrix result = new Matrix (h, w);
+            for (int c = 0; c < ow; c++)
+            {
+              for (int r = 0;  r < oh; r++) result.value[c][r] = value[c][r] * B[c][r];
+              for (int r = oh; r < h;  r++) result.value[c][r] = value[c][r];
+            }
+            for (int c = ow; c < w; c++)
+            {
+              for (int r = 0; r < h; r++)   result.value[c][r] = value[c][r];
+            }
+            return result;
+        }
+        if (that instanceof Scalar)
+        {
+            double scalar = ((Scalar) that).value;
+            int w = value.length;
+            int h = value[0].length;
+            Matrix result = new Matrix (h, w);
+            for (int c = 0; c < w; c++)
+            {
+                for (int r = 0; r < h; r++)
+                {
+                    result.value[c][r] = value[c][r] * scalar;
+                }
+            }
+            return result;
+        }
+        if (that instanceof Text) return multiply (new Matrix ((Text) that));
+        throw new EvaluationException ("type mismatch");
+    }
+
     public Type divide (Type that) throws EvaluationException
     {
-        if (that instanceof Matrix) return multiply (that.NOT ());  // should do a least-squares solution
+        if (that instanceof Matrix)
+        {
+            double[][] B = ((Matrix) that).value;
+            int w = value.length;
+            int h = value[0].length;
+            int ow = Math.min (w, B.length);
+            int oh = Math.min (h, B[0].length);
+            Matrix result = new Matrix (h, w);
+            for (int c = 0; c < ow; c++)
+            {
+              for (int r = 0;  r < oh; r++) result.value[c][r] = value[c][r] / B[c][r];
+              for (int r = oh; r < h;  r++) result.value[c][r] = value[c][r];
+            }
+            for (int c = ow; c < w; c++)
+            {
+              for (int r = 0; r < h; r++)   result.value[c][r] = value[c][r];
+            }
+            return result;
+        }
         if (that instanceof Scalar)
         {
             double scalar = ((Scalar) that).value;

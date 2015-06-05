@@ -29,6 +29,11 @@ public abstract class Type
         throw new EvaluationException ("Operation not supported on this type.");
     }
 
+    public Type multiplyElementwise (Type that) throws EvaluationException
+    {
+        throw new EvaluationException ("Operation not supported on this type.");
+    }
+
     public Type divide (Type that) throws EvaluationException
     {
         throw new EvaluationException ("Operation not supported on this type.");
