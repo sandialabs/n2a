@@ -596,9 +596,7 @@ public class InternalBackendData
     }
 
     /**
-         Convert resolutions to a form that can be processed quickly at runtime
-         Plan: replace the resolution path with a set of objects that will make
-         the process fast at runtime.
+         Convert resolutions to a form that can be processed quickly at runtime.
          There are 3 ways to leave a part
          1) Ascend to its container
          2) Descend into a contained population -- need the index of population

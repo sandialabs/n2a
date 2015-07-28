@@ -24,6 +24,7 @@ import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.ReadMatrix;
+import gov.sandia.n2a.language.function.ReadMatrixRaw;
 import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.Power;
 import gov.sandia.n2a.language.type.Matrix;
@@ -906,7 +907,7 @@ public class SimulationC implements Simulation
                 {
                     // Handle all functions that need static handles
                     Function f = (Function) op;
-                    if (f instanceof ReadMatrix)
+                    if (f instanceof ReadMatrix  ||  f instanceof ReadMatrixRaw)
                     {
                         if (f.operands.length == 3)
                         {
@@ -1801,7 +1802,15 @@ public class SimulationC implements Simulation
                 {
                     multiconditional (p, context, "  ");
                 }
-                result.append ("  if (" + mangle ("$p") + " == 0  ||  " + mangle ("$p") + " < 1  &&  " + mangle ("$p") + " < uniform1 ())\n");
+                if (p.hasAttribute ("constant"))
+                {
+                    double pvalue = ((Scalar) ((Constant) p.equations.first ().expression).value).value;
+                    if (pvalue != 0) result.append ("  if (" + resolve (p.reference, context, false) + " < uniform1 ())\n");
+                }
+                else
+                {
+                    result.append ("  if (" + mangle ("$p") + " == 0  ||  " + mangle ("$p") + " < 1  &&  " + mangle ("$p") + " < uniform1 ())\n");
+                }
                 result.append ("  {\n");
                 result.append ("    die ();\n");
                 result.append ("    return false;\n");
@@ -2996,6 +3005,16 @@ public class SimulationC implements Simulation
             {
                 ReadMatrix r = (ReadMatrix) op;
                 result.append ("matrix (" + matrixNames.get (r.operands[0]) + ", ");
+                r.operands[1].render (this);
+                result.append (", ");
+                r.operands[2].render (this);
+                result.append (")");
+                return true;
+            }
+            if (op instanceof ReadMatrixRaw)
+            {
+                ReadMatrixRaw r = (ReadMatrixRaw) op;
+                result.append ("matrixRaw (" + matrixNames.get (r.operands[0]) + ", ");
                 r.operands[1].render (this);
                 result.append (", ");
                 r.operands[2].render (this);

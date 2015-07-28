@@ -110,10 +110,12 @@ public class Matrix extends Type
                 if (processLine)
                 {
                     ArrayList<Double> row = new ArrayList<Double> ();
-                    line.trim ();
+                    line = line.trim ();
                     while (line.length () > 0)
                     {
-                        int position = line.indexOf (',');
+                        int                 position = line.indexOf (',' );  // The valid element delimiters are comma, space and tab
+                        if (position == -1) position = line.indexOf (" " );
+                        if (position == -1) position = line.indexOf ("\t");
                         if (position == -1)
                         {
                             row.add (Double.valueOf (line));
@@ -124,7 +126,7 @@ public class Matrix extends Type
                             row.add (Double.valueOf (line.substring (0, position)));
                         }
                         line = line.substring (position + 1);
-                        line.trim ();
+                        line = line.trim ();
                     }
                     int c = row.size ();
                     if (c > 0)

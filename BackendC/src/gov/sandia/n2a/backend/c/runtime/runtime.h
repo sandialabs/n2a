@@ -21,6 +21,7 @@ extern float                   gaussian1    ();
 extern fl::MatrixResult<float> gaussian     (int dimension);
 extern fl::MatrixResult<float> grid         (int i, int nx, int ny = 1, int nz = 1);
 extern float                   matrix       (fl::Matrix<float> * handle, float row, float column);
+extern float                   matrixRaw    (fl::Matrix<float> * handle, float row, float column);
 extern fl::Matrix<float> *     matrixHelper (const std::string & fileName, fl::Matrix<float> * oldHandle = 0);
 extern float                   pulse        (float t, float width, float period = 0, float rise = 0, float fall = 0);
 extern fl::MatrixResult<float> uniform      (int dimension);

@@ -16,6 +16,7 @@ import gov.sandia.n2a.language.function.Grid;
 import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.Pulse;
 import gov.sandia.n2a.language.function.ReadMatrix;
+import gov.sandia.n2a.language.function.ReadMatrixRaw;
 import gov.sandia.n2a.language.function.Sine;
 import gov.sandia.n2a.language.function.Tangent;
 import gov.sandia.n2a.language.function.Trace;
@@ -189,6 +190,7 @@ public class Operator implements Cloneable
         register (Norm         .factory ());
         register (Pulse        .factory ());
         register (ReadMatrix   .factory ());
+        register (ReadMatrixRaw.factory ());
         register (Sine         .factory ());
         register (Tangent      .factory ());
         register (Trace        .factory ());

@@ -65,40 +65,39 @@ MatrixResult<float> grid (int i, int nx, int ny, int nz)
 
 float matrix (Matrix<float> * handle, float row, float column)
 {
-    cerr << "matrix: " << row << " " << column << endl;
-    cerr << "  handle = " << *handle << endl;
     // Just assume handle is good.
-    if (row < 0  ||  row > 1  ||  column < 0  ||  column > 1) return 0;
     row    = row    * handle->rows_    - 0.5;
     column = column * handle->columns_ - 0.5;
+    int lastRow    = handle->rows_    - 1;
+    int lastColumn = handle->columns_ - 1;
     int r = (int) floor (row);
     int c = (int) floor (column);
     if (r < 0)
     {
-        if      (c < 0)                     return (*handle)(r+1,c+1);
-        else if (c >= handle->columns_ - 1) return (*handle)(r+1,c  );
+        if      (c <  0         ) return (*handle)(0,0         );
+        else if (c >= lastColumn) return (*handle)(0,lastColumn);
         else
         {
             float b = column - c;
-            return (1 - b) * (*handle)(r+1,c) + b * (*handle)(r+1,c+1);
+            return (1 - b) * (*handle)(0,c) + b * (*handle)(0,c+1);
         }
     }
-    else if (r >= handle->rows_ - 1)
+    else if (r >= lastRow)
     {
-        if      (c < 0)                     return (*handle)(r,c+1);
-        else if (c >= handle->columns_ - 1) return (*handle)(r,c  );
+        if      (c <  0         ) return (*handle)(lastRow,0         );
+        else if (c >= lastColumn) return (*handle)(lastRow,lastColumn);
         else
         {
             float b = column - c;
-            return (1 - b) * (*handle)(r+1,c) + b * (*handle)(r+1,c+1);
+            return (1 - b) * (*handle)(lastRow,c) + b * (*handle)(lastRow,c+1);
         }
     }
     else
     {
         float a = row - r;
         float a1 = 1 - a;
-        if      (c < 0)                     return a1 * (*handle)(r,c+1) + a * (*handle)(r+1,c+1);
-        else if (c >= handle->columns_ - 1) return a1 * (*handle)(r,c  ) + a * (*handle)(r+1,c  );
+        if      (c <  0         ) return a1 * (*handle)(r,0         ) + a * (*handle)(r+1,0         );
+        else if (c >= lastColumn) return a1 * (*handle)(r,lastColumn) + a * (*handle)(r+1,lastColumn);
         else
         {
             float b = column - c;
@@ -106,6 +105,17 @@ float matrix (Matrix<float> * handle, float row, float column)
                    +      b  * (a1 * (*handle)(r,c+1) + a * (*handle)(r+1,c+1));
         }
     }
+}
+
+float matrixRaw (Matrix<float> * handle, float row, float column)
+{
+    int r = (int) row;
+    int c = (int) column;
+    if      (r <  0               ) r = 0;
+    else if (r >= handle->rows_   ) r = handle->rows_    - 1;
+    if      (c <  0               ) c = 0;
+    else if (c >= handle->columns_) c = handle->columns_ - 1;
+    return (*handle)(r,c);
 }
 
 map<string, Matrix<float> *> matrixMap;

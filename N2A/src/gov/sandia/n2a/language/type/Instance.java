@@ -69,10 +69,11 @@ public class Instance extends Type
     }
 
     /**
-        Fetches a value local to this instance.
+        Fetches a value local to this instance. Value may also be a constant (and thus not stored).
     **/
     public Type get (Variable v)
     {
+        if (v.readIndex < 0) return v.type;
         if (v.type instanceof Scalar) return new Scalar (valuesFloat[v.readIndex]);
         Type result = valuesType[v.readIndex];
         if (result == null) return v.type;  // assumes that we never modify the returned object, and that previously it was set to the equivalent of 0

@@ -182,6 +182,9 @@ public class InternalSimulation implements Simulation
     public static void clearVariables (EquationSet s)
     {
         for (EquationSet p : s.parts) clearVariables (p);
-        for (Variable v : s.variables) v.type = v.type.clear ();  // So we can use these as backup when stored value is null.
+        for (Variable v : s.variables)
+        {
+            if (! v.hasAttribute ("constant")) v.type = v.type.clear ();  // So we can use these as backup when stored value is null.
+        }
     }
 }
