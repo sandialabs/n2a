@@ -36,22 +36,21 @@ public class Grid extends Function
     public Type eval (Instance context) throws EvaluationException
     {
         // collect parameters into arrays
-        int i = (int) Math.round (((Scalar) operands[0].eval (context)).value);
+        int i = (int) Math.floor (((Scalar) operands[0].eval (context)).value);
         int nx = 1;
         int ny = 1;
         int nz = 1;
-        if (operands.length >= 2) nx = (int) Math.round (((Scalar) operands[1].eval (context)).value);
-        if (operands.length >= 3) nx = (int) Math.round (((Scalar) operands[2].eval (context)).value);
-        if (operands.length >= 4) nx = (int) Math.round (((Scalar) operands[3].eval (context)).value);
-        int sy = ny * nz;
-        int sx = nx * sy;
+        if (operands.length >= 2) nx = (int) Math.floor (((Scalar) operands[1].eval (context)).value);
+        if (operands.length >= 3) nx = (int) Math.floor (((Scalar) operands[2].eval (context)).value);
+        if (operands.length >= 4) nx = (int) Math.floor (((Scalar) operands[3].eval (context)).value);
+        int sx = ny * nz;  // stride x
 
         // compute xyz in stride order
         Matrix result = new Matrix (3, 1);
         result.value[0][0] = ((i / sx) + 0.5) / nx;  // (i / sx) is an integer operation, so remainder is truncated.
         i %= sx;
-        result.value[0][1] = ((i / sy) + 0.5) / ny;
-        result.value[0][2] = ((i % sy) + 0.5) / nz;
+        result.value[0][1] = ((i / nz) + 0.5) / ny;
+        result.value[0][2] = ((i % nz) + 0.5) / nz;
         return result;
     }
 
