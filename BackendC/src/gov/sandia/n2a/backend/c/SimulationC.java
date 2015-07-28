@@ -12,6 +12,7 @@ import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.EquationSet.Conversion;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
+import gov.sandia.n2a.language.AccessElement;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.BuildMatrix;
 import gov.sandia.n2a.language.Constant;
@@ -2933,6 +2934,26 @@ public class SimulationC implements Simulation
             {
                 AccessVariable av = (AccessVariable) op;
                 result.append (resolve (av.reference, this, false));
+                return true;
+            }
+            if (op instanceof AccessElement)
+            {
+                AccessElement ae = (AccessElement) op;
+                ae.operands[0].render (this);
+                if (ae.operands.length == 2)
+                {
+                    result.append ("[");
+                    ae.operands[1].render (this);
+                    result.append ("]");
+                }
+                else if (ae.operands.length == 3)
+                {
+                    result.append ("(");
+                    ae.operands[1].render (this);
+                    result.append (",");
+                    ae.operands[2].render (this);
+                    result.append (")");
+                }
                 return true;
             }
             if (op instanceof Power)

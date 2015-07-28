@@ -31,7 +31,7 @@ public class AccessElement extends Function
         operands[0] = av;
         av.name = node.jjtGetValue ().toString ();
 
-        for (int i = 1; i < count; i++)
+        for (int i = 0; i < count; i++)
         {
             operands[i+1] = Operator.getFrom ((SimpleNode) l.jjtGetChild (i));
         }
@@ -41,6 +41,7 @@ public class AccessElement extends Function
     {
         for (int i = 0; i < operands.length; i++) operands[i] = operands[i].simplify (from);
         if (operands.length == 1) return operands[0];
+        // Implicitly, the number of operands is > 1
         int row = 0;
         int col = 0;
         if (operands[1] instanceof Constant)
@@ -84,7 +85,7 @@ public class AccessElement extends Function
     {
         if (renderer.render (this)) return;
         operands[0].render (renderer);  // render variable
-        renderer.result.append (toString () + "(");
+        renderer.result.append ("(");
         if (operands.length > 1)
         {
             operands[1].render (renderer);  // first subscript
@@ -96,8 +97,6 @@ public class AccessElement extends Function
         }
         renderer.result.append (")");
     }
-
-    // TODO: if operand[0] is unresolved, then report an undefined function.
 
     public Type eval (Instance instance)
     {
