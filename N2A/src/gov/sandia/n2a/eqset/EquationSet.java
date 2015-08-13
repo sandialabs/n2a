@@ -532,12 +532,11 @@ public class EquationSet implements Comparable<EquationSet>
                 v.reference.variable.addAttribute ("externalWrite");
                 v.reference.variable.addDependency (v);  // v.reference.variable receives an external write from v, and therefore its value depends on v
                 v.reference.variable.container.referenced = true;
-                v.reference.variable.assignment = Variable.ADD;
-                for (EquationEntry e : v.reference.variable.equations)  // because the equations of v.reference.variable must share its storage with us, they must respect unknown ordering and not simply write the value
+                if (v.reference.variable.assignment != v.assignment)
                 {
-                    // TODO: we will have other combining operators (min, max, etc.), so it might be better to require the user to explicitly set the right operator, and to be consistent
-                    // Alternately, go ahead and make the equations consistent, but issue a warning to the user.
-                    e.assignment = "+=";
+                    System.out.println ("WARNING: Reference has different assignment type than target variable. Attempting to correct.");
+                    if (v.assignment == Variable.REPLACE) v.assignment = v.reference.variable.assignment;
+                    else                                  v.reference.variable.assignment = v.assignment;
                 }
             }
         }
@@ -731,9 +730,9 @@ public class EquationSet implements Comparable<EquationSet>
                 if (n2.name.equals ("$n")) continue;
 
                 // check contents of $n
+                if (n.assignment != Variable.REPLACE) continue;
                 if (n.equations.size () != 1) continue;
                 EquationEntry ne = n.equations.first ();
-                if (! ne.assignment.equals ("=")) continue;
 
                 // If we can't evaluate $n as a number, then we treat it as 1
                 // Otherwise, we check the actual value.
@@ -911,11 +910,10 @@ public class EquationSet implements Comparable<EquationSet>
         if (add (v))
         {
             v.addAttribute ("constant");  // default. Actual values should be set by setAttributeLive()
-            v.equations = new TreeSet<EquationEntry> ();
             EquationEntry e = new EquationEntry (v, "");
-            v.equations.add (e);
             e.assignment = "=";
             e.expression = new Constant (new Scalar (1));
+            v.add (e);
         }
 
         v = new Variable ("$type", 0);
@@ -937,11 +935,10 @@ public class EquationSet implements Comparable<EquationSet>
             if (add (v))
             {
                 v.addAttribute ("constant");  // default. Actual values set by client code.
-                v.equations = new TreeSet<EquationEntry> ();
                 EquationEntry e = new EquationEntry (v, "");
-                v.equations.add (e);
                 e.assignment = "=";
                 e.expression = new Constant (new Scalar (1));
+                v.add (e);
             }
         }
     }
@@ -1044,11 +1041,13 @@ public class EquationSet implements Comparable<EquationSet>
         Variable init = find (new Variable ("$init"));
         if (init == null)
         {
-            EquationEntry e = new EquationEntry ("$init", 0);
-            e.variable.addAttribute ("constant");  // TODO: should really be "initOnly", since it changes value during (at the end of) the init cycle.
+            init = new Variable ("$init", 0);
+            init.addAttribute ("constant");  // TODO: should really be "initOnly", since it changes value during (at the end of) the init cycle.
+            EquationEntry e = new EquationEntry (init, "");
             e.assignment = "=";
             e.expression = new Constant (new Scalar (value));
-            add (e.variable);
+            init.add (e);
+            add (init);
         }
         else
         {
@@ -1529,7 +1528,7 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
-        Identifies variables that act as subexpressions, and thus are not stored in the part's state.
+        Check for special variables that we wish not to store in connections.
         Depends on results of: none
     **/
     public void findTemporary () throws Exception
@@ -1541,7 +1540,6 @@ public class EquationSet implements Comparable<EquationSet>
 
         for (Variable v : variables)
         {
-            // Check for special variables that we wish not to store in connections.
             if (connectionBindings != null  &&  v.order == 0)
             {
                 if (v.name.equals ("$p"))
@@ -1561,23 +1559,6 @@ public class EquationSet implements Comparable<EquationSet>
                     }
                 }
             }
-
-            if (v.equations.size () == 0) continue;
-            EquationEntry f = v.equations.first ();
-            boolean hasTemporary = f.assignment != null  &&  f.assignment.equals (":=");
-            for (EquationEntry e : v.equations)
-            {
-                boolean foundTemporary = e.assignment != null  &&  e.assignment.equals (":=");  
-                if (foundTemporary != hasTemporary)
-                {
-                    throw new Exception ("Inconsisten use of ':=' by " + v.container.prefix () + "." + v.name);
-                }
-                if (hasTemporary)
-                {
-                    e.assignment = "=";  // replace := with = for use in code generation
-                }
-            }
-            if (hasTemporary) v.addAttribute ("temporary");
         }
     }
 
@@ -1821,7 +1802,7 @@ public class EquationSet implements Comparable<EquationSet>
                     changed = true;
                 }
             }
-            else if (firesDuringUpdate == 1  &&  update.assignment.equals ("="))  // last chance to be "initOnly": must be exactly one equation that is not a combining operator
+            else if (firesDuringUpdate == 1  &&  v.assignment == Variable.REPLACE)  // last chance to be "initOnly": must be exactly one equation that is not a combining operator
             {
                 // Determine if our single update equation depends only on constants and initOnly variables
                 class VisitInitOnly extends Visitor

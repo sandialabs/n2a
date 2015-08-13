@@ -10,7 +10,6 @@ package gov.sandia.n2a.eqset;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Visitor;
-import gov.sandia.n2a.language.parse.ParseException;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 
 import java.util.Map;
@@ -87,32 +86,38 @@ public class EquationEntry implements Comparable<EquationEntry>
         parts = temp.split ("=", 2);
         if (parts.length > 1)
         {
-            String name = parts[0];
-            expression = Operator.parse (parts[1]);
-            if (name.endsWith ("*") || name.endsWith ("/") || name.endsWith ("-"))
+            String lhs = parts[0];
+            String rhs = parts[1];
+            lhs = lhs.trim ();
+            rhs = rhs.trim ();
+
+            // assignment
+            char first;
+            if (rhs.isEmpty ()) first = 'N';  // for nothing
+            else                first = rhs.charAt (0);
+            if (first == ':'  ||  first == '+'  ||  first == '*'  ||  first == '<'  ||  first == '>')
             {
-                throw new ParseException ("Only += and := are allowed");
-            }
-            if (name.endsWith ("+") || name.endsWith (":"))
-            {
-                int last = name.length () - 1;
-                assignment = name.substring (last) + "=";
-                name = name.substring (0, last);
+                assignment = "=" + first;
+                rhs = rhs.substring (1);
             }
             else
             {
                 assignment = "=";
             }
-            name = name.trim ();
+
+            // variable
             int order = 0;
-            while (name.endsWith ("'"))
+            while (lhs.endsWith ("'"))
             {
                 order++;
-                name = name.substring (0, name.length () - 1);
+                lhs = lhs.substring (0, lhs.length () - 1);
             }
-            variable = new Variable (name, order);
+            variable = new Variable (lhs, order);
+
+            // expression
+            expression = Operator.parse (rhs);
         }
-        else  // naked expression
+        else  // naked expression.  TODO: formalize the use of naked expressions in the language? particularly for trace()
         {
             variable = new Variable ("", 0);
             assignment = "";

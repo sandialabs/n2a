@@ -2485,9 +2485,7 @@ public class SimulationC implements Simulation
             {
                 prepareMatrices (e.expression, context, pad);
                 context.result.append (padIf);
-                if (! v.hasAttribute ("dummy")) context.result.append (resolve (v.reference, context, true) + " " + e.assignment + " ");
-                e.expression.render (context);
-                context.result.append (";\n");
+                renderEquation (context, e);
             }
             if (haveIf) context.result.append (pad + "}\n");
         }
@@ -2527,12 +2525,46 @@ public class SimulationC implements Simulation
             {
                 prepareMatrices (defaultEquation.expression, context, pad);
                 context.result.append (padIf);
-                if (! v.hasAttribute ("dummy")) context.result.append (resolve (v.reference, context, true) + " " + defaultEquation.assignment + " ");
-                defaultEquation.expression.render (context);
-                context.result.append (";\n");
+                renderEquation (context, defaultEquation);
             }
             if (haveIf) context.result.append (pad + "}\n");
         }
+    }
+
+    public void renderEquation (CRenderer context, EquationEntry e)
+    {
+        if (e.variable.hasAttribute ("dummy"))
+        {
+            e.expression.render (context);
+        }
+        else
+        {
+            switch (e.variable.assignment)
+            {
+                case Variable.REPLACE:
+                    context.result.append (resolve (e.variable.reference, context, true) + " = ");
+                    e.expression.render (context);
+                    break;
+                case Variable.ADD:
+                    context.result.append (resolve (e.variable.reference, context, true) + " += ");
+                    e.expression.render (context);
+                    break;
+                case Variable.MULTIPLY:
+                    context.result.append (resolve (e.variable.reference, context, true) + " *= ");
+                    e.expression.render (context);
+                    break;
+                case Variable.MIN:
+                    context.result.append (resolve (e.variable.reference, context, true) + " = min (" + resolve (e.variable.reference, context, true) + ", ");
+                    e.expression.render (context);
+                    context.result.append (")");
+                    break;
+                case Variable.MAX:
+                    context.result.append (resolve (e.variable.reference, context, true) + " = max (" + resolve (e.variable.reference, context, true) + ", ");
+                    e.expression.render (context);
+                    context.result.append (")");
+            }
+        }
+        context.result.append (";\n");
     }
 
     public void prepareMatrices (Operator op, final CRenderer context, final String pad) throws Exception

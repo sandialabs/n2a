@@ -16,6 +16,7 @@ import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Max;
 import gov.sandia.n2a.language.function.Min;
 import gov.sandia.n2a.language.operator.Add;
+import gov.sandia.n2a.language.operator.Multiply;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 
@@ -53,11 +54,12 @@ public class Variable implements Comparable<Variable>
     public boolean  global;          // redundant with "global" attribute; for faster execution, since it is a frequently checked
 
     // Assignment modes
-    public static final int REPLACE  = 0;  // =
-    public static final int ADD      = 1;  // +=
-    public static final int MULTIPLY = 2;  // *=
-    public static final int MAX      = 3;  // >=
-    public static final int MIN      = 4;  // <=
+    public static final int UNKNOWN  = 0;  // the default state of assignment when this object is constructed
+    public static final int REPLACE  = 1;  // =
+    public static final int ADD      = 2;  // +=
+    public static final int MULTIPLY = 3;  // *=
+    public static final int MAX      = 4;  // >=
+    public static final int MIN      = 5;  // <=
 
     public Variable (String name)
     {
@@ -76,11 +78,16 @@ public class Variable implements Comparable<Variable>
         for (EquationEntry e : equations)
         {
             if (e.assignment == null  ||  e.assignment.isEmpty ()) continue;
-            if      (e.assignment.equals ( "=")) assignment = REPLACE;
-            else if (e.assignment.equals ("+=")) assignment = ADD;
-            else if (e.assignment.equals ("*=")) assignment = MULTIPLY;
-            else if (e.assignment.equals (">=")) assignment = MAX;
-            else if (e.assignment.equals ("<=")) assignment = MIN;
+            if      (e.assignment.equals ("=" )) assignment = REPLACE;
+            else if (e.assignment.equals ("=+")) assignment = ADD;
+            else if (e.assignment.equals ("=*")) assignment = MULTIPLY;
+            else if (e.assignment.equals ("=>")) assignment = MAX;
+            else if (e.assignment.equals ("=<")) assignment = MIN;
+            else if (e.assignment.equals ("=:"))
+            {
+                assignment = REPLACE;
+                addAttribute ("temporary");
+            }
             else continue;
             break;  // stop on the first valid equation
         }
@@ -136,15 +143,20 @@ public class Variable implements Comparable<Variable>
         if (equations == null) equations = new TreeSet<EquationEntry> ();
         for (EquationEntry e : v.equations)
         {
-            if (e.assignment.matches ("[+<>]="))
+            char mode = 'N';
+            if (e.assignment.length () == 2) mode = e.assignment.charAt (1);
+
+            if (mode == '+'  ||  mode == '*'  ||  mode == '<'  ||  mode == '>')
             {
                 EquationEntry e2 = equations.floor (e);
                 if (e.compareTo (e2) == 0)  // conditionals are exactly the same
                 {
                     // merge expressions
-                    if (e.assignment.startsWith ("+"))
+                    OperatorBinary op = null;
+                    if      (mode == '+') op = new Add ();
+                    else if (mode == '*') op = new Multiply ();
+                    if (op != null)
                     {
-                        OperatorBinary op = new Add ();
                         op.operand0 = e2.expression;
                         op.operand1 = e .expression;
                         e2.expression = op;
@@ -152,8 +164,8 @@ public class Variable implements Comparable<Variable>
                     }
 
                     Function f = null;
-                    if      (e.assignment.startsWith ("<")) f = new Min ();
-                    else if (e.assignment.startsWith (">")) f = new Max ();
+                    if      (mode == '<') f = new Min ();
+                    else if (mode == '>') f = new Max ();
                     if (f != null)
                     {
                         f.operands[0] = e2.expression;
