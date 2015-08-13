@@ -21,7 +21,7 @@ import gov.sandia.n2a.language.type.Scalar;
 
 import java.util.Collection;
 
-public class XyceRenderer extends Renderer  // TODO: rename to XyceRenderer; pass as parameter to Symbol functions
+public class XyceRenderer extends Renderer
 {
     public Euler                         simulator;
     public Instance                      pi;
@@ -97,8 +97,11 @@ public class XyceRenderer extends Renderer  // TODO: rename to XyceRenderer; pas
         }
 
         // special variables don't get SymbolDefs; just translate directly
-        if (r.variable.name.equals ("$t" )) return "TIME";
-        if (r.variable.name.equals ("$dt")) return new Double (simulator.dt).toString ();
+        if (r.variable.name.equals ("$t" ))
+        {
+            if (r.variable.order == 0) return "TIME";
+            if (r.variable.order == 1) return new Double (simulator.getNextDt ()).toString ();
+        }
 
         if (r.variable.hasAttribute ("initOnly")) return pi.get (r).toString ();
         if (r.variable.hasAttribute ("constant")) return r.variable.equations.first ().expression.toString ();

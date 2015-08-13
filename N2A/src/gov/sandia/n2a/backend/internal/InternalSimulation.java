@@ -17,8 +17,6 @@ import gov.sandia.umf.platform.plugins.Simulation;
 import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 
-import java.io.PrintStream;
-import java.io.File;
 import java.util.Map.Entry;
 import java.util.TreeMap;
 
@@ -59,31 +57,15 @@ public class InternalSimulation implements Simulation
         {
             public void run ()
             {
-                Wrapper wrapper = null;
+                Euler simulator = new Euler (new Wrapper (runState.digestedModel), runState.jobDir);
                 try
                 {
-                    wrapper = new Wrapper (runState.digestedModel);
-                    wrapper.out = new PrintStream (new File (runState.jobDir, "out"));
-                    wrapper.err = new PrintStream (new File (runState.jobDir, "err"));
-
-                    Euler simulator = new Euler ();
-                    simulator.wrapper = wrapper;
-                    simulator.enqueue (wrapper);
-                    wrapper.init (simulator);
                     simulator.run ();
                 }
                 catch (Exception e)
                 {
-                    if (wrapper != null  &&  wrapper.err != null)
-                    {
-                        wrapper.err.println (e);
-                        e.printStackTrace (wrapper.err);
-                    }
-                    else
-                    {
-                        System.err.println (e);
-                        e.printStackTrace (System.err);
-                    }
+                    simulator.err.println (e);
+                    e.printStackTrace (simulator.err);
                 }
             }
         };
@@ -127,19 +109,13 @@ public class InternalSimulation implements Simulation
     public static Euler constructStaticNetwork (EquationSet e) throws Exception
     {
         digestModel (e);
-        Wrapper wrapper = new Wrapper (e);
-        Euler simulator = new Euler ();
-        simulator.wrapper = wrapper;
-        simulator.enqueue (wrapper);
-        wrapper.init (simulator);
-        simulator.finishInitCycle ();
-        return simulator;
+        return new Euler (new Wrapper (e));
     }
 
     public static void digestModel (EquationSet e) throws Exception
     {
         e.flatten ();
-        e.addSpecials ();  // $dt, $index, $init, $live, $n, $t, $type
+        e.addSpecials ();  // $index, $init, $live, $n, $t, $t', $type
         e.fillIntegratedVariables ();
         e.findIntegrated ();
         e.resolveLHS ();
@@ -152,14 +128,14 @@ public class InternalSimulation implements Simulation
         e.determineOrder ();
         e.findDerivative ();
         e.addAttribute ("global",      0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
-        e.addAttribute ("preexistent", 0, true,  new String[] {"$dt", "$t"});
+        e.addAttribute ("preexistent", 0, true,  new String[] {"$t'", "$t"});  // variables that are not stored because Instance.get/set intercepts them
         e.addAttribute ("readOnly",    0, true,  new String[] {"$t"});
         // We don't really need the "simulator" attribute, because it has no impact on the behavior of Internal
-        e.replaceConstantWithInitOnly ();
+        e.makeConstantDtInitOnly ();
         e.findInitOnly ();
         e.findDeath ();
         e.setAttributesLive ();
-        e.setFunctions ();
+        e.forceTemporaryStorageForSpecials ();
         e.determineTypes ();
 
         createBackendData (e);
@@ -175,8 +151,10 @@ public class InternalSimulation implements Simulation
 
     public static void analyze (EquationSet s)
     {
-        ((InternalBackendData) s.backendData).analyze (s);
+        InternalBackendData bed = (InternalBackendData) s.backendData;
+        bed.analyze (s);
         for (EquationSet p : s.parts) analyze (p);
+        bed.analyzeLastT (s);
     }
 
     public static void clearVariables (EquationSet s)

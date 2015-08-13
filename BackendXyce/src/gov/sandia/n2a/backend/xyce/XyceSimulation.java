@@ -30,7 +30,6 @@ import gov.sandia.umf.platform.plugins.Simulation;
 import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 
-import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.List;
@@ -206,7 +205,7 @@ class XyceSimulation implements Simulation
         writer.append (".tran 0 " + duration + "\n");
 
         // Equations
-        for (Instance i : simulator.queue)
+        for (Instance i : simulator)
         {
             if (i == simulator.wrapper) continue;
 

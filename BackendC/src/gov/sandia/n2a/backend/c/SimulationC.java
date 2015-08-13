@@ -164,13 +164,13 @@ public class SimulationC implements Simulation
         e.findDerivative ();
         e.addAttribute ("global",       0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
         e.addAttribute ("preexistent", -1, false, new String[] {"$index"});
-        e.addAttribute ("preexistent",  0, true,  new String[] {"$dt", "$t"});
-        e.addAttribute ("simulator",    0, true,  new String[] {"$dt", "$t"});
-        e.replaceConstantWithInitOnly ();  // for "preexistent" $variables ($dt, $t)
+        e.addAttribute ("preexistent",  0, true,  new String[] {"$t'", "$t"});
+        e.addAttribute ("simulator",    0, true,  new String[] {"$t'", "$t"});
+        e.makeConstantDtInitOnly ();
         e.findInitOnly ();  // propagate initOnly through ASTs
         e.findDeath ();
         e.setAttributesLive ();
-        e.setFunctions ();
+        e.forceTemporaryStorageForSpecials ();
         findLiveReferences (e);
         e.determineTypes ();
 
@@ -375,12 +375,12 @@ public class SimulationC implements Simulation
                     if (! v.hasAttribute ("reference"))
                     {
                         boolean temporary = v.hasAttribute ("temporary");
-                        boolean unusedTemporary = temporary  &&  ! v.hasUsers;
+                        boolean unusedTemporary = temporary  &&  ! v.hasUsers;  // here only to make the following line of code more clear
                         if (! unusedTemporary) bed.globalInit.add (v);
-                        if (! temporary)
+                        if (! temporary  &&  ! v.hasAttribute ("dummy"))
                         {
-                            if (! v.hasAny (new String [] {"preexistent", "dummy"})) bed.globalMembers.add (v);
-                            if (v.order > 0) bed.globalStackDerivative.add (v);
+                            if (! v.hasAttribute ("preexistent")) bed.globalMembers.add (v);
+                            if (v.order > 0  &&  ! initOnly) bed.globalStackDerivative.add (v);
 
                             boolean external = false;
                             if (v.hasAttribute ("externalWrite"))
@@ -401,15 +401,18 @@ public class SimulationC implements Simulation
                                 if (! external)
                                 {
                                     bed.globalBufferedInternal.add (v);
-                                    if (! initOnly) bed.globalBufferedInternalUpdate.add (v);
-                                    if (derivativeOrDependency) bed.globalBufferedInternalDerivative.add (v);
+                                    if (! initOnly)
+                                    {
+                                        bed.globalBufferedInternalUpdate.add (v);
+                                        if (derivativeOrDependency) bed.globalBufferedInternalDerivative.add (v);
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-            else
+            else  // local
             {
                 if (! v.hasAny (new String[] {"constant", "accessor"}))
                 {
@@ -426,10 +429,10 @@ public class SimulationC implements Simulation
                         boolean temporary = v.hasAttribute ("temporary");
                         boolean unusedTemporary = temporary  &&  ! v.hasUsers;
                         if (! unusedTemporary  &&  ! v.name.equals ("$index")) bed.localInit.add (v);
-                        if (! temporary)
+                        if (! temporary  &&  ! v.hasAttribute ("dummy"))
                         {
-                            if (! v.hasAny (new String [] {"preexistent", "dummy"})) bed.localMembers.add (v);
-                            if (v.order > 0) bed.localStackDerivative.add (v);
+                            if (! v.hasAttribute ("preexistent")) bed.localMembers.add (v);
+                            if (v.order > 0  &&  ! initOnly) bed.localStackDerivative.add (v);
 
                             boolean external = false;
                             if (v.hasAttribute ("externalWrite"))
@@ -446,12 +449,15 @@ public class SimulationC implements Simulation
                             }
                             if (external  ||  v.hasAttribute ("cycle"))
                             {
-                                bed.localBuffered.add (v);
+                                bed.localBuffered.add (v);  // only used during init(). Rename?
                                 if (! external)
                                 {
-                                    bed.localBufferedInternal.add (v);
-                                    if (! initOnly) bed.localBufferedInternalUpdate.add (v);
-                                    if (derivativeOrDependency) bed.localBufferedInternalDerivative.add (v);
+                                    bed.localBufferedInternal.add (v);  // only used during init(). Rename?
+                                    if (! initOnly)
+                                    {
+                                        bed.localBufferedInternalUpdate.add (v);
+                                        if (derivativeOrDependency) bed.localBufferedInternalDerivative.add (v);
+                                    }
                                 }
                             }
                         }
@@ -461,16 +467,10 @@ public class SimulationC implements Simulation
         }
         for (Variable v : s.variables)  // we need these to be in order by differential level, not by dependency
         {
-            if (v.hasAttribute ("integrated"))  // Do we need to guard against reference, constant, transient?
+            if (v.derivative != null  &&  ! v.hasAny (new String[] {"constant", "initOnly"}))
             {
-                if (v.hasAttribute ("global"))
-                {
-                    bed.globalIntegrated.add (v);
-                }
-                else
-                {
-                    bed.localIntegrated.add (v);
-                }
+                if (v.hasAttribute ("global")) bed.globalIntegrated.add (v);
+                else                           bed.localIntegrated .add (v);
             }
         }
 
@@ -1073,16 +1073,14 @@ public class SimulationC implements Simulation
             result.append ("  {\n");
             for (Variable v : bed.globalIntegrated)
             {
-                Variable vo = s.variables.floor (new Variable (v.name, v.order + 1));
-                result.append ("    " + resolve (v.reference, context, false) + " = stackIntegrated->" + mangle (v) + " + " + resolve (vo.reference, context, false) + " * simulator.dt;\n");
+                result.append ("    " + resolve (v.reference, context, false) + " = stackIntegrated->" + mangle (v) + " + " + resolve (v.derivative.reference, context, false) + " * simulator.dt;\n");
             }
             result.append ("  }\n");
             result.append ("  else\n");
             result.append ("  {\n");
             for (Variable v : bed.globalIntegrated)
             {
-                Variable vo = s.variables.floor (new Variable (v.name, v.order + 1));
-                result.append ("    " + resolve (v.reference, context, false) + " += " + resolve (vo.reference, context, false) + " * simulator.dt;\n");
+                result.append ("    " + resolve (v.reference, context, false) + " += " + resolve (v.derivative.reference, context, false) + " * simulator.dt;\n");
             }
             result.append ("  }\n");
             result.append ("};\n");
@@ -1592,7 +1590,7 @@ public class SimulationC implements Simulation
             for (Variable v : bed.localBuffered)  // more than just localBufferedInternal, because we must finalize members as well
             {
                 if (! v.name.startsWith ("$")) continue;
-                if (v.name.equals ("$dt"))
+                if (v.name.equals ("$t")  &&  v.order == 1)  // $t'
                 {
                     result.append ("  if (" + mangle ("next_", v) + " != simulator.dt) simulator.move (" + mangle ("next_", v) + ");\n");
                 }
@@ -1646,16 +1644,14 @@ public class SimulationC implements Simulation
                 result.append ("  {\n");
                 for (Variable v : bed.localIntegrated)
                 {
-                    Variable vo = s.variables.floor (new Variable (v.name, v.order + 1));  // pre-processing should guarantee that this exists
-                    result.append ("    " + resolve (v.reference, context, false) + " = stackIntegrated->" + mangle (v) + " + " + resolve (vo.reference, context, false) + " * simulator.dt;\n");
+                    result.append ("    " + resolve (v.reference, context, false) + " = stackIntegrated->" + mangle (v) + " + " + resolve (v.derivative.reference, context, false) + " * simulator.dt;\n");
                 }
                 result.append ("  }\n");
                 result.append ("  else\n");
                 result.append ("  {\n");
                 for (Variable v : bed.localIntegrated)
                 {
-                    Variable vo = s.variables.floor (new Variable (v.name, v.order + 1));
-                    result.append ("    " + resolve (v.reference, context, false) + " += " + resolve (vo.reference, context, false) + " * simulator.dt;\n");
+                    result.append ("    " + resolve (v.reference, context, false) + " += " + resolve (v.derivative.reference, context, false) + " * simulator.dt;\n");
                 }
                 result.append ("  }\n");
             }
@@ -1732,7 +1728,7 @@ public class SimulationC implements Simulation
 
             for (Variable v : bed.localBufferedExternal)
             {
-                if (v.name.equals ("$dt"))
+                if (v.name.equals ("$t")  &&  v.order == 1)
                 {
                     result.append ("  if (" + mangle ("next_", v) + " != simulator.dt) simulator.move (" + mangle ("next_", v) + ");\n");
                 }
@@ -2677,7 +2673,7 @@ public class SimulationC implements Simulation
             context.result = temp;
             return result.toString ();
         }
-        if (r.variable.name.equals ("$dt")  &&  ! lvalue  &&  context.part.getInit ())  // force $dt==0 during init phase
+        if (r.variable.name.equals ("$t")  &&  r.variable.order == 1  &&  ! lvalue  &&  context.part.getInit ())  // force $t'==0 during init phase
         {
             return "0";
         }
@@ -2694,11 +2690,15 @@ public class SimulationC implements Simulation
         String name = "";
         if (r.variable.hasAttribute ("simulator"))
         {
-            // We can't read $t or $dt from another object's simulator, unless is exactly the same as ours, in which case there is no point.
-            // We can't directly write $dt of another object.
+            // We can't read $t or $t' from another object's simulator, unless is exactly the same as ours, in which case there is no point.
+            // We can't directly write $t' of another object.
             // TODO: Need a way to tell another part to immediately accelerate
             if (containers.length () > 0) return "unresolved";
-            if (! lvalue) return "simulator." + r.variable.name.substring (1);  // strip the $ and expect it to be a member of simulator, which must be passed into the current function
+            if (! lvalue)
+            {
+                if (r.variable.name.equals ("$t'")) return "simulator.dt";
+                return "simulator." + r.variable.name.substring (1);  // strip the $ and expect it to be a member of simulator, which must be passed into the current function
+            }
             // if lvalue, then fall through to the main case below 
         }
         if (r.variable.hasAttribute ("accessor"))

@@ -42,14 +42,14 @@ public class Population extends Instance
         }
     }
 
-    public void integrate (Euler simulator)
+    public void integrate (Euler simulator, double dt)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
         for (Variable v : bed.globalIntegrated)
         {
             double a  = ((Scalar) get (v           )).value;
             double aa = ((Scalar) get (v.derivative)).value;
-            setFinal (v, new Scalar (a + aa * simulator.dt));
+            setFinal (v, new Scalar (a + aa * dt));
         }
     }
 

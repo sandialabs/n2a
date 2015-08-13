@@ -599,8 +599,8 @@ PopulationConnection::connect (Simulator & simulator)
                     if (Bmax  &&  c->getCount (1) >= Bmax) continue;  // no room in this B
                     float create = c->getP (simulator);
                     if (create <= 0  ||  create < 1  &&  create < uniform1 ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
-                    c->init (simulator);
                     simulator.enqueue (c);
+                    c->init (simulator);
                     Acount++;
                     c = (Connection *) this->create ();
                     c->setPart (0, a);
@@ -622,8 +622,8 @@ PopulationConnection::connect (Simulator & simulator)
                     if (Bmax  &&  c->getCount (1) >= Bmax) continue;  // no room in this B
                     float create = c->getP (simulator);
                     if (create <= 0  ||  create < 1  &&  create < uniform1 ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
-                    c->init (simulator);
                     simulator.enqueue (c);
+                    c->init (simulator);
                     c = (Connection *) this->create ();
                     c->setPart (0, a);
                     Bnext = b;

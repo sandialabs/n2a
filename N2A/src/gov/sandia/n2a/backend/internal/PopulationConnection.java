@@ -88,8 +88,8 @@ public class PopulationConnection extends Population
                     c.resolve ();
                     double create = c.getP (simulator);
                     if (create <= 0  ||  create < 1  &&  create < simulator.uniform.nextDouble ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
+                    container.enqueue (c);
                     c.init (simulator);
-                    simulator.enqueue (c);
                     c = new Connection (equations, this);
                     c.setPart (0, a);
                     Bnext = b;
@@ -138,8 +138,8 @@ public class PopulationConnection extends Population
                         c.resolve ();
                         double create = c.getP (simulator);
                         if (create <= 0  ||  create < 1  &&  create < simulator.uniform.nextDouble ()) continue;
+                        container.enqueue (c);
                         c.init (simulator);
-                        simulator.enqueue (c);
                         c = new Connection (equations, this);
                         c.setPart (1, b);
                         Anext = a;

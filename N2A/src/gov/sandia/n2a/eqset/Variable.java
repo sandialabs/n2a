@@ -36,6 +36,7 @@ public class Variable implements Comparable<Variable>
     // resolution
     public EquationSet                  container;  // non-null iff this variable is contained in an EquationSet.variables collection
     public VariableReference            reference;  // points to variable that actually contains the data, which is usually us unless we are a proxy for a variable in another equation set. null if not resolved yet.
+    public Variable                     derivative; // The variable from which we are integrated, if any.
     // graph analysis
     public List<Variable>               uses;       // Variables we depend on. Forms a digraph (which may have cycles) on Variable nodes.
     public boolean                      hasUsers;   // Indicates that some variable depends on us. That is, we exist in some Variable.uses collection.
@@ -49,7 +50,6 @@ public class Variable implements Comparable<Variable>
     public boolean  readTemp;        // Read the temp Instance rather than the main one
     public int      writeIndex = -1; // Position Instance.values to write
     public boolean  writeTemp;       // Write the temp Instance rather than the main one
-    public Variable derivative;      // The variable from which we are integrated, if any.
     public boolean  global;          // redundant with "global" attribute; for faster execution, since it is a frequently checked
 
     // Assignment modes
@@ -80,7 +80,7 @@ public class Variable implements Comparable<Variable>
             else if (e.assignment.equals ("+=")) assignment = ADD;
             else if (e.assignment.equals ("*=")) assignment = MULTIPLY;
             else if (e.assignment.equals (">=")) assignment = MAX;
-            else if (e.assignment.equals ("*=")) assignment = MIN;
+            else if (e.assignment.equals ("<=")) assignment = MIN;
             else continue;
             break;  // stop on the first valid equation
         }
@@ -357,14 +357,14 @@ public class Variable implements Comparable<Variable>
         }
     }
 
-    public void visitTemporaries ()
+    public void tagDerivativeOrDependency ()
     {
         if (hasAttribute ("derivativeOrDependency")) return;
         addAttribute ("derivativeOrDependency");
         if (uses == null) return;
         for (Variable u : uses)
         {
-            if (u.hasAttribute ("temporary")) u.visitTemporaries ();
+            if (u.hasAttribute ("temporary")) u.tagDerivativeOrDependency ();
         }
     }
 
@@ -383,14 +383,11 @@ public class Variable implements Comparable<Variable>
             <dt>reference</dt>
                 <dd>the actual value of the variable is stored in a different
                 equation set</dd>
-            <dt>integrated</dt>
-                <dd>this lower-ordered version of a variable is defined by a
-                higher-order derivative rather than a direct equation</dd>
             <dt>accessor</dt>
                 <dd>value is given by a function rather than stored</dd>
             <dt>preexistent</dt>
-                <dd>storage does not need to be created for the variable (in C)
-                because it is either inherited or passed into a function</dd>
+                <dd>storage does not need to be created for the variable
+                because it is either inherited or passed into a function.</dd>
             <dt>simulator</dt>
                 <dd>accessible via the simulator object; a subcategory of preexistent</dd>
             <dt>temporary</dt>
@@ -406,6 +403,8 @@ public class Variable implements Comparable<Variable>
             <dt>dummy</dt>
                 <dd>an equation has some important side-effect, but the result itself
                 is not stored because it is never referenced.</dd>
+            <dt>updates</dt>
+                <dd>this variable has both a derivative and regular update equations.</dd>
         </dl>
     **/
     public void addAttribute (String attribute)

@@ -7,6 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.function;
 
+import gov.sandia.n2a.backend.internal.Euler;
 import gov.sandia.n2a.backend.internal.InstanceTemporaries;
 import gov.sandia.n2a.backend.internal.Wrapper;
 import gov.sandia.n2a.language.Function;
@@ -42,30 +43,21 @@ public class Trace extends Function
     {
         Scalar result = (Scalar) operands[0].eval (context);
 
-        Wrapper wrapper = null;
+        Euler simulator = null;
         if (context instanceof InstanceTemporaries)
         {
-            wrapper = ((InstanceTemporaries) context).simulator.wrapper;
+            simulator = ((InstanceTemporaries) context).simulator;
         }
         else
         {
             Instance top = context;
             while (top.container != null) top = top.container;
-            if (top instanceof Wrapper) wrapper = (Wrapper) top;
+            if (top instanceof Wrapper) simulator = ((Wrapper) top).simulator;
         }
-        if (wrapper != null)
+        if (simulator != null)
         {
             String column = operands[1].eval (context).toString ();
-            Integer index = wrapper.columnMap.get (column);
-            if (index == null)
-            {
-                wrapper.columnMap.put (column, wrapper.columnValues.size ());
-                wrapper.columnValues.add ((float) result.value);
-            }
-            else
-            {
-                wrapper.columnValues.set (index, (float) result.value);
-            }
+            simulator.trace (column, (float) result.value);
         }
 
         return result;

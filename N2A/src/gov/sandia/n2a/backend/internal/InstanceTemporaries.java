@@ -56,8 +56,9 @@ public class InstanceTemporaries extends Instance
     public Type get (Variable v)
     {
         if (v == bed.init) return init;
-        if (v == bed.t   ) return new Scalar (simulator.t);
-        if (v == bed.dt  ) return new Scalar (simulator.dt);
+        if (v == bed.t   ) return new Scalar (simulator.currentEvent.t);
+        // By construction, there should never bet a get() request for $t' unless bed.storeDt is true.
+        // In this case the following code will satisfy the request.
 
         if (v.readTemp) return super.get (v);
         return               wrapped.get (v);
@@ -83,8 +84,13 @@ public class InstanceTemporaries extends Instance
 
     public void setFinal (Variable v, Type value)
     {
-        if (v == bed.dt) simulator.move (((Scalar) value).value);
-        else if (v.readTemp) super.setFinal (v, value);
-        else               wrapped.setFinal (v, value);
+        if (v == bed.dt)
+        {
+            simulator.move (wrapped, ((Scalar) value).value);
+            if (! bed.storeDt) return;  // don't try to store $dt (below) unless necessary
+        }
+
+        if (v.readTemp) super.setFinal (v, value);
+        else          wrapped.setFinal (v, value);
     }
 }

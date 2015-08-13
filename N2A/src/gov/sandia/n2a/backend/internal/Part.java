@@ -110,14 +110,22 @@ public class Part extends Instance
     public void integrate (Euler simulator)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
+        if (bed.localIntegrated.isEmpty ()  &&  populations == null) return;  // nothing to do
+
+        double dt;
+        if (bed.lastT == null) dt = ((EventStep) simulator.currentEvent).dt;
+        else                   dt = simulator.currentEvent.t - ((Scalar) get (bed.lastT)).value;
+        if (dt <= 0) return;  // nothing to do
+
+        // Integrate variables
         for (Variable v : bed.localIntegrated)
         {
             double a  = ((Scalar) get (v           )).value;
             double aa = ((Scalar) get (v.derivative)).value;
-            setFinal (v, new Scalar (a + aa * simulator.dt));
+            setFinal (v, new Scalar (a + aa * dt));
         }
 
-        if (populations != null) for (Population p : populations) p.integrate (simulator);
+        if (populations != null) for (Population p : populations) p.integrate (simulator, dt);
     }
 
     public void prepare ()
@@ -191,10 +199,8 @@ public class Part extends Instance
             if (((Scalar) get (bed.live)).value == 0) return false;  // early-out if we are already dead, to avoid another call to die()
         }
 
-        for (Variable v : bed.localBufferedExternal)
-        {
-            setFinal (v, getFinal (v));
-        }
+        if (bed.lastT != null) setFinal (bed.lastT, new Scalar (simulator.currentEvent.t));
+        for (Variable v : bed.localBufferedExternal) setFinal (v, getFinal (v));
 
         if (bed.type != null)
         {
@@ -219,7 +225,7 @@ public class Part extends Instance
                         {
                             Part p = convert (other);
 
-                            simulator.enqueue (p);
+                            enqueue (p);
                             p.resolve ();
                             p.init (simulator);  // accountable connections are updated here
 

@@ -530,11 +530,14 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 v.addAttribute ("reference");
                 v.reference.variable.addAttribute ("externalWrite");
-                v.reference.variable.addDependency (v);  // v.reference.variable receives an external write from v, and therefore depends on it
+                v.reference.variable.addDependency (v);  // v.reference.variable receives an external write from v, and therefore its value depends on v
                 v.reference.variable.container.referenced = true;
+                v.reference.variable.assignment = Variable.ADD;
                 for (EquationEntry e : v.reference.variable.equations)  // because the equations of v.reference.variable must share its storage with us, they must respect unknown ordering and not simply write the value
                 {
-                    e.assignment = "+=";  // TODO: we will have other combining operators (min, max, etc.), so it might be better to require the user to explicitly set the right operator, and to be consistent
+                    // TODO: we will have other combining operators (min, max, etc.), so it might be better to require the user to explicitly set the right operator, and to be consistent
+                    // Alternately, go ahead and make the equations consistent, but issue a warning to the user.
+                    e.assignment = "+=";
                 }
             }
         }
@@ -892,7 +895,13 @@ public class EquationSet implements Comparable<EquationSet>
 
         setInit (0);  // force $init to exist
 
-        Variable v = new Variable ("$dt", 0);
+        Variable v = new Variable ("$t", 0);
+        if (add (v))
+        {
+            v.equations = new TreeSet<EquationEntry> ();
+        }
+
+        v = new Variable ("$t", 1);  // $t'
         if (add (v))
         {
             v.equations = new TreeSet<EquationEntry> ();
@@ -907,12 +916,6 @@ public class EquationSet implements Comparable<EquationSet>
             v.equations.add (e);
             e.assignment = "=";
             e.expression = new Constant (new Scalar (1));
-        }
-
-        v = new Variable ("$t", 0);
-        if (add (v))
-        {
-            v.equations = new TreeSet<EquationEntry> ();
         }
 
         v = new Variable ("$type", 0);
@@ -1013,8 +1016,10 @@ public class EquationSet implements Comparable<EquationSet>
             }
 
             // This may seem inefficient, but in general there will only be one order to process.
+            int lowestOrder = 0;
+            if (v.name.equals ("$t")) lowestOrder = 1;  // don't let $t depend on $t', as this is handled entirely within the simulator
             Variable last = v;
-            for (int o = v.order - 1; o >= 0; o--)
+            for (int o = v.order - 1; o >= lowestOrder; o--)
             {
                 Variable vo = new Variable (v.name, o);
                 Variable found = find (vo);
@@ -1383,7 +1388,7 @@ public class EquationSet implements Comparable<EquationSet>
             if ((v.name.startsWith ("$")  ||  v.name.contains (".$"))  &&  ! v.name.startsWith ("$up.")) continue;
 
             Type value;
-            if (v.hasAttribute ("integrated"))
+            if (v.derivative != null  &&  ! v.hasAttribute ("constant"))
             {
                 value = find (new Variable (v.name, v.order + 1)).type;  // this should exist, so no need to verify result
             }
@@ -1541,7 +1546,7 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 if (v.name.equals ("$p"))
                 {
-                    if (! v.hasAny (new String [] {"externalRead", "externalWrite", "integrated"}))
+                    if (! v.hasAny (new String [] {"externalRead", "externalWrite"})  &&  v.derivative == null)
                     {
                         v.addAttribute ("temporary");
                         continue;
@@ -1662,12 +1667,10 @@ public class EquationSet implements Comparable<EquationSet>
         for (Variable v : variables)
         {
             if (v.hasAttribute ("reference")) continue;
+            if (v.name.equals ("$t")  &&  v.order == 0) continue;  // don't integrate $t, because the simulator itself handles this.
             // Check if there is another equation that is exactly one order higher than us.
             // If so, then we must be integrated from it.
-            if (find (new Variable (v.name, v.order + 1)) != null)
-            {
-                v.addAttribute ("integrated");
-            }
+            v.derivative = find (new Variable (v.name, v.order + 1));  // returns null if the derivative does not exist
         }
     }
 
@@ -1689,9 +1692,14 @@ public class EquationSet implements Comparable<EquationSet>
 
         for (Variable v : variables)
         {
-            if (v.order > 0)
+            if (v.name.equals ("$t"))
             {
-                v.visitTemporaries ();  // sets attribute "derivativeOrDependency"
+                // Don't make $t' a derivative of $t, because integration is strictly internal to simulator.
+                if (v.order > 1) v.tagDerivativeOrDependency ();
+            }
+            else
+            {
+                if (v.order > 0) v.tagDerivativeOrDependency ();
             }
         }
     }
@@ -1700,16 +1708,13 @@ public class EquationSet implements Comparable<EquationSet>
         Convert "preexistent" $variables that appear to be "constant" into "initOnly",
         so that they will be evaluated during init()
     **/
-    public void replaceConstantWithInitOnly ()
+    public void makeConstantDtInitOnly ()
     {
-        for (EquationSet p : parts) p.replaceConstantWithInitOnly ();
+        for (EquationSet p : parts) p.makeConstantDtInitOnly ();
 
         for (Variable v : variables)
         {
-            if (   v.order == 0
-                && v.name.startsWith ("$")
-                && v.hasAttribute ("preexistent")
-                && v.hasAttribute ("constant"))
+            if (v.name.equals ("$t")  &&  v.order == 1  &&  v.hasAttribute ("constant"))
             {
                 v.removeAttribute ("constant");
                 v.addAttribute    ("initOnly");
@@ -1719,20 +1724,19 @@ public class EquationSet implements Comparable<EquationSet>
 
     /**
         Identify variables that only change during init.
-        For now, the criteria are:
+        Also mark variables that change by both integration and update equations, so they will be processed in both ways.
+        The criteria for "initOnly" are:
         <ul>
-        <li>only one equation -- Multiple equations imply the value could change
-        via conditional selection. This is merely a heuristic, as the actual logic
-        could work out such that the value doesn't change after init anyway.
-        <li>not any of {"integrated", "constant"}
-        <li>EITHER the conditional expression is 0 when $init=0 (Note: The equation must be conditional!)
-        <li>OR the equation only depends on constants and other specific initOnly $variables. Phasing:
+        <li>not "constant"
+        <li>not integrated
+        <li>one of:
             <ul>
-            <li>$index and $init are defined going into init(), so other $variables can depend on them
-            <li>$variables are defined first, so non-$variables can depend on them
+            <li>all equations are conditional, and none are true when $init=0 (that is, during update)
+            <li>only one equation could fire during update, and it depends only on "constant" or "initOnly" variables.
+            Why only one equation? Multiple equations imply the value could change via conditional selection.
             </ul>
         </ul>
-        Depends on results of: findConstants(), replaceConstantsWithInitOnly()
+        Depends on results of: findConstants(), makeConstantDtInitOnly()
     **/
     public void findInitOnly ()
     {
@@ -1748,69 +1752,126 @@ public class EquationSet implements Comparable<EquationSet>
             if (s.findInitOnlyRecursive ()) changed = true;
         }
 
-        for (Variable v : variables)
+        class ReplaceInit extends Transformer
         {
-            if (v.hasAny (new String[] {"initOnly", "constant", "integrated", "dummy"})) continue;  // Note: some variables get tagged "initOnly" by other means, so don't re-process
-            if (v.equations.size () != 1) continue;  // TODO: should a variable with no equations be considered initOnly?
-
-            // Determine if our single equation is guaranteed not to fire after the init step
-            EquationEntry e = v.equations.first ();
-            if (e.conditional != null)
+            float init;
+            public Operator transform (Operator op)
             {
-                Transformer replaceInit = new Transformer ()
+                if (op instanceof AccessVariable)
                 {
-                    public Operator transform (Operator op)
+                    AccessVariable av = (AccessVariable) op;
+                    if (av.name.equals ("$init")) return new Constant (new Scalar (init));
+                }
+                return null;
+            }
+        };
+        ReplaceInit replaceInit = new ReplaceInit ();
+
+        for (final Variable v : variables)
+        {
+            if (v.hasAny (new String[] {"initOnly", "constant", "dummy"})) continue;  // Note: some variables get tagged "initOnly" by other means, so don't re-process
+
+            // Count equations
+            int firesDuringInit   = 0;
+            int firesDuringUpdate = 0;
+            EquationEntry update = null;  // If we have a single update equation, then we may still be initOnly if it depends only on constants or other initOnly variables. Save the update equation for analysis.
+            for (EquationEntry e : v.equations)
+            {
+                if (e.conditional == null)
+                {
+                    firesDuringInit++;
+                    firesDuringUpdate++;
+                    update = e;
+                }
+                else
+                {
+                    // init
+                    replaceInit.init = 1;
+                    Operator test = e.conditional.deepCopy ().transform (replaceInit).simplify (v);
+                    boolean fires = true;
+                    if (test instanceof Constant)
                     {
-                        if (op instanceof AccessVariable)
-                        {
-                            AccessVariable av = (AccessVariable) op;
-                            if (av.name.equals ("$init")) return new Constant (new Scalar (0));  // set $init to 0
-                        }
-                        return null;
+                        Constant c = (Constant) test;
+                        if (c.value instanceof Scalar  &&  ((Scalar) c.value).value == 0) fires = false;
                     }
-                };
-                Operator test = e.conditional.deepCopy ().transform (replaceInit).simplify (v);
-                if (test instanceof Constant)
+                    if (fires) firesDuringInit++;
+
+                    // update
+                    replaceInit.init = 0;
+                    test = e.conditional.deepCopy ().transform (replaceInit).simplify (v);
+                    fires = true;
+                    if (test instanceof Constant)
+                    {
+                        Constant c = (Constant) test;
+                        if (c.value instanceof Scalar  &&  ((Scalar) c.value).value == 0) fires = false;
+                    }
+                    if (fires)
+                    {
+                        firesDuringUpdate++;
+                        update = e;
+                    }
+                }
+            }
+
+            if (firesDuringUpdate == 0)
+            {
+                if (firesDuringInit > 0  &&  v.derivative == null)
                 {
-                    Constant c = (Constant) test;
-                    if (c.value instanceof Scalar  &&  ((Scalar) c.value).value == 0)
+                    v.addAttribute ("initOnly");
+                    changed = true;
+                }
+            }
+            else if (firesDuringUpdate == 1  &&  update.assignment.equals ("="))  // last chance to be "initOnly": must be exactly one equation that is not a combining operator
+            {
+                // Determine if our single update equation depends only on constants and initOnly variables
+                class VisitInitOnly extends Visitor
+                {
+                    boolean isInitOnly = true;  // until something falsifies it
+                    public boolean visit (Operator op)
+                    {
+                        if (isInitOnly)
+                        {
+                            if (op instanceof AccessVariable)
+                            {
+                                AccessVariable av = (AccessVariable) op;
+
+                                // Since constants have already been located (via simplify), we can be certain that any symbolic
+                                // constant has already been replaced. Therefore, only the "initOnly" attribute matters here.
+                                if (av.reference == null  ||  av.reference.variable == null  ||  ! av.reference.variable.hasAttribute ("initOnly")) isInitOnly = false;
+
+                                // Also verify that the variables we depend on are available during the appropriate phase of init
+                                if (isInitOnly)
+                                {
+                                    if (v.name.startsWith ("$"))  // we are a $variable, so we can only depend on $index and $init
+                                    {
+                                        if (! av.reference.variable.name.equals ("$index")  &&  ! av.reference.variable.name.equals ("$init")) isInitOnly = false;
+                                    }
+                                    else  // we are a regular variable, so can only depend on $variables
+                                    {
+                                        if (! av.reference.variable.name.startsWith ("$")) isInitOnly = false;
+                                    }
+                                }
+                            }
+                        }
+                        return isInitOnly;
+                    }
+                }
+                VisitInitOnly visitor = new VisitInitOnly ();
+
+                if (update.conditional != null) update.conditional.visit (visitor);
+                if (visitor.isInitOnly)
+                {
+                    update.expression.visit (visitor);
+                    if (visitor.isInitOnly)
                     {
                         v.addAttribute ("initOnly");
                         changed = true;
-                        continue;
                     }
                 }
             }
 
-            // Determine if variable depends only on constants and initOnly variables
-            // TODO: recurse past variables, rather than doing repeated iterations of findInitOnlyRecursive()
-            class VisitInitOnly extends Visitor
-            {
-                boolean isInitOnly = true;  // until something falsifies it
-                public boolean visit (Operator op)
-                {
-                    if (isInitOnly)
-                    {
-                        if (op instanceof AccessVariable)
-                        {
-                            // Since constants have already been located (via simplify),
-                            // we can be certain that any symbolic constant has already been
-                            // located and replaced. Therefore, only the "initOnly" attribute
-                            // matters here.
-                            AccessVariable av = (AccessVariable) op;
-                            if (av.reference == null  ||  av.reference.variable == null  ||  ! av.reference.variable.hasAttribute ("initOnly")) isInitOnly = false;
-                        }
-                    }
-                    return isInitOnly;
-                }
-            }
-            VisitInitOnly visitor = new VisitInitOnly ();
-            e.expression.visit (visitor);
-            if (visitor.isInitOnly)
-            {
-                v.addAttribute ("initOnly");
-                changed = true;
-            }
+            if (firesDuringUpdate > 0  &&  v.derivative != null  &&  ! v.hasAttribute ("initOnly")) v.addAttribute    ("updates");
+            else                                                                                    v.removeAttribute ("updates");
         }
 
         return changed;
@@ -1821,13 +1882,13 @@ public class EquationSet implements Comparable<EquationSet>
         We add either the "cycle" or "externalRead" attribute, to force the value into
         temporary storage.
     **/
-    public void setFunctions ()
+    public void forceTemporaryStorageForSpecials ()
     {
-        for (EquationSet p : parts) p.setFunctions ();
+        for (EquationSet p : parts) p.forceTemporaryStorageForSpecials ();
 
         for (Variable v : variables)
         {
-            if (v.name.equals ("$dt")  &&  v.order == 0)
+            if (v.name.equals ("$t")  &&  v.order == 1)
             {
                 if (v.hasAttribute ("initOnly")) v.addAttribute ("cycle");
                 else                             v.addAttribute ("externalRead");

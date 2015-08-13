@@ -14,6 +14,7 @@ import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Visitor;
+import gov.sandia.n2a.language.function.DollarEvent;
 import gov.sandia.n2a.language.type.Scalar;
 
 import java.util.Comparator;
@@ -60,7 +61,6 @@ public class InternalBackendData
     public int[]      connectionTargets;
     public Variable[] accountableEndpoints;  ///< These are structured as direct members of the endpoint. No resolution. Instead, we use the Connection.endpoint array.
 
-    public Variable   dt;
     public Variable   index;
     public Variable   init;
     public Variable[] k;
@@ -71,8 +71,19 @@ public class InternalBackendData
     public Variable   p;
     public Variable[] radius;
     public Variable   t;
+    public Variable   dt;  // $t'
     public Variable   type;
     public Variable   xyz;
+
+    // If the model uses events or otherwise has non-constant frequency, then we
+    // may need to store last $t in order to calculate an accurate dt for integration.
+    // Of course, this is only necessary if we actually have integrated variables.
+    // If we must store $t, then lastT provides a handle into Instance.valuesFloat.
+    // If we do not store $t, then this member is null.
+    public Variable lastT;
+    public boolean receivesEvents;  // TODO: use existence of event structures instead?
+
+    public boolean storeDt;
 
     public boolean populationChangesWithoutN;
     public int     populationIndex;  // in container.populations
@@ -159,15 +170,29 @@ public class InternalBackendData
             if (v.type != null) className = v.type.getClass ().getSimpleName ();
             System.out.println ("  " + v.nameString () + " " + v.attributeString () + " " + className);
 
-            if      (v.name.equals ("$dt"   )                  ) dt    = v;
-            else if (v.name.equals ("$index")                  ) index = v;
+            if      (v.name.equals ("$index")                  ) index = v;
             else if (v.name.equals ("$init" )                  ) init  = v;
             else if (v.name.equals ("$live" )                  ) live  = v;
             else if (v.name.equals ("$n"    )  &&  v.order == 0) n     = v;
             else if (v.name.equals ("$p"    )                  ) p     = v;
-            else if (v.name.equals ("$t"    )                  ) t     = v;
             else if (v.name.equals ("$type" )                  ) type  = v;
             else if (v.name.equals ("$xyz"  )                  ) xyz   = v;
+            else if (v.name.equals ("$t"    ))
+            {
+                if (v.order == 0)
+                {
+                    t = v;
+                }
+                else if (v.order == 1)
+                {
+                    dt = v;
+                    if (dt.hasUsers  &&  ! dt.hasAttribute ("initOnly"))
+                    {
+                        dt.removeAttribute ("preexistent");
+                        storeDt = true;
+                    }
+                }
+            }
 
             if (v.hasAttribute ("global"))
             {
@@ -199,7 +224,8 @@ public class InternalBackendData
                 if (! v.hasAny (new String[] {"constant", "accessor", "readOnly"}))
                 {
                     boolean initOnly = v.hasAttribute ("initOnly");
-                    if (! initOnly) globalUpdate.add (v);
+                    boolean hasEquations = v.equations.size () > 0;
+                    if (! initOnly  &&  hasEquations) globalUpdate.add (v);
                     if (v.hasAttribute ("reference"))
                     {
                         if (globalReference.add (v.reference))
@@ -217,9 +243,9 @@ public class InternalBackendData
                         boolean temporary = v.hasAttribute ("temporary");
                         boolean unusedTemporary = temporary  &&  ! v.hasUsers;
                         if (! unusedTemporary) globalInit.add (v);
-                        if (! temporary)
+                        if (! temporary  &&  ! v.hasAttribute ("dummy"))
                         {
-                            if (! v.hasAny (new String [] {"preexistent", "dummy"})) globalMembers.add (v);
+                            if (! v.hasAttribute ("preexistent")) globalMembers.add (v);
 
                             boolean external = false;
                             if (v.hasAttribute ("externalWrite"))
@@ -227,7 +253,7 @@ public class InternalBackendData
                                 external = true;
                                 globalBufferedExternalWrite.add (v);
                             }
-                            if (external  ||  (v.hasAttribute ("externalRead")  &&  v.equations.size () > 0  &&  ! initOnly))
+                            if (external  ||  (v.hasAttribute ("externalRead")  &&  hasEquations  &&  ! initOnly))
                             {
                                 external = true;
                                 globalBufferedExternal.add (v);
@@ -245,7 +271,7 @@ public class InternalBackendData
                     }
                 }
             }
-            else
+            else  // local
             {
                 v.visit (new Visitor ()
                 {
@@ -274,7 +300,15 @@ public class InternalBackendData
                 if (! v.hasAny (new String[] {"constant", "accessor", "readOnly"}))
                 {
                     boolean initOnly = v.hasAttribute ("initOnly");
-                    if (! initOnly) localUpdate.add (v);
+                    boolean hasEquations = v.equations.size () > 0;
+                    if (v.derivative == null)
+                    {
+                        if (! initOnly  &&  hasEquations) localUpdate.add (v);
+                    }
+                    else  // has a derivative, so different rules apply
+                    {
+                        if (v.hasAttribute ("updates")) localUpdate.add (v);
+                    }
                     if (v.hasAttribute ("reference"))
                     {
                         if (localReference.add (v.reference))
@@ -302,9 +336,9 @@ public class InternalBackendData
                                 localInitRegular.add (v);
                             }
                         }
-                        if (! temporary)
+                        if (! temporary  &&  ! v.hasAttribute ("dummy"))
                         {
-                            if (! v.hasAny (new String [] {"preexistent", "dummy"})) localMembers.add (v);
+                            if (! v.hasAttribute ("preexistent")) localMembers.add (v);
 
                             boolean external = false;
                             if (v.hasAttribute ("externalWrite"))
@@ -312,7 +346,7 @@ public class InternalBackendData
                                 external = true;
                                 localBufferedExternalWrite.add (v);
                             }
-                            if (external  ||  (v.hasAttribute ("externalRead")  &&  v.equations.size () > 0  &&  ! initOnly))
+                            if (external  ||  (v.hasAttribute ("externalRead")  &&  hasEquations  &&  ! initOnly))
                             {
                                 external = true;
                                 localBufferedExternal.add (v);
@@ -334,9 +368,8 @@ public class InternalBackendData
         }
         for (Variable v : s.variables)  // we need these to be in order by differential level, not by dependency
         {
-            if (v.hasAttribute ("integrated"))  // Do we need to guard against reference, constant, transient?
+            if (v.derivative != null  &&  ! v.hasAny (new String[] {"constant", "initOnly"}))
             {
-                v.derivative = s.variables.floor (new Variable (v.name, v.order + 1));  // cache our derivative, so we don't need to look it up repeatedly at runtime
                 if (v.hasAttribute ("global")) globalIntegrated.add (v);
                 else                            localIntegrated.add (v);
             }
@@ -402,12 +435,38 @@ public class InternalBackendData
             }
         }
 
+        // TODO: Scan for events and set up structures
+        // For now, just scan equations for $event() and set a flag
+        class EventVisitor extends Visitor
+        {
+            public boolean found;
+            public boolean visit (Operator op)
+            {
+                if (found) return false;
+                if (op instanceof DollarEvent)
+                {
+                    found = true;
+                    return false;
+                }
+                return true;
+            }
+        }
+        EventVisitor eventVisitor = new EventVisitor ();
+        for (Variable v : s.variables)
+        {
+            v.visit (eventVisitor);
+            if (eventVisitor.found == true) break;
+        }
+        if (eventVisitor.found) receivesEvents = true;
+
         // Set index on variables
         // Initially readIndex = writeIndex = -1, and readTemp = writeTemp = false
 
         //   Locals
         for (Variable v : localMembers)
         {
+            // If a float variable is a reference to another instance, we store a pointer to that instance
+            // in the type array rather than the float array.
             if (v.type instanceof Scalar  &&  v.reference.variable == v)
             {
                 v.readIndex = v.writeIndex = countLocalFloat++;
@@ -592,6 +651,29 @@ public class InternalBackendData
 
             // TODO: Match populations?
             // Currently, any contained populations do not carry over to new instance. Instead, it must create them from scratch.
+        }
+    }
+
+    /**
+        Determine if time of last integration must be stored.
+        Note: global (population) variables are integrated at same time as container using its dt value.
+        Thus, we only handle local variables here.
+    **/
+    public void analyzeLastT (EquationSet s)
+    {
+        boolean hasIntegrated = localIntegrated.size () > 0;
+        for (EquationSet p : s.parts)
+        {
+            if (hasIntegrated) break;
+            hasIntegrated = ((InternalBackendData) p.backendData).globalIntegrated.size () > 0;
+        }
+        boolean dtCanChange =  dt != null  &&  ! dt.hasAttribute ("initOnly");
+
+        if (hasIntegrated  &&  (receivesEvents  ||  dtCanChange))
+        {
+            lastT = new Variable ("$lastT");
+            lastT.readIndex = lastT.writeIndex = countLocalFloat++;
+            namesLocalFloat.add (lastT.nameString ());
         }
     }
 

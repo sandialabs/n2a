@@ -31,6 +31,8 @@ public class Instance extends Type
     public Instance    container;
     public float[]     valuesFloat;  // memory is the premium resource, not accuracy
     public Type[]      valuesType;
+    public Instance    next;      // for doubly-linked list
+    public Instance    previous;  // for doubly-linked list
 
     public void allocate (int countFloat, int countType)
     {
@@ -142,6 +144,20 @@ public class Instance extends Type
     {
     }
 
+    public void enqueue (Instance i)
+    {
+        i.next          = next;
+        i.previous      = this;
+        i.next.previous = i;
+        i.previous.next = i;
+    }
+
+    public void dequeue ()
+    {
+        previous.next = next;
+        next.previous = previous;
+    }
+
     /**
         Finalize the values of buffered variables, and complete any other housekeeping for current simulation cycle.
         @return true to remain in simulation queue. false to be removed from simulation.
@@ -250,6 +266,7 @@ public class Instance extends Type
 
     public String toString ()
     {
+        if (equations == null) return "null@" + hashCode ();
         return equations.name + "@" + hashCode ();
     }
 }
