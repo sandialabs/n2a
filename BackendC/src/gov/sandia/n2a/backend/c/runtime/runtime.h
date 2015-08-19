@@ -89,8 +89,8 @@ public:
     // Interface for numerical manipulation
     // This is deliberately a minimal set of functions to support Runge-Kutta, with folded push and pop operations.
     // This interface will no doubt need to be generalized when another integrator is added.
-    virtual void pushIntegrated     ();                  ///< push I0; I0 = members
-    virtual void popIntegrated      ();                  ///< pop I0; no change to members
+    virtual void snapshot           ();                  ///< save all members trashed by integration
+    virtual void restore            ();                  ///< restore all members trashed by integration
     virtual void pushDerivative     ();                  ///< push D0; D0 = members
     virtual void multiplyAddToStack (float scalar);      ///< D0 += members * scalar
     virtual void multiply           (float scalar);      ///< members *= scalar

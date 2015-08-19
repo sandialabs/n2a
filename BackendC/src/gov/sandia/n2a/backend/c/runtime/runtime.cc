@@ -279,12 +279,12 @@ Simulatable::finalizeDerivative ()
 }
 
 void
-Simulatable::pushIntegrated ()
+Simulatable::snapshot ()
 {
 }
 
 void
-Simulatable::popIntegrated ()
+Simulatable::restore ()
 {
 }
 
@@ -938,7 +938,7 @@ RungeKutta::integrate ()
     p = &queue;
     while (*p)
     {
-        (*p)->pushIntegrated ();
+        (*p)->snapshot ();
         (*p)->pushDerivative ();
         p = & (*p)->next;
     }
@@ -1017,7 +1017,7 @@ RungeKutta::integrate ()
     p = &queue;
     while (*p)
     {
-        (*p)->popIntegrated ();  // clears stackIntgrated
+        (*p)->restore ();
         p = & (*p)->next;
     }
 }
