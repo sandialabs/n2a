@@ -948,7 +948,7 @@ public class EquationSet implements Comparable<EquationSet>
         equation. These values do not input to any other calculation, and they are not
         displayed. Therefore they are a waste of time and space.
         Depends on results of:
-            resolveLHS(), resolveRHS(), fillIntegratedVariables(),
+            resolveLHS(), resolveRHS(), fillIntegratedVariables()
             addSpecials() -- so we can remove any $variables added unnecessarily
     **/
     public void removeUnused ()
@@ -1274,7 +1274,6 @@ public class EquationSet implements Comparable<EquationSet>
     /**
         Determine if population can grow by a means other than setting $n, specifically by
         $type splits that produce more than 1 offspring of our current type.
-        Depends on the results of: 
     **/
     public boolean canGrow ()
     {
@@ -1506,7 +1505,8 @@ public class EquationSet implements Comparable<EquationSet>
     /**
         Identifies variables that have a known value before code generation.
         As part of the process, removes arithmetic operations that have no effect.
-        Depends on results of: resolveRHS()  (so that named constants can be found during evaluation)
+        Depends on results of:
+            resolveRHS() -- so that named constants can be found during evaluation
     **/
     public void findConstants ()
     {
@@ -1520,6 +1520,7 @@ public class EquationSet implements Comparable<EquationSet>
             v.simplify ();
 
             // Check if we have a constant
+            v.removeAttribute ("constant");
             if (v.equations.size () != 1) continue;
             EquationEntry e = v.equations.first ();
             if (e.conditional != null) continue;
@@ -1686,8 +1687,7 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
-        Convert "preexistent" $variables that appear to be "constant" into "initOnly",
-        so that they will be evaluated during init()
+        Convert $dt from "constant" to "initOnly" so it will be evaluated during init().
     **/
     public void makeConstantDtInitOnly ()
     {

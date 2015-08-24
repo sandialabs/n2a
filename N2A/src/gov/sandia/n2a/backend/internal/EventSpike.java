@@ -12,7 +12,6 @@ public class EventSpike extends Event
     {
         setFlag ();
         simulator.integrate (target);
-        target.prepare ();  // TODO: eliminate prepare() phase. It is incompatible with mixed-frequency events and with spiking.
         target.update (simulator);
         if (! target.finish (simulator)) target.dequeue ();
     }

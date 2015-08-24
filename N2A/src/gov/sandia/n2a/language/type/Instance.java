@@ -136,12 +136,17 @@ public class Instance extends Type
     {
     }
 
-    public void prepare ()
+    public void update (Euler simulator)
     {
     }
 
-    public void update (Euler simulator)
+    /**
+        Finalize the values of buffered variables, and complete any other housekeeping for current simulation cycle.
+        @return true to remain in simulation queue. false to be removed from simulation.
+    **/
+    public boolean finish (Euler simulator)
     {
+        return true;
     }
 
     public void enqueue (Instance i)
@@ -156,15 +161,6 @@ public class Instance extends Type
     {
         previous.next = next;
         next.previous = previous;
-    }
-
-    /**
-        Finalize the values of buffered variables, and complete any other housekeeping for current simulation cycle.
-        @return true to remain in simulation queue. false to be removed from simulation.
-    **/
-    public boolean finish (Euler simulator)
-    {
-        return true;
     }
 
     public Type EQ (Type that) throws EvaluationException

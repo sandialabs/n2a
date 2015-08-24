@@ -88,7 +88,8 @@ public class InternalBackendData
     public List<EventTarget> eventTargets = new ArrayList<EventTarget> ();
     //public List<EventSource> eventSources = new ArrayList<EventSource> ();
 
-    public boolean populationChangesWithoutN;
+    public boolean populationCanGrowOrDie;
+    public boolean populationCanResize;
     public int     populationIndex;  // in container.populations
 
     public int liveStorage;
@@ -598,11 +599,15 @@ public class InternalBackendData
             }
         }
 
-        populationChangesWithoutN = s.lethalP  ||  s.lethalType  ||  s.canGrow ();
-        if (populationChangesWithoutN  &&  (n == null  ||  n.hasAttribute ("constant")))
+        populationCanGrowOrDie =  s.lethalP  ||  s.lethalType  ||  s.canGrow ();
+        if (n != null)
         {
-            populationChangesWithoutN = false;  // suppress updates to $n, since it's not stored
-            if (n != null  &&  n.hasUsers ()) System.err.println ("Warning: $n can change (due to structural dynamics) but it was detected as a constant. Equations that depend on $n may give incorrect results.");
+            populationCanResize = globalMembers.contains (n);
+            if (populationCanGrowOrDie  &&  ! populationCanResize  &&  n.hasUsers ())
+            {
+                // TODO: if $n has users and populationCanGrowOrDie, then $n should not be tagged "constant"
+                System.err.println ("WARNING: $n can change (due to structural dynamics) but it was detected as a constant. Equations that depend on $n may give incorrect results.");
+            }
         }
 
         if      (live.hasAttribute ("constant")) liveStorage = LIVE_CONSTANT;

@@ -32,11 +32,6 @@ public class Wrapper extends Part
         populations[0].integrate (simulator);
     }
 
-    public void prepare ()
-    {
-        populations[0].prepare ();
-    }
-
     public void update (Euler simulator)
     {
         populations[0].update (simulator);

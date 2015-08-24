@@ -53,15 +53,6 @@ public class Population extends Instance
         }
     }
 
-    public void prepare ()
-    {
-        InternalBackendData bed = (InternalBackendData) equations.backendData;
-        for (Variable v : bed.globalBufferedExternalWrite)
-        {
-            set (v, v.type);  // v.type should be pre-loaded with zero-equivalent values
-        }
-    }
-
     public void update (Euler simulator)
     {
         InstanceTemporaries temp = new InstanceTemporaries (this, simulator, false);
@@ -110,10 +101,8 @@ public class Population extends Instance
     public boolean finish (Euler simulator)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
-        for (Variable v : bed.globalBufferedExternal)
-        {
-            setFinal (v, getFinal (v));
-        }
+        for (Variable v : bed.globalBufferedExternal) setFinal (v, getFinal (v));
+        for (Variable v : bed.globalBufferedExternalWrite) set (v, v.type);  // v.type should be pre-loaded with zero-equivalent values
         return true;
     }
 }

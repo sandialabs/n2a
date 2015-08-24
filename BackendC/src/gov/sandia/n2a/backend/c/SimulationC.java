@@ -1195,6 +1195,7 @@ public class SimulationC implements Simulation
             result.append ("\n");
         }
 
+        // Population resize()
         if (bed.n != null  &&  bed.n.derivative == null  &&  bed.canGrowOrDie)
         {
             result.append ("virtual void " + ns + "resize (Simulator & simulator, int n)\n");

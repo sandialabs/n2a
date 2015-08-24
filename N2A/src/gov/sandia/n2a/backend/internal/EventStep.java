@@ -25,13 +25,6 @@ public class EventStep extends Event
         i = head.next;
         while (i != head)
         {
-            i.prepare ();
-            i = i.next;
-        }
-
-        i = head.next;
-        while (i != head)
-        {
             i.update (simulator);
             i = i.next;
         }

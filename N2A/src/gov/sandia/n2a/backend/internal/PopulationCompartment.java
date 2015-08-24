@@ -17,7 +17,7 @@ public class PopulationCompartment extends Population
 {
     // We create a null-terminated doubly-linked list. This is little more complicated
     // to manage than a fully-circular list, but it is worth the complexity to avoid
-    // extra storage for the head.
+    // extra storage for the head object.
     public Compartment head; ///< List of all instances of this population. Mainly used for creating connections.
     public Compartment tail; ///< Last member in list. Used for reverse iteration.
     public Compartment old;  ///< First old part in list. All parts before this were added during current cycle. If old == null, then all parts are new.
@@ -86,46 +86,58 @@ public class PopulationCompartment extends Population
         resize (simulator, requestedN);
     }
 
-    public void prepare ()
-    {
-        super.prepare ();
-
-        old = head;
-
-        InternalBackendData bed = (InternalBackendData) equations.backendData;
-        if (bed.populationChangesWithoutN)  // This flag will not be set if $n is not stored. (It would be better to force $n to be stored if this flag should be set, but the will require more tricky pre-processing.)
-        {
-            int requestedN = (int) ((Scalar) get (bed.n)).value;
-            if (requestedN != n) set (bed.n, new Scalar (n));  // conditional so we can preserve fractional requested $n unless it is very wrong
-        }
-    }
-
     public void update (Euler simulator)
     {
         super.update (simulator);
-
-        InternalBackendData bed = (InternalBackendData) equations.backendData;
-        if (! bed.n.hasAny (new String[] {"constant", "initOnly", "externalWrite", "externalRead"}))  // This case should be mutually exclusive with the one in Population.finish().
-        {
-            int requestedN = (int) ((Scalar) get (bed.n)).value;
-            if (requestedN != n) simulator.resize (this, requestedN);
-        }
+        old = head;
     }
 
     public boolean finish (Euler simulator)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
-        if (bed.globalBufferedExternal.contains (bed.n))
+        if (bed.populationCanResize  &&  bed.populationCanGrowOrDie  &&  bed.n.derivative == null)  // $n shares control with other specials, so must coordinate them
         {
             double oldN = ((Scalar) get      (bed.n)).value;
             double newN = ((Scalar) getFinal (bed.n)).value;
-            if (newN != oldN) simulator.resize (this, (int) newN);
+            if (newN != oldN) simulator.resize (this, (int) newN);  // $n was explicitly changed, so its value takes precedence
+            else              simulator.resize (this, -1);  // -1 means to update $n from n. This can only be done after other parts are finalized, as they may impose structural dynamics via $p or $type.
         }
-        return super.finish (simulator);
+
+        boolean result = super.finish (simulator);
+
+        if (bed.populationCanResize)
+        {
+            int requestedN = (int) ((Scalar) get (bed.n)).value;  // This is the finalized value of $n.
+            if (bed.populationCanGrowOrDie)
+            {
+                if (bed.n.derivative != null)  // $n' exists
+                {
+                    // the rate of change in $n is pre-determined, so it relentlessly overrides any other structural dynamics
+                    simulator.resize (this, requestedN);
+                }
+            }
+            else  // $n is the only kind of structural dynamics, so simply do a resize() when needed
+            {
+                if (requestedN != n) simulator.resize (this, requestedN);
+            }
+        }
+
+        return result;
     }
 
     public void resize (Euler simulator, int requestedN)
     {
+        if (requestedN < 0)  // indicated to update $n from actual part count
+        {
+            InternalBackendData bed = (InternalBackendData) equations.backendData;
+            int currentN = (int) ((Scalar) get (bed.n)).value;
+            if (currentN != n)  // conditional so we can preserve fractional $n unless it is very wrong
+            {
+                setFinal (bed.n, new Scalar (n));
+            }
+            return;
+        }
+
         while (n < requestedN)
         {
             Compartment p = new Compartment (equations, this);

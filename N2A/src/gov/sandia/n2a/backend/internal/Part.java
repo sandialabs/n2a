@@ -128,17 +128,6 @@ public class Part extends Instance
         if (populations != null) for (Population p : populations) p.integrate (simulator, dt);
     }
 
-    public void prepare ()
-    {
-        InternalBackendData bed = (InternalBackendData) equations.backendData;
-        for (Variable v : bed.localBufferedExternalWrite)
-        {
-            set (v, v.type);  // v.type should be pre-loaded with zero-equivalent values
-        }
-
-        if (populations != null) for (Population p : populations) p.prepare ();
-    }
-
     public void update (Euler simulator)
     {
         InstanceTemporaries temp = new InstanceTemporaries (this, simulator, false);
@@ -201,6 +190,7 @@ public class Part extends Instance
 
         if (bed.lastT != null) setFinal (bed.lastT, new Scalar (simulator.currentEvent.t));
         for (Variable v : bed.localBufferedExternal) setFinal (v, getFinal (v));
+        for (Variable v : bed.localBufferedExternalWrite) set (v, v.type);  // v.type should be pre-loaded with zero-equivalent values
 
         if (bed.type != null)
         {
