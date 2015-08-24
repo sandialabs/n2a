@@ -534,7 +534,7 @@ public class EquationSet implements Comparable<EquationSet>
                 v.reference.variable.container.referenced = true;
                 if (v.reference.variable.assignment != v.assignment)
                 {
-                    System.out.println ("WARNING: Reference has different assignment type than target variable. Attempting to correct.");
+                    System.out.println ("WARNING: Reference has different assignment operator than target variable. Attempting to reconcile.");
                     if (v.assignment == Variable.REPLACE) v.assignment = v.reference.variable.assignment;
                     else                                  v.reference.variable.assignment = v.assignment;
                 }
@@ -961,7 +961,7 @@ public class EquationSet implements Comparable<EquationSet>
         TreeSet<Variable> temp = new TreeSet<Variable> (variables);
         for (Variable v : temp)
         {
-            if (v.hasUsers  ||  v.hasAttribute ("externalWrite")) continue;
+            if (v.hasUsers ()  ||  v.hasAttribute ("externalWrite")) continue;
             if (v.equations.size () > 0  &&  (v.name.startsWith ("$")  ||  v.name.contains (".$"))) continue;  // even if a $variable has no direct users, we must respect any statements about it
 
             // Scan AST for any special output functions.
@@ -976,7 +976,7 @@ public class EquationSet implements Comparable<EquationSet>
             }
             if (output)  // outputs must always exist!
             {
-                v.addAttribute ("dummy");  // we only get the "dummy" attribute when we are not otherwise referenced (hasUsers==false)
+                v.addAttribute ("dummy");  // we only get the "dummy" attribute when we are not otherwise referenced (usedBy==false)
                 continue;
             }
 
@@ -1236,7 +1236,7 @@ public class EquationSet implements Comparable<EquationSet>
             lethalContainer = true;
             somethingChanged = true;
             Variable live = container.find (new Variable ("$live"));
-            if (live != null) live.hasUsers = true;
+            if (live != null) live.addUser (this);
         }
 
         if (connectionBindings != null)
@@ -1247,7 +1247,7 @@ public class EquationSet implements Comparable<EquationSet>
                 if (s.canDie ())
                 {
                     Variable live = s.find (new Variable ("$live"));
-                    if (live != null) live.hasUsers = true;
+                    if (live != null) live.addUser (this);
                     if (! lethalConnection)
                     {
                         lethalConnection = true;
@@ -1312,7 +1312,7 @@ public class EquationSet implements Comparable<EquationSet>
             live.removeAttribute ("initOnly");
             live.removeAttribute ("accessor");
 
-            if (canDie ()  &&  live.hasUsers)
+            if (canDie ()  &&  live.hasUsers ())
             {
                 if (lethalN  ||  lethalP  ||  lethalType)
                 {
@@ -1862,6 +1862,7 @@ public class EquationSet implements Comparable<EquationSet>
         Tag variables that must be set via a function call.
         We add either the "cycle" or "externalRead" attribute, to force the value into
         temporary storage.
+        Depends on results of: findConstants(), makeConstantDtInitOnly()
     **/
     public void forceTemporaryStorageForSpecials ()
     {
@@ -1873,6 +1874,24 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 if (v.hasAttribute ("initOnly")) v.addAttribute ("cycle");
                 else                             v.addAttribute ("externalRead");
+            }
+            else if (v.name.equals ("$n")  &&  v.order == 0)
+            {
+                boolean canGrowOrDie =  lethalN  ||  lethalP  ||  canGrow ();
+                boolean stored = ! v.hasAttribute ("constant");  // TODO: need a better way to decide if the variable is (or should be) stored
+                // Issues with deciding whether $n is stored:
+                // * setting "externalRead" below forces $n to be stored, if it weren't already
+                // * the reason for "externalRead" is to allow us to detect changes in $n due to direct dynamics
+                // * canGrowOrDie implies $n will change, but not necessarily that it should be stored
+                // * $n should be stored if it is used by other equations or if it has direct dynamics
+                // * if $n is merely used by other equations, and doesn't have direct dynamics, it may be possible to get its value from the size of the relevant parts collection, rather than storing the value separately.
+                // All this suggests we should specifically check for direct dynamics rather than storage.
+                // This would be either "externalWrite", in which case we don't need to add an attribute,
+                // or it would be equations in $n itself.
+                if (stored  &&  canGrowOrDie  &&  v.derivative == null)
+                {
+                    v.addAttribute ("externalRead");
+                }
             }
         }
     }

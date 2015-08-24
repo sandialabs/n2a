@@ -243,11 +243,6 @@ Simulatable::init (Simulator & simulator)
 }
 
 void
-Simulatable::prepare ()
-{
-}
-
-void
 Simulatable::integrate (Simulator & simulator)
 {
 }
@@ -261,11 +256,6 @@ bool
 Simulatable::finalize (Simulator & simulator)
 {
     return true;
-}
-
-void
-Simulatable::prepareDerivative ()
-{
 }
 
 void
@@ -473,12 +463,6 @@ PopulationCompartment::allocate ()
     }
 
     return result;
-}
-
-void
-PopulationCompartment::prepare ()
-{
-    old = live.after;  // if old==live, then everything is new
 }
 
 void
@@ -835,12 +819,6 @@ Simulator::run ()
         p = &queue;
         while (*p)
         {
-            (*p)->prepare ();
-            p = & (*p)->next;
-        }
-        p = &queue;
-        while (*p)
-        {
             (*p)->update (*this);
             p = & (*p)->next;
         }
@@ -952,7 +930,6 @@ RungeKutta::integrate ()
         while (*p)
         {
             (*p)->integrate (*this);
-            (*p)->prepareDerivative ();
             p = & (*p)->next;
         }
 
@@ -980,7 +957,6 @@ RungeKutta::integrate ()
         while (*p)
         {
             (*p)->integrate (*this);
-            (*p)->prepareDerivative ();
             p = & (*p)->next;
         }
 

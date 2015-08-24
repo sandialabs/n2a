@@ -200,10 +200,8 @@ public class SimulationC implements Simulation
         s.append ("public:\n");
         s.append ("  virtual void init (Simulator & simulator);\n");
         s.append ("  virtual void integrate (Simulator & simulator);\n");
-        s.append ("  virtual void prepare ();\n");
         s.append ("  virtual void update (Simulator & simulator);\n");
         s.append ("  virtual bool finalize (Simulator & simulator);\n");
-        s.append ("  virtual void prepareDerivative ();\n");
         s.append ("  virtual void updateDerivative (Simulator & simulator);\n");
         s.append ("  virtual void finalizeDerivative ();\n");
         s.append ("  virtual void snapshot ();\n");
@@ -226,11 +224,6 @@ public class SimulationC implements Simulation
         s.append ("  " + mangle (e.name) + ".integrate (simulator);\n");
         s.append ("}\n");
         s.append ("\n");
-        s.append ("void Wrapper::prepare ()\n");
-        s.append ("{\n");
-        s.append ("  " + mangle (e.name) + ".prepare ();\n");
-        s.append ("}\n");
-        s.append ("\n");
         s.append ("void Wrapper::update (Simulator & simulator)\n");
         s.append ("{\n");
         s.append ("  " + mangle (e.name) + ".update (simulator);\n");
@@ -241,11 +234,6 @@ public class SimulationC implements Simulation
         s.append ("  " + mangle (e.name) + ".finalize (simulator);\n");
         s.append ("  writeTrace ();\n");
         s.append ("  return " + mangle (e.name) + ".n;\n");  // The simulation stops when the last model instance dies.
-        s.append ("}\n");
-        s.append ("\n");
-        s.append ("void Wrapper::prepareDerivative ()\n");
-        s.append ("{\n");
-        s.append ("  " + mangle (e.name) + ".prepareDerivative ();\n");
         s.append ("}\n");
         s.append ("\n");
         s.append ("void Wrapper::updateDerivative (Simulator & simulator)\n");
@@ -375,12 +363,28 @@ public class SimulationC implements Simulation
                     if (! v.hasAttribute ("reference"))
                     {
                         boolean temporary = v.hasAttribute ("temporary");
-                        boolean unusedTemporary = temporary  &&  ! v.hasUsers;  // here only to make the following line of code more clear
+                        boolean unusedTemporary = temporary  &&  ! v.hasUsers ();  // here only to make the following line of code more clear
                         if (! unusedTemporary) bed.globalInit.add (v);
                         if (! temporary  &&  ! v.hasAttribute ("dummy"))
                         {
-                            if (! v.hasAttribute ("preexistent")) bed.globalMembers.add (v);
-                            if (v.order > 0  &&  ! initOnly) bed.globalDerivative.add (v);
+                            if (! v.hasAttribute ("preexistent"))
+                            {
+                                bed.globalMembers.add (v);
+
+                                // If v is merely a derivative, not used by anything but its own integral, then no reason to preserve it.
+                                // check if v.usedBy contains any variable that is not v's integral
+                                if (derivativeOrDependency  &&  v.derivative == null  &&  v.usedBy != null)
+                                {
+                                    for (Object o : v.usedBy)
+                                    {
+                                        if (o instanceof Variable  &&  ((Variable) o).derivative != v)
+                                        {
+                                            bed.globalDerivativePreserve.add (v);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
 
                             boolean external = false;
                             if (! initOnly)
@@ -439,11 +443,26 @@ public class SimulationC implements Simulation
                     else
                     {
                         boolean temporary = v.hasAttribute ("temporary");
-                        boolean unusedTemporary = temporary  &&  ! v.hasUsers;
+                        boolean unusedTemporary = temporary  &&  ! v.hasUsers ();
                         if (! unusedTemporary  &&  ! v.name.equals ("$index")) bed.localInit.add (v);
                         if (! temporary  &&  ! v.hasAttribute ("dummy"))
                         {
-                            if (! v.hasAttribute ("preexistent")) bed.localMembers.add (v);
+                            if (! v.hasAttribute ("preexistent"))
+                            {
+                                bed.localMembers.add (v);
+
+                                if (derivativeOrDependency  &&  v.derivative == null  &&  v.usedBy != null)
+                                {
+                                    for (Object o : v.usedBy)
+                                    {
+                                        if (o instanceof Variable  &&  ((Variable) o).derivative != v)
+                                        {
+                                            bed.localDerivativePreserve.add (v);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
 
                             boolean external = false;
                             if (! initOnly)
@@ -536,12 +555,16 @@ public class SimulationC implements Simulation
             result.append ("  };\n");
             result.append ("\n");
         }
-        if (bed.globalIntegrated.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
+        if (bed.globalIntegrated.size () > 0  ||  bed.globalDerivativePreserve.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
         {
             result.append ("  class Preserve\n");
             result.append ("  {\n");
             result.append ("  public:\n");
             for (Variable v : bed.globalIntegrated)
+            {
+                result.append ("    " + type (v) + " " + mangle (v) + ";\n");
+            }
+            for (Variable v : bed.globalDerivativePreserve)
             {
                 result.append ("    " + type (v) + " " + mangle (v) + ";\n");
             }
@@ -558,7 +581,7 @@ public class SimulationC implements Simulation
         {
             result.append ("  Derivative * stackDerivative;\n");
         }
-        if (bed.globalIntegrated.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
+        if (bed.globalIntegrated.size () > 0  ||  bed.globalDerivativePreserve.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
         {
             result.append ("  Preserve * preserve;\n");
         }
@@ -574,7 +597,7 @@ public class SimulationC implements Simulation
         result.append ("\n");
 
         // Population functions
-        if (bed.globalDerivative.size () > 0  ||  bed.globalIntegrated.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
+        if (bed.globalDerivative.size () > 0  ||  bed.globalIntegrated.size () > 0  ||  bed.globalDerivativePreserve.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
         {
             result.append ("  " + prefix (s) + "_Population ();\n");
             result.append ("  virtual ~" + prefix (s) + "_Population ();\n");
@@ -585,25 +608,20 @@ public class SimulationC implements Simulation
         {
             result.append ("  virtual void integrate (Simulator & simulator);\n");
         }
-        Variable n = s.find (new Variable ("$n", 0));
-        bed.updateN =    n != null
-                      && (s.lethalP  ||  s.lethalType  || s.canGrow ())
-                      && bed.globalMembers.contains (n);
-        if (bed.globalBufferedExternalWrite.size () > 0  || bed.updateN)
-        {
-            result.append ("  virtual void prepare ();\n");
-        }
         if (bed.globalUpdate.size () > 0)
         {
             result.append ("  virtual void update (Simulator & simulator);\n");
         }
-        if (bed.globalBufferedExternal.size () > 0  ||  s.container == null)
+        bed.n = s.find (new Variable ("$n", 0));
+        if (bed.n != null  &&  ! bed.globalMembers.contains (bed.n)) bed.n = null;  // force bed.n to null if $n is not a stored member; used as an indicator
+        if (bed.globalBufferedExternal.size () > 0  ||  bed.n != null)
         {
             result.append ("  virtual bool finalize (Simulator & simulator);\n");
         }
-        if (bed.globalBufferedExternalWriteDerivative.size () > 0)
+        bed.canGrowOrDie =  s.lethalP  ||  s.lethalType  ||  s.canGrow ();
+        if (bed.n != null  &&  bed.n.derivative == null  &&  bed.canGrowOrDie)
         {
-            result.append ("  virtual void prepareDerivative ();\n");
+            result.append ("  virtual void resize (Simulator & simulator, int n);\n");
         }
         if (bed.globalDerivativeUpdate.size () > 0)
         {
@@ -613,7 +631,7 @@ public class SimulationC implements Simulation
         {
             result.append ("  virtual void finalizeDerivative ();\n");
         }
-        if (bed.globalIntegrated.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
+        if (bed.globalIntegrated.size () > 0  ||  bed.globalDerivativePreserve.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
         {
             result.append ("  virtual void snapshot ();\n");
             result.append ("  virtual void restore ();\n");
@@ -725,12 +743,16 @@ public class SimulationC implements Simulation
             result.append ("  };\n");
             result.append ("\n");
         }
-        if (bed.localIntegrated.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0)
+        if (bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0)
         {
             result.append ("  class Preserve\n");
             result.append ("  {\n");
             result.append ("  public:\n");
             for (Variable v : bed.localIntegrated)
+            {
+                result.append ("    " + type (v) + " " + mangle (v) + ";\n");
+            }
+            for (Variable v : bed.localDerivativePreserve)
             {
                 result.append ("    " + type (v) + " " + mangle (v) + ";\n");
             }
@@ -747,7 +769,7 @@ public class SimulationC implements Simulation
         {
             result.append ("  Derivative * stackDerivative;\n");
         }
-        if (bed.localIntegrated.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0)
+        if (bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0)
         {
             result.append ("  Preserve * preserve;\n");
         }
@@ -785,11 +807,11 @@ public class SimulationC implements Simulation
         result.append ("\n");
 
         // Unit functions
-        if (bed.localDerivative.size () > 0  ||  bed.localIntegrated.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0  ||  ! s.parts.isEmpty ()  ||  s.accountableConnections != null  ||  bed.refcount)
+        if (bed.localDerivative.size () > 0  ||  bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0  ||  ! s.parts.isEmpty ()  ||  s.accountableConnections != null  ||  bed.refcount)
         {
             result.append ("  " + prefix (s) + " ();\n");
         }
-        if (bed.localDerivative.size () > 0  ||  bed.localIntegrated.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0)
+        if (bed.localDerivative.size () > 0  ||  bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0)
         {
             result.append ("  virtual ~" + prefix (s) + " ();\n");
         }
@@ -818,10 +840,6 @@ public class SimulationC implements Simulation
         {
             result.append ("  virtual void integrate (Simulator & simulator);\n");
         }
-        if (bed.localBufferedExternalWrite.size () > 0  ||  s.parts.size () > 0)
-        {
-            result.append ("  virtual void prepare ();\n");
-        }
         if (bed.localUpdate.size () > 0  ||  s.parts.size () > 0)
         {
             result.append ("  virtual void update (Simulator & simulator);\n");
@@ -829,10 +847,6 @@ public class SimulationC implements Simulation
         if (bed.localBufferedExternal.size () > 0  ||  bed.type != null  ||  s.canDie ()  ||  s.parts.size () > 0)
         {
             result.append ("  virtual bool finalize (Simulator & simulator);\n");
-        }
-        if (bed.localBufferedExternalWriteDerivative.size () > 0  ||  s.parts.size () > 0)
-        {
-            result.append ("  virtual void prepareDerivative ();\n");
         }
         if (bed.localDerivativeUpdate.size () > 0  ||  s.parts.size () > 0)
         {
@@ -842,7 +856,7 @@ public class SimulationC implements Simulation
         {
             result.append ("  virtual void finalizeDerivative ();\n");
         }
-        if (bed.localIntegrated.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0  ||  s.parts.size () > 0)
+        if (bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0  ||  s.parts.size () > 0)
         {
             result.append ("  virtual void snapshot ();\n");
             result.append ("  virtual void restore ();\n");
@@ -977,7 +991,7 @@ public class SimulationC implements Simulation
         context.global = true;
         String ns = prefix (s) + "_Population::";  // namespace for all functions associated with part s
 
-        if (bed.globalDerivative.size () > 0  ||  bed.globalIntegrated.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
+        if (bed.globalDerivative.size () > 0  ||  bed.globalIntegrated.size () > 0  ||  bed.globalDerivativePreserve.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
         {
             // Population ctor
             result.append (ns + prefix (s) + "_Population ()\n");
@@ -986,7 +1000,7 @@ public class SimulationC implements Simulation
             {
                 result.append ("  stackDerivative = 0;\n");
             }
-            if (bed.globalIntegrated.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
+            if (bed.globalIntegrated.size () > 0  ||  bed.globalDerivativePreserve.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
             {
                 result.append ("  preserve = 0;\n");
             }
@@ -1005,7 +1019,7 @@ public class SimulationC implements Simulation
                 result.append ("    delete temp;\n");
                 result.append ("  }\n");
             }
-            if (bed.globalIntegrated.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
+            if (bed.globalIntegrated.size () > 0  ||  bed.globalDerivativePreserve.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
             {
                 result.append ("  if (preserve) delete preserve;\n");
             }
@@ -1111,27 +1125,6 @@ public class SimulationC implements Simulation
             result.append ("\n");
         }
 
-        // Population prepare
-        if (bed.globalBufferedExternalWrite.size () > 0  || bed.updateN)
-        {
-            result.append ("void " + ns + "prepare ()\n");
-            result.append ("{\n");
-            if (s.connectionBindings == null)
-            {
-                result.append ("  old = live.after;\n");  // copied from PopulationCompartment::prepare() in runtime.cc, to avoid a function call
-            }
-            for (Variable v : bed.globalBufferedExternalWrite)
-            {
-                result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
-            }
-            if (bed.updateN)
-            {
-                result.append ("  if (n != (int) " + mangle ("$n") + ") " + mangle ("$n") + " = n;\n");  // Why make it conditional? Because we want to preserve the non-integer value of $n for dynamics, as long as it is equivalent to the correct value.
-            }
-            result.append ("};\n");
-            result.append ("\n");
-        }
-
         // Population update
         if (bed.globalUpdate.size () > 0)
         {
@@ -1151,10 +1144,9 @@ public class SimulationC implements Simulation
                 result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
             }
 
-            Variable n = s.find (new Variable ("$n", 0));
-            if (n != null  &&  ! n.hasAny (new String[] {"constant", "initOnly", "externalWrite", "externalRead"}))  // This case should be mutually exclusive with the one below in finalize().
+            if (s.connectionBindings == null)
             {
-                result.append ("  if (n != (int) " + mangle (n) + ") simulator.resize (this, " + mangle (n) + ");\n");
+                result.append ("  old = live.after;\n");  // TODO: find a better way to keep track of "new" parts. Problem: what if a part is "new" relative to several different connection types, and what if those connections are tested at different times?
             }
 
             result.append ("};\n");
@@ -1162,32 +1154,53 @@ public class SimulationC implements Simulation
         }
 
         // Population finalize
-        if (bed.globalBufferedExternal.size () > 0  ||  s.container == null)
+        if (bed.globalBufferedExternal.size () > 0  ||  bed.n != null)
         {
             result.append ("bool " + ns + "finalize (Simulator & simulator)\n");
             result.append ("{\n");
+
+            if (bed.n != null  &&  bed.n.derivative == null  &&  bed.canGrowOrDie)  // $n shares control with other specials, so must coordinate them
+            {
+                result.append ("  if (" + mangle ("$n") + " != " + mangle ("next_", "$n") + ") simulator.resize (this, " + mangle ("next_", "$n") + ");\n");
+                result.append ("  else simulator.resize (this, -1);\n");  // -1 means to update $n from n. This can only be done after other parts are finalized, as they may impose structural dynamics via $p or $type.
+            }
+
             for (Variable v : bed.globalBufferedExternal)
             {
-                if (v.name.equals ("$n")  &&  v.order == 0)
-                {
-                    result.append ("  if (" + mangle (v) + " != " + mangle ("next_", v) + ") simulator.resize (this, " + mangle ("next_", v) + ");\n");
-                }
                 result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
             }
+            for (Variable v : bed.globalBufferedExternalWrite)
+            {
+                result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
+            }
+
+            if (bed.n != null)  
+            {
+                if (bed.canGrowOrDie)
+                {
+                    if (bed.n.derivative != null)  // $n' exists
+                    {
+                        // the rate of change in $n is pre-determined, so it relentlessly overrides any other structural dynamics
+                        result.append ("  simulator.resize (this, " + mangle ("$n") + ");\n");
+                    }
+                }
+                else  // $n is the only kind of structural dynamics, so simply do a resize() when needed
+                {
+                    result.append ("  if (n != (int) " + mangle ("$n") + ") simulator.resize (this, " + mangle ("$n") + ");\n");
+                }
+            }
+
             result.append ("  return true;\n");  // Doesn't matter what we return, because the value is always ignored.
             result.append ("};\n");
             result.append ("\n");
         }
 
-        // Population prepareDerivative
-        if (bed.globalBufferedExternalWriteDerivative.size () > 0)
+        if (bed.n != null  &&  bed.n.derivative == null  &&  bed.canGrowOrDie)
         {
-            result.append ("void " + ns + "prepareDerivative ()\n");
+            result.append ("virtual void " + ns + "resize (Simulator & simulator, int n)\n");
             result.append ("{\n");
-            for (Variable v : bed.globalBufferedExternalWriteDerivative)
-            {
-                result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
-            }
+            result.append ("  if (n >= 0) PopulationCompartment::resize (simulator, n);\n");
+            result.append ("  else " + mangle ("$n") + " = this.n;\n");
             result.append ("};\n");
             result.append ("\n");
         }
@@ -1222,17 +1235,25 @@ public class SimulationC implements Simulation
             {
                 result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
             }
+            for (Variable v : bed.globalBufferedExternalWriteDerivative)
+            {
+                result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
+            }
             result.append ("};\n");
             result.append ("\n");
         }
 
-        if (bed.globalIntegrated.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
+        if (bed.globalIntegrated.size () > 0  ||  bed.globalDerivativePreserve.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
         {
             // Population snapshot
             result.append ("void " + ns + "snapshot ()\n");
             result.append ("{\n");
             result.append ("  preserve = new Preserve;\n");
             for (Variable v : bed.globalIntegrated)
+            {
+                result.append ("  preserve->" + mangle (v) + " = " + mangle (v) + ";\n");
+            }
+            for (Variable v : bed.globalDerivativePreserve)
             {
                 result.append ("  preserve->" + mangle (v) + " = " + mangle (v) + ";\n");
             }
@@ -1247,6 +1268,10 @@ public class SimulationC implements Simulation
             // Population restore
             result.append ("void " + ns + "restore ()\n");
             result.append ("{\n");
+            for (Variable v : bed.globalDerivativePreserve)
+            {
+                result.append ("  " + mangle (v) + " = preserve->" + mangle (v) + ";\n");
+            }
             for (Variable v : bed.globalBufferedExternalWriteDerivative)
             {
                 result.append ("  " + mangle ("next_", v) + " = preserve->" + mangle ("next_", v) + ";\n");
@@ -1435,7 +1460,7 @@ public class SimulationC implements Simulation
         ns = prefix (s) + "::";
 
         // Unit ctor
-        if (bed.localDerivative.size () > 0  ||  bed.localIntegrated.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0  ||  ! s.parts.isEmpty ()  ||  s.accountableConnections != null  ||  bed.refcount)
+        if (bed.localDerivative.size () > 0  ||  bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0  ||  ! s.parts.isEmpty ()  ||  s.accountableConnections != null  ||  bed.refcount)
         {
             result.append (ns + prefix (s) + " ()\n");
             result.append ("{\n");
@@ -1443,7 +1468,7 @@ public class SimulationC implements Simulation
             {
                 result.append ("  stackDerivative = 0;\n");
             }
-            if (bed.localIntegrated.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0)
+            if (bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0)
             {
                 result.append ("  preserve = 0;\n");
             }
@@ -1484,7 +1509,7 @@ public class SimulationC implements Simulation
                 result.append ("    delete temp;\n");
                 result.append ("  }\n");
             }
-            if (bed.localIntegrated.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0)
+            if (bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0)
             {
                 result.append ("  if (preserve) delete preserve;\n");
             }
@@ -1677,24 +1702,6 @@ public class SimulationC implements Simulation
             result.append ("\n");
         }
 
-        // Unit prepare
-        if (bed.localBufferedExternalWrite.size () > 0  ||  s.parts.size () > 0)
-        {
-            result.append ("void " + ns + "prepare ()\n");
-            result.append ("{\n");
-            for (Variable v : bed.localBufferedExternalWrite)
-            {
-                result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
-            }
-            // contained populations
-            for (EquationSet e : s.parts)
-            {
-                result.append ("  " + mangle (e.name) + ".prepare ();\n");
-            }
-            result.append ("}\n");
-            result.append ("\n");
-        }
-
         // Unit update
         if (bed.localUpdate.size () > 0  ||  s.parts.size () > 0)
         {
@@ -1749,6 +1756,10 @@ public class SimulationC implements Simulation
                 {
                     result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
                 }
+            }
+            for (Variable v : bed.localBufferedExternalWrite)
+            {
+                result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
             }
 
             if (bed.type != null)
@@ -1861,24 +1872,6 @@ public class SimulationC implements Simulation
             result.append ("\n");
         }
 
-        // Unit prepareDerivative
-        if (bed.localBufferedExternalWriteDerivative.size () > 0  ||  s.parts.size () > 0)
-        {
-            result.append ("void " + ns + "prepareDerivative ()\n");
-            result.append ("{\n");
-            for (Variable v : bed.localBufferedExternalWriteDerivative)
-            {
-                result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
-            }
-            // contained populations
-            for (EquationSet e : s.parts)
-            {
-                result.append ("  " + mangle (e.name) + ".prepareDerivative ();\n");
-            }
-            result.append ("}\n");
-            result.append ("\n");
-        }
-
         // Unit updateDerivative
         if (bed.localDerivativeUpdate.size () > 0  ||  s.parts.size () > 0)
         {
@@ -1914,6 +1907,10 @@ public class SimulationC implements Simulation
             {
                 result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
             }
+            for (Variable v : bed.localBufferedExternalWriteDerivative)
+            {
+                result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
+            }
             // contained populations
             for (EquationSet e : s.parts)
             {
@@ -1923,15 +1920,19 @@ public class SimulationC implements Simulation
             result.append ("\n");
         }
 
-        if (bed.localIntegrated.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0  ||  s.parts.size () > 0)
+        if (bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0  ||  s.parts.size () > 0)
         {
             // Unit snapshot
             result.append ("void " + ns + "snapshot ()\n");
             result.append ("{\n");
-            if (bed.localIntegrated.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0)
+            if (bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0)
             {
                 result.append ("  preserve = new Preserve;\n");
                 for (Variable v : bed.localIntegrated)
+                {
+                    result.append ("  preserve->" + mangle (v) + " = " + mangle (v) + ";\n");
+                }
+                for (Variable v : bed.localDerivativePreserve)
                 {
                     result.append ("  preserve->" + mangle (v) + " = " + mangle (v) + ";\n");
                 }
@@ -1951,8 +1952,12 @@ public class SimulationC implements Simulation
             // Unit restore
             result.append ("void " + ns + "restore ()\n");
             result.append ("{\n");
-            if (bed.localIntegrated.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0)
+            if (bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0)
             {
+                for (Variable v : bed.localDerivativePreserve)
+                {
+                    result.append ("  " + mangle (v) + " = preserve->" + mangle (v) + ";\n");
+                }
                 for (Variable v : bed.localBufferedExternalWriteDerivative)
                 {
                     result.append ("  " + mangle ("next_", v) + " = preserve->" + mangle ("next_", v) + ";\n");
@@ -2675,8 +2680,7 @@ public class SimulationC implements Simulation
         while (t != null)
         {
             t = t.container;
-            if (t == null) result = "Wrapper_" + result;
-            else           result = mangle (t.name) + "_" + result;
+            if (t != null) result = mangle (t.name) + "_" + result;
         }
         return result;
     }
@@ -2921,6 +2925,7 @@ public class SimulationC implements Simulation
         public List<Variable>          localIntegrated                       = new ArrayList<Variable> ();  // variables that have derivatives, and thus change their value via integration
         public List<Variable>          localDerivative                       = new ArrayList<Variable> ();  // variables that are derivatives of other variables
         public List<Variable>          localDerivativeUpdate                 = new ArrayList<Variable> ();  // every variable that must be calculated to update derivatives, including their dependencies
+        public List<Variable>          localDerivativePreserve               = new ArrayList<Variable> ();  // subset of derivative update that must be restored after integration is done
         public List<VariableReference> localReference                        = new ArrayList<VariableReference> ();  // references to other equation sets which can die
         public List<Variable>          globalUpdate                          = new ArrayList<Variable> ();
         public List<Variable>          globalInit                            = new ArrayList<Variable> ();
@@ -2936,18 +2941,20 @@ public class SimulationC implements Simulation
         public List<Variable>          globalIntegrated                      = new ArrayList<Variable> ();
         public List<Variable>          globalDerivative                      = new ArrayList<Variable> ();
         public List<Variable>          globalDerivativeUpdate                = new ArrayList<Variable> ();
+        public List<Variable>          globalDerivativePreserve              = new ArrayList<Variable> ();
 
         public String pathToContainer;
         public Variable type;
-        List<String> accountableEndpoints = new ArrayList<String> ();
-        boolean refcount;
-        boolean hasProjectFrom;
-        boolean hasProjectTo;
-        boolean updateN;
-        boolean needK;
-        boolean needMax;
-        boolean needMin;
-        boolean needRadius;
+        public Variable n;  // only non-null if $n is actually stored as a member
+        public List<String> accountableEndpoints = new ArrayList<String> ();
+        public boolean refcount;
+        public boolean hasProjectFrom;
+        public boolean hasProjectTo;
+        public boolean canGrowOrDie;  // via $p or $type
+        public boolean needK;
+        public boolean needMax;
+        public boolean needMin;
+        public boolean needRadius;
     }
 
     class CRenderer extends Renderer

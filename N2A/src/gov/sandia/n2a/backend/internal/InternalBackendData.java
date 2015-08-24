@@ -81,9 +81,12 @@ public class InternalBackendData
     // If we must store $t, then lastT provides a handle into Instance.valuesFloat.
     // If we do not store $t, then this member is null.
     public Variable lastT;
-    public boolean receivesEvents;  // TODO: use existence of event structures instead?
 
     public boolean storeDt;
+
+    // Event structures
+    public List<EventTarget> eventTargets = new ArrayList<EventTarget> ();
+    //public List<EventSource> eventSources = new ArrayList<EventSource> ();
 
     public boolean populationChangesWithoutN;
     public int     populationIndex;  // in container.populations
@@ -122,12 +125,32 @@ public class InternalBackendData
     public class Conversion
     {
         // These two arrays are filled in parallel, such that index i in one matches i in the other.
-        ArrayList<Variable> from = new ArrayList<Variable> ();
-        ArrayList<Variable> to   = new ArrayList<Variable> ();
-        int[] bindings;  // to index = bindings[from index]
+        public ArrayList<Variable> from = new ArrayList<Variable> ();
+        public ArrayList<Variable> to   = new ArrayList<Variable> ();
+        public int[] bindings;  // to index = bindings[from index]
     }
 
-    class ReferenceComparator implements Comparator<VariableReference>
+    public class EventTarget implements Comparable<EventTarget>
+    {
+        public Operator expression;
+        public double   delay;
+        public int      trigger;
+
+        public int valueIndex;  // position of bit array in valuesFloat
+        public int mask;        // an unsigned AND between this and the (int cast) entry from valuesFloat will indicate event active
+
+        // trigger types
+        public int CHANGE  = 1;
+        public int RISING  = 2;
+        public int FALLING = 3;
+
+        public int compareTo (EventTarget that)
+        {
+            return 0;
+        }
+    }
+
+    public class ReferenceComparator implements Comparator<VariableReference>
     {
         public int compare (VariableReference arg0, VariableReference arg1)
         {
@@ -186,7 +209,7 @@ public class InternalBackendData
                 else if (v.order == 1)
                 {
                     dt = v;
-                    if (dt.hasUsers  &&  ! dt.hasAttribute ("initOnly"))
+                    if (dt.hasUsers ()  &&  ! dt.hasAttribute ("initOnly"))
                     {
                         dt.removeAttribute ("preexistent");
                         storeDt = true;
@@ -241,7 +264,7 @@ public class InternalBackendData
                     else
                     {
                         boolean temporary = v.hasAttribute ("temporary");
-                        boolean unusedTemporary = temporary  &&  ! v.hasUsers;
+                        boolean unusedTemporary = temporary  &&  ! v.hasUsers ();
                         if (! unusedTemporary) globalInit.add (v);
                         if (! temporary  &&  ! v.hasAttribute ("dummy"))
                         {
@@ -324,7 +347,7 @@ public class InternalBackendData
                     else
                     {
                         boolean temporary = v.hasAttribute ("temporary");
-                        boolean unusedTemporary = temporary  &&  ! v.hasUsers;
+                        boolean unusedTemporary = temporary  &&  ! v.hasUsers ();
                         if (! unusedTemporary)
                         {
                             if (v.name.startsWith ("$"))
@@ -435,18 +458,14 @@ public class InternalBackendData
             }
         }
 
-        // TODO: Scan for events and set up structures
-        // For now, just scan equations for $event() and set a flag
+        // Scan for events and set up structures
         class EventVisitor extends Visitor
         {
-            public boolean found;
             public boolean visit (Operator op)
             {
-                if (found) return false;
                 if (op instanceof DollarEvent)
                 {
-                    found = true;
-                    return false;
+                    eventTargets.add (new EventTarget ());  // TODO: eliminate duplicates, and actually store meaningful info in object
                 }
                 return true;
             }
@@ -455,9 +474,7 @@ public class InternalBackendData
         for (Variable v : s.variables)
         {
             v.visit (eventVisitor);
-            if (eventVisitor.found == true) break;
         }
-        if (eventVisitor.found) receivesEvents = true;
 
         // Set index on variables
         // Initially readIndex = writeIndex = -1, and readTemp = writeTemp = false
@@ -585,7 +602,7 @@ public class InternalBackendData
         if (populationChangesWithoutN  &&  (n == null  ||  n.hasAttribute ("constant")))
         {
             populationChangesWithoutN = false;  // suppress updates to $n, since it's not stored
-            if (n != null  &&  n.hasUsers) System.err.println ("Warning: $n can change (due to structural dynamics) but it was detected as a constant. Equations that depend on $n may give incorrect results.");
+            if (n != null  &&  n.hasUsers ()) System.err.println ("Warning: $n can change (due to structural dynamics) but it was detected as a constant. Equations that depend on $n may give incorrect results.");
         }
 
         if      (live.hasAttribute ("constant")) liveStorage = LIVE_CONSTANT;
@@ -669,7 +686,7 @@ public class InternalBackendData
         }
         boolean dtCanChange =  dt != null  &&  ! dt.hasAttribute ("initOnly");
 
-        if (hasIntegrated  &&  (receivesEvents  ||  dtCanChange))
+        if (hasIntegrated  &&  (eventTargets.size () > 0  ||  dtCanChange))
         {
             lastT = new Variable ("$lastT");
             lastT.readIndex = lastT.writeIndex = countLocalFloat++;

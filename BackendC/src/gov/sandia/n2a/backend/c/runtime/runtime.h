@@ -79,10 +79,8 @@ public:
     // Interface for computing simulation steps
     virtual void init               (Simulator & simulator);              ///< Initialize all variables. A part must increment $n of its population, enqueue each of its contained populations and call their init(). A population must create its instances, enqueue them and call init(). If this is a connection with $min or $max, increment count in respective target compartments.
     virtual void integrate          (Simulator & simulator);
-    virtual void prepare            ();
     virtual void update             (Simulator & simulator);
     virtual bool finalize           (Simulator & simulator);              ///< A population may init() and add new parts to simulator. @return true if this part is still live, false if it should be removed from simulator queue.
-    virtual void prepareDerivative  ();                                   ///< Same as prepare(), but restricted to computing derivatives.
     virtual void updateDerivative   (Simulator & simulator);              ///< Same as update(), but restricted to computing derivatives.
     virtual void finalizeDerivative ();                                   ///< Same as finalize(), but restricted to computing derivatives.
 
@@ -172,9 +170,7 @@ public:
     virtual void   add      (Part * part); ///< Assign an index to part and put it on our live list (ahead of old).
     virtual void   remove   (Part * part); ///< Remove part from live.
     virtual Part * allocate ();            ///< New part is inserted at head of live list (before old).
-
-    virtual void prepare ();                             ///< Reset the old pointer.
-    virtual void resize  (Simulator & simulator, int n); ///< Add or kill instances until $n matches given n.
+    virtual void   resize   (Simulator & simulator, int n); ///< Add or kill instances until $n matches given n.
 
     Compartment   live;      ///< Parts currently on simulator queue (regardless of $live), linked via Compartment::before and after. Used for crossing populations to make connections.
     Compartment * old;       ///< Position in parts linked list of first old part. All parts before this were added in the current simulation cycle. If old==&live, then all parts are new.

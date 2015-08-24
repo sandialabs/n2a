@@ -40,7 +40,7 @@ public class Variable implements Comparable<Variable>
     public Variable                     derivative; // The variable from which we are integrated, if any.
     // graph analysis
     public List<Variable>               uses;       // Variables we depend on. Forms a digraph (which may have cycles) on Variable nodes.
-    public boolean                      hasUsers;   // Indicates that some variable depends on us. That is, we exist in some Variable.uses collection.
+    public List<Object>                 usedBy;     // Variables and EquationSets that depends on us.
     public List<Variable>               before;     // Variables that must be evaluated after us. Generally the same as uses, unless we are a temporary, in which case the ordering is reversed. Note EquationSet.ordered
     public Variable                     visited;    // Points to the previous variable visited on the current path. Used to prevent infinite recursion. Only work on a single thread.
     public int                          priority;   // For evaluation order.
@@ -250,6 +250,9 @@ public class Variable implements Comparable<Variable>
         return null;
     }
 
+    /**
+        Record what other variables this variable depends on.
+    **/
     public void addDependency (Variable whatWeNeed)
     {
         if (uses == null)
@@ -262,13 +265,34 @@ public class Variable implements Comparable<Variable>
             // force us to use the Comparable interface, which won't handle Variable identity
             // quite right.
             // FWIW, when the number of dependencies is low, this is probably more efficient.
-            for (Variable v : uses)
-            {
-                if (v == whatWeNeed) return;  // already recorded this dependency, so don't do it again
-            }
+            if (uses.contains (whatWeNeed)) return;  // already recorded this dependency, so don't do it again
         }
         uses.add (whatWeNeed);
-        whatWeNeed.hasUsers = true;
+        whatWeNeed.addUser (this);
+    }
+
+    /**
+        Record variables or equation sets that depend on this variable.
+        Note that addDependency(Variable) handles both sides of the add. You only call this function
+        directly to add equation sets.
+    **/
+    public void addUser (Object user)
+    {
+        if (usedBy == null)
+        {
+            usedBy = new ArrayList<Object> ();
+        }
+        else
+        {
+            if (usedBy.contains (user)) return;
+        }
+        usedBy.add (user);
+    }
+
+    public boolean hasUsers ()
+    {
+        if (usedBy == null) return false;
+        return ! usedBy.isEmpty ();
     }
 
     /**
