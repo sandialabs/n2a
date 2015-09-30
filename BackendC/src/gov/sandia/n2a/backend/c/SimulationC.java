@@ -1084,6 +1084,11 @@ public class SimulationC implements Simulation
         {
             result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
         }
+        //   clear variables that may be written externally before first finalize()
+        for (Variable v : bed.globalBufferedExternalWrite)
+        {
+            result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
+        }
         //   create instances
         {
             Variable n = s.find (new Variable ("$n", 0));
@@ -1649,6 +1654,12 @@ public class SimulationC implements Simulation
             {
                 if (v.name.startsWith ("$")) continue;
                 result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
+            }
+
+            // clear variables that may be written externally before first finalize()
+            for (Variable v : bed.localBufferedExternalWrite)
+            {
+                result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
             }
 
             // instance counting
