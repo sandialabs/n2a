@@ -153,7 +153,7 @@ public class InternalBackendData
         public boolean     testAll;     // indicates that the monitor must test every event target of this type separately, generally because the trigger references variables outside the source part
         public int         edge  = RISE;
         public double      delay = -1;  // default is no-care; Indicates to process event in next regularly scheduled cycle of the target part
-        public Map<VariableReference,Integer> sources = new TreeMap<VariableReference,Integer> (new ReferenceComparator ());  // map to index in monitored part's eventSource collection
+        public Map<EquationSet,EventSource> sources = new TreeMap<EquationSet,EventSource> ();
         public List<Variable> dependencies = new ArrayList<Variable> ();
 
         /**
@@ -233,7 +233,6 @@ public class InternalBackendData
 
             if (delay >= -1) return delay;
             double result = ((Scalar) event.operands[1].eval (temp)).value;
-            System.out.println ("calculated " + result);
             if (result < 0) result = -1;
             return result;
         }
@@ -246,8 +245,9 @@ public class InternalBackendData
 
     public class EventSource
     {
-        public EventTarget target;
-        public int         valueIndex;  // position of target array in valuesObject
+        public EventTarget       target;
+        public int               monitorIndex; // position of monitor array in source_instance.valuesObject
+        public VariableReference reference;    // position of reference to source part in target_instance.valuesObject
     }
 
     public class ReferenceComparator implements Comparator<VariableReference>
@@ -427,19 +427,17 @@ public class InternalBackendData
                                     {
                                         AccessVariable av = (AccessVariable) op;
                                         EquationSet container = av.reference.variable.container;
-                                        uniqueContainers.add (container);
-                                        if (container != s)  // external reference, so we need to plug a monitor into the other part
+                                        uniqueContainers.add (container);  // we could add the target part as one of the containers, if in fact we use local variables in the trigger expression
+                                        if (container != s  &&  ! et.sources.containsKey (container))  // external reference, so we need to plug a monitor into the other part
                                         {
-                                            if (! et.sources.containsKey (av.reference))
-                                            {
-                                                InternalBackendData containerBed = (InternalBackendData) container.backendData;
-                                                et.sources.put (av.reference, containerBed.eventSources.size ());  // TODO: does the source index do anything useful?
-                                                EventSource es = new EventSource ();
-                                                es.target = et;
-                                                es.valueIndex = containerBed.countLocalObject++;
-                                                containerBed.namesLocalObject.add ("$event_monitor_" + s.prefix ());
-                                                containerBed.eventSources.add (es);
-                                            }
+                                            InternalBackendData containerBed = (InternalBackendData) container.backendData;
+                                            EventSource es = new EventSource ();
+                                            es.target       = et;
+                                            es.monitorIndex = containerBed.countLocalObject++;
+                                            es.reference    = av.reference;
+                                            containerBed.namesLocalObject.add ("$event_monitor_" + s.prefix ());
+                                            containerBed.eventSources.add (es);
+                                            et.sources.put (container, es);
                                         }
                                         return false;
                                     }

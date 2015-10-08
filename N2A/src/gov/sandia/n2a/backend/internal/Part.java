@@ -15,7 +15,6 @@ import gov.sandia.n2a.backend.internal.InternalBackendData.EventSource;
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventTarget;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
@@ -53,7 +52,7 @@ public class Part extends Instance
         }
         for (EventSource es : bed.eventSources)
         {
-            valuesObject[es.valueIndex] = new ArrayList<Instance> ();
+            valuesObject[es.monitorIndex] = new ArrayList<Instance> ();
         }
     }
 
@@ -120,16 +119,12 @@ public class Part extends Instance
         // Request event monitors
         for (EventTarget et : temp.bed.eventTargets)
         {
-            // TODO: what if we have several different events that require monitors on the same source object?
-            // Wouldn't it be more efficient to register only on monitor per source, and have it check all the
-            // different events? The issue here is event identity (keeping the various targets in the same part
-            // separate). However, it would be possible to store a collection of EventTargets in the EventSource
-            // object, rather than merely a single one. Similar compaction would be needed in EventTarget.sources.
-            for (Entry<VariableReference,Integer> i : et.sources.entrySet ())
+            for (Entry<EquationSet,EventSource> i : et.sources.entrySet ())
             {
-                Instance source = ((Instance) valuesObject[i.getKey ().index]);
+                EventSource es = i.getValue ();
+                Instance source = ((Instance) valuesObject[es.reference.index]);
                 @SuppressWarnings("unchecked")
-                ArrayList<Instance> monitors = (ArrayList<Instance>) source.valuesObject[i.getValue ()];
+                ArrayList<Instance> monitors = (ArrayList<Instance>) source.valuesObject[es.monitorIndex];
                 monitors.add (this);
             }
         }
@@ -216,7 +211,7 @@ public class Part extends Instance
         for (EventSource es : bed.eventSources)
         {
             @SuppressWarnings("unchecked")
-            ArrayList<Instance> monitors = (ArrayList<Instance>) valuesObject[es.valueIndex];
+            ArrayList<Instance> monitors = (ArrayList<Instance>) valuesObject[es.monitorIndex];
             EventTarget eventType = es.target;
             if (eventType.testAll)
             {
