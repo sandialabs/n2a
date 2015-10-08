@@ -53,4 +53,23 @@ public class Split extends Operator
         }
         return result.toString ();
     }
+
+    public int compareTo (Operator that)
+    {
+        Class<? extends Operator> thisClass = getClass ();
+        Class<? extends Operator> thatClass = that.getClass ();
+        if (! thisClass.equals (thatClass)) return thisClass.hashCode () - thatClass.hashCode ();
+
+        // Same class as us, so compare split targets
+        Split s = (Split) that;
+        int difference = names.length - s.names.length;
+        if (difference != 0) return difference;
+        for (int i = 0; i < names.length; i++)
+        {
+            difference = names[i].compareTo (s.names[i]);
+            if (difference != 0) return difference;
+        }
+
+        return 0;
+    }
 }

@@ -11,11 +11,15 @@ import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.AccessVariable;
+import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.DollarEvent;
+import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
+import gov.sandia.n2a.language.type.Text;
 
 import java.util.Comparator;
 import java.util.Map;
@@ -56,7 +60,7 @@ public class InternalBackendData
     public TreeSet<VariableReference> globalReference  = new TreeSet<VariableReference> (new ReferenceComparator ());
 
     // The following arrays have exactly the same order as EquationSet.connectionBindings
-    // This includes the $variables in the next group below.
+    // This includes the array $variables in the next group below.
     // In all cases, there may be null entries if they are not applicable.
     public int[]      connectionTargets;
     public Variable[] accountableEndpoints;  ///< These are structured as direct members of the endpoint. No resolution. Instead, we use the Connection.endpoint array.
@@ -75,18 +79,28 @@ public class InternalBackendData
     public Variable   type;
     public Variable   xyz;
 
-    // If the model uses events or otherwise has non-constant frequency, then we
-    // may need to store last $t in order to calculate an accurate dt for integration.
-    // Of course, this is only necessary if we actually have integrated variables.
-    // If we must store $t, then lastT provides a handle into Instance.valuesFloat.
-    // If we do not store $t, then this member is null.
+    /**
+        If the model uses events or otherwise has non-constant frequency, then we
+        may need to store last $t in order to calculate an accurate dt for integration.
+        Of course, this is only necessary if we actually have integrated variables.
+        If we must store $t, then lastT provides a handle into Instance.valuesFloat.
+        If we do not store $t, then this member is null.
+    **/
     public Variable lastT;
 
+    /**
+        If there are equations that read $t' and/or try to change it, then we need to
+        store it because it is not readily available in the simulator object structure.
+        Alternately, we could include an upward link to the containing event. That
+        might cost a little more space, and would only provide benefit if there were
+        several attributes of the event that we need at runtime.
+    **/
     public boolean storeDt;
 
     // Event structures
+    public List<Integer>     eventLatches = new ArrayList<Integer> ();  // Indices within Instance.valuesFloat of each latch block. Generally, there will only be one, if any. Used to reset latches during finalize phase.
     public List<EventTarget> eventTargets = new ArrayList<EventTarget> ();
-    //public List<EventSource> eventSources = new ArrayList<EventSource> ();
+    public List<EventSource> eventSources = new ArrayList<EventSource> ();
 
     public boolean populationCanGrowOrDie;
     public boolean populationCanResize;
@@ -102,24 +116,24 @@ public class InternalBackendData
     // Some variables must be stored as objects. Thus there are two kinds of blocks.
     // Then there's temp versus permanent and local versus global, for 8 variants.
     public int countLocalTempFloat;
-    public int countLocalTempType;
+    public int countLocalTempObject;
     public int countLocalFloat;
-    public int countLocalType;
+    public int countLocalObject;
     public int countGlobalTempFloat;
-    public int countGlobalTempType;
+    public int countGlobalTempObject;
     public int countGlobalFloat;
-    public int countGlobalType;
+    public int countGlobalObject;
 
     // for debugging
     // We could use ArrayList.size() instead of the corresponding count* values above.
-    public List<String> namesLocalTempFloat  = new ArrayList<String> ();
-    public List<String> namesLocalTempType   = new ArrayList<String> ();
-    public List<String> namesLocalFloat      = new ArrayList<String> ();
-    public List<String> namesLocalType       = new ArrayList<String> ();
-    public List<String> namesGlobalTempFloat = new ArrayList<String> ();
-    public List<String> namesGlobalTempType  = new ArrayList<String> ();
-    public List<String> namesGlobalFloat     = new ArrayList<String> ();
-    public List<String> namesGlobalType      = new ArrayList<String> ();
+    public List<String> namesLocalTempFloat   = new ArrayList<String> ();
+    public List<String> namesLocalTempObject  = new ArrayList<String> ();
+    public List<String> namesLocalFloat       = new ArrayList<String> ();
+    public List<String> namesLocalObject      = new ArrayList<String> ();
+    public List<String> namesGlobalTempFloat  = new ArrayList<String> ();
+    public List<String> namesGlobalTempObject = new ArrayList<String> ();
+    public List<String> namesGlobalFloat      = new ArrayList<String> ();
+    public List<String> namesGlobalObject     = new ArrayList<String> ();
 
     public Map<EquationSet,Conversion> conversions = new TreeMap<EquationSet,Conversion> ();  // maps from new part type to appropriate conversion record
 
@@ -131,24 +145,109 @@ public class InternalBackendData
         public int[] bindings;  // to index = bindings[from index]
     }
 
-    public class EventTarget implements Comparable<EventTarget>
+    public class EventTarget
     {
-        public Operator expression;
-        public double   delay;
-        public int      trigger;
+        public DollarEvent event;       // For evaluating whether the event should be triggered. There may be several equivalent $event() calls in the part, so this is just one representative of the group.
+        public int         valueIndex;  // position of bit array in valuesFloat
+        public int         mask;        // an unsigned AND between this and the (int cast) entry from valuesFloat will indicate event active
+        public boolean     testAll;     // indicates that the monitor must test every event target of this type separately, generally because the trigger references variables outside the source part
+        public int         edge  = RISE;
+        public double      delay = -1;  // default is no-care; Indicates to process event in next regularly scheduled cycle of the target part
+        public Map<VariableReference,Integer> sources = new TreeMap<VariableReference,Integer> (new ReferenceComparator ());  // map to index in monitored part's eventSource collection
+        public List<Variable> dependencies = new ArrayList<Variable> ();
 
-        public int valueIndex;  // position of bit array in valuesFloat
-        public int mask;        // an unsigned AND between this and the (int cast) entry from valuesFloat will indicate event active
+        /**
+            Every $event() function has a trigger expression as its first parameter.
+            This expression is tested during the update phase of any monitored parts,
+            which are generally different from $event()'s home part. The home part
+            will keep an auxiliary variable which $event() updates each time it is
+            tested. However, if the expression is a simple variable, then we compare the
+            variable's buffered value instead. The variable is likely to be a reference
+            to another part. In either case, we need the identity of the variable.
+        **/
+        public Variable track;
+        public boolean  trackOne;  // we are following a single first-class variable
 
-        // trigger types
-        public int CHANGE  = 1;
-        public int RISING  = 2;
-        public int FALLING = 3;
+        // edge types
+        public static final int EVALUATE = -1;  // Always recompute the edge type, because the parameter is not constant.
+        public static final int RISE     = 0;
+        public static final int FALL     = 1;
+        public static final int CHANGE   = 2;
 
-        public int compareTo (EventTarget that)
+        public EventTarget (DollarEvent event)
         {
-            return 0;
+            this.event = event;
         }
+
+        /**
+            Determine if this event should be triggered.
+            Must be called during the update phase.
+            @param targetPart Must be an instance of the part where the $event() function appears,
+            even if it is called during update of another part.
+            @return -2 if this event did not fire. -1 if it fired with nocare delivery.
+            0 or greater if it fired and we specify the delay until delivery.
+        **/
+        public double test (Instance targetPart, Euler simulator)
+        {
+            // Evaluate any temporaries needed by operands in $event()
+            InstanceTemporaries temp = new InstanceTemporaries (targetPart, simulator, false);
+            for (Variable v : dependencies)
+            {
+                Type result = v.eval (temp);
+                if (result != null  &&  v.writeIndex >= 0) temp.set (v, result);
+            }
+
+            double before = ((Scalar) temp.get (track.reference)).value;
+            double after;
+            if (trackOne)  // This is a single variable, so check its value directly.
+            {
+                after = ((Scalar) temp.getFinal (track.reference)).value;
+            }
+            else  // This is an expression, so use our private auxiliary variable.
+            {
+                Scalar result = (Scalar) event.operands[0].eval (temp);
+                temp.setFinal (track, result);  // Since the variable is effectively hidden, we don't wait for the finalize phase.
+                after = result.value;
+            }
+
+            int edge = this.edge;
+            if (edge == EVALUATE)
+            {
+                Text t = (Text) event.operands[2].eval (temp);
+                if      (t.value.equalsIgnoreCase ("change")) edge = CHANGE;
+                else if (t.value.equalsIgnoreCase ("fall"  )) edge = FALL;
+                else                                          edge = RISE;
+            }
+            switch (edge)
+            {
+                case CHANGE:
+                    if (before == after) return -2;
+                    break;
+                case FALL:
+                    if (before == 0  ||  after != 0) return -2;
+                    break;
+                case RISE:
+                default:
+                    if (after == 0  ||  before != 0) return -2;
+            }
+
+            if (delay >= -1) return delay;
+            double result = ((Scalar) event.operands[1].eval (temp)).value;
+            System.out.println ("calculated " + result);
+            if (result < 0) result = -1;
+            return result;
+        }
+
+        public boolean equals (Object that)
+        {
+            return event.compareTo (((EventTarget) that).event) == 0;
+        }
+    }
+
+    public class EventSource
+    {
+        public EventTarget target;
+        public int         valueIndex;  // position of target array in valuesObject
     }
 
     public class ReferenceComparator implements Comparator<VariableReference>
@@ -182,6 +281,189 @@ public class InternalBackendData
             }
 
             return 0;
+        }
+    }
+
+    /**
+        Find $event() calls and collate them (in case the same signature appears several different places
+        in the equation set).
+        This must be done before the variables are sorted into sets according to attributes, because we
+        may need to add the "externalRead" attribute to some of them.
+    **/
+    public void analyzeEvents (final EquationSet s)
+    {
+        class EventVisitor extends Visitor
+        {
+            public int valueIndex = -1;
+            public int mask;
+
+            public boolean visit (Operator op)
+            {
+                if (op instanceof DollarEvent)
+                {
+                    DollarEvent de = (DollarEvent) op;
+                    if (de.eventType == null)  // this $event has not yet been analyzed
+                    {
+                        final EventTarget et = new EventTarget (de);
+                        int targetIndex = eventTargets.indexOf (et);
+                        if (targetIndex >= 0)  // event target already exists
+                        {
+                            de.eventType = eventTargets.get (targetIndex);
+                        }
+                        else  // we must create a new event target, or more properly, fill in the event target we just used as a query object
+                        {
+                            // Create an entry and save the index
+                            eventTargets.add (et);
+                            de.eventType = et;
+
+                            // Allocate a latch bit
+                            if (valueIndex == -1)
+                            {
+                                valueIndex = countLocalFloat++;
+                                namesLocalFloat.add ("$event_latch" + valueIndex);
+                                eventLatches.add (valueIndex);
+                                mask = 1;
+                            }
+                            et.valueIndex = valueIndex;
+                            et.mask       = mask;
+                            mask <<= 1;
+                            if (mask > 0x20000000) valueIndex = -1;  // Allocate another float when we declare over 30 events ... but who would ever need that?
+
+                            // Analyze the $event
+                            //   edge type
+                            if (de.operands.length < 3)
+                            {
+                                et.edge = EventTarget.RISE;
+                            }
+                            else if (de.operands[2] instanceof Constant)
+                            {
+                                Constant c = (Constant) de.operands[2];
+                                if (c.value instanceof Text)
+                                {
+                                    Text t = (Text) c.value;
+                                    if      (t.value.equalsIgnoreCase ("change")) et.edge = EventTarget.CHANGE;
+                                    else if (t.value.equalsIgnoreCase ("fall"  )) et.edge = EventTarget.FALL;
+                                    else                                          et.edge = EventTarget.RISE;
+                                }
+                                else
+                                {
+                                    throw new EvaluationException ("Edge type for $event() must be specified with a string.");
+                                }
+                            }
+                            else
+                            {
+                                et.edge = EventTarget.EVALUATE;
+                            }
+
+                            //   delay
+                            //   already initialized: et.delay = -1
+                            if (de.operands.length >= 2)
+                            {
+                                if (de.operands[1] instanceof Constant)
+                                {
+                                    Constant c = (Constant) de.operands[1];
+                                    et.delay = ((Scalar) c.value).value;
+                                    if (et.delay < 0) et.delay = -1;
+                                }
+                                else
+                                {
+                                    et.delay = -2;  // indicates that we need to evaluate delay at run time
+                                }
+                            }
+
+                            //   auxiliary variable
+                            if (de.operands[0] instanceof AccessVariable)
+                            {
+                                Variable v = ((AccessVariable) de.operands[0]).reference.variable;
+                                if (! v.hasAttribute ("temporary"))
+                                {
+                                    et.trackOne = true;
+                                    et.track = v;
+                                    v.addAttribute ("externalRead");  // ensure it's buffered, so we can detect change
+                                }
+                            }
+                            if (! et.trackOne)  // expression, so create auxiliary variable
+                            {
+                                et.track = new Variable ("$event_aux" + eventTargets.size (), 0);
+                                et.track.type = new Scalar (0);
+                                et.track.reference = new VariableReference ();
+                                et.track.reference.variable = et.track;
+                                et.track.readIndex = et.track.writeIndex = countLocalFloat++;
+                                namesLocalFloat.add (et.track.name);
+                            }
+
+                            //   locate any temporaries for evaluation
+                            //     Tie into the dependency graph using a phantom variable (which can go away afterward without damaging the graph).
+                            final Variable phantom = new Variable ("$event");
+                            phantom.uses = new ArrayList<Variable> ();
+                            for (int i = 0; i < et.event.operands.length; i++) et.event.operands[i].visit (new Visitor ()
+                            {
+                                public boolean visit (Operator op)
+                                {
+                                    if (op instanceof AccessVariable)
+                                    {
+                                        AccessVariable av = (AccessVariable) op;
+                                        Variable v = av.reference.variable;
+                                        if (! phantom.uses.contains (v)) phantom.uses.add (v);
+                                        return false;
+                                    }
+                                    return true;
+                                }
+                            });
+                            //     Scan all variables in equation set to see if we need them
+                            for (Variable t : s.variables)
+                            {
+                                if (t.hasAttribute ("temporary")  &&  phantom.dependsOn (t) != null) et.dependencies.add (t);
+                            }
+
+                            //   set up monitors in source parts
+                            //   and determine if monitor needs to test every target, or if one representative target is sufficient
+                            class ReferenceVisitor extends Visitor
+                            {
+                                TreeSet<EquationSet> uniqueContainers = new TreeSet<EquationSet> ();
+                                public boolean visit (Operator op)
+                                {
+                                    if (op instanceof AccessVariable)
+                                    {
+                                        AccessVariable av = (AccessVariable) op;
+                                        EquationSet container = av.reference.variable.container;
+                                        uniqueContainers.add (container);
+                                        if (container != s)  // external reference, so we need to plug a monitor into the other part
+                                        {
+                                            if (! et.sources.containsKey (av.reference))
+                                            {
+                                                InternalBackendData containerBed = (InternalBackendData) container.backendData;
+                                                et.sources.put (av.reference, containerBed.eventSources.size ());  // TODO: does the source index do anything useful?
+                                                EventSource es = new EventSource ();
+                                                es.target = et;
+                                                es.valueIndex = containerBed.countLocalObject++;
+                                                containerBed.namesLocalObject.add ("$event_monitor_" + s.prefix ());
+                                                containerBed.eventSources.add (es);
+                                            }
+                                        }
+                                        return false;
+                                    }
+                                    return true;
+                                }
+                            }
+                            ReferenceVisitor rv = new ReferenceVisitor ();
+                            de.operands[0].visit (rv);
+                            // If all the variables used by the trigger expression are within the same source
+                            // part, then the answer will be the same for all registered target parts. However,
+                            // if any of the variables belong to a different source part or to the target part
+                            // itself, then the answer could vary, and every target must be tested separately.
+                            if (rv.uniqueContainers.size () > 1) et.testAll = true;
+                        }
+                    }
+                }
+                return true;
+            }
+        }
+
+        EventVisitor eventVisitor = new EventVisitor ();
+        for (Variable v : s.variables)
+        {
+            v.visit (eventVisitor);
         }
     }
 
@@ -232,8 +514,8 @@ public class InternalBackendData
                             {
                                 if (globalReference.add (av.reference))
                                 {
-                                    av.reference.index = countGlobalType++;
-                                    namesGlobalType.add ("reference to " + av.reference.variable.container.name);
+                                    av.reference.index = countGlobalObject++;
+                                    namesGlobalObject.add ("reference to " + av.reference.variable.container.name);
                                 }
                                 else
                                 {
@@ -254,8 +536,8 @@ public class InternalBackendData
                     {
                         if (globalReference.add (v.reference))
                         {
-                            v.reference.index = countGlobalType++;
-                            namesGlobalType.add ("reference to " + v.reference.variable.container.name);
+                            v.reference.index = countGlobalObject++;
+                            namesGlobalObject.add ("reference to " + v.reference.variable.container.name);
                         }
                         else
                         {
@@ -308,8 +590,8 @@ public class InternalBackendData
                             {
                                 if (localReference.add (av.reference))
                                 {
-                                    av.reference.index = countLocalType++;
-                                    namesLocalType.add ("reference to " + av.reference.variable.container.name);
+                                    av.reference.index = countLocalObject++;
+                                    namesLocalObject.add ("reference to " + av.reference.variable.container.name);
                                 }
                                 else
                                 {
@@ -337,8 +619,8 @@ public class InternalBackendData
                     {
                         if (localReference.add (v.reference))
                         {
-                            v.reference.index = countLocalType++;
-                            namesLocalType.add ("reference to " + v.reference.variable.container.name);
+                            v.reference.index = countLocalObject++;
+                            namesLocalObject.add ("reference to " + v.reference.variable.container.name);
                         }
                         else
                         {
@@ -459,23 +741,6 @@ public class InternalBackendData
             }
         }
 
-        // Scan for events and set up structures
-        class EventVisitor extends Visitor
-        {
-            public boolean visit (Operator op)
-            {
-                if (op instanceof DollarEvent)
-                {
-                    eventTargets.add (new EventTarget ());  // TODO: eliminate duplicates, and actually store meaningful info in object
-                }
-                return true;
-            }
-        }
-        EventVisitor eventVisitor = new EventVisitor ();
-        for (Variable v : s.variables)
-        {
-            v.visit (eventVisitor);
-        }
 
         // Set index on variables
         // Initially readIndex = writeIndex = -1, and readTemp = writeTemp = false
@@ -492,8 +757,8 @@ public class InternalBackendData
             }
             else
             {
-                v.readIndex = v.writeIndex = countLocalType++;
-                namesLocalType.add (v.nameString ());
+                v.readIndex = v.writeIndex = countLocalObject++;
+                namesLocalObject.add (v.nameString ());
             }
         }
         for (Variable v : localBufferedExternal)
@@ -505,8 +770,8 @@ public class InternalBackendData
             }
             else
             {
-                v.writeIndex = countLocalType++;
-                namesLocalType.add ("next_" + v.nameString ());
+                v.writeIndex = countLocalObject++;
+                namesLocalObject.add ("next_" + v.nameString ());
             }
         }
         for (Variable v : localBufferedInternal)
@@ -519,8 +784,8 @@ public class InternalBackendData
             }
             else
             {
-                v.writeIndex = countLocalTempType++;
-                namesLocalTempType.add ("next_" + v.nameString ());
+                v.writeIndex = countLocalTempObject++;
+                namesLocalTempObject.add ("next_" + v.nameString ());
             }
         }
 
@@ -534,8 +799,8 @@ public class InternalBackendData
             }
             else
             {
-                v.readIndex = v.writeIndex = countGlobalType++;
-                namesGlobalType.add (v.nameString ());
+                v.readIndex = v.writeIndex = countGlobalObject++;
+                namesGlobalObject.add (v.nameString ());
             }
         }
         for (Variable v : globalBufferedExternal)
@@ -547,8 +812,8 @@ public class InternalBackendData
             }
             else
             {
-                v.writeIndex = countGlobalType++;
-                namesGlobalType.add ("next_" + v.nameString ());
+                v.writeIndex = countGlobalObject++;
+                namesGlobalObject.add ("next_" + v.nameString ());
             }
         }
         for (Variable v : globalBufferedInternal)
@@ -561,8 +826,8 @@ public class InternalBackendData
             }
             else
             {
-                v.writeIndex = countGlobalTempType++;
-                namesGlobalTempType.add ("next_" + v.nameString ());
+                v.writeIndex = countGlobalTempObject++;
+                namesGlobalTempObject.add ("next_" + v.nameString ());
             }
         }
 
@@ -580,8 +845,8 @@ public class InternalBackendData
                 }
                 else
                 {
-                    v.readIndex = v.writeIndex = countGlobalTempType++;
-                    namesGlobalTempType.add (v.nameString ());
+                    v.readIndex = v.writeIndex = countGlobalTempObject++;
+                    namesGlobalTempObject.add (v.nameString ());
                 }
             }
             else
@@ -593,8 +858,8 @@ public class InternalBackendData
                 }
                 else
                 {
-                    v.readIndex = v.writeIndex = countLocalTempType++;
-                    namesLocalTempType.add (v.nameString ());
+                    v.readIndex = v.writeIndex = countLocalTempObject++;
+                    namesLocalTempObject.add (v.nameString ());
                 }
             }
         }

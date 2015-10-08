@@ -1,0 +1,10 @@
+package gov.sandia.n2a.backend.internal;
+
+public class EventSpikeSingleLatch extends EventSpikeSingle
+{
+    public void run (Euler simulator)
+    {
+        setFlag ();
+        // Note absence of normal cycle processing.
+    }
+}

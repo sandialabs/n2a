@@ -56,7 +56,7 @@ import java.util.TreeMap;
 import replete.plugins.ExtensionPoint;
 import replete.plugins.PluginManager;
 
-public class Operator implements Cloneable
+public class Operator implements Cloneable, Comparable<Operator>
 {
     public interface Factory extends ExtensionPoint
     {
@@ -170,7 +170,15 @@ public class Operator implements Cloneable
         return "unknown";
     }
 
-    
+    public int compareTo (Operator that)
+    {
+        Class<? extends Operator> thisClass = getClass ();
+        Class<? extends Operator> thatClass = that.getClass ();
+        if (thisClass.equals (thatClass)) return 0;
+        return thisClass.hashCode () - thatClass.hashCode ();
+    }
+
+
     // Static interface ------------------------------------------------------
 
     public static TreeMap<String,Factory> operators = new TreeMap<String,Factory> ();

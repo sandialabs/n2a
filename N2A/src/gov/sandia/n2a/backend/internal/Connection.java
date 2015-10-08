@@ -86,8 +86,9 @@ public class Connection extends Part
     public double getP (Euler simulator)
     {
         InstancePreLive temp = new InstancePreLive (this, simulator);
+        if (temp.bed.p == null) return 1;  // N2A language defines default to be 1 (always create)
         Type result = temp.bed.p.eval (temp);
-        if (result == null) return 1;  // N2A language defines default to be 1 (always create)
+        if (result == null) return 1;
         return ((Scalar) result).value;
     }
 

@@ -534,9 +534,8 @@ public class EquationSet implements Comparable<EquationSet>
                 v.reference.variable.container.referenced = true;
                 if (v.reference.variable.assignment != v.assignment)
                 {
-                    System.out.println ("WARNING: Reference has different assignment operator than target variable. Attempting to reconcile.");
-                    if (v.assignment == Variable.REPLACE) v.assignment = v.reference.variable.assignment;
-                    else                                  v.reference.variable.assignment = v.assignment;
+                    System.out.println ("WARNING: Reference to " + v.nameString () + " has different assignment operator than target variable. Attempting to reconcile.");
+                    v.assignment = v.reference.variable.assignment = Math.max (v.assignment, v.reference.variable.assignment);
                 }
             }
         }

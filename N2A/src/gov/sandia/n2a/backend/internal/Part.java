@@ -8,10 +8,14 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.backend.internal;
 
 import java.util.ArrayList;
+import java.util.Map.Entry;
 
 import gov.sandia.n2a.backend.internal.InternalBackendData.Conversion;
+import gov.sandia.n2a.backend.internal.InternalBackendData.EventSource;
+import gov.sandia.n2a.backend.internal.InternalBackendData.EventTarget;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
@@ -36,7 +40,7 @@ public class Part extends Instance
         this.equations = equations;
         this.container = container;
         InternalBackendData bed = (InternalBackendData) equations.backendData;
-        allocate (bed.countLocalFloat, bed.countLocalType);
+        allocate (bed.countLocalFloat, bed.countLocalObject);
         if (equations.parts.size () > 0)
         {
             populations = new Population[equations.parts.size ()];
@@ -46,6 +50,10 @@ public class Part extends Instance
                 if (s.connectionBindings == null) populations[i++] = new PopulationCompartment (s, this);
                 else                              populations[i++] = new PopulationConnection  (s, this);
             }
+        }
+        for (EventSource es : bed.eventSources)
+        {
+            valuesObject[es.valueIndex] = new ArrayList<Instance> ();
         }
     }
 
@@ -85,6 +93,8 @@ public class Part extends Instance
         {
             Type result = v.eval (temp);
             if (result != null  &&  v.writeIndex >= 0) temp.set (v, result);
+            // Note that some valuesObject entries may be left null. This is OK, because Instance.get() will return
+            // a zero-equivalent value if it finds null. Ditto for non-$variables below.
         }
         for (Variable v : temp.bed.localBufferedSpecial)
         {
@@ -102,7 +112,27 @@ public class Part extends Instance
             temp.setFinal (v, temp.getFinal (v));
         }
 
+        // zero external buffered variables that may be written before first finish()
+        for (Variable v : temp.bed.localBufferedExternalWrite) set (v, v.type);  // v.type should be pre-loaded with zero-equivalent values
+
         // Note: instance counting is handled directly by PopulationCompartment.add()
+
+        // Request event monitors
+        for (EventTarget et : temp.bed.eventTargets)
+        {
+            // TODO: what if we have several different events that require monitors on the same source object?
+            // Wouldn't it be more efficient to register only on monitor per source, and have it check all the
+            // different events? The issue here is event identity (keeping the various targets in the same part
+            // separate). However, it would be possible to store a collection of EventTargets in the EventSource
+            // object, rather than merely a single one. Similar compaction would be needed in EventTarget.sources.
+            for (Entry<VariableReference,Integer> i : et.sources.entrySet ())
+            {
+                Instance source = ((Instance) valuesObject[i.getKey ().index]);
+                @SuppressWarnings("unchecked")
+                ArrayList<Instance> monitors = (ArrayList<Instance>) source.valuesObject[i.getValue ()];
+                monitors.add (this);
+            }
+        }
 
         if (populations != null) for (Population p : populations) p.init (simulator);
     }
@@ -180,9 +210,68 @@ public class Part extends Instance
 
     public boolean finish (Euler simulator)
     {
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
+
+        // Events
+        for (EventSource es : bed.eventSources)
+        {
+            @SuppressWarnings("unchecked")
+            ArrayList<Instance> monitors = (ArrayList<Instance>) valuesObject[es.valueIndex];
+            EventTarget eventType = es.target;
+            if (eventType.testAll)
+            {
+                for (Instance i : monitors)
+                {
+                    double delay = eventType.test (i, simulator);
+                    if (delay == -2) continue;  // the trigger condition was not satisfied 
+                    EventSpikeSingle spike;
+                    if (delay >= 0)
+                    {
+                        spike = new EventSpikeSingle (); // : new EventSpikeSingleLatch ();
+                        spike.t = simulator.currentEvent.t + delay;
+                    }
+                    else  // delay == -1 --> event was triggered, but timing is no-care
+                    {
+                        spike = new EventSpikeSingleLatch ();
+                        spike.t = simulator.currentEvent.t;  // queue immediately after current cycle, so latches get set for next full cycle
+                    }
+                    spike.eventType = eventType;
+                    simulator.eventQueue.add (spike);
+                }
+            }
+            else if (monitors.size () > 0)
+            {
+                double delay = eventType.test (monitors.get (0), simulator);
+                if (delay >= -1)  // the trigger condition was satisfied
+                {
+                    EventSpikeMulti spike;
+                    if (delay >= 0)
+                    {
+                        spike = new EventSpikeMulti ();
+                        spike.t = simulator.currentEvent.t + delay;
+                    }
+                    else
+                    {
+                        spike = new EventSpikeMultiLatch ();
+                        spike.t = simulator.currentEvent.t;
+                    }
+                    spike.eventType = eventType;
+                    // We don't copy the array, just keep a reference to it. What could go wrong with this?
+                    // If a part dies and tries to remove itself from the list while it is being used to deliver spikes,
+                    // then we could get a null pointer exception. Solution is to synchronize access to the list.
+                    // If a connection is born while the spike is in flight, one could argue that it shouldn't
+                    // receive it, but one could also argue that it should. In nature these two things (spikes
+                    // and synapse creation) occur at vastly different timescales. Wouldn't a nascent synapse
+                    // receive spikes even as it is forming?
+                    spike.targets = monitors;
+                    simulator.eventQueue.add (spike);
+                }
+            }
+        }
+
+        // Other stuff
         if (populations != null) for (Population p : populations) p.finish (simulator);
 
-        InternalBackendData bed = (InternalBackendData) equations.backendData;
         if (bed.liveStorage == InternalBackendData.LIVE_STORED)
         {
             if (((Scalar) get (bed.live)).value == 0) return false;  // early-out if we are already dead, to avoid another call to die()
@@ -190,7 +279,27 @@ public class Part extends Instance
 
         if (bed.lastT != null) setFinal (bed.lastT, new Scalar (simulator.currentEvent.t));
         for (Variable v : bed.localBufferedExternal) setFinal (v, getFinal (v));
-        for (Variable v : bed.localBufferedExternalWrite) set (v, v.type);  // v.type should be pre-loaded with zero-equivalent values
+        for (Integer i : bed.eventLatches) valuesFloat[i] = 0;
+        for (Variable v : bed.localBufferedExternalWrite)
+        {
+            switch (v.assignment)
+            {
+                case Variable.ADD:
+                    set (v, v.type);  // initial value is zero-equivalent (additive identity)
+                    break;
+                // TODO: make the following cases type-sensitive
+                case Variable.MULTIPLY:
+                    set (v, new Scalar (1));  // multiplicative identity
+                    break;
+                case Variable.MIN:
+                    set (v, new Scalar (Double.POSITIVE_INFINITY));
+                    break;
+                case Variable.MAX:
+                    set (v, new Scalar (Double.NEGATIVE_INFINITY));
+                    break;
+                // For all other assignment types, do nothing. Effectively, buffered value is initialized to current value
+            }
+        }
 
         if (bed.type != null)
         {

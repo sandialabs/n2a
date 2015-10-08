@@ -24,7 +24,7 @@ public class Population extends Instance
         this.equations = equations;
         this.container = container;
         InternalBackendData bed = (InternalBackendData) equations.backendData;
-        allocate (bed.countGlobalFloat, bed.countGlobalType);
+        allocate (bed.countGlobalFloat, bed.countGlobalObject);
     }
 
     public void init (Euler simulator)
@@ -40,6 +40,8 @@ public class Population extends Instance
         {
             temp.setFinal (v, temp.getFinal (v));
         }
+        // zero external buffered variables that may be written before first finish()
+        for (Variable v : temp.bed.globalBufferedExternalWrite) set (v, v.type);  // v.type should be pre-loaded with zero-equivalent values
     }
 
     public void integrate (Euler simulator, double dt)
@@ -102,7 +104,26 @@ public class Population extends Instance
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
         for (Variable v : bed.globalBufferedExternal) setFinal (v, getFinal (v));
-        for (Variable v : bed.globalBufferedExternalWrite) set (v, v.type);  // v.type should be pre-loaded with zero-equivalent values
+        for (Variable v : bed.globalBufferedExternalWrite)
+        {
+            switch (v.assignment)
+            {
+                case Variable.ADD:
+                    set (v, v.type);  // initial value is zero-equivalent (additive identity)
+                    break;
+                // TODO: make the following cases type-sensitive
+                case Variable.MULTIPLY:
+                    set (v, new Scalar (1));  // multiplicative identity
+                    break;
+                case Variable.MIN:
+                    set (v, new Scalar (Double.POSITIVE_INFINITY));
+                    break;
+                case Variable.MAX:
+                    set (v, new Scalar (Double.NEGATIVE_INFINITY));
+                    break;
+                // For all other assignment types, do nothing. Effectively, buffered value is initialized to current value
+            }
+        }
         return true;
     }
 }

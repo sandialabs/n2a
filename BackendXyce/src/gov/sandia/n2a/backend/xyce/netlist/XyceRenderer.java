@@ -92,7 +92,7 @@ public class XyceRenderer extends Renderer
         {
             // Evaluate in referenced equation set's context
             XyceRenderer context = new XyceRenderer (simulator);
-            context.pi = (Instance) pi.valuesType[r.index];
+            context.pi = (Instance) pi.valuesObject[r.index];
             return context.change (r.variable.reference);   // this should be a self-reference within r.variable
         }
 

@@ -4,7 +4,7 @@ package gov.sandia.n2a.language;
     Holds data from one of N2A's basic types, and knows how to perform operations with all other types.
     Encodes rules for automatic type promotion in the context of an operation.
 **/
-public abstract class Type
+public abstract class Type implements Comparable<Type>
 {
     /**
         @return A copy of this type with the same structure, but with a value equivalent to 0.

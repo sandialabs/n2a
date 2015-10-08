@@ -56,10 +56,10 @@ public class Variable implements Comparable<Variable>
     // Assignment modes
     public static final int UNKNOWN  = 0;  // the default state of assignment when this object is constructed
     public static final int REPLACE  = 1;  // =
-    public static final int ADD      = 2;  // +=
-    public static final int MULTIPLY = 3;  // *=
-    public static final int MAX      = 4;  // >=
-    public static final int MIN      = 5;  // <=
+    public static final int ADD      = 2;  // =+
+    public static final int MULTIPLY = 3;  // =*
+    public static final int MIN      = 4;  // =<
+    public static final int MAX      = 5;  // =>
 
     public Variable (String name)
     {

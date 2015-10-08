@@ -29,15 +29,15 @@ public class Instance extends Type
 {
     public EquationSet equations;
     public Instance    container;
-    public float[]     valuesFloat;  // memory is the premium resource, not accuracy
-    public Type[]      valuesType;
+    public float[]     valuesFloat;  // memory is the premium resource, not accuracy, so use float rather than double
+    public Object[]    valuesObject;
     public Instance    next;      // for doubly-linked list
     public Instance    previous;  // for doubly-linked list
 
-    public void allocate (int countFloat, int countType)
+    public void allocate (int countFloat, int countObject)
     {
-        if (countFloat > 0) valuesFloat = new float[countFloat];
-        if (countType  > 0) valuesType  = new Type [countType ];
+        if (countFloat  > 0) valuesFloat  = new float [countFloat];
+        if (countObject > 0) valuesObject = new Object[countObject];
     }
 
     public void resolve (TreeSet<VariableReference> references)
@@ -57,7 +57,7 @@ public class Instance extends Type
                     else                              result = result.container.container;  // Parts must dereference their Population to get to their true container.
                 }
             }
-            valuesType[r.index] = result;
+            valuesObject[r.index] = result;
         }
     }
 
@@ -66,7 +66,7 @@ public class Instance extends Type
     **/
     public Type get (VariableReference r)
     {
-        if (r.index >= 0) return ((Instance) valuesType[r.index]).get (r.variable);
+        if (r.index >= 0) return ((Instance) valuesObject[r.index]).get (r.variable);
         return get (r.variable);
     }
 
@@ -77,7 +77,7 @@ public class Instance extends Type
     {
         if (v.readIndex < 0) return v.type;
         if (v.type instanceof Scalar) return new Scalar (valuesFloat[v.readIndex]);
-        Type result = valuesType[v.readIndex];
+        Type result = (Type) valuesObject[v.readIndex];
         if (result == null) return v.type;  // assumes that we never modify the returned object, and that previously it was set to the equivalent of 0
         return result;
     }
@@ -89,12 +89,12 @@ public class Instance extends Type
     {
         if (v.reference.variable != v)
         {
-            ((Instance) valuesType[v.reference.index]).set (v.reference.variable, value);
+            ((Instance) valuesObject[v.reference.index]).set (v.reference.variable, value);
         }
         else
         {
-            if (v.type instanceof Scalar) valuesFloat[v.writeIndex] = (float) ((Scalar) value).value;
-            else                          valuesType [v.writeIndex] = value;
+            if (v.type instanceof Scalar) valuesFloat [v.writeIndex] = (float) ((Scalar) value).value;
+            else                          valuesObject[v.writeIndex] = value;
         }
     }
 
@@ -103,7 +103,7 @@ public class Instance extends Type
     **/
     public Type getFinal (VariableReference r)
     {
-        if (r.index >= 0) return ((Instance) valuesType[r.index]).getFinal (r.variable);
+        if (r.index >= 0) return ((Instance) valuesObject[r.index]).getFinal (r.variable);
         return getFinal (r.variable);
     }
 
@@ -113,7 +113,7 @@ public class Instance extends Type
     public Type getFinal (Variable v)
     {
         if (v.type instanceof Scalar) return new Scalar (valuesFloat[v.writeIndex]);
-        Type result = valuesType[v.writeIndex];
+        Type result = (Type) valuesObject[v.writeIndex];
         if (result == null) return v.type;
         return result;
     }
@@ -124,8 +124,8 @@ public class Instance extends Type
     public void setFinal (Variable v, Type value)
     {
         // Note the change from writeIndex to readIndex.
-        if (v.type instanceof Scalar) valuesFloat[v.readIndex] = (float) ((Scalar) value).value;
-        else                          valuesType [v.readIndex] = value;
+        if (v.type instanceof Scalar) valuesFloat [v.readIndex] = (float) ((Scalar) value).value;
+        else                          valuesObject[v.readIndex] = value;
     }
 
     public void init (Euler simulator)
@@ -215,12 +215,12 @@ public class Instance extends Type
             if (temp)
             {
                 namesFloat = bed.namesGlobalTempFloat;
-                namesType  = bed.namesGlobalTempType;
+                namesType  = bed.namesGlobalTempObject;
             }
             else
             {
                 namesFloat = bed.namesGlobalFloat;
-                namesType  = bed.namesGlobalType;
+                namesType  = bed.namesGlobalObject;
             }
         }
         else  // local
@@ -228,12 +228,12 @@ public class Instance extends Type
             if (temp)
             {
                 namesFloat = bed.namesLocalTempFloat;
-                namesType  = bed.namesLocalTempType;
+                namesType  = bed.namesLocalTempObject;
             }
             else
             {
                 namesFloat = bed.namesLocalFloat;
-                namesType  = bed.namesLocalType;
+                namesType  = bed.namesLocalObject;
             }
         }
 
@@ -248,21 +248,33 @@ public class Instance extends Type
             }
         }
         System.out.print ("][");
-        if (valuesType != null)
+        if (valuesObject != null)
         {
-            for (int i = 0; i < valuesType.length; i++)
+            for (int i = 0; i < valuesObject.length; i++)
             {
                 System.out.print (namesType.get (i) + "=");
-                System.out.print (valuesType[i]);
-                if (i < valuesType.length - 1) System.out.print (",");
+                System.out.print (valuesObject[i]);
+                if (i < valuesObject.length - 1) System.out.print (",");
             }
         }
         System.out.print ("]");
+    }
+
+    public boolean betterThan (Type that)
+    {
+        if (that instanceof Instance) return false;
+        return true;
     }
 
     public String toString ()
     {
         if (equations == null) return "null@" + hashCode ();
         return equations.name + "@" + hashCode ();
+    }
+
+    public int compareTo (Type that)
+    {
+        if (that instanceof Instance) return hashCode () - that.hashCode ();
+        return 1;  // We evaluate greater than any non-Instance
     }
 }

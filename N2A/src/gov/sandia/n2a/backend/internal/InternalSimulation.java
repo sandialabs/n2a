@@ -139,6 +139,7 @@ public class InternalSimulation implements Simulation
         e.determineTypes ();
 
         createBackendData (e);
+        analyzeEvents (e);
         analyze (e);
         clearVariables (e);
     }
@@ -147,6 +148,13 @@ public class InternalSimulation implements Simulation
     {
         if (! (s.backendData instanceof InternalBackendData)) s.backendData = new InternalBackendData ();
         for (EquationSet p : s.parts) createBackendData (p);
+    }
+
+    public static void analyzeEvents (EquationSet s)
+    {
+        InternalBackendData bed = (InternalBackendData) s.backendData;
+        bed.analyzeEvents (s);
+        for (EquationSet p : s.parts) analyzeEvents (p);
     }
 
     public static void analyze (EquationSet s)

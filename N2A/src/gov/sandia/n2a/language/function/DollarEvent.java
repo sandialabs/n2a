@@ -7,6 +7,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.function;
 
+import gov.sandia.n2a.backend.internal.InstanceTemporaries;
+import gov.sandia.n2a.backend.internal.InternalBackendData.EventTarget;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
@@ -15,6 +17,8 @@ import gov.sandia.n2a.language.type.Scalar;
 
 public class DollarEvent extends Function
 {
+    public EventTarget eventType;  // If another $event in the same part shares the same parameters, it will have the same EventTarget.
+
     public static Factory factory ()
     {
         return new Factory ()
@@ -33,7 +37,12 @@ public class DollarEvent extends Function
 
     public Type eval (Instance context)
     {
-        return new Scalar (0); // TODO: evaluate $event()
+        if (eventType != null)  // This check is necessary because eval() can be called outside of Internal simulator.
+        {
+            if (context instanceof InstanceTemporaries) context = ((InstanceTemporaries) context).wrapped;  // event latches are always stored in main instance, never in a temporary variable
+            if (((int) context.valuesFloat[eventType.valueIndex] & eventType.mask) != 0) return new Scalar (1);
+        }
+        return new Scalar (0);
     }
 
     public String toString ()

@@ -34,7 +34,7 @@ public class SymbolStateVar1 extends Symbol
 
         // This symbol refers to a symbol in another part. We don't re-define the
         // variable, rather we create another diff eq that updates the existing one.
-        Instance target = (Instance) renderer.pi.valuesType[r.index];
+        Instance target = (Instance) renderer.pi.valuesObject[r.index];
         String thisVarname = r.variable.name + "_" + target     .hashCode ();
         String eqName      = v.name          + "_" + renderer.pi.hashCode ();
         return Xyceisms.updateDiffEq (eqName, thisVarname, translatedEq);

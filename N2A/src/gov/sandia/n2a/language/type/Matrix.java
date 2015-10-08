@@ -578,8 +578,9 @@ public class Matrix extends Type
 
     public boolean betterThan (Type that)
     {
-        if (that instanceof Matrix) return false;
-        if (that instanceof Text  ) return false;
+        if (that instanceof Matrix  ) return false;
+        if (that instanceof Text    ) return false;
+        if (that instanceof Instance) return false;
         return true;
     }
 
@@ -610,5 +611,47 @@ public class Matrix extends Type
         stream.append ("]");
 
         return stream.toString ();
+    }
+
+    public int compareTo (Type that)
+    {
+        int cols = value.length;
+        int rows = 0;
+        if (cols != 0) rows = value[0].length;
+
+        if (that instanceof Matrix)
+        {
+            double[][] B = ((Matrix) that).value;
+            int Bcols = value.length;
+            int difference = cols - Bcols;
+            if (difference != 0) return difference;
+            int Brows = 0;
+            if (Bcols != 0) Brows = B[0].length;
+            difference = rows - Brows;
+            if (difference != 0) return difference;
+
+            for (int c = 0; c < cols; c++)
+            {
+                for (int r = 0; r < rows; r++)
+                {
+                    double d = value[c][r] - B[c][r];
+                    if (d > 0) return 1;
+                    if (d < 0) return -1;
+                }
+            }
+            return 0;
+        }
+        if (that instanceof Scalar)
+        {
+            if (cols != 1) return 1;
+            if (rows != 1) return 1;
+            double d = value[0][0] - ((Scalar) that).value;
+            if (d > 0) return 1;
+            if (d < 0) return -1;
+            return 0;
+        }
+        if (that instanceof Text    ) return compareTo (new Matrix ((Text) that));
+        if (that instanceof Instance) return -1;
+        throw new EvaluationException ("type mismatch");
     }
 }

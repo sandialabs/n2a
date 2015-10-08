@@ -349,4 +349,21 @@ public class Scalar extends Type
     {
         return String.valueOf (value);
     }
+
+    public int compareTo (Type that)
+    {
+        if (that instanceof Scalar) return new Double (value).compareTo (new Double (((Scalar) that).value));
+        if (that instanceof Text  ) return new Double (value).compareTo (Double.valueOf (((Text) that).value));
+        if (that instanceof Matrix)
+        {
+            double[][] B = ((Matrix) that).value;
+            int w = B.length;
+            if (w != 1) return -1;
+            int h = B[0].length;
+            if (h != 1) return -1;
+            return new Double (value).compareTo (new Double (B[0][0]));
+        }
+        if (that instanceof Instance) return -1;
+        throw new EvaluationException ("type mismatch");
+    }
 }

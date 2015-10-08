@@ -81,4 +81,23 @@ public class Function extends Operator
         }
         renderer.result.append (")");
     }
+
+    public int compareTo (Operator that)
+    {
+        Class<? extends Operator> thisClass = getClass ();
+        Class<? extends Operator> thatClass = that.getClass ();
+        if (! thisClass.equals (thatClass)) return thisClass.hashCode () - thatClass.hashCode ();
+
+        // Same class as us, so compare operands
+        Function f = (Function) that;
+        int difference = operands.length - f.operands.length;
+        if (difference != 0) return difference;
+        for (int i = 0; i < operands.length; i++)
+        {
+            difference = operands[i].compareTo (f.operands[i]);
+            if (difference != 0) return difference;
+        }
+
+        return 0;
+    }
 }

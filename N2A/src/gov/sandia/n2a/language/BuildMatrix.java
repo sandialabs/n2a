@@ -242,4 +242,37 @@ public class BuildMatrix extends Operator
         render (renderer);
         return renderer.result.toString ();
     }
+
+    public int compareTo (Operator that)
+    {
+        Class<? extends Operator> thisClass = getClass ();
+        Class<? extends Operator> thatClass = that.getClass ();
+        if (! thisClass.equals (thatClass)) return thisClass.hashCode () - thatClass.hashCode ();
+
+        // Same class as us, so compare operands
+        BuildMatrix B = (BuildMatrix) that;
+        int columns = operands.length;
+        int difference = columns - B.operands.length;
+        if (difference != 0) return difference;
+        if (columns == 0) return 0;
+        int rows = operands[0].length;
+        difference = rows - B.operands[0].length;
+        if (difference != 0) return difference;
+
+        for (int c = 0; c < columns; c++)
+        {
+            for (int r = 0; r < rows; r++)
+            {
+                Operator a =   operands[c][r];
+                Operator b = B.operands[c][r];
+                if (a == b) continue;  // generally only true if both a and b are null
+                if (a == null) return -1;
+                if (b == null) return 1;
+                difference = a.compareTo (b);
+                if (difference != 0) return difference;
+            }
+        }
+
+        return 0;
+    }
 }

@@ -240,7 +240,7 @@ public class Device
     public String getInstanceVarname (VariableReference r, Instance pi)
     {
         Instance target = pi;
-        if (r.index >= 0) target = (Instance) pi.valuesType[r.index];
+        if (r.index >= 0) target = (Instance) pi.valuesObject[r.index];
         return Xyceisms.referenceVariable (r.variable.name, target.hashCode ());
     }
 

@@ -146,12 +146,22 @@ public class Text extends Type
 
     public boolean betterThan (Type that)
     {
-        if (that instanceof Text) return false;
+        if (that instanceof Text    ) return false;
+        if (that instanceof Instance) return false;
         return true;
     }
 
     public String toString ()
     {
         return value;
+    }
+
+    public int compareTo (Type that)
+    {
+        if (that instanceof Text    ) return value.compareTo (((Text) that).value);
+        if (that instanceof Scalar  ) return new Double (value).compareTo (new Double (((Scalar) that).value));
+        if (that instanceof Matrix  ) return new Matrix (this).compareTo (that);
+        if (that instanceof Instance) return -1;
+        throw new EvaluationException ("type mismatch");
     }
 }

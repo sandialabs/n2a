@@ -72,4 +72,15 @@ public class AccessVariable extends Operator
     {
         return name;
     }
+
+    public int compareTo (Operator that)
+    {
+        Class<? extends Operator> thisClass = getClass ();
+        Class<? extends Operator> thatClass = that.getClass ();
+        if (! thisClass.equals (thatClass)) return thisClass.hashCode () - thatClass.hashCode ();
+
+        // Same class as us, so compare operands
+        AccessVariable a = (AccessVariable) that;
+        return name.compareTo (a.name);
+    }
 }

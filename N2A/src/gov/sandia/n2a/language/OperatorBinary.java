@@ -97,4 +97,17 @@ public class OperatorBinary extends Operator
         operand1.render (renderer);
         if (useParens) renderer.result.append (")");
     }
+
+    public int compareTo (Operator that)
+    {
+        Class<? extends Operator> thisClass = getClass ();
+        Class<? extends Operator> thatClass = that.getClass ();
+        if (! thisClass.equals (thatClass)) return thisClass.hashCode () - thatClass.hashCode ();
+
+        // Same class as us, so compare operands
+        OperatorBinary o = (OperatorBinary) that;
+        int difference = operand0.compareTo (o.operand0);
+        if (difference != 0) return difference;
+        return operand1.compareTo (o.operand1);
+    }
 }

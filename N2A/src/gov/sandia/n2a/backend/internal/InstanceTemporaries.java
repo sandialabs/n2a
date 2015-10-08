@@ -43,13 +43,13 @@ public class InstanceTemporaries extends Instance
         this.simulator = simulator;
         this.init      = new Scalar (init ? 1 : 0);
         this.bed       = bed;
-        if (wrapped instanceof Population) allocate (bed.countGlobalTempFloat, bed.countGlobalTempType);
-        else                               allocate (bed.countLocalTempFloat,  bed.countLocalTempType);
+        if (wrapped instanceof Population) allocate (bed.countGlobalTempFloat, bed.countGlobalTempObject);
+        else                               allocate (bed.countLocalTempFloat,  bed.countLocalTempObject);
     }
 
     public Type get (VariableReference r)
     {
-        if (r.index >= 0) return ((Instance) wrapped.valuesType[r.index]).get (r.variable);
+        if (r.index >= 0) return ((Instance) wrapped.valuesObject[r.index]).get (r.variable);
         return get (r.variable);
     }
 
@@ -72,7 +72,7 @@ public class InstanceTemporaries extends Instance
 
     public Type getFinal (VariableReference r)
     {
-        if (r.index >= 0) return ((Instance) wrapped.valuesType[r.index]).getFinal (r.variable);
+        if (r.index >= 0) return ((Instance) wrapped.valuesObject[r.index]).getFinal (r.variable);
         return getFinal (r.variable);
     }
 
@@ -87,10 +87,15 @@ public class InstanceTemporaries extends Instance
         if (v == bed.dt)
         {
             simulator.move (wrapped, ((Scalar) value).value);
-            if (! bed.storeDt) return;  // don't try to store $dt (below) unless necessary
+            if (! bed.storeDt) return;  // don't try to store $t' (below) unless necessary
         }
 
         if (v.readTemp) super.setFinal (v, value);
         else          wrapped.setFinal (v, value);
+    }
+
+    public String toString ()
+    {
+        return "temp:" + wrapped.toString ();
     }
 }
