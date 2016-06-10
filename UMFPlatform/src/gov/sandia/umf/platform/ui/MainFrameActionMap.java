@@ -7,11 +7,9 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui;
 
-import gov.sandia.umf.platform.XycePlotPrnFile;
 import gov.sandia.umf.platform.plugins.extpoints.MenuItems;
 import gov.sandia.umf.platform.plugins.extpoints.UMFMenuBarActionDescriptor;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
-
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
@@ -291,20 +289,6 @@ public class MainFrameActionMap extends UIActionMap {
             i("redsky2.gif"), allEnabledStateMap, false, 'J', true, redSkyListener));
         action.addDescriptor(new ToolBarActionDescriptor("toolsMenu", "Run Manager", i("redsky2.gif"),
             allEnabledStateMap, false, redSkyListener));
-        addAction(action);
-
-        ActionListener prnGraphListener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                XycePlotPrnFile frame = new XycePlotPrnFile();
-                frame.setLocationRelativeTo(uiController.getParentRef());
-                frame.setVisible(true);
-            }
-        };
-        action = new UIAction("prngraph");
-        action.addDescriptor(new MenuBarActionDescriptor("toolsMenu", "Open PRN Plotter", 't',
-            i("prnplot.gif"), allEnabledStateMap, false, 0, false, prnGraphListener));
-        action.addDescriptor(new ToolBarActionDescriptor("toolsMenu", "Open PRN Plotter", i("prnplot.gif"),
-            allEnabledStateMap, false, prnGraphListener));
         addAction(action);
 
         action = new UIAction(sepId());

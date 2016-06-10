@@ -66,13 +66,8 @@ import replete.util.ExceptionUtil;
 import replete.util.GUIUtil;
 import replete.util.Lay;
 
-public class RunManagerFrame extends EscapeFrame {
-
-
-    ////////////
-    // FIELDS //
-    ////////////
-
+public class RunManagerFrame extends EscapeFrame
+{
     private VisualStateSavingTree treJobs;
     private TNode root = new TNode(new NodeRoot("All Jobs"));
     private DefaultTreeModel model = new DefaultTreeModel(root);
@@ -84,8 +79,9 @@ public class RunManagerFrame extends EscapeFrame {
     private ExecutionEnv env;
     private JProgressBar pgb;
     private JLabel lblViewFile;
-///    private JButton btnSubmitNewJob;
+    //private JButton btnSubmitNewJob;
     private JButton btnRefresh;
+    public  JButton btnGraph;
     private JPanel pnlViewFileHeader;
 
     private CommonThread currentAction;
@@ -93,30 +89,34 @@ public class RunManagerFrame extends EscapeFrame {
     private Thread refreshThread;
     private long lastRefreshTime;
 
-
-    /////////////////
-    // CONSTRUCTOR //
-    /////////////////
-
-    public RunManagerFrame(JFrame parent) {
+    public RunManagerFrame (JFrame parent)
+    {
         super("Run Manager");
 
         btnRefresh = new MButton("&Refresh", ImageUtil.getImage("refresh.gif"));
-        btnRefresh.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
+        btnRefresh.addActionListener(new ActionListener()
+        {
+            public void actionPerformed(ActionEvent e)
+            {
                 doRefresh();
-                if(refreshThread == null) {
-                    refreshThread = new Thread() {
+                if(refreshThread == null)
+                {
+                    refreshThread = new Thread()
+                    {
                         @Override
-                        public void run() {
-                            while(true) {
-                                try {
+                        public void run()
+                        {
+                            while(true)
+                            {
+                                try
+                                {
                                     Thread.sleep(1000);
-                                    if(System.currentTimeMillis() - lastRefreshTime > 20000 &&
-                                                    refresh && currentAction == null) {
+                                    if(System.currentTimeMillis() - lastRefreshTime > 20000 && refresh && currentAction == null)
+                                    {
                                         doRefresh(true);
                                     }
-                                } catch(Exception e) {}
+                                }
+                                catch(Exception e) {}
                             }
                         }
                     };
@@ -126,34 +126,48 @@ public class RunManagerFrame extends EscapeFrame {
             }
         });
 
+        btnGraph = new MButton ("&Graph", ImageUtil.getImage ("analysis.gif"));
+        btnGraph.addActionListener (new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                Plot frame = new Plot (lblViewFile.getText (), parent);
+                frame.setVisible (true);
+            }
+        });
+
         treJobs = new VisualStateSavingTree(model);
         TNode nInfo = new TNode("(Click Refresh Button)");
         root.add(nInfo);
         treJobs.expandPath(new TreePath(root));
         //treJobs.setCellRenderer(new TreeRenderer());
-        treJobs.addMouseListener(new MouseAdapter() {
+        treJobs.addMouseListener(new MouseAdapter()
+        {
             @Override
-            public void mouseClicked(MouseEvent e) {
-                if(SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 2) {
+            public void mouseClicked(MouseEvent e)
+            {
+                if(SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 2)
+                {
                     TreePath path = treJobs.getPathForLocation(e.getX(), e.getY());
-                    if(path != null) {
+                    if(path != null)
+                    {
                         TNode node = (TNode) path.getLastPathComponent();
-                        if(node.isLeaf() && node.getUserObject() instanceof NodeFile) {
-                            doView();
-                        }
+                        if(node.isLeaf() && node.getUserObject() instanceof NodeFile) doView();
                     }
                 }
-                if(SwingUtilities.isRightMouseButton(e) && e.getClickCount() == 1) {
+                if (SwingUtilities.isRightMouseButton(e) && e.getClickCount() == 1)
+                {
                     TreePath path = treJobs.getPathForLocation(e.getX(), e.getY());
-                    if(path == null) {
-                        return;
-                    }
+                    if(path == null) return;
                     TNode node = (TNode) path.getLastPathComponent();
-                    if(node.getUserObject() instanceof NodeFile) {
+                    if(node.getUserObject() instanceof NodeFile)
+                    {
                         treJobs.setSelectionPath(path);
                         treJobs.requestFocusInWindow();
                         mnuFile.show(treJobs, e.getX(), e.getY());
-                    } else if(node.getUserObject() instanceof NodeJob) {
+                    }
+                    else if(node.getUserObject() instanceof NodeJob)
+                    {
                         treJobs.setSelectionPath(path);
                         treJobs.requestFocusInWindow();
                         mnuJob.show(treJobs, e.getX(), e.getY());
@@ -161,20 +175,22 @@ public class RunManagerFrame extends EscapeFrame {
                 }
             }
         });
-        treJobs.addTreeWillExpandListener(new TreeWillExpandListener() {
-            public void treeWillCollapse(TreeExpansionEvent e) throws ExpandVetoException {
+        treJobs.addTreeWillExpandListener(new TreeWillExpandListener()
+        {
+            public void treeWillCollapse(TreeExpansionEvent e) throws ExpandVetoException
+            {
                 TNode nObj = (TNode) e.getPath().getLastPathComponent();
                 NodeBase uObj = (NodeBase) nObj.getUserObject();
-                if(!uObj.isCollapsible()) {
-                    throw new ExpandVetoException(e);
-                }
+                if(!uObj.isCollapsible()) throw new ExpandVetoException(e);
             }
             public void treeWillExpand(TreeExpansionEvent arg0) throws ExpandVetoException {}
         });
 
         JButton btnClose = new MButton("&Close");
-        btnClose.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
+        btnClose.addActionListener(new ActionListener()
+        {
+            public void actionPerformed(ActionEvent e)
+            {
                 setVisible(false);
                 refresh = false;
             }
@@ -191,34 +207,40 @@ public class RunManagerFrame extends EscapeFrame {
         pgb.setIndeterminate(true);
         pgb.setVisible(false);
 
-        final JCheckBox chkFixedWidth = new MCheckBox("&Fixed-Width Font?");
-        chkFixedWidth.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                if(chkFixedWidth.isSelected()) {
+        final JCheckBox chkFixedWidth = new MCheckBox("&Fixed-Width Font");
+        chkFixedWidth.addActionListener(new ActionListener()
+        {
+            public void actionPerformed(ActionEvent e)
+            {
+                if(chkFixedWidth.isSelected())
+                {
                     txtView.setFont(new Font("Courier New", txtView.getFont().getStyle(), txtView.getFont().getSize()));
-                } else {
+                }
+                else
+                {
                     txtView.setFont(new Font("Arial", txtView.getFont().getStyle(), txtView.getFont().getSize()));
                 }
             }
         });
 /*
         btnSubmitNewJob = new MButton("&Submit New Xyce Run...", ImageUtil.getImage("add.gif"));
-        btnSubmitNewJob.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                try {
+        btnSubmitNewJob.addActionListener(new ActionListener ()
+        {
+            public void actionPerformed(ActionEvent e)
+            {
+                try
+                {
                     CommonFileChooser chooser = CommonFileChooser.getChooser("Choose Xyce Netlist File...");
                     FilterBuilder builder = new FilterBuilder(chooser, false);
                     builder.append("Xyce Netlist Files (*.cir)", "cir");
                     refresh = false;
-                    if(chooser.showOpen(RunManagerFrame.this)) {
-                        doSubmit(chooser.getSelectedFile());
-                    }
+                    if(chooser.showOpen(RunManagerFrame.this)) doSubmit(chooser.getSelectedFile());
                     refresh = true;
-
-                } catch(Exception ee) {
+                }
+                catch (Exception ee)
+                {
                     ee.printStackTrace();
-                    Dialogs.showDetails("An error occurred while submitting the job.",
-                        ExceptionUtil.toCompleteString(ee, 4));
+                    Dialogs.showDetails("An error occurred while submitting the job.", ExceptionUtil.toCompleteString(ee, 4));
                 }
             }
         });
@@ -226,12 +248,15 @@ public class RunManagerFrame extends EscapeFrame {
         buildPopupMenus();
 
         Lay.BLtg(this,
-            "N", Lay.FL("L", lblE, cboEnvs, btnRefresh),
+            "N", Lay.BL(
+                "W", Lay.FL ("L", lblE, cboEnvs, btnRefresh),
+                "E", chkFixedWidth
+            ),
             "C", Lay.SPL(
                 Lay.augb(
                     Lay.BL(
                         "C", Lay.sp(treJobs),
-//                        "S", Lay.hn(btnSubmitNewJob, "enabled=false"),
+                        //"S", Lay.hn(btnSubmitNewJob, "enabled=false"),
                         "vgap=5"
                     ),
                     Lay.eb("5")
@@ -240,8 +265,7 @@ public class RunManagerFrame extends EscapeFrame {
                     Lay.BL(
                         "N", pnlViewFileHeader = Lay.BL(
                             "C", Lay.eb(lblViewFile = new JLabel(), "3"),
-                            "E", chkFixedWidth,
-                            "visible=false"
+                            "E", btnGraph
                         ),
                         "C", Lay.sp(txtView)
                     ),
@@ -260,36 +284,47 @@ public class RunManagerFrame extends EscapeFrame {
         setIconImage(ImageUtil.getImage("redsky2.gif").getImage());
         setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
         setLocationRelativeTo(parent);
-        addWindowListener(new WindowAdapter() {
+        addWindowListener(new WindowAdapter()
+        {
             @Override
-            public void windowClosing(WindowEvent e) {
+            public void windowClosing(WindowEvent e)
+            {
                 refresh = false;
             }
             @Override
-            public void windowClosed(WindowEvent e) {
+            public void windowClosed(WindowEvent e)
+            {
                 refresh = false;
             }
         });
     }
 
-    private void buildPopupMenus() {
+    private void buildPopupMenus()
+    {
         JMenuItem mnuDownload = new MMenuItem("&Download", ImageUtil.getImage("download.gif"));
-        mnuDownload.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
+        mnuDownload.addActionListener(new ActionListener()
+        {
+            public void actionPerformed(ActionEvent e)
+            {
                 doDownload();
             }
         });
         JMenuItem mnuView = new MMenuItem("&View", ImageUtil.getImage("view.gif"));
-        mnuView.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
+        mnuView.addActionListener(new ActionListener()
+        {
+            public void actionPerformed(ActionEvent e)
+            {
                 doView();
             }
         });
-        mnuFile = new JPopupMenu() {
+        mnuFile = new JPopupMenu()
+        {
             @Override
-            public void setEnabled(boolean state) {
+            public void setEnabled(boolean state)
+            {
                 super.setEnabled(state);
-                for(int c = 0; c < getComponentCount(); c++) {
+                for(int c = 0; c < getComponentCount(); c++)
+                {
                     getComponent(c).setEnabled(state);
                 }
             }
@@ -298,16 +333,21 @@ public class RunManagerFrame extends EscapeFrame {
         mnuFile.add(mnuDownload);
 
         JMenuItem mnuDelete = new MMenuItem("&Delete", ImageUtil.getImage("remove.gif"));
-        mnuDelete.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
+        mnuDelete.addActionListener(new ActionListener()
+        {
+            public void actionPerformed(ActionEvent e)
+            {
                 doDelete();
             }
         });
-        mnuJob = new JPopupMenu() {
+        mnuJob = new JPopupMenu()
+        {
             @Override
-            public void setEnabled(boolean state) {
+            public void setEnabled(boolean state)
+            {
                 super.setEnabled(state);
-                for(int c = 0; c < getComponentCount(); c++) {
+                for(int c = 0; c < getComponentCount(); c++)
+                {
                     getComponent(c).setEnabled(state);
                 }
             }
@@ -320,24 +360,29 @@ public class RunManagerFrame extends EscapeFrame {
     // ACTIVE THREAD //
     ///////////////////
 
-    private void startAction(String actionStr, CommonRunnable runnable, ChangeListener callbackListener) {
+    private void startAction(String actionStr, CommonRunnable runnable, ChangeListener callbackListener)
+    {
         startAction(actionStr, false, runnable, callbackListener);
     }
-    private void startAction(final String actionStr, final boolean suppressMouseChange, CommonRunnable runnable,
-                             final ChangeListener callbackListener) {
+    private void startAction(final String actionStr, final boolean suppressMouseChange, CommonRunnable runnable, final ChangeListener callbackListener)
+    {
 
-        if(currentAction != null) {
+        if(currentAction != null)
+        {
             Dialogs.showWarning(this, "Please wait for previous action to finish.");
             return;
         }
 
         // DUH!
-        GUIUtil.safeSync(new Runnable() {
+        GUIUtil.safeSync(new Runnable()
+        {
             @Override
-            public void run() {
+            public void run()
+            {
                 // UI Start Up
                 pgb.setVisible(true);
-                if(!suppressMouseChange) {
+                if(!suppressMouseChange)
+                {
                     setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
                 }
 
@@ -349,13 +394,18 @@ public class RunManagerFrame extends EscapeFrame {
         });
 
         currentAction = new CommonThread(runnable);
-        currentAction.addProgressListener(new ChangeListener() {
-            public void stateChanged(ChangeEvent e) {
+        currentAction.addProgressListener(new ChangeListener()
+        {
+            public void stateChanged(ChangeEvent e)
+            {
                 CommonThreadResult r = (CommonThreadResult) e.getSource();
-                if(r.isDone()) {
+                if(r.isDone())
+                {
                     // DUH!
-                    GUIUtil.safeSync(new Runnable() {
-                        public void run() {
+                    GUIUtil.safeSync(new Runnable()
+                    {
+                        public void run()
+                        {
                             treJobs.updateUI();
                             currentAction = null;
 
@@ -369,9 +419,7 @@ public class RunManagerFrame extends EscapeFrame {
                         }
                     });
 
-                    if(callbackListener != null) {
-                        callbackListener.stateChanged(null);
-                    }
+                    if(callbackListener != null) callbackListener.stateChanged(null);
                 }
             }
         });
@@ -384,51 +432,55 @@ public class RunManagerFrame extends EscapeFrame {
     // ACTIONS //
     /////////////
 
-    private void doRefresh() {
+    private void doRefresh()
+    {
         doRefresh(false);
     }
-    private void doRefresh(boolean suppressMouseChange) {
-        startAction("Refreshing", suppressMouseChange, new CommonRunnable() {
-            public void runThread(CommonThreadContext context) throws CommonThreadShutdownException {
-                GUIUtil.safeSync(new Runnable() {
-                    public void run() {
+    private void doRefresh(boolean suppressMouseChange)
+    {
+        startAction("Refreshing", suppressMouseChange, new CommonRunnable()
+        {
+            public void runThread(CommonThreadContext context) throws CommonThreadShutdownException
+            {
+                GUIUtil.safeSync(new Runnable()
+                {
+                    public void run()
+                    {
                         env = (ExecutionEnv) cboEnvs.getSelectedItem();
-                        try {
+                        try
+                        {
                             Set<Integer> activeProcs = env.getActiveProcs();
                             treJobs.saveState();
                             root.removeAllChildren();
                             ((NodeRoot) root.getUserObject()).setName("All " + env + " Jobs");
                             TNode actNode = new TNode(new NodeActiveProcs(activeProcs.size()));
                             root.add(actNode);
-                            for(Integer proc : activeProcs) {
+                            for(Integer proc : activeProcs)
+                            {
                                 TNode dateNode = new TNode(new NodeActiveProc(proc.toString ()));
                                 actNode.add(dateNode);
                             }
 
                             AllJobInfo allJobInfo = env.getJobs();
-                            for(DateGroup group : allJobInfo.getDateGroups()) {
+                            for(DateGroup group : allJobInfo.getDateGroups())
+                            {
                                 TNode dateNode = new TNode(new NodeDate(group.getName()));
                                 root.add(dateNode);
-                                for(Job job : group.getJobs()) {
+                                for(Job job : group.getJobs())
+                                {
                                     TNode jobNode = new TNode(new NodeJob(job.getName()));
                                     dateNode.add(jobNode);
-                                    for(Resource resource : job.getResources()) {
+                                    for(Resource resource : job.getResources())
+                                    {
                                         NodeBase uRes;
                                         String path = resource.getRemotePath();
 
-                                        if      (path.endsWith ("model")) {
-                                            uRes = new NodeFile (NodeFile.Type.Model,   path);
-                                        } else if (path.endsWith ("out")) {
-                                            uRes = new NodeFile (NodeFile.Type.Output,  path);
-                                        } else if (path.endsWith ("err")) {
-                                            uRes = new NodeFile (NodeFile.Type.Error,   path);
-                                        } else if (path.endsWith ("result")) {
-                                            uRes = new NodeFile (NodeFile.Type.Result,  path);
-                                        } else if (path.endsWith ("console")) {
-                                            uRes = new NodeFile (NodeFile.Type.Console, path);
-                                        } else {
-                                            continue;
-                                        }
+                                        if      (path.endsWith ("model"  )) uRes = new NodeFile (NodeFile.Type.Model,   path);
+                                        else if (path.endsWith ("out"    )) uRes = new NodeFile (NodeFile.Type.Output,  path);
+                                        else if (path.endsWith ("err"    )) uRes = new NodeFile (NodeFile.Type.Error,   path);
+                                        else if (path.endsWith ("result" )) uRes = new NodeFile (NodeFile.Type.Result,  path);
+                                        else if (path.endsWith ("console")) uRes = new NodeFile (NodeFile.Type.Console, path);
+                                        else continue;
                                         TNode nRes = new TNode(uRes);
                                         jobNode.add(nRes);
                                     }
@@ -437,11 +489,17 @@ public class RunManagerFrame extends EscapeFrame {
 
                             treJobs.restoreState();
                             lastRefreshTime = System.currentTimeMillis();
-        //                    btnSubmitNewJob.setEnabled(true);
-                        } catch(Exception e1) {
+                            //btnSubmitNewJob.setEnabled(true);
+                        }
+                        catch(Exception e1)
+                        {
                             e1.printStackTrace();
-                            Dialogs.showDetails(RunManagerFrame.this, "An error occurred while refreshing the job tree.",
-                                ExceptionUtil.toCompleteString(e1, 4));
+                            Dialogs.showDetails
+                            (
+                                RunManagerFrame.this,
+                                "An error occurred while refreshing the job tree.",
+                                ExceptionUtil.toCompleteString (e1, 4)
+                            );
                         }
                     }
                 });
@@ -450,29 +508,36 @@ public class RunManagerFrame extends EscapeFrame {
         }, null);
     }
 
-    private void doView() {
-        startAction("Fetching", new CommonRunnable() {
+    private void doView()
+    {
+        startAction("Fetching", new CommonRunnable()
+        {
             public void runThread(CommonThreadContext context) throws CommonThreadShutdownException {
                 TNode node = (TNode) treJobs.getSelectionPaths()[0].getLastPathComponent();
                 NodeFile nf = (NodeFile) node.getUserObject();
-                try {
+                try
+                {
                     txtView.setText(env.getFileContents(nf.getRemotePath()));
                     txtView.setCaretPosition(0);
                     pnlViewFileHeader.setVisible(true);
-                    lblViewFile.setText("<html>Viewing File: <b>" + nf.getRemotePath() + "</b></html>");
-                } catch(Exception e1) {
+                    lblViewFile.setText(nf.getRemotePath());
+                }
+                catch(Exception e1)
+                {
                     e1.printStackTrace();
-                    Dialogs.showDetails(RunManagerFrame.this, "An error occurred viewing the file.",
-                        ExceptionUtil.toCompleteString(e1, 4));
+                    Dialogs.showDetails(RunManagerFrame.this, "An error occurred viewing the file.", ExceptionUtil.toCompleteString(e1, 4));
                 }
             }
             public void cleanUp() {}
         }, null);
     }
 
-    private void doDownload() {
-        startAction("Downloading", new CommonRunnable() {
-            public void runThread(CommonThreadContext context) throws CommonThreadShutdownException {
+    private void doDownload()
+    {
+        startAction("Downloading", new CommonRunnable()
+        {
+            public void runThread(CommonThreadContext context) throws CommonThreadShutdownException
+            {
                 TNode node = (TNode) treJobs.getSelectionPaths()[0].getLastPathComponent();
                 NodeFile nf = (NodeFile) node.getUserObject();
                 String remotePath = nf.getRemotePath();
@@ -480,16 +545,19 @@ public class RunManagerFrame extends EscapeFrame {
                 String name = remotePath.substring(lastSlash + 1);
                 CommonFileChooser fc = CommonFileChooser.getChooser("Save " + nf.getType().getLabel());
                 fc.setSelectedFile(new File(name));
-                if(fc.showSave(RunManagerFrame.this)) {
+                if(fc.showSave(RunManagerFrame.this))
+                {
                     setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-                    try {
+                    try
+                    {
                         File dst = fc.getSelectedFile();
                         env.downloadFile(remotePath, dst);
                         Dialogs.showMessage(RunManagerFrame.this, "File downloaded.");
-                    } catch(Exception e1) {
+                    }
+                    catch(Exception e1)
+                    {
                         e1.printStackTrace();
-                        Dialogs.showDetails(RunManagerFrame.this, "An error occurred while downloading file.",
-                            ExceptionUtil.toCompleteString(e1, 4));
+                        Dialogs.showDetails(RunManagerFrame.this, "An error occurred while downloading file.", ExceptionUtil.toCompleteString(e1, 4));
                     }
                 }
             }
@@ -497,31 +565,38 @@ public class RunManagerFrame extends EscapeFrame {
         }, null);
     }
 
-    private void doDelete() {
-        startAction("Deleting", new CommonRunnable() {
-            public void runThread(CommonThreadContext context) throws CommonThreadShutdownException {
+    private void doDelete()
+    {
+        startAction("Deleting", new CommonRunnable()
+        {
+            public void runThread(CommonThreadContext context) throws CommonThreadShutdownException
+            {
                 TNode node = (TNode) treJobs.getSelectionPaths()[0].getLastPathComponent();
                 NodeJob nf = (NodeJob) node.getUserObject();
                 TNode nodep = (TNode) node.getParent();
                 NodeDate nd = (NodeDate) nodep.getUserObject();
                 String jobName = nf.toString();
                 String date = nd.toString();
-                if(Dialogs.showConfirm(RunManagerFrame.this, "Are you sure you want to delete the job '" + jobName + "' from '" + date + "'?")) {
-                    try {
+                if(Dialogs.showConfirm(RunManagerFrame.this, "Are you sure you want to delete the job '" + jobName + "' from '" + date + "'?"))
+                {
+                    try
+                    {
                         env.deleteJob(jobName);
                         nodep.remove(node);
                         Dialogs.showMessage(RunManagerFrame.this, "Job Deleted");
-                    } catch(Exception e1) {
+                    }
+                    catch(Exception e1)
+                    {
                         e1.printStackTrace();
-                        Dialogs.showDetails(RunManagerFrame.this, "An error occurred deleting the file.",
-                            ExceptionUtil.toCompleteString(e1, 4));
+                        Dialogs.showDetails(RunManagerFrame.this, "An error occurred deleting the file.", ExceptionUtil.toCompleteString(e1, 4));
                     }
                 }
             }
             public void cleanUp() {}
         }, null);
     }
-/*
+
+    /*
     private void doSubmit(final File netlistFile) {
         startAction("Submitting", new CommonRunnable() {
             public void runThread(CommonThreadContext context) throws CommonThreadShutdownException {
@@ -543,5 +618,5 @@ public class RunManagerFrame extends EscapeFrame {
             }
         });
     }
-*/
+    */
 }
