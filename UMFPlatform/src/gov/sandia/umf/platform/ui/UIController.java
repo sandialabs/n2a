@@ -279,26 +279,32 @@ public class UIController {
         }
     }
 
-    ////////
+    // //////
     // DB //
-    ////////
+    // //////
 
-    // These two could also be combined if a thread could some how return a value on success/failure.
-    public void testConnect(final ChangeListener onSuccessCallback) {
-        startAction("Connecting", new CommonRunnable() {
-            public void runThread(CommonThreadContext context) throws CommonThreadShutdownException {
-                try {
-                    if(dataModelMgr2.hasDetails()) {
-                        dataModelMgr2.connect();
-                    }
-//                    workpaneModel.init();  // TODO: Rethink the workpane.
-                    onSuccessCallback.stateChanged(null);
-
-                } catch(Exception e) {
-                    throw new RuntimeException("Could not connect to database.", e);
+    // These two could also be combined if a thread could some how return a
+    // value on success/failure.
+    public void testConnect ()
+    {
+        startAction ("Connecting", new CommonRunnable ()
+        {
+            public void runThread (CommonThreadContext context) throws CommonThreadShutdownException
+            {
+                try
+                {
+                    if (dataModelMgr2.hasDetails ()) dataModelMgr2.connect ();
+                    // workpaneModel.init(); // TODO: Rethink the workpane.
+                }
+                catch (Exception e)
+                {
+                    throw new RuntimeException ("Could not connect to database.", e);
                 }
             }
-            public void cleanUp() {}
+
+            public void cleanUp ()
+            {
+            }
         }, null, "connecting to the database");
     }
 
@@ -785,16 +791,6 @@ public class UIController {
         }, null, "searching the database");
     }
 
-    public void openSearchOrient() {
-        startAction("Opening", new CommonRunnable() {
-            public void runThread(CommonThreadContext context) throws CommonThreadShutdownException {
-                tabs.openSearchOrient();
-            }
-            public void cleanUp() {}
-        }, null, "opening the search tab");
-    }
-
-
     public void saveSynchronous(ODocument bean) {  // Not an UI operation but here for consistency.
         bean.save();
 //        updateWorkpane(bean); // Make a notifier/listener pair someday
@@ -853,9 +849,6 @@ public class UIController {
         }
     }
     public void openImportDialog() {
-    }
-    public void initTabsFromAppState() {
-        tabs.initFromAppState();
     }
 
     public void backup ()

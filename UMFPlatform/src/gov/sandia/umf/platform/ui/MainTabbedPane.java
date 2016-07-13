@@ -8,12 +8,10 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui;
 
-import gov.sandia.umf.platform.AppState;
 import gov.sandia.umf.platform.connect.orientdb.expl.OrientDbExplorerPanel;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.connect.orientdb.ui.RecordEditPanel;
 import gov.sandia.umf.platform.plugins.extpoints.RecordHandler;
-import gov.sandia.umf.platform.ui.home.HomeTabPanel;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 import gov.sandia.umf.platform.ui.search.DefaultButtonEnabledPanel;
 import gov.sandia.umf.platform.ui.search.SearchPanel;
@@ -41,7 +39,6 @@ public class MainTabbedPane extends AdvancedTabbedPane {
 
     // Const
 
-    private static final String HOME_TAB_KEY = "Home";
     private static final String SEARCH_ORIENT_TAB_KEY = "Search";
     private static final String EXPLORE_ORIENT_TAB_KEY = "Explore";
 
@@ -61,59 +58,81 @@ public class MainTabbedPane extends AdvancedTabbedPane {
     //////////////
 
     protected ChangeNotifier historyNotifier = new ChangeNotifier(this);
-    public void addHistoryListener(ChangeListener listener) {
-        historyNotifier.addListener(listener);
-    }
-    protected void fireHistoryNotifier() {
-        historyNotifier.fireStateChanged();
+
+    public void addHistoryListener (ChangeListener listener)
+    {
+        historyNotifier.addListener (listener);
     }
 
+    protected void fireHistoryNotifier ()
+    {
+        historyNotifier.fireStateChanged ();
+    }
 
-    /////////////////
+    // ///////////////
     // CONSTRUCTOR //
-    /////////////////
+    // ///////////////
 
-    public MainTabbedPane(UIController uic) {
-        super(true);
+    public MainTabbedPane (UIController uic)
+    {
+        super (true);
         uiController = uic;
 
-        // Home panel
-        HomeTabPanel pnlHome = new HomeTabPanel(uiController);
-        TabState homeTabState = new TabState(TabStateType.HOME);
-        addTab(HOME_TAB_KEY, ImageUtil.getImage("home.gif"), pnlHome, null);
-        setAdditionalInfo(0, homeTabState);
-        historyNewTab(HOME_TAB_KEY);
-        setCloseableAt(0, false);
+        // Search panel
+        final SearchPanel pnl = new SearchPanel (uiController);
+        pnl.addSelectRecordListener (new ChangeListener ()
+        {
+            public void stateChanged (ChangeEvent e)
+            {
+                List<NDoc> doc = pnl.getSelectedRecords ();
+                uiController.openRecord (doc.get (0));
+            }
+        });
+        addTab (SEARCH_ORIENT_TAB_KEY, ImageUtil.getImage ("mag.gif"), pnl, null);
+        TabState searchOrientTabState = new TabState (TabStateType.SEARCH_ORIENT);
+        setAdditionalInfo (0, searchOrientTabState);
+        historyNewTab (SEARCH_ORIENT_TAB_KEY);
+        setCloseableAt (0, false);
 
         // Listeners
-        addTabAboutToCloseListener(new TabAboutToCloseListener() {
-            public void stateChanged(TabAboutToCloseEvent e) {
-                if(!uiController.okToCloseCurrentTab()) {
-                    e.cancel();
+        addTabAboutToCloseListener (new TabAboutToCloseListener ()
+        {
+            public void stateChanged (TabAboutToCloseEvent e)
+            {
+                if (!uiController.okToCloseCurrentTab ())
+                {
+                    e.cancel ();
                 }
             }
         });
-        addTabCloseListener(new TabCloseListener() {
-            public void stateChanged(TabCloseEvent e) {
-                String removedKey = getKeyAt(e.getIndex());
-                historyRemoveEntry(removedKey);
+        addTabCloseListener (new TabCloseListener ()
+        {
+            public void stateChanged (TabCloseEvent e)
+            {
+                String removedKey = getKeyAt (e.getIndex ());
+                historyRemoveEntry (removedKey);
             }
         });
-        addChangeListener(new ChangeListener() {
-            public void stateChanged(ChangeEvent e) {
-                int index = getSelectedIndex();
-                if(index != -1) {
-                    if(!noHistoryFire) {
-                        historyNewTab(getKeyAt(index));
+        addChangeListener (new ChangeListener ()
+        {
+            public void stateChanged (ChangeEvent e)
+            {
+                int index = getSelectedIndex ();
+                if (index != -1)
+                {
+                    if (!noHistoryFire)
+                    {
+                        historyNewTab (getKeyAt (index));
                     }
-                    Component cmp = getComponentAt(index);
-                    if(cmp instanceof DefaultButtonEnabledPanel) {
+                    Component cmp = getComponentAt (index);
+                    if (cmp instanceof DefaultButtonEnabledPanel)
+                    {
                         DefaultButtonEnabledPanel pnlDbe = (DefaultButtonEnabledPanel) cmp;
-                        getRootPane().setDefaultButton(pnlDbe.getDefaultButton());
+                        getRootPane ().setDefaultButton (pnlDbe.getDefaultButton ());
                         return;
                     }
                 }
-                getRootPane().setDefaultButton(null);
+                getRootPane ().setDefaultButton (null);
             }
         });
     }
@@ -125,25 +144,30 @@ public class MainTabbedPane extends AdvancedTabbedPane {
 
     // --- New OrientDB --- //
 
-    public void openSearchOrient() {
-        int searchIdx = indexOfTabByKey(SEARCH_ORIENT_TAB_KEY);
-        if(searchIdx == -1) {
-            final SearchPanel pnlSearch = new SearchPanel(uiController);
-            pnlSearch.addSelectRecordListener(new ChangeListener() {
-                public void stateChanged(ChangeEvent e) {
-                  List<NDoc> doc = pnlSearch.getSelectedRecords();
-                  uiController.openRecord(doc.get(0));
+    public void openSearchOrient ()
+    {
+        int searchIdx = indexOfTabByKey (SEARCH_ORIENT_TAB_KEY);
+        if (searchIdx == -1)
+        {
+            final SearchPanel pnlSearch = new SearchPanel (uiController);
+            pnlSearch.addSelectRecordListener (new ChangeListener ()
+            {
+                public void stateChanged (ChangeEvent e)
+                {
+                    List<NDoc> doc = pnlSearch.getSelectedRecords ();
+                    uiController.openRecord (doc.get (0));
                 }
             });
-            insertTab(SEARCH_ORIENT_TAB_KEY, ImageUtil.getImage("mag.gif"), pnlSearch, null, 1);
-            TabState searchOrientTabState = new TabState(TabStateType.SEARCH_ORIENT);
-            setAdditionalInfo(1, searchOrientTabState);
-            searchIdx = 1;
+            insertTab (SEARCH_ORIENT_TAB_KEY, ImageUtil.getImage ("mag.gif"), pnlSearch, null, 0);
+            TabState searchOrientTabState = new TabState (TabStateType.SEARCH_ORIENT);
+            setAdditionalInfo (0, searchOrientTabState);
+            searchIdx = 0;
         }
-        setSelectedIndex(searchIdx);
-        SearchPanel pnlSearch = (SearchPanel) getComponentAt(searchIdx);
-        pnlSearch.doFocus();
+        setSelectedIndex (searchIdx);
+        SearchPanel pnlSearch = (SearchPanel) getComponentAt (searchIdx);
+        pnlSearch.doFocus ();
     }
+
     public void openExplore() {
         int exploreIdx = indexOfTabByKey(EXPLORE_ORIENT_TAB_KEY);
         if(exploreIdx == -1) {
@@ -274,16 +298,17 @@ public class MainTabbedPane extends AdvancedTabbedPane {
         }
     }
 
-    private void closeTab(int i) {
+    private void closeTab (int i)
+    {
         // Need to manually update the history for now since
         // removeTabAt does not fire closing events yet.
-        String removedKey = getKeyAt(i);
-        if(!removedKey.equals(HOME_TAB_KEY)) {
-            historyRemoveEntry(removedKey);
-            removeTabAt(i);
+        String removedKey = getKeyAt (i);
+        if (! removedKey.equals (SEARCH_ORIENT_TAB_KEY))
+        {
+            historyRemoveEntry (removedKey);
+            removeTabAt (i);
         }
     }
-
 
     //////////
     // SAVE //
@@ -427,22 +452,5 @@ public class MainTabbedPane extends AdvancedTabbedPane {
             states.add((TabState) getAdditionalInfo(i));
         }
         return states;
-    }
-    public void initFromAppState() {
-        if(true) {
-            return;
-        }
-        List<TabState> states = AppState.getState().getTabStates();
-        for(TabState state : states) {
-            switch(state.getType()) {
-                case HOME: break;  // default
-                case SEARCH_ORIENT: openSearchOrient(); break;
-                case ORIENT_RECORD:
-                    NDoc record = uiController.getDMM().getDataModel().getRecord(state.getBeanClass(), state.getOrientId());
-                    openRecordTabOrient(record);
-//                    uiController.openRecord(state.getBeanClass(), state.getOrientId());
-                    break;
-            }
-        }
     }
 }

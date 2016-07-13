@@ -21,26 +21,15 @@ import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.wp.WorkpaneModel;
 import gov.sandia.umf.platform.ui.wp.WorkpaneRecord;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStream;
 import java.lang.Thread.UncaughtExceptionHandler;
-import java.lang.management.ManagementFactory;
-import java.lang.management.OperatingSystemMXBean;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.TreeMap;
-import java.util.zip.GZIPInputStream;
-
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.event.ChangeEvent;
@@ -49,10 +38,6 @@ import javax.swing.event.ChangeListener;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 import org.json.JSONObject;
-
-import com.orientechnologies.orient.core.command.OCommandOutputListener;
-import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
-import com.orientechnologies.orient.core.db.tool.ODatabaseImport;
 
 import replete.cli.CommandLineParser;
 import replete.cli.errors.CommandLineParseException;
@@ -73,7 +58,6 @@ import replete.util.Application;
 import replete.util.ArrayUtil;
 import replete.util.ArrayUtil.ArrayTranslator;
 import replete.util.FileUtil;
-import replete.util.ReflectionUtil;
 import replete.util.User;
 import replete.xstream.SerializationResult;
 import replete.xstream.XStreamWrapper;
@@ -409,11 +393,7 @@ public class UMF
         if(loadingFrame != null) {
             loadingFrame.dispose();
         }
-        uiController.testConnect(new ChangeListener() {
-            public void stateChanged(ChangeEvent e) {
-                uiController.initTabsFromAppState();
-            }
-        });
+        uiController.testConnect ();
 
     }
 

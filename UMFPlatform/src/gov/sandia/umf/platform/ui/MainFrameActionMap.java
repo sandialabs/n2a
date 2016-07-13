@@ -83,20 +83,6 @@ public class MainFrameActionMap extends UIActionMap {
             allEnabledStateMap, false, listener));
         addAction(action);
 
-        // Search
-
-        listener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.openSearchOrient();
-            }
-        };
-        action = new UIAction("searchDbOrient");
-        action.addDescriptor(new MenuBarActionDescriptor("fileMenu", "Search", 0,
-            ImageUtil.getImage("mag.gif"), allEnabledStateMap, false, 'F', true, listener));
-        action.addDescriptor(new ToolBarActionDescriptor("fileMenu", "Search", ImageUtil.getImage("mag.gif"),
-            allEnabledStateMap, false, listener));
-        addAction(action);
-
         // Explore
 
         listener = new ActionListener() {

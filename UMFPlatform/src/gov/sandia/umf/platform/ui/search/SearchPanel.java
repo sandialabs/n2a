@@ -92,22 +92,29 @@ public class SearchPanel extends JPanel implements DefaultButtonEnabledPanel {
     // NOTIFIERS //
     ///////////////
 
-    protected ChangeNotifier selectRecordNotifier = new ChangeNotifier(this);
-    public void addSelectRecordListener(ChangeListener listener) {
-        selectRecordNotifier.addListener(listener);
-    }
-    protected void fireSelectRecordNotifier() {
-        selectRecordNotifier.fireStateChanged();
+    protected ChangeNotifier selectRecordNotifier = new ChangeNotifier (this);
+
+    public void addSelectRecordListener (ChangeListener listener)
+    {
+        selectRecordNotifier.addListener (listener);
     }
 
-    protected ChangeNotifier selectionChangedNotifier = new ChangeNotifier(this);
-    public void addSelectionChangedListener(ChangeListener listener) {
-        selectionChangedNotifier.addListener(listener);
-    }
-    protected void fireSelectionChangedNotifier() {
-        selectionChangedNotifier.fireStateChanged();
+    protected void fireSelectRecordNotifier ()
+    {
+        selectRecordNotifier.fireStateChanged ();
     }
 
+    protected ChangeNotifier selectionChangedNotifier = new ChangeNotifier (this);
+
+    public void addSelectionChangedListener (ChangeListener listener)
+    {
+        selectionChangedNotifier.addListener (listener);
+    }
+
+    protected void fireSelectionChangedNotifier ()
+    {
+        selectionChangedNotifier.fireStateChanged ();
+    }
 
     /////////////////
     // CONSTRUCTOR //
