@@ -10,7 +10,6 @@ package gov.sandia.umf.platform;
 import gov.sandia.umf.platform.connect.orientdb.ui.ConnectionModel;
 import gov.sandia.umf.platform.plugins.extpoints.ProductCustomization;
 import gov.sandia.umf.platform.ui.TabState;
-import gov.sandia.umf.platform.ui.wp.WorkpaneModel;
 
 import java.io.File;
 import java.io.IOException;
@@ -67,7 +66,6 @@ public class AppState {
 
     private String lookAndFeel;
     private String theme;
-    private WorkpaneModel wpModel;
     private Map<String, Object> winLayout;
     private boolean showUids;
     private boolean eqnFormat;
@@ -85,7 +83,6 @@ public class AppState {
     public AppState() {
         lookAndFeel = null;
         theme = null;
-        wpModel = new WorkpaneModel();
         winLayout = new HashMap<String, Object>();
         showUids = false;
         eqnFormat = false;
@@ -123,9 +120,6 @@ public class AppState {
     public String getTheme() {
         return theme;
     }
-    public WorkpaneModel getWorkpaneModel() {
-        return wpModel;
-    }
     public Map<String, Object> getWinLayout() {
         return winLayout;
     }
@@ -158,9 +152,6 @@ public class AppState {
     }
     public void setTheme(String theme) {
         this.theme = theme;
-    }
-    public void setWorkpaneModel(WorkpaneModel model) {
-        wpModel = model;
     }
     public void setWinLayout(Map<String, Object> winLayout) {
         this.winLayout = winLayout;

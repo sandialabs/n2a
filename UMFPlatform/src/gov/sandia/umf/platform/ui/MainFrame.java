@@ -11,7 +11,6 @@ import gov.sandia.umf.platform.AppState;
 import gov.sandia.umf.platform.plugins.extpoints.ProductCustomization;
 import gov.sandia.umf.platform.ui.general.HelpNotesPanel;
 import gov.sandia.umf.platform.ui.jobs.RunManagerFrame;
-import gov.sandia.umf.platform.ui.wp.WorkpaneModel;
 
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
@@ -63,7 +62,6 @@ public class MainFrame extends EscapeFrame implements HelpCapableWindow {
     // Core
 
     private UIController uiController;
-    private WorkpaneModel workpaneModel;
 
     // UI
 
@@ -80,14 +78,13 @@ public class MainFrame extends EscapeFrame implements HelpCapableWindow {
     // CONSTRUCTOR //
     /////////////////
 
-    public MainFrame(UIController uic, WorkpaneModel wpm) {
-
+    public MainFrame(UIController uic)
+    {
         ProductCustomization pc = AppState.getState().getProductCustomization();
         setTitle(pc.getProductLongName() + " v" + pc.getProductVersion());
         setIconImage(pc.getWindowIcon().getImage());
 
         uiController = uic;  // Not fully populated yet, as it needs tab & parent reference.
-        workpaneModel = wpm;
 
         tabN2A = new MainTabbedPane(uic);
         sbar = new CommonStatusBar();

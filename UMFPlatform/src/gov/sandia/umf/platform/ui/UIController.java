@@ -13,7 +13,6 @@ import gov.sandia.umf.platform.connect.orientdb.ui.BackupDialog;
 import gov.sandia.umf.platform.connect.orientdb.ui.ConnectionManager;
 import gov.sandia.umf.platform.connect.orientdb.ui.ConnectionSelectionDialog;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
-import gov.sandia.umf.platform.connect.orientdb.ui.OrientConnectDetails;
 import gov.sandia.umf.platform.connect.orientdb.ui.OrientDatasource;
 import gov.sandia.umf.platform.ensemble.params.groups.ParameterSpecGroup;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
@@ -33,18 +32,12 @@ import gov.sandia.umf.platform.ui.run.CreateRunEnsembleDialog;
 import gov.sandia.umf.platform.ui.search.SearchDialogOrient;
 import gov.sandia.umf.platform.ui.search.SearchSelectionValidator;
 import gov.sandia.umf.platform.ui.search.SearchType;
-import gov.sandia.umf.platform.ui.wp.WorkpaneModel;
 
 import java.awt.Component;
 import java.awt.Cursor;
-import java.io.File;
 import java.io.IOException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.TreeSet;
 import javax.swing.Icon;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
@@ -73,10 +66,6 @@ import replete.util.GUIUtil;
 import replete.util.Lay;
 import replete.util.ReflectionUtil;
 import replete.util.User;
-import com.orientechnologies.orient.core.command.OCommandOutputListener;
-import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
-import com.orientechnologies.orient.core.db.tool.ODatabaseExport;
-import com.orientechnologies.orient.core.db.tool.ODatabaseImport;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 
 
@@ -97,7 +86,6 @@ public class UIController {
     // Core
 
     public ConnectionManager dataModelMgr2;  // Orient stuff
-    private WorkpaneModel workpaneModel;
 
     // UI
 
@@ -128,8 +116,8 @@ public class UIController {
     // CONSTRUCTOR //
     /////////////////
 
-    public UIController(WorkpaneModel wpm, ConnectionManager mgr2) {
-        workpaneModel = wpm;
+    public UIController (ConnectionManager mgr2)
+    {
         dataModelMgr2 = mgr2;
     }
 

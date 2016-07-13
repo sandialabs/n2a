@@ -18,8 +18,6 @@ import gov.sandia.umf.platform.runs.RunQueue;
 import gov.sandia.umf.platform.ui.AboutDialog;
 import gov.sandia.umf.platform.ui.MainFrame;
 import gov.sandia.umf.platform.ui.UIController;
-import gov.sandia.umf.platform.ui.wp.WorkpaneModel;
-import gov.sandia.umf.platform.ui.wp.WorkpaneRecord;
 
 import java.io.File;
 import java.lang.Thread.UncaughtExceptionHandler;
@@ -88,7 +86,6 @@ public class UMF
     private static MainFrame mainFrame;
     private static UIController uiController;
     private static ConnectionManager dataModelMgr2;
-    private static WorkpaneModel workpaneModel;
     private static LoadingWindow loadingFrame;
 
     // Misc
@@ -149,7 +146,6 @@ public class UMF
 
         XStreamWrapper.addAlias(SerializationResult.class.getSimpleName(), SerializationResult.class);
         XStreamWrapper.addAlias(AppState.class.getSimpleName(), AppState.class);
-        XStreamWrapper.addAlias(WorkpaneRecord.class.getSimpleName(), WorkpaneRecord.class);
 
         AppState.load();
 
@@ -190,9 +186,6 @@ public class UMF
 
         ProductCustomization pc = chooseProductCustomization(prodCust);
         AppState.getState().setProductCustomization(pc);
-
-        workpaneModel = AppState.getState().getWorkpaneModel();
-        //workpaneModel.removeTempRecords();
 
         // Read L&F from properties.
         String lafClassName = AppState.getState().getLookAndFeel();
@@ -331,8 +324,8 @@ public class UMF
     }
 
     private static void createAndShowMainFrame() {
-        uiController = new UIController(workpaneModel, dataModelMgr2);
-        mainFrame = new MainFrame(uiController, workpaneModel);
+        uiController = new UIController(dataModelMgr2);
+        mainFrame = new MainFrame(uiController);
         MainFrame.setInstance(mainFrame);
         uiController.setParentReference(mainFrame);
         uiController.setTabbedPane(mainFrame.getTabbedPane());
