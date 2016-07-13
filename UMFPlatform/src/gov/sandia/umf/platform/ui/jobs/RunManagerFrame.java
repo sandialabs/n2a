@@ -14,6 +14,7 @@ import gov.sandia.umf.platform.execenvs.beans.Job;
 import gov.sandia.umf.platform.execenvs.beans.Resource;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
+import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Font;
@@ -36,6 +37,7 @@ import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JProgressBar;
+import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
@@ -46,6 +48,8 @@ import javax.swing.event.TreeWillExpandListener;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.ExpandVetoException;
 import javax.swing.tree.TreePath;
+
+import org.jfree.chart.ChartPanel;
 
 import replete.gui.controls.WComboBox;
 import replete.gui.controls.mnemonics.MButton;
@@ -72,6 +76,7 @@ public class RunManagerFrame extends EscapeFrame
     private TNode root = new TNode(new NodeRoot("All Jobs"));
     private DefaultTreeModel model = new DefaultTreeModel(root);
     private JTextArea txtView;
+    public  JScrollPane scrollPane = new JScrollPane ();
     private JPopupMenu mnuFile;
     private JPopupMenu mnuJob;
     private JLabel lblStatus;
@@ -123,16 +128,6 @@ public class RunManagerFrame extends EscapeFrame
                     refreshThread.start();
                 }
                 refresh = true;
-            }
-        });
-
-        btnGraph = new MButton ("&Graph", ImageUtil.getImage ("analysis.gif"));
-        btnGraph.addActionListener (new ActionListener ()
-        {
-            public void actionPerformed (ActionEvent e)
-            {
-                Plot frame = new Plot (lblViewFile.getText (), parent);
-                frame.setVisible (true);
             }
         });
 
@@ -222,6 +217,34 @@ public class RunManagerFrame extends EscapeFrame
                 }
             }
         });
+
+        scrollPane.setViewportView (txtView);
+        btnGraph = new MButton ("&Graph", ImageUtil.getImage ("analysis.gif"));
+        btnGraph.addActionListener (new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                TNode node = (TNode) treJobs.getSelectionPaths ()[0].getLastPathComponent ();
+                Object o = node.getUserObject ();
+                if (o instanceof NodeFile)
+                {
+                    NodeFile nf = (NodeFile) o;
+                    if (nf != null  &&  nf.type == NodeFile.Type.Output)
+                    {
+                    	if (scrollPane.getViewport ().getView () instanceof ChartPanel)
+                    	{
+                    		doView ();
+                    	}
+                    	else
+                    	{
+                            Plot plot = new Plot (lblViewFile.getText ());
+                            if (! plot.columns.isEmpty ()) scrollPane.setViewportView (plot.createGraphPanel ());
+                    	}
+                    }
+                }
+            }
+        });
+
 /*
         btnSubmitNewJob = new MButton("&Submit New Xyce Run...", ImageUtil.getImage("add.gif"));
         btnSubmitNewJob.addActionListener(new ActionListener ()
@@ -267,7 +290,7 @@ public class RunManagerFrame extends EscapeFrame
                             "C", Lay.eb(lblViewFile = new JLabel(), "3"),
                             "E", btnGraph
                         ),
-                        "C", Lay.sp(txtView)
+                        "C", scrollPane
                     ),
                     Lay.eb("5")
                 ),
@@ -510,17 +533,22 @@ public class RunManagerFrame extends EscapeFrame
 
     private void doView()
     {
-        startAction("Fetching", new CommonRunnable()
+        startAction("Fetching", new CommonRunnable ()
         {
-            public void runThread(CommonThreadContext context) throws CommonThreadShutdownException {
+            public void runThread (CommonThreadContext context) throws CommonThreadShutdownException
+            {
                 TNode node = (TNode) treJobs.getSelectionPaths()[0].getLastPathComponent();
                 NodeFile nf = (NodeFile) node.getUserObject();
                 try
                 {
-                    txtView.setText(env.getFileContents(nf.getRemotePath()));
-                    txtView.setCaretPosition(0);
-                    pnlViewFileHeader.setVisible(true);
-                    lblViewFile.setText(nf.getRemotePath());
+                	if (scrollPane.getViewport ().getView () != txtView)
+                	{
+                		scrollPane.setViewportView (txtView);
+                	}
+                    txtView.setText (env.getFileContents (nf.getRemotePath ()));
+                    txtView.setCaretPosition (0);
+                    pnlViewFileHeader.setVisible (true);
+                    lblViewFile.setText (nf.getRemotePath ());
                 }
                 catch(Exception e1)
                 {
@@ -528,15 +556,15 @@ public class RunManagerFrame extends EscapeFrame
                     Dialogs.showDetails(RunManagerFrame.this, "An error occurred viewing the file.", ExceptionUtil.toCompleteString(e1, 4));
                 }
             }
-            public void cleanUp() {}
+            public void cleanUp () {}
         }, null);
     }
 
     private void doDownload()
     {
-        startAction("Downloading", new CommonRunnable()
+        startAction ("Downloading", new CommonRunnable ()
         {
-            public void runThread(CommonThreadContext context) throws CommonThreadShutdownException
+            public void runThread (CommonThreadContext context) throws CommonThreadShutdownException
             {
                 TNode node = (TNode) treJobs.getSelectionPaths()[0].getLastPathComponent();
                 NodeFile nf = (NodeFile) node.getUserObject();
@@ -561,15 +589,15 @@ public class RunManagerFrame extends EscapeFrame
                     }
                 }
             }
-            public void cleanUp() {}
+            public void cleanUp () {}
         }, null);
     }
 
     private void doDelete()
     {
-        startAction("Deleting", new CommonRunnable()
+        startAction ("Deleting", new CommonRunnable ()
         {
-            public void runThread(CommonThreadContext context) throws CommonThreadShutdownException
+            public void runThread (CommonThreadContext context) throws CommonThreadShutdownException
             {
                 TNode node = (TNode) treJobs.getSelectionPaths()[0].getLastPathComponent();
                 NodeJob nf = (NodeJob) node.getUserObject();
@@ -592,7 +620,7 @@ public class RunManagerFrame extends EscapeFrame
                     }
                 }
             }
-            public void cleanUp() {}
+            public void cleanUp () {}
         }, null);
     }
 

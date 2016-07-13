@@ -8,11 +8,13 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.umf.platform.ui.jobs;
 
 import java.awt.Color;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.swing.JFrame;
 import javax.swing.JPanel;
 
 import org.jfree.chart.ChartFactory;
@@ -26,14 +28,10 @@ import org.jfree.data.xy.XYDataset;
 import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
 
-import replete.gui.windows.EscapeFrame;
 import replete.util.FileUtil;
-import replete.util.Lay;
 
-public class Plot extends EscapeFrame
+public class Plot
 {
-    JPanel pnlCurrent;
-
     public class Column
     {
     	public String header = "";
@@ -41,86 +39,92 @@ public class Plot extends EscapeFrame
     	public int startRow;
     }
     public List<Column> columns = new ArrayList<Column> ();
-    public boolean isXycePRN;
+    public boolean isXycePRN = false;
 
-    public Plot (String path, JFrame parent)
+    public Plot (String path)
     {
-        super (path);
+    	parsePrnFile (new File (path));
+    }
 
-        System.out.println("starting parsing");
-        parsePrnFile (new File (path));
-        pnlCurrent = createGraphPanel ();
-        System.out.println("done");
-
-        Lay.BLtg(this,
-            "C", pnlCurrent,
-            "bg=white,augb=mb(1,black)"
-        );
-        setSize(500,500);
-        setLocationRelativeTo (parent);
+    public JPanel createGraphPanel ()
+    {
+        XYDataset dataset = createDataset ();
+        JFreeChart chart = createChart (dataset);
+        return new ChartPanel (chart);
     }
 
     public void parsePrnFile (File f)
     {
-    	int row = 0;
-        String s = FileUtil.getTextContent(f);
-        String[] lines = s.split("\n");
-        for(String line : lines)
+        columns = new ArrayList<Column> ();
+        isXycePRN = false;
+
+        try
         {
-        	line = line.trim ();
-        	if (line.length () == 0) continue;
-        	if (line.startsWith ("End of")) continue;
-
-            String[] parts = line.split ("\\s+");
-            while (columns.size () < parts.length)
+            int row = 0;
+            BufferedReader br = new BufferedReader (new FileReader (f));
+            while (true)
             {
-            	Column c = new Column ();
-            	c.startRow = row;
-            	columns.add (c);
-            }
+                String line = br.readLine ();
+                if (line == null) break;  // indicates end of stream
 
-            char firstCharacter = parts[0].charAt (0);
-            if (firstCharacter > '9')  // column header
-            {
-        		isXycePRN = parts[0].equals ("Index");
-                for (int p = 0; p < parts.length; p++)
+                line = line.trim ();
+            	if (line.length () == 0) continue;
+            	if (line.startsWith ("End of")) continue;
+
+                String[] parts = line.split ("\\s+");
+                while (columns.size () < parts.length)
                 {
-                	columns.get (p).header = parts[p];
+                	Column c = new Column ();
+                	c.startRow = row;
+                	columns.add (c);
+                }
+
+                char firstCharacter = parts[0].charAt (0);
+                if (firstCharacter > '9')  // column header
+                {
+            		isXycePRN = parts[0].equals ("Index");
+                    for (int p = 0; p < parts.length; p++)
+                    {
+                    	columns.get (p).header = parts[p];
+                    }
+                }
+                else
+                {
+                	int p = isXycePRN ? 1 : 0;  // skip paring Index column, since we don't use it
+                    for (; p < parts.length; p++)
+                    {
+                        columns.get (p).values.add (Double.parseDouble (parts[p]));
+                    }
+                    row++;
                 }
             }
-            else
-            {
-            	int p = isXycePRN ? 1 : 0;  // skip paring Index column, since we don't use it
-                for (; p < parts.length; p++)
-                {
-                    columns.get (p).values.add (Double.parseDouble (parts[p]));
-                }
-                row++;
-            }
+            br.close ();
         }
+        catch (IOException e)
+        {
+		}
     }
 
-    private JPanel createGraphPanel ()
-    {
-        XYDataset dataset = createDataset ();
-        JFreeChart chart = createChart (dataset);
-        ChartPanel chartPanel = new ChartPanel (chart);
-        return chartPanel;
-    }
-
-    private XYDataset createDataset ()
+    public XYDataset createDataset ()
     {
         XYSeriesCollection dataset = new XYSeriesCollection();
-    	Column time = columns.get (0);  // fallback, in case we don't find it by name
+
+        Column time = columns.get (0);  // fallback, in case we don't find it by name
+    	int timeMatch = 0;
     	for (Column c : columns)
     	{
-    		if (c.header.equals ("t")  ||  c.header.equals ("$t")  ||  c.header.equals ("TIME"))
+    		int potentialMatch = 0;
+    		if      (c.header.equals ("t"   )) potentialMatch = 1;
+    		else if (c.header.equals ("TIME")) potentialMatch = 2;
+    		else if (c.header.equals ("$t"  )) potentialMatch = 3;
+    		if (potentialMatch > timeMatch)
     		{
+    			timeMatch = potentialMatch;
     			time = c;
-    			break;
     		}
     	}
-        for (Column c : columns)
+
+    	for (Column c : columns)
         {
         	if (c == time) continue;
         	if (isXycePRN  &&  c == columns.get (0)) continue;
@@ -135,7 +139,7 @@ public class Plot extends EscapeFrame
         return dataset;
     }
 
-    private JFreeChart createChart(final XYDataset dataset)
+    public JFreeChart createChart (final XYDataset dataset)
     {
         final JFreeChart chart = ChartFactory.createXYLineChart
         (
