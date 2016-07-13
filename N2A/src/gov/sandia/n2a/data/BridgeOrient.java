@@ -101,7 +101,7 @@ public class BridgeOrient implements Bridge {
                     System.out.println(destDoc.getId());
                     System.out.println(compDoc.getId());
                     System.out.println(aliases);
-                    System.out.println(con.get("name"));
+                    System.out.println(con.get("name").toString ());
                     if(destDoc.getId().equals(compDoc.getId()) && !aliases.containsKey(con.get("name"))) {
                         aliases.put(con.get("name").toString(), layer);
                         aliasedLayers.add(layerDoc.getId());

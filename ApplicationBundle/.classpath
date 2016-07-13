@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <classpath>
-	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
-	<classpathentry combineaccessrules="false" kind="src" path="/UMFPlatform"/>
-	<classpathentry combineaccessrules="false" kind="src" path="/BackendXyce"/>
-	<classpathentry combineaccessrules="false" kind="src" path="/N2A"/>
-	<classpathentry combineaccessrules="false" kind="src" path="/BackendC"/>
+	<classpathentry exported="true" kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry combineaccessrules="false" exported="true" kind="src" path="/UMFPlatform"/>
+	<classpathentry combineaccessrules="false" exported="true" kind="src" path="/BackendXyce"/>
+	<classpathentry combineaccessrules="false" exported="true" kind="src" path="/BackendC"/>
+	<classpathentry combineaccessrules="false" exported="true" kind="src" path="/N2A"/>
+	<classpathentry combineaccessrules="false" exported="true" kind="src" path="/BackendSTPU"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

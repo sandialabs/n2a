@@ -3,6 +3,11 @@
 	<name>ApplicationBundle</name>
 	<comment></comment>
 	<projects>
+		<project>BackendC</project>
+		<project>BackendSTPU</project>
+		<project>BackendXyce</project>
+		<project>N2A</project>
+		<project>UMFPlatform</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>

@@ -23,7 +23,7 @@ public class N2AProductCustomization implements ProductCustomization {
         return N2APlugin.getInstance().getVersion();
     }
     public String getProductDevelopedBy() {
-        return "Fred Rothganger (PI), Derek Trumbo, Christy Warrender, Brad Aimone, Corinne Teeter, Brandon Rohrer, Steve Verzi, Ann Speed, Asmeret Bier";
+        return "Fred Rothganger (PI), Derek Trumbo, Christy Warrender, Brad Aimone, Corinne Teeter, Brandon Rohrer, Steve Verzi, Ann Speed, Asmeret Bier, Felix Wang";
     }
     public String getCopyright() {
         return "Copyright &copy; 2013 Sandia Corporation. Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains certain rights in this software.";
