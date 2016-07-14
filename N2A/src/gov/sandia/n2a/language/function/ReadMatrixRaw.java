@@ -41,7 +41,7 @@ public class ReadMatrixRaw extends Function
     public Type eval (Instance context)
     {
         String path = ((Text) operands[0].eval (context)).value;
-        if (! matrices.containsKey (path)) matrices.put (path, new Matrix (new File (path)));
+        if (! matrices.containsKey (path)) matrices.put (path, new Matrix (new File (path).getAbsoluteFile ()));  // getAbsoluteFile() interprets path relative to System user.dir
         Matrix A = matrices.get (path);
 
         int rows    = A.rows ();

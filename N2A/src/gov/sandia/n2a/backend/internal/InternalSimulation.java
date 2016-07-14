@@ -9,6 +9,7 @@ package gov.sandia.n2a.backend.internal;
 
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.umf.platform.UMF;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
 import gov.sandia.umf.platform.plugins.RunOrient;
@@ -17,6 +18,7 @@ import gov.sandia.umf.platform.plugins.Simulation;
 import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 
+import java.io.File;
 import java.util.Map.Entry;
 import java.util.TreeMap;
 
@@ -95,7 +97,7 @@ public class InternalSimulation implements Simulation
         // TODO: fix run ensembles to put metadata directly in a special derived part
         e.metadata.putAll (metadata);  // parameters pushed by run system override any we already have
 
-        digestModel (e);
+        digestModel (e, runState.jobDir);
         runState.digestedModel = e;
         env.setFileContents (sourceFileName, e.flatList (false));
 
@@ -106,14 +108,26 @@ public class InternalSimulation implements Simulation
         Utility function to enable other backends to use Internal to prepare static network structures.
         @return An Euler (simulator) object which contains the constructed network.
     **/
-    public static Euler constructStaticNetwork (EquationSet e) throws Exception
+    public static Euler constructStaticNetwork (EquationSet e, String jobDir) throws Exception
     {
-        digestModel (e);
-        return new Euler (new Wrapper (e));
+        digestModel (e, jobDir);
+        return new Euler (new Wrapper (e), jobDir);
     }
 
-    public static void digestModel (EquationSet e) throws Exception
+    public static void digestModel (EquationSet e, String jobDir) throws Exception
     {
+        // We need to set this first because certain analyses try to open files.
+        if (jobDir.isEmpty ())
+        {
+            // Fall back: make paths relative to n2a data directory
+            System.setProperty ("user.dir", UMF.getAppResourceDir ().getAbsolutePath ());
+        }
+        else
+        {
+            // Make paths relative to job directory
+            System.setProperty ("user.dir", new File (jobDir).getAbsolutePath ());
+        }
+
         e.flatten ();
         e.addSpecials ();  // $index, $init, $live, $n, $t, $t', $type
         e.fillIntegratedVariables ();

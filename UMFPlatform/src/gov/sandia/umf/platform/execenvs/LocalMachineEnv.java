@@ -18,7 +18,6 @@ import java.util.Date;
 import java.util.Locale;
 
 import replete.util.FileUtil;
-import replete.util.User;
 
 
 public abstract class LocalMachineEnv extends ExecutionEnv
@@ -169,7 +168,7 @@ public abstract class LocalMachineEnv extends ExecutionEnv
         {
             try
             {
-                File n2a = new File (User.getHome (), "n2a");
+                File n2a = new File (System.getProperty ("user.home"), "n2a");
                 return new File (n2a, "jobs").getAbsolutePath ();
             }
             catch (Exception e)
@@ -181,7 +180,7 @@ public abstract class LocalMachineEnv extends ExecutionEnv
         {
             try
             {
-                File n2a = new File (User.getHome (), "n2a");
+                File n2a = new File (System.getProperty ("user.home"), "n2a");
                 return new File (n2a, "cruntime").getAbsolutePath ();
             }
             catch (Exception e)

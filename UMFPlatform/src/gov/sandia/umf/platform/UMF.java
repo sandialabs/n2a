@@ -56,7 +56,6 @@ import replete.util.Application;
 import replete.util.ArrayUtil;
 import replete.util.ArrayUtil.ArrayTranslator;
 import replete.util.FileUtil;
-import replete.util.User;
 import replete.xstream.SerializationResult;
 import replete.xstream.XStreamWrapper;
 
@@ -64,7 +63,7 @@ public class UMF
 {
     public static File getAppResourceDir ()
     {
-        return new File (User.getHome (), "n2a");
+        return new File (System.getProperty ("user.home"), "n2a").getAbsoluteFile ();
     }
     public static File getAppLogDir ()
     {

@@ -90,7 +90,7 @@ class XyceSimulation implements Simulation
 
         EquationSet e = new EquationSet (runRecord.getModel ());
         if (e.name.length () < 1) e.name = "Model";  // because the default is for top-level equation set to be anonymous
-        Euler simulator = InternalSimulation.constructStaticNetwork (e);
+        Euler simulator = InternalSimulation.constructStaticNetwork (e, jobDir);
         analyze (e);
 
         FileWriter writer = new FileWriter (cirFile);

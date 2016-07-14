@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.backend.internal;
 
 import gov.sandia.n2a.language.type.Instance;
+import gov.sandia.umf.platform.UMF;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -58,16 +59,19 @@ public class Euler implements Iterable<Instance>
         }
     }
 
-    public Euler (Wrapper wrapper)
-    {
-        this (wrapper, "");
-    }
-
     public Euler (Wrapper wrapper, String jobDir)
     {
-        // Setup out and err streams first, so init phase can log output properly.
-        if (! jobDir.isEmpty ())
+        if (jobDir.isEmpty ())
         {
+            // Fall back: make paths relative to n2a data directory
+            System.setProperty ("user.dir", UMF.getAppResourceDir ().getAbsolutePath ());
+        }
+        else
+        {
+            // Make paths relative to job directory
+            System.setProperty ("user.dir", new File (jobDir).getAbsolutePath ());
+
+            // Setup out and err streams first, so init phase can log output properly.
             try
             {
                 out = new PrintStream (new File (jobDir, "out"));
@@ -96,6 +100,22 @@ public class Euler implements Iterable<Instance>
             e.t = e.dt;
             eventQueue.add (e);
         }
+    }
+
+    public static Euler getSimulator (Instance context)
+    {
+        Euler simulator = null;
+        if (context instanceof InstanceTemporaries)
+        {
+            simulator = ((InstanceTemporaries) context).simulator;
+        }
+        else
+        {
+            Instance top = context;
+            while (top.container != null) top = top.container;
+            if (top instanceof Wrapper) simulator = ((Wrapper) top).simulator;
+        }
+        return simulator;
     }
 
     public void run ()

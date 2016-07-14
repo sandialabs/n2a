@@ -43,17 +43,7 @@ public class Trace extends Function
     {
         Scalar result = (Scalar) operands[0].eval (context);
 
-        Euler simulator = null;
-        if (context instanceof InstanceTemporaries)
-        {
-            simulator = ((InstanceTemporaries) context).simulator;
-        }
-        else
-        {
-            Instance top = context;
-            while (top.container != null) top = top.container;
-            if (top instanceof Wrapper) simulator = ((Wrapper) top).simulator;
-        }
+        Euler simulator = Euler.getSimulator (context);
         if (simulator != null)
         {
             String column = operands[1].eval (context).toString ();
