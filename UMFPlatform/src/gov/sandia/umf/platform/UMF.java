@@ -283,7 +283,6 @@ public class UMF
         winProps.put("mainFrame.width", mainFrame.getWidth());
         winProps.put("mainFrame.height", mainFrame.getHeight());
         winProps.put("mainFrame.state", mainFrame.getExtendedState());
-        winProps.put("mainFrame.workpane.divloc", mainFrame.getWorkpaneDivLoc());
 
         List<CommonWindow> childWins = mainFrame.getVisibleChildWindows();
         for(CommonWindow win : childWins) {
@@ -359,11 +358,6 @@ public class UMF
             }
 
             ensureSizeLoc(mainFrame, winProps, "mainFrame");
-
-            Integer divLoc = readPropsInt(winProps, "mainFrame.workpane.divloc");
-            if(divLoc != null) {
-                mainFrame.setWorkpaneDivLoc(divLoc);
-            }
 
             mainFrame.setVisible(true);
 

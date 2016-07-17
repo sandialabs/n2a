@@ -83,20 +83,6 @@ public class MainFrameActionMap extends UIActionMap {
             allEnabledStateMap, false, listener));
         addAction(action);
 
-        // Explore
-
-        listener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.openExplore();
-            }
-        };
-        action = new UIAction("explore");
-        action.addDescriptor(new MenuBarActionDescriptor("fileMenu", "Explore", 0,
-            i("explore.gif"), allEnabledStateMap, false, 'E', true, listener));
-        action.addDescriptor(new ToolBarActionDescriptor("fileMenu", "Explore", i("explore.gif"),
-            allEnabledStateMap, false, listener));
-        addAction(action);
-
         action = new UIAction(sepId());
         action.addDescriptor(new MenuBarActionDescriptor());
         addAction(action);
@@ -212,50 +198,12 @@ public class MainFrameActionMap extends UIActionMap {
 
         // ACTIONS //
 
-        action = new UIAction("viewMenu");
-        action.addDescriptor(new MenuBarActionDescriptor("", "View", 'V', null,
-            allEnabledStateMap, false, 0, false, null));
-        addAction(action);
-
-        // TODO: Make this Alt+Left and Alt+Right...  Need to modify replete.
-        listener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.historyBackTab();
-            }
-        };
-        action = new UIAction("backTab");
-        action.addDescriptor(new MenuBarActionDescriptor("viewMenu", "Back", 'B',
-            i("back.gif"), allEnabledStateMap, false, '1', true, listener));
-        action.addDescriptor(new ToolBarActionDescriptor("viewMenu", "Back", i("back.gif"),
-            allEnabledStateMap, false, listener));
-        addAction(action);
-
-        listener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.historyForwardTab();
-            }
-        };
-        action = new UIAction("forwardTab");
-        action.addDescriptor(new MenuBarActionDescriptor("viewMenu", "Forward", 'F',
-            i("forward.gif"), allEnabledStateMap, false, '2', true, listener));
-        action.addDescriptor(new ToolBarActionDescriptor("viewMenu", "Forward", i("forward.gif"),
-            allEnabledStateMap, false, listener));
-        addAction(action);
+        //action = new UIAction("viewMenu");
+        //action.addDescriptor(new MenuBarActionDescriptor("", "View", 'V', null, allEnabledStateMap, false, 0, false, null));
+        //addAction(action);
 
         action = new UIAction(sepId());
         action.addDescriptor(new MenuBarActionDescriptor());
-        addAction(action);
-
-        listener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.toggleWorkpane();
-            }
-        };
-        action = new UIAction("toggleWS");
-        action.addDescriptor(new MenuBarActionDescriptor("viewMenu", "Toggle Workpane", 'W',
-            i("ws.gif"), allEnabledStateMap, false, 0, false, listener));
-        action.addDescriptor(new ToolBarActionDescriptor("viewMenu", "Toggle Workpane", i("ws.gif"),
-            allEnabledStateMap, false, listener));
         addAction(action);
 
         // TOOLS //
@@ -289,23 +237,6 @@ public class MainFrameActionMap extends UIActionMap {
         action = new UIAction("prefs");
         action.addDescriptor(new MenuBarActionDescriptor("toolsMenu", "Preferences", 'P',
             i("properties.gif"), allEnabledStateMap, false, 0, false, preferencesListener));
-        addAction(action);
-
-        // PEOPLE //
-
-        action = new UIAction("peopleMenu");
-        action.addDescriptor(new MenuBarActionDescriptor("", "People", 'P', null,
-            allEnabledStateMap, false, 0, false, null));
-        addAction(action);
-
-        ActionListener genListener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.openProfileFromUserId(User.getName());
-            }
-        };
-        action = new UIAction("openMyProfile");
-        action.addDescriptor(new MenuBarActionDescriptor("peopleMenu", "Edit My Profile...", 'P',
-            i("user.png"), allEnabledStateMap, false, 0, false, genListener));
         addAction(action);
 
         // L&F //

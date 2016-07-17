@@ -32,8 +32,6 @@ public class GeneralDetailPanel extends ModelEditDetailPanel {
     private DualTextFieldPanel pnlName;
     private JLabel lblOwner;
     private JLabel lblUID;
-    private IconButton btnOwnerDetails;
-//    private JCheckBox chkDevTest;
     private boolean fireOnLostFocus;
     private boolean noFire = false;
 
@@ -58,28 +56,13 @@ public class GeneralDetailPanel extends ModelEditDetailPanel {
     public GeneralDetailPanel(UIController uic, ModelOrient m) {
         super(uic, m);
 
-        boolean readOnly = !User.getName().equals(model.getOwner());
-
-        btnOwnerDetails = createButtonOwnerDetails(model.getSource());
-
-        /*chkDevTest = new JCheckBox("Developer Test Record?");
-        chkDevTest.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                //model.setDevTest(chkDevTest.isSelected());
-                fireContentChangedNotifier();
-            }
-        });*/
-
         Lay.BLtg(this,
             "N", Lay.BxL("Y",
                 Lay.hn(createLabelPanel("Name", "name"), "alignx=0,pref=[10,25]"),
-                Lay.hn(pnlName = new DualTextFieldPanel(readOnly), "alignx=0,pref=[10,30]"),
+                Lay.hn(pnlName = new DualTextFieldPanel(false), "alignx=0,pref=[10,30]"),
                 Lay.hn(createLabelPanel("Owner", "owner"), "alignx=0,pref=[10,25]"),
                 Lay.BL(
-                    "W", Lay.BL(
-                        "C", lblOwner = Lay.lb("", "fg=" + Lay.clr(DARK_BLUE)),
-                        "E", Lay.p(btnOwnerDetails, "eb=3l")
-                    ),
+                    "W", lblOwner = Lay.lb("", "fg=" + Lay.clr(DARK_BLUE)),
                     "C", Lay.p(),
                     "alignx=0"
                 ),

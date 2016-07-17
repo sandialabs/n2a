@@ -8,7 +8,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui;
 
-import gov.sandia.umf.platform.connect.orientdb.expl.OrientDbExplorerPanel;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.connect.orientdb.ui.RecordEditPanel;
 import gov.sandia.umf.platform.plugins.extpoints.RecordHandler;
@@ -40,7 +39,6 @@ public class MainTabbedPane extends AdvancedTabbedPane {
     // Const
 
     private static final String SEARCH_ORIENT_TAB_KEY = "Search";
-    private static final String EXPLORE_ORIENT_TAB_KEY = "Explore";
 
     // Core
 
@@ -166,23 +164,6 @@ public class MainTabbedPane extends AdvancedTabbedPane {
         setSelectedIndex (searchIdx);
         SearchPanel pnlSearch = (SearchPanel) getComponentAt (searchIdx);
         pnlSearch.doFocus ();
-    }
-
-    public void openExplore() {
-        int exploreIdx = indexOfTabByKey(EXPLORE_ORIENT_TAB_KEY);
-        if(exploreIdx == -1) {
-            final OrientDbExplorerPanel pnlExplore = new OrientDbExplorerPanel(uiController);
-            pnlExplore.addDefaultSource();
-            addTab(EXPLORE_ORIENT_TAB_KEY, ImageUtil.getImage("explore.gif"),
-                pnlExplore, null, EXPLORE_ORIENT_TAB_KEY);
-            int newIndex = indexOfTabByKey(EXPLORE_ORIENT_TAB_KEY);
-            TabState exploreOrientTabState = new TabState(TabStateType.EXPLORE_ORIENT);
-            setAdditionalInfo(newIndex, exploreOrientTabState);
-            exploreIdx = newIndex;
-        }
-        setSelectedIndex(exploreIdx);
-        OrientDbExplorerPanel pnlExplore = (OrientDbExplorerPanel) getComponentAt(exploreIdx);
-        pnlExplore.doFocus();
     }
 
     public void openRecordTabOrient(NDoc doc) {

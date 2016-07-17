@@ -150,25 +150,6 @@ public class UIController {
     }
 
 
-    ////////////
-    // SEARCH //
-    ////////////
-
-
-    /////////////
-    // EXPLORE //
-    /////////////
-
-    public void openExplore() {
-        startAction("Opening", new CommonRunnable() {
-            public void runThread(CommonThreadContext context) throws CommonThreadShutdownException {
-                tabs.openExplore();
-            }
-            public void cleanUp() {}
-        }, null, "opening the explore database tab");
-    }
-
-
     ///////////////////
     // RECORD PANELS //
     ///////////////////
@@ -238,16 +219,6 @@ public class UIController {
                 public void cleanUp() {}
             }, null, "discarding the " + beanType);
         }
-    }
-
-    public void openProfileFromUserId(String userId) {
-//        List<Profile> profiles = Profile.get(Query.create().eq("UserName", userId));
-//        if(profiles.size() == 0) {
-//            Dialogs.showMessage("No profile for this user could be found.");
-//        } else {
-//            openExisting(Profile.class, profiles.get(0).getId());
-//        }
-        notImpl();
     }
 
     // TODO? Kinda pretends that delete isn't only called from the button
@@ -557,31 +528,6 @@ public class UIController {
         }
         return true;
     }
-
-    public void toggleWorkpane() {
-        parentRef.toggleWorkpane();
-    }
-
-    public void removeMyWork(int[] selectedIndices) {
-//        workpaneModel.removeMyWork(selectedIndices);
-    }
-    public void removeRecent(int[] selectedIndices) {
-//        workpaneModel.removeRecent(selectedIndices);
-    }
-
-//    public void addRecent(BeanBase bean) {
-//        workpaneModel.addRecent(bean, true);
-//    }
-
-    public void hideWorkpane() {
-        parentRef.hideWorkpane();
-    }
-//    public boolean isInMyWork(BeanBase b) {
-//        return workpaneModel.isInMyWork(b);
-//    }
-//    public void setInMyWork(BeanBase record, boolean selected) {
-//        workpaneModel.setInMyWork(record, selected);
-//    }
 
     public void showPreferences() {
         PreferencesDialog dlg = new PreferencesDialog(parentRef);

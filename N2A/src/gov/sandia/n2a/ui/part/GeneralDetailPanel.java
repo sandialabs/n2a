@@ -18,7 +18,6 @@ import javax.swing.event.ChangeListener;
 import replete.event.ChangeNotifier;
 import replete.gui.controls.IconButton;
 import replete.util.Lay;
-import replete.util.User;
 
 public class GeneralDetailPanel extends RecordEditDetailPanel {
 
@@ -58,22 +57,10 @@ public class GeneralDetailPanel extends RecordEditDetailPanel {
     public GeneralDetailPanel(UIController uic, NDoc p) {
         super(uic, p);
 
-        boolean readOnly = !User.getName().equals(record.getOwner());
-
-        btnOwnerDetails = createButtonOwnerDetails(record);
-
-        /*chkDevTest = new JCheckBox("Developer Test Record?");
-        chkDevTest.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                part.setDevTest(chkDevTest.isSelected());
-                fireContentChangedNotifier();
-            }
-        });*/
-
         Lay.BLtg(this,
             "N", Lay.BxL("Y",
                 Lay.hn(createLabelPanel("Name", "part-name"), "alignx=0,pref=[10,25]"),
-                Lay.hn(pnlName = new DualTextFieldPanel(readOnly), "alignx=0,pref=[10,30]"),
+                Lay.hn(pnlName = new DualTextFieldPanel(false), "alignx=0,pref=[10,30]"),
                 Lay.hn(createLabelPanel("Owner", "part-owner"), "alignx=0,pref=[10,25]"),
                 Lay.BL(
                     "W", Lay.BL(

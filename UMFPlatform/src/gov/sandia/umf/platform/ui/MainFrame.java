@@ -69,9 +69,6 @@ public class MainFrame extends EscapeFrame implements HelpCapableWindow {
     private CommonStatusBar sbar;
     private MainGlassPane glassPane;
     private JMenuItem mnuWindow;
-    private JButton btnHistoryBack;
-    private JButton btnHistoryForward;
-    private JSplitPane splMain;
 
 
     /////////////////
@@ -91,19 +88,12 @@ public class MainFrame extends EscapeFrame implements HelpCapableWindow {
         JPanel pnlConnectStatus = new ConnectStatusPanel(uiController);
         sbar.setRightComponent(pnlConnectStatus);
         Lay.hn(sbar, "dim=[20, 30]");
-        tabN2A.addHistoryListener(new ChangeListener() {
-            public void stateChanged(ChangeEvent e) {
-                updateBackForwardButtons();
-            }
-        });
 
         UIActionMap actions = new MainFrameActionMap(uiController);
         actions.setState("ALL");
         UIActionToolBar tb = new UIActionToolBar(actions);
         setJMenuBar(new UIActionMenuBar(actions));
         mnuWindow = ((MenuBarActionDescriptor) actions.getAction("windowMenu").getDescriptor(MenuBarActionDescriptor.class)).getComponent();
-        btnHistoryBack = (JButton) ((ToolBarActionDescriptor) actions.getAction("backTab").getDescriptor(ToolBarActionDescriptor.class)).getComponent();
-        btnHistoryForward = (JButton) ((ToolBarActionDescriptor) actions.getAction("forwardTab").getDescriptor(ToolBarActionDescriptor.class)).getComponent();
 
         Lay.BLtg(this,
             "N", tb,
@@ -163,7 +153,6 @@ public class MainFrame extends EscapeFrame implements HelpCapableWindow {
             }
         });
         updateWindowMenu();
-        updateBackForwardButtons();
         addChildWindowHandlers();
 
         KeyStroke stroke = KeyStroke.getKeyStroke(KeyEvent.VK_F4, InputEvent.CTRL_DOWN_MASK);
@@ -172,11 +161,6 @@ public class MainFrame extends EscapeFrame implements HelpCapableWindow {
                 uiController.closeCurrentTab();
             }
         }, stroke, JComponent.WHEN_IN_FOCUSED_WINDOW);
-    }
-
-    private void updateBackForwardButtons() {
-        btnHistoryBack.setEnabled(tabN2A.getHistoryLocation() > 0);
-        btnHistoryForward.setEnabled(tabN2A.getHistoryLocation() < tabN2A.getHistorySize() - 1);
     }
 
     private void updateWindowMenu() {
@@ -234,29 +218,6 @@ public class MainFrame extends EscapeFrame implements HelpCapableWindow {
 
     public void showHelp(String topic, String content) {
         glassPane.showHelp(topic, content);
-    }
-
-    public void toggleWorkpane() {
-//        int thresh = (int) (splMain.getWidth() * 0.10);
-//        if(splMain.getDividerLocation() < thresh) {
-//            splMain.setDividerLocation((int) (splMain.getWidth() * 0.25));
-//        } else {
-//            splMain.setLastDividerLocation(splMain.getDividerLocation());
-//            splMain.setDividerLocation(0);
-//        }
-    }
-
-    public int getWorkpaneDivLoc() {
-        return 0;
-//        return splMain.getDividerLocation();
-    }
-    public void setWorkpaneDivLoc(int loc) {
-//        splMain.setDividerLocation(loc);
-    }
-
-    public void hideWorkpane() {
-//        splMain.setLastDividerLocation(splMain.getDividerLocation());
-//        splMain.setDividerLocation(0);
     }
 
     @Override

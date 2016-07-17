@@ -118,24 +118,4 @@ public abstract class RecordEditDetailPanel extends JPanel {
             "C", Lay.p()
         );
     }
-
-    // TODO: Old SQL
-    protected IconButton createButtonOwnerDetails(NDoc record) {
-        final String owner = record.getOwner();
-//        Query query = Query.create().eq("UserName", owner);
-//        List<Profile> profiles = Profile.get(query);
-        String img = "user.png";
-//        if(profiles.size() == 1 && profiles.get(0).getGender() == ProfileGender.FEMALE) {
-//            img = "user_female.png";
-//        }
-        IconButton btnOwnerDetails = new IconButton(ImageUtil.getImage(img), "Show User Details");
-        btnOwnerDetails.setFocusable(false);
-        btnOwnerDetails.toImageOnly();
-        btnOwnerDetails.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.openProfileFromUserId(owner);
-            }
-        });
-        return btnOwnerDetails;
-    }
 }
