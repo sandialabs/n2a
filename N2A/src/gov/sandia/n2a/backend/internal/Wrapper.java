@@ -40,7 +40,8 @@ public class Wrapper extends Part
     public boolean finish (Euler simulator)
     {
         populations[0].finish (simulator);
-        simulator.writeTrace ();
-        return ((PopulationCompartment) populations[0]).n > 0;
+        boolean result = ((PopulationCompartment) populations[0]).n > 0;
+        if (result) simulator.writeTrace ();  // only trace if sim is still running
+        return result;
     }
 }

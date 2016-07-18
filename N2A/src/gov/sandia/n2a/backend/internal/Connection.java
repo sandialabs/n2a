@@ -65,6 +65,13 @@ public class Connection extends Part
         super.init (simulator);
     }
 
+    public String path ()
+    {
+        String result = endpoints[0].path ();
+        for (int i = 1; i < endpoints.length; i++) result += "-" + endpoints[i].path ();
+        return result;
+    }
+
     public void setPart (int i, Part p)
     {
         endpoints[i] = p;

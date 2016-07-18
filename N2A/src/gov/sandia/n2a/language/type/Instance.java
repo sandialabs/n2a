@@ -16,6 +16,7 @@ import gov.sandia.n2a.backend.internal.InternalBackendData;
 import gov.sandia.n2a.backend.internal.Part;
 import gov.sandia.n2a.backend.internal.Euler;
 import gov.sandia.n2a.backend.internal.Population;
+import gov.sandia.n2a.backend.internal.Wrapper;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
@@ -270,6 +271,26 @@ public class Instance extends Type
     {
         if (equations == null) return "null@" + hashCode ();
         return equations.name + "@" + hashCode ();
+    }
+
+    /**
+        Return a unique name for this instance within the simulation.
+        Name consists of the equation set name combined with the index of this part,
+        prefixed by the path to the parent part. In the case of a connection, the name
+        consists of the path to each of the connected parts.
+    **/
+    public String path ()
+    {
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
+        if (bed.index == null) return "";  // because the name by itself adds no information; only parts with indices are useful in the path
+
+        String result = equations.name + get (bed.index);
+
+        Instance nextLevel = container.container;
+        if (nextLevel == null  ||  nextLevel instanceof Wrapper) return result;
+        String prefix = nextLevel.path ();
+        if (prefix.isEmpty ()) return result;
+        return prefix + "." + result;
     }
 
     public int compareTo (Type that)

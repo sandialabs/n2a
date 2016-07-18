@@ -16,6 +16,7 @@ import gov.sandia.n2a.language.Split;
 import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
+import gov.sandia.n2a.language.function.Trace;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
@@ -634,6 +635,35 @@ public class EquationSet implements Comparable<EquationSet>
             resolver.from = v;
             resolver.unresolved = unresolved;
             v.transform (resolver);
+        }
+    }
+
+    public void determineTraceVariableName ()
+    {
+        for (EquationSet s : parts)
+        {
+            s.determineTraceVariableName ();
+        }
+
+        class TraceVisitor extends Visitor
+        {
+            public Variable v;
+            public boolean visit (Operator op)
+            {
+                if (op instanceof Trace)
+                {
+                    ((Trace) op).determineVariableName (v);
+                    return false;
+                }
+                return true;
+            }
+        }
+        TraceVisitor visitor = new TraceVisitor ();
+
+        for (Variable v : variables)
+        {
+            visitor.v = v;
+            v.visit (visitor);
         }
     }
 

@@ -134,6 +134,7 @@ public class InternalSimulation implements Simulation
         e.findIntegrated ();
         e.resolveLHS ();
         e.resolveRHS ();
+        e.determineTraceVariableName ();
         e.findConstants ();
         e.removeUnused ();  // especially get rid of unneeded $variables created by addSpecials()
         e.collectSplits ();

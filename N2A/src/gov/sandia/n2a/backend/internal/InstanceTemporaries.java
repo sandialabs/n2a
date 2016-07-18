@@ -98,4 +98,9 @@ public class InstanceTemporaries extends Instance
     {
         return "temp:" + wrapped.toString ();
     }
+
+    public String path ()
+    {
+        return wrapped.path ();
+    }
 }

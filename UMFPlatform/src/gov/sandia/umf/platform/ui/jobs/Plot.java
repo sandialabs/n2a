@@ -28,8 +28,6 @@ import org.jfree.data.xy.XYDataset;
 import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
 
-import replete.util.FileUtil;
-
 public class Plot
 {
     public class Column
@@ -80,7 +78,7 @@ public class Plot
                 }
 
                 char firstCharacter = parts[0].charAt (0);
-                if (firstCharacter > '9')  // column header
+                if (firstCharacter < '0'  ||  firstCharacter > '9')  // column header
                 {
             		isXycePRN = parts[0].equals ("Index");
                     for (int p = 0; p < parts.length; p++)
@@ -166,8 +164,7 @@ public class Plot
         plot.setRangeGridlinePaint (Color.white);
 
         final XYLineAndShapeRenderer renderer = new XYLineAndShapeRenderer();
-        renderer.setSeriesShapesVisible(0, false);
-        renderer.setSeriesShapesVisible(1, false);
+        for (int i = 0; i < dataset.getSeriesCount (); i++) renderer.setSeriesShapesVisible (i, false);
         plot.setRenderer(renderer);
 
         // change the auto tick unit selection to integer units only...

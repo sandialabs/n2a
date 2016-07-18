@@ -347,6 +347,7 @@ public class Scalar extends Type
 
     public String toString ()
     {
+        if ((int) value == value) return String.valueOf ((int) value);  // simplify display a little, since we don't distinguish float from int
         return String.valueOf (value);
     }
 

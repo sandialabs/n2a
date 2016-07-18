@@ -7,7 +7,9 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.internal;
 
+import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.type.Instance;
+import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.umf.platform.UMF;
 
 import java.io.File;
@@ -40,11 +42,15 @@ public class Euler implements Iterable<Instance>
     public TreeMap<Double,EventStep>   periods      = new TreeMap<Double,EventStep> ();
     public Random                      uniform      = new Random ();
 
-    // trace
-    public Map<String,Integer> columnMap    = new HashMap<String,Integer> ();  ///< For trace(). Maps from column name to column position.
-    public List<Float>         columnValues = new ArrayList<Float> ();         ///< For trace(). Holds current value for each column.
-    public PrintStream         out          = System.out;
-    public PrintStream         err          = System.err;
+    // Global shared data
+    public Map<String,Input.Holder> inputs          = new HashMap<String,Input.Holder> ();
+    public Map<String,Matrix>       matrices        = new HashMap<String,Matrix> ();
+    public Map<String,Integer>      columnMap       = new HashMap<String,Integer> ();  ///< For trace(). Maps from column name to column position.
+    public List<Float>              columnValues    = new ArrayList<Float> ();         ///< For trace(). Holds current value for each column.
+    public int                      columnsPrevious = 0;  ///< Number of columns written in previous cycle (of wrapper).
+    public PrintStream              out             = System.out;
+    public PrintStream              err             = System.err;
+    // Note: System.in will get bound into an Input.Holder if used at all.
 
     public Event currentEvent;
 
@@ -126,8 +132,6 @@ public class Euler implements Iterable<Instance>
             currentEvent = eventQueue.remove ();
             currentEvent.run (this);
         }
-
-        writeHeaders ();
     }
 
     public void integrate (Instance i)
@@ -196,6 +200,12 @@ public class Euler implements Iterable<Instance>
 
     public void trace (String column, float value)
     {
+        if (columnValues.isEmpty ())  // slip $t into first column 
+        {
+            columnMap.put ("$t", 0);
+            columnValues.add ((float) currentEvent.t);
+        }
+
         Integer index = columnMap.get (column);
         if (index == null)
         {
@@ -210,32 +220,42 @@ public class Euler implements Iterable<Instance>
 
     public void writeTrace ()
     {
-        int last = columnValues.size () - 1;
-        for (int i = 0; i <= last; i++)
-        {
-            Float c = columnValues.get (i);
-            if (! c.isNaN ()) out.print (c);
-            if (i < last) out.print ("\t");
-            columnValues.set (i, Float.NaN);
-        }
-        if (last >= 0) out.println ();
-    }
+        int count = columnValues.size ();
+        int last  = count - 1;
 
-    public void writeHeaders ()
-    {
-        int count = columnMap.size ();
-        int last = count - 1;
-        String headers[] = new String[count];
-        for (Entry<String,Integer> i : columnMap.entrySet ())
+        // Write headers if new columns have been added
+        if (count > columnsPrevious)
         {
-            headers[i.getValue ()] = i.getKey ();
+            columnsPrevious = count;
+            String headers[] = new String[count];
+            for (Entry<String,Integer> i : columnMap.entrySet ())
+            {
+                headers[i.getValue ()] = i.getKey ();
+            }
+            out.print (headers[0]);
+            for (int i = 1; i < count; i++)
+            {
+                out.print ("\t");
+                out.print (headers[i]);
+            }
+            out.println ();
         }
-        for (int i = 0; i < count; i++)
+
+        // Write values
+        if (count > 0)
         {
-            out.print (headers[i]);
-            if (i < last) out.print ("\t");
+            // $t is guaranteed to be column 0, and furthermore, we are still within the current event that generated these column values
+            columnValues.set (0, (float) currentEvent.t);
+
+            for (int i = 0; i <= last; i++)
+            {
+                Float c = columnValues.get (i);
+                if (! c.isNaN ()) out.print (c);
+                if (i < last) out.print ("\t");
+                columnValues.set (i, Float.NaN);
+            }
+            out.println ();
         }
-        if (last >= 0) out.println ();
     }
 
     public class InstanceIterator implements Iterator<Instance>
