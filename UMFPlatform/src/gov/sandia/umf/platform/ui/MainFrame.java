@@ -235,4 +235,9 @@ public class MainFrame extends EscapeFrame implements HelpCapableWindow {
     public static void setInstance(MainFrame f) {
         instance = f;
     }
+
+    public void init ()
+    {
+        tabN2A.panelSearch.search ();
+    }
 }

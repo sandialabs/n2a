@@ -244,7 +244,7 @@ public class UIController {
 
     // These two could also be combined if a thread could some how return a
     // value on success/failure.
-    public void testConnect ()
+    public void testConnect (final ChangeListener onSuccessCallback)
     {
         startAction ("Connecting", new CommonRunnable ()
         {
@@ -253,7 +253,6 @@ public class UIController {
                 try
                 {
                     if (dataModelMgr2.hasDetails ()) dataModelMgr2.connect ();
-                    // workpaneModel.init(); // TODO: Rethink the workpane.
                 }
                 catch (Exception e)
                 {
@@ -264,7 +263,7 @@ public class UIController {
             public void cleanUp ()
             {
             }
-        }, null, "connecting to the database");
+        }, onSuccessCallback, "connecting to the database");
     }
 
     public boolean disconnect2() {

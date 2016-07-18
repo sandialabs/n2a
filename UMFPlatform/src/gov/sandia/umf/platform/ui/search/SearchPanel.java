@@ -12,7 +12,6 @@ import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
-import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics;
@@ -135,17 +134,16 @@ public class SearchPanel extends JPanel implements DefaultButtonEnabledPanel {
                 "E", btnSearch = new MButton("&Search", ImageUtil.getImage("mag.gif")),
                 "eb=10,hgap=7,opaque=false"
             ),
-            "C", pnlPreImage = Lay.GBL(Lay.lb(ImageUtil.getImage("bigmag2x.gif")), "opaque=false"),
-            "vgap=0"
-        );
-        pnlResults = Lay.BL(
-            "N", Lay.FL("R", lblResultsCount = Lay.lb(ImageUtil.getImage("pound.gif")), "opaque=false"),
-            "C", Lay.SPL(
-                sp1 = Lay.sp(pnlFaceted = Lay.p("gradient", "gradclr1=white,gradclr2=200"),"eb=0"),
-                Lay.sp(lstResults = new SearchResultList(mdlResults = new DefaultListModel())),
-                "divpixel=170,hgap=5,mb=[1t,black]"
+            "C", pnlResults = Lay.BL(
+                "N", Lay.FL("R", lblResultsCount = Lay.lb(ImageUtil.getImage("pound.gif")), "opaque=false"),
+                "C", Lay.SPL(
+                    sp1 = Lay.sp(pnlFaceted = Lay.p("gradient", "gradclr1=white,gradclr2=200"),"eb=0"),
+                    Lay.sp(lstResults = new SearchResultList(mdlResults = new DefaultListModel())),
+                    "divpixel=170,hgap=5,mb=[1t,black]"
+                ),
+                "opaque=false"
             ),
-            "opaque=false"
+            "vgap=0"
         );
         cboQuery.setEditable(true);
         lblResultsCount.setFont(new Font("Arial", Font.BOLD, 14));
@@ -278,7 +276,8 @@ public class SearchPanel extends JPanel implements DefaultButtonEnabledPanel {
         }
     }
 
-    private void search() {
+    public void search ()
+    {
         String query = (String) cboQuery.getSelectedItem();
         if(query == null) {
             query = "";
@@ -349,9 +348,6 @@ public class SearchPanel extends JPanel implements DefaultButtonEnabledPanel {
                             pnlFaceted.add(pnlCat);
                             first = false;
                         }
-                        remove(pnlPreImage);
-                        add(pnlResults, BorderLayout.CENTER);
-//                        pnlResults.setVisible(true);
                         cboQuery.getEditor().selectAll();
                         updateResultsShown();
                         updateUI();

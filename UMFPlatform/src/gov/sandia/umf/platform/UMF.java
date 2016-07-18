@@ -379,8 +379,13 @@ public class UMF
         if(loadingFrame != null) {
             loadingFrame.dispose();
         }
-        uiController.testConnect ();
-
+        uiController.testConnect (new ChangeListener ()
+        {
+            public void stateChanged (ChangeEvent arg0)
+            {
+                mainFrame.init ();
+            }
+        });
     }
 
     private static void ensureSizeLoc(CommonWindow win, Map<String, Object> winProps, String propKeyPrefix) {

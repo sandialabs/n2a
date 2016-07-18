@@ -43,6 +43,7 @@ public class MainTabbedPane extends AdvancedTabbedPane {
     // Core
 
     private UIController uiController;
+    public SearchPanel panelSearch;
 
     // Misc
 
@@ -77,16 +78,16 @@ public class MainTabbedPane extends AdvancedTabbedPane {
         uiController = uic;
 
         // Search panel
-        final SearchPanel pnl = new SearchPanel (uiController);
-        pnl.addSelectRecordListener (new ChangeListener ()
+        panelSearch = new SearchPanel (uiController);
+        panelSearch.addSelectRecordListener (new ChangeListener ()
         {
             public void stateChanged (ChangeEvent e)
             {
-                List<NDoc> doc = pnl.getSelectedRecords ();
+                List<NDoc> doc = panelSearch.getSelectedRecords ();
                 uiController.openRecord (doc.get (0));
             }
         });
-        addTab (SEARCH_ORIENT_TAB_KEY, ImageUtil.getImage ("mag.gif"), pnl, null);
+        addTab (SEARCH_ORIENT_TAB_KEY, ImageUtil.getImage ("mag.gif"), panelSearch, null);
         TabState searchOrientTabState = new TabState (TabStateType.SEARCH_ORIENT);
         setAdditionalInfo (0, searchOrientTabState);
         historyNewTab (SEARCH_ORIENT_TAB_KEY);
