@@ -8,8 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.language.function;
 
 import java.io.File;
-import java.util.HashMap;
-
+import gov.sandia.n2a.backend.internal.Euler;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
@@ -20,8 +19,6 @@ import gov.sandia.n2a.language.type.Text;
 
 public class ReadMatrixRaw extends Function
 {
-    public HashMap<String,Matrix> matrices = new HashMap<String,Matrix> ();
-
     public static Factory factory ()
     {
         return new Factory ()
@@ -40,9 +37,16 @@ public class ReadMatrixRaw extends Function
 
     public Type eval (Instance context)
     {
+        Matrix A;
         String path = ((Text) operands[0].eval (context)).value;
-        if (! matrices.containsKey (path)) matrices.put (path, new Matrix (new File (path).getAbsoluteFile ()));  // getAbsoluteFile() interprets path relative to System user.dir
-        Matrix A = matrices.get (path);
+        Euler simulator = Euler.getSimulator (context);
+        if (simulator == null) return new Scalar (0);  // absence of simulator indicates analysis phase, so opening files is unecessary
+        A = simulator.matrices.get (path);
+        if (A == null)
+        {
+            A = new Matrix (new File (path).getAbsoluteFile ());
+            simulator.matrices.put (path, A);
+        }
 
         int rows    = A.rows ();
         int columns = A.columns ();

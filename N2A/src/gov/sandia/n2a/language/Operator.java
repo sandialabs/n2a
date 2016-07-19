@@ -14,6 +14,8 @@ import gov.sandia.n2a.language.function.DollarEvent;
 import gov.sandia.n2a.language.function.Exp;
 import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Grid;
+import gov.sandia.n2a.language.function.Input;
+import gov.sandia.n2a.language.function.InputRaw;
 import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.Pulse;
 import gov.sandia.n2a.language.function.ReadMatrix;
@@ -197,6 +199,8 @@ public class Operator implements Cloneable, Comparable<Operator>
         register (Exp          .factory ());
         register (Gaussian     .factory ());
         register (Grid         .factory ());
+        register (Input        .factory ());
+        register (InputRaw     .factory ());
         register (Norm         .factory ());
         register (Pulse        .factory ());
         register (ReadMatrix   .factory ());
