@@ -9,16 +9,16 @@ package gov.sandia.umf.platform.db;
 
 import java.util.TreeMap;
 
-public class MNodeCached extends MNodeMemory
+public class MPersistent extends MVolatile
 {
     MNode parent;
 
-    public MNodeCached (MNodeCached parent)
+    public MPersistent (MPersistent parent)
 	{
         this.parent = parent;
 	}
 
-	public MNodeCached (MNodeCached parent, String value)
+	public MPersistent (MPersistent parent, String value)
 	{
 	    super (value);
 	    this.parent = parent;
@@ -26,7 +26,7 @@ public class MNodeCached extends MNodeMemory
 
 	public void markChanged ()
 	{
-	    ((MNodeCached) parent).markChanged ();
+	    ((MPersistent) parent).markChanged ();
 	}
 
     public void clear ()
@@ -61,13 +61,13 @@ public class MNodeCached extends MNodeMemory
         {
             markChanged ();
             children = new TreeMap<String,MNode> ();
-            return children.put (index, new MNodeCached (this, value));
+            return children.put (index, new MPersistent (this, value));
         }
         MNode c = children.get (index);
         if (c == null)
         {
             markChanged ();
-            return children.put (index, new MNodeCached (this, value));
+            return children.put (index, new MPersistent (this, value));
         }
         c.set (value);
         return c;

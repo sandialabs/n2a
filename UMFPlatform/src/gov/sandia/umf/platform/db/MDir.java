@@ -21,19 +21,19 @@ import java.util.TreeMap;
     This allows the direct children of this directory to be subdirectories, and each document
     file may be a specifically-named entry in a subdirectory.
 **/
-public class MNodeDir extends MNode
+public class MDir extends MNode
 {
 	File   root;    // The directory containing the files or subdirs that constitute the children of this node
 	String suffix;  // Relative path to document file, or null if documents are directly under root
 
-	NavigableMap<String,SoftReference<MNodeDoc>> children;
+	NavigableMap<String,SoftReference<MDoc>> children;
 
-    public MNodeDir (File root)
+    public MDir (File root)
     {
         this (root, null);
     }
 
-	public MNodeDir (File root, String suffix)
+	public MDir (File root, String suffix)
 	{
 	    this.root = root;
 	    this.suffix = suffix;
@@ -41,18 +41,18 @@ public class MNodeDir extends MNode
 
 	public MNode child (String index)
     {
-	    MNodeDoc result = null;
+	    MDoc result = null;
 	    if (children != null) result = children.get (index).get ();
 	    if (result == null)  // We have never loaded this document, or it has been garbage collected.
 	    {
 	        File path = new File (root, index);
 	        if (suffix != null) path = new File (path, suffix);
 	        if (! path.canRead ()) return null;
-	        result = new MNodeDoc (this, path);
+	        result = new MDoc (this, path);
 
 	        // Now create and store a new doc
-	        if (children == null) children = new TreeMap<String,SoftReference<MNodeDoc>> ();
-	        children.put (index, new SoftReference<MNodeDoc> (result));
+	        if (children == null) children = new TreeMap<String,SoftReference<MDoc>> ();
+	        children.put (index, new SoftReference<MDoc> (result));
 	    }
         return result;
     }
@@ -69,14 +69,14 @@ public class MNodeDir extends MNode
 
     public MNode set (String value, String index)
     {
-        if (children == null) children = new TreeMap<String,SoftReference<MNodeDoc>> ();
+        if (children == null) children = new TreeMap<String,SoftReference<MDoc>> ();
 
         File path = new File (root, index);
         if (suffix != null) path = new File (path, suffix);
-        MNodeDoc result = new MNodeDoc (this, path);
+        MDoc result = new MDoc (this, path);
 
-        if (children == null) children = new TreeMap<String,SoftReference<MNodeDoc>> ();
-        children.put (index, new SoftReference<MNodeDoc> (result));
+        if (children == null) children = new TreeMap<String,SoftReference<MDoc>> ();
+        children.put (index, new SoftReference<MDoc> (result));
         return result;
     }
 
@@ -84,12 +84,12 @@ public class MNodeDir extends MNode
     {
         TreeMap<String,MNode> dir = new TreeMap<String,MNode> ();
         File[] files = root.listFiles ();  // This may cost a lot of time in some cases. However, N2A should never have more than about 10,000 models in a dir.
-        if (files.length > 0  &&  children == null) children = new TreeMap<String,SoftReference<MNodeDoc>> ();
+        if (files.length > 0  &&  children == null) children = new TreeMap<String,SoftReference<MDoc>> ();
         for (File f : files)
         {
-            MNodeDoc doc = new MNodeDoc (this, f);
+            MDoc doc = new MDoc (this, f);
             String index = f.getName ();
-            children.put (index, new SoftReference<MNodeDoc> (doc));
+            children.put (index, new SoftReference<MDoc> (doc));
             dir.put (index, doc);
         }
         return dir.entrySet ().iterator ();

@@ -12,16 +12,16 @@ import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
-public class MNodeMemory extends MNode
+public class MVolatile extends MNode
 {
 	String value;
 	NavigableMap<String,MNode> children;
 
-	public MNodeMemory ()
+	public MVolatile ()
 	{
 	}
 
-	public MNodeMemory (String value)
+	public MVolatile (String value)
 	{
 	    if (! value.isEmpty ()) this.value = value;
 	}
@@ -54,10 +54,10 @@ public class MNodeMemory extends MNode
         if (children == null)
         {
             children = new TreeMap<String,MNode> ();
-            return children.put (index, new MNodeMemory (value));
+            return children.put (index, new MVolatile (value));
         }
         MNode c = children.get (index);
-        if (c == null) return children.put (index, new MNodeMemory (value));
+        if (c == null) return children.put (index, new MVolatile (value));
         c.set (value);
         return c;
     }

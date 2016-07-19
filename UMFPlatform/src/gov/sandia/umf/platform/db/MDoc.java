@@ -20,7 +20,7 @@ import java.util.TreeMap;
     We assume that only one instance of this class exists for a given disk document
     at any given moment, and that no other process in the system modifies the file on disk.
 **/
-public class MNodeDoc extends MNodeCached
+public class MDoc extends MPersistent
 {
     // Note: MNodeRAM.value stores the path, since we don't allow a document node to have a top-level value.
 
@@ -29,7 +29,7 @@ public class MNodeDoc extends MNodeCached
     // Note: "needRead" is indicated by whether the MNodeRAM.children collection is null. If it is non-null, the read has happened.
     // If children exists but is empty, then either the file was actually empty or it does not yet exist.
 
-	public MNodeDoc (MNodeDir parent, File path)
+	public MDoc (MDir parent, File path)
 	{
 	    super (null, path.toString ());
 	    this.parent = parent;
