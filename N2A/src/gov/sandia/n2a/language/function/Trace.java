@@ -8,8 +8,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.language.function;
 
 import gov.sandia.n2a.backend.internal.Euler;
-import gov.sandia.n2a.backend.internal.InstanceTemporaries;
-import gov.sandia.n2a.backend.internal.InternalBackendData;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Function;

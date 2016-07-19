@@ -163,6 +163,11 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
         {
             return null;
         }
+
+        public void remove ()
+        {
+            // Do nothing, since the list is empty.
+        }
     }
 
     public static class Visitor
