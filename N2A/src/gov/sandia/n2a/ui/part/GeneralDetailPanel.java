@@ -31,8 +31,6 @@ public class GeneralDetailPanel extends RecordEditDetailPanel {
     private DualTextFieldPanel pnlName;
     private DualTextFieldPanel pnlOwner;
     private DualTextFieldPanel pnlUID;
-    private IconButton btnOwnerDetails;
-    //private JCheckBox chkDevTest;
     private boolean fireOnLostFocus;
     private boolean noFire = false;
 
@@ -63,17 +61,12 @@ public class GeneralDetailPanel extends RecordEditDetailPanel {
                 Lay.hn(pnlName = new DualTextFieldPanel(false), "alignx=0,pref=[10,30]"),
                 Lay.hn(createLabelPanel("Owner", "part-owner"), "alignx=0,pref=[10,25]"),
                 Lay.BL(
-                    "W", Lay.BL(
-                        "C", pnlOwner = new DualTextFieldPanel(true),
-                        "E", Lay.p(btnOwnerDetails, "eb=3l")
-                    ),
+                    "W", pnlOwner = new DualTextFieldPanel(true),
                     "C", Lay.p(),
                     "alignx=0,pref=[10,30]"
                 ),
                 Lay.hn(createLabelPanel("DB UID", "part-db-uid"), "alignx=0,pref=[10,25]"),
                 Lay.hn(pnlUID = new DualTextFieldPanel(true), "alignx=0,pref=[10,30]")
-
-                //Lay.hn(createCheckboxPanel(chkDevTest, "db-uid"), "alignx=0,pref=[10,25]")
             ),
             "C", Lay.p(),
             "eb=10"
