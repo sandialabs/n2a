@@ -69,25 +69,11 @@ public class MainFrameActionMap extends UIActionMap {
         action.addDescriptor(new MenuBarActionDescriptor("fileMenu", "New", 'N', allEnabledStateMap));
         addAction(action);
 
-        // Connect
-
-        ActionListener listener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.openOrientDbConnect();
-            }
-        };
-        action = new UIAction("connectDbOrient");
-        action.addDescriptor(new MenuBarActionDescriptor("fileMenu", "Connect...", 'o',
-            ImageUtil.getImage("connect.gif"), allEnabledStateMap, false, 'D', true, listener));
-        action.addDescriptor(new ToolBarActionDescriptor("fileMenu", "Connect...", ImageUtil.getImage("connect.gif"),
-            allEnabledStateMap, false, listener));
-        addAction(action);
-
         action = new UIAction(sepId());
         action.addDescriptor(new MenuBarActionDescriptor());
         addAction(action);
 
-        listener = new ActionListener() {
+        ActionListener listener = new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 uiController.saveCurrentTab();
             }

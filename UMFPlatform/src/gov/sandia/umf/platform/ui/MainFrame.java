@@ -77,7 +77,7 @@ public class MainFrame extends EscapeFrame implements HelpCapableWindow {
 
     public MainFrame(UIController uic)
     {
-        ProductCustomization pc = AppState.getState().getProductCustomization();
+        ProductCustomization pc = AppState.getState().prodCustomization;
         setTitle(pc.getProductLongName() + " v" + pc.getProductVersion());
         setIconImage(pc.getWindowIcon().getImage());
 
@@ -85,8 +85,6 @@ public class MainFrame extends EscapeFrame implements HelpCapableWindow {
 
         tabN2A = new MainTabbedPane(uic);
         sbar = new CommonStatusBar();
-        JPanel pnlConnectStatus = new ConnectStatusPanel(uiController);
-        sbar.setRightComponent(pnlConnectStatus);
         Lay.hn(sbar, "dim=[20, 30]");
 
         UIActionMap actions = new MainFrameActionMap(uiController);

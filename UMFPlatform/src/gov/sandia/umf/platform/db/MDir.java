@@ -57,7 +57,12 @@ public class MDir extends MNode
         return result;
     }
 
-    public String get (String defaultValue)
+	public int length ()
+	{
+	    return root.list ().length;
+	}
+
+	public String get (String defaultValue)
     {
         return defaultValue;
     }

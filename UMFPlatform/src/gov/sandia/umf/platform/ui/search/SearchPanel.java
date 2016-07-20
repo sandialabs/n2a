@@ -9,6 +9,7 @@ package gov.sandia.umf.platform.ui.search;
 
 import gov.sandia.umf.platform.AppState;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
@@ -27,8 +28,10 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 
@@ -119,14 +122,15 @@ public class SearchPanel extends JPanel implements DefaultButtonEnabledPanel {
     // CONSTRUCTOR //
     /////////////////
 
-    public SearchPanel(UIController uic) {
+    public SearchPanel (UIController uic)
+    {
         uiController = uic;
         JScrollPane sp1;
-        mdlQuery = new NoFireComboBoxModel();
-        // ERROR
-        List<String> queries = AppState.getState().getOrientQueries();
-        for(String query : queries) {
-            mdlQuery.addElement(query);
+        mdlQuery = new NoFireComboBoxModel ();
+        Iterator<Entry<String,MNode>> queries = AppState.getState ().getNode ("Queries").iterator ();
+        while (queries.hasNext ())
+        {
+            mdlQuery.addElement (queries.next ().getValue ().get ());
         }
         Lay.BLtg(this,
             "N", Lay.BL(
@@ -269,10 +273,13 @@ public class SearchPanel extends JPanel implements DefaultButtonEnabledPanel {
         return s == null || s.trim().equals("") ? "<html><i>(no title)</i></html>" : s;
     }
 
-    private void updateAppState() {
-        AppState.getState().getOrientQueries().clear();
-        for(int i = 0; i < mdlQuery.getSize(); i++) {
-            AppState.getState().getOrientQueries().add((String) mdlQuery.getElementAt(i));
+    private void updateAppState ()
+    {
+        MNode queries = AppState.getState ().getNode ("Queries");
+        queries.clear ();
+        for (int i = 0; i < mdlQuery.getSize (); i++)
+        {
+            queries.set ((String) mdlQuery.getElementAt (i), String.valueOf (i));
         }
     }
 

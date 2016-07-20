@@ -30,7 +30,6 @@ public class SearchResultList extends EmptyMessageList {
     // FIELDS //
     ////////////
 
-    private static final String NO_RESULTS = "No Results!";
     private ListCellRenderer renderer = new CustomRenderer();
     private SearchResultPanelGenerator panelGenerator;
 
@@ -56,7 +55,6 @@ public class SearchResultList extends EmptyMessageList {
     }
 
     private void init() {
-        setEmptyMessage(NO_RESULTS);
         setCellRenderer(renderer);
     }
 

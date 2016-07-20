@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.io.StringWriter;
 import java.io.Writer;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -22,6 +23,49 @@ import java.util.Map.Entry;
 **/
 public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
 {
+    public static class MOrder implements Comparator<String>
+    {
+        // It might be possible to write a more efficient M collation routine by sifting through
+        // each string, character by character. It would do the usual string comparison while
+        // simultaneously converting each string into a number. As long as a string still
+        // appears to be a number, conversion continues.
+        // This current version is easier to write and understand, but less efficient.
+        public int compare (String A, String B)
+        {
+            if (A.equals (B)) return 0;  // If strings follow M collation rules, then compare for equals works for numbers.
+
+            Double Avalue = null;
+            try
+            {
+                Avalue = Double.valueOf (A);
+            }
+            catch (NumberFormatException e)
+            {
+            }
+
+            Double Bvalue = null;
+            try
+            {
+                Bvalue = Double.valueOf (B);
+            }
+            catch (NumberFormatException e)
+            {
+            }
+
+            if (Avalue == null)  // A is a string
+            {
+                if (Bvalue == null) return A.compareTo (B);  // Both A and B are strings
+                return 1;  // string > number
+            }
+            else  // A is a number
+            {
+                if (Bvalue == null) return -1;  // number < string
+                return (int) Math.signum (Avalue - Bvalue);
+            }
+        }
+    }
+    public static MOrder comparator = new MOrder ();
+
     /**
         @return The child indicated by the given index, or null if it doesn't exist.
     **/
@@ -48,6 +92,11 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
     {
     }
 
+    public int length ()
+    {
+        return 0;
+    }
+
     /**
         @return This node's value, with "" as default
     **/
@@ -65,44 +114,65 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
     }
 
     /**
-        @return Child node value, with first arg as default
-    **/
-    public String get (String defaultValue, String index)
-    {
-        MNode c = child (index);
-        if (c == null) return defaultValue;
-        return c.get (defaultValue);
-    }
-
-    /**
         Digs down tree as far as possible to retrieve value; returns first arg if necessary.
     **/
-    public String get (String defaultValue, String index0, String... deeperIndices)
+    public String get (String defaultValue, String... indices)
     {
-        MNode c = child (index0);
-        if (c == null) return defaultValue;
-        for (int i = 0; i < deeperIndices.length; i++)
+        MNode c = this;
+        for (int i = 0; i < indices.length; i++)
         {
-            c = c.child (deeperIndices[i]);
+            c = c.child (indices[i]);
             if (c == null) return defaultValue;
         }
         return c.get (defaultValue);
     }
 
-    public int getInt (String... args)
+    /**
+        Retrieves child node, or creates it if nonexistent.
+        Like a combination of child() and set().
+        The benefit of getting back a node rather than a value is ease of access
+        to a list stored as children of the node.
+    **/
+    public MNode getNode (String... indices)
     {
-        if (args.length == 0) return Integer.parseInt (get (""));
-        if (args.length == 1) return Integer.parseInt (get (args[0]));
-        if (args.length == 2) return Integer.parseInt (get (args[0], args[1]));
-        return Integer.parseInt (get (args[0], args[1], Arrays.copyOfRange (args, 2, args.length - 1)));
+        MNode result = this;
+        for (int i = 0; i < indices.length; i++)
+        {
+            MNode c = result.child (indices[i]);
+            if (c == null) c = result.set ("", indices[i]);
+            result = c;
+        }
+        return result;  // If no indices are specified, we actually return this node.
     }
 
-    public double getDouble (String... args)
+    public boolean getBoolean ()
     {
-        if (args.length == 0) return Double.parseDouble (get (""));
-        if (args.length == 1) return Double.parseDouble (get (args[0]));
-        if (args.length == 2) return Double.parseDouble (get (args[0], args[1]));
-        return Double.parseDouble (get (args[0], args[1], Arrays.copyOfRange (args, 2, args.length - 1)));
+        return Boolean.parseBoolean (get (""));
+    }
+
+    public boolean getBoolean (boolean defaultValue, String... args)
+    {
+        return Boolean.parseBoolean (get (defaultValue ? "1" : "0", args));
+    }
+
+    public int getInt ()
+    {
+        return Integer.parseInt (get (""));
+    }
+
+    public int getInt (int defaultValue, String... args)
+    {
+        return Integer.parseInt (get (String.valueOf (defaultValue), args));
+    }
+
+    public double getDouble ()
+    {
+        return Double.parseDouble (get (""));
+    }
+
+    public Double getDouble (double defaultValue, String... args)
+    {
+        return Double.parseDouble (get (String.valueOf (defaultValue), args));
     }
 
     /**
@@ -148,7 +218,7 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
         }
         else  // indices.length >= 2
         {
-            set (value.toString (), indices[0], Arrays.copyOfRange (indices, 1, indices.length - 1));
+            set (value.toString (), indices[0], Arrays.copyOfRange (indices, 1, indices.length));
         }
     }
 
@@ -244,6 +314,8 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
     {
         while (true)
         {
+            if (reader.line == null) return;  // stop at end of file
+
             // At this point, reader.whitespaces == whitespaces
             String line = reader.line.trim ();
             String[] pieces = line.split ("=", 2);
@@ -255,7 +327,7 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
 
             reader.getNextLine ();
             if (reader.whitespaces > whitespaces) child.read (reader, reader.whitespaces);  // Recursively populate child. When this call returns, reader.whitespaces <= whitespaces in this function, because that is what ends the recursion.
-            if (reader.whitespaces < whitespaces) break;
+            if (reader.whitespaces < whitespaces) return;  // end recursion
         }
     }
 
@@ -278,6 +350,11 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
             while (true)
             {
                 line = reader.readLine ();
+                if (line == null)  // end of file
+                {
+                    whitespaces = -1;
+                    return;
+                }
                 int comment = line.indexOf ('#');  // find comment character, if it exists
                 if (comment == -1)  // no comment
                 {

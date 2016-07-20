@@ -59,10 +59,13 @@ public class MDoc extends MPersistent
 	{
 	    if (children != null) return;  // already loaded
 	    if (value == null) return;  // we have no file name, so can't load
-	    children = new TreeMap<String,MNode> ();
+	    children = new TreeMap<String,MNode> (comparator);
         try
         {
-            BufferedReader reader = new BufferedReader (new FileReader (new File (value)));
+            File file;
+            if (parent == null) file = new File (value);
+            else                file = new File (((MDir) parent).root, value);
+            BufferedReader reader = new BufferedReader (new FileReader (file));
             String line = reader.readLine ().trim ();
             String[] pieces = line.split ("=", 2);
             if (pieces.length < 2  ||  ! pieces[0].equals ("N2A.schema")  ||  ! pieces[1].equals ("1"))
@@ -85,7 +88,10 @@ public class MDoc extends MPersistent
 	    if (! needsWrite) return;
 	    try
 	    {
-	        BufferedWriter writer = new BufferedWriter (new FileWriter (new File (value)));
+            File file;
+            if (parent == null) file = new File (value);
+            else                file = new File (((MDir) parent).root, value);
+	        BufferedWriter writer = new BufferedWriter (new FileWriter (file));
 	        writer.write (String.format ("N2A.schema=1%n"));
 	        write (writer, "");
 	        writer.close ();

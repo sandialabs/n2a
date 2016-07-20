@@ -66,17 +66,15 @@ public class SearchResultTableModelOrient extends MinimalAbstractTableModel {
         return String.class;
     }
     @Override
-    public int getColumnCount() {
-        if(AppState.getState().isShowUids()) {
-            return COLUMNS.length;
-        }
+    public int getColumnCount ()
+    {
+        if (AppState.getState ().getBoolean (false, "ShowUids")) return COLUMNS.length;
         return COLUMNS.length - 1;
     }
     @Override
-    public String getColumnName(int columnIndex) {
-        if(AppState.getState().isShowUids()) {
-            return COLUMNS[columnIndex];
-        }
+    public String getColumnName (int columnIndex)
+    {
+        if (AppState.getState().getBoolean (false, "ShowUids")) return COLUMNS[columnIndex];
         return COLUMNS[columnIndex + 1];
     }
     @Override
@@ -94,8 +92,10 @@ public class SearchResultTableModelOrient extends MinimalAbstractTableModel {
 
         NDoc result = results.get(rowIndex);
 
-        if(AppState.getState().isShowUids()) {
-            switch(columnIndex) {
+        if(AppState.getState().getBoolean (false, "ShowUids"))
+        {
+            switch (columnIndex)
+            {
                 case 0: return result.getId();
                 case 1: return result.get("name", "");
                 case 2: return StringUtil.toTitleCase(result.get("type", "").toString());
@@ -103,8 +103,10 @@ public class SearchResultTableModelOrient extends MinimalAbstractTableModel {
                 case 4: return result.get("notes", "");
             }
         }
-        else {
-            switch(columnIndex) {
+        else
+        {
+            switch (columnIndex)
+            {
                 case 0: return result.get("name", "");
                 case 1: return StringUtil.toTitleCase(result.get("type", "").toString());
                 case 2: return result.get("$owner");

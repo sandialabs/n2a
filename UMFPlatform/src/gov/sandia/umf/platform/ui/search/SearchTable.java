@@ -35,7 +35,7 @@ public class SearchTable extends JTable {
         setSelectionMode(sel);
         setFillsViewportHeight(true);
         setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
-        setShowUids(AppState.getState().isShowUids());
+        setShowUids (AppState.getState ().getBoolean (false, "ShowUids"));
     }
 
 

@@ -88,8 +88,6 @@ public class MainTabbedPane extends AdvancedTabbedPane {
             }
         });
         addTab (SEARCH_ORIENT_TAB_KEY, ImageUtil.getImage ("mag.gif"), panelSearch, null);
-        TabState searchOrientTabState = new TabState (TabStateType.SEARCH_ORIENT);
-        setAdditionalInfo (0, searchOrientTabState);
         historyNewTab (SEARCH_ORIENT_TAB_KEY);
         setCloseableAt (0, false);
 
@@ -158,8 +156,6 @@ public class MainTabbedPane extends AdvancedTabbedPane {
                 }
             });
             insertTab (SEARCH_ORIENT_TAB_KEY, ImageUtil.getImage ("mag.gif"), pnlSearch, null, 0);
-            TabState searchOrientTabState = new TabState (TabStateType.SEARCH_ORIENT);
-            setAdditionalInfo (0, searchOrientTabState);
             searchIdx = 0;
         }
         setSelectedIndex (searchIdx);
@@ -185,16 +181,9 @@ public class MainTabbedPane extends AdvancedTabbedPane {
             }
             String tip = doc.isNew() ? "New " + typeName : title;
             RecordEditPanel pnlEdit = makeRecordTabPanelOrient(doc);
-            TabState orientTabState = new TabState(TabStateType.ORIENT_RECORD);
-            orientTabState.setDbType(TabStateDbType.ORIENT);
-            orientTabState.setBeanClass(doc.getClassName());
-            orientTabState.setOrientId(doc.getId());
             addTab(title, doc.getIcon(), pnlEdit, tip, tabKey);
             index = indexOfTabByKey(tabKey);
-            setAdditionalInfo(index, orientTabState);
-            if(doc.isNew()) {
-                setDirtyAt(index, true);
-            }
+            if (doc.isNew ()) setDirtyAt (index, true);
             setSelectedIndex(index);
             pnlEdit.doInitialFocus();
             // TODO: post layout not always called when expected (not actually layed out yet).
@@ -426,13 +415,5 @@ public class MainTabbedPane extends AdvancedTabbedPane {
 
     public int getHistorySize() {
         return history.size();
-    }
-
-    public List<TabState> getTabStates() {
-        List<TabState> states = new ArrayList<TabState>();
-        for(int i = 0; i < getTabCount(); i++) {
-            states.add((TabState) getAdditionalInfo(i));
-        }
-        return states;
     }
 }

@@ -37,6 +37,12 @@ public class MVolatile extends MNode
 	    if (children != null) children.clear ();
 	}
 
+	public int length ()
+	{
+	    if (children == null) return 0;
+	    return children.size ();
+	}
+
 	public String get (String defaultValue)
     {
         if (value == null) return defaultValue;
@@ -53,13 +59,20 @@ public class MVolatile extends MNode
     {
         if (children == null)
         {
-            children = new TreeMap<String,MNode> ();
-            return children.put (index, new MVolatile (value));
+            children = new TreeMap<String,MNode> (comparator);
+            MNode result = new MVolatile (value);
+            children.put (index, result);
+            return result;
         }
-        MNode c = children.get (index);
-        if (c == null) return children.put (index, new MVolatile (value));
-        c.set (value);
-        return c;
+        MNode result = children.get (index);
+        if (result == null)
+        {
+            result = new MVolatile (value);
+            children.put (index, result);
+            return result;
+        }
+        result.set (value);
+        return result;
     }
 
     public Iterator<Entry<String,MNode>> iterator ()

@@ -40,7 +40,7 @@ public class AboutDialog extends EscapeDialog {
         Font f1 = new Font("Helvetica", Font.PLAIN, 16);
         Font f2 = new Font("Helvetica", Font.PLAIN, 12);
 
-        ProductCustomization pc = AppState.getState().getProductCustomization();
+        ProductCustomization pc = AppState.getState ().prodCustomization;
         String shortName;
         if(pc != null) {
             shortName = pc.getProductShortName();
@@ -88,7 +88,7 @@ public class AboutDialog extends EscapeDialog {
     }
 
     public AboutDialog(JFrame parent) {
-        super(parent, "About " + AppState.getState().getProductCustomization().getProductLongName(), true);
+        super(parent, "About " + AppState.getState().prodCustomization.getProductLongName(), true);
 
         // Technically possible for this to execute before the thread
         // invoking initializeLabels finishes.  However, that is such
@@ -126,7 +126,7 @@ public class AboutDialog extends EscapeDialog {
         Lay.BLtg(gp, "C", pnlText, "eb=10");
 
         Lay.BLtg(this,
-            "N", Lay.lb(AppState.getState().getProductCustomization().getAboutImage()),
+            "N", Lay.lb(AppState.getState().prodCustomization.getAboutImage()),
             "C", gp,
             "resizable=false,size=[520,380],center"
         );

@@ -7,11 +7,9 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui;
 
-import gov.sandia.umf.platform.AppState;
 import gov.sandia.umf.platform.UMF;
 import gov.sandia.umf.platform.connect.orientdb.ui.BackupDialog;
 import gov.sandia.umf.platform.connect.orientdb.ui.ConnectionManager;
-import gov.sandia.umf.platform.connect.orientdb.ui.ConnectionSelectionDialog;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.connect.orientdb.ui.OrientDatasource;
 import gov.sandia.umf.platform.ensemble.params.groups.ParameterSpecGroup;
@@ -676,41 +674,6 @@ public class UIController {
 //                }
 //            }
 //        }
-    }
-
-    public void openOrientDbConnect() {
-
-        final ConnectionSelectionDialog dlg = new ConnectionSelectionDialog(
-            parentRef,
-            AppState.getState().getConnectModel().getList(),
-            AppState.getState().getConnectModel().getSelected());
-
-        dlg.setVisible(true);
-
-        if(dlg.getState() == ConnectionSelectionDialog.SAVE) {
-            if(!disconnect2()) {
-                return;
-            }
-            // TODO: if disconnect fails, then you lose your edits in the dialog.
-            // If we save the list but not the selected when we might save a list
-            // in which the original selected connection might not exist.... conumdrum.
-            AppState.getState().getConnectModel().setList(dlg.getConnections());
-            AppState.getState().getConnectModel().setSelected(dlg.getChosenConnection());
-            if(dlg.getChosenConnection() == null) {
-                return;
-            }
-            startAction("Connecting", new CommonRunnable() {
-                public void runThread(CommonThreadContext context) throws CommonThreadShutdownException {
-                    try {
-                        dataModelMgr2.connect(dlg.getChosenConnection());
-                        Dialogs.showMessage("Connection successful.", "Connect");
-                    } catch(Exception e1) {
-                        Dialogs.showDetails("Connection failed.", "Connect", e1);
-                    }
-                }
-                public void cleanUp() {}
-            }, null, "connecting to the database");
-        }
     }
 
     public void searchDb(final String query, final ChangeListener onSuccessCallback) {

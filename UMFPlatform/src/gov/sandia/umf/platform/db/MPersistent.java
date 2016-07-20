@@ -60,16 +60,20 @@ public class MPersistent extends MVolatile
         if (children == null)
         {
             markChanged ();
-            children = new TreeMap<String,MNode> ();
-            return children.put (index, new MPersistent (this, value));
+            children = new TreeMap<String,MNode> (comparator);
+            MNode result = new MPersistent (this, value);
+            children.put (index, result);
+            return result;
         }
-        MNode c = children.get (index);
-        if (c == null)
+        MNode result = children.get (index);
+        if (result == null)
         {
             markChanged ();
-            return children.put (index, new MPersistent (this, value));
+            result = new MPersistent (this, value);
+            children.put (index, result);
+            return result;
         }
-        c.set (value);
-        return c;
+        result.set (value);
+        return result;
     }
 }

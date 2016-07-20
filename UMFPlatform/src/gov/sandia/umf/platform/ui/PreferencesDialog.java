@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.umf.platform.ui;
 
 import gov.sandia.umf.platform.AppState;
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import java.awt.BorderLayout;
@@ -122,16 +123,20 @@ public class PreferencesDialog extends EscapeDialog {
         return result;
     }
 
-    protected void save() {
-        AppState.getState().setShowUids(chkShowUids.isSelected());
-        AppState.getState().setEqnFormat(chkEqnFormat.isSelected());
-        AppState.getState().setShowTestRecords(chkShowTestRecords.isSelected());
+    protected void save ()
+    {
+        MNode state = AppState.getState ();
+        state.set (chkShowUids       .isSelected (), "ShowUids");
+        state.set (chkEqnFormat      .isSelected (), "EqnFormat");
+        state.set (chkShowTestRecords.isSelected (), "ShowTestRecords");
     }
 
-    protected void load() {
-        chkShowUids.setSelected(AppState.getState().isShowUids());
-        chkEqnFormat.setSelected(AppState.getState().isEqnFormat());
-        chkShowTestRecords.setSelected(AppState.getState().isShowTestRecords());
+    protected void load ()
+    {
+        MNode state = AppState.getState ();
+        chkShowUids       .setSelected (state.getBoolean (false, "ShowUids"));
+        chkEqnFormat      .setSelected (state.getBoolean (false, "EqnFormat"));
+        chkShowTestRecords.setSelected (state.getBoolean (false, "ShowTestRecords"));
     }
 
     private void constructSectionPanels() {

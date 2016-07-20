@@ -8,8 +8,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.umf.platform;
 
 import gov.sandia.umf.platform.connect.orientdb.ui.ConnectionManager;
-import gov.sandia.umf.platform.connect.orientdb.ui.ConnectionModel;
 import gov.sandia.umf.platform.connect.orientdb.ui.OrientConnectDetails;
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.plugins.UMFPluginManager;
 import gov.sandia.umf.platform.plugins.base.PlatformPlugin;
 import gov.sandia.umf.platform.plugins.base.PlatformProductCustomization;
@@ -27,7 +27,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.event.ChangeEvent;
@@ -56,8 +55,6 @@ import replete.util.Application;
 import replete.util.ArrayUtil;
 import replete.util.ArrayUtil.ArrayTranslator;
 import replete.util.FileUtil;
-import replete.xstream.SerializationResult;
-import replete.xstream.XStreamWrapper;
 
 public class UMF
 {
@@ -143,28 +140,7 @@ public class UMF
         Application.setName("Unified Modeling Framework");
         Application.setTitle("Unified Modeling Framework");
 
-        XStreamWrapper.addAlias(SerializationResult.class.getSimpleName(), SerializationResult.class);
-        XStreamWrapper.addAlias(AppState.class.getSimpleName(), AppState.class);
-
-        AppState.load();
-
-        ConnectionModel mdl2 = AppState.getState ().getConnectModel ();
-        if (mdl2.getList ().size () == 0)
-        {
-            // Create a new DB in the standard location
-            File repos = new File (getAppResourceDir (), "repos");
-            File dflt  = new File (repos, "local");
-            OrientConnectDetails details = new OrientConnectDetails
-            (
-                "Local",
-                "local:" + dflt.getAbsolutePath (),  // TODO: change to "plocal:"
-                "admin",
-                "admin"
-            );
-            mdl2.getList ().add (details);
-            mdl2.setSelected (details);
-            // DB will be automatically populated by the OrientDatasource class
-        }
+        AppState.getState ().load();
 
         String[] pluginMem = ArrayUtil.translate(String.class, pluginValuesCL);
 
@@ -183,21 +159,31 @@ public class UMF
 
         setUncaughtExceptionHandler(null);
 
-        ProductCustomization pc = chooseProductCustomization(prodCust);
-        AppState.getState().setProductCustomization(pc);
+        AppState.getState ().prodCustomization = chooseProductCustomization (prodCust);
 
         // Read L&F from properties.
-        String lafClassName = AppState.getState().getLookAndFeel();
-        String lafTheme = AppState.getState().getTheme();
-        LafManager.initialize(lafClassName, lafTheme);
+        String lafClassName = AppState.getState ().get ("LookAndFeel");
+        String lafTheme = AppState.getState ().get ("Theme");
+        LafManager.initialize (lafClassName, lafTheme);
 
         LogManager.setLogFile (new File (getAppLogDir (), "n2a.log"));
 
         // Read popup help.
         popupHelp = readPopupHelp();
 
-        dataModelMgr2 = ConnectionManager.getInstance();
-        dataModelMgr2.setConnectDetails(AppState.getState().getConnectModel().getSelected());
+        // Create a new DB in the standard location
+        File repos = new File (getAppResourceDir (), "repos");
+        File dflt  = new File (repos, "local");
+        OrientConnectDetails details = new OrientConnectDetails
+        (
+            "Local",
+            "local:" + dflt.getAbsolutePath (),  // TODO: change to "plocal:"
+            "admin",
+            "admin"
+        );
+        // DB will be automatically populated by the OrientDatasource class
+        dataModelMgr2 = ConnectionManager.getInstance ();
+        dataModelMgr2.setConnectDetails (details);
 
         // Create the main frame.
         createAndShowMainFrame();
@@ -270,37 +256,34 @@ public class UMF
         return pc;
     }
 
-    private static Map<String, Object> getWindowLayoutProps() {
-        Map<String, Object> winProps = new TreeMap<String, Object>() {
-            @Override
-            public Object put(String key, Object o) {
-                super.put(key, o.toString());
-                return o;
-            }
-        };
-        winProps.put("mainFrame.x", mainFrame.getX());
-        winProps.put("mainFrame.y", mainFrame.getY());
-        winProps.put("mainFrame.width", mainFrame.getWidth());
-        winProps.put("mainFrame.height", mainFrame.getHeight());
-        winProps.put("mainFrame.state", mainFrame.getExtendedState());
+    private static void getWindowLayoutProps ()
+    {
+        MNode winProps = AppState.getState ().getNode ("WinLayout");
+        winProps.clear ();
 
-        List<CommonWindow> childWins = mainFrame.getVisibleChildWindows();
-        for(CommonWindow win : childWins) {
-            String typeId = mainFrame.getTypeIdOfWindow(win);
-            winProps.put("childFrame." + typeId + ".x", win.getX());
-            winProps.put("childFrame." + typeId + ".y", win.getY());
-            winProps.put("childFrame." + typeId + ".width", win.getWidth());
-            winProps.put("childFrame." + typeId + ".height", win.getHeight());
+        winProps.set (mainFrame.getX             (), "MainFrame", "x");
+        winProps.set (mainFrame.getY             (), "MainFrame", "y");
+        winProps.set (mainFrame.getWidth         (), "MainFrame", "width");
+        winProps.set (mainFrame.getHeight        (), "MainFrame", "height");
+        winProps.set (mainFrame.getExtendedState (), "MainFrame", "state");
+
+        List<CommonWindow> childWins = mainFrame.getVisibleChildWindows ();
+        for (CommonWindow win : childWins)
+        {
+            String typeId = mainFrame.getTypeIdOfWindow (win);
+            winProps.set (win.getX      (), "ChildFrame", typeId, "x");
+            winProps.set (win.getY      (), "ChildFrame", typeId, "y");
+            winProps.set (win.getWidth  (), "ChildFrame", typeId, "width");
+            winProps.set (win.getHeight (), "ChildFrame", typeId, "height");
         }
-
-        return winProps;
     }
 
-    private static void reloadAppFrame() {
+    private static void reloadAppFrame ()
+    {
         loadingFrame = new LoadingWindow();
         loadingFrame.setVisible(true);
 
-        AppState.getState().setWinLayout(getWindowLayoutProps());
+        getWindowLayoutProps ();
 
         List<CommonWindow> childWins = mainFrame.getAllChildWindows();
         for(CommonWindow win : childWins) {
@@ -321,58 +304,61 @@ public class UMF
         }.start();
     }
 
-    private static void createAndShowMainFrame() {
-        uiController = new UIController(dataModelMgr2);
-        mainFrame = new MainFrame(uiController);
-        MainFrame.setInstance(mainFrame);
-        uiController.setParentReference(mainFrame);
-        uiController.setTabbedPane(mainFrame.getTabbedPane());
-        uiController.setPopupHelp(popupHelp);
-        mainFrame.addAttemptToCloseListener(new CommonWindowClosingListener() {
-            public void stateChanged(CommonWindowClosingEvent e) {
-                AppState.getState().setLookAndFeel(LafManager.getCurrentLaf().getCls());
-                AppState.getState().setTheme(LafManager.getCurrentLaf().getCurTheme());
-                AppState.getState().setWinLayout(getWindowLayoutProps());
-                AppState.getState().getTabStates().clear();
-                AppState.getState().getTabStates().addAll(uiController.getTabs().getTabStates());
-                AppState.save();
+    private static void createAndShowMainFrame ()
+    {
+        uiController = new UIController (dataModelMgr2);
+        mainFrame    = new MainFrame (uiController);
+        MainFrame.setInstance (mainFrame);
+        uiController.setParentReference (mainFrame);
+        uiController.setTabbedPane (mainFrame.getTabbedPane ());
+        uiController.setPopupHelp (popupHelp);
+        mainFrame.addAttemptToCloseListener (new CommonWindowClosingListener ()
+        {
+            public void stateChanged (CommonWindowClosingEvent e)
+            {
+                AppState appState = AppState.getState ();
+                appState.set (LafManager.getCurrentLaf ().getCls (),      "LookAndFeel");
+                appState.set (LafManager.getCurrentLaf ().getCurTheme (), "Theme");
+                getWindowLayoutProps ();
+                appState.save ();
             }
         });
-        mainFrame.addClosingListener(new ChangeListener() {
-            public void stateChanged(ChangeEvent e) {
-                RunQueue.getInstance().stop();
-                dataModelMgr2.disconnect();
+        mainFrame.addClosingListener (new ChangeListener ()
+        {
+            public void stateChanged (ChangeEvent e)
+            {
+                RunQueue.getInstance ().stop ();
+                dataModelMgr2.disconnect ();
             }
         });
-        RunQueue.getInstance().setUiController(uiController);   // Also, starts the queue.
+        RunQueue.getInstance().setUiController (uiController);   // Also, starts the queue.
 
 
-        Map<String, Object> winProps = AppState.getState().getWinLayout();
+        MNode winProps = AppState.getState ().getNode ("WinLayout");
 
-        int extState = 0;
-        // TODO: Why fail on all properties because of one key? -- simplicity yes... laziness.... yes?
-        if(winProps != null && winProps.containsKey("mainFrame.x")) {
-            Integer es = readPropsInt(winProps, "mainFrame.state");
-            if(es != null && es == 1) {
-                extState = 0;
-            }
+        MNode m = winProps.child ("MainFrame");
+        if (m != null)
+        {
+            ensureSizeLoc (mainFrame, m);
+            mainFrame.setVisible (true);
 
-            ensureSizeLoc(mainFrame, winProps, "mainFrame");
-
-            mainFrame.setVisible(true);
-
-            String[] childTypeIds = mainFrame.getRegisteredTypeIds();
-            for(String id : childTypeIds) {
-                if(winProps.containsKey("childFrame." + id + ".x")) {
-                    CommonWindow childWin = mainFrame.createChildWindow(id, null);
-                    ensureSizeLoc(childWin, winProps, "childFrame." + id);
-                    mainFrame.openChildWindow(id, null);
+            String[] childTypeIds = mainFrame.getRegisteredTypeIds ();
+            for (String id : childTypeIds)
+            {
+                MNode c = winProps.child ("ChildFrame", id);
+                if (c != null)
+                {
+                    CommonWindow childWin = mainFrame.createChildWindow (id, null);
+                    ensureSizeLoc (childWin, c);
+                    mainFrame.openChildWindow (id, null);
                 }
             }
-        } else {
-            mainFrame.setVisible(true);
         }
-        mainFrame.setExtendedState(extState);
+        else
+        {
+            mainFrame.setVisible (true);
+        }
+        mainFrame.setExtendedState (winProps.getInt (0, "MainFrame", "state"));
 
         setUncaughtExceptionHandler(mainFrame);
         Dialogs.registerApplicationWindow(mainFrame, Application.getName());
@@ -388,28 +374,16 @@ public class UMF
         });
     }
 
-    private static void ensureSizeLoc(CommonWindow win, Map<String, Object> winProps, String propKeyPrefix) {
-        Integer w = readPropsInt(winProps, propKeyPrefix + ".width");
-        Integer h = readPropsInt(winProps, propKeyPrefix + ".height");
-        Integer x = readPropsInt(winProps, propKeyPrefix + ".x");
-        Integer y = readPropsInt(winProps, propKeyPrefix + ".y");
-        if(w != null && h != null) {
-            win.setSize(w, h);
-        }
-        if(x == null || y == null) {
-            win.setLocationRelativeTo(win.getParent());
-        } else {
-            win.setLocation(x, y);
-        }
-        win.ensureOnScreen(true);
-    }
-
-    private static Integer readPropsInt(Map<String, Object> winProps, String key) {
-        try {
-            return Integer.parseInt((String) winProps.get(key));
-        } catch(Exception e) {
-            return null;
-        }
+    private static void ensureSizeLoc (CommonWindow win, MNode winProps)
+    {
+        int w = winProps.getInt (-1, "width");
+        int h = winProps.getInt (-1, "height");
+        int x = winProps.getInt (-1, "x");
+        int y = winProps.getInt (-1, "y");
+        if (w >= 0  &&  h >= 0) win.setSize (w, h);
+        if (x >= 0  &&  y >= 0) win.setLocation (x, y);
+        else                    win.setLocationRelativeTo (win.getParent ());
+        win.ensureOnScreen (true);
     }
 
     private static Map<String, String[]> readPopupHelp() {
