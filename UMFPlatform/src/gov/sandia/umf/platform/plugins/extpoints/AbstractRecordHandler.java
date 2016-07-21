@@ -11,19 +11,12 @@ import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.connect.orientdb.ui.RecordEditPanel;
 import gov.sandia.umf.platform.plugins.Parameterizable;
 import gov.sandia.umf.platform.ui.UIController;
-import gov.sandia.umf.platform.ui.search.SearchResultDetails;
-
 import javax.swing.ImageIcon;
 
 public class AbstractRecordHandler implements RecordHandler {
 
     @Override
     public NDoc createNewRecord() {
-        return null;
-    }
-
-    @Override
-    public SearchResultDetails getSearchResultListDetails(NDoc doc) {
         return null;
     }
 

@@ -92,26 +92,12 @@ public class SearchResultTableModelOrient extends MinimalAbstractTableModel {
 
         NDoc result = results.get(rowIndex);
 
-        if(AppState.getState().getBoolean (false, "ShowUids"))
+        switch (columnIndex)
         {
-            switch (columnIndex)
-            {
-                case 0: return result.getId();
-                case 1: return result.get("name", "");
-                case 2: return StringUtil.toTitleCase(result.get("type", "").toString());
-                case 3: return result.get("$owner");
-                case 4: return result.get("notes", "");
-            }
-        }
-        else
-        {
-            switch (columnIndex)
-            {
-                case 0: return result.get("name", "");
-                case 1: return StringUtil.toTitleCase(result.get("type", "").toString());
-                case 2: return result.get("$owner");
-                case 3: return result.get("notes", "");
-            }
+            case 0: return result.get("name", "");
+            case 1: return StringUtil.toTitleCase(result.get("type", "").toString());
+            case 2: return result.get("$owner");
+            case 3: return result.get("notes", "");
         }
 
         return null;

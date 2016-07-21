@@ -11,15 +11,12 @@ import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.connect.orientdb.ui.RecordEditPanel;
 import gov.sandia.umf.platform.plugins.Parameterizable;
 import gov.sandia.umf.platform.ui.UIController;
-import gov.sandia.umf.platform.ui.search.SearchResultDetails;
-
 import javax.swing.ImageIcon;
 
 import replete.plugins.ExtensionPoint;
 
 public interface RecordHandler extends ExtensionPoint {
     public NDoc createNewRecord();
-    public SearchResultDetails getSearchResultListDetails(NDoc doc);
     public String[] getHandledRecordTypes();
     public String getTitle(NDoc doc);
     public ImageIcon getIcon(NDoc doc);

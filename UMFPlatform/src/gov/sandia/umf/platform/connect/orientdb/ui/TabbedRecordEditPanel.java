@@ -51,18 +51,6 @@ public abstract class TabbedRecordEditPanel extends RecordEditPanel {
     // MISC //
     //////////
 
-    // TODO: this method could be protected by a spinner/prog bar.
-    @Override
-    protected void reloadWorker() {
-        for(int c = 0; c < tabSections.getTabCount(); c++) {
-            Component cmp = tabSections.getComponentAt(c);
-            if(cmp instanceof RecordEditDetailPanel) {
-                ((RecordEditDetailPanel) cmp).reload();
-            }
-        }
-        btnReload.setEnabled(getRecord().isPersisted());
-    }
-    
     // cew 130327
     @Override
     protected void reload() {

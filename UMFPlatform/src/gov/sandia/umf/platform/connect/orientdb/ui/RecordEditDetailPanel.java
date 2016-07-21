@@ -100,22 +100,4 @@ public abstract class RecordEditDetailPanel extends JPanel {
     protected JButton createHelpIcon(String helpKey) {
         return HelpLabels.createHelpIcon(uiController, MainFrame.getInstance(), helpKey);
     }
-
-    protected JPanel createCheckboxPanel(JCheckBox chk, final String helpKey) {
-        IconButton btnHelp = new IconButton(ImageUtil.getImage("help3.gif"), "Show Help");
-        btnHelp.setFocusable(false);
-        btnHelp.toImageOnly();
-        btnHelp.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.showHelp(MainFrame.getInstance(), helpKey);
-            }
-        });
-        return Lay.BL(
-            "W", Lay.BL(
-                "C", chk,
-                "E", Lay.p(btnHelp, "eb=2l")
-            ),
-            "C", Lay.p()
-        );
-    }
 }

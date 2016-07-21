@@ -14,8 +14,6 @@ import gov.sandia.umf.platform.plugins.Parameterizable;
 import gov.sandia.umf.platform.plugins.extpoints.RecordHandler;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
-import gov.sandia.umf.platform.ui.search.SearchResultDetails;
-
 import javax.swing.ImageIcon;
 
 public class ReferenceRecordHandler implements RecordHandler {
@@ -23,17 +21,6 @@ public class ReferenceRecordHandler implements RecordHandler {
     @Override
     public NDoc createNewRecord() {
         return null;
-    }
-
-    @Override
-    public SearchResultDetails getSearchResultListDetails(NDoc record) {
-        SearchResultDetails details = new SearchResultDetails();
-        details.setTitle(record.getTitle() + " (" + record.get("author") + ")");
-        details.setOwner(record.getOwner());
-        details.setLastModified(record.getModified());
-        details.setDescription((String) record.getValid("notes", null, String.class));
-        details.setIcon(getIcon(record));
-        return details;
     }
 
     @Override

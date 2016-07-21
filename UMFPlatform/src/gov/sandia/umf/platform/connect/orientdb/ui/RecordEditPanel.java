@@ -218,7 +218,6 @@ public abstract class RecordEditPanel extends JPanel {
 
     public abstract String validationMessage();
     public abstract void doInitialFocus();
-    protected abstract void reloadWorker();
 //cew 130327
     protected abstract void reload();
 //    public void reload() {

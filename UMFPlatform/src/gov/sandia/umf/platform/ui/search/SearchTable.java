@@ -35,36 +35,13 @@ public class SearchTable extends JTable {
         setSelectionMode(sel);
         setFillsViewportHeight(true);
         setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
-        setShowUids (AppState.getState ().getBoolean (false, "ShowUids"));
+
+        int[][] widths = new int[][] {{30, 140, 300},{110, 110, 110},{110, 110, 110}, {-1, -1, -1}};
+        redoColumns(widths);
+        getColumnModel().getColumn(0).setCellRenderer( regularRenderer );
+        getColumnModel().getColumn(1).setCellRenderer( centerRenderer );
+        getColumnModel().getColumn(2).setCellRenderer( regularRenderer );
     }
-
-
-    //////////////////////////
-    // ACCESSORS / MUTATORS //
-    //////////////////////////
-
-    // Mutators
-
-    public void setShowUids(boolean show) {
-        if(show) {
-            int[][] widths = new int[][] {{35, 35, 35}, {30, 140, 300},{110, 110, 110},{110, 110, 110}, {-1, -1, -1}};
-            redoColumns(widths);
-            getColumnModel().getColumn(0).setCellRenderer( regularRenderer );
-            getColumnModel().getColumn(1).setCellRenderer( regularRenderer );
-            getColumnModel().getColumn(2).setCellRenderer( centerRenderer );
-        } else {
-            int[][] widths = new int[][] {{30, 140, 300},{110, 110, 110},{110, 110, 110}, {-1, -1, -1}};
-            redoColumns(widths);
-            getColumnModel().getColumn(0).setCellRenderer( regularRenderer );
-            getColumnModel().getColumn(1).setCellRenderer( centerRenderer );
-            getColumnModel().getColumn(2).setCellRenderer( regularRenderer );
-        }
-    }
-
-
-    //////////
-    // MISC //
-    //////////
 
     private void redoColumns(int[][] widths) {
         for(int r = 0; r < widths.length; r++) {

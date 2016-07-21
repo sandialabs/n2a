@@ -15,8 +15,6 @@ import gov.sandia.umf.platform.plugins.Parameterizable;
 import gov.sandia.umf.platform.plugins.extpoints.RecordHandler;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
-import gov.sandia.umf.platform.ui.search.SearchResultDetails;
-
 import javax.swing.ImageIcon;
 
 import replete.util.Lay;
@@ -30,17 +28,6 @@ public class ModelRecordHandler implements RecordHandler {
         record.set("notes", null);
         record.set("$owner", null);*/
         return null;
-    }
-
-    @Override
-    public SearchResultDetails getSearchResultListDetails(NDoc record) {
-        SearchResultDetails details = new SearchResultDetails();
-        details.setTitle(record.getTitle());
-        details.setOwner(record.getOwner());
-        details.setLastModified(record.getModified());
-        details.setDescription((String) record.get("notes", null));
-        details.setIcon(getIcon(record));
-        return details;
     }
 
     @Override
@@ -80,12 +67,12 @@ public class ModelRecordHandler implements RecordHandler {
 
     @Override
     public boolean providesToString(NDoc doc) {
-        return false;
+        return true;
     }
 
     @Override
     public String getToString(NDoc doc) {
-        return null;
+        return (String) doc.get ("name");
     }
 
     @Override
