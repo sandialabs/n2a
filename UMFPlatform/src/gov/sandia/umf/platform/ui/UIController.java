@@ -28,7 +28,6 @@ import gov.sandia.umf.platform.ui.export.ExportParametersDialog;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 import gov.sandia.umf.platform.ui.run.CreateRunEnsembleDialog;
 import gov.sandia.umf.platform.ui.search.SearchDialogOrient;
-import gov.sandia.umf.platform.ui.search.SearchSelectionValidator;
 import gov.sandia.umf.platform.ui.search.SearchType;
 
 import java.awt.Component;
@@ -325,15 +324,15 @@ public class UIController {
         currentAction.start();
     }
 
-    public List<NDoc> searchRecordOrient(CommonWindow win, SearchType searchType, String title, SearchSelectionValidator validator, Icon selectIcon, int sel) {
-        return searchRecordOrient(win, searchType, title, validator, selectIcon, sel, null);
+    public List<NDoc> searchRecordOrient(CommonWindow win, SearchType searchType, String title, Icon selectIcon, int sel) {
+        return searchRecordOrient(win, searchType, title, selectIcon, sel, null);
     }
-    public List<NDoc> searchRecordOrient(CommonWindow win, SearchType searchType, String title, SearchSelectionValidator validator, Icon selectIcon, int sel, List<NDoc> given) {
+    public List<NDoc> searchRecordOrient(CommonWindow win, SearchType searchType, String title, Icon selectIcon, int sel, List<NDoc> given) {
         SearchDialogOrient dlg;
         if(win instanceof JFrame) {
-            dlg = new SearchDialogOrient((JFrame) win, title, this, searchType, validator, selectIcon, sel, given);
+            dlg = new SearchDialogOrient((JFrame) win, title, this, searchType, selectIcon, sel, given);
         } else {
-            dlg = new SearchDialogOrient((JDialog) win, title, this, searchType, validator, selectIcon, sel, given);
+            dlg = new SearchDialogOrient((JDialog) win, title, this, searchType, selectIcon, sel, given);
         }
         dlg.setVisible(true);
         if(dlg.getResult() == SearchDialogOrient.SEARCH) {
@@ -725,7 +724,7 @@ public class UIController {
     }
 
     public void openExportDialog() {
-        List<NDoc> results = searchRecordOrient(parentRef, SearchType.COMPARTMENT, "Choose Model", null, null, ListSelectionModel.SINGLE_SELECTION);
+        List<NDoc> results = searchRecordOrient(parentRef, SearchType.COMPARTMENT, "Choose Model", null, ListSelectionModel.SINGLE_SELECTION);
         if(results != null) {
             ExportDialog dlg = new ExportDialog(parentRef);
             dlg.setVisible(true);

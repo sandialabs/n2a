@@ -17,9 +17,6 @@ import gov.sandia.umf.platform.plugins.Simulation;
 import gov.sandia.umf.platform.plugins.extpoints.Simulator;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
-import gov.sandia.umf.platform.ui.search.SearchResultTableModelOrient;
-import gov.sandia.umf.platform.ui.search.SearchTable;
-
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
@@ -57,8 +54,9 @@ public class RunDetailPanel extends ModelEditDetailPanel {
 
     // UI
 
-    private SearchTable tblRuns;
-    private SearchResultTableModelOrient modelRuns;
+    // TODO: Merge functionality of this panel with the RunManagerFrame, and make it a single tab in the main frame.
+    //private SearchTable tblRuns;
+    //private SearchResultTableModelOrient modelRuns;
     private JPopupMenu mnuContext;
     private JMenuItem mnuOpen;
     private SimpleTree treRunEnsembles;
@@ -298,7 +296,9 @@ public class RunDetailPanel extends ModelEditDetailPanel {
     //////////
 
     // TODO: Permissions check.
-    protected void doRemove() {
+    protected void doRemove ()
+    {
+        /*
         int[] idxs = tblRuns.getSelectedRows();
         String x = idxs.length == 1 ? "this run" : "these " + idxs.length + " runs";
         if(Dialogs.showConfirm("Are you sure you want to remove " + x + "?")) {
@@ -308,6 +308,7 @@ public class RunDetailPanel extends ModelEditDetailPanel {
                 modelRuns.remove(idxs[i]);
             }
         }
+        */
     }
 
     private void doOpen() {

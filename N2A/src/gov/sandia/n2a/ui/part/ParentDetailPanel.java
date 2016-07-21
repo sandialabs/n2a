@@ -64,36 +64,7 @@ public class ParentDetailPanel extends RecordEditDetailPanel {
                         SearchType.COMPARTMENT;// :
                      //   SearchType.CONNECTION;
 
-                List<NDoc> chosen = uiController.searchRecordOrient(parentWin, type, "Select Parent", null/*new SearchSelectionValidator() {
-                    public String validate(NDoc record) {
-                        if(part.getParent() != null && part.getParent().getId().equals(record.getId())) {
-                            return "This is already the current parent.";
-                        }
-
-                        // TODO: Technically this only checks against parent
-                        // IDs currently loaded into the data model's cache.
-                        // It is possible that another user has changed a
-                        // different record on the hierarchy, creating a loop
-                        // but each user's client couldn't independently recognize
-                        // the loop.  This is why we need to do recursion detection
-                        // later and why we could use some sort of mechanism at
-                        // the persistence layer to notify clients of changes they're
-                        // interested in.
-
-                        PartX prevParent = part.getParent();
-                        part.setParent((PartX) record);
-
-                        try {
-                            part.getAssembledEquations(true);
-                        } catch(DataModelLoopException e) {
-                            return "Using this parent would create a loop in the parent and/or include hierarchy.";
-                        } finally {
-                            part.setParent(prevParent);
-                        }
-
-                        return null;
-                    }
-                }*/, null, ListSelectionModel.SINGLE_SELECTION);
+                List<NDoc> chosen = uiController.searchRecordOrient(parentWin, type, "Select Parent", null, ListSelectionModel.SINGLE_SELECTION);
                 if(chosen != null) {
                     parentSet(chosen.get(0));
                 }

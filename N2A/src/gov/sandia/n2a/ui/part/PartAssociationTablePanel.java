@@ -169,7 +169,7 @@ public class PartAssociationTablePanel extends RecordEditDetailPanel {
         String searchTitle = "Add Compartment(s) For " + record.get("name");
         CommonFrame parent = (CommonFrame) SwingUtilities.getRoot(this);
         List<NDoc> chosen = uiController.searchRecordOrient(parent,
-            SearchType.REFERENCE, searchTitle, null, ImageUtil.getImage("complete.gif"), ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+            SearchType.REFERENCE, searchTitle, ImageUtil.getImage("complete.gif"), ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         // validate loops
         if(chosen != null) {
             for(NDoc chosenRecord : chosen) {

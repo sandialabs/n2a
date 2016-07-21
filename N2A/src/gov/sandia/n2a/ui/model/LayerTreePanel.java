@@ -313,7 +313,7 @@ public class LayerTreePanel extends ModelEditDetailPanel {
         CommonFrame parent = (CommonFrame) SwingUtilities.getRoot(this);
         String searchTitle = "Add Layer(s) Using Compartment(s)";
         List<NDoc> chosen = uiController.searchRecordOrient(parent,
-            SearchType.COMPARTMENT, searchTitle, null, ImageUtil.getImage("complete.gif"), ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+            SearchType.COMPARTMENT, searchTitle, ImageUtil.getImage("complete.gif"), ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         if(chosen != null) {
             for(NDoc chosenRecord : chosen) {
                 NDoc chosenPart = chosenRecord;

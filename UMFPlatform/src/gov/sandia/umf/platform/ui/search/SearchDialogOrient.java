@@ -55,25 +55,22 @@ public class SearchDialogOrient extends EscapeDialog {
     private int result = CANCEL;
     private List<NDoc> searchResults = null;
 
-    private SearchSelectionValidator validator;
-
 
     //////////////////
     // CONSTRUCTORS //
     //////////////////
 
-    public SearchDialogOrient(JFrame parent, String title, UIController uic, SearchType searchType, SearchSelectionValidator valid, Icon selectIcon, int sel, List<NDoc> given) {
+    public SearchDialogOrient(JFrame parent, String title, UIController uic, SearchType searchType, Icon selectIcon, int sel, List<NDoc> given) {
         super(parent, "Search: " + title, true);
-        init(uic, searchType, valid, selectIcon, sel, given);
+        init(uic, searchType, selectIcon, sel, given);
     }
-    public SearchDialogOrient(JDialog parent, String title, UIController uic, SearchType searchType, SearchSelectionValidator valid, Icon selectIcon, int sel, List<NDoc> given) {
+    public SearchDialogOrient(JDialog parent, String title, UIController uic, SearchType searchType, Icon selectIcon, int sel, List<NDoc> given) {
         super(parent, "Search: " + title, true);
-        init(uic, searchType, valid, selectIcon, sel, given);
+        init(uic, searchType, selectIcon, sel, given);
     }
 
-    private void init(UIController uic, SearchType searchType, SearchSelectionValidator valid, Icon selectIcon, int sel, List<NDoc> given) {
+    private void init(UIController uic, SearchType searchType, Icon selectIcon, int sel, List<NDoc> given) {
         uiController = uic;
-        validator = valid;
 
         setIconImage(ImageUtil.getImage("mag.gif").getImage());
 

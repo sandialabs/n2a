@@ -272,7 +272,7 @@ public class BridgeTreePanel extends ModelEditDetailPanel {
             CommonFrame parent = (CommonFrame) SwingUtilities.getRoot(this);
             String searchTitle = "Select Connection to connect these layers";
             List<NDoc> chosen = uiController.searchRecordOrient(parent,
-                SearchType.CONNECTION, searchTitle, null,
+                SearchType.CONNECTION, searchTitle,
                 ImageUtil.getImage("complete.gif"), ListSelectionModel.SINGLE_SELECTION);
 
             if(chosen != null) {

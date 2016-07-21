@@ -270,32 +270,4 @@ public class SearchPanel extends JPanel implements DefaultButtonEnabledPanel
         }
         return results;
     }
-
-
-    ///////////
-    // PAINT //
-    ///////////
-
-    @Override
-    protected void paintComponent(Graphics g) {
-        super.paintComponent(g);
-        Graphics2D g2 = (Graphics2D) g;
-        g2.setPaint(getPaint());  // Must be calculated every time b/c depends on dimensions.
-        g2.fillRect(0, 0, getWidth(), getHeight());
-    }
-
-    public Paint getPaint() {
-        Color bg = getBackground();
-        Color darker0;
-        Color darker1;
-        int x = -30;
-        int y = -20;
-        int z = 40;
-        darker0 = GUIUtil.deriveColor(GUIUtil.deriveColor(bg, x, (int)(1.5*x), x), z, z, z);
-
-        darker1 = GUIUtil.deriveColor(darker0, y, y, y);
-        Color[] c = new Color[] {darker0, bg, darker1, bg};
-        float[] f = new float[] {0F, 0.2F, 0.75F, 1F};
-        return new LinearGradientPaint(0, 0, getWidth(), getHeight(), f, c);
-    }
 }

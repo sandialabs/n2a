@@ -164,7 +164,7 @@ public class EquationTreeEditContext {
             String searchTitle = "Add Reference For Equation";
             CommonFrame parentWin = (CommonFrame) SwingUtilities.getRoot(tree);
             List<NDoc> chosen = uiController.searchRecordOrient(parentWin, SearchType.REFERENCE, searchTitle,
-                null, ImageUtil.getImage("complete.gif"), ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+                ImageUtil.getImage("complete.gif"), ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
             if(chosen != null) {
                 for(NDoc record : chosen) {
                     try {
