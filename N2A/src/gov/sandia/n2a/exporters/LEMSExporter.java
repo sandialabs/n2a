@@ -7,7 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.exporters;
 
-import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.plugins.extpoints.Exporter;
 import gov.sandia.umf.platform.ui.export.ExportParameters;
 import gov.sandia.umf.platform.ui.export.ExportParametersPanel;
@@ -35,7 +35,8 @@ public class LEMSExporter implements Exporter
     }
 
     @Override
-    public void export(NDoc source, ExportParameters params) throws IOException {
+    public void export (MNode source, ExportParameters params) throws IOException
+    {
     }
 
     @Override

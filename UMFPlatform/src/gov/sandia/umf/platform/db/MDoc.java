@@ -22,16 +22,16 @@ import java.util.TreeMap;
 **/
 public class MDoc extends MPersistent
 {
-    // Note: MNodeRAM.value stores the path, since we don't allow a document node to have a top-level value.
+    // Note: MVolatile.value stores the path, since we don't allow a document node to have a top-level value.
 
     boolean needsWrite; // indicates that this node has changed since it was last read from disk (and therefore should be written out again)
 
     // Note: "needRead" is indicated by whether the MNodeRAM.children collection is null. If it is non-null, the read has happened.
     // If children exists but is empty, then either the file was actually empty or it does not yet exist.
 
-	public MDoc (MDir parent, File path)
+	public MDoc (MDir parent, String fileName)
 	{
-	    super (null, path.toString ());
+	    super (null, fileName);
 	    this.parent = parent;
 	}
 
@@ -80,6 +80,7 @@ public class MDoc extends MPersistent
         catch (IOException e)
         {
             System.err.println ("Failed to read file: " + value);
+            System.err.println (e);
         }
 	}
 

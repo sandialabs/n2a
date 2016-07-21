@@ -7,7 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui.search;
 
-import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
@@ -38,10 +38,6 @@ public class SearchDialogOrient extends EscapeDialog {
     public static final int CANCEL = 0;
     public static final int SEARCH = 1;
 
-    // Global
-
-    public static List<NDoc> prevResults;
-
     // Core
 
     private UIController uiController;
@@ -53,23 +49,27 @@ public class SearchDialogOrient extends EscapeDialog {
     // Misc
 
     private int result = CANCEL;
-    private List<NDoc> searchResults = null;
+    private List<MNode> searchResults = null;
 
 
     //////////////////
     // CONSTRUCTORS //
     //////////////////
 
-    public SearchDialogOrient(JFrame parent, String title, UIController uic, SearchType searchType, Icon selectIcon, int sel, List<NDoc> given) {
-        super(parent, "Search: " + title, true);
-        init(uic, searchType, selectIcon, sel, given);
-    }
-    public SearchDialogOrient(JDialog parent, String title, UIController uic, SearchType searchType, Icon selectIcon, int sel, List<NDoc> given) {
-        super(parent, "Search: " + title, true);
-        init(uic, searchType, selectIcon, sel, given);
+    public SearchDialogOrient (JFrame parent, String title, UIController uic, SearchType searchType, Icon selectIcon, int sel)
+    {
+        super (parent, "Search: " + title, true);
+        init (uic, searchType, selectIcon, sel);
     }
 
-    private void init(UIController uic, SearchType searchType, Icon selectIcon, int sel, List<NDoc> given) {
+    public SearchDialogOrient (JDialog parent, String title, UIController uic, SearchType searchType, Icon selectIcon, int sel)
+    {
+        super (parent, "Search: " + title, true);
+        init (uic, searchType, selectIcon, sel);
+    }
+
+    private void init(UIController uic, SearchType searchType, Icon selectIcon, int sel)
+    {
         uiController = uic;
 
         setIconImage(ImageUtil.getImage("mag.gif").getImage());
@@ -107,9 +107,9 @@ public class SearchDialogOrient extends EscapeDialog {
 
         pnlSearch.addSelectionChangedListener(new ChangeListener() {
             @Override
-            public void stateChanged(ChangeEvent arg0) {
-                List<NDoc> selectedRecords = pnlSearch.getSelectedRecords();
-                btnSelect.setEnabled(selectedRecords.size() != 0);
+            public void stateChanged(ChangeEvent arg0)
+            {
+                btnSelect.setEnabled (pnlSearch.getSelectedRecords ().size() != 0);
             }
         });
     }
@@ -119,26 +119,10 @@ public class SearchDialogOrient extends EscapeDialog {
     // ACTION //
     ////////////
 
-    private void doSelect() {
-        List<NDoc> records = pnlSearch.getSelectedRecords();
-
-        for(NDoc record : records) {
-/*            if(record.exists()) {
-                record.revert(); todo
-                String validMsg = (validator == null ? null : validator.validate(record));
-                if(validMsg != null) {
-                    Dialogs.showWarning(validMsg, "Invalid Selection");
-                    return;
-                }
-            } else {
-                uiController.couldNotFind();
-                return;
-            }*/
-        }
-
+    private void doSelect ()
+    {
         result = SEARCH;
-        searchResults = records;
-        prevResults = pnlSearch.getSearchResults();
+        searchResults = pnlSearch.getSelectedRecords ();
         closeWindow();
     }
 
@@ -147,11 +131,13 @@ public class SearchDialogOrient extends EscapeDialog {
     // ACCESSORS //
     ///////////////
 
-    public int getResult() {
+    public int getResult ()
+    {
         return result;
     }
 
-    public List<NDoc> getSelectedRecords() {
+    public List<MNode> getSelectedRecords ()
+    {
         return searchResults;
     }
 }

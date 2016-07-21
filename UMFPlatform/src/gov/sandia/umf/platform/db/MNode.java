@@ -411,6 +411,7 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
 
     public String toString ()
     {
+        System.out.println ("toString: " + get ());
         StringWriter writer = new StringWriter ();
         write (writer);
         return writer.toString ();

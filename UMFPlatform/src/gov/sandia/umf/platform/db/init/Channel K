@@ -1,0 +1,11 @@
+N2A.schema=1
+name=Channel K
+parent=$inherit("Channel")
+I = G * n ^ 4 * (E - V)
+n' = alpha_n * (1 - n) - beta_n * n
+alpha_n =: (10 - V) / (100 * (exp((10 - V) / 10) - 1))
+beta_n =: 0.125 * exp(-V / 80)
+G = 36
+E = -12
+n = 0.6 @ $init
+

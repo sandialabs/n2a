@@ -1,0 +1,6 @@
+N2A.schema=1
+name=Compartment Passive
+V' = (G_m * (V_rest - V) + I_inj) / C_m
+G_m = 0.3
+V_rest = 10.613
+C_m = 1

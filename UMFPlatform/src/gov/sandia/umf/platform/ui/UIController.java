@@ -12,6 +12,9 @@ import gov.sandia.umf.platform.connect.orientdb.ui.BackupDialog;
 import gov.sandia.umf.platform.connect.orientdb.ui.ConnectionManager;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.connect.orientdb.ui.OrientDatasource;
+import gov.sandia.umf.platform.db.AppData;
+import gov.sandia.umf.platform.db.MDoc;
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ensemble.params.groups.ParameterSpecGroup;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
 import gov.sandia.umf.platform.ensemble.params.specs.ParameterSpecification;
@@ -33,8 +36,12 @@ import gov.sandia.umf.platform.ui.search.SearchType;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+
 import javax.swing.Icon;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
@@ -63,6 +70,7 @@ import replete.util.GUIUtil;
 import replete.util.Lay;
 import replete.util.ReflectionUtil;
 import replete.util.User;
+
 import com.orientechnologies.orient.core.record.impl.ODocument;
 
 
@@ -324,21 +332,14 @@ public class UIController {
         currentAction.start();
     }
 
-    public List<NDoc> searchRecordOrient(CommonWindow win, SearchType searchType, String title, Icon selectIcon, int sel) {
-        return searchRecordOrient(win, searchType, title, selectIcon, sel, null);
-    }
-    public List<NDoc> searchRecordOrient(CommonWindow win, SearchType searchType, String title, Icon selectIcon, int sel, List<NDoc> given) {
+    public List<MNode> searchRecordOrient (CommonWindow win, SearchType searchType, String title, Icon selectIcon, int sel)
+    {
         SearchDialogOrient dlg;
-        if(win instanceof JFrame) {
-            dlg = new SearchDialogOrient((JFrame) win, title, this, searchType, selectIcon, sel, given);
-        } else {
-            dlg = new SearchDialogOrient((JDialog) win, title, this, searchType, selectIcon, sel, given);
-        }
-        dlg.setVisible(true);
-        if(dlg.getResult() == SearchDialogOrient.SEARCH) {
-            return dlg.getSelectedRecords();
-        }
-        return null;
+        if (win instanceof JFrame) dlg = new SearchDialogOrient ((JFrame) win, title, this, searchType, selectIcon, sel);
+        else dlg = new SearchDialogOrient ((JDialog) win, title, this, searchType, selectIcon, sel);
+        dlg.setVisible (true);
+        if (dlg.getResult () != SearchDialogOrient.SEARCH) return null;
+        return dlg.getSelectedRecords ();
     }
 
     public void closeMainFrame() {
@@ -675,20 +676,23 @@ public class UIController {
 //        }
     }
 
-    public void searchDb(final String query, final ChangeListener onSuccessCallback) {
-        startAction("Searching", new CommonRunnable() {
-            public void runThread(CommonThreadContext context) throws CommonThreadShutdownException {
-                OrientDatasource ds = getDMM().getDataModel();
-                List<NDoc> docs = ds.search(query);
-                onSuccessCallback.stateChanged(new ChangeEvent(docs));
+    public void searchDb (final String query, final ChangeListener onSuccessCallback)
+    {
+        startAction ("Searching", new CommonRunnable ()
+        {
+            public void runThread (CommonThreadContext context) throws CommonThreadShutdownException
+            {
+                List<MNode> docs = new ArrayList<MNode> ();
+                Iterator<Entry<String, MNode>> i = AppData.getInstance ().models.iterator ();
+                while (i.hasNext ()) docs.add (i.next ().getValue ());
+                onSuccessCallback.stateChanged (new ChangeEvent (docs));  // TODO: move this to callback position in startAction() ?
             }
-            public void cleanUp() {}
+            public void cleanUp () {}
         }, null, "searching the database");
     }
 
     public void saveSynchronous(ODocument bean) {  // Not an UI operation but here for consistency.
         bean.save();
-//        updateWorkpane(bean); // Make a notifier/listener pair someday
     }
 
     public void save(final ODocument bean, final ChangeListener onSuccessCallback) {
@@ -696,48 +700,62 @@ public class UIController {
         startAction("Saving", new CommonRunnable() {
             public void runThread(CommonThreadContext context) throws CommonThreadShutdownException {
                 bean.save();
-//                updateWorkpane(bean); // Make a notifier/listener pair someday
                 onSuccessCallback.stateChanged(null);
             }
             public void cleanUp() {}
         }, null, "saving the " + beanType);
     }
 
-    public void openRecord(String className, String id) {
-        NDoc record = dataModelMgr2.getDataModel().getRecord(className, id);
-        openRecord(record);
-    }
-    public void openRecord(final NDoc doc) {
-        if(doc != null && doc.getHandler() != null) {
-            startAction("Opening", new CommonRunnable() {
-                public void runThread(CommonThreadContext context) throws CommonThreadShutdownException {
+    public void openRecord (final MNode mNode)
+    {
+        if (mNode != null)
+        {
+            startAction ("Opening", new CommonRunnable ()
+            {
+                public void runThread (CommonThreadContext context) throws CommonThreadShutdownException
+                {
                     // Need a generic way to have tasks run on the UI thread.
-                    GUIUtil.safeSync(new Runnable() {
-                        public void run() {
-                            tabs.openRecordTabOrient(doc);
+                    GUIUtil.safeSync (new Runnable ()
+                    {
+                        public void run ()
+                        {
+                            //tabs.openRecordTabOrient (mNode);
                         }
                     });
                 }
-                public void cleanUp() {}
-            }, null, "opening the " + doc.getHandler().getRecordTypeDisplayName(doc));
+
+                public void cleanUp ()
+                {
+                }
+            }, null, "opening record");
         }
     }
 
-    public void openExportDialog() {
-        List<NDoc> results = searchRecordOrient(parentRef, SearchType.COMPARTMENT, "Choose Model", null, ListSelectionModel.SINGLE_SELECTION);
-        if(results != null) {
-            ExportDialog dlg = new ExportDialog(parentRef);
-            dlg.setVisible(true);
-            if(dlg.getState() == ExportDialog.OK) {
-                Exporter exporter = dlg.getExporter();
-                ExportParametersDialog dlg2 = new ExportParametersDialog(parentRef, exporter);
-                dlg2.setVisible(true);
-                if(dlg2.getState() == ExportParametersDialog.OK) {
-                    ExportParameters params = dlg2.getParameters();
-                    try {
-                        exporter.export(results.get(0), params);
-                    } catch(IOException e) {
-                        e.printStackTrace();
+    /**
+        @TODO Instead of showing a dialog, determine the currently displayed model.
+    **/
+    public void openExportDialog ()
+    {
+        List<MNode> results = searchRecordOrient (parentRef, SearchType.COMPARTMENT, "Choose Model", null, ListSelectionModel.SINGLE_SELECTION);
+        if (results != null)
+        {
+            ExportDialog dlg = new ExportDialog (parentRef);
+            dlg.setVisible (true);
+            if (dlg.getState () == ExportDialog.OK)
+            {
+                Exporter exporter = dlg.getExporter ();
+                ExportParametersDialog dlg2 = new ExportParametersDialog (parentRef, exporter);
+                dlg2.setVisible (true);
+                if (dlg2.getState () == ExportParametersDialog.OK)
+                {
+                    ExportParameters params = dlg2.getParameters ();
+                    try
+                    {
+                        exporter.export (results.get (0), params);
+                    }
+                    catch (IOException e)
+                    {
+                        e.printStackTrace ();
                     }
                 }
             }

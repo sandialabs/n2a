@@ -8,16 +8,11 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.umf.platform.ui.search;
 
 import gov.sandia.umf.platform.AppState;
-import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
-import java.awt.Color;
-import java.awt.Graphics;
-import java.awt.Graphics2D;
-import java.awt.LinearGradientPaint;
-import java.awt.Paint;
+import java.awt.Component;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyAdapter;
@@ -32,9 +27,10 @@ import java.util.Map.Entry;
 
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
+import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
-import javax.swing.SwingUtilities;
+import javax.swing.ListCellRenderer;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.ListSelectionEvent;
@@ -44,8 +40,6 @@ import replete.event.ChangeNotifier;
 import replete.gui.controls.mnemonics.MButton;
 import replete.gui.controls.nofire.NoFireComboBox;
 import replete.gui.controls.nofire.NoFireComboBoxModel;
-import replete.util.DateUtil;
-import replete.util.GUIUtil;
 import replete.util.Lay;
 
 public class SearchPanel extends JPanel implements DefaultButtonEnabledPanel
@@ -53,16 +47,14 @@ public class SearchPanel extends JPanel implements DefaultButtonEnabledPanel
     // Core
 
     private UIController uiController;
-    private List<NDoc> allResults;
-    private List<NDoc> shownResults;
 
     // UI
 
     private NoFireComboBox cboQuery;
     private NoFireComboBoxModel mdlQuery;
     private JButton btnSearch;
-    private JList lstResults;
-    private DefaultListModel mdlResults;
+    private JList<MNode> lstResults;
+    private DefaultListModel<MNode> mdlResults;
 
 
     ///////////////
@@ -106,13 +98,17 @@ public class SearchPanel extends JPanel implements DefaultButtonEnabledPanel
         {
             mdlQuery.addElement (queries.next ().getValue ().get ());
         }
+
+        lstResults = new JList<MNode> (mdlResults = new DefaultListModel<MNode> ());
+        lstResults.setCellRenderer (new MNodeRenderer ());
+
         Lay.BLtg (this,
             "N", Lay.BL (
                 "C", cboQuery = new NoFireComboBox(mdlQuery),
                 "E", btnSearch = new MButton("&Search", ImageUtil.getImage("mag.gif")),
                 "eb=10,hgap=7,opaque=false"
             ),
-            "C", Lay.sp (lstResults = new JList(mdlResults = new DefaultListModel())),
+            "C", Lay.sp (lstResults),
             "opaque=false"
         );
         cboQuery.setEditable(true);
@@ -183,20 +179,6 @@ public class SearchPanel extends JPanel implements DefaultButtonEnabledPanel
         });
     }
 
-    public String modified(Long millis) {
-        if(millis == null) {
-            return "<unknown>";
-        }
-        return DateUtil.toShortString(millis);
-    }
-
-    public String unkIf(String s) {
-        return s == null || s.trim().equals("") ? "(no title)" : s;
-    }
-    public String unkIfWithHtml(String s) {  // For performance
-        return s == null || s.trim().equals("") ? "<html><i>(no title)</i></html>" : s;
-    }
-
     private void updateAppState ()
     {
         MNode queries = AppState.getState ().getNode ("Queries");
@@ -224,50 +206,44 @@ public class SearchPanel extends JPanel implements DefaultButtonEnabledPanel
         {
             public void stateChanged (ChangeEvent e)
             {
-                allResults = (List<NDoc>) e.getSource ();
-                shownResults = new ArrayList<NDoc> (allResults);
-
-                // TODO: not sure it is necessary to delay this execution
-                SwingUtilities.invokeLater (new Runnable ()
-                {
-                    public void run ()
-                    {
-                        cboQuery.getEditor().selectAll();
-                        mdlResults.clear();
-                        for (NDoc record : shownResults) mdlResults.addElement (record);
-                        updateUI();
-                    }
-                });
+                mdlResults.clear ();
+                List<MNode> results = (List<MNode>) e.getSource ();
+                for (MNode record : results) mdlResults.addElement (record);
+                cboQuery.getEditor().selectAll ();
+                updateUI ();
             }
         });
     }
 
     @Override
-    public JButton getDefaultButton() {
+    public JButton getDefaultButton ()
+    {
         return btnSearch;
     }
 
-    public void doFocus() {
-        cboQuery.requestFocusInWindow();
+    public void doFocus ()
+    {
+        cboQuery.requestFocusInWindow ();
     }
 
-    public List<NDoc> getSelectedRecords() {
-        List<NDoc> records = new ArrayList<NDoc>();
-        if(lstResults.getSelectedIndices().length != 0) {
-            for(int i = 0; i < lstResults.getSelectedIndices().length; i++) {
-                int selIndex = lstResults.getSelectedIndices()[i];
-                NDoc record = (NDoc) mdlResults.get(selIndex);
-                records.add(record);
-            }
+    public List<MNode> getSelectedRecords ()
+    {
+        List<MNode> result = new ArrayList<MNode> ();
+        for (int index : lstResults.getSelectedIndices ())
+        {
+            result.add ((MNode) mdlResults.get (index));
         }
-        return records;
+        return result;
     }
 
-    public List<NDoc> getSearchResults() {
-        List<NDoc> results = new ArrayList<NDoc>();
-        for(int i = 0; i < mdlResults.getSize(); i++) {
-            results.add((NDoc) mdlResults.get(i));
+    public class MNodeRenderer extends JLabel implements ListCellRenderer<MNode>
+    {
+        public Component getListCellRendererComponent (JList<? extends MNode> list, MNode node, int index, boolean isSelected, boolean cellHasFocus)
+        {
+            String name = node.get ("", "name");
+            if (name.isEmpty ()) name = node.get ();
+            setText (name);
+            return this;
         }
-        return results;
     }
 }

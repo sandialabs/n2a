@@ -12,6 +12,7 @@ import java.lang.ref.SoftReference;
 import java.util.Iterator;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
+import java.util.Set;
 import java.util.TreeMap;
 
 /**
@@ -37,6 +38,7 @@ public class MDir extends MNode
 	{
 	    this.root = root;
 	    this.suffix = suffix;
+	    root.mkdirs ();  // We take the liberty of forcing the dir to exist.
 	}
 
 	public MNode child (String index)
@@ -45,10 +47,10 @@ public class MDir extends MNode
 	    if (children != null) result = children.get (index).get ();
 	    if (result == null)  // We have never loaded this document, or it has been garbage collected.
 	    {
-	        File path = new File (root, index);
-	        if (suffix != null) path = new File (path, suffix);
-	        if (! path.canRead ()) return null;
-	        result = new MDoc (this, path);
+            File path = new File (index);
+            if (suffix != null) path = new File (path, suffix);
+	        if (! new File (root, path.getPath ()).canRead ()) return null;
+	        result = new MDoc (this, path.toString ());
 
 	        // Now create and store a new doc
 	        if (children == null) children = new TreeMap<String,SoftReference<MDoc>> ();
@@ -76,9 +78,9 @@ public class MDir extends MNode
     {
         if (children == null) children = new TreeMap<String,SoftReference<MDoc>> ();
 
-        File path = new File (root, index);
+        File path = new File (index);
         if (suffix != null) path = new File (path, suffix);
-        MDoc result = new MDoc (this, path);
+        MDoc result = new MDoc (this, path.toString ());
 
         if (children == null) children = new TreeMap<String,SoftReference<MDoc>> ();
         children.put (index, new SoftReference<MDoc> (result));
@@ -88,15 +90,25 @@ public class MDir extends MNode
     public Iterator<Entry<String,MNode>> iterator ()
     {
         TreeMap<String,MNode> dir = new TreeMap<String,MNode> ();
-        File[] files = root.listFiles ();  // This may cost a lot of time in some cases. However, N2A should never have more than about 10,000 models in a dir.
-        if (files.length > 0  &&  children == null) children = new TreeMap<String,SoftReference<MDoc>> ();
-        for (File f : files)
+        String[] fileNames = root.list ();  // This may cost a lot of time in some cases. However, N2A should never have more than about 10,000 models in a dir.
+        if (fileNames.length > 0  &&  children == null) children = new TreeMap<String,SoftReference<MDoc>> ();
+        for (String index : fileNames)
         {
-            MDoc doc = new MDoc (this, f);
-            String index = f.getName ();
+            MDoc doc = new MDoc (this, index);
             children.put (index, new SoftReference<MDoc> (doc));
             dir.put (index, doc);
         }
         return dir.entrySet ().iterator ();
+    }
+
+    public void save ()
+    {
+        if (children == null) return;
+        Set<Entry<String,SoftReference<MDoc>>> entries = children.entrySet ();
+        for (Entry<String,SoftReference<MDoc>> e : entries)
+        {
+            MDoc doc = e.getValue ().get ();
+            if (doc != null) doc.save ();
+        }
     }
 }

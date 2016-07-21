@@ -10,6 +10,7 @@ package gov.sandia.umf.platform.ui;
 
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.connect.orientdb.ui.RecordEditPanel;
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.plugins.extpoints.RecordHandler;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 import gov.sandia.umf.platform.ui.search.DefaultButtonEnabledPanel;
@@ -29,23 +30,12 @@ import replete.gui.tabbed.TabAboutToCloseListener;
 import replete.gui.tabbed.TabCloseEvent;
 import replete.gui.tabbed.TabCloseListener;
 
-public class MainTabbedPane extends AdvancedTabbedPane {
-
-
-    ////////////
-    // FIELDS //
-    ////////////
-
-    // Const
-
-    private static final String SEARCH_ORIENT_TAB_KEY = "Search";
-
-    // Core
+public class MainTabbedPane extends AdvancedTabbedPane
+{
+    private static final String SEARCH_TAB_KEY = "Search";
 
     private UIController uiController;
     public SearchPanel panelSearch;
-
-    // Misc
 
     private boolean noHistoryFire = false;
     private int historyLocation = -1;
@@ -83,12 +73,12 @@ public class MainTabbedPane extends AdvancedTabbedPane {
         {
             public void stateChanged (ChangeEvent e)
             {
-                List<NDoc> doc = panelSearch.getSelectedRecords ();
+                List<MNode> doc = panelSearch.getSelectedRecords ();
                 uiController.openRecord (doc.get (0));
             }
         });
-        addTab (SEARCH_ORIENT_TAB_KEY, ImageUtil.getImage ("mag.gif"), panelSearch, null);
-        historyNewTab (SEARCH_ORIENT_TAB_KEY);
+        addTab (SEARCH_TAB_KEY, ImageUtil.getImage ("mag.gif"), panelSearch, null);
+        historyNewTab (SEARCH_TAB_KEY);
         setCloseableAt (0, false);
 
         // Listeners
@@ -143,7 +133,7 @@ public class MainTabbedPane extends AdvancedTabbedPane {
 
     public void openSearchOrient ()
     {
-        int searchIdx = indexOfTabByKey (SEARCH_ORIENT_TAB_KEY);
+        int searchIdx = indexOfTabByKey (SEARCH_TAB_KEY);
         if (searchIdx == -1)
         {
             final SearchPanel pnlSearch = new SearchPanel (uiController);
@@ -151,11 +141,11 @@ public class MainTabbedPane extends AdvancedTabbedPane {
             {
                 public void stateChanged (ChangeEvent e)
                 {
-                    List<NDoc> doc = pnlSearch.getSelectedRecords ();
+                    List<MNode> doc = pnlSearch.getSelectedRecords ();
                     uiController.openRecord (doc.get (0));
                 }
             });
-            insertTab (SEARCH_ORIENT_TAB_KEY, ImageUtil.getImage ("mag.gif"), pnlSearch, null, 0);
+            insertTab (SEARCH_TAB_KEY, ImageUtil.getImage ("mag.gif"), pnlSearch, null, 0);
             searchIdx = 0;
         }
         setSelectedIndex (searchIdx);
@@ -274,7 +264,7 @@ public class MainTabbedPane extends AdvancedTabbedPane {
         // Need to manually update the history for now since
         // removeTabAt does not fire closing events yet.
         String removedKey = getKeyAt (i);
-        if (! removedKey.equals (SEARCH_ORIENT_TAB_KEY))
+        if (! removedKey.equals (SEARCH_TAB_KEY))
         {
             historyRemoveEntry (removedKey);
             removeTabAt (i);

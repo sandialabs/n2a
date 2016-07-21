@@ -9,6 +9,7 @@ package gov.sandia.umf.platform;
 
 import gov.sandia.umf.platform.connect.orientdb.ui.ConnectionManager;
 import gov.sandia.umf.platform.connect.orientdb.ui.OrientConnectDetails;
+import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.plugins.UMFPluginManager;
 import gov.sandia.umf.platform.plugins.base.PlatformPlugin;
@@ -27,6 +28,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.event.ChangeEvent;
@@ -51,6 +53,9 @@ import replete.logging.LogManager;
 import replete.plugins.ExtPointNotLoadedException;
 import replete.plugins.ExtensionPoint;
 import replete.plugins.PluginManager;
+import replete.threads.CommonRunnable;
+import replete.threads.CommonThreadContext;
+import replete.threads.CommonThreadShutdownException;
 import replete.util.Application;
 import replete.util.ArrayUtil;
 import replete.util.ArrayUtil.ArrayTranslator;
@@ -93,38 +98,21 @@ public class UMF
     // MAIN //
     //////////
 
-    public static void main(String[] args) {
-        /* String expectedXml = "" +
-                "<software>\n" +
-                "  <version>1.0</version>\n" +
-                "  <vendor>Joe</vendor>\n" +
-                "  <name>XStream</name>\n" +
-                "</software>";
-        xstream = new XStream() {
-            protected MapperWrapper wrapMapper(MapperWrapper next) {
-                return new MapperWrapper(next) {
-                    public boolean shouldSerializeMember(Class definedIn, String fieldName) {
-                        return definedIn != Object.class ? super.shouldSerializeMember(definedIn, fieldName) : false;
-                    }
-                };
-            }
-        };
-        xstream.alias("software", Software.class);
-        Software out = (Software) xstream.fromXML(expectedXml);
-        assertEquals("Joe", out.vendor);
-        assertEquals("XStream", out.name);
-         */
-
+    public static void main (String[] args)
+    {
         // TODO: Add help to these options.
         CommandLineParser parser = new CommandLineParser();
         Option optPluginAdd = parser.addStringOption("plugin");
         Option optPluginDir = parser.addStringOption("plugindir");
         Option optProdCust = parser.addStringOption("product");
 
-        try {
-            parser.parse(args);
-        } catch(CommandLineParseException e) {
-            System.err.println(parser.getUsageMessage(e, "UMF", 80, 20));
+        try
+        {
+            parser.parse (args);
+        }
+        catch (CommandLineParseException e)
+        {
+            System.err.println (parser.getUsageMessage (e, "UMF", 80, 20));
             return;
         }
 
@@ -171,19 +159,9 @@ public class UMF
         // Read popup help.
         popupHelp = readPopupHelp();
 
-        // Create a new DB in the standard location
-        File repos = new File (getAppResourceDir (), "repos");
-        File dflt  = new File (repos, "local");
-        OrientConnectDetails details = new OrientConnectDetails
-        (
-            "Local",
-            "local:" + dflt.getAbsolutePath (),  // TODO: change to "plocal:"
-            "admin",
-            "admin"
-        );
-        // DB will be automatically populated by the OrientDatasource class
-        dataModelMgr2 = ConnectionManager.getInstance ();
-        dataModelMgr2.setConnectDetails (details);
+        // Start data handling
+        AppData data = AppData.getInstance ();
+        data.checkInitialDB ();
 
         // Create the main frame.
         createAndShowMainFrame();
@@ -328,7 +306,7 @@ public class UMF
             public void stateChanged (ChangeEvent e)
             {
                 RunQueue.getInstance ().stop ();
-                dataModelMgr2.disconnect ();
+                AppData.getInstance ().save ();
             }
         });
         RunQueue.getInstance().setUiController (uiController);   // Also, starts the queue.
@@ -362,16 +340,22 @@ public class UMF
 
         setUncaughtExceptionHandler(mainFrame);
         Dialogs.registerApplicationWindow(mainFrame, Application.getName());
-        if(loadingFrame != null) {
-            loadingFrame.dispose();
-        }
-        uiController.testConnect (new ChangeListener ()
+        if (loadingFrame != null) loadingFrame.dispose ();
+
+        mainFrame.init ();
+        /*
+        uiController.startAction ("Load DB", new CommonRunnable ()
         {
-            public void stateChanged (ChangeEvent arg0)
+            public void runThread (CommonThreadContext context) throws CommonThreadShutdownException
             {
                 mainFrame.init ();
             }
-        });
+
+            public void cleanUp ()
+            {
+            }
+        }, null, "loading the database");
+        */
     }
 
     private static void ensureSizeLoc (CommonWindow win, MNode winProps)
