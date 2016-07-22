@@ -1,0 +1,10 @@
+N2A.schema=1
+name=STPU Connector Input
+stpu.component=stpu.inp2lif
+A=$connect("STPU Input")
+B=$connect("Neuron LIF")
+w=1.0
+delay=5.0
+B.v = B.v + A.I * w @ $event(A.stream, delay, "rise")
+B.v = B.v + A.I_init * w @ $event($init, 0.0, "fall")
+

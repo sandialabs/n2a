@@ -1,0 +1,9 @@
+N2A.schema=1
+name=STPU Input
+stpu.component=stpu.input
+I = matrixRaw("../../stpu/stpuinput.input", 0.0, $index)
+ stpu.param = "InpVal"
+stream = 0.0
+ stpu.param = "input_stream"
+I_init = matrixRaw("../../stpu/stpuinput.init", 0.0, $index)
+ stpu.param = "InitVal"

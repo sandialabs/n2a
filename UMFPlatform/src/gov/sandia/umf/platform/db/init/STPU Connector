@@ -1,0 +1,11 @@
+N2A.schema=1
+name=STPU Connector
+stpu.component=stpu.lif2lif
+A=$connect("Neuron LIF")
+B=$connect("Neuron LIF")
+delay = 5.0
+ stpu.param = "TmpOff"
+w = 1.0
+ stpu.param = "SynStr"
+B.v = B.v + w @ $event(A.v >= A.v_thresh, delay, "rise")
+

@@ -1,6 +1,0 @@
-N2A.schema=1
-name=Hodgkin-Huxley Compartment
-parent=$inherit("Compartment Passive")
-Na=$include("Channel Na")
-K=$include("Channel K")
-

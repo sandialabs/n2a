@@ -1,0 +1,21 @@
+N2A.schema=1
+name=Neuron Hodgkin-Huxley
+backend.xyce.device=neuron1
+parent=$inherit("Compartment Passive")
+Na=$include("Channel Na")
+K=$include("Channel K")
+notes=|
+  From Koch, chapter 6
+  Models the potential across the membrane over time by specifying changes in each of several ion currents:  Na, K, and a ‘leak’ current (generally used to make the resting potential come out right)
+  Potentially tricky bits:
+  This model specifies reversal potentials (E_x) relative to resting potential; others use absolute values.
+  Slightly different equations/parameters used in different texts (e.g. Dayan).  Also typos are common.
+  Assumes temperature of 6.3 deg C; rates need to be adjusted for different temperatures.
+  
+  This part does not specify sizes, which means V and I really represent voltage/current DENSITIES.
+  Alternatively, one can imagine this represents a 1 cm^2 compartment.
+  
+  For full usability as a Xyce device, we need to specify the units of all the constants, so they can be scaled correctly. Xyce expects SI units: Volts, amps, Farads, etc.
+  
+  Models a Hodgkin-Huxley compartment fully as well as a Hodgkin-Huxley point neuron.
+
