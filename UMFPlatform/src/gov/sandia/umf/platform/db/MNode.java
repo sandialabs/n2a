@@ -92,6 +92,16 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
     {
     }
 
+    /**
+        Remove child with the given index, if it exists.
+    **/
+    public void clear (String index)
+    {
+    }
+
+    /**
+        @return The number of children we have.
+    **/
     public int length ()
     {
         return 0;
@@ -102,13 +112,23 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
     **/
     public String get ()
     {
-        return get ("");
+        return getDefault ("");
     }
 
     /**
-        @return Our value. If our value is "", then return the defaultValue.
+        Digs down tree as far as possible to retrieve value; returns "" if node does not exist.
     **/
-    public String get (String defaultValue)
+    public String get (String... indices)
+    {
+        return getDefault ("", indices);
+    }
+
+    /**
+        Retrieve our own value, or the given default if we are set to "".
+        Note that this is the only get function that needs to be overridden by subclasses,
+        and even this is optional.
+    **/
+    public String getDefault (String defaultValue)
     {
         return defaultValue;
     }
@@ -116,7 +136,7 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
     /**
         Digs down tree as far as possible to retrieve value; returns first arg if necessary.
     **/
-    public String get (String defaultValue, String... indices)
+    public String getDefault (String defaultValue, String... indices)
     {
         MNode c = this;
         for (int i = 0; i < indices.length; i++)
@@ -124,7 +144,7 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
             c = c.child (indices[i]);
             if (c == null) return defaultValue;
         }
-        return c.get (defaultValue);
+        return c.getDefault (defaultValue);
     }
 
     /**
@@ -147,32 +167,38 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
 
     public boolean getBoolean ()
     {
-        return Boolean.parseBoolean (get (""));
+        return Boolean.parseBoolean (get ());
     }
 
-    public boolean getBoolean (boolean defaultValue, String... args)
+    public double getInt ()
     {
-        return Boolean.parseBoolean (get (defaultValue ? "1" : "0", args));
-    }
-
-    public int getInt ()
-    {
-        return Integer.parseInt (get (""));
-    }
-
-    public int getInt (int defaultValue, String... args)
-    {
-        return Integer.parseInt (get (String.valueOf (defaultValue), args));
+        return Integer.parseInt (get ());
     }
 
     public double getDouble ()
     {
-        return Double.parseDouble (get (""));
+        return Double.parseDouble (get ());
     }
 
-    public Double getDouble (double defaultValue, String... args)
+    public boolean getDefault (boolean defaultValue, String... indices)
     {
-        return Double.parseDouble (get (String.valueOf (defaultValue), args));
+        String result = getDefault ("", indices);
+        if (result.isEmpty ()) return defaultValue;
+        return Boolean.parseBoolean (result);
+    }
+
+    public int getDefault (int defaultValue, String... indices)
+    {
+        String result = getDefault ("", indices);
+        if (result.isEmpty ()) return defaultValue;
+        return Integer.parseInt (result);
+    }
+
+    public Double getDefault (double defaultValue, String... indices)
+    {
+        String result = getDefault ("", indices);
+        if (result.isEmpty ()) return defaultValue;
+        return Double.parseDouble (result);
     }
 
     /**

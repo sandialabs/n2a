@@ -7,8 +7,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui.orientdb.general;
 
-import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.connect.orientdb.ui.RecordEditDetailPanel;
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
@@ -53,7 +53,8 @@ public class TagTablePanel extends RecordEditDetailPanel {
     // CONSTRUCTOR //
     /////////////////
 
-    public TagTablePanel(UIController uic, NDoc doc) {
+    public TagTablePanel(UIController uic, MNode doc)
+    {
         super(uic, doc);
 
         mdlTags = new TagTableModel();

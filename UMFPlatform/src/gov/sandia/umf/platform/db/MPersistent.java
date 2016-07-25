@@ -11,7 +11,7 @@ import java.util.TreeMap;
 
 public class MPersistent extends MVolatile
 {
-    MNode parent;
+    public MNode parent;
 
     public MPersistent (MPersistent parent)
 	{

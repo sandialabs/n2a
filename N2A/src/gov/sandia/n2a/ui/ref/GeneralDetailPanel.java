@@ -7,22 +7,15 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.ref;
 
-import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.connect.orientdb.ui.RecordEditDetailPanel;
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.UIController;
-import gov.sandia.umf.platform.ui.images.ImageUtil;
-
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-
-import javax.swing.JLabel;
 import javax.swing.JTextField;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.DocumentEvent;
 
 import replete.event.ChangeNotifier;
 import replete.gui.controls.ChangedDocumentListener;
-import replete.gui.controls.IconButton;
 import replete.gui.controls.SelectAllTextField;
 import replete.util.Lay;
 
@@ -38,9 +31,6 @@ public class GeneralDetailPanel extends RecordEditDetailPanel {
     private JTextField txtTitle;
     private JTextField txtAuthors;
     private JTextField txtYear;
-    private JLabel lblOwner;
-    private JLabel lblUID;
-    private IconButton btnOwnerDetails;
     private boolean noFire;
 
 
@@ -61,16 +51,9 @@ public class GeneralDetailPanel extends RecordEditDetailPanel {
     // CONSTRUCTOR //
     /////////////////
 
-    public GeneralDetailPanel(UIController uic, NDoc r) {
-        super(uic, r);
-
-        btnOwnerDetails = new IconButton(ImageUtil.getImage("user.png"), "Show User Details");
-        btnOwnerDetails.toImageOnly();
-        btnOwnerDetails.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.notImpl();
-            }
-        });
+    public GeneralDetailPanel(UIController uic, MNode record)
+    {
+        super (uic, record);
 
         Lay.BLtg(this,
             "N", Lay.BxL("Y",
@@ -80,17 +63,7 @@ public class GeneralDetailPanel extends RecordEditDetailPanel {
                 Lay.hn(txtAuthors = new SelectAllTextField(), "alignx=0,pref=[10,30]"),
                 Lay.hn(createLabelPanel("Year", "name"), "alignx=0,pref=[10,25]"),
                 Lay.hn(txtYear = new SelectAllTextField(), "alignx=0,pref=[10,30]"),
-                Lay.hn(createLabelPanel("Owner", "owner"), "alignx=0,pref=[10,25]"),
-                Lay.BL(
-                    "W", Lay.BL(
-                        "C", lblOwner = Lay.lb("", "fg=" + Lay.clr(DARK_BLUE)),
-                        "E", Lay.p(btnOwnerDetails, "eb=3l")
-                    ),
-                    "C", Lay.p(),
-                    "alignx=0"
-                ),
-                Lay.hn(createLabelPanel("DB UID", "db-uid"), "alignx=0,pref=[10,25]"),
-                lblUID = Lay.lb("", "fg=" + Lay.clr(DARK_BLUE))
+                Lay.hn(createLabelPanel("Owner", "owner"), "alignx=0,pref=[10,25]")
             ),
             "C", Lay.p(),
             "eb=10"
@@ -101,31 +74,29 @@ public class GeneralDetailPanel extends RecordEditDetailPanel {
         txtYear.getDocument().addDocumentListener(docListener);
     }
 
-    ChangedDocumentListener docListener = new ChangedDocumentListener() {
+    ChangedDocumentListener docListener = new ChangedDocumentListener ()
+    {
         @Override
-        public void documentChanged(DocumentEvent e) {
-            if(!noFire) {
-                record.set("title", txtTitle.getText());
-                record.set("author", txtAuthors.getText());
-                try {
-                    record.set("year", Integer.parseInt(txtYear.getText()));
-                } catch(NumberFormatException nfe) {
-                    record.set("year", -1);
-                }
-                fireContentChangedNotifier();
+        public void documentChanged (DocumentEvent e)
+        {
+            if(!noFire)
+            {
+                record.set (txtTitle  .getText(), "title");
+                record.set (txtAuthors.getText(), "author");
+                record.set (txtYear   .getText(), "year");
+                fireContentChangedNotifier ();
             }
         }
     };
 
     @Override
-    public void reload() {
+    public void reload ()
+    {
         noFire = true;
-        txtTitle.setText(((String) record.getValid("title", "", String.class)));
-        txtAuthors.setText(((String) record.getValid("author", "", String.class)));
-        txtYear.setText("" + record.getValid("year", "", Integer.class));
+        txtTitle  .setText(record.get ("title"));
+        txtAuthors.setText(record.get ("author"));
+        txtYear   .setText(record.get ("year"));
         noFire = false;
-        lblOwner.setText(SPC + record.getOwner());
-        lblUID.setText(SPC + (!record.isPersisted() ? "<NEW>" : record.getId()));
     }
 
     public void focusNameField() {

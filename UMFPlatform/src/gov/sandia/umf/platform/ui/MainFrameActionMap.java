@@ -10,6 +10,7 @@ package gov.sandia.umf.platform.ui;
 import gov.sandia.umf.platform.plugins.extpoints.MenuItems;
 import gov.sandia.umf.platform.plugins.extpoints.UMFMenuBarActionDescriptor;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
+
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
@@ -27,7 +28,6 @@ import replete.gui.uiaction.UIActionMap;
 import replete.plugins.ExtensionPoint;
 import replete.plugins.PluginManager;
 import replete.util.ReflectionUtil;
-import replete.util.User;
 
 
 public class MainFrameActionMap extends UIActionMap {
@@ -73,9 +73,11 @@ public class MainFrameActionMap extends UIActionMap {
         action.addDescriptor(new MenuBarActionDescriptor());
         addAction(action);
 
-        ActionListener listener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.saveCurrentTab();
+        ActionListener listener = new ActionListener ()
+        {
+            public void actionPerformed(ActionEvent e)
+            {
+                uiController.save ();
             }
         };
         action = new UIAction("save");
@@ -83,50 +85,6 @@ public class MainFrameActionMap extends UIActionMap {
             i("save.gif"), allEnabledStateMap, false, 'S', true, listener));
         action.addDescriptor(new ToolBarActionDescriptor("fileMenu1", "Save", i("save.gif"),
             allEnabledStateMap, false, listener));
-        addAction(action);
-
-        listener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.saveAllTabs();
-            }
-        };
-        action = new UIAction("save-all");
-        action.addDescriptor(new MenuBarActionDescriptor("fileMenu", "Save All", 'e',
-            i("saveall.gif"), allEnabledStateMap, false, 'S', true, true, listener));
-        action.addDescriptor(new ToolBarActionDescriptor("fileMenu1", "Save All", i("saveall.gif"),
-            allEnabledStateMap, false, listener));
-        addAction(action);
-
-        action = new UIAction(sepId());
-        action.addDescriptor(new MenuBarActionDescriptor());
-        addAction(action);
-
-        listener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.closeCurrentTab();
-            }
-        };
-        action = new UIAction("closeTab");
-        action.addDescriptor(new MenuBarActionDescriptor("fileMenu", "Close", 'C',
-            i("close.gif"), allEnabledStateMap, false, 'W', true, listener));
-        action.addDescriptor(new ToolBarActionDescriptor("fileMenu1", "Close", i("close.gif"),
-            allEnabledStateMap, false, listener));
-        addAction(action);
-
-        listener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.closeAllTabs();
-            }
-        };
-        action = new UIAction("closeAllTabs");
-        action.addDescriptor(new MenuBarActionDescriptor("fileMenu", "Close All", 'l',
-            i("closeall.gif"), allEnabledStateMap, false, 'W', true, true, listener));
-        action.addDescriptor(new ToolBarActionDescriptor("fileMenu1", "Close All", i("closeall.gif"),
-            allEnabledStateMap, false, listener));
-        addAction(action);
-
-        action = new UIAction(sepId());
-        action.addDescriptor(new MenuBarActionDescriptor());
         addAction(action);
 
         listener = new ActionListener() {
@@ -153,10 +111,6 @@ public class MainFrameActionMap extends UIActionMap {
        //     allEnabledStateMap, false, listener));
         addAction(action);
 
-        action = new UIAction(sepId());
-        action.addDescriptor(new MenuBarActionDescriptor());
-        addAction(action);
-
         listener = new ActionListener ()
         {
             public void actionPerformed (ActionEvent e)
@@ -167,10 +121,6 @@ public class MainFrameActionMap extends UIActionMap {
         action = new UIAction ("backup");
         action.addDescriptor (new MenuBarActionDescriptor ("fileMenu", "Backup...", 0, i ("saveall.gif"), allEnabledStateMap, listener));
         addAction (action);
-
-        action = new UIAction(sepId());
-        action.addDescriptor(new MenuBarActionDescriptor());
-        addAction(action);
 
         ActionListener exitListener = new ActionListener() {
             public void actionPerformed(ActionEvent e) {

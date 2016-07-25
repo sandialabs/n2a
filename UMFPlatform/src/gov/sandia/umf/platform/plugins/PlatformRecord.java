@@ -7,7 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.plugins;
 
-import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ensemble.params.ParameterSet;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
 
@@ -17,7 +17,7 @@ public interface PlatformRecord {
     PlatformRecord copy();
     void save();
     void saveRecursive();
-    NDoc getSource();
+    MNode getSource();
     // run ensembles?
     
     /* 

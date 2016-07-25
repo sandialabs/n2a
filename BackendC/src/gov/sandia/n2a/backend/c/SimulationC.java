@@ -146,8 +146,9 @@ public class SimulationC implements Simulation
         if (e.name.length () < 1) e.name = "Model";  // because the default is for top-level equation set to be anonymous
 
         // TODO: fix run ensembles to put metadata directly in a special derived part
-        e.metadata.putAll (metadata);  // parameters pushed by run system override any we already have
+        for (Entry<String,String> m : metadata.entrySet ()) e.setNamedValue (m.getKey (), m.getValue ());
 
+        e.resolveConnectionBindings ();
         e.flatten ();
         e.addSpecials ();  // $dt, $index, $init, $live, $n, $t, $type
         e.fillIntegratedVariables ();
@@ -282,11 +283,7 @@ public class SimulationC implements Simulation
         // Main
         s.append ("int main (int argc, char * argv[])\n");
         s.append ("{\n");
-        String integrator = e.metadata.get ("c.integrator");
-        if (integrator == null)
-        {
-            integrator = "Euler";
-        }
+        String integrator = e.getNamedValue ("c.integrator", "Euler");
         s.append ("  try\n");
         s.append ("  {\n");
         s.append ("    " + integrator + " simulator;\n");
@@ -710,10 +707,6 @@ public class SimulationC implements Simulation
             {
                 result.append ("  virtual int getRadius (int i);\n");
             }
-        }
-        if (s.metadata.size () > 0)
-        {
-            result.append ("  virtual void getNamedValue (const string & name, string & value);\n");
         }
 
         // Population class trailer
@@ -1441,21 +1434,6 @@ public class SimulationC implements Simulation
             }
             result.append ("  }\n");
             result.append ("  return 0;\n");
-            result.append ("}\n");
-            result.append ("\n");
-        }
-
-        // Population getNamedValue
-        // note: metadata is always at the population level
-        if (s.metadata.size () > 0)
-        {
-            result.append ("void " + ns + "getNamedValue (const string & name, string & value)\n");
-            result.append ("{\n");
-            for (Entry<String, String> m : s.metadata.entrySet ())
-            {
-                result.append ("  if (name == \"" + m.getKey () + "\")\n");
-                result.append ("    value = \"" + m.getValue () + "\";\n");
-            }
             result.append ("}\n");
             result.append ("\n");
         }

@@ -14,8 +14,8 @@ import java.util.TreeMap;
 
 public class MVolatile extends MNode
 {
-	String value;
-	NavigableMap<String,MNode> children;
+	public String value;
+	public NavigableMap<String,MNode> children;
 
 	public MVolatile ()
 	{
@@ -37,13 +37,19 @@ public class MVolatile extends MNode
 	    if (children != null) children.clear ();
 	}
 
+    public void clear (String index)
+    {
+        if (children == null) return;
+        children.remove (index);
+    }
+
 	public int length ()
 	{
 	    if (children == null) return 0;
 	    return children.size ();
 	}
 
-	public String get (String defaultValue)
+	public String getDefault (String defaultValue)
     {
         if (value == null) return defaultValue;
         return value;

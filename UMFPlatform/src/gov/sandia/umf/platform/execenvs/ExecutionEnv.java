@@ -23,15 +23,27 @@ public abstract class ExecutionEnv
 {
     public static List<ExecutionEnv> envs = new ArrayList<ExecutionEnv>();
 
+    public static ExecutionEnv windows = new Windows ();
+    public static ExecutionEnv linux   = new Linux ();
+    
     static
     {
-        envs.add (new Linux ());
-        envs.add (new Windows ());
+        envs.add (linux);
+        envs.add (windows);
         envs.add (new RedSkyParallelEnv ());
         envs.add (new RedSkyLoginEnv ());
     }
 
     static int jobCount = 0;
+
+    /**
+        Determine our local environment and return the appropriate class.
+    **/
+    public static ExecutionEnv factory ()
+    {
+        if (System.getProperty ("os.name").startsWith ("Windows")) return windows;
+        return linux;
+    }
 
     /*
         TODO: This interface is broken in a number of ways.  The job of

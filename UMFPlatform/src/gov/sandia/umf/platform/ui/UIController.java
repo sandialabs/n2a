@@ -11,10 +11,10 @@ import gov.sandia.umf.platform.UMF;
 import gov.sandia.umf.platform.connect.orientdb.ui.BackupDialog;
 import gov.sandia.umf.platform.connect.orientdb.ui.ConnectionManager;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
-import gov.sandia.umf.platform.connect.orientdb.ui.OrientDatasource;
 import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.db.MDoc;
 import gov.sandia.umf.platform.db.MNode;
+import gov.sandia.umf.platform.db.MPersistent;
 import gov.sandia.umf.platform.ensemble.params.groups.ParameterSpecGroup;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
 import gov.sandia.umf.platform.ensemble.params.specs.ParameterSpecification;
@@ -69,7 +69,6 @@ import replete.threads.CommonThreadShutdownException;
 import replete.util.GUIUtil;
 import replete.util.Lay;
 import replete.util.ReflectionUtil;
-import replete.util.User;
 
 import com.orientechnologies.orient.core.record.impl.ODocument;
 
@@ -159,43 +158,9 @@ public class UIController {
     // RECORD PANELS //
     ///////////////////
 
-    public void openDuplicate(final NDoc record) {
-        String beanType = record.getHandler().getRecordTypeDisplayName(record);
-        startAction("Duplicating", new CommonRunnable() {
-            public void runThread(CommonThreadContext context) throws CommonThreadShutdownException {
-                NDoc newRecord = record.copy();
-                // TODO: untested
-                newRecord.setOwner(User.getName());
-                tabs.openRecordTabOrient(newRecord);
-            }
-            public void cleanUp() {}
-        }, null, "duplicating the " + beanType);
-    }
-
-    public void saveSynchronous(NDoc record) {  // Not an UI operation but here for consistency.
-        record.save();
-        //updateWorkpane(bean); // Make a notifier/listener pair someday TODO
-    }
-
     public void saveSynchronousRecursive(NDoc record) {  // Not an UI operation but here for consistency.
         record.saveRecursive();
         //updateWorkpane(bean); // Make a notifier/listener pair someday TODO
-    }
-
-    public void save(final NDoc bean, final ChangeListener onSuccessCallback) {
-        String beanType = bean.getClassName();
-        startAction("Saving", new CommonRunnable() {
-            public void runThread(CommonThreadContext context) throws CommonThreadShutdownException {
-                bean.save();
-                //updateWorkpane(bean); // Make a notifier/listener pair someday TODO
-                GUIUtil.safeSync(new Runnable() {
-                    public void run() {
-                        onSuccessCallback.stateChanged(null);
-                    }
-                });
-            }
-            public void cleanUp() {}
-        }, null, "saving the " + beanType);
     }
 
     public void saveRecursive(final NDoc bean, final ChangeListener onSuccessCallback) {
@@ -214,70 +179,18 @@ public class UIController {
         }, null, "saving the " + beanType);
     }
 
-    public void discardNew(final NDoc record) {
-        String beanType = record.getClassName();
-        if(Dialogs.showConfirm("Are you sure you want to discard this new (unsaved) " + beanType + "?")) {
-            startAction("Discarding", new CommonRunnable() {
-                public void runThread(CommonThreadContext context) throws CommonThreadShutdownException {
-                    tabs.closeTab(record);
-                }
-                public void cleanUp() {}
-            }, null, "discarding the " + beanType);
-        }
-    }
-
-    // TODO? Kinda pretends that delete isn't only called from the button
-    // on the active tab, so doesn't use getSelectedIndex().
-    public void delete(final NDoc record) {
-        String beanType = record.getClassName();
-        // TODO: Nice delete message, including name/details of bean
-        if(Dialogs.showConfirm("Are you sure you want to delete this " + beanType + "?")) {
-            startAction("Deleting", new CommonRunnable() {
-                public void runThread(CommonThreadContext context) throws CommonThreadShutdownException {
-                    record.delete();
-                    //workpaneModel.removeRecord(bean); // Make a notifier/listener pair someday
-                    tabs.closeTab(record);
-                }
-                public void cleanUp() {}
-            }, null, "deleting the " + beanType);
-        }
-    }
-
-    // //////
-    // DB //
-    // //////
-
-    // These two could also be combined if a thread could some how return a
-    // value on success/failure.
-    public void testConnect (final ChangeListener onSuccessCallback)
+    public void delete (MNode record)
     {
-        startAction ("Connecting", new CommonRunnable ()
+        final MDoc doc = (MDoc) record;
+        if (doc == null) return;
+        startAction ("Deleting", new CommonRunnable ()
         {
-            public void runThread (CommonThreadContext context) throws CommonThreadShutdownException
+            public void runThread(CommonThreadContext context) throws CommonThreadShutdownException
             {
-                try
-                {
-                    if (dataModelMgr2.hasDetails ()) dataModelMgr2.connect ();
-                }
-                catch (Exception e)
-                {
-                    throw new RuntimeException ("Could not connect to database.", e);
-                }
+                doc.delete ();
             }
-
-            public void cleanUp ()
-            {
-            }
-        }, onSuccessCallback, "connecting to the database");
-    }
-
-    public boolean disconnect2() {
-        if(!okToCloseAllTabs("disconnect from this data source")) {
-            return false;
-        }
-        tabs.closeAllTabsNoSave();
-        dataModelMgr2.disconnect();
-        return true;
+            public void cleanUp() {}
+        }, null, "deleting");
     }
 
 
@@ -400,130 +313,6 @@ public class UIController {
 
     public void couldNotFind() {
         Dialogs.showWarning("Could not find the requested record.  Please refresh any search results you may have displayed and/or reopen any currently open records.");
-    }
-
-
-    ////////////////////////////////
-    // DIRTY, CLOSE, SAVE, AND OK //
-    ////////////////////////////////
-
-    public boolean isDirty() {
-        return tabs.isDirty();
-    }
-
-    public boolean closeCurrentTab() {
-        if(okToCloseCurrentTab()) {
-            tabs.closeCurrentTabNoSave();
-            return true;
-        }
-        return false;
-    }
-
-    public void closeAllTabs() {
-        UIActionBuilder builder = new UIActionBuilder()
-            .setOnUIThread(true)
-            .setErrorMessage("closing the records")
-            .setOnUIThread(true)
-            .setInProgressCaption("Closing")
-            .setTask(new CommonRunnable() {
-                public void runThread(CommonThreadContext context) throws CommonThreadShutdownException {
-                    // TODO: leave only those invalid tabs open.
-                    if(okToCloseAllTabs("close all of the tabs")) {
-                        tabs.closeAllTabsNoSave();
-                    }
-                }
-                public void cleanUp() {}
-            });
-
-        actions.submit(builder.getAction());
-
-        /*startAction("Closing", new CommonRunnable() {
-            public void runThread(CommonThreadContext context) throws CommonThreadShutdownException {
-                // TODO: leave only those invalid tabs open.
-                if(okToCloseAllTabs("close all of the tabs")) {
-                    tabs.closeAllTabsNoSave();
-                }
-            }
-            public void cleanUp() {}
-        }, null, "closing the records");*/
-    }
-
-    public boolean okToCloseAllTabs(String action) {
-        if(isDirty()) {
-            String[] opts = {"&Save", "&Discard", "&Cancel"};
-            int choice = Dialogs.showMulti("One or more records contain unsaved changes.  " +
-                "Do you wish to\nsave all changes before you " + action + "?", "Save Changes?",
-                opts, JOptionPane.QUESTION_MESSAGE);
-            if(choice == 2 || choice == -1) {
-                return false;
-            } else if(choice == 0) {
-                if(!saveAllTabs()) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-
-    /*
-    public boolean okToCloseAllTabs2(String action, final SimpleCallback callback) {
-        if(isDirty()) {
-            String[] opts = {"&Save", "&Discard", "&Cancel"};
-            int choice = Dialogs.showMulti("One or more records contain unsaved changes.  " +
-                "Do you wish to\nsave all changes before you " + action + "?", "Save Changes?",
-                opts, JOptionPane.QUESTION_MESSAGE);
-            if(choice == 2 || choice == -1) {
-                return false;
-            } else if(choice == 0) {
-                startAction("Saving", new CommonRunnable() {
-                    public void runThread(CommonThreadContext context) throws CommonThreadShutdownException {
-                        saveAllTabs();
-                    }
-                    public void cleanUp() {}
-                }, new ChangeListener() {
-                    public void stateChanged(ChangeEvent e) {
-                        callback.callback();   /////// THIS GETS CALLED IN EITHER SUCCESS OR FAILURE CASE......ANNOYING.
-                        // need mechanism with this whole threading thing to return a simple
-                        // value from the run method... some addition to the thread context?
-                    }
-                }, "saving the records");
-                return false;
-            }
-        }
-        return true;
-    }*/
-
-    public boolean okToCloseCurrentTab() {
-        if(tabs.isDirtyAt(tabs.getSelectedIndex())) {
-            String[] opts = {"&Save", "&Discard", "&Cancel"};
-            int choice = Dialogs.showMulti("This record contains unsaved changes.  Do you wish to save?",
-                "Save Changes?", opts);
-            if(choice == 2 || choice == -1) {
-                return false;
-            } else if(choice == 0) {
-                if(!saveCurrentTab()) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-
-    public boolean saveCurrentTab() {
-        String msg = tabs.saveCurrentTab();
-        if(msg != null) {
-            Dialogs.showError("The record could not be saved due to a validation error.\n\n" + msg);
-            return false;
-        }
-        return true;
-    }
-
-    public boolean saveAllTabs() {
-        if(!tabs.saveAllTabs()) {
-            Dialogs.showError("One or more records could not be saved due to a validation error.");
-            return false;
-        }
-        return true;
     }
 
     public void showPreferences() {
@@ -691,44 +480,33 @@ public class UIController {
         }, null, "searching the database");
     }
 
-    public void saveSynchronous(ODocument bean) {  // Not an UI operation but here for consistency.
-        bean.save();
-    }
-
-    public void save(final ODocument bean, final ChangeListener onSuccessCallback) {
-        String beanType = bean.getClassName();
-        startAction("Saving", new CommonRunnable() {
-            public void runThread(CommonThreadContext context) throws CommonThreadShutdownException {
-                bean.save();
-                onSuccessCallback.stateChanged(null);
-            }
-            public void cleanUp() {}
-        }, null, "saving the " + beanType);
-    }
-
-    public void openRecord (final MNode mNode)
+    public void save ()
     {
-        if (mNode != null)
-        {
-            startAction ("Opening", new CommonRunnable ()
-            {
-                public void runThread (CommonThreadContext context) throws CommonThreadShutdownException
-                {
-                    // Need a generic way to have tasks run on the UI thread.
-                    GUIUtil.safeSync (new Runnable ()
-                    {
-                        public void run ()
-                        {
-                            //tabs.openRecordTabOrient (mNode);
-                        }
-                    });
-                }
+        AppData.getInstance ().save ();
+    }
 
-                public void cleanUp ()
+    // TODO: Get rid of this code pathway. Instead, each "plugin" provides tab panels for the record types it supports. Those tabs remain up all the time, and contain a selection mechanism.
+    public void openRecord (final MNode node)
+    {
+        if (node == null) return;
+        startAction ("Opening", new CommonRunnable ()
+        {
+            public void runThread (CommonThreadContext context) throws CommonThreadShutdownException
+            {
+                // Need a generic way to have tasks run on the UI thread.
+                GUIUtil.safeSync (new Runnable ()
                 {
-                }
-            }, null, "opening record");
-        }
+                    public void run ()
+                    {
+                        tabs.openRecordTab (node);
+                    }
+                });
+            }
+
+            public void cleanUp ()
+            {
+            }
+        }, null, "opening record");
     }
 
     /**

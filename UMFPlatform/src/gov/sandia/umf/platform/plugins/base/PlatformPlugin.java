@@ -57,8 +57,10 @@ public class PlatformPlugin extends DefaultPlugin {
 
     @Override
     @SuppressWarnings("unchecked")
-    public Class<? extends ExtensionPoint>[] getExtensionPoints() {
-        return new Class[] {
+    public Class<? extends ExtensionPoint>[] getExtensionPoints ()
+    {
+        return new Class[]
+        {
            ProductCustomization.class,
            Simulator.class,
            Analyzer.class,
@@ -69,12 +71,12 @@ public class PlatformPlugin extends DefaultPlugin {
     }
 
     @Override
-    public ExtensionPoint[] getExtensions() {
-        return new ExtensionPoint[] {
-            new PlatformProductCustomization(),
-            new RunRecordHandler(),
-            new RunEnsembleRecordHandler(),
-            new ProfileRecordHandler()
+    public ExtensionPoint[] getExtensions ()
+    {
+        return new ExtensionPoint[]
+        {
+            new PlatformProductCustomization (),
+            new RunEnsembleRecordHandler ()
         };
     }
 }

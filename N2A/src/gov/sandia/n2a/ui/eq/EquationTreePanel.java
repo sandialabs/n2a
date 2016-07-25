@@ -7,13 +7,17 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.eq;
 
-import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
-import gov.sandia.n2a.ui.eq.tree.NodeEqReference;
+import gov.sandia.n2a.ui.eq.tree.NodePart;
+import gov.sandia.n2a.ui.eq.tree.NodeReference;
 import gov.sandia.n2a.ui.eq.tree.NodeEquation;
-import gov.sandia.n2a.ui.eq.tree.NodeRoot;
-import gov.sandia.umf.platform.UMF;
-import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
+import gov.sandia.umf.platform.db.MNode;
+import gov.sandia.umf.platform.execenvs.ExecutionEnv;
+import gov.sandia.umf.platform.plugins.Run;
+import gov.sandia.umf.platform.plugins.RunOrient;
+import gov.sandia.umf.platform.plugins.RunState;
+import gov.sandia.umf.platform.plugins.Simulation;
+import gov.sandia.umf.platform.plugins.extpoints.Simulator;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
@@ -24,12 +28,12 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
-import java.util.ArrayList;
 import java.util.List;
 
 import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JSeparator;
@@ -47,24 +51,20 @@ import replete.gui.controls.simpletree.NodeBase;
 import replete.gui.controls.simpletree.SimpleTree;
 import replete.gui.controls.simpletree.TModel;
 import replete.gui.controls.simpletree.TNode;
-import replete.gui.fc.CommonFileChooser;
 import replete.gui.windows.Dialogs;
-import replete.util.FileUtil;
+import replete.plugins.ExtensionPoint;
+import replete.plugins.PluginManager;
+import replete.threads.CommonThread;
+import replete.threads.CommonThreadShutdownException;
+import replete.util.ExceptionUtil;
 import replete.util.GUIUtil;
 import replete.util.Lay;
+import replete.util.User;
+import replete.xstream.XStreamWrapper;
 
-public class EquationTreePanel extends JPanel {
-
-
-    ////////////
-    // FIELDS //
-    ////////////
-
-    // Core
-
+public class EquationTreePanel extends JPanel
+{
     private UIController uiController;
-
-    // UI
 
     // Tree & Its Model
     private SimpleTree treEqs;
@@ -77,7 +77,7 @@ public class EquationTreePanel extends JPanel {
     private JButton btnRemove;
     private JButton btnMoveUp;
     private JButton btnMoveDown;
-    private JButton btnImport;
+    private JButton btnRun;
 
     // Context Menus
     private JPopupMenu mnuAddNewPopup;
@@ -88,6 +88,7 @@ public class EquationTreePanel extends JPanel {
     private JMenuItem mnuMoveDown;
 
     // Edit Context
+    public MNode model;
     private EquationTreeEditContext context;
 
 
@@ -108,20 +109,26 @@ public class EquationTreePanel extends JPanel {
     // CONSTRUCTOR //
     /////////////////
 
-    public EquationTreePanel(UIController uic) {
+    public EquationTreePanel (UIController uic, MNode model)
+    {
+        this.model = model;
+
         uiController = uic;
-        uiController.addPropListener(new ChangeListener() {
-            public void stateChanged(ChangeEvent e) {
-                treEqs.updateUI();
+        uiController.addPropListener (new ChangeListener ()
+        {
+            public void stateChanged (ChangeEvent e)
+            {
+                treEqs.updateUI ();
             }
         });
 
         // Tree
 
-        root = new TNode(new NodeRoot());
+        root = new TNode(new NodePart (null));
         treEqs = new SimpleTree(root);
         treEqs.setExpandsSelectedPaths(true);
-        treEqs.setRootVisible(false);
+        treEqs.setRootVisible (false);
+        treEqs.setShowsRootHandles (true);
         treEqs.addMouseListener(contextMenuListener);
         treEqs.addMouseListener(new MouseAdapter() {
             @Override
@@ -129,7 +136,7 @@ public class EquationTreePanel extends JPanel {
                 boolean empty = (treEqs.getPathForLocation(e.getX(), e.getY()) == null);
                 if(SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 2) {
                     if(empty) {
-                        context.addEquation(null);
+                        context.addEquation("");
                     } else {
                         context.editSelectedNode();
                     }
@@ -182,9 +189,9 @@ public class EquationTreePanel extends JPanel {
         btnMoveDown.setToolTipText("Move Down");
         btnMoveDown.addActionListener(moveDownListener);
 
-        btnImport = new IconButton(ImageUtil.getImage("import.gif"), 2);
-        btnImport.setToolTipText("Import Equations");
-        btnImport.addActionListener(importListener);
+        btnRun = new IconButton(ImageUtil.getImage("run.gif"), 2);
+        btnRun.setToolTipText("Run");
+        btnRun.addActionListener(runListener);
 
 
         // Context Menus
@@ -248,7 +255,6 @@ public class EquationTreePanel extends JPanel {
                 Lay.BL(btnRemove, "eb=20b,alignx=0.5,maxH=20"),
                 Lay.BL(btnMoveUp, "eb=5b,alignx=0.5,maxH=20"),
                 Lay.BL(btnMoveDown, "eb=5b,alignx=0.5,maxH=20"),
-                Lay.hn(btnImport, "alignx=0.5"),
                 Box.createVerticalGlue()
             )
         );
@@ -270,7 +276,7 @@ public class EquationTreePanel extends JPanel {
 
     ActionListener addNewListener = new ActionListener() {
         public void actionPerformed(ActionEvent e) {
-            context.addEquation(null);
+            context.addEquation("");
         }
     };
     ActionListener addAnnotListener = new ActionListener() {
@@ -305,45 +311,70 @@ public class EquationTreePanel extends JPanel {
             checkEnabledButtons();
         }
     };
-
-    ActionListener importListener = new ActionListener ()
+    ActionListener runListener = new ActionListener ()
     {
         public void actionPerformed (ActionEvent e)
         {
-            CommonFileChooser fc = CommonFileChooser.getChooser ("Import Equations");
-            if (fc.showOpen (EquationTreePanel.this))
+            // fire off a simulation
+            // The code below is adapted from gove.sandia.n2a.ui.model.RunDetailPanel, specifically the old-style single-run.
+            // uiController.prepareAndSubmitRunEnsemble() is the way to set up a run ensemble
+
+            Simulator simulator = null;
+            Simulator internal = null;
+            String simulatorName = model.get ("$metadata", "backend");
+            for (ExtensionPoint ext : PluginManager.getExtensionsForPoint (Simulator.class))
             {
-                String content = FileUtil.getTextContent (fc.getSelectedFile ());
-                String[] lines = content.split ("\n");
-                List<EquationEntry> good = new ArrayList<EquationEntry> ();
-                List<String> invalid = new ArrayList<String> ();
-                for (String line : lines)
+                Simulator s = (Simulator) ext;
+                if (s.getName ().equalsIgnoreCase (simulatorName))
                 {
-                    line = line.trim ();
-                    if (line.isEmpty ()  ||  line.startsWith ("#")) continue;
+                    simulator = s;
+                    break;
+                }
+                if (s.getName ().equals ("Internal")) internal = s;
+            }
+            if (simulator == null) simulator = internal;
+            if (simulator == null)
+            {
+                System.err.println ("Couldn't find internal simulator");
+                return;
+            }
+
+            final Simulator sim = simulator;
+            Run run = new RunOrient (0.0, "", null, sim, User.getName (), "Pending", null, model);  // Most of these are useless properties, now handled by backend reading metadata from model.
+
+            uiController.getParentRef ().waitOn ();
+            final CommonThread t = new CommonThread ()
+            {
+                @Override
+                public void runThread () throws CommonThreadShutdownException
+                {
+                    Simulation simulation = sim.createSimulation ();
                     try
                     {
-                        EquationEntry peq = new EquationEntry (line);
-                        if (peq.variable.name.isEmpty ()) invalid.add (line);  // TODO: Behavior should be discussed
-                        else                              good   .add (peq);
+                        ExecutionEnv env = ExecutionEnv.factory ();
+                        simulation.execute (run, null, env);
+                        uiController.openChildWindow ("jobs", null);
                     }
-                    catch (Exception ex)
+                    catch (Exception e1)
                     {
-                        invalid.add (line);
+                        e1.printStackTrace ();
+                        Dialogs.showDetails ("An error occurred while submitting the job.", ExceptionUtil.toCompleteString (e1, 4));
                     }
                 }
-
-                context.addEquations (good);
-                checkEnabledButtons();
-
-                if(invalid.size() != 0) {
-                    String msg = "Import Complete: The following lines were unrecognized as equations and ignored from the import:\n";
-                    for(String inv : invalid) {
-                        msg += "  > " + inv + "\n";
+            };
+            t.addProgressListener (new ChangeListener ()
+            {
+                public void stateChanged (ChangeEvent e)
+                {
+                    if (t.getResult ().isDone ())
+                    {
+                        uiController.getParentRef ().waitOff ();
                     }
-                    Dialogs.showWarning(msg);
                 }
-            }
+            });
+            t.start ();
+
+            checkEnabledButtons ();
         }
     };
 
@@ -364,7 +395,7 @@ public class EquationTreePanel extends JPanel {
                     mnuEqPopup.show(treEqs, e.getX(), e.getY());
                 } else if(nAny.getUserObject() instanceof NodeAnnotation) {
                     mnuAnnotPopup.show(treEqs, e.getX(), e.getY());
-                } else if(nAny.getUserObject() instanceof NodeEqReference) {
+                } else if(nAny.getUserObject() instanceof NodeReference) {
                     mnuEqRefPopup.show(treEqs, e.getX(), e.getY());
                 }
             }
@@ -376,15 +407,14 @@ public class EquationTreePanel extends JPanel {
     // ACCESSORS / MUTATORS //
     //////////////////////////
 
-    public List<NDoc> getEquations() {
-        return context.getEquations(root);
-    }
-
-    public void setEquations(final List<NDoc> eqs) {
-        GUIUtil.safe(new Runnable() {
-            public void run() {
-                context.setEquations(root, eqs);
-                treEqs.update();
+    public void setEquations (MNode eqs)
+    {
+        GUIUtil.safe (new Runnable ()
+        {
+            public void run ()
+            {
+                context.reload (eqs);
+                treEqs.update ();
             }
         });
     }
@@ -415,42 +445,6 @@ public class EquationTreePanel extends JPanel {
             btnMoveUp.setEnabled(false);
             btnMoveDown.setEnabled(false);
         }
-    }
-
-    // So other components can ask this panel to open a dialog
-    // for editing an equation.
-    public void openForEditing (NDoc openEq, String prefix)
-    {
-        EquationEntry openPeq;
-        try
-        {
-            openPeq = new EquationEntry (openEq);
-        }
-        catch (Exception e)
-        {
-            UMF.handleUnexpectedError(null, e, "Could not open equation for editing.");
-            return;
-        }
-
-        String openVar = openPeq.variable.name;
-
-        for(int i = 0; i < root.getChildCount(); i++) {
-            TNode nEq = (TNode) root.getChildAt(i);
-            NodeEquation uEq = (NodeEquation) nEq.getUserObject();
-            NDoc eq = uEq.getEq();
-            if (eq == openEq  ||  uEq.getParsed().variable.name.equals (openVar))   // TODO: Review this and document.
-            {
-                TreePath newPath = new TreePath(new Object[]{root, nEq});
-                treEqs.expandPath(newPath);
-                treEqs.setSelectionPath(newPath);
-                treEqs.scrollPathToVisible(newPath);
-                context.editEquationNode(nEq);
-                return;
-            }
-        }
-
-        treEqs.clearSelection();
-        context.addEquation((prefix == null ? "" : prefix + ".") + openEq.get("value"));
     }
 
     public void postLayout() {

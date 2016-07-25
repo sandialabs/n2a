@@ -87,7 +87,7 @@ public class Device
     {
         eqSet = s;
 
-        String deviceName = s.metadata.get (DEVICE_TAG);
+        String deviceName = s.getNamedValue (DEVICE_TAG);
         if (deviceName != null) device = XyceDevice.createFor (deviceName);
         if (device == null) throw new EvaluationException ("unrecognized device name " + deviceName + " for " + eqSet.name);
 
@@ -106,48 +106,45 @@ public class Device
         // This checks for equations with 'xyce' annotations and saves the appropriate information
         for (Variable v : eqSet.variables)
         {
-            for (EquationEntry eq : v.equations)
+            for (Entry<String,String> m : v.getMetadata ())
             {
-                // TODO: xyce metadata should really be in the variable, not the equation. This is an issue with N2A storage structure in general.
-                if (eq.metadata == null) continue;
-                for (String metaKey : eq.metadata.keySet ())
+                String metaKey = m.getKey ();
+                String value = m.getValue ().replace ("\"", "");
+
+                if (metaKey.equals (PARAM_TAG))
                 {
-                    String value = eq.metadata.get (metaKey).replace ("\"", "");
-                    if (metaKey.equals (PARAM_TAG))
+                    if (! device.isAllowedModelParameter (value))
                     {
-                        if (! device.isAllowedModelParameter (value))
-                        {
-                            throw new EvaluationException ("unrecognized parameter " + value + " for device " + deviceName);
-                        }
-                        paramList.put (value.toUpperCase (), v);
+                        throw new EvaluationException ("unrecognized parameter " + value + " for device " + deviceName);
                     }
-                    else if (metaKey.equals (NODE_TAG ))
+                    paramList.put (value.toUpperCase (), v);
+                }
+                else if (metaKey.equals (NODE_TAG ))
+                {
+                    // is RHS of node index hint a number?
+                    // is that number within the range of expected device nodes?
+                    // assumes node indices in xyce hints start at 1
+                    int index = Integer.parseInt (value) - 1;
+                    if (! device.isValidNodeIndex (index))
                     {
-                        // is RHS of node index hint a number?
-                        // is that number within the range of expected device nodes?
-                        // assumes node indices in xyce hints start at 1
-                        int index = Integer.parseInt (value) - 1;
-                        if (! device.isValidNodeIndex (index))
-                        {
-                            throw new EvaluationException("unrecognized/illegal node index " + index + " for device " + deviceName + " variable " + v.name);
-                        }
-                        varnames.set (index, v);
+                        throw new EvaluationException("unrecognized/illegal node index " + index + " for device " + deviceName + " variable " + v.name);
                     }
-                    else if (metaKey.equals (IVAR_TAG ))
+                    varnames.set (index, v);
+                }
+                else if (metaKey.equals (IVAR_TAG ))
+                {
+                    // IVAR_TAG - designates 'internal variables' in Xyce devices,
+                    // like 'u' in level 7 neuron
+                    // Main purpose would be in case user wants to output those vars
+                    if (! device.isInternalVariable (value))
                     {
-                        // IVAR_TAG - designates 'internal variables' in Xyce devices,
-                        // like 'u' in level 7 neuron
-                        // Main purpose would be in case user wants to output those vars
-                        if (! device.isInternalVariable (value))
-                        {
-                            throw new EvaluationException ("unrecognized internal variable " + value + " for device " + deviceName);
-                        }
-                        ivars.put (v, value);
+                        throw new EvaluationException ("unrecognized internal variable " + value + " for device " + deviceName);
                     }
-                    else if (metaKey.equals (INPUT_TAG))
-                    {
-                        inputs.put (Integer.parseInt (value) - 1, v);
-                    }
+                    ivars.put (v, value);
+                }
+                else if (metaKey.equals (INPUT_TAG))
+                {
+                    inputs.put (Integer.parseInt (value) - 1, v);
                 }
             }
         }
@@ -246,7 +243,7 @@ public class Device
 
     public static boolean isXyceDevice (EquationSet s)
     {
-        return s.metadata.containsKey (DEVICE_TAG);
+        return s.getNamedValue (DEVICE_TAG, null) != null;
     }
 
     public static boolean ignoreEquation (EquationEntry eq)
@@ -254,14 +251,12 @@ public class Device
         // These equations don't have to be translated like others;
         // device already implements them or doesn't need them.
         // Parameter and input equations DO have to be processed/understood elsewhere
-        if (eq.metadata != null)
+        for (Entry<String,String> m : eq.variable.getMetadata ())
         {
-            for (String metaKey : eq.metadata.keySet ())
+            String metaKey = m.getKey ();
+            if (metaKey.equals (IGNORE_TAG)  ||  metaKey.equals (NODE_TAG)  ||  metaKey.equals (IVAR_TAG))
             {
-                if (metaKey.equals (IGNORE_TAG)  ||  metaKey.equals (NODE_TAG)  ||  metaKey.equals (IVAR_TAG))
-                {
-                    return true;
-                }
+                return true;
             }
         }
         return false;

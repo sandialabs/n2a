@@ -10,28 +10,15 @@ package gov.sandia.n2a.eqset;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Visitor;
-import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
-
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-import java.util.TreeMap;
+import gov.sandia.umf.platform.db.MNode;
 
 public class EquationEntry implements Comparable<EquationEntry>
 {
-    public NDoc                    source;  // Reference to the source DB object
-    public Variable                variable;
-    public String                  ifString;  // only for sorting. TODO: get rid of ifString. Instead, convert conditional to a canonical form with well-defined sort order. This will enable us to combine logically equivalent conditions, as well prioritize more restrictive conditions.
-    public String                  assignment;
-    public Operator                expression;
-    public Operator                conditional;
-    public TreeMap<String, String> metadata;
-
-    public EquationEntry (String name, int order)
-    {
-        this (new Variable (name, order), "");
-        variable.add (this);
-    }
+    public MNode    source;      // Reference to the source DB object
+    public Variable variable;    // Our container
+    public String   ifString;    // only for sorting. TODO: get rid of ifString. Instead, convert conditional to a canonical form with well-defined sort order. This will enable us to combine logically equivalent conditions, as well prioritize more restrictive conditions.
+    public Operator expression;
+    public Operator conditional;
 
     /**
         @param variable This equation must be explicitly added to variable.equations 
@@ -42,115 +29,44 @@ public class EquationEntry implements Comparable<EquationEntry>
         this.ifString = ifString;
     }
 
-    public EquationEntry (NDoc source) throws Exception
+    /**
+        Construct the equation for a sub-node of a variable, that is, an equation
+        that is part of a multiconditional statement.
+        We can safely assume that the variable already exists, and that the caller
+        will add us to it.
+        Note that the formatting of a multiconditional statement is different from
+        a single line, in that the condition itself serves as the index. The @
+        symbol is included in the stored index (to allow commingling with $metadata
+        and $reference), but should be stripped off before calling this constructor.
+    **/
+    public EquationEntry (String index, MNode source) throws Exception
     {
-        this ((String) source.get ("value"));
         this.source = source;
-        Map<String, String> namedValues = source.getValid ("$metadata", new TreeMap<String, String> (), Map.class);
-        if (namedValues.size () > 0)
-        {
-            metadata = new TreeMap<String,String> ();
-            metadata.putAll (namedValues);
-        }
-    }
-
-    public EquationEntry (String raw) throws Exception
-    {
-        String[] parts = raw.split ("@");
-        String temp = parts[0].trim ();
-        ifString = "";
-        if (parts.length > 1)
-        {
-            int convertFrom = 2;
-            if (parts[1].contains ("xyce."))
-            {
-                convertFrom = 1;
-            }
-            else
-            {
-                conditional = Operator.parse (parts[1]);
-                ifString = conditional.render ();
-            }
-            if (convertFrom < parts.length)  // there exists some metadata to convert
-            {
-                metadata = new TreeMap<String, String> ();
-                for (int i = convertFrom; i < parts.length; i++)
-                {
-                    String[] nv = parts[i].split ("=", 2);
-                    nv[0].trim ();
-                    if (nv.length > 1) metadata.put (nv[0], nv[1].trim ());
-                    else               metadata.put (nv[0], "");
-                }
-            }
-        }
-        parts = temp.split ("=", 2);
-        if (parts.length > 1)
-        {
-            String lhs = parts[0];
-            String rhs = parts[1];
-            lhs = lhs.trim ();
-            rhs = rhs.trim ();
-
-            // assignment
-            char first;
-            if (rhs.isEmpty ()) first = 'N';  // for nothing
-            else                first = rhs.charAt (0);
-            if (first == ':'  ||  first == '+'  ||  first == '*'  ||  first == '<'  ||  first == '>')
-            {
-                assignment = "=" + first;
-                rhs = rhs.substring (1);
-            }
-            else
-            {
-                assignment = "=";
-            }
-
-            // variable
-            int order = 0;
-            while (lhs.endsWith ("'"))
-            {
-                order++;
-                lhs = lhs.substring (0, lhs.length () - 1);
-            }
-            variable = new Variable (lhs, order);
-
-            // expression
-            expression = Operator.parse (rhs);
-        }
-        else  // naked expression.  TODO: formalize the use of naked expressions in the language? particularly for trace()
-        {
-            variable = new Variable ("", 0);
-            assignment = "";
-            expression = Operator.parse (parts[0]);
-        }
-        variable.add (this);
-    }
-
-    public String getNamedValue (String name)
-    {
-        return getNamedValue (name, "");
-    }
-
-    public String getNamedValue (String name, String defaultValue)
-    {
-        if (metadata == null) return defaultValue;
-        if (metadata.containsKey (name)) return metadata.get (name);
-        return defaultValue;
-    }
-
-    public void setNamedValue (String name, String value)
-    {
-        if (metadata == null) metadata = new TreeMap<String, String> ();
-        metadata.put (name, value);
+        conditional = Operator.parse (index);
+        ifString = conditional.render ();
+        parseRHS (source.get ());
     }
 
     /**
-        Safe method to access metadata for iteration
+        Parses the right-hand side of an equation and converts it into an EquationEntry.
+        The caller is responsible for adding the equation object to the correct variable.
     **/
-    public Set<Entry<String,String>> getMetadata ()
+    public EquationEntry (String rhs) throws Exception
     {
-        if (metadata == null) metadata = new TreeMap<String, String> ();
-        return metadata.entrySet ();
+        parseRHS (rhs);
+    }
+
+    public void parseRHS (String rhs) throws Exception
+    {
+        // conditional
+        String[] parts = rhs.split ("@");
+        expression = Operator.parse (parts[0]);
+        ifString = "";
+        if (parts.length > 1)
+        {
+            conditional = Operator.parse (parts[1]);
+            ifString = conditional.render ();
+        }
     }
 
     public void visit (Visitor visitor)
@@ -161,10 +77,8 @@ public class EquationEntry implements Comparable<EquationEntry>
 
     public void render (Renderer renderer)
     {
-        renderer.result.append (variable.nameString () + " " + assignment);
         if (expression  != null)
         {
-            renderer.result.append (" ");
             expression.render (renderer);
         }
         if (conditional != null)

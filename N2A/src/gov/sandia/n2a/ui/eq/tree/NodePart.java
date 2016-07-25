@@ -21,7 +21,6 @@ import replete.gui.controls.simpletree.NodeBase;
 public class NodePart extends NodeBase
 {
     protected static ImageIcon icon  = ImageUtil.getImage ("comp.gif");
-    protected static ImageIcon icon2 = ImageUtil.getImage ("conn.gif");
 
     public EquationSet part;
 
@@ -30,16 +29,10 @@ public class NodePart extends NodeBase
         this.part  = part;
     }
 
-    public String getSourcePartName ()
-    {
-        return part.source.get ("name", part.name);
-    }
-
     @Override
     public Icon getIcon (boolean expanded)
     {
-        if (part.connectionBindings == null) return icon;   // compartment
-        else                                 return icon2;  // connection
+        return icon;
     }
 
     @Override
@@ -51,6 +44,7 @@ public class NodePart extends NodeBase
     @Override
     public String toString ()
     {
-        return part.name + " = $include(\"" + getSourcePartName () + "\")";
+        if (part == null) return "";
+        return part.name + " = $include(\"" + part.source.getDefault (part.name, "name") + "\")";
     }
 }

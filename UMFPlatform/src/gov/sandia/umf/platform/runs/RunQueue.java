@@ -225,7 +225,7 @@ public class RunQueue {
     }
 
     private PendingRunEnsemble convertToDomainObjects(NDoc dEnsemble) {
-        NDoc templateModel = dEnsemble.get("templateModel");
+        NDoc templateModel = dEnsemble.get("model");
         String label = dEnsemble.get("label");
         String envName = dEnsemble.get("environment");
         String simType = dEnsemble.get("simulator");

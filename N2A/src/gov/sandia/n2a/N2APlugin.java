@@ -10,8 +10,8 @@ package gov.sandia.n2a;
 import gov.sandia.n2a.exporters.LEMSExporter;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.records.ModelRecordHandler;
-import gov.sandia.n2a.records.PartRecordHandler;
 import gov.sandia.n2a.records.ReferenceRecordHandler;
+import gov.sandia.umf.platform.plugins.UMFPluginManager;
 import gov.sandia.umf.platform.plugins.extpoints.MenuItems;
 import gov.sandia.umf.platform.plugins.extpoints.UMFMenuActionListener;
 import gov.sandia.umf.platform.plugins.extpoints.UMFMenuBarActionDescriptor;
@@ -63,40 +63,32 @@ public class N2APlugin extends DefaultPlugin {
     }
 
     @Override
-    public ExtensionPoint[] getExtensions() {
-        return new ExtensionPoint[] {
-                new N2AProductCustomization(),
-                new LEMSExporter(),
-                new PartRecordHandler(),
-                new ModelRecordHandler(),
-                new ReferenceRecordHandler(),
-                new MenuItems() {
-                    public Map<String, UMFMenuBarActionDescriptor> getMenuItems() {
-                        Map<String, UMFMenuBarActionDescriptor> map = new LinkedHashMap<String, UMFMenuBarActionDescriptor>();
-                        map.put("newCompOrient", new UMFMenuBarActionDescriptor("fileMenu/newMenu", "New Compartment", 'N',
-                            ImageUtil.getImage("compnew.gif"), null, false, 0, false, new UMFMenuActionListener() {
-                                public void actionPerformed(UIController uiController, ActionEvent e) {
-                                    PartRecordHandler handler = new PartRecordHandler();
-                                    uiController.openRecord(handler.createNewPart("compartment"));
-                                }
-                        }));
-                        map.put("newConnOrient", new UMFMenuBarActionDescriptor("fileMenu/newMenu", "New Connection", 'N',
-                                ImageUtil.getImage("connnew.gif"), null, false, 0, false, new UMFMenuActionListener() {
-                                    public void actionPerformed(UIController uiController, ActionEvent e) {
-                                        PartRecordHandler handler = new PartRecordHandler();
-                                        uiController.openRecord(handler.createNewPart("connection"));
-                                    }
-                            }));
-                        map.put("newModelOrient", new UMFMenuBarActionDescriptor("fileMenu/newMenu", "New Model", 'N',
-                                ImageUtil.getImage("modelnew.gif"), null, false, 0, false, new UMFMenuActionListener() {
-                                    public void actionPerformed(UIController uiController, ActionEvent e) {
-                                        ModelRecordHandler handler = new ModelRecordHandler();
-                                        uiController.openRecord(handler.createNewModel());
-                                    }
-                            }));
-                        return map;
-                    }
+    public ExtensionPoint[] getExtensions ()
+    {
+        return new ExtensionPoint[]
+        {
+            new N2AProductCustomization(),
+            new LEMSExporter(),
+            new ModelRecordHandler(),
+            new ReferenceRecordHandler(),
+            new MenuItems ()
+            {
+                public Map<String, UMFMenuBarActionDescriptor> getMenuItems ()
+                {
+                    Map<String, UMFMenuBarActionDescriptor> map = new LinkedHashMap<String, UMFMenuBarActionDescriptor> ();
+                    map.put ("newModelOrient", new UMFMenuBarActionDescriptor (
+                        "fileMenu/newMenu", "New Model", 'N', ImageUtil.getImage ("modelnew.gif"), null, false, 0, false,
+                        new UMFMenuActionListener ()
+                        {
+                            public void actionPerformed (UIController uiController, ActionEvent e)
+                            {
+                                uiController.openRecord (UMFPluginManager.getHandler ("Model").createNewRecord ());
+                            }
+                        }
+                    ));
+                    return map;
                 }
+            }
         };
     }
 

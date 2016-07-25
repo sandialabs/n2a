@@ -6,7 +6,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
 
-package gov.sandia.n2a.ui.model.topotree;
+package gov.sandia.n2a.ui.eq.tree;
 
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
@@ -15,40 +15,38 @@ import javax.swing.ImageIcon;
 
 import replete.gui.controls.simpletree.NodeBase;
 
-public class NodeBridgeLayers extends NodeBase {
-
-
-    ////////////
-    // FIELDS //
-    ////////////
-
-    // Const
-
+public class NodeBinding extends NodeBase
+{
     protected static ImageIcon icon = ImageUtil.getImage("layer.gif");
 
+    public String name;
+    public String alias;
 
-    /////////////////
-    // CONSTRUCTOR //
-    /////////////////
-
-    public NodeBridgeLayers() {
+    public NodeBinding (String alias, String name)
+    {
+        this.name  = name;
+        this.alias = alias;
     }
 
-
-    ////////////////
-    // OVERRIDDEN //
-    ////////////////
+    public void parseEditedString (String input)
+    {
+    }
 
     @Override
-    public boolean isCollapsible() {
+    public boolean isCollapsible ()
+    {
         return true;
     }
+
     @Override
-    public Icon getIcon(boolean expanded) {
+    public Icon getIcon (boolean expanded)
+    {
         return icon;
     }
+
     @Override
-    public String toString() {
-        return "Layers Connected";
+    public String toString ()
+    {
+        return alias + " = " + name;
     }
 }

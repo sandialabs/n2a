@@ -16,28 +16,37 @@ import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Max;
 import gov.sandia.n2a.language.function.Min;
 import gov.sandia.n2a.language.operator.Add;
+import gov.sandia.n2a.language.operator.Divide;
 import gov.sandia.n2a.language.operator.Multiply;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
+import gov.sandia.umf.platform.db.MNode;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.NavigableSet;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 public class Variable implements Comparable<Variable>
 {
+    public MNode                        source;
     public String                       name;
     public int                          order;      // of differential
     public Type                         type;       // Stores an actual instance of the type. Necessary to get the size of Matrix. Otherwise, only class matters.
     public Set<String>                  attributes;
     public NavigableSet<EquationEntry>  equations;
-    public int                          assignment; // TODO: this should probably replace EquationEntry.assignment
+    public int                          assignment;
+    public Map<String, String>          metadata;
+
     // resolution
     public EquationSet                  container;  // non-null iff this variable is contained in an EquationSet.variables collection
     public VariableReference            reference;  // points to variable that actually contains the data, which is usually us unless we are a proxy for a variable in another equation set. null if not resolved yet.
     public Variable                     derivative; // The variable from which we are integrated, if any.
+
     // graph analysis
     public List<Variable>               uses;       // Variables we depend on. Forms a digraph (which may have cycles) on Variable nodes.
     public List<Object>                 usedBy;     // Variables and EquationSets that depends on us.
@@ -54,12 +63,18 @@ public class Variable implements Comparable<Variable>
     public boolean  global;          // redundant with "global" attribute; for faster execution, since it is a frequently checked
 
     // Assignment modes
-    public static final int UNKNOWN  = 0;  // the default state of assignment when this object is constructed
-    public static final int REPLACE  = 1;  // =
-    public static final int ADD      = 2;  // =+
-    public static final int MULTIPLY = 3;  // =*
+    public static final int REPLACE  = 0;  // =      Note: because this is 0, it is the default state of assignment when this object is constructed
+    public static final int ADD      = 1;  // =+
+    public static final int MULTIPLY = 2;  // =*
+    public static final int DIVIDE   = 3;  // =/
     public static final int MIN      = 4;  // =<
     public static final int MAX      = 5;  // =>
+    // Note that there is no =-, because the minus could be ambiguous with content of expression.
+    // DIVIDE is redundant with MULTIPLY, but may make some expressions easier to write. Since they are compatible, no error will be flagged if they are used together.
+
+    public Variable ()
+    {
+    }
 
     public Variable (String name)
     {
@@ -72,89 +87,165 @@ public class Variable implements Comparable<Variable>
         this.order = order;
     }
 
-    public void determineAssignment ()
+    public Variable (String index, MNode source) throws Exception
     {
-        // Only change the assignment mode if we actually encounter an equation
-        for (EquationEntry e : equations)
+        this.source = source;
+        equations = new TreeSet<EquationEntry> ();  // It is possible for Variable to be parse from MNode without any equations, but code that relies this ctor expects a non-null equations member.
+
+        parseLHS (index);
+        String rhs = source.get ();
+        if (! rhs.isEmpty ())
         {
-            if (e.assignment == null  ||  e.assignment.isEmpty ()) continue;
-            if      (e.assignment.equals ("=" )) assignment = REPLACE;
-            else if (e.assignment.equals ("=+")) assignment = ADD;
-            else if (e.assignment.equals ("=*")) assignment = MULTIPLY;
-            else if (e.assignment.equals ("=>")) assignment = MAX;
-            else if (e.assignment.equals ("=<")) assignment = MIN;
-            else if (e.assignment.equals ("=:"))
+            rhs = parseAssignment (rhs);
+            if (! rhs.isEmpty ()) add (new EquationEntry (rhs));
+        }
+        for (Entry<String,MNode> i : source)
+        {
+            String key = i.getKey ();
+            if (key.startsWith ("@")) add (new EquationEntry (key.substring (1), i.getValue ()));
+            if (key.equals ("$metadata"))
             {
-                assignment = REPLACE;
-                addAttribute ("temporary");
+                if (metadata == null) metadata = new TreeMap<String,String> ();
+                for (Entry<String,MNode> m : i.getValue ())
+                {
+                    metadata.put (m.getValue ().get (), m.getKey ());
+                }
             }
-            else continue;
-            break;  // stop on the first valid equation
+            if (key.equals ("$reference"))
+            {
+                // TODO: handle references
+            }
         }
     }
 
+    /**
+        Convert a full line (variable=expression@condition) into a Variable/EquationEntry structure.
+        Technically, this is a constructor, but Variable(String) is already used for making queries,
+        and that is probably best.
+    **/
+    public static Variable parse (String line) throws Exception
+    {
+        Variable result = new Variable ();
+        String[] parts = line.split ("=", 2);
+        result.parseLHS (parts[0]);
+        if (parts.length > 1)
+        {
+            String rhs = result.parseAssignment (parts[1]);
+            result.add (new EquationEntry (rhs));
+        }
+        return result;
+    }
+
+    public void parseLHS (String lhs)
+    {
+        name = lhs.trim ();
+        order = 0;
+        while (name.endsWith ("'"))
+        {
+            order++;
+            name = name.substring (0, name.length () - 1);
+        }
+    }
+
+    /**
+        Checks for a combining operator at the beginning of the right-hand side, and removes it
+        for further processing.
+    **/
+    public String parseAssignment (String rhs)
+    {
+        assignment = REPLACE;  // Assuming that an = was found before calling this function.
+
+        rhs = rhs.trim ();
+        char first;
+        if (rhs.isEmpty ()) first = 0;
+        else                first = rhs.charAt (0);
+        switch (first)
+        {
+            case '+': assignment = ADD;           return rhs.substring (1);
+            case '*': assignment = MULTIPLY;      return rhs.substring (1);
+            case '/': assignment = DIVIDE;        return rhs.substring (1);
+            case '>': assignment = MAX;           return rhs.substring (1);
+            case '<': assignment = MIN;           return rhs.substring (1);
+            case ':': addAttribute ("temporary"); return rhs.substring (1);  // We are already set to REPLACE
+        }
+
+        return rhs;
+    }
+
+    public EquationEntry find (EquationEntry query)
+    {
+        EquationEntry result = equations.floor (query);
+        if (result != null  &&  result.compareTo (query) == 0) return result;
+        return null;
+    }
+
+    /**
+        Any existing entry takes precedence over the given equation.
+    **/
     public void add (EquationEntry e)
     {
         if (equations == null) equations = new TreeSet<EquationEntry> ();
         equations.add (e);
         e.variable = this;
-        determineAssignment ();
     }
 
     /**
-        The given equation takes precedence over any existing entry.
-    **/
-    public void replace (EquationEntry e)
-    {
-        if (equations == null)
-        {
-            equations = new TreeSet<EquationEntry> ();
-        }
-        else
-        {
-            equations.remove (e);
-        }
-        equations.add (e);
-        e.variable = this;
-        determineAssignment ();
-    }
-
-    /**
-        Combine equations from given variable with this, where this takes precedence.
+        Combine equations from given variable with this, where that takes precedence.
         All equations will be detached from given variable, whether or not they are added to this.
+        TODO: Revoke conditional forms.
+            variable=@condition  -- revokes the given condition on the given variable
+            variable=@           -- revokes all conditions
+            variabel=expression@ -- revples all conditions, and replaces them with a single new unconditional expression
     **/
-    public void merge (Variable v)
+    public void merge (Variable that)
     {
-        if (equations == null)
+        if (equations == null) equations = new TreeSet<EquationEntry> ();
+        for (EquationEntry e : that.equations) e.variable = this;
+        that.equations.addAll (equations);  // Set.addAll() keeps pre-existing entries
+        equations = that.equations;
+        that.equations = new TreeSet<EquationEntry> ();
+
+        // Merge $metadata
+        if (that.metadata != null)
         {
-            equations = new TreeSet<EquationEntry> ();
+            if (metadata == null) metadata = new TreeMap<String,String> ();
+            metadata.putAll (that.metadata);
         }
-        for (EquationEntry e : v.equations)
-        {
-            e.variable = this;
-        }
-        equations.addAll (v.equations);
-        v.equations.clear ();
-        determineAssignment ();
+
+        // TODO: merge references
     }
 
-    public void mergeExpressions (Variable v)
+    /**
+        Store changes to metadata into the DB, in a way that will play back correctly when our
+        containing EquationSet tree is re-built from the top-level model document.
+    **/
+    public void updateDB (String tag, String value)
+    {
+        String path = nameString ();
+        EquationSet s = container;
+        while (s.container != null)
+        {
+            path = container.name + "." + path;
+            s = s.container;
+        }
+        s.source.set (value, path, "$metadata", tag);
+    }
+
+    public void flattenExpressions (Variable v)
     {
         if (equations == null) equations = new TreeSet<EquationEntry> ();
         for (EquationEntry e : v.equations)
         {
-            char mode = 'N';
-            if (e.assignment.length () == 2) mode = e.assignment.charAt (1);
-
-            if (mode == '+'  ||  mode == '*'  ||  mode == '<'  ||  mode == '>')
+            if (v.assignment > REPLACE)  // assuming UNKNOWN=0 and REPLACE=1, and all other constants are greater 
             {
                 EquationEntry e2 = equations.floor (e);
                 if (e.compareTo (e2) == 0)  // conditionals are exactly the same
                 {
                     // merge expressions
                     OperatorBinary op = null;
-                    if      (mode == '+') op = new Add ();
-                    else if (mode == '*') op = new Multiply ();
+                    if      (v.assignment == ADD)      op = new Add ();
+                    else if (v.assignment == MULTIPLY) op = new Multiply ();
+                    else if (v.assignment == DIVIDE)   op = new Divide ();
                     if (op != null)
                     {
                         op.operand0 = e2.expression;
@@ -164,8 +255,8 @@ public class Variable implements Comparable<Variable>
                     }
 
                     Function f = null;
-                    if      (mode == '<') f = new Min ();
-                    else if (mode == '>') f = new Max ();
+                    if      (v.assignment == MIN) f = new Min ();
+                    else if (v.assignment == MAX) f = new Max ();
                     if (f != null)
                     {
                         f.operands[0] = e2.expression;
@@ -176,10 +267,9 @@ public class Variable implements Comparable<Variable>
                 }
             }
             e.variable = this;
-            equations.add (e);  // any pre-existing equation takes precedence over this one
+            equations.add (e);  // Any pre-existing equation takes precedence over this one. Note also that the merged e2 above does not need to be added for the changes to become effective.
         }
         v.equations.clear ();
-        determineAssignment ();
     }
 
     public void visit (Visitor visitor)
@@ -512,10 +602,50 @@ public class Variable implements Comparable<Variable>
         return result;
     }
 
+    public String combinerString ()
+    {
+        switch (assignment)
+        {
+            case ADD:      return "+";
+            case MULTIPLY: return "*";
+            case DIVIDE:   return "/";
+            case MAX:      return ">";
+            case MIN:      return "<";
+        }
+        return "";
+    }
+
     public String attributeString ()
     {
         if (attributes == null) return "[]";
         else                    return attributes.toString ();
+    }
+
+    public String getNamedValue (String name)
+    {
+        return getNamedValue (name, "");
+    }
+
+    public String getNamedValue (String name, String defaultValue)
+    {
+        if (metadata == null) return defaultValue;
+        if (metadata.containsKey (name)) return metadata.get (name);
+        return defaultValue;
+    }
+
+    public void setNamedValue (String name, String value)
+    {
+        if (metadata == null) metadata = new TreeMap<String, String> ();
+        metadata.put (name, value);
+    }
+
+    /**
+        Safe method to access metadata for iteration
+    **/
+    public Set<Entry<String,String>> getMetadata ()
+    {
+        if (metadata == null) metadata = new TreeMap<String, String> ();
+        return metadata.entrySet ();
     }
 
     public int compareTo (Variable that)

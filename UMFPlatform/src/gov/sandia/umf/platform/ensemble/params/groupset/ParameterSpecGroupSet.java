@@ -7,6 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ensemble.params.groupset;
 
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ensemble.params.ParameterSet;
 import gov.sandia.umf.platform.ensemble.params.ParameterSetList;
 import gov.sandia.umf.platform.ensemble.params.groups.ConstantParameterSpecGroup;
@@ -49,17 +50,26 @@ public class ParameterSpecGroupSet extends ArrayList<ParameterSpecGroup> {
 
     // Inherited
 
-    public ParameterSpecGroupSet() {
-        super();
+    public ParameterSpecGroupSet ()
+    {
+        super ();
     }
-    public ParameterSpecGroupSet(Collection<? extends ParameterSpecGroup> c) {
-        super(c);
-        if(c instanceof ParameterSpecGroupSet) {
-            defaultValueGroup = ((ParameterSpecGroupSet) c).getDefaultValueGroup();
-        }
+
+    public ParameterSpecGroupSet (int initialCapacity)
+    {
+        super (initialCapacity);
     }
-    public ParameterSpecGroupSet(int initialCapacity) {
-        super(initialCapacity);
+
+    public ParameterSpecGroupSet (MNode doc)
+    {
+        super ();
+        // TODO: unpack the document into appropriate structrures
+    }
+
+    public ParameterSpecGroupSet(Collection<? extends ParameterSpecGroup> c)
+    {
+        super (c);
+        if (c instanceof ParameterSpecGroupSet) defaultValueGroup = ((ParameterSpecGroupSet) c).getDefaultValueGroup ();
     }
 
     // Custom

@@ -7,12 +7,12 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.c;
 
-import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.plugins.RunState;
 
 public class RunStateC extends RunState
 {
-    public NDoc model;
+    public MNode model;
 	public String jobDir;
 	public String command;
 

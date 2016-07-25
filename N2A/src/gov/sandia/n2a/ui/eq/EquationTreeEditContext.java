@@ -8,11 +8,18 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.ui.eq;
 
 import gov.sandia.n2a.eqset.EquationEntry;
+import gov.sandia.n2a.eqset.EquationSet;
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
-import gov.sandia.n2a.ui.eq.tree.NodeEqReference;
+import gov.sandia.n2a.ui.eq.tree.NodeBinding;
+import gov.sandia.n2a.ui.eq.tree.NodeNone;
+import gov.sandia.n2a.ui.eq.tree.NodePart;
+import gov.sandia.n2a.ui.eq.tree.NodeReference;
 import gov.sandia.n2a.ui.eq.tree.NodeEquation;
+import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 import gov.sandia.umf.platform.UMF;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 import gov.sandia.umf.platform.ui.search.SearchType;
@@ -23,13 +30,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeListener;
+import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 
 import replete.event.ChangeNotifier;
@@ -39,47 +49,152 @@ import replete.gui.controls.simpletree.TModel;
 import replete.gui.controls.simpletree.TNode;
 import replete.gui.windows.common.CommonFrame;
 
-public class EquationTreeEditContext {
-
-
-    ////////////
-    // FIELDS //
-    ////////////
-
-    // Core
-
+public class EquationTreeEditContext
+{
     public UIController uiController;
     public SimpleTree tree;
     public Class<?> addToClass;
 
-    // Derived
-
     public TModel model;
 
 
-    //////////////
-    // NOTIFIER //
-    //////////////
+    protected ChangeNotifier eqChangeNotifier = new ChangeNotifier (this);
 
-    protected ChangeNotifier eqChangeNotifier = new ChangeNotifier(this);
-    public void addEqChangeListener(ChangeListener listener) {
-        eqChangeNotifier.addListener(listener);
-    }
-    protected void fireEqChangeNotifier() {
-        eqChangeNotifier.fireStateChanged();
+    public void addEqChangeListener (ChangeListener listener)
+    {
+        eqChangeNotifier.addListener (listener);
     }
 
+    protected void fireEqChangeNotifier ()
+    {
+        eqChangeNotifier.fireStateChanged ();
+    }
 
-    /////////////////
-    // CONSTRUCTOR //
-    /////////////////
-
-    public EquationTreeEditContext(UIController uic, SimpleTree t, Class<?> cls) {
+    public EquationTreeEditContext (UIController uic, SimpleTree t, Class<?> cls)
+    {
         uiController = uic;
         tree = t;
         addToClass = cls;
 
         model = tree.getTModel();
+    }
+
+    public void reload (MNode doc)
+    {
+        insertEquationTree (tree.getRoot (), doc);
+    }
+
+    public void insertEquationTree (TNode targetNode, MNode doc)
+    {
+        try
+        {
+            EquationSet s = new EquationSet (doc);
+            s.resolveConnectionBindings ();
+            insertEquationTree (targetNode, s);
+        }
+        catch (Exception e)
+        {
+            System.err.println ("Exception while parsing model: " + e);
+            e.printStackTrace ();
+        }
+    }
+
+    public void insertEquationTree (TNode targetNode, EquationSet s)
+    {
+        targetNode.removeAllChildren ();
+
+        // TODO: add $inherit() lines from original MNode, because they are dropped (processed away) by EquationSet
+
+        Set<Entry<String,String>> metadata = s.getMetadata ();
+        if (metadata.size () > 0)
+        {
+            TNode dollarnode = new TNode (new NodeNone ("$metadata"));
+            model.insertNodeInto (dollarnode, targetNode, targetNode.getChildCount ());
+            for (Entry<String,String> m : metadata)
+            {
+                TNode mnode = new TNode (new NodeAnnotation (m.getKey (), m.getValue ()));
+                model.insertNodeInto (mnode, dollarnode, dollarnode.getChildCount ());
+            }
+        }
+
+        // Note that references are not collated like metadata or equations. Only local references appear.
+        // TODO: collate references?
+        MNode references = s.source.child ("$reference");
+        if (references != null  &&  references.length () > 0)
+        {
+            TNode dollarnode = new TNode (new NodeNone ("$reference"));
+            model.insertNodeInto (dollarnode, targetNode, targetNode.getChildCount ());
+            for (Entry<String,MNode> r : references)
+            {
+                TNode rnode = new TNode (new NodeReference (r.getKey (), r.getValue ().get ()));
+                model.insertNodeInto (rnode, dollarnode, dollarnode.getChildCount ());
+            }
+        }
+
+        if (s.connectionBindings != null)
+        {
+            for (Entry<String,EquationSet> a : s.connectionBindings.entrySet ())
+            {
+                TNode node = new TNode (new NodeBinding (a.getKey (), a.getValue ().name));
+                model.insertNodeInto (node, targetNode, targetNode.getChildCount ());
+            }
+        }
+
+        Set<Variable> unsorted = new TreeSet<Variable> (s.variables);
+        String[] keys = s.getNamedValue ("gui.order").split (",");  // comma-separated list
+        for (int i = 0; i < keys.length; i++)
+        {
+            Variable query = new Variable (keys[i]);
+            Variable result = s.find (query);
+            if (result != null)
+            {
+                unsorted.remove (result);
+                insertVariableTree (targetNode, result);
+            }
+        }
+        for (Variable v : unsorted)  // output everything else
+        {
+            insertVariableTree (targetNode, v);
+        }
+
+        for (EquationSet p : s.parts)
+        {
+            TNode node = new TNode (new NodePart (p));
+            model.insertNodeInto (node, targetNode, targetNode.getChildCount ());
+            insertEquationTree (node, p);
+        }
+    }
+
+    public void insertVariableTree (TNode targetNode, Variable v)
+    {
+        targetNode.removeAllChildren ();
+
+        TNode vnode = new TNode (new NodeVariable (v));
+        model.insertNodeInto (vnode, targetNode, targetNode.getChildCount ());
+        if (v.equations.size () > 1)  // for a single equation, the variable line itself suffices
+        {
+            for (EquationEntry e : v.equations)
+            {
+                TNode enode = new TNode (new NodeEquation (e));
+                model.insertNodeInto (enode, vnode, vnode.getChildCount ());
+            }
+        }
+        for (Entry<String,String> m : v.getMetadata ())
+        {
+            TNode mnode = new TNode (new NodeAnnotation (m.getKey (), m.getValue ()));
+            model.insertNodeInto (mnode, vnode, vnode.getChildCount ());
+        }
+        MNode references = v.source.child ("$reference");
+        if (references != null  &&  references.length () > 0)
+        {
+            TNode dollarnode = new TNode (new NodeNone ("$reference"));
+            model.insertNodeInto (dollarnode, targetNode, targetNode.getChildCount ());
+            for (Entry<String,MNode> r : references)
+            {
+                TNode rnode = new TNode (new NodeReference (r.getKey (), r.getValue ().get ()));
+                model.insertNodeInto (rnode, dollarnode, dollarnode.getChildCount ());
+            }
+        }
     }
 
 
@@ -91,152 +206,233 @@ public class EquationTreeEditContext {
 
     public void addEquation (String initVal)
     {
-        TNode chosenNode = getContextRoot (null);
-        if (chosenNode != null)
+        TNode containingNodePart = getContextRoot (NodePart.class);  // This will always succeed, because root is NodePart.
+
+        EquationInputBox input = getEquationInputBox (initVal);
+        input.setVisible (true);
+        if (input.getResult () == EquationInputBox.Result.OK)
         {
-            EquationInputBox input = getEquationInputBox (false, false, initVal == null ? "" : initVal);
-            input.setVisible (true);
-            if (input.getResult () == EquationInputBox.Result.OK)
+            try
             {
-                try
+                // We need our nearest containing EquationSet in order to add the new variable, or to update an existing one.
+                EquationSet s = null;
+                NodePart n = (NodePart) containingNodePart.getUserObject ();
+                if (n != null) s = n.part;
+                if (s != null)
                 {
-                    // TODO: Check to see if exists in tree first...
-                    NDoc eq = new NDoc ("gov.sandia.umf.n2a$Equation");  // TODO: Is this a magic string?
-                    eq.set ("value", input.getValue ());
-                    NodeEquation uEqn = new NodeEquation (eq);
-                    TNode nEq = model.append (chosenNode, uEqn);
-                    tree.select (nEq);
+                    String value = input.getValue ();
+                    Variable v = Variable.parse (value);  // TODO: handle case where user enters only expression, not variable name
+                    s.updateDB (v);
+
+                    // The rest of this overly-complex code could be eliminated completely by reloading from the DB model document.
+                    // However, that is heavy in terms of user experience, so we do a lot of complicated work here to update the gui as seamlessly as possible.
+
+                    if (value.contains ("$include")  ||  value.contains ("$inherit"))  // Structural change. This forces a rebuild of the whole EquationSet tree and gui tree.
+                    {
+                        // TODO: Update existing EquationSet tree with $include, rather than doing a full rebuild.
+                        reload (((NodePart) tree.getRootObject ()).part.source);
+                    }
+                    else  // Incremental change to existing EquationSet tree and gui tree
+                    {
+                        s.update (v);
+                        Variable      newVariable = s.find (v);
+                        EquationEntry newEquation = v.equations.first ();
+
+                        // Do we have an existing NodeVariable that needs to be updated?
+                        TNode existingTreeNodeVariable = null;
+                        for (TNode t : containingNodePart.getTChildren (null))
+                        {
+                            NodeVariable nv = (NodeVariable) t.getUserObject ();
+                            if (nv == null) continue;
+                            if (nv.variable.equals (v))
+                            {
+                                existingTreeNodeVariable = t;
+                                break;
+                            }
+                        }
+
+                        if (existingTreeNodeVariable == null)  // new variable, so add single line
+                        {
+                            NodeVariable newNodeVariable = new NodeVariable (newVariable);
+                            TNode newTreeNode = model.append (containingNodePart, newNodeVariable);
+                            tree.select (newTreeNode);
+                        }
+                        else  // existing variable, so add or update an equation node
+                        {
+                            // Count existing equations and check if there is a match for the conditional on the newly-entered one.
+                            int count = 0;
+                            TNode existingTreeNodeEquation = null;
+                            for (TNode t : existingTreeNodeVariable.getTChildren (NodeEquation.class))
+                            {
+                                NodeEquation ne = (NodeEquation) t.getUserObject ();
+                                if (ne == null) continue;
+                                count++;
+                                if (ne.equation.equals (newEquation)) existingTreeNodeEquation = t;
+                            }
+
+                            if (count == 0)  // single-line
+                            {
+                                NodeVariable existingNodeVariable = (NodeVariable) existingTreeNodeVariable.getUserObject ();
+                                EquationEntry existingEquation = existingNodeVariable.variable.equations.first ();
+                                if (existingEquation.equals (newEquation))  // conditionals match, so stay one-line
+                                {
+                                    existingEquation.expression = newEquation.expression;
+                                }
+                                else  // conditionals are different, so convert to multi-line equation
+                                {
+                                    existingNodeVariable.variable = newVariable;
+                                    insertVariableTree (existingTreeNodeVariable, newVariable);
+                                }
+                                tree.select (existingTreeNodeVariable);
+                            }
+                            else
+                            {
+                                if (existingTreeNodeEquation == null)  // new equation, so add an equation node under the variable
+                                {
+                                    NodeEquation newNodeEquation = new NodeEquation (newEquation);
+                                    TNode newTreeNode = model.append (existingTreeNodeVariable, newNodeEquation);
+                                    tree.select (newTreeNode);
+                                }
+                                else  // An existing equation line matches, so change its contents
+                                {
+                                    ((NodeEquation) existingTreeNodeEquation.getUserObject ()).equation = newEquation;
+                                    tree.select (existingTreeNodeEquation);
+                                }
+                            }
+                        }
+                    }
                     fireEqChangeNotifier ();
                 }
-                catch (Exception ex)
-                {
-                    UMF.handleUnexpectedError(null, ex, "An error has occurred adding the equation to the tree.");
-                }
             }
-        }
-    }
-
-    public void addEquations (List<EquationEntry> peqs)
-    {
-        TNode chosenNode = getContextRoot (null);
-        if (chosenNode != null)
-        {
-            for (EquationEntry peq : peqs)
+            catch (Exception ex)
             {
-                // TODO: Check to see if exists in tree first...
-                NDoc eq = new NDoc ("gov.sandia.umf.n2a$Equation");  // TODO: Is this a magic string?
-                eq.set ("value", peq.toString ());
-                NodeEquation uEqn = new NodeEquation (eq);
-                model.append (chosenNode, uEqn);
+                UMF.handleUnexpectedError (null, ex, "An error has occurred adding the equation to the tree.");
             }
-            tree.select (chosenNode);
-            fireEqChangeNotifier ();
         }
     }
 
     public void addAnnotationToSelected ()
     {
-        TNode contextRoot = getContextRoot (NodeEquation.class);
-        if (contextRoot != null)
+        TNode nearestPart     = getContextRoot (NodePart    .class);  // This will always succeed, because root is a NodePart.
+        TNode nearestVariable = getContextRoot (NodeVariable.class);
+
+        EquationInputBox input = getEquationInputBox ("");
+        input.setVisible (true);
+        if (input.getResult () == EquationInputBox.Result.OK)
         {
-            EquationInputBox input = getEquationInputBox (false, true, "");
-            input.setVisible (true);
-            if (input.getResult () == EquationInputBox.Result.OK)
+            try
             {
-                try
+                String value = input.getValue ();
+                String[] parts = value.split ("=", 2);
+                String name = parts[0];
+                if (parts.length > 1) value = parts[1];
+                else                  value = "";
+
+                NodeAnnotation newNodeAnnotation = new NodeAnnotation (name, value);
+                TNode target;
+                if (nearestVariable != null)
                 {
-                    NodeAnnotation uNew = new NodeAnnotation (input.getValue ());
-                    TNode nNew = model.append (contextRoot, uNew);
-                    tree.select (nNew);
-                    fireEqChangeNotifier ();
+                    target = nearestVariable;
                 }
-                catch (Exception ex)
+                else
                 {
-                    UMF.handleUnexpectedError(null, ex, "An error has occurred adding the annotation to the tree.");
+                    target = nearestPart;
                 }
+
+                // Search for $metadata under the target tree node. Create if necessary.
+                TNode metadataTreeNode = null;
+                for (TNode t : target.getTChildren (NodeNone.class))
+                {
+                    NodeNone n = (NodeNone) t.getUserObject ();
+                    if (n != null  &&  n.label.equals ("$metadata"))
+                    {
+                        metadataTreeNode = t;
+                        break;
+                    }
+                }
+                if (metadataTreeNode == null)
+                {
+                    metadataTreeNode = model.append (target, new NodeNone ("$metadata"));
+                    TNode nameTreeNode = model.append (metadataTreeNode, new NodeAnnotation (name, value));
+                    tree.select (nameTreeNode);
+                }
+                else  // existing $metadata tree
+                {
+                    // Check if key already exists in $metadata
+                    TNode nameTreeNode = null;
+                    for (TNode t : target.getTChildren ())
+                    {
+                        NodeAnnotation a = (NodeAnnotation) t.getUserObject ();
+                        if (a != null  &&  a.name.equals (name))
+                        {
+                            nameTreeNode = t;
+                            a.value = value;  // go ahead and update it here, while we have it in hand
+                            break;
+                        }
+                    }
+
+                    if (nameTreeNode == null) nameTreeNode = model.append (metadataTreeNode, new NodeAnnotation (name, value));
+                    tree.select (nameTreeNode);
+                }
+
+                fireEqChangeNotifier ();
+            }
+            catch (Exception ex)
+            {
+                UMF.handleUnexpectedError(null, ex, "An error has occurred adding the annotation to the tree.");
             }
         }
     }
 
-    public void addReferenceToSelected() {
-        TreePath path = tree.getSelectionPath();
-        if(path != null) {
-            String searchTitle = "Add Reference For Equation";
-            CommonFrame parentWin = (CommonFrame) SwingUtilities.getRoot(tree);
-            List<NDoc> chosen = uiController.searchRecordOrient(parentWin, SearchType.REFERENCE, searchTitle,
-                ImageUtil.getImage("complete.gif"), ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-            if(chosen != null) {
-                for(NDoc record : chosen) {
-                    try {
-                        // This could be cleaned up with supporting methods.
-                        TNode nSel = (TNode) path.getLastPathComponent();
-                        if(nSel.getUserObject() instanceof NodeAnnotation || nSel.getUserObject() instanceof NodeEqReference) {
-                            nSel = (TNode) nSel.getParent();
-                        }
-                        NDoc eq = ((NodeEquation) nSel.getUserObject()).getEq();
-                        NDoc eqRef = new NDoc();
-                        eqRef.set("ref", record);
-                        List<NDoc> refs = eq.getValid("refs", new ArrayList<NDoc>(), List.class);
-                        refs.add(eqRef);
-                        NodeEqReference uER = new NodeEqReference(eqRef);
-                        TNode nNew = model.append(nSel, uER);
-                        tree.select(nNew);
-                        fireEqChangeNotifier();
-                    } catch(Exception ex) {
-                        UMF.handleUnexpectedError(null, ex, "An error has occurred adding the reference to the tree.");
-                    }
-                }
-            }
-        }
+    public void addReferenceToSelected ()
+    {
+        // TODO: implement references in a manner similar to $metadata
+        // They are much the same, except reference tags point to reference records, while the value contains notes w.r.t. the reference.
+        // Should create a dialog the pops up to help user find reference tags. Should be a 3-column listing (year, author, title)
+        // with a search box on author.
     }
 
     // Edit
 
-    public void editSelectedNode() {
-        TreePath selPath = tree.getSelectionPath();
-        if(selPath == null) {
-            return;
-        }
+    public void editSelectedNode ()
+    {
+        TreePath path = tree.getSelectionPath ();
+        if (path == null) return;
 
         // These two blocks probably could be combined in some fashion.
-        TNode nSel = (TNode) selPath.getLastPathComponent();
-        NodeBase uSel = (NodeBase) nSel.getUserObject();
+        TNode selected = (TNode) path.getLastPathComponent ();
+        NodeBase node = (NodeBase) selected.getUserObject();
 
-        if(uSel instanceof NodeEqReference) {
-            NDoc eqRef = ((NodeEqReference) uSel).getEqReference();
-            uiController.openRecord((NDoc) eqRef.getValid("ref", null, NDoc.class));
-        } else if(uSel instanceof NodeEquation) {
-            editEquationNode(nSel);
-        } else if(uSel instanceof NodeAnnotation) {
-            editAnnotationNode(nSel);
-        }
-    }
-
-    public void editAnnotationNode (TNode nSel)
-    {
-        NodeAnnotation uSel = (NodeAnnotation) nSel.getUserObject ();
-        String curVal = uSel.toString ();
-        EquationInputBox input = getEquationInputBox (true, true, curVal);
-        input.setVisible (true);
-        if (input.getResult () == EquationInputBox.Result.OK)
+        // TODO: substantial additional work to create editing behavior that handles $inherit, $include, variables, equations, annotations and references
+        if (node instanceof NodeReference)
         {
-            uSel.setAnnotation (input.getValue ());
-            tree.select (nSel);
-            fireEqChangeNotifier ();
+            // TODO: edit the same way as metadata
         }
-    }
-
-    public void editEquationNode (TNode nSel)
-    {
-        NodeEquation uSel = (NodeEquation) nSel.getUserObject ();
-        String curVal = uSel.getParsed ().toString ();
-        EquationInputBox input = getEquationInputBox (true, false, curVal);
-        input.setVisible (true);
-        if (input.getResult () == EquationInputBox.Result.OK)
+        else if (node instanceof NodeEquation)
         {
-            uSel.setEqValue (input.getValue ());
-            tree.select (nSel);
-            fireEqChangeNotifier ();
+            NodeEquation nodeEquation = (NodeEquation) selected.getUserObject ();
+            String curVal = nodeEquation.toString ();
+            EquationInputBox input = getEquationInputBox (curVal);
+            input.setVisible (true);
+            if (input.getResult () == EquationInputBox.Result.OK)
+            {
+                //nodeEquation.setEqValue (input.getValue ());
+                tree.select (selected);
+                fireEqChangeNotifier ();
+            }
+        }
+        else if (node instanceof NodeAnnotation)
+        {
+            NodeAnnotation nodeAnnotation = (NodeAnnotation) selected.getUserObject ();
+            String curVal = nodeAnnotation.toString ();
+            EquationInputBox input = getEquationInputBox (curVal);
+            input.setVisible (true);
+            if (input.getResult () == EquationInputBox.Result.OK)
+            {
+                //nodeAnnotation.setAnnotation (input.getValue ());
+                tree.select (selected);
+                fireEqChangeNotifier ();
+            }
         }
     }
 
@@ -271,8 +467,8 @@ public class EquationTreeEditContext {
                 removeNode(node);
             }
         }
-        if(toDel.get(NodeEqReference.class) != null) {
-            for(TNode node : toDel.get(NodeEqReference.class)) {
+        if(toDel.get(NodeReference.class) != null) {
+            for(TNode node : toDel.get(NodeReference.class)) {
                 removeNode(node);
             }
         }
@@ -291,7 +487,7 @@ public class EquationTreeEditContext {
     public void removeNode(TNode node) {
         if(node.getUserObject() instanceof NodeEquation) {
             tree.remove(node);
-        } else if(node.getUserObject() instanceof NodeAnnotation || node.getUserObject() instanceof NodeEqReference) {
+        } else if(node.getUserObject() instanceof NodeAnnotation || node.getUserObject() instanceof NodeReference) {
             tree.remove(node);
             /*
             TNode eq = (TNode) node.getParent();
@@ -346,131 +542,52 @@ public class EquationTreeEditContext {
     // MISC //
     //////////
 
-    private TNode getContextRoot(Class<?> stopAtClass) {
+    private TNode getContextRoot (Class<?> stopAtClass)
+    {
         TNode chosenNode = null;
-        TreePath path = tree.getSelectionPath();
-        if(path != null) {
-            return getContextRoot(stopAtClass, (TNode) path.getLastPathComponent());
-        } else if(addToClass == null) {
-            return getContextRoot(stopAtClass, null);
-        }
+        TreePath path = tree.getSelectionPath ();
+        if (path != null) return getContextRoot (stopAtClass, (TNode) path.getLastPathComponent ());
+        if (addToClass == null) return getContextRoot (stopAtClass, null);
         return chosenNode;
     }
-    private TNode getContextRoot(Class<?> stopAtClass, TNode nSel) {
+
+    private TNode getContextRoot (Class<?> stopAtClass, TNode nSel)
+    {
         TNode chosenNode = null;
         TNode n = nSel;
-        while(n != null) {
-            Class<?> uClass = n.getUserObject().getClass();
-            if(stopAtClass != null) {
-                if(stopAtClass.isAssignableFrom(uClass)) {
+        while (n != null)
+        {
+            Class<?> uClass = n.getUserObject ().getClass ();
+            if (stopAtClass != null)
+            {
+                if (stopAtClass.isAssignableFrom (uClass))
+                {
                     chosenNode = n;
                     break;
                 }
-            } else if(addToClass != null && addToClass.isAssignableFrom(uClass)) {
+            }
+            else if (addToClass != null  &&  addToClass.isAssignableFrom (uClass))
+            {
                 chosenNode = n;
                 break;
             }
-            n = (TNode) n.getParent();
+            n = (TNode) n.getParent ();
         }
-        if(addToClass == null && stopAtClass == null) {
-            chosenNode = (TNode) model.getRoot();
-        }
+        if (addToClass == null  &&  stopAtClass == null) chosenNode = (TNode) model.getRoot ();
         return chosenNode;
     }
 
-    private EquationInputBox getEquationInputBox(boolean isEdit, boolean annot, String initVal) {
-        Component c = SwingUtilities.getRoot(tree);
+    private EquationInputBox getEquationInputBox (String initVal)
+    {
+        Component c = SwingUtilities.getRoot (tree);
         EquationInputBox input;
-        if(c instanceof JFrame) {
-            input = new EquationInputBox((JFrame) c, isEdit, annot, initVal);
-        } else {
-            input = new EquationInputBox((JDialog) c, isEdit, annot, initVal);
-        }
+        if (c instanceof JFrame) input = new EquationInputBox ((JFrame)  c, initVal);
+        else                     input = new EquationInputBox ((JDialog) c, initVal);
         return input;
     }
 
-    public List<NDoc> getEquations (TNode contextRoot)
+    public boolean isInContext (TNode nAny)
     {
-        List<NDoc> eqs = new ArrayList<NDoc> ();
-        for (int i = 0; i < contextRoot.getChildCount (); i++)
-        {
-            TNode nEq = (TNode) contextRoot.getChildAt (i);
-            NodeEquation uEq = (NodeEquation) nEq.getUserObject ();
-            String line = uEq.getParsed ().toString ();
-            NDoc eq = uEq.getEq ();
-            eq.set ("order", i);                  // Order is updated here upon access.
-            List<NDoc> eqRefs = new ArrayList<NDoc> ();
-            TreeMap<String,String> metadata = new TreeMap<String,String> ();
-            for (int j = 0; j < nEq.getChildCount (); j++)
-            {
-                TNode nChild = (TNode) nEq.getChildAt (j);
-                Object n = nChild.getUserObject ();
-                if (n instanceof NodeAnnotation)
-                {
-                    NodeAnnotation uAn = (NodeAnnotation) n;
-                    metadata.put (uAn.name, uAn.value);  // TODO: value could be null; does Orient handle this correctly?
-                }
-                else if (n instanceof NodeEqReference)
-                {
-                    NodeEqReference uEqRef = (NodeEqReference) n;
-                    eqRefs.add (uEqRef.getEqReference ());
-                }
-            }
-            eq.set ("$metadata", metadata);
-            eq.set ("refs", eqRefs);
-            uEq.setEqValue (line);
-            eqs.add (eq);
-        }
-        return eqs;
-    }
-
-    public void setEquations (TNode targetNode, List<NDoc> eqs)
-    {
-        targetNode.removeAllChildren ();
-
-        // Construct an ORDER-BIN#->LIST map to handle any
-        // combination of values for the order fields as
-        // they exist in the database.
-        Map<Integer, List<NDoc>> orderedEqs = new TreeMap<Integer, List<NDoc>> ();
-        for (NDoc eq : eqs)
-        {
-            Integer order = eq.get ("order", null);
-            if (order == null) order = Integer.MAX_VALUE;
-            List<NDoc> binEqs = orderedEqs.get (order);
-            if (binEqs == null)
-            {
-                binEqs = new ArrayList<NDoc> ();
-                orderedEqs.put (order, binEqs);
-            }
-            binEqs.add (eq);
-        }
-
-        for (Integer order : orderedEqs.keySet ())
-        {
-            for (NDoc eq : orderedEqs.get (order))
-            {
-                NodeEquation uEqn = new NodeEquation (eq);
-                TNode nEqn = new TNode (uEqn);
-                model.insertNodeInto (nEqn, targetNode, targetNode.getChildCount ());
-                for (Entry<String,String> an : uEqn.getParsed ().getMetadata ())
-                {
-                    NodeAnnotation uAnnot = new NodeAnnotation (an.getKey (), an.getValue ());
-                    TNode nAnnot = new TNode (uAnnot);
-                    model.insertNodeInto (nAnnot, nEqn, nEqn.getChildCount ());
-                }
-                for (NDoc eqRef : (List<NDoc>) eq.getValid ("refs", new ArrayList<NDoc>(), List.class))
-                {
-                    NodeEqReference uER = new NodeEqReference (eqRef);
-                    TNode nER = new TNode (uER);
-                    model.insertNodeInto (nER, nEqn, nEqn.getChildCount ());
-                }
-                TreePath newPath = new TreePath (new Object[]{targetNode, nEqn});
-                tree.expandPath (newPath);
-            }
-        }
-    }
-
-    public boolean isInContext(TNode nAny) {
-        return getContextRoot(addToClass, nAny) != null;
+        return getContextRoot (addToClass, nAny) != null;
     }
 }

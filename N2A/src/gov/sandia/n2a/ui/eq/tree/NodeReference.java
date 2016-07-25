@@ -5,23 +5,36 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
+
 package gov.sandia.n2a.ui.eq.tree;
 
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
+
+import java.awt.Color;
 
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 
 import replete.gui.controls.simpletree.NodeBase;
 
-public class NodeNone extends NodeBase
+public class NodeReference extends NodeBase
 {
-    protected static ImageIcon icon = ImageUtil.getImage ("none.gif");
-    public String label;
+    protected static ImageIcon icon = ImageUtil.getImage("book.gif");
 
-    public NodeNone (String a)
+    public String index;
+    public String comment;
+
+    public NodeReference (String index, MNode node)
     {
-        label = a;
+        this.index = index;
+        comment = node.get ();
+    }
+
+    public NodeReference (String index, String comment)
+    {
+        this.index = index;
+        this.comment = comment;
     }
 
     @Override
@@ -31,14 +44,14 @@ public class NodeNone extends NodeBase
     }
 
     @Override
-    public boolean isItalic ()
+    public Color getForegroundColor ()
     {
-        return true;
+        return Color.black;
     }
 
     @Override
     public String toString ()
     {
-        return label;
+        return index + " -- " + comment;
     }
 }

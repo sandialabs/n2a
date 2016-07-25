@@ -283,7 +283,7 @@ public class NDoc
         if(handler == null) {
             return null;
         }
-        return handler.getIcon(this);
+        return handler.getIcon ();
     }
 
 

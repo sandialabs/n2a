@@ -20,7 +20,8 @@ import gov.sandia.n2a.language.function.Trace;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
-import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
+import gov.sandia.umf.platform.db.AppData;
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
@@ -28,7 +29,7 @@ import gov.sandia.umf.platform.ui.images.ImageUtil;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
@@ -45,7 +46,7 @@ import javax.swing.ImageIcon;
 
 public class EquationSet implements Comparable<EquationSet>
 {
-    public NDoc                                source;
+    public MNode                               source;
     public String                              name;
     public EquationSet                         container;
     public NavigableSet<Variable>              variables;
@@ -53,7 +54,6 @@ public class EquationSet implements Comparable<EquationSet>
     public NavigableMap<String, EquationSet>   connectionBindings;     // non-null iff this is a connection
     public boolean                             connected;
     public NavigableSet<AccountableConnection> accountableConnections; // Connections which declare a $min or $max w.r.t. this part. Note: connected can be true even if accountableConnections is null.
-    /** @deprecated Better to refer metadata requests to source. Part/NDoc should implement a getNamedValue() function that refers requests up the inheritance chain. **/
     public Map<String, String>                 metadata;
     public List<Variable>                      ordered;
     public List<ArrayList<EquationSet>>        splits;                 // Enumeration of the $type splits this part can go through
@@ -87,12 +87,22 @@ public class EquationSet implements Comparable<EquationSet>
         this.name = name;
     }
 
-    public EquationSet (NDoc part) throws Exception
+    public EquationSet (MNode part) throws Exception
     {
         this ("", null, part);
     }
 
-    public EquationSet (String name, EquationSet container, NDoc source) throws Exception
+    /**
+        Construct the hierarchical tree of parts implied by the N2A code in the given model.
+        This involves reading in other models as indicated by $inherit or $include, and
+        placing variables in the correct set.
+
+        Note: Although it is possible to express an override to a $include or $inherit in
+        other models, this is forbidden. No other object-oriented lanaguage allows such changes.
+        By forbidding it, the form of a part prior to equation overriding is well-defined,
+        allowing a clean recursive construction process.
+    **/
+    public EquationSet (String name, EquationSet container, MNode source) throws Exception
     {
         EquationSet c = container;
         while (c != null)
@@ -109,138 +119,94 @@ public class EquationSet implements Comparable<EquationSet>
         this.source    = source;
         variables      = new TreeSet<Variable> ();
         parts          = new TreeSet<EquationSet> ();
-        metadata       = new HashMap<String, String> ();
+        metadata       = new TreeMap<String, String> ();
 
-        // TODO: Includes, Bridges and Layers should all be stored the same way in the DB.
-        // They should all refer to a Part, and they should all have an alias.
-        // "Bridges" have additional attributes to name the aliases of the parts they connect.
-
-        // Includes
-        List<NDoc> associations = source.getValid ("associations", new ArrayList<NDoc> (), List.class);
-        for (NDoc a : associations)
+        // Sort equations by object-oriented operation
+        Map<String,MNode> inherits = new TreeMap<String,MNode> ();
+        Map<String,MNode> includes = new TreeMap<String,MNode> ();
+        Map<String,MNode> others   = new TreeMap<String,MNode> ();
+        for (Entry<String,MNode> e : source)
         {
-            if (((String) a.get ("type")).equalsIgnoreCase ("include"))
+            String index = e.getKey ();
+            if (index.equals ("$metadata"))
             {
-                String aname = a.get ("name");  // TODO: default alias name should be assigned at creation time, not filled in here!
-                if (aname == null) throw new Exception ("Need to set include name in DB");
-                NDoc dest = a.get ("dest");
-                parts.add (new EquationSet (aname, this, dest));
-            }
-        }
-
-        // Layers
-        List<NDoc> layers = source.getValid ("layers", new ArrayList<NDoc> (), List.class);
-        for (NDoc l : layers)
-        {
-            parts.add (new EquationSet ((String) l.get ("name"), this, (NDoc) l.get ("derivedPart")));
-        }
-
-        // Bridges
-        List<NDoc> bridges = source.getValid ("bridges", new ArrayList<NDoc> (), List.class);
-        for (NDoc b : bridges)
-        {
-            NDoc connection = b.get ("derivedPart");
-            EquationSet s = new EquationSet ((String) b.get ("name"), this, connection);
-            parts.add (s);
-
-            // Configure the connection bindings in s (the "bridge" equation set)
-
-            //   Collect "connect" associations from connection part. These indicate the alias and type
-            //   of parts that get connected. We will match the types of parts that this "bridge"
-            //   connects in order to infer which alias refers to each one.
-            //   TODO: This approach is fragile in multiple ways, and should be changed ASAP.
-            List<NDoc> connectionAssociations = new ArrayList<NDoc> ();
-            NDoc parent = connection.get ("parent");
-            associations = parent.getValid ("associations", new ArrayList<NDoc> (), List.class);
-            for (NDoc a : associations)
-            {
-                if (((String) a.get ("type")).equalsIgnoreCase ("connect"))
+                for (Entry<String,MNode> m : e.getValue ())
                 {
-                    connectionAssociations.add (a);
+                    metadata.put (m.getKey (), m.getValue ().get ());
                 }
             }
-
-            //   Scan the list of parts connected by this "bridge"
-            List<NDoc> connected = b.getValid ("layers", new ArrayList<NDoc> (), List.class);
-            for (NDoc l : connected)
+            else if (index.equals ("$reference"))
             {
-                // Retrieve the equation set associated with the connected part
-                String lname = l.get ("name");
-                EquationSet e = parts.floor (new EquationSet (lname));
-                if (e == null  ||  ! e.name.equals (lname))
-                {
-                    // We should NEVER get here, since a "bridge" directly references layers which should already be added. 
-                    throw new Exception ("Connection references a Part that does not exist.");
-                }
-
-                // Determine the alias by scanning associations of the connection part
-                NDoc layerType = ((NDoc) l.get ("derivedPart")).get ("parent");
-                for (NDoc a : connectionAssociations)
-                {
-                    NDoc connectionType = a.get ("dest");
-                    if (layerType.getId ().equals (connectionType.getId ()))
-                    {
-                        // Stored the binding
-                        if (s.connectionBindings == null)
-                        {
-                            s.connectionBindings = new TreeMap<String, EquationSet> ();
-                        }
-                        String aname = a.get ("name");
-                        if (! s.connectionBindings.containsKey (aname))
-                        {
-                            s.connectionBindings.put (aname, e);
-                        }
-                    }
-                }
-
-                e.connected = true;
+                // TODO: process references, like metadata
+            }
+            else  // regular equation
+            {
+                String value = e.getValue ().get ();
+                if      (value.contains ("$inherit")) inherits.put (e.getKey (), e.getValue ());
+                else if (value.contains ("$include")) includes.put (e.getKey (), e.getValue ());
+                else                                  others  .put (e.getKey (), e.getValue ());
             }
         }
-
-        // Local equations
-        List<NDoc> eqs = source.getValid ("eqs", new ArrayList<NDoc> (), List.class);
-        for (NDoc e : eqs)
-        {
-            EquationEntry ee = new EquationEntry (e);
-            Variable v = variables.floor (ee.variable);
-            if (v == null  ||  ! v.equals (ee.variable))
-            {
-                add (ee.variable);
-            }
-            else
-            {
-                v.replace (ee);
-            }
-        }
-        //   Treat model output equations (in the old system) exactly the same as local equations.
-        eqs = source.getValid ("outputEqs", new ArrayList<NDoc> (), List.class);
-        for (NDoc e : eqs)
-        {
-            EquationEntry ee = new EquationEntry (e);
-            if (ee.variable.name.length () == 0) throw new Exception ("Output equations which lack a variable assignment are no longer permitted.");
-            Variable v = variables.floor (ee.variable);
-            if (v == null  ||  ! v.equals (ee.variable))
-            {
-                add (ee.variable);
-            }
-            else
-            {
-                v.replace (ee);
-            }
-        }
-
-        // Metadata
-        Map<String, String> namedValues = source.getValid ("$metadata", new TreeMap<String, String> (), Map.class);
-        metadata.putAll (namedValues);
 
         // Inherits
-        NDoc parent = source.get ("parent");  // TODO: should be any number of parents (multiple-inheritance)
-        if (parent != null)
+        for (Entry<String,MNode> e : inherits.entrySet ())
         {
+            // Get parent
+            String value = e.getValue ().get ();
+            String[] pieces = value.split ("\"");
+            if (pieces.length < 2) throw new Exception ("Ill-formed inherit expression: " + value);
+            MNode parent = AppData.getInstance ().models.child (pieces[1]);
+            if (parent == null) throw new Exception ("Can't find parent: " + pieces[1]);
+
             merge (new EquationSet ("", this, parent));
         }
 
+        // Includes
+        for (Entry<String,MNode> e : includes.entrySet ())
+        {
+            String aname = e.getKey ();
+
+            String value = e.getValue ().get ();
+            String[] pieces = value.split ("\"");
+            if (pieces.length < 2) throw new Exception ("Ill-formed include expression: " + value);
+            MNode part = AppData.getInstance ().models.child (pieces[1]);
+            if (part == null) throw new Exception ("Can't find part: " + pieces[1]);
+
+            parts.add (new EquationSet (aname, this, part));
+        }
+
+        // Local equations
+        for (Entry<String,MNode> e : others.entrySet ())
+        {
+            update (new Variable (e.getKey (), e.getValue ()));
+        }
+
+        // Metadata
+        MNode m = source.child ("$metadata");
+        if (m != null)
+        {
+            for (Entry<String,MNode> e : m)
+            {
+                metadata.put (e.getKey (), e.getValue ().get ());
+            }
+        }
+
         pushDown ();
+
+        // TODO: Add the ability to create implicit parts. These occur when dot notation
+        // is used in an equation set to separate out a sub-namespace, the resulting group of equations
+        // has a $n different than 1, and there is no explicit part (from a $include) with that name.
+        // pushDown() will leave such equations at the current level, which is wrong because $n is not honored.
+    }
+
+    /**
+        Search for the given variable within this specific equation set. If not found, return null.
+    **/
+    public Variable find (Variable v)
+    {
+        Variable result = variables.floor (v);
+        if (result != null  &&  result.compareTo (v) == 0) return result;
+        return null;
     }
 
     public boolean add (Variable v)
@@ -249,20 +215,139 @@ public class EquationSet implements Comparable<EquationSet>
         return variables.add (v);
     }
 
-    public void replace (Variable v)
+    public void update (Variable v)
     {
-        variables.remove (v);
-        variables.add (v);
-        v.container = this;
+        Variable existing = find (v);
+        if (existing == null)
+        {
+            // Instead of a true variable, v might also be a carrier for $metadata related to a contained part.
+            // Since parts and variables share the same namespace, it is possible to distinguish these cases.
+            if (v.order == 0)
+            {
+                EquationSet query = new EquationSet (v.name);
+                EquationSet p = parts.floor (query);
+                if (p != null  &&  p.equals (query))
+                {
+                    // Merge metadata.
+                    for (Entry<String,String> m : v.getMetadata ())
+                    {
+                        metadata.put (m.getKey (), m.getValue ());
+                    }
+                    return;
+                }
+            }
+            // It did not turn out to be an EquationSet proxy, so add it as a regular variable.
+            add (v);
+        }
+        else
+        {
+            existing.merge (v);  // equations in v take precedence over equations in existing
+        }
     }
 
     /**
-        Merge given equation set into this, where contents of this always take precedence.
+        Changes the model in persistent storage to reflect the given change to a variable.
+        This change must be stored in the top-level model, regardless of where in the hierarchy it occurs.
+        On a new build of the equation set from the database, pushDown() will apply it to the correct
+        location. In that sense, this function is the true dual of pushDown().
+
+        Note: If this new equation is a $inherit or $include, then the whole EquationSet tree should be
+        rebuilt afterward. Also note that $inherit and $include may only be specified on the top-level model,
+        as overriding them in external models is forbidden.
+
+        @param v A Variable carrying a single EquationEntry. The Variable object itself will not be stored,
+        only strings constructed from it. The caller is responsible for making a separate call to update(Variable)
+        to put it into the EquationSet structure.
+        @throws Exception
     **/
-    public void merge (EquationSet s)
+    public void updateDB (Variable v) throws Exception
+    {
+        if (container == null)  // top-level model, so apply the variable
+        {
+            if (source == null) throw new Exception ("No associated DB model to update.");
+            // Our internal state should match the DB before the update, so use it to make
+            // decisions about which form of variable node to output.
+            Variable existing = find (v);
+            EquationEntry payload = v.equations.first ();
+            if (existing == null  ||  (existing.equations.size () == 1  &&  existing.find (payload) != null))  // OK to use single-line form
+            {
+                source.set (v.combinerString () + payload.toString (), v.nameString ());
+            }
+            else  // must store as a child node
+            {
+                MNode vnode = source.getNode (v.nameString ());
+
+                // Convert any existing single-line expression into a new child under the variable
+                String value = vnode.get ();
+                if (value.length () > 0)
+                {
+                    String combiner = value.substring (0, 1);
+                    if (new String (":+*/<>").contains (combiner))
+                    {
+                        value = value.substring (1);
+                    }
+                    else
+                    {
+                        combiner = "";
+                    }
+
+                    vnode.set (combiner);
+                    String[] pieces = value.split ("@", 2);
+                    value = pieces[0];
+                    String index;
+                    if (pieces.length > 1) index = "@" + pieces[1];
+                    else                   index = "@";
+                    vnode.set (value, index);
+                }
+
+                // Store the new node
+                String combiner = v.combinerString ();
+                if (! combiner.isEmpty ()) vnode.set (combiner);  // override what was there; a little dangerous, should make sense to the user
+                String index = "@";
+                if (payload.conditional != null) index = index + payload.conditional.render ();
+                value = "";
+                if (payload.expression != null) value = payload.expression.render ();
+                vnode.set (value, index);
+            }
+        }
+        else
+        {
+            v.name = name + "." + v.name;
+            container.updateDB (v);
+        }
+    }
+
+    /**
+        Changes model in persistent storage to reflect change in metadata.
+    **/
+    public void updateDB (String tag, String value)
+    {
+        if (container == null) source.set (value, "$metadata", tag);
+        else                   container.updateDB (name, tag, value);
+    }
+
+    public void updateDB (String path, String tag, String value)
+    {
+        if (container == null)
+        {
+            source.set (value, path, "$metadata", tag);
+        }
+        else
+        {
+            path = name + "." + path;
+            container.updateDB (path, tag, value);
+        }
+    }
+
+    /**
+        Merge given equation set into this, where contents of that always take precedence.
+        @param that No longer usable after the merge, as certain contents may be extracted,
+        modified, and incorporated into this.
+    **/
+    public void merge (EquationSet that)
     {
         // Merge variables, and collate equations within each variable
-        for (Variable v : s.variables)
+        for (Variable v : that.variables)
         {
             Variable r = variables.floor (v);
             if (r == null  ||  ! r.equals (v))
@@ -276,7 +361,7 @@ public class EquationSet implements Comparable<EquationSet>
         }
 
         // Merge parts, and collate contents of any that are already present
-        for (EquationSet p : s.parts)
+        for (EquationSet p : that.parts)
         {
             EquationSet r = parts.floor (p);
             if (r == null  ||  ! r.equals (p))
@@ -290,22 +375,7 @@ public class EquationSet implements Comparable<EquationSet>
             }
         }
 
-        // Merge connection bindings
-        // In theory, connection bindings are only created by the level above a given part, so none of the following should be necessary.
-        // TODO: connectionBindings must maintain object identity after parts are merged!!!
-        if (connectionBindings == null)
-        {
-            connectionBindings = s.connectionBindings;
-        }
-        else if (s.connectionBindings != null)
-        {
-            s.connectionBindings.putAll (connectionBindings);  // putAll() replaces entries in the receiving map, so we must merge into s first to preserve precedence
-            connectionBindings = s.connectionBindings;
-        }
-
-        // Merge metadata
-        s.metadata.putAll (metadata);
-        metadata = s.metadata;
+        metadata.putAll (that.metadata);
     }
 
     /**
@@ -313,8 +383,8 @@ public class EquationSet implements Comparable<EquationSet>
     **/
     public void pushDown ()
     {
-        Set<Variable> temp = new TreeSet<Variable> (variables);
-        variables.clear ();
+        Set<Variable> temp = variables;
+        variables = new TreeSet<Variable> ();
         for (Variable v : temp)
         {
             pushDown (v);
@@ -330,7 +400,7 @@ public class EquationSet implements Comparable<EquationSet>
         if (index < 0  ||  v.name.startsWith ("$up."))
         {
             // Store at the current level.
-            replace (v);
+            update (v);
         }
         else
         {
@@ -338,11 +408,12 @@ public class EquationSet implements Comparable<EquationSet>
             EquationSet p = parts.floor (new EquationSet (prefix));
             if (p == null  ||  ! p.name.equals (prefix))
             {
-                replace (v);
+                update (v);
             }
             else
             {
-                v.transform (new Transformer () {
+                v.transform (new Transformer ()
+                {
                     public Operator transform (Operator op)
                     {
                         if (op instanceof AccessVariable)
@@ -382,6 +453,82 @@ public class EquationSet implements Comparable<EquationSet>
             return temp + "." + name;
         }
         return name;
+    }
+
+    /**
+        Find instance variables (what in other languages might be called pointers) and move them
+        into the connectionBindings structure.
+        Dependencies: This function must be the very first thing run after constructing the full
+        equation set hierarchy. Other resolve functions depend on it.
+    **/
+    public void resolveConnectionBindings () throws Exception
+    {
+        for (EquationSet s : parts)
+        {
+            s.resolveConnectionBindings ();
+        }
+
+        // Scan for equations that look and smell like connection bindings.
+        // A binding equation has these characteristics:
+        // * Only one equation on the variable.
+        // * Unconditional (conditional bindings are not permitted)
+        // * No operators, only a name on RHS that appears like a variable name.
+        // * RHS name is order 0 (not a derivative)
+        // * No variable in the current equation set matches the name.
+        // $up is permitted. The explicit name of a higher container may also be used,
+        // provided nothing matches the name on the way up.
+        // $connect should not appear. It should have been overwritten during construction.
+        // If $connect does appear, bindings are incomplete, which is an error.
+        Iterator<Variable> i = variables.iterator ();  // need to use an iterator here, so we can remove variables from the set
+        while (i.hasNext ())
+        {
+            Variable v = i.next ();
+
+            // Detect instance variables
+            if (v.equations.size () != 1) continue;
+            EquationEntry ee = v.equations.first ();
+            if (ee.conditional != null) continue;
+            if (! (ee.expression instanceof AccessVariable)) continue;
+
+            // Resolve connection endpoint to a specific equation set
+            String targetName = ((AccessVariable) ee.expression).name;
+            EquationSet s = findEquationSet (targetName);
+            if (s == null) throw new Exception ("Failed to resolve connection target: " + targetName);
+
+            // Store connection binding
+            if (connectionBindings == null) connectionBindings = new TreeMap<String, EquationSet> ();
+            connectionBindings.put (v.name, s);
+            s.connected = true;
+            i.remove ();  // Should no longer be in the equation list, as there is nothing further to compute.
+        }
+    }
+
+    /**
+        Returns reference to the named equation set, based on a search starting in the
+        current equation set and applying all the N2A name-resolution rules.
+    **/
+    public EquationSet findEquationSet (String query)
+    {
+        if (query.isEmpty ()) return this;
+        String[] pieces = query.split ("\\.", 2);
+        String ns = pieces[0];
+        String nextName;
+        if (pieces.length > 1) nextName = pieces[1];
+        else                   nextName = "";
+
+        if (ns.equals ("$up"))  // Don't bother with local checks if we know we are going up
+        {
+            if (container == null) return null;
+            return container.findEquationSet (nextName);
+        }
+
+        EquationSet p = parts.floor (new EquationSet (ns));
+        if (p != null  &&  p.name.equals (ns)) return p.findEquationSet (nextName);
+
+        if (find (new Variable (ns)) != null) return null;  // not allowed to match any of our variables
+
+        if (container == null) return null;
+        return container.findEquationSet (query);
     }
 
     /**
@@ -484,19 +631,6 @@ public class EquationSet implements Comparable<EquationSet>
         if (container == null) return null;  // unresolved!!
         v.reference.resolution.add (container);
         return container.resolveEquationSet (v, create);
-    }
-
-    /**
-        Search for the given variable within this specific equation set. If not found, return null.
-    **/
-    public Variable find (Variable v)
-    {
-        Variable result = variables.floor (v);
-        if (result != null  &&  result.compareTo (v) == 0)
-        {
-            return result;
-        }
-        return null;
     }
 
     public VariableReference resolveReference (String variableName)
@@ -717,11 +851,34 @@ public class EquationSet implements Comparable<EquationSet>
         }
         for (Variable v : variables)
         {
-            for (EquationEntry e : v.equations)
+            renderer.result.append (prefix + "." + v.nameString ());
+            if (v.equations.size () > 0)
             {
-                renderer.result.append (prefix + ".");
-                e.render (renderer);
-                renderer.result.append ("\n");
+                renderer.result.append (" =");
+                switch (v.assignment)
+                {
+                    case Variable.ADD:      renderer.result.append ("+"); break;
+                    case Variable.MULTIPLY: renderer.result.append ("*"); break;
+                    case Variable.DIVIDE:   renderer.result.append ("/"); break;
+                    case Variable.MAX:      renderer.result.append (">"); break;
+                    case Variable.MIN:      renderer.result.append ("<"); break;
+                }
+                if (v.equations.size () == 1)
+                {
+                    renderer.result.append (" ");
+                    v.equations.first ().render (renderer);
+                    renderer.result.append ("\n");
+                }
+                else
+                {
+                    renderer.result.append ("\n");
+                    for (EquationEntry e : v.equations)
+                    {
+                        renderer.result.append ("  ");
+                        e.render (renderer);
+                        renderer.result.append ("\n");
+                    }
+                }
             }
         }
 
@@ -749,6 +906,18 @@ public class EquationSet implements Comparable<EquationSet>
             // Check if connection. They must remain a separate equation set for code-generation purposes.
             if (s.connectionBindings != null) continue;
             if (s.connected) continue;
+
+            // For similar reasons, if the part contains backend-related metadata, it should remain separate.
+            boolean hasBackendMetadata = false;
+            for (Entry<String,String> m : s.metadata.entrySet ())
+            {
+                if (m.getKey ().startsWith ("backend"))  // this is only a convention, but one that should be followed
+                {
+                    hasBackendMetadata = true;
+                    break;
+                }
+            }
+            if (hasBackendMetadata) continue;
 
             // Check if $n==1
             Variable n = s.find (new Variable ("$n", 0));
@@ -858,7 +1027,7 @@ public class EquationSet implements Comparable<EquationSet>
                 }
                 else
                 {
-                    v2.mergeExpressions (v);
+                    v2.flattenExpressions (v);
                 }
             }
 
@@ -940,7 +1109,6 @@ public class EquationSet implements Comparable<EquationSet>
         {
             v.addAttribute ("constant");  // default. Actual values should be set by setAttributeLive()
             EquationEntry e = new EquationEntry (v, "");
-            e.assignment = "=";
             e.expression = new Constant (new Scalar (1));
             v.add (e);
         }
@@ -965,7 +1133,6 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 v.addAttribute ("constant");  // default. Actual values set by client code.
                 EquationEntry e = new EquationEntry (v, "");
-                e.assignment = "=";
                 e.expression = new Constant (new Scalar (1));
                 v.add (e);
             }
@@ -1073,7 +1240,6 @@ public class EquationSet implements Comparable<EquationSet>
             init = new Variable ("$init", 0);
             init.addAttribute ("constant");  // TODO: should really be "initOnly", since it changes value during (at the end of) the init cycle.
             EquationEntry e = new EquationEntry (init, "");
-            e.assignment = "=";
             e.expression = new Constant (new Scalar (value));
             init.add (e);
             add (init);
@@ -1962,6 +2128,12 @@ public class EquationSet implements Comparable<EquationSet>
     public void setNamedValue (String name, String value)
     {
         metadata.put (name, value);
+    }
+
+    public Set<Entry<String,String>> getMetadata ()
+    {
+        if (metadata == null) metadata = new TreeMap<String, String> ();
+        return metadata.entrySet ();
     }
 
     public int compareTo (EquationSet that)

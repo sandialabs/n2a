@@ -10,61 +10,64 @@ package gov.sandia.umf.platform.plugins.base;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.connect.orientdb.ui.RecordEditPanel;
 import gov.sandia.umf.platform.connect.orientdb.ui.TabbedRecordEditPanel;
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
 import gov.sandia.umf.platform.plugins.Parameterizable;
 import gov.sandia.umf.platform.plugins.extpoints.RecordHandler;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.ensemble.ParameterSpecGroupsPanel;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
+
 import javax.swing.ImageIcon;
 
 import replete.util.Lay;
 import replete.xstream.XStreamWrapper;
 
-public class RunEnsembleRecordHandler implements RecordHandler {
-
+public class RunEnsembleRecordHandler implements RecordHandler
+{
     @Override
-    public ImageIcon getIcon(NDoc doc) {
+    public ImageIcon getIcon ()
+    {
         return ImageUtil.getImage("runens.gif");
     }
 
     @Override
-    public String getRecordTypeDisplayName(NDoc record) {
+    public String getRecordTypeDisplayName (NDoc record)
+    {
         return "Run Ensemble";
     }
 
-    public String[] getRecordTypeSearchFields(String type) {
+    public String[] getRecordTypeSearchFields (String type)
+    {
         return new String[] {"label"};
     }
 
     @Override
-    public String[] getHandledRecordTypes() {
+    public String[] getHandledRecordTypes ()
+    {
         return new String[] {"gov.sandia.umf.platform$RunEnsemble"};
     }
 
-    public String getTitle(NDoc doc) {
-        return doc.get("label");
+    public String getTitle (NDoc doc)
+    {
+        return doc.get ("label");
     }
 
     @Override
-    public RecordEditPanel getRecordEditPanel(UIController uiController, NDoc doc) {
+    public RecordEditPanel getRecordEditPanel (UIController uiController, MNode doc)
+    {
         return new TestRecordPanel(uiController, doc);
     }
 
-    private class TestRecordPanel extends TabbedRecordEditPanel {
+    private class TestRecordPanel extends TabbedRecordEditPanel
+    {
+        public TestRecordPanel (UIController uic, MNode doc)
+        {
+            super (uic, doc);
+            System.out.println (doc);
 
+            ParameterSpecGroupSet groups = new ParameterSpecGroupSet (doc);
 
-        /////////////////
-        // CONSTRUCTOR //
-        /////////////////
-
-        public TestRecordPanel(UIController uic, NDoc doc) {
-            super(uic, doc);
-            System.out.println(doc);
-
-            ParameterSpecGroupSet groups = getParameterSpecGroupSet(doc);
-
-//            addTab("General", Lay.p());
             addTab("Parameterization",
                 Lay.BL(
                     "W", Lay.hn(new ParameterSpecGroupsPanel(groups), "prefw=400"),
@@ -76,23 +79,15 @@ public class RunEnsembleRecordHandler implements RecordHandler {
                 "C", Lay.p(tabSections, "bg=180")
             );
         }
-        @Override
-        public String validationMessage() {
-            return null;
-        }
-        @Override
-        public void doInitialFocus() {
-        }
 
-        private ParameterSpecGroupSet getParameterSpecGroupSet(NDoc dEns) {
-            return (ParameterSpecGroupSet) XStreamWrapper.loadTargetFromString(
-                (String) dEns.get("paramSpecs"));
+        @Override
+        public void doInitialFocus ()
+        {
         }
-
     }
 
     @Override
-    public NDoc createNewRecord() {
+    public MNode createNewRecord() {
         return null;
     }
     @Override
@@ -113,10 +108,5 @@ public class RunEnsembleRecordHandler implements RecordHandler {
     @Override
     public boolean includeTypeInSearchResults(String type) {
         return true;
-    }
-
-    @Override
-    public Parameterizable unknown__getParameterizableProcessForRecord(NDoc doc) {
-        return null;
     }
 }

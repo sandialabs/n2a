@@ -8,7 +8,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.umf.platform;
 
 import gov.sandia.umf.platform.connect.orientdb.ui.ConnectionManager;
-import gov.sandia.umf.platform.connect.orientdb.ui.OrientConnectDetails;
 import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.plugins.UMFPluginManager;
@@ -30,7 +29,6 @@ import java.util.List;
 import java.util.Map;
 
 import javax.swing.JFrame;
-import javax.swing.JOptionPane;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
@@ -53,9 +51,6 @@ import replete.logging.LogManager;
 import replete.plugins.ExtPointNotLoadedException;
 import replete.plugins.ExtensionPoint;
 import replete.plugins.PluginManager;
-import replete.threads.CommonRunnable;
-import replete.threads.CommonThreadContext;
-import replete.threads.CommonThreadShutdownException;
 import replete.util.Application;
 import replete.util.ArrayUtil;
 import replete.util.ArrayUtil.ArrayTranslator;
@@ -94,17 +89,17 @@ public class UMF
     private static Map<String, String[]> popupHelp;
 
 
-    //////////
+    // ////////
     // MAIN //
-    //////////
+    // ////////
 
     public static void main (String[] args)
     {
         // TODO: Add help to these options.
-        CommandLineParser parser = new CommandLineParser();
-        Option optPluginAdd = parser.addStringOption("plugin");
-        Option optPluginDir = parser.addStringOption("plugindir");
-        Option optProdCust = parser.addStringOption("product");
+        CommandLineParser parser = new CommandLineParser ();
+        Option optPluginAdd = parser.addStringOption ("plugin");
+        Option optPluginDir = parser.addStringOption ("plugindir");
+        Option optProdCust = parser.addStringOption ("product");
 
         try
         {
@@ -116,36 +111,39 @@ public class UMF
             return;
         }
 
-        Object[] pluginValuesCL = parser.getOptionValues(optPluginAdd);
-        Object[] pluginDirsCL = parser.getOptionValues(optPluginDir);
-        String prodCust = (String) parser.getOptionValue(optProdCust);
+        Object[] pluginValuesCL = parser.getOptionValues (optPluginAdd);
+        Object[] pluginDirsCL = parser.getOptionValues (optPluginDir);
+        String prodCust = (String) parser.getOptionValue (optProdCust);
 
         // Set up Log4J.
-        URL log4jConfig = UMF.class.getResource(DEFAULT_INTERNAL_LOG4J_CONFIG);
-        PropertyConfigurator.configure(log4jConfig);
+        URL log4jConfig = UMF.class.getResource (DEFAULT_INTERNAL_LOG4J_CONFIG);
+        PropertyConfigurator.configure (log4jConfig);
 
         // Set some global application properties.
-        Application.setName("Unified Modeling Framework");
-        Application.setTitle("Unified Modeling Framework");
+        Application.setName ("Unified Modeling Framework");
+        Application.setTitle ("Unified Modeling Framework");
 
-        AppState.getState ().load();
+        AppState.getState ().load ();
 
-        String[] pluginMem = ArrayUtil.translate(String.class, pluginValuesCL);
+        String[] pluginMem = ArrayUtil.translate (String.class, pluginValuesCL);
 
-        File[] pluginDirs = ArrayUtil.translate(File.class, pluginDirsCL, new ArrayTranslator() {
-            public Object translate(Object o) {
-                return new File((String) o);
+        File[] pluginDirs = ArrayUtil.translate (File.class, pluginDirsCL, new ArrayTranslator ()
+        {
+            public Object translate (Object o)
+            {
+                return new File ((String) o);
             }
         });
         pluginDirs = ArrayUtil.cat (pluginDirs, UMFPluginManager.getPluginsDir ());
 
-        if(!PluginManager.initialize(new PlatformPlugin(), pluginMem, pluginDirs)) {
-            System.err.println(PluginManager.getInitializationErrors());
+        if (!PluginManager.initialize (new PlatformPlugin (), pluginMem, pluginDirs))
+        {
+            System.err.println (PluginManager.getInitializationErrors ());
         }
 
-        UMFPluginManager.init();
+        UMFPluginManager.init ();
 
-        setUncaughtExceptionHandler(null);
+        setUncaughtExceptionHandler (null);
 
         AppState.getState ().prodCustomization = chooseProductCustomization (prodCust);
 
@@ -157,43 +155,39 @@ public class UMF
         LogManager.setLogFile (new File (getAppLogDir (), "n2a.log"));
 
         // Read popup help.
-        popupHelp = readPopupHelp();
+        popupHelp = readPopupHelp ();
 
         // Start data handling
         AppData data = AppData.getInstance ();
         data.checkInitialDB ();
 
         // Create the main frame.
-        createAndShowMainFrame();
+        createAndShowMainFrame ();
 
-        // Hear about when the L&F manager needs the main frame to reboot itself.
-        LafManager.setNeedToRebootListener(new RebootFramesListener() {
-            public void reboot() {
-                reloadAppFrame();
+        // Hear about when the L&F manager needs the main frame to reboot
+        // itself.
+        LafManager.setNeedToRebootListener (new RebootFramesListener ()
+        {
+            public void reboot ()
+            {
+                reloadAppFrame ();
             }
-            public boolean allowReboot() {
-                if(uiController.isDirty()) {
-                    int val = Dialogs.showMulti("Changing to this look and feel requires the window to restart.\n" +
-                        "One or more active panels has unsaved information.\n" +
-                        "Are you sure you wish to change the look and feel?\nYou will lose all unsaved information.",
-                        "Change L&F?",
-                        new String[] {"Yes", "No"}, JOptionPane.WARNING_MESSAGE);
-                    if(val == 0) {
-                        return true;
-                    }
-                    return false;
-                }
+
+            public boolean allowReboot ()
+            {
                 return true;
             }
         });
 
         // Needed because HTML labels are slow to construct!
-        new Thread() {
+        new Thread ()
+        {
             @Override
-            public void run() {
-                AboutDialog.initializeLabels();
+            public void run ()
+            {
+                AboutDialog.initializeLabels ();
             };
-        }.start();
+        }.start ();
     }
 
     private static ProductCustomization chooseProductCustomization(String prodCust) {
@@ -336,7 +330,7 @@ public class UMF
         {
             mainFrame.setVisible (true);
         }
-        mainFrame.setExtendedState (winProps.getInt (0, "MainFrame", "state"));
+        mainFrame.setExtendedState (winProps.getDefault (0, "MainFrame", "state"));
 
         setUncaughtExceptionHandler(mainFrame);
         Dialogs.registerApplicationWindow(mainFrame, Application.getName());
@@ -360,10 +354,10 @@ public class UMF
 
     private static void ensureSizeLoc (CommonWindow win, MNode winProps)
     {
-        int w = winProps.getInt (-1, "width");
-        int h = winProps.getInt (-1, "height");
-        int x = winProps.getInt (-1, "x");
-        int y = winProps.getInt (-1, "y");
+        int w = winProps.getDefault (-1, "width");
+        int h = winProps.getDefault (-1, "height");
+        int x = winProps.getDefault (-1, "x");
+        int y = winProps.getDefault (-1, "y");
         if (w >= 0  &&  h >= 0) win.setSize (w, h);
         if (x >= 0  &&  y >= 0) win.setLocation (x, y);
         else                    win.setLocationRelativeTo (win.getParent ());

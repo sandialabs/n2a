@@ -8,9 +8,9 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui;
 
-import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.connect.orientdb.ui.RecordEditPanel;
 import gov.sandia.umf.platform.db.MNode;
+import gov.sandia.umf.platform.plugins.UMFPluginManager;
 import gov.sandia.umf.platform.plugins.extpoints.RecordHandler;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 import gov.sandia.umf.platform.ui.search.DefaultButtonEnabledPanel;
@@ -25,8 +25,6 @@ import javax.swing.event.ChangeListener;
 
 import replete.event.ChangeNotifier;
 import replete.gui.tabbed.AdvancedTabbedPane;
-import replete.gui.tabbed.TabAboutToCloseEvent;
-import replete.gui.tabbed.TabAboutToCloseListener;
 import replete.gui.tabbed.TabCloseEvent;
 import replete.gui.tabbed.TabCloseListener;
 
@@ -36,6 +34,7 @@ public class MainTabbedPane extends AdvancedTabbedPane
 
     private UIController uiController;
     public SearchPanel panelSearch;
+    public RecordEditPanel panelEdit;
 
     private boolean noHistoryFire = false;
     private int historyLocation = -1;
@@ -82,16 +81,6 @@ public class MainTabbedPane extends AdvancedTabbedPane
         setCloseableAt (0, false);
 
         // Listeners
-        addTabAboutToCloseListener (new TabAboutToCloseListener ()
-        {
-            public void stateChanged (TabAboutToCloseEvent e)
-            {
-                if (!uiController.okToCloseCurrentTab ())
-                {
-                    e.cancel ();
-                }
-            }
-        });
         addTabCloseListener (new TabCloseListener ()
         {
             public void stateChanged (TabCloseEvent e)
@@ -124,127 +113,24 @@ public class MainTabbedPane extends AdvancedTabbedPane
         });
     }
 
-
-    //////////
-    // OPEN //
-    //////////
-
-    // --- New OrientDB --- //
-
-    public void openSearchOrient ()
+    public void openRecordTab (MNode node)
     {
-        int searchIdx = indexOfTabByKey (SEARCH_TAB_KEY);
-        if (searchIdx == -1)
+        int index = indexOfTabByKey ("Model");
+        if (index >= 0)
         {
-            final SearchPanel pnlSearch = new SearchPanel (uiController);
-            pnlSearch.addSelectRecordListener (new ChangeListener ()
-            {
-                public void stateChanged (ChangeEvent e)
-                {
-                    List<MNode> doc = pnlSearch.getSelectedRecords ();
-                    uiController.openRecord (doc.get (0));
-                }
-            });
-            insertTab (SEARCH_TAB_KEY, ImageUtil.getImage ("mag.gif"), pnlSearch, null, 0);
-            searchIdx = 0;
+            panelEdit.loadFromRecord (node);
+            setSelectedIndex (index);
         }
-        setSelectedIndex (searchIdx);
-        SearchPanel pnlSearch = (SearchPanel) getComponentAt (searchIdx);
-        pnlSearch.doFocus ();
-    }
-
-    public void openRecordTabOrient(NDoc doc) {
-        String tabKey;
-        String typeName = doc.getClassName();
-        if(doc.isNew()) {
-            tabKey = typeName + "-NEW-" + doc.getId();// -NEW- used later to determine if temp
-        } else {
-            tabKey = typeName + "-" + doc.getId();
-        }
-        int index = indexOfTabByKey(tabKey);
-        if(index == -1) {
-            String title;
-            if(doc.isNew()) {
-                title = "NEW";
-            } else {
-                title = getOrientTabTitle(doc);
-            }
-            String tip = doc.isNew() ? "New " + typeName : title;
-            RecordEditPanel pnlEdit = makeRecordTabPanelOrient(doc);
-            addTab(title, doc.getIcon(), pnlEdit, tip, tabKey);
-            index = indexOfTabByKey(tabKey);
-            if (doc.isNew ()) setDirtyAt (index, true);
-            setSelectedIndex(index);
-            pnlEdit.doInitialFocus();
+        else  // Model tab not open yet. TODO: create and insert model tab at startup, just like Search tab is now. (Combine Search and Model into one tab.)
+        {
+            RecordHandler handler = UMFPluginManager.getHandler ("Model");
+            panelEdit = handler.getRecordEditPanel (uiController, node);
+            addTab ("Model", handler.getIcon (), panelEdit, "Model", "Model");
+            index = indexOfTabByKey ("Model");
+            setSelectedIndex (index);
+            panelEdit.doInitialFocus ();
             // TODO: post layout not always called when expected (not actually layed out yet).
-            pnlEdit.postLayout();
-//            uiController.addRecent(bean); TODO
-        } else {
-            setSelectedIndex(index);
-        }
-    }
-
-    private String getOrientTabTitle(NDoc doc) {
-        String beanTitle = doc.getTitle();
-        if(beanTitle == null || beanTitle.trim().equals("")) {
-            beanTitle = "(no title)";
-        }
-        if(beanTitle.length() > 20) {
-            beanTitle = beanTitle.substring(0, 20) + "...";
-        }
-        return beanTitle;
-    }
-
-    private RecordEditPanel makeRecordTabPanelOrient(final NDoc doc) {
-        final RecordEditPanel pnlRecord = recordTabFactoryOrient(doc);
-        pnlRecord.addDirtyChangedNotifier(new ChangeListener() {
-            public void stateChanged(ChangeEvent e) {
-                int index = indexOfComponent(pnlRecord);
-                // This is needed because of the way the attemptToSave* methods work.  They
-                // validate/verify, kick off a thread to do the saving and then immediately
-                // return, allowing a close operation to also immediately remove the tab.
-                // Then the save thread saves and calls makeClean, which changes the dirty
-                // state of a panel that no longer has a tab holding it.  Thus the index != -1.
-                // Maybe could redesign this some day.  Purpose of course is to allow the
-                // UI thread not to lock up during the save, and get mouse/progress bar activated
-                // during save.
-                if(index != -1) {
-                    if(!pnlRecord.isDirty()) {
-                        String beanTitle = getOrientTabTitle(doc);
-                        setTitleAt(index, beanTitle);
-                        String curKey = getKeyAt(index);
-                        if(isTempKey(curKey)) {
-                            String typeName = doc.getClassName();
-                            String newKey = typeName + "-" + doc.getId();
-                            changeKey(curKey, newKey);
-                        }
-                    }
-                    setDirtyAt(index, pnlRecord.isDirty());
-                    updateUI();
-                }
-            }
-        });
-        return pnlRecord;
-    }
-
-    private RecordEditPanel recordTabFactoryOrient(NDoc doc) {
-        RecordHandler handler = doc.getHandler();
-        return handler.getRecordEditPanel(uiController, doc);
-    }
-
-    // Uses object identity for comparison because of the way
-    // that the record panels maintain their state (just have
-    // single instance of a bean throughout the life of the
-    // panel).  Also enables this to remove new records that
-    // may have random tab keys.
-    public void closeTab(final NDoc record) {
-        for(int i = getTabCount() - 1; i >= 1; i--) {
-            Component c = getComponentAt(i);
-            if(c instanceof RecordEditPanel) {
-                if(((RecordEditPanel) c).getRecord() == record) {
-                    closeTab(i);
-                }
-            }
+            panelEdit.postLayout ();
         }
     }
 
@@ -269,37 +155,6 @@ public class MainTabbedPane extends AdvancedTabbedPane
             historyRemoveEntry (removedKey);
             removeTabAt (i);
         }
-    }
-
-    //////////
-    // SAVE //
-    //////////
-
-    public String saveCurrentTab() {
-        return saveTab(getSelectedIndex());
-    }
-
-    public boolean saveAllTabs() {
-        boolean hadFailure = false;
-        for(int i = 0; i < getTabCount(); i++) {
-            if(saveTab(i) != null) {
-                hadFailure = true;
-            }
-        }
-        return !hadFailure;
-    }
-
-    private String saveTab(int i) {
-        if(isDirtyAt(i)) {
-            Component c = getComponentAt(i);
-            if(c instanceof RecordEditPanel) {
-                String msg = ((RecordEditPanel) c).attemptToSaveSynchronous();
-                if(msg != null) {
-                    return msg;
-                }
-            }
-        }
-        return null;
     }
 
 

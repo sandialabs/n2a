@@ -22,40 +22,19 @@ public class NodeAnnotation extends NodeBase
     public String name;
     public String value;
 
-
-    /////////////////
-    // CONSTRUCTOR //
-    /////////////////
-
-    public NodeAnnotation (String namedValue)
-    {
-        setAnnotation (namedValue);
-    }
-
     public NodeAnnotation (String name, String value)
     {
         this.name  = name;
         this.value = value;
     }
 
-    public void setAnnotation (String namedValue)
+    public void parseEditedString (String input)
     {
-        String[] parts = namedValue.split ("=", 2);
-        if (parts.length < 2)
-        {
-            name = namedValue;
-            value = null;
-        }
-        else
-        {
-            name = parts[0];
-            value = parts[1];
-        }
+        String[] parts = input.split ("=", 2);
+        name = parts[0];
+        if (parts.length > 1) value = parts[1];
+        else                  value = "";
     }
-
-    ////////////////
-    // OVERRIDDEN //
-    ////////////////
 
     @Override
     public Icon getIcon (boolean expanded)
@@ -66,7 +45,7 @@ public class NodeAnnotation extends NodeBase
     @Override
     public String toString ()
     {
-        if (value == null  ||  value.isEmpty ()) return name;
+        if (value.isEmpty ()) return name;
         return name + " = " + value;
     }
 }

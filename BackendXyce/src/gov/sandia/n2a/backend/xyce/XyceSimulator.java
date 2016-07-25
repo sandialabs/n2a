@@ -7,8 +7,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.xyce;
 
-import gov.sandia.n2a.data.ModelOrient;
 import gov.sandia.n2a.eqset.EquationSet;
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ensemble.params.specs.ParameterSpecification;
 import gov.sandia.umf.platform.plugins.Simulation;
 import gov.sandia.umf.platform.plugins.extpoints.Simulator;
@@ -39,8 +39,9 @@ public class XyceSimulator implements Simulator
     {
         try
         {
-            ModelOrient mo = (ModelOrient) model;
-            EquationSet s = new EquationSet (mo.getSource ());
+            MNode n = (MNode) model;
+            if (n == null) return null;
+            EquationSet s = new EquationSet (n);
             if (s.name.length () < 1) s.name = "Model";
             s.resolveLHS ();
             return s.getOutputParameters ();

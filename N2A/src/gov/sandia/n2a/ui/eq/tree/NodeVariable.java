@@ -8,7 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.eq.tree;
 
-import gov.sandia.n2a.eqset.EquationEntry;
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import java.awt.Color;
@@ -18,15 +18,15 @@ import javax.swing.ImageIcon;
 
 import replete.gui.controls.simpletree.NodeBase;
 
-public class NodeEquation extends NodeBase
+public class NodeVariable extends NodeBase
 {
     protected static ImageIcon icon = ImageUtil.getImage("expr.gif");
 
-    public EquationEntry equation;
+    public Variable variable;
 
-    public NodeEquation (EquationEntry equation)
+    public NodeVariable (Variable variable)
     {
-        this.equation = equation;
+        this.variable = variable;
     }
 
     public void parseEditedString (String input)
@@ -57,6 +57,12 @@ public class NodeEquation extends NodeBase
     @Override
     public String toString ()
     {
-        return equation.toString ();
+        String result = variable.nameString ();
+        if (variable.equations.size () > 0)
+        {
+            result = result + "=" + variable.combinerString ();
+            if (variable.equations.size () == 1) result = result + variable.equations.first ().toString ();  // Otherwise, we use child nodes to display the equations.
+        }
+        return result;
     }
 }

@@ -8,28 +8,38 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.umf.platform.plugins;
 
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
+import gov.sandia.umf.platform.db.AppData;
+import gov.sandia.umf.platform.db.MNode;
+import gov.sandia.umf.platform.db.MVolatile;
 import gov.sandia.umf.platform.ensemble.params.ParameterSet;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
 import gov.sandia.umf.platform.plugins.extpoints.Simulator;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map.Entry;
 
 import replete.plugins.PluginManager;
 import replete.xstream.XStreamWrapper;
 
-public class RunEnsembleOrient implements RunEnsemble {
-    private NDoc source;
-    private List<NDoc> runDocs;
+public class RunEnsembleOrient implements RunEnsemble
+{
+    private MNode source;
+    private List<MNode> runDocs;
     private List<Run> runs;
 
-    public RunEnsembleOrient(NDoc src) {
+    public RunEnsembleOrient (MNode src)
+    {
         source = src;
-        runDocs = source.getAndSetValid("runs", new ArrayList<Run>(), List.class);
-        runs = new ArrayList<Run>();
-        for(NDoc runDoc : runDocs) {
-            runs.add(new RunOrient(runDoc));
+        Iterator<Entry<String, MNode>> i = source.getNode ("runs").iterator ();
+        while (i.hasNext ())
+        {
+            Entry<String, MNode> e = i.next ();
+            MNode runDoc = e.getValue ();
+            runDocs.add (runDoc);
+            runs.add (new RunOrient (runDoc));
         }
     }
 
@@ -37,28 +47,27 @@ public class RunEnsembleOrient implements RunEnsemble {
      * 'groups' is for model and simulation parameters that the framework will manage
      * 'simGroups' is for model parameters that the Simulator will manage 
      */
-    public RunEnsembleOrient(PlatformRecord modelCopy, String label,
+    public RunEnsembleOrient (PlatformRecord modelCopy, String label,
             String environment, String simulator, ParameterSpecGroupSet groups,
             ParameterSpecGroupSet simGroups,
-            List<String> outputExpressions) {
+            List<String> outputExpressions)
+    {
         // Create database record for run ensemble, and give it a reference to the model record.
-        source = new NDoc("gov.sandia.umf.platform$RunEnsemble");
-        source.set("templateModel", modelCopy.getSource());
-        source.set("label", label);
-        source.set("environment", environment);
-        source.set("simulator", simulator);
-        source.set("paramSpecs", XStreamWrapper.writeToString(groups));
-        source.set("simParamSpecs", XStreamWrapper.writeToString(simGroups));
-        source.set("outputExpressions", outputExpressions);
+        source = new MVolatile ();
+        source.set (modelCopy.getSource().get (), "model");
+        source.set (label,                        "label");
+        source.set (environment,                  "environment");
+        source.set (simulator,                    "simulator");
+        source.set (XStreamWrapper.writeToString(groups),    "paramSpecs");
+        source.set (XStreamWrapper.writeToString(simGroups), "simParamSpecs");
+        source.set (outputExpressions,            "outputExpressions");
         // runCount is the total # of runs; frameworkRunCount will be less for
         // xyce simulations that include parameter sweeps 
-        source.set("runCount", simGroups.size()==0? groups.getRunCount() :
-            groups.getRunCount()*simGroups.getRunCount());
-        source.set("frameworkRunCount", groups.getRunCount());
-        source.save();
-        source.dumpDebug("RunEnsembleOrient constructor");
-        runDocs = new ArrayList<NDoc>();
-        runs = new ArrayList<Run>();
+        source.set (simGroups.size () == 0 ? groups.getRunCount () : groups.getRunCount ()*simGroups.getRunCount (), "runCount");
+        source.set (groups.getRunCount(),         "frameworkRunCount");
+
+        runDocs = new ArrayList<MNode> ();
+        runs = new ArrayList<Run> ();
     }
 
     @Override
@@ -67,13 +76,14 @@ public class RunEnsembleOrient implements RunEnsemble {
     }
 
     @Override
-    public NDoc getSource() {
+    public MNode getSource() {
         return source;
     }
 
     @Override
-    public NDoc getTemplateModelDoc() {
-        return source.get("templateModel");
+    public MNode getTemplateModelDoc ()
+    {
+        return AppData.getInstance ().models.child (source.get ("model"));
     }
 
     @Override
@@ -116,18 +126,28 @@ public class RunEnsembleOrient implements RunEnsemble {
     }
 
     @Override
-    public List<String> getOutputExprs() {
-        return source.getAndSetValid("outputExpressions", new ArrayList<String>(), List.class);
+    public List<String> getOutputExprs ()
+    {
+        List<String> result = new ArrayList<String> ();
+        Iterator<Entry<String, MNode>> i = source.getNode ("outputExpressions").iterator ();
+        while (i.hasNext ())
+        {
+            Entry<String, MNode> e = i.next ();
+            result.add (e.getKey ());  // assuming all "output expression" are unique
+        }
+        return result;
     }
 
     @Override
-    public long getTotalRunCount() {
-        return ((Number) source.getAndSetValid("runCount", 0, Number.class)).longValue();
+    public long getTotalRunCount ()
+    {
+        return source.getDefault (0, "runCount");
     }
 
     @Override
-    public long getFrameworkRunCount() {
-        return ((Number) source.getAndSetValid("frameworkRunCount", 0, Number.class)).longValue();
+    public long getFrameworkRunCount ()
+    {
+        return source.getDefault (0, "frameworkRunCount");
     }
 
     @Override
@@ -136,10 +156,11 @@ public class RunEnsembleOrient implements RunEnsemble {
     }
     
     @Override
-    public void addRun(Run run) {
-        runs.add(run);
-        runDocs.add(run.getSource());
-        source.set("runs", runDocs);
-        source.save();
+    public void addRun (Run run)
+    {
+        runs.add (run);
+        runDocs.add (run.getSource ());
+        MNode runsNode = source.getNode ("runs");
+        runsNode.getNode (String.valueOf (runsNode.length ())).merge (run.getSource ());
     }
 }

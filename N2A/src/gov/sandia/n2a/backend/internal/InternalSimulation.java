@@ -7,6 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.internal;
 
+import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.umf.platform.UMF;
@@ -95,7 +96,7 @@ public class InternalSimulation implements Simulation
         if (e.name.length () < 1) e.name = "Model";  // because the default is for top-level equation set to be anonymous
 
         // TODO: fix run ensembles to put metadata directly in a special derived part
-        e.metadata.putAll (metadata);  // parameters pushed by run system override any we already have
+        for (Entry<String,String> m : metadata.entrySet ()) e.setNamedValue (m.getKey (), m.getValue ());
 
         digestModel (e, runState.jobDir);
         runState.digestedModel = e;
@@ -128,6 +129,7 @@ public class InternalSimulation implements Simulation
             System.setProperty ("user.dir", new File (jobDir).getAbsolutePath ());
         }
 
+        e.resolveConnectionBindings ();
         e.flatten ();
         e.addSpecials ();  // $index, $init, $live, $n, $t, $t', $type
         e.fillIntegratedVariables ();

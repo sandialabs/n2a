@@ -7,23 +7,16 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.connect.orientdb.ui;
 
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.HelpLabels;
 import gov.sandia.umf.platform.ui.MainFrame;
 import gov.sandia.umf.platform.ui.UIController;
-import gov.sandia.umf.platform.ui.images.ImageUtil;
-
 import java.awt.Color;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-
 import javax.swing.JButton;
-import javax.swing.JCheckBox;
 import javax.swing.JPanel;
 import javax.swing.event.ChangeListener;
 
 import replete.event.ChangeNotifier;
-import replete.gui.controls.IconButton;
-import replete.util.Lay;
 
 public abstract class RecordEditDetailPanel extends JPanel {
 
@@ -40,7 +33,7 @@ public abstract class RecordEditDetailPanel extends JPanel {
     // Core
 
     protected UIController uiController;
-    protected NDoc record;
+    protected MNode record;
 
     // Every detail panel has a reference to the shared
     // part object and can edit it at will.
@@ -63,9 +56,9 @@ public abstract class RecordEditDetailPanel extends JPanel {
     // CONSTRUCTOR //
     /////////////////
 
-    public RecordEditDetailPanel(UIController uic, NDoc rec) {
+    public RecordEditDetailPanel(UIController uic, MNode record2) {
         uiController = uic;
-        record = rec;
+        record = record2;
     }
 
 
@@ -73,7 +66,7 @@ public abstract class RecordEditDetailPanel extends JPanel {
     // MUTATOR //
     /////////////
 
-    public void setRecord(NDoc p) {
+    public void setRecord(MNode p) {
         record = p;
         reload();
     }

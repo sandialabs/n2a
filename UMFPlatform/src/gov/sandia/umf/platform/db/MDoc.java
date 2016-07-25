@@ -24,7 +24,7 @@ public class MDoc extends MPersistent
 {
     // Note: MVolatile.value stores the path, since we don't allow a document node to have a top-level value.
 
-    boolean needsWrite; // indicates that this node has changed since it was last read from disk (and therefore should be written out again)
+    public boolean needsWrite; // indicates that this node has changed since it was last read from disk (and therefore should be written out again)
 
     // Note: "needRead" is indicated by whether the MNodeRAM.children collection is null. If it is non-null, the read has happened.
     // If children exists but is empty, then either the file was actually empty or it does not yet exist.
@@ -40,10 +40,23 @@ public class MDoc extends MPersistent
         needsWrite = true;
     }
 
+    public void delete ()
+    {
+        if (parent == null) return;
+        parent.clear (value);  // value holds our file name, and thus our index
+    }
+
     public MNode child (String index)
     {
         if (children == null) load ();  // redundant with the guard in load(), but should save time in the common case that file is already loaded
         return children.get (index);
+    }
+
+    public void set (String value)
+    {
+        // Move the file on disk and in the MDir's children collection.
+        // To avoid an infinite loop, MDir.set(String,String) does not call this function.
+        ((MDir) parent).set (value, this.value);
     }
 
     public MNode set (String value, String index)

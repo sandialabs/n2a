@@ -130,13 +130,6 @@ public class MainFrame extends EscapeFrame implements HelpCapableWindow {
         glassPane.setVisible(false);
         setGlassPane(glassPane);
 
-        addAttemptToCloseListener(new CommonWindowClosingListener() {
-            public void stateChanged(CommonWindowClosingEvent e) {
-                if(!uiController.okToCloseAllTabs("exit the application")) {
-                    e.cancelClose();
-                }
-            }
-        });
         addClosingListener(new ChangeListener() {
             public void stateChanged(ChangeEvent e) {
                 for(CommonWindow win : getAllChildWindows()) {
@@ -152,13 +145,6 @@ public class MainFrame extends EscapeFrame implements HelpCapableWindow {
         });
         updateWindowMenu();
         addChildWindowHandlers();
-
-        KeyStroke stroke = KeyStroke.getKeyStroke(KeyEvent.VK_F4, InputEvent.CTRL_DOWN_MASK);
-        getRootPane().registerKeyboardAction(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.closeCurrentTab();
-            }
-        }, stroke, JComponent.WHEN_IN_FOCUSED_WINDOW);
     }
 
     private void updateWindowMenu() {
