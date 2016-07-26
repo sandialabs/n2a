@@ -20,7 +20,7 @@ import replete.gui.controls.simpletree.NodeBase;
 
 public class NodeVariable extends NodeBase
 {
-    protected static ImageIcon icon = ImageUtil.getImage("expr.gif");
+    protected static ImageIcon icon = ImageUtil.getImage ("comp.gif");
 
     public Variable variable;
 

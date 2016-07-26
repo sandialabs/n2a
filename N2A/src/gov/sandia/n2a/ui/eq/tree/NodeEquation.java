@@ -20,7 +20,7 @@ import replete.gui.controls.simpletree.NodeBase;
 
 public class NodeEquation extends NodeBase
 {
-    protected static ImageIcon icon = ImageUtil.getImage("expr.gif");
+    protected static ImageIcon icon = ImageUtil.getImage ("pound.gif");
 
     public EquationEntry equation;
 

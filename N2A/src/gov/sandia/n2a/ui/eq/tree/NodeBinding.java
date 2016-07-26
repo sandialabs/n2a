@@ -17,7 +17,7 @@ import replete.gui.controls.simpletree.NodeBase;
 
 public class NodeBinding extends NodeBase
 {
-    protected static ImageIcon icon = ImageUtil.getImage("layer.gif");
+    protected static ImageIcon icon = ImageUtil.getImage ("connect.gif");
 
     public String name;
     public String alias;

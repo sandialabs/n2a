@@ -18,12 +18,8 @@ import gov.sandia.n2a.ui.eq.tree.NodeReference;
 import gov.sandia.n2a.ui.eq.tree.NodeEquation;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 import gov.sandia.umf.platform.UMF;
-import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.UIController;
-import gov.sandia.umf.platform.ui.images.ImageUtil;
-import gov.sandia.umf.platform.ui.search.SearchType;
-
 import java.awt.Component;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,15 +27,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.TreeSet;
 
 import javax.swing.JDialog;
 import javax.swing.JFrame;
-import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeListener;
-import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 
 import replete.event.ChangeNotifier;
@@ -47,7 +40,6 @@ import replete.gui.controls.simpletree.NodeBase;
 import replete.gui.controls.simpletree.SimpleTree;
 import replete.gui.controls.simpletree.TModel;
 import replete.gui.controls.simpletree.TNode;
-import replete.gui.windows.common.CommonFrame;
 
 public class EquationTreeEditContext
 {
@@ -81,16 +73,16 @@ public class EquationTreeEditContext
 
     public void reload (MNode doc)
     {
-        insertEquationTree (tree.getRoot (), doc);
+        buildEquationTree (tree.getRoot (), doc);
     }
 
-    public void insertEquationTree (TNode targetNode, MNode doc)
+    public void buildEquationTree (TNode targetNode, MNode doc)
     {
         try
         {
             EquationSet s = new EquationSet (doc);
             s.resolveConnectionBindings ();
-            insertEquationTree (targetNode, s);
+            buildEquationTree (targetNode, s);
         }
         catch (Exception e)
         {
@@ -99,7 +91,7 @@ public class EquationTreeEditContext
         }
     }
 
-    public void insertEquationTree (TNode targetNode, EquationSet s)
+    public void buildEquationTree (TNode targetNode, EquationSet s)
     {
         targetNode.removeAllChildren ();
 
@@ -149,28 +141,31 @@ public class EquationTreeEditContext
             if (result != null)
             {
                 unsorted.remove (result);
-                insertVariableTree (targetNode, result);
+                TNode vnode = new TNode (new NodeVariable (result));
+                model.insertNodeInto (vnode, targetNode, targetNode.getChildCount ());
+                buildVariableTree (vnode);
             }
         }
         for (Variable v : unsorted)  // output everything else
         {
-            insertVariableTree (targetNode, v);
+            TNode vnode = new TNode (new NodeVariable (v));
+            model.insertNodeInto (vnode, targetNode, targetNode.getChildCount ());
+            buildVariableTree (vnode);
         }
 
         for (EquationSet p : s.parts)
         {
             TNode node = new TNode (new NodePart (p));
             model.insertNodeInto (node, targetNode, targetNode.getChildCount ());
-            insertEquationTree (node, p);
+            buildEquationTree (node, p);
         }
     }
 
-    public void insertVariableTree (TNode targetNode, Variable v)
+    public void buildVariableTree (TNode vnode)
     {
-        targetNode.removeAllChildren ();
+        vnode.removeAllChildren ();
 
-        TNode vnode = new TNode (new NodeVariable (v));
-        model.insertNodeInto (vnode, targetNode, targetNode.getChildCount ());
+        Variable v = ((NodeVariable) vnode.getUserObject ()).variable;
         if (v.equations.size () > 1)  // for a single equation, the variable line itself suffices
         {
             for (EquationEntry e : v.equations)
@@ -184,15 +179,13 @@ public class EquationTreeEditContext
             TNode mnode = new TNode (new NodeAnnotation (m.getKey (), m.getValue ()));
             model.insertNodeInto (mnode, vnode, vnode.getChildCount ());
         }
-        MNode references = v.source.child ("$reference");
+        MNode references = v.source.child ("$reference");  // TODO: should have collated references in the Variable object
         if (references != null  &&  references.length () > 0)
         {
-            TNode dollarnode = new TNode (new NodeNone ("$reference"));
-            model.insertNodeInto (dollarnode, targetNode, targetNode.getChildCount ());
             for (Entry<String,MNode> r : references)
             {
                 TNode rnode = new TNode (new NodeReference (r.getKey (), r.getValue ().get ()));
-                model.insertNodeInto (rnode, dollarnode, dollarnode.getChildCount ());
+                model.insertNodeInto (rnode, vnode, vnode.getChildCount ());
             }
         }
     }
@@ -235,7 +228,7 @@ public class EquationTreeEditContext
                     else  // Incremental change to existing EquationSet tree and gui tree
                     {
                         s.update (v);
-                        Variable      newVariable = s.find (v);
+                        Variable      storeedVariable = s.find (v);
                         EquationEntry newEquation = v.equations.first ();
 
                         // Do we have an existing NodeVariable that needs to be updated?
@@ -253,7 +246,7 @@ public class EquationTreeEditContext
 
                         if (existingTreeNodeVariable == null)  // new variable, so add single line
                         {
-                            NodeVariable newNodeVariable = new NodeVariable (newVariable);
+                            NodeVariable newNodeVariable = new NodeVariable (storeedVariable);
                             TNode newTreeNode = model.append (containingNodePart, newNodeVariable);
                             tree.select (newTreeNode);
                         }
@@ -280,8 +273,8 @@ public class EquationTreeEditContext
                                 }
                                 else  // conditionals are different, so convert to multi-line equation
                                 {
-                                    existingNodeVariable.variable = newVariable;
-                                    insertVariableTree (existingTreeNodeVariable, newVariable);
+                                    existingNodeVariable.variable = storeedVariable;
+                                    buildVariableTree (existingTreeNodeVariable);
                                 }
                                 tree.select (existingTreeNodeVariable);
                             }
@@ -328,7 +321,6 @@ public class EquationTreeEditContext
                 if (parts.length > 1) value = parts[1];
                 else                  value = "";
 
-                NodeAnnotation newNodeAnnotation = new NodeAnnotation (name, value);
                 TNode target;
                 if (nearestVariable != null)
                 {

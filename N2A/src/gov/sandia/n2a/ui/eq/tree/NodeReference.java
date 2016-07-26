@@ -20,7 +20,7 @@ import replete.gui.controls.simpletree.NodeBase;
 
 public class NodeReference extends NodeBase
 {
-    protected static ImageIcon icon = ImageUtil.getImage("book.gif");
+    protected static ImageIcon icon = ImageUtil.getImage ("book.gif");
 
     public String index;
     public String comment;

@@ -17,7 +17,7 @@ import replete.gui.controls.simpletree.NodeBase;
 
 public class NodeAnnotation extends NodeBase
 {
-    public static ImageIcon icon = ImageUtil.getImage ("about.gif");
+    public static ImageIcon icon = ImageUtil.getImage ("edit.gif");
 
     public String name;
     public String value;

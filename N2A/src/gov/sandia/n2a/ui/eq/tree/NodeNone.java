@@ -16,7 +16,7 @@ import replete.gui.controls.simpletree.NodeBase;
 
 public class NodeNone extends NodeBase
 {
-    protected static ImageIcon icon = ImageUtil.getImage ("none.gif");
+    protected static ImageIcon icon = ImageUtil.getImage ("properties.gif");
     public String label;
 
     public NodeNone (String a)
