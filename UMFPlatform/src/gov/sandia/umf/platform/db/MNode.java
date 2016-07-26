@@ -232,7 +232,7 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
         c.set (value, deeperIndices[last]);
     }
 
-    public<T extends Object> void set (T value, String... indices)
+    public void set (Object value, String... indices)
     {
         if (indices.length == 0)
         {

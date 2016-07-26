@@ -340,7 +340,7 @@ public class EquationTreePanel extends JPanel
             }
 
             final Simulator sim = simulator;
-            Run run = new RunOrient (0.0, "", null, sim, User.getName (), "Pending", null, model);  // Most of these are useless properties, now handled by backend reading metadata from model.
+            final Run run = new RunOrient (0.0, "", null, sim, User.getName (), "Pending", null, model);  // Most of these are useless properties, now handled by backend reading metadata from model.
 
             uiController.getParentRef ().waitOn ();
             final CommonThread t = new CommonThread ()
@@ -407,7 +407,7 @@ public class EquationTreePanel extends JPanel
     // ACCESSORS / MUTATORS //
     //////////////////////////
 
-    public void setEquations (MNode eqs)
+    public void setEquations (final MNode eqs)
     {
         GUIUtil.safe (new Runnable ()
         {
