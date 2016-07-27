@@ -1,23 +1,32 @@
 N2A.schema=1
-name=Channel Na
+$metadata
+ name=Channel Na
 parent=$inherit("Channel")
 I = G * m ^ 3 * h * (E - V)
 m' = alpha_m * (1 - m) - beta_m * m
- xyce.internalVar="m"
+ $metadata
+  xyce.internalVar="m"
 h' = alpha_h * (1 - h) - beta_h * h
- xyce.internalVar="h"
+ $metadata
+  xyce.internalVar="h"
 alpha_m =: (25 - V) / (10 * (exp((25 - V) / 10) - 1))
- xyce.ignore
+ $metadata
+  xyce.ignore
 beta_m =: 4 * exp(-V / 18)
- xyce.ignore
+ $metadata
+  xyce.ignore
 alpha_h =: 0.07 * exp(-V / 20)
- xyce.ignore
+ $metadata
+  xyce.ignore
 beta_h =: 1 / (exp((30 - V) / 10) + 1)
- xyce.ignore
+ $metadata
+  xyce.ignore
 G = 120
- xyce.param="gNa"
+ $metadata
+  xyce.param="gNa"
 E = 115
- xyce.param="eNa"
+ $metadata
+  xyce.param="eNa"
 m = 0.05 @ $init
 h = 0.31 @ $init
 

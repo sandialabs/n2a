@@ -1,30 +1,42 @@
 N2A.schema=1
-name=Neuron Izhikevich
-backend.xyce.device=neuron7
+$metadata
+ name=Neuron Izhikevich
+ xyce.device=neuron7
 v' = 1.0 / Cm * (k * (v - vr) * (v - vt) - u + I)
- xyce.nodeIndex=1
+ $metadata
+  xyce.nodeIndex=1
 u' = a * (b * (v - vr) - u)
- xyce.internalVar="u"
+ $metadata
+  xyce.internalVar="u"
 vt = -0.04
- xyce.param="Vt"
+ $metadata
+  xyce.param="Vt"
 Cm = 5.0E-11
- xyce.param="memC"
+ $metadata
+  xyce.param="memC"
 vr = -0.07
- xyce.param="Vr"
+ $metadata
+  xyce.param="Vr"
 k = 1.0E-7
- xyce.param="k"
+ $metadata
+  xyce.param="k"
 I = 0.0
 a = 100.0
- xyce.param="a"
+ $metadata
+  xyce.param="a"
 b = -1.0E-10
- xyce.param="b"
+ $metadata
+  xyce.param="b"
 c = -0.045
- xyce.param="c"
+ $metadata
+  xyce.param="c"
 d = 1.0E-10
- xyce.param="d"
+ $metadata
+  xyce.param="d"
 v = c @ v > v_reset
- xyce.ignore
+ $metadata
+  xyce.ignore
 u = u + d @ v > v_reset
- xyce.ignore
+ $metadata
+  xyce.ignore
 v_reset = 0.035
-

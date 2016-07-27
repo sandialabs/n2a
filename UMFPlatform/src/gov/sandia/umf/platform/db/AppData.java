@@ -69,6 +69,7 @@ public class AppData
                 reader.readLine ();  // dispose of schema line
                 doc.read (reader);
                 reader.close ();
+                doc.save ();  // before the hard reference goes out of scope
             }
         }
         catch (IOException e)

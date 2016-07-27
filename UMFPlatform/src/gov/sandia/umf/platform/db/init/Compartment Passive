@@ -1,10 +1,14 @@
 N2A.schema=1
-name=Compartment Passive
+$metadata
+ name=Compartment Passive
 V' = (G_m * (V_rest - V) + I_inj) / C_m
 G_m = 0.3
- xyce.param="gMem"
+ $metadata
+  xyce.param="gMem"
 V_rest = 10.613
- xyce.param="eLeak"
+ $metadata
+  xyce.param="eLeak"
 C_m = 1
- xyce.param="cMem"
+ $metadata
+  xyce.param="cMem"
 

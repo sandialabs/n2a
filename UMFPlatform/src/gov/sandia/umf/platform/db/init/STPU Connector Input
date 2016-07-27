@@ -1,6 +1,7 @@
 N2A.schema=1
-name=STPU Connector Input
-stpu.component=stpu.inp2lif
+$metadata
+ name=STPU Connector Input
+ stpu.component=stpu.inp2lif
 A=$connect("STPU Input")
 B=$connect("Neuron LIF")
 w=1.0

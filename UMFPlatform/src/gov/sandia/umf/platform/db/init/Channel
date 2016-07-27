@@ -1,4 +1,5 @@
 N2A.schema=1
-name=Channel
+$metadata
+ name=Channel
 $up.V' =+ I / C_m
 

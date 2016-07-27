@@ -1,17 +1,17 @@
 N2A.schema=1
-name=Neuron Firing-Rate
+$metadata
+ name=Neuron Firing-Rate
+ notes=|
+   Sigmoid f-I firing rate relationship
+   I_inj = input current; 0 by default
+   V_mean = mid-point of f-V sigmoid (V for 50% firing rate)
+   V_thresh = approximate voltage at which neuron starts firing
+   f_max = max firing rate
+   dfdV = slope of firing rate at midpoint voltage
+   V_rest = voltage at which neuron returns to in absence of input
+   tau = time constant of neuron re-polarization
 f = f_max * ((1.0 + tanh((V - V_mean) * dfdV)) / 2.0) ^ 2.0 / 1000.0
 V' = -1.0 / tau * (V - V_rest) + I_inj
 V_mean = V_thresh + 1.0 / dfdV
 V = V_rest @ init
 I_inj = 0.0
-notes=|
-  Sigmoid f-I firing rate relationship
-  I_inj = input current; 0 by default
-  V_mean = mid-point of f-V sigmoid (V for 50% firing rate)
-  V_thresh = approximate voltage at which neuron starts firing
-  f_max = max firing rate
-  dfdV = slope of firing rate at midpoint voltage
-  V_rest = voltage at which neuron returns to in absence of input
-  tau = time constant of neuron re-polarization
-

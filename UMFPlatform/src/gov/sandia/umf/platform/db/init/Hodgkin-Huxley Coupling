@@ -1,5 +1,6 @@
 N2A.schema=1
-name=Hodgkin-Huxley Coupling
+$metadata
+ name=Hodgkin-Huxley Coupling
 A=$connect("Hodgkin-Huxley Compartment")
 B=$connect("Hodgkin-Huxley Compartment")
 A.V' =+ (B.V - A.V) / (A.C_m * R)

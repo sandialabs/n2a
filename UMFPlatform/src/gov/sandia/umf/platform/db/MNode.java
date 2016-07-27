@@ -349,9 +349,28 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
             String value;
             if (pieces.length > 1) value = pieces[1].trim ();
             else                   value = "";
+            if (value.startsWith ("|"))  // go into string reading mode
+            {
+                StringBuilder block = new StringBuilder ();
+                reader.getNextLine ();
+                if (reader.whitespaces > whitespaces)
+                {
+                    int blockIndent = reader.whitespaces;
+                    while (true)
+                    {
+                        block.append (reader.line.substring (blockIndent));
+                        reader.getNextLine ();
+                        if (reader.whitespaces < blockIndent) break;
+                        block.append (String.format ("%n"));
+                    }
+                }
+                value = block.toString ();
+            }
+            else
+            {
+                reader.getNextLine ();
+            }
             MNode child = set (value, index);  // Create a child with the given value
-
-            reader.getNextLine ();
             if (reader.whitespaces > whitespaces) child.read (reader, reader.whitespaces);  // Recursively populate child. When this call returns, reader.whitespaces <= whitespaces in this function, because that is what ends the recursion.
             if (reader.whitespaces < whitespaces) return;  // end recursion
         }
@@ -372,7 +391,7 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
         public void getNextLine () throws IOException
         {
             // Scan for non-empty line
-            // A pure comment line will be thrown away, but a line that contains a comment and other data will be passed on in full.
+            // Only ignore lines which start with a comment character, or which are perfectly empty.
             while (true)
             {
                 line = reader.readLine ();
@@ -381,15 +400,9 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
                     whitespaces = -1;
                     return;
                 }
-                int comment = line.indexOf ('#');  // find comment character, if it exists
-                if (comment == -1)  // no comment
-                {
-                    if (!                        line.trim ().isEmpty ()) break;  // got a non-empty line
-                }
-                else
-                {
-                    if (! line.substring (0, comment).trim ().isEmpty ()) break;  // ditto
-                }
+                if (line.isEmpty ()) continue;
+                if (line.startsWith ("#")) continue;
+                break;
             }
 
             // Count leading whitespace
@@ -430,7 +443,22 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
         for (Entry<String,MNode> e : this)  // if this node has no children, nothing at all is written
         {
             MNode child = e.getValue ();
-            writer.write (String.format ("%s%s=%s%n", space, e.getKey (), child.get ()));
+            String index = e.getKey ();
+            String value = child.get ();
+            String newLine = String.format ("%n");
+            if (value.isEmpty ())
+            {
+                writer.write (String.format ("%s%s%n", space, index));
+            }
+            else
+            {
+                if (value.contains (newLine))  // go into extended text write mode
+                {
+                    value = value.replace (newLine, newLine + space + "  ");
+                    value = "|" + newLine + space + "  " + value;
+                }
+                writer.write (String.format ("%s%s=%s%n", space, index, value));
+            }
             child.write (writer, space2);
         }
     }

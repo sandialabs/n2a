@@ -49,6 +49,11 @@ public class MDir extends MNode
 	    root.mkdirs ();  // We take the liberty of forcing the dir to exist.
 	}
 
+	/**
+        @TODO There is a potential race condition with MDoc.finalize(). If the child() call
+        comes before the garbage-collected object is done writing its state to disk,
+        we might read an old version of the file.
+	**/
 	public MNode child (String index)
     {
 	    MDoc result = null;
@@ -141,6 +146,7 @@ public class MDir extends MNode
             if (suffix != null) path = new File (path, suffix);
             result = new MDoc (this, path.toString ());
             children.put (index, new SoftReference<MDoc> (result));
+            result.save ();  // simplifies iterator() by not forcing us to check for new unsaved docs in children
         }
         else  // existing document; move if needed
         {
@@ -171,8 +177,17 @@ public class MDir extends MNode
         String[] fileNames = root.list ();  // This may cost a lot of time in some cases. However, N2A should never have more than about 10,000 models in a dir.
         for (String index : fileNames)
         {
-            MDoc doc = new MDoc (this, index);
-            children.put (index, new SoftReference<MDoc> (doc));
+            MDoc doc;
+            SoftReference<MDoc> ref = children.get (index);
+            if (ref == null)
+            {
+                doc = new MDoc (this, index);
+                children.put (index, new SoftReference<MDoc> (doc));
+            }
+            else
+            {
+                doc = ref.get ();
+            }
             dir.put (index, doc);
         }
         return dir.entrySet ().iterator ();
