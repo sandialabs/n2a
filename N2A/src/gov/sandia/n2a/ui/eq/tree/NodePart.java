@@ -45,6 +45,6 @@ public class NodePart extends NodeBase
     public String toString ()
     {
         if (part == null) return "";
-        return part.name + " = $include(\"" + part.source.getDefault (part.name, "name") + "\")";
+        return part.name + " = $include(\"" + part.source.getDefault (part.name, "$metadata", "name") + "\")";
     }
 }

@@ -108,7 +108,7 @@ public class Variable implements Comparable<Variable>
                 if (metadata == null) metadata = new TreeMap<String,String> ();
                 for (Entry<String,MNode> m : i.getValue ())
                 {
-                    metadata.put (m.getValue ().get (), m.getKey ());
+                    metadata.put (m.getKey (), m.getValue ().get ());
                 }
             }
             if (key.equals ("$reference"))

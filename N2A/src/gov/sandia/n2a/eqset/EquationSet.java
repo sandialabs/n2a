@@ -152,13 +152,16 @@ public class EquationSet implements Comparable<EquationSet>
         for (Entry<String,MNode> e : inherits.entrySet ())
         {
             // Get parent
+            MNode parent = null;
             String value = e.getValue ().get ();
             String[] pieces = value.split ("\"");
-            if (pieces.length < 2) throw new Exception ("Ill-formed inherit expression: " + value);
-            MNode parent = AppData.getInstance ().models.child (pieces[1]);
-            if (parent == null) throw new Exception ("Can't find parent: " + pieces[1]);
-
-            merge (new EquationSet ("", this, parent));
+            if (pieces.length > 1) parent = AppData.getInstance ().models.child (pieces[1]);
+            if (parent == null)
+            {
+                // TODO: add a warning to a compile results object, to display to the user
+                update (new Variable (e.getKey (), e.getValue ()));
+            }
+            else merge (new EquationSet ("", this, parent));
         }
 
         // Includes
@@ -166,13 +169,16 @@ public class EquationSet implements Comparable<EquationSet>
         {
             String aname = e.getKey ();
 
+            MNode part = null;
             String value = e.getValue ().get ();
             String[] pieces = value.split ("\"");
-            if (pieces.length < 2) throw new Exception ("Ill-formed include expression: " + value);
-            MNode part = AppData.getInstance ().models.child (pieces[1]);
-            if (part == null) throw new Exception ("Can't find part: " + pieces[1]);
-
-            parts.add (new EquationSet (aname, this, part));
+            if (pieces.length > 1) part = AppData.getInstance ().models.child (pieces[1]);
+            if (part == null)
+            {
+                // TODO: add a warning to a compile results object, to display to the user
+                update (new Variable (e.getKey (), e.getValue ()));
+            }
+            else parts.add (new EquationSet (aname, this, part));
         }
 
         // Local equations
@@ -493,7 +499,12 @@ public class EquationSet implements Comparable<EquationSet>
             // Resolve connection endpoint to a specific equation set
             String targetName = ((AccessVariable) ee.expression).name;
             EquationSet s = findEquationSet (targetName);
-            if (s == null) throw new Exception ("Failed to resolve connection target: " + targetName);
+            if (s == null)
+            {
+                // TODO: add a warning to a compile results object, to display to the user
+                //throw new Exception ("Failed to resolve connection target: " + targetName);
+                continue;
+            }
 
             // Store connection binding
             if (connectionBindings == null) connectionBindings = new TreeMap<String, EquationSet> ();
