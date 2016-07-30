@@ -17,6 +17,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
@@ -32,10 +34,11 @@ import java.util.TreeMap;
 **/
 public class MDir extends MNode
 {
-	public File   root;    // The directory containing the files or subdirs that constitute the children of this node
-	public String suffix;  // Relative path to document file, or null if documents are directly under root
+	protected File   root;    // The directory containing the files or subdirs that constitute the children of this node
+	protected String suffix;  // Relative path to document file, or null if documents are directly under root
 
-	public NavigableMap<String,SoftReference<MDoc>> children = new TreeMap<String,SoftReference<MDoc>> ();
+	protected NavigableMap<String,SoftReference<MDoc>> children = new TreeMap<String,SoftReference<MDoc>> ();
+	protected Set<MDoc> writeQueue = new HashSet<MDoc> ();  // By storing strong references to docs that need to be saved, we prevent them from being garbage collected until that is done.
 
     public MDir (File root)
     {
@@ -49,12 +52,7 @@ public class MDir extends MNode
 	    root.mkdirs ();  // We take the liberty of forcing the dir to exist.
 	}
 
-	/**
-        @TODO There is a potential race condition with MDoc.finalize(). If the child() call
-        comes before the garbage-collected object is done writing its state to disk,
-        we might read an old version of the file.
-	**/
-	public MNode child (String index)
+	public synchronized MNode child (String index)
     {
 	    MDoc result = null;
 	    SoftReference<MDoc> reference = children.get (index);
@@ -70,10 +68,14 @@ public class MDir extends MNode
         return result;
     }
 
-    public void clear ()
+	/**
+	    Empty this directory of all files!
+	    This is an extremely dangerous function. It destroys all data on disk and all data pending in memory.
+	**/
+    public synchronized void clear ()
     {
-        // Empty this directory of all files!
         children.clear ();
+        writeQueue.clear ();
         try
         {
             Files.walkFileTree (Paths.get (root.getAbsolutePath ()), new SimpleFileVisitor<Path> ()
@@ -96,9 +98,11 @@ public class MDir extends MNode
         }
     }
 
-    public void clear (String index)
+    public synchronized void clear (String index)
     {
-        children.remove (index);
+        SoftReference<MDoc> ref = children.remove (index);
+        MDoc doc = ref.get ();
+        if (ref != null) writeQueue.remove (doc);
         Path path;
         if (suffix.isEmpty ()) path = Paths.get (root.getAbsolutePath (), index);
         else                   path = Paths.get (root.getAbsolutePath (), index, suffix);
@@ -111,20 +115,14 @@ public class MDir extends MNode
         }
     }
 
-    public int length ()
+    public synchronized int length ()
 	{
-	    return root.list ().length;
+        if (writeQueue.isEmpty ()) return root.list ().length;
+
+        Set<String> files = new HashSet<String> (Arrays.asList (root.list ()));
+        for (MDoc doc : writeQueue) files.add (doc.get ());
+        return files.size ();
 	}
-
-	public String getDefault (String defaultValue)
-    {
-        return defaultValue;
-    }
-
-    public void set (String value)
-    {
-        // ignore
-    }
 
     /**
         Creates a new MDoc in this directory, or renames it if it already exists.
@@ -137,7 +135,7 @@ public class MDir extends MNode
         @param value The destination file name for a move. Ignored if a file named by the given index does not exist.
         @param index The file name for a new document, or the source file name for a move.
      */
-    public MNode set (String value, String index)
+    public synchronized MNode set (String value, String index)
     {
         MDoc result = (MDoc) child (index);
         if (result == null)  // new document
@@ -146,7 +144,7 @@ public class MDir extends MNode
             if (suffix != null) path = new File (path, suffix);
             result = new MDoc (this, path.toString ());
             children.put (index, new SoftReference<MDoc> (result));
-            result.save ();  // simplifies iterator() by not forcing us to check for new unsaved docs in children
+            result.markChanged ();  // Set the new document to save
         }
         else  // existing document; move if needed
         {
@@ -155,6 +153,8 @@ public class MDir extends MNode
             // Move the document in our internal collection.
             children.remove (index);
             children.put (value, new SoftReference<MDoc> (result));
+            // Note: We don't need to mark this document to be saved, since we are moving an existing file on disk.
+            // However, if the document currently has unsaved changes, they will eventually get written to the new location.
 
             // Move the document on disk.
             // Don't use suffix even if it is non-empty, because in that case we want to move the whole directory named by index.
@@ -171,7 +171,7 @@ public class MDir extends MNode
         return result;
     }
 
-    public Iterator<Entry<String,MNode>> iterator ()
+    public synchronized Iterator<Entry<String,MNode>> iterator ()
     {
         TreeMap<String,MNode> dir = new TreeMap<String,MNode> ();
         String[] fileNames = root.list ();  // This may cost a lot of time in some cases. However, N2A should never have more than about 10,000 models in a dir.
@@ -190,17 +190,13 @@ public class MDir extends MNode
             }
             dir.put (index, doc);
         }
+        for (MDoc doc : writeQueue) dir.put (doc.get (), doc);  // Just in case there are new docs that aren't on the disk yet.
         return dir.entrySet ().iterator ();
     }
 
-    public void save ()
+    public synchronized void save ()
     {
-        if (children == null) return;
-        Set<Entry<String,SoftReference<MDoc>>> entries = children.entrySet ();
-        for (Entry<String,SoftReference<MDoc>> e : entries)
-        {
-            MDoc doc = e.getValue ().get ();
-            if (doc != null) doc.save ();
-        }
+        for (MDoc doc: writeQueue) doc.save ();
+        writeQueue.clear ();  // This releases the strong references, so these docs can be garbage collected if needed.
     }
 }

@@ -134,9 +134,9 @@ public class PreferencesDialog extends EscapeDialog {
     protected void load ()
     {
         MNode state = AppState.getState ();
-        chkShowUids       .setSelected (state.getDefault (false, "ShowUids"));
-        chkEqnFormat      .setSelected (state.getDefault (false, "EqnFormat"));
-        chkShowTestRecords.setSelected (state.getDefault (false, "ShowTestRecords"));
+        chkShowUids       .setSelected (state.getOrDefault (false, "ShowUids"));
+        chkEqnFormat      .setSelected (state.getOrDefault (false, "EqnFormat"));
+        chkShowTestRecords.setSelected (state.getOrDefault (false, "ShowTestRecords"));
     }
 
     private void constructSectionPanels() {

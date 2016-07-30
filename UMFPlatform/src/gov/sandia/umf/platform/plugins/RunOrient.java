@@ -80,7 +80,7 @@ public class RunOrient implements Run
 
     @Override
     public double getSimDuration() {
-        return source.getDefault (0.0, "duration");
+        return source.getOrDefault (0.0, "duration");
     }
 
     @Override

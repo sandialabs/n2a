@@ -93,7 +93,7 @@ public class SearchPanel extends JPanel implements DefaultButtonEnabledPanel
     {
         uiController = uic;
         mdlQuery = new NoFireComboBoxModel ();
-        Iterator<Entry<String,MNode>> queries = AppState.getState ().getNode ("Queries").iterator ();
+        Iterator<Entry<String,MNode>> queries = AppState.getState ().childOrCreate ("Queries").iterator ();
         while (queries.hasNext ())
         {
             mdlQuery.addElement (queries.next ().getValue ().get ());
@@ -181,7 +181,7 @@ public class SearchPanel extends JPanel implements DefaultButtonEnabledPanel
 
     private void updateAppState ()
     {
-        MNode queries = AppState.getState ().getNode ("Queries");
+        MNode queries = AppState.getState ().childOrCreate ("Queries");
         queries.clear ();
         for (int i = 0; i < mdlQuery.getSize (); i++)
         {

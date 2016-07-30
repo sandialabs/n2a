@@ -14,7 +14,6 @@ import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.db.MDoc;
 import gov.sandia.umf.platform.db.MNode;
-import gov.sandia.umf.platform.db.MPersistent;
 import gov.sandia.umf.platform.ensemble.params.groups.ParameterSpecGroup;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
 import gov.sandia.umf.platform.ensemble.params.specs.ParameterSpecification;
@@ -69,8 +68,6 @@ import replete.threads.CommonThreadShutdownException;
 import replete.util.GUIUtil;
 import replete.util.Lay;
 import replete.util.ReflectionUtil;
-
-import com.orientechnologies.orient.core.record.impl.ODocument;
 
 
 // TODO: will probably need a UI model (kinda like a "selected model")
@@ -255,8 +252,9 @@ public class UIController {
         return dlg.getSelectedRecords ();
     }
 
-    public void closeMainFrame() {
-        parentRef.closeWindow();
+    public void closeMainFrame ()
+    {
+        parentRef.closeWindow ();
     }
 
     public void showHelp(HelpCapableWindow win, String key) {
@@ -284,13 +282,6 @@ public class UIController {
     public void showAbout() {
         AboutDialog dlg = new AboutDialog(parentRef);
         dlg.setVisible(true);
-    }
-
-    public void historyBackTab() {
-        tabs.historyBackTab();
-    }
-    public void historyForwardTab() {
-        tabs.historyForwardTab();
     }
 
     public void startProgressIndeterminate(String message) {

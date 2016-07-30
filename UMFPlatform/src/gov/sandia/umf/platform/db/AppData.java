@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 
 import gov.sandia.umf.platform.UMF;
+import gov.sandia.umf.platform.ui.AboutDialog;
 
 /**
     Manages all user data associated with the application.
@@ -27,12 +28,35 @@ public class AppData
     public MDir references;
     public MDir runs;
 
+    protected boolean stop;
+    protected Thread saveThread;
+
     public AppData ()
     {
         File root = UMF.getAppResourceDir ();
         models     = new MDir (new File (root, "models"));
         references = new MDir (new File (root, "references"));
         runs       = new MDir (new File (root, "models"), "model");
+
+        stop = false;
+        saveThread = new Thread ("Save Thread")
+        {
+            public void run ()
+            {
+                while (! stop)
+                {
+                    try
+                    {
+                        sleep (30000);
+                        instance.save ();
+                    }
+                    catch (InterruptedException e)
+                    {
+                    }
+                }
+            };
+        };
+        saveThread.start ();
     }
 
     public void checkInitialDB ()
@@ -69,7 +93,6 @@ public class AppData
                 reader.readLine ();  // dispose of schema line
                 doc.read (reader);
                 reader.close ();
-                doc.save ();  // before the hard reference goes out of scope
             }
         }
         catch (IOException e)
@@ -83,5 +106,12 @@ public class AppData
         models.save ();
         references.save ();
         runs.save ();  // The reason to save runs is if we record data in them about process status. If no data is changed, could get rid of this save.
+    }
+
+    public void quit ()
+    {
+        stop = true;
+        saveThread.interrupt ();
+        save ();
     }
 }

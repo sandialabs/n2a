@@ -33,7 +33,7 @@ public class RunEnsembleOrient implements RunEnsemble
     public RunEnsembleOrient (MNode src)
     {
         source = src;
-        Iterator<Entry<String, MNode>> i = source.getNode ("runs").iterator ();
+        Iterator<Entry<String, MNode>> i = source.childOrCreate ("runs").iterator ();
         while (i.hasNext ())
         {
             Entry<String, MNode> e = i.next ();
@@ -129,7 +129,7 @@ public class RunEnsembleOrient implements RunEnsemble
     public List<String> getOutputExprs ()
     {
         List<String> result = new ArrayList<String> ();
-        Iterator<Entry<String, MNode>> i = source.getNode ("outputExpressions").iterator ();
+        Iterator<Entry<String, MNode>> i = source.childOrCreate ("outputExpressions").iterator ();
         while (i.hasNext ())
         {
             Entry<String, MNode> e = i.next ();
@@ -141,13 +141,13 @@ public class RunEnsembleOrient implements RunEnsemble
     @Override
     public long getTotalRunCount ()
     {
-        return source.getDefault (0, "runCount");
+        return source.getOrDefault (0, "runCount");
     }
 
     @Override
     public long getFrameworkRunCount ()
     {
-        return source.getDefault (0, "frameworkRunCount");
+        return source.getOrDefault (0, "frameworkRunCount");
     }
 
     @Override
@@ -160,7 +160,7 @@ public class RunEnsembleOrient implements RunEnsemble
     {
         runs.add (run);
         runDocs.add (run.getSource ());
-        MNode runsNode = source.getNode ("runs");
-        runsNode.getNode (String.valueOf (runsNode.length ())).merge (run.getSource ());
+        MNode runsNode = source.childOrCreate ("runs");
+        runsNode.childOrCreate (String.valueOf (runsNode.length ())).merge (run.getSource ());
     }
 }

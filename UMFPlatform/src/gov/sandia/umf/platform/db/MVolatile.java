@@ -14,8 +14,8 @@ import java.util.TreeMap;
 
 public class MVolatile extends MNode
 {
-	public String value;
-	public NavigableMap<String,MNode> children;
+	protected String value;
+	protected NavigableMap<String,MNode> children;
 
 	public MVolatile ()
 	{
@@ -26,42 +26,42 @@ public class MVolatile extends MNode
 	    if (! value.isEmpty ()) this.value = value;
 	}
 
-	public MNode child (String index)
+	public synchronized MNode child (String index)
     {
         if (children == null) return null;
         return children.get (index);
     }
 
-	public void clear ()
+	public synchronized void clear ()
 	{
 	    if (children != null) children.clear ();
 	}
 
-    public void clear (String index)
+    public synchronized void clear (String index)
     {
         if (children == null) return;
         children.remove (index);
     }
 
-	public int length ()
+	public synchronized int length ()
 	{
 	    if (children == null) return 0;
 	    return children.size ();
 	}
 
-	public String getDefault (String defaultValue)
+	public synchronized String getOrDefault (String defaultValue)
     {
         if (value == null) return defaultValue;
         return value;
     }
 
-    public void set (String value)
+    public synchronized void set (String value)
     {
         if (value.isEmpty ()) this.value = null;
         else                  this.value = value;
     }
 
-    public MNode set (String value, String index)
+    public synchronized MNode set (String value, String index)
     {
         if (children == null)
         {
@@ -81,7 +81,7 @@ public class MVolatile extends MNode
         return result;
     }
 
-    public Iterator<Entry<String,MNode>> iterator ()
+    public synchronized Iterator<Entry<String,MNode>> iterator ()
     {
         if (children == null) return new MNode.IteratorEmpty ();
         return children.entrySet ().iterator ();

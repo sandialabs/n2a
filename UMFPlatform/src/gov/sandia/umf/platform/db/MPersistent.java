@@ -7,11 +7,13 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.db;
 
+import java.util.Map.Entry;
 import java.util.TreeMap;
 
 public class MPersistent extends MVolatile
 {
-    public MNode parent;
+    protected MNode parent;
+    protected boolean needsWrite; // indicates that this node is new or has changed since it was last read from disk (and therefore should be written out)
 
     public MPersistent (MPersistent parent)
 	{
@@ -24,18 +26,31 @@ public class MPersistent extends MVolatile
 	    this.parent = parent;
 	}
 
-	public void markChanged ()
+	public synchronized void markChanged ()
 	{
-	    ((MPersistent) parent).markChanged ();
+	    if (! needsWrite)
+	    {
+	        ((MPersistent) parent).markChanged ();
+	        needsWrite = true;
+	    }
 	}
 
-    public void clear ()
+	public synchronized void clearChanged ()
+	{
+	    needsWrite = false;
+        for (Entry<String,MNode> i : this)
+        {
+            ((MPersistent) i.getValue ()).clearChanged ();
+        }
+	}
+
+	public synchronized void clear ()
     {
         super.clear ();
         markChanged ();
     }
 
-	public void set (String value)
+	public synchronized void set (String value)
     {
         if (value.isEmpty ())
         {
@@ -55,7 +70,7 @@ public class MPersistent extends MVolatile
         }
     }
 
-    public MNode set (String value, String index)
+    public synchronized MNode set (String value, String index)
     {
         if (children == null)
         {

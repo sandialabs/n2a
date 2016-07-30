@@ -13,40 +13,66 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.TreeMap;
 
 /**
     Stores a document in memory and coordinates with its persistent form on disk.
     We assume that only one instance of this class exists for a given disk document
     at any given moment, and that no other process in the system modifies the file on disk.
+
+    We inherit the value field from MVolatile. Since we don't really have a direct value,
+    we store a copy of the file name there. This is used to implement several functions, such
+    as renaming. It also allows an instance to stand alone, without being a child of an MDir.
+
+    We inherit the children collection from MVolatile. This field is left null until we first
+    read in the associated file on disk. If the file is empty or non-existent, children becomes
+    non-null but empty. Thus, whether children is null or not safely indicates the need to load.
 **/
 public class MDoc extends MPersistent
 {
-    // Note: MVolatile.value stores the path, since we don't allow a document node to have a top-level value.
-
-    public boolean needsWrite; // indicates that this node has changed since it was last read from disk (and therefore should be written out again)
-
-    // Note: "needRead" is indicated by whether the MNodeRAM.children collection is null. If it is non-null, the read has happened.
-    // If children exists but is empty, then either the file was actually empty or it does not yet exist.
-
 	public MDoc (MDir parent, String fileName)
 	{
-	    super (null, fileName);
+	    super (null, fileName);  // We cheat a little here, since MDir is not an MPersistent. TODO: Should MDir be an MPersistent?
 	    this.parent = parent;
 	}
 
-    public void markChanged ()
+    public synchronized void markChanged ()
     {
-        needsWrite = true;
+        if (! needsWrite)
+        {
+            if (parent != null)
+            {
+                synchronized (parent)
+                {
+                    ((MDir) parent).writeQueue.add (this);
+                }
+            }
+            needsWrite = true;
+        }
     }
 
+    /**
+        Removes this document from persistent storage, but retains its contents in memory.
+    **/
     public void delete ()
     {
-        if (parent == null) return;
-        parent.clear (value);  // value holds our file name, and thus our index
+        if (parent == null)
+        {
+            try
+            {
+                Files.delete (Paths.get (value));
+            }
+            catch (IOException e)
+            {
+                System.err.println ("Failed to delete file: " + value);
+            }
+        }
+        else parent.clear (value);  // value is our file name, and thus our index
     }
 
-    public MNode child (String index)
+    public synchronized MNode child (String index)
     {
         if (children == null) load ();  // redundant with the guard in load(), but should save time in the common case that file is already loaded
         return children.get (index);
@@ -59,16 +85,16 @@ public class MDoc extends MPersistent
         ((MDir) parent).set (value, this.value);
     }
 
-    public MNode set (String value, String index)
+    public synchronized MNode set (String value, String index)
     {
-        if (children == null) load ();  // see comment in child(String)
+        if (children == null) load ();
         return super.set (value, index);
     }
 
 	/**
         We only load once. We assume no other process is modifying the files, so once loaded, we know its exact state.
 	**/
-	public void load ()
+	public synchronized void load ()
 	{
 	    if (children != null) return;  // already loaded
 	    if (value == null) return;  // we have no file name, so can't load
@@ -86,18 +112,18 @@ public class MDoc extends MPersistent
                 System.err.println ("WARNING: schema version not recognized. Proceeding as if it were.");
                 // Note that we may have just destroyed an important line of input in the process.
             }
+            needsWrite = true;  // lie to ourselves, to prevent being put onto the MDir write queue
             read (reader);
             reader.close ();
-            needsWrite = false;  // needsWrite will get set true during normal load process
         }
         catch (IOException e)
         {
             System.err.println ("Failed to read file: " + value);
-            System.err.println (e);
         }
+        clearChanged ();  // After load(), clear the slate so we can detect any changes and save the document.
 	}
 
-	public void save ()
+	public synchronized void save ()
 	{
 	    if (! needsWrite) return;
 	    try
@@ -109,19 +135,11 @@ public class MDoc extends MPersistent
 	        writer.write (String.format ("N2A.schema=1%n"));
 	        write (writer, "");
 	        writer.close ();
-	        needsWrite = false;
+	        clearChanged ();
 	    }
 	    catch (IOException e)
 	    {
             System.err.println ("Failed to write file: " + value);
 	    }
 	}
-
-	protected void finalize () throws Throwable
-    {
-	    // If we get garbage collected, due to the soft reference in MNodeDir.children, then push out any unsaved changes.
-	    // The normal path for saving is via an explicit shutdown procedure or a background save thread.
-	    // In those two cases, the reference has not been cleared.
-	    save ();
-    }
 }

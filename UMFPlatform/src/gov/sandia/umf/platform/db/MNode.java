@@ -20,8 +20,10 @@ import java.util.Map.Entry;
 /**
     A hierarchical key-value storage system, with subclasses that provide persistence.
     The "M" in MNode refers to the MUMPS language, in which variables have this hierarchical structure.
+
+    This class and all its descendents are thread-safe.
 **/
-public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
+public class MNode implements Iterable<Map.Entry<String,MNode>>
 {
     public static class MOrder implements Comparator<String>
     {
@@ -67,14 +69,17 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
     public static MOrder comparator = new MOrder ();
 
     /**
-        @return The child indicated by the given index, or null if it doesn't exist.
+        Returns the child indicated by the given index, or null if it doesn't exist.
     **/
     public MNode child (String index)
     {
         return null;
     }
 
-    public MNode child (String index0, String... deeperIndices)
+    /**
+        Returns a child node from arbitrary depth, or null if any part of the path doesn't exist.
+    **/
+    public synchronized MNode child (String index0, String... deeperIndices)
     {
         MNode c = child (index0);
         for (int i = 0; i < deeperIndices.length; i++)
@@ -83,6 +88,24 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
             c = c.child (deeperIndices[i]);
         }
         return c;
+    }
+
+    /**
+        Retrieves a child node from arbitrary depth, or creates it if nonexistent.
+        Like a combination of child() and set().
+        The benefit of getting back a node rather than a value is ease of access
+        to a list stored as children of the node.
+    **/
+    public synchronized MNode childOrCreate (String... indices)
+    {
+        MNode result = this;
+        for (int i = 0; i < indices.length; i++)
+        {
+            MNode c = result.child (indices[i]);
+            if (c == null) c = result.set ("", indices[i]);
+            result = c;
+        }
+        return result;  // If no indices are specified, we actually return this node.
     }
 
     /**
@@ -112,7 +135,7 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
     **/
     public String get ()
     {
-        return getDefault ("");
+        return getOrDefault ("");
     }
 
     /**
@@ -120,7 +143,7 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
     **/
     public String get (String... indices)
     {
-        return getDefault ("", indices);
+        return getOrDefault ("", indices);
     }
 
     /**
@@ -128,7 +151,7 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
         Note that this is the only get function that needs to be overridden by subclasses,
         and even this is optional.
     **/
-    public String getDefault (String defaultValue)
+    public String getOrDefault (String defaultValue)
     {
         return defaultValue;
     }
@@ -136,7 +159,7 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
     /**
         Digs down tree as far as possible to retrieve value; returns first arg if necessary.
     **/
-    public String getDefault (String defaultValue, String... indices)
+    public synchronized String getOrDefault (String defaultValue, String... indices)
     {
         MNode c = this;
         for (int i = 0; i < indices.length; i++)
@@ -144,25 +167,7 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
             c = c.child (indices[i]);
             if (c == null) return defaultValue;
         }
-        return c.getDefault (defaultValue);
-    }
-
-    /**
-        Retrieves child node, or creates it if nonexistent.
-        Like a combination of child() and set().
-        The benefit of getting back a node rather than a value is ease of access
-        to a list stored as children of the node.
-    **/
-    public MNode getNode (String... indices)
-    {
-        MNode result = this;
-        for (int i = 0; i < indices.length; i++)
-        {
-            MNode c = result.child (indices[i]);
-            if (c == null) c = result.set ("", indices[i]);
-            result = c;
-        }
-        return result;  // If no indices are specified, we actually return this node.
+        return c.getOrDefault (defaultValue);
     }
 
     public boolean getBoolean ()
@@ -180,23 +185,23 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
         return Double.parseDouble (get ());
     }
 
-    public boolean getDefault (boolean defaultValue, String... indices)
+    public boolean getOrDefault (boolean defaultValue, String... indices)
     {
-        String result = getDefault ("", indices);
+        String result = getOrDefault ("", indices);
         if (result.isEmpty ()) return defaultValue;
         return Boolean.parseBoolean (result);
     }
 
-    public int getDefault (int defaultValue, String... indices)
+    public int getOrDefault (int defaultValue, String... indices)
     {
-        String result = getDefault ("", indices);
+        String result = getOrDefault ("", indices);
         if (result.isEmpty ()) return defaultValue;
         return Integer.parseInt (result);
     }
 
-    public Double getDefault (double defaultValue, String... indices)
+    public Double getOrDefault (double defaultValue, String... indices)
     {
-        String result = getDefault ("", indices);
+        String result = getOrDefault ("", indices);
         if (result.isEmpty ()) return defaultValue;
         return Double.parseDouble (result);
     }
@@ -213,12 +218,15 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
         child.set(String)). Creates child node if it doesn't already exist.
         @return The node on which the value was set, for use by set(String,String,String...)
     **/
-    public abstract MNode set (String value, String index);
+    public MNode set (String value, String index)
+    {
+        return new MNode ();  // A completely useless object.
+    }
 
     /**
         Creates all children necessary to set value
     **/
-    public void set (String value, String index0, String... deeperIndices)
+    public synchronized void set (String value, String index0, String... deeperIndices)
     {
         MNode c = child (index0);
         if (c == null) c = set ("", index0);
@@ -266,6 +274,11 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
         }
     }
 
+    public Iterator<Entry<String, MNode>> iterator ()
+    {
+        return new MNode.IteratorEmpty ();
+    }
+
     public static class Visitor
     {
         /**
@@ -285,7 +298,7 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
     /**
         Execute some operation on each node in the tree. Traversal is depth-first.
     **/
-    public void visit (Visitor v, String index)
+    public synchronized void visit (Visitor v, String index)
     {
         v.visit (this, index);
         for (Entry<String,MNode> e : this)  // We are an Iterable. In particular, we iterate over the children nodes.
@@ -301,7 +314,7 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
         source with no match in this node are deep-copied. Any children in this node with no match in
         the source remain unchanged.
     **/
-    public void merge (MNode that)
+    public synchronized void merge (MNode that)
     {
         String value = that.get ();
         if (! value.isEmpty ()) set (value);
@@ -319,7 +332,7 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
         This method only processes children. It assumes that our value was processed
         at the caller's level, as its child.
     **/
-    public void read (BufferedReader reader)
+    public synchronized void read (BufferedReader reader)
     {
         clear ();
         try
@@ -336,7 +349,7 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
         Recursive version of read(Reader) for loading children.
         We assume LineReader always holds the next unprocessed line.
     **/
-    public void read (LineReader reader, int whitespaces) throws IOException
+    public synchronized void read (LineReader reader, int whitespaces) throws IOException
     {
         while (true)
         {
@@ -421,7 +434,7 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
         Produces an indented hierarchical list of indices and values from entire tree.
         Note that an empty value simply produces no characters rather than two quote marks.
     **/
-    public void write (Writer writer)
+    public synchronized void write (Writer writer)
     {
         try
         {
@@ -437,7 +450,7 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
         Produces an indented hierarchical list of indices and values from entire tree.
         Also note that an empty value simply produces no characters rather than two quote marks.
     **/
-    public void write (Writer writer, String space) throws IOException
+    public synchronized void write (Writer writer, String space) throws IOException
     {
         String space2 = space + " ";
         for (Entry<String,MNode> e : this)  // if this node has no children, nothing at all is written
@@ -465,7 +478,6 @@ public abstract class MNode implements Iterable<Map.Entry<String,MNode>>
 
     public String toString ()
     {
-        System.out.println ("toString: " + get ());
         StringWriter writer = new StringWriter ();
         write (writer);
         return writer.toString ();

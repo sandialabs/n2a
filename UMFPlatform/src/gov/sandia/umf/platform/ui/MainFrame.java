@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.umf.platform.ui;
 
 import gov.sandia.umf.platform.AppState;
+import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.plugins.extpoints.ProductCustomization;
 import gov.sandia.umf.platform.ui.general.HelpNotesPanel;
 import gov.sandia.umf.platform.ui.jobs.RunManagerFrame;
@@ -95,15 +96,9 @@ public class MainFrame extends EscapeFrame implements HelpCapableWindow {
 
         Lay.BLtg(this,
             "N", tb,
-//            "C", splMain = Lay.SPL(
-//                new WorkpanePanel(/*uiController, workpaneModel*/),
-//                tabN2A
-//            ),
             "C", tabN2A,
             "S", sbar
-//            "S", Lay.p(Lay.lb("alsdkfj"), "bg=yellow")
         );
-//        splMain.setOneTouchExpandable(true);
 
         setSize(600, 600);
         setLocationRelativeTo(null);
@@ -130,11 +125,15 @@ public class MainFrame extends EscapeFrame implements HelpCapableWindow {
         glassPane.setVisible(false);
         setGlassPane(glassPane);
 
-        addClosingListener(new ChangeListener() {
-            public void stateChanged(ChangeEvent e) {
-                for(CommonWindow win : getAllChildWindows()) {
+        addClosingListener(new ChangeListener ()
+        {
+            public void stateChanged (ChangeEvent e)
+            {
+                for (CommonWindow win : getAllChildWindows ())
+                {
                     destroyChildWindow(win);
                 }
+                AppData.getInstance ().quit ();  // Save data before exiting.
             }
         });
 

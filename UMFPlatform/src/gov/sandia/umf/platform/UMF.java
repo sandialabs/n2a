@@ -180,7 +180,7 @@ public class UMF
         });
 
         // Needed because HTML labels are slow to construct!
-        new Thread ()
+        new Thread ("Load HTML Labels")
         {
             @Override
             public void run ()
@@ -230,7 +230,7 @@ public class UMF
 
     private static void getWindowLayoutProps ()
     {
-        MNode winProps = AppState.getState ().getNode ("WinLayout");
+        MNode winProps = AppState.getState ().childOrCreate ("WinLayout");
         winProps.clear ();
 
         winProps.set (mainFrame.getX             (), "MainFrame", "x");
@@ -306,7 +306,7 @@ public class UMF
         RunQueue.getInstance().setUiController (uiController);   // Also, starts the queue.
 
 
-        MNode winProps = AppState.getState ().getNode ("WinLayout");
+        MNode winProps = AppState.getState ().childOrCreate ("WinLayout");
 
         MNode m = winProps.child ("MainFrame");
         if (m != null)
@@ -330,34 +330,21 @@ public class UMF
         {
             mainFrame.setVisible (true);
         }
-        mainFrame.setExtendedState (winProps.getDefault (0, "MainFrame", "state"));
+        mainFrame.setExtendedState (winProps.getOrDefault (0, "MainFrame", "state"));
 
         setUncaughtExceptionHandler(mainFrame);
         Dialogs.registerApplicationWindow(mainFrame, Application.getName());
         if (loadingFrame != null) loadingFrame.dispose ();
 
         mainFrame.init ();
-        /*
-        uiController.startAction ("Load DB", new CommonRunnable ()
-        {
-            public void runThread (CommonThreadContext context) throws CommonThreadShutdownException
-            {
-                mainFrame.init ();
-            }
-
-            public void cleanUp ()
-            {
-            }
-        }, null, "loading the database");
-        */
     }
 
     private static void ensureSizeLoc (CommonWindow win, MNode winProps)
     {
-        int w = winProps.getDefault (-1, "width");
-        int h = winProps.getDefault (-1, "height");
-        int x = winProps.getDefault (-1, "x");
-        int y = winProps.getDefault (-1, "y");
+        int w = winProps.getOrDefault (-1, "width");
+        int h = winProps.getOrDefault (-1, "height");
+        int x = winProps.getOrDefault (-1, "x");
+        int y = winProps.getOrDefault (-1, "y");
         if (w >= 0  &&  h >= 0) win.setSize (w, h);
         if (x >= 0  &&  y >= 0) win.setLocation (x, y);
         else                    win.setLocationRelativeTo (win.getParent ());

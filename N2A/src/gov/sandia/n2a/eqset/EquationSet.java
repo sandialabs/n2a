@@ -281,7 +281,7 @@ public class EquationSet implements Comparable<EquationSet>
             }
             else  // must store as a child node
             {
-                MNode vnode = source.getNode (v.nameString ());
+                MNode vnode = source.childOrCreate (v.nameString ());
 
                 // Convert any existing single-line expression into a new child under the variable
                 String value = vnode.get ();
