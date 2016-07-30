@@ -45,7 +45,6 @@ public class EquationTreeEditContext
 {
     public UIController uiController;
     public SimpleTree tree;
-    public Class<?> addToClass;
 
     public TModel model;
 
@@ -62,11 +61,10 @@ public class EquationTreeEditContext
         eqChangeNotifier.fireStateChanged ();
     }
 
-    public EquationTreeEditContext (UIController uic, SimpleTree t, Class<?> cls)
+    public EquationTreeEditContext (UIController uic, SimpleTree t)
     {
         uiController = uic;
         tree = t;
-        addToClass = cls;
 
         model = tree.getTModel();
     }
@@ -395,10 +393,19 @@ public class EquationTreeEditContext
         TNode selected = (TNode) path.getLastPathComponent ();
         NodeBase node = (NodeBase) selected.getUserObject();
 
-        // TODO: substantial additional work to create editing behavior that handles $inherit, $include, variables, equations, annotations and references
-        if (node instanceof NodeReference)
+        // TODO: substantial additional work to create editing behavior that handles $inherit, $include
+        if (node instanceof NodeVariable)
         {
-            // TODO: edit the same way as metadata
+            NodeVariable nodeVariable = (NodeVariable) selected.getUserObject ();
+            String curVal = nodeVariable.toString ();
+            EquationInputBox input = getEquationInputBox (curVal);
+            input.setVisible (true);
+            if (input.getResult () == EquationInputBox.Result.OK)
+            {
+                //nodeVariable.setEqValue (input.getValue ());
+                tree.select (selected);
+                fireEqChangeNotifier ();
+            }
         }
         else if (node instanceof NodeEquation)
         {
@@ -425,6 +432,10 @@ public class EquationTreeEditContext
                 tree.select (selected);
                 fireEqChangeNotifier ();
             }
+        }
+        else if (node instanceof NodeReference)
+        {
+            // TODO: edit the same way as metadata
         }
     }
 
@@ -536,36 +547,27 @@ public class EquationTreeEditContext
 
     private TNode getContextRoot (Class<?> stopAtClass)
     {
-        TNode chosenNode = null;
         TreePath path = tree.getSelectionPath ();
         if (path != null) return getContextRoot (stopAtClass, (TNode) path.getLastPathComponent ());
-        if (addToClass == null) return getContextRoot (stopAtClass, null);
-        return chosenNode;
+        return getContextRoot (stopAtClass, null);
     }
 
     private TNode getContextRoot (Class<?> stopAtClass, TNode nSel)
     {
+        if (stopAtClass == null) return (TNode) model.getRoot ();
+
         TNode chosenNode = null;
         TNode n = nSel;
         while (n != null)
         {
             Class<?> uClass = n.getUserObject ().getClass ();
-            if (stopAtClass != null)
-            {
-                if (stopAtClass.isAssignableFrom (uClass))
-                {
-                    chosenNode = n;
-                    break;
-                }
-            }
-            else if (addToClass != null  &&  addToClass.isAssignableFrom (uClass))
+            if (stopAtClass.isAssignableFrom (uClass))
             {
                 chosenNode = n;
                 break;
             }
             n = (TNode) n.getParent ();
         }
-        if (addToClass == null  &&  stopAtClass == null) chosenNode = (TNode) model.getRoot ();
         return chosenNode;
     }
 
@@ -576,10 +578,5 @@ public class EquationTreeEditContext
         if (c instanceof JFrame) input = new EquationInputBox ((JFrame)  c, initVal);
         else                     input = new EquationInputBox ((JDialog) c, initVal);
         return input;
-    }
-
-    public boolean isInContext (TNode nAny)
-    {
-        return getContextRoot (addToClass, nAny) != null;
     }
 }
