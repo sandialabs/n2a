@@ -10,10 +10,8 @@ package gov.sandia.n2a.ui.eq.tree;
 
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
-import javax.swing.Icon;
 import javax.swing.ImageIcon;
-
-import replete.gui.controls.simpletree.NodeBase;
+import javax.swing.tree.DefaultTreeCellRenderer;
 
 public class NodeBinding extends NodeBase
 {
@@ -26,27 +24,17 @@ public class NodeBinding extends NodeBase
     {
         this.name  = name;
         this.alias = alias;
+        setUserObject (alias + " = " + name);
+    }
+
+    @Override
+    public void prepareRenderer (DefaultTreeCellRenderer renderer, boolean selected, boolean expanded, boolean hasFocus)
+    {
+        renderer.setIcon (icon);
+        setFont (renderer, false, false);
     }
 
     public void parseEditedString (String input)
     {
-    }
-
-    @Override
-    public boolean isCollapsible ()
-    {
-        return true;
-    }
-
-    @Override
-    public Icon getIcon (boolean expanded)
-    {
-        return icon;
-    }
-
-    @Override
-    public String toString ()
-    {
-        return alias + " = " + name;
     }
 }

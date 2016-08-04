@@ -11,12 +11,8 @@ package gov.sandia.n2a.ui.eq.tree;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
-import java.awt.Color;
-
-import javax.swing.Icon;
 import javax.swing.ImageIcon;
-
-import replete.gui.controls.simpletree.NodeBase;
+import javax.swing.tree.DefaultTreeCellRenderer;
 
 public class NodeEquation extends NodeBase
 {
@@ -27,36 +23,17 @@ public class NodeEquation extends NodeBase
     public NodeEquation (EquationEntry equation)
     {
         this.equation = equation;
+        setUserObject (equation.toString ());
+    }
+
+    @Override
+    public void prepareRenderer (DefaultTreeCellRenderer renderer, boolean selected, boolean expanded, boolean hasFocus)
+    {
+        renderer.setIcon (icon);
+        setFont (renderer, false, false);
     }
 
     public void parseEditedString (String input)
     {
-    }
-
-    @Override
-    public boolean isCollapsible ()
-    {
-        return false;
-    }
-
-    @Override
-    public Icon getIcon (boolean expanded)
-    {
-        return icon;
-    }
-
-    @Override
-    public Color getForegroundColor ()
-    {
-        // TODO: compare record references rather than using booleans
-        //Color grn = new Color (0, 120, 0);
-        //return (overridden ? Color.red : (overriding ? grn : Color.black));
-        return Color.black;
-    }
-
-    @Override
-    public String toString ()
-    {
-        return equation.toString ();
     }
 }

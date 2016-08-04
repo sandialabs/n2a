@@ -7,8 +7,9 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.eq;
 
+import gov.sandia.n2a.eqset.EquationSet;
+import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
-import gov.sandia.n2a.ui.eq.tree.NodeEquation;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
@@ -19,32 +20,36 @@ import gov.sandia.umf.platform.plugins.extpoints.Simulator;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
+import java.awt.Component;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.event.MouseListener;
 
 import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
-import javax.swing.JSeparator;
+import javax.swing.JTree;
 import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import javax.swing.event.TreeModelEvent;
+import javax.swing.event.TreeModelListener;
 import javax.swing.event.TreeSelectionEvent;
 import javax.swing.event.TreeSelectionListener;
+import javax.swing.tree.DefaultMutableTreeNode;
+import javax.swing.tree.DefaultTreeCellEditor;
+import javax.swing.tree.DefaultTreeCellRenderer;
+import javax.swing.tree.DefaultTreeModel;
+import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
+import javax.swing.tree.TreeSelectionModel;
 
 import replete.gui.controls.IconButton;
-import replete.gui.controls.simpletree.NodeBase;
-import replete.gui.controls.simpletree.SimpleTree;
-import replete.gui.controls.simpletree.TModel;
-import replete.gui.controls.simpletree.TNode;
 import replete.gui.windows.Dialogs;
 import replete.plugins.ExtensionPoint;
 import replete.plugins.PluginManager;
@@ -58,230 +63,277 @@ import replete.util.User;
 public class EquationTreePanel extends JPanel
 {
     protected UIController uiController;
+    protected MNode record;
 
     // Tree & Its Model
-    protected SimpleTree treEqs;
-    protected TNode root;
+    public JTree            tree;
+    public DefaultTreeModel model;
+    public NodePart         root;
 
-    // Side Buttons
+    // Controls
     protected JButton btnAddAnnot;
     protected JButton btnAddRef;
     protected JButton btnAddEqn;
-    protected JButton btnEdit;
     protected JButton btnRemove;
     protected JButton btnMoveUp;
     protected JButton btnMoveDown;
     protected JButton btnRun;
-
-    // Context Menus
-    protected JPopupMenu mnuAddNewPopup;
     protected JPopupMenu mnuEqPopup;
-    protected JMenuItem mnuMoveUp;
-    protected JMenuItem mnuMoveDown;
 
-    // Edit Context
-    public MNode model;
-    protected EquationTreeEditContext context;
-
-    public EquationTreePanel (UIController uic, MNode model)
+    public EquationTreePanel (UIController uic, MNode record)
     {
-        this.model = model;
-
         uiController = uic;
         uiController.addPropListener (new ChangeListener ()
         {
             public void stateChanged (ChangeEvent e)
             {
-                treEqs.updateUI ();
+                tree.updateUI ();
             }
         });
 
         // Tree
 
-        root = new TNode (new NodePart (null));
-        treEqs = new SimpleTree (root);
-        treEqs.setExpandsSelectedPaths (true);
-        treEqs.setRootVisible (false);
-        treEqs.setShowsRootHandles (true);
-        treEqs.addMouseListener (contextMenuListener);
-        treEqs.addMouseListener (new MouseAdapter ()
+        root  = new NodePart ();
+        model = new DefaultTreeModel (root);
+        loadRootFromDB (record);
+        tree  = new JTree (model);
+
+        tree.setExpandsSelectedPaths (true);
+        tree.getSelectionModel ().setSelectionMode (TreeSelectionModel.SINGLE_TREE_SELECTION);  // No multiple selection. It only makes deletes and moves more complicated.
+        tree.setEditable (true);
+
+        DefaultTreeCellRenderer renderer = new DefaultTreeCellRenderer ()
         {
             @Override
-            public void mouseClicked (MouseEvent e)
+            public Component getTreeCellRendererComponent (JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
             {
-                boolean empty = (treEqs.getPathForLocation (e.getX (), e.getY ()) == null);
-                if (SwingUtilities.isLeftMouseButton (e)  &&  e.getClickCount () == 2)
+                super.getTreeCellRendererComponent (tree, value, selected, expanded, leaf, row, hasFocus);
+                ((NodeBase) value).prepareRenderer (this, selected, expanded, hasFocus);
+                return this;
+            }
+        };
+        tree.setCellRenderer (renderer);
+
+        tree.setCellEditor (new DefaultTreeCellEditor (tree, renderer)
+        {
+            
+        });
+
+        tree.addMouseListener (new MouseAdapter ()
+        {
+            public void mouseReleased (MouseEvent e)  // TODO: Since this is a popup menu, would it make sense for this to be mousePressed() instead?
+            {
+                if (SwingUtilities.isRightMouseButton (e)  &&   e.getClickCount () == 1)
                 {
-                    if (empty)
+                    TreePath path = tree.getPathForLocation (e.getX (), e.getY ());
+                    if (path != null)
                     {
-                        context.addEquation ("");
-                    }
-                    else
-                    {
-                        context.editSelectedNode ();
+                        tree.setSelectionPath (path);
+                        mnuEqPopup.show (tree, e.getX (), e.getY ());
                     }
                 }
             }
-        });
-        treEqs.addTreeSelectionListener (new TreeSelectionListener ()
-        {
-            public void valueChanged (TreeSelectionEvent e)
+
+            public void mouseClicked (MouseEvent e)
             {
-                checkEnabledButtons ();
+                if (SwingUtilities.isLeftMouseButton (e)  &&  e.getClickCount () == 2)
+                {
+                    TreePath path = tree.getClosestPathForLocation (e.getX (), e.getY ());
+                    if (path != null) tree.startEditingAtPath (path);
+                }
             }
         });
-        treEqs.addKeyListener (new KeyAdapter ()
+
+        tree.addKeyListener (new KeyAdapter ()
         {
             @Override
             public void keyPressed (KeyEvent e)
             {
-                if      (e.getKeyCode () == KeyEvent.VK_DELETE) context.removeSelectedNode ();
-                else if (e.getKeyCode () == KeyEvent.VK_ENTER)  context.editSelectedNode ();
+                int keycode = e.getKeyCode ();
+                if (keycode == KeyEvent.VK_DELETE)
+                {
+                    deleteSelected ();
+                }
+                else if (keycode == KeyEvent.VK_INSERT)
+                {
+                    getSelected ().add ("", EquationTreePanel.this);
+                }
+                else if (keycode == KeyEvent.VK_ENTER)
+                {
+                    TreePath path = tree.getSelectionPath ();
+                    if (path != null) tree.startEditingAtPath (path);
+                }
+                else if (e.isAltDown ())
+                {
+                    if (keycode == KeyEvent.VK_UP)
+                    {
+                        moveSelected (-1);
+                    }
+                    else if (keycode == KeyEvent.VK_DOWN)
+                    {
+                        moveSelected (1);
+                    }
+                }
+            }
+        });
+
+        model.addTreeModelListener (new TreeModelListener ()
+        {
+            public void treeNodesChanged (TreeModelEvent e)
+            {
+                NodeBase parent = (NodeBase) e.getTreePath ().getLastPathComponent ();
+                int[] childIndices = e.getChildIndices ();
+                NodeBase changed;
+                if (childIndices == null) changed = parent;
+                else                      changed = (NodeBase) parent.getChildAt (childIndices[0]);
+
+                // TODO: tell node to update the EquationSet and database
+                System.out.println("The user has finished editing the node.");
+                System.out.println("New value: " + changed.getUserObject ());
+            }
+
+            public void treeNodesInserted (TreeModelEvent e)
+            {
+            }
+
+            public void treeNodesRemoved (TreeModelEvent e)
+            {
+            }
+
+            public void treeStructureChanged (TreeModelEvent e)
+            {
             }
         });
 
         // Side Buttons
 
-        btnAddEqn = new IconButton (ImageUtil.getImage ("addexpr.gif"), 2);
+        btnAddEqn = new IconButton (ImageUtil.getImage ("compnew.gif"), 2);
         btnAddEqn.setToolTipText ("Add Equation");
-        btnAddEqn.addActionListener (addNewListener);
+        btnAddEqn.setActionCommand ("Equation");
+        btnAddEqn.addActionListener (addListener);
 
         btnAddAnnot = new IconButton (ImageUtil.getImage ("addannot.gif"), 2);
         btnAddAnnot.setToolTipText ("Add Annotation");
-        btnAddAnnot.addActionListener (addAnnotListener);
+        btnAddAnnot.setActionCommand ("Annotation");
+        btnAddAnnot.addActionListener (addListener);
 
         btnAddRef = new IconButton (ImageUtil.getImage ("booknew.gif"), 2);
         btnAddRef.setToolTipText ("Add Reference");
-        btnAddRef.addActionListener (addRefListener);
-
-        btnEdit = new IconButton (ImageUtil.getImage ("edit.gif"), 2);
-        btnEdit.setToolTipText ("Edit");
-        btnEdit.addActionListener (editListener);
+        btnAddRef.setActionCommand ("Reference");
+        btnAddRef.addActionListener (addListener);
 
         btnRemove = new IconButton (ImageUtil.getImage ("remove.gif"), 2);
         btnRemove.setToolTipText ("Remove");
-        btnRemove.addActionListener (removeListener);
+        btnRemove.addActionListener (deleteListener);
 
         btnMoveUp = new IconButton (ImageUtil.getImage ("up.gif"), 2);
         btnMoveUp.setToolTipText ("Move Up");
-        btnMoveUp.addActionListener (moveUpListener);
+        btnMoveUp.setActionCommand ("-1");
+        btnMoveUp.addActionListener (moveListener);
 
         btnMoveDown = new IconButton (ImageUtil.getImage ("down.gif"), 2);
         btnMoveDown.setToolTipText ("Move Down");
-        btnMoveDown.addActionListener (moveDownListener);
+        btnMoveDown.setActionCommand ("1");
+        btnMoveDown.addActionListener (moveListener);
 
         btnRun = new IconButton (ImageUtil.getImage ("run.gif"), 2);
         btnRun.setToolTipText ("Run");
         btnRun.addActionListener (runListener);
 
         // Context Menus
-        JMenuItem mnuAddNew = new JMenuItem ("Add Equation", ImageUtil.getImage ("addexpr.gif"));
-        mnuAddNew.addActionListener (addNewListener);
+        JMenuItem mnuAddNew = new JMenuItem ("Add Equation", ImageUtil.getImage ("compnew.gif"));
+        mnuAddNew.setActionCommand ("Equation");
+        mnuAddNew.addActionListener (addListener);
 
         JMenuItem mnuAddAnnot = new JMenuItem ("Add Annotation", ImageUtil.getImage ("addannot.gif"));
-        mnuAddAnnot.addActionListener (addAnnotListener);
+        mnuAddAnnot.setActionCommand ("Annotation");
+        mnuAddAnnot.addActionListener (addListener);
 
         JMenuItem mnuAddRef = new JMenuItem ("Add Reference", ImageUtil.getImage ("booknew.gif"));
-        mnuAddRef.addActionListener (addRefListener);
-
-        JMenuItem mnuEdit = new JMenuItem ("Edit", ImageUtil.getImage ("edit.gif"));
-        mnuEdit.addActionListener (editListener);
-
-        JMenuItem mnuRemove = new JMenuItem ("Remove",  ImageUtil.getImage ("remove.gif"));
-        mnuRemove.addActionListener (removeListener);
-
-        mnuMoveUp = new JMenuItem ("Move &Up", ImageUtil.getImage ("up.gif"));
-        mnuMoveUp.addActionListener (moveUpListener);
-
-        mnuMoveDown = new JMenuItem ("Move &Down", ImageUtil.getImage ("down.gif"));
-        mnuMoveDown.addActionListener (moveDownListener);
-
-        mnuAddNewPopup = new JPopupMenu ();
-        mnuAddNewPopup.add (mnuAddNew);
+        mnuAddRef.setActionCommand ("Reference");
+        mnuAddRef.addActionListener (addListener);
 
         mnuEqPopup = new JPopupMenu ();
+        mnuEqPopup.add (mnuAddNew);
         mnuEqPopup.add (mnuAddAnnot);
         mnuEqPopup.add (mnuAddRef);
-        mnuEqPopup.add (new JSeparator ());
-        mnuEqPopup.add (mnuEdit);
-        mnuEqPopup.add (mnuRemove);
-        mnuEqPopup.add (new JSeparator ());
-        mnuEqPopup.add (mnuMoveUp);
-        mnuEqPopup.add (mnuMoveDown);
 
         Lay.BLtg (this,
-            "C", Lay.p (Lay.sp (treEqs), "eb=5r"),
+            "C", Lay.p (Lay.sp (tree), "eb=5r"),
             "E", Lay.BxL ("Y",
-                Lay.BL (btnAddEqn, "eb=5b,alignx=0.5,maxH=20"),
+                Lay.BL (btnAddEqn,   "eb=5b,alignx=0.5,maxH=20"),
                 Lay.BL (btnAddAnnot, "eb=5b,alignx=0.5,maxH=20"),
-                Lay.BL (btnAddRef, "eb=20b,alignx=0.5,maxH=20"),
-                Lay.BL (btnEdit, "eb=20b,alignx=0.5,maxH=20"),
-                Lay.BL (btnRemove, "eb=20b,alignx=0.5,maxH=20"),
-                Lay.BL (btnMoveUp, "eb=5b,alignx=0.5,maxH=20"),
-                Lay.BL (btnMoveDown, "eb=5b,alignx=0.5,maxH=20"),
+                Lay.BL (btnAddRef,   "eb=20b,alignx=0.5,maxH=20"),
+                Lay.BL (btnRemove,   "eb=20b,alignx=0.5,maxH=20"),
+                Lay.BL (btnMoveUp,   "eb=5b,alignx=0.5,maxH=20"),
+                Lay.BL (btnMoveDown, "eb=20b,alignx=0.5,maxH=20"),
+                Lay.BL (btnRun,      "eb=5b,alignx=0.5,maxH=20"),
                 Box.createVerticalGlue ()
             )
         );
-
-        context = new EquationTreeEditContext (uiController, treEqs);
-        checkEnabledButtons ();
     }
 
-    // /////////////
-    // LISTENERS //
-    // /////////////
+    public void setEquations (final MNode eqs)
+    {
+        GUIUtil.safe (new Runnable ()
+        {
+            public void run ()
+            {
+                loadRootFromDB (eqs);
+            }
+        });
+    }
 
-    ActionListener addNewListener = new ActionListener ()
+    public void loadRootFromDB (MNode doc)
+    {
+        record = doc;
+        try
+        {
+            EquationSet s = new EquationSet (record);
+            s.resolveConnectionBindings ();
+            root.part = s;
+            root.build (model);
+        }
+        catch (Exception e)
+        {
+            System.err.println ("Exception while parsing model: " + e);
+            e.printStackTrace ();
+        }
+    }
+
+    public NodeBase getSelected ()
+    {
+        NodeBase result = null;
+        TreePath path = tree.getSelectionPath ();
+        if (path != null) result = (NodeBase) path.getLastPathComponent ();
+        if (result == null) return root;
+        return result;
+    }
+
+    ActionListener addListener = new ActionListener ()
     {
         public void actionPerformed (ActionEvent e)
         {
-            context.addEquation ("");
+            getSelected ().add (e.getActionCommand (), EquationTreePanel.this);
         }
     };
-    ActionListener addAnnotListener = new ActionListener ()
+
+    ActionListener deleteListener = new ActionListener ()
     {
         public void actionPerformed (ActionEvent e)
         {
-            context.addAnnotationToSelected ();
+            deleteSelected ();
         }
     };
-    ActionListener addRefListener = new ActionListener ()
+
+    ActionListener moveListener = new ActionListener ()
     {
         public void actionPerformed (ActionEvent e)
         {
-            context.addReferenceToSelected ();
+            moveSelected (Integer.valueOf (e.getActionCommand ()));
         }
     };
-    ActionListener editListener = new ActionListener ()
-    {
-        public void actionPerformed (ActionEvent e)
-        {
-            context.editSelectedNode ();
-        }
-    };
-    ActionListener removeListener = new ActionListener ()
-    {
-        public void actionPerformed (ActionEvent e)
-        {
-            context.removeSelectedNode ();
-        }
-    };
-    ActionListener moveUpListener = new ActionListener ()
-    {
-        public void actionPerformed (ActionEvent e)
-        {
-            context.moveSelectedUp ();
-            checkEnabledButtons ();
-        }
-    };
-    ActionListener moveDownListener = new ActionListener ()
-    {
-        public void actionPerformed (ActionEvent e)
-        {
-            context.moveSelectedDown ();
-            checkEnabledButtons ();
-        }
-    };
+
     ActionListener runListener = new ActionListener ()
     {
         public void actionPerformed (ActionEvent e)
@@ -292,7 +344,7 @@ public class EquationTreePanel extends JPanel
 
             Simulator simulator = null;
             Simulator internal = null;
-            String simulatorName = model.get ("$metadata", "backend");
+            String simulatorName = record.get ("$metadata", "backend");
             for (ExtensionPoint ext : PluginManager.getExtensionsForPoint (Simulator.class))
             {
                 Simulator s = (Simulator) ext;
@@ -311,7 +363,7 @@ public class EquationTreePanel extends JPanel
             }
 
             final Simulator sim = simulator;
-            final Run run = new RunOrient (0.0, "", null, sim, User.getName (), "Pending", null, model);  // Most of these are useless properties, now handled by backend reading metadata from model.
+            final Run run = new RunOrient (0.0, "", null, sim, User.getName (), "Pending", null, record);  // Most of these are useless properties, now handled by backend reading metadata from model.
 
             uiController.getParentRef ().waitOn ();
             final CommonThread t = new CommonThread ()
@@ -344,77 +396,38 @@ public class EquationTreePanel extends JPanel
                 }
             });
             t.start ();
-
-            checkEnabledButtons ();
         }
     };
 
-    protected MouseListener contextMenuListener = new MouseAdapter ()
+    public void deleteSelected ()
     {
-        @Override
-        public void mouseReleased (MouseEvent e)
+        // TODO: Implement node delete
+        System.out.println ("Would have removed a tree node, if the code were written.");
+    }
+
+    public void moveSelected (int direction)
+    {
+        TreePath path = tree.getSelectionPath ();
+        if (path != null)
         {
-            if (SwingUtilities.isRightMouseButton (e)  &&   e.getClickCount () == 1)
+            DefaultMutableTreeNode node   = (DefaultMutableTreeNode) path.getLastPathComponent ();
+            DefaultMutableTreeNode parent = (DefaultMutableTreeNode) node.getParent ();
+            if (parent != null)
             {
-                TreePath selPath = treEqs.getPathForLocation (e.getX (), e.getY ());
-                if (selPath == null)
+                int index = parent.getIndex (node) + direction;
+                if (index >= 0  &&  index < parent.getChildCount ())
                 {
-                    mnuAddNewPopup.show (treEqs, e.getX (), e.getY ());
-                    return;
-                }
-                TNode nAny = (TNode) selPath.getLastPathComponent ();
-                treEqs.setSelectionPath (selPath);
-                if (nAny.getUserObject () instanceof NodeVariable)
-                {
-                    mnuMoveUp.setEnabled (btnMoveUp.isEnabled ());
-                    mnuMoveDown.setEnabled (btnMoveDown.isEnabled ());
-                    mnuEqPopup.show (treEqs, e.getX (), e.getY ());
+                    Object neighbor = parent.getChildAt (index);
+                    if (neighbor instanceof NodeVariable  ||  neighbor instanceof NodePart)
+                    {
+                        model.removeNodeFromParent (node);
+                        model.insertNodeInto (node, parent, index);
+                        path = new TreePath (model.getPathToRoot (node));
+                        tree.setSelectionPath (path);
+                        // TODO: update containing part.$metadata.gui.order
+                    }
                 }
             }
         }
-    };
-
-    public void setEquations (final MNode eqs)
-    {
-        GUIUtil.safe (new Runnable ()
-        {
-            public void run ()
-            {
-                context.reload (eqs);
-                treEqs.update ();
-            }
-        });
-    }
-
-    protected void checkEnabledButtons ()
-    {
-        boolean isAny = (treEqs.getSelectionCount () != 0);
-        boolean isOne = (treEqs.getSelectionCount () == 1);
-
-        btnAddAnnot.setEnabled (isOne);
-        btnAddRef  .setEnabled (isOne);
-        btnEdit    .setEnabled (isOne);
-        btnRemove  .setEnabled (isAny);
-
-        if (isOne)
-        {
-            TreePath selPath = treEqs.getSelectionPath ();
-            TNode    nSel    = (TNode) selPath.getLastPathComponent ();
-            NodeBase uSel    = (NodeBase) nSel.getUserObject ();
-            btnMoveUp  .setEnabled (uSel instanceof NodeEquation  &&  root.getIndex (nSel) > 0);
-            btnMoveDown.setEnabled (uSel instanceof NodeEquation  &&  root.getIndex (nSel) < root.getChildCount () - 1);
-        }
-        else
-        {
-            btnMoveUp  .setEnabled (false);
-            btnMoveDown.setEnabled (false);
-        }
-    }
-
-    public void postLayout ()
-    {
-        TModel model = (TModel) treEqs.getModel ();
-        model.reload ();
-        treEqs.updateUI ();
     }
 }

@@ -8,12 +8,11 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.eq.tree;
 
+import gov.sandia.n2a.ui.eq.EquationTreePanel;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
-import javax.swing.Icon;
 import javax.swing.ImageIcon;
-
-import replete.gui.controls.simpletree.NodeBase;
+import javax.swing.tree.DefaultTreeCellRenderer;
 
 public class NodeAnnotation extends NodeBase
 {
@@ -26,26 +25,34 @@ public class NodeAnnotation extends NodeBase
     {
         this.name  = name;
         this.value = value;
+
+        if (value.isEmpty ()) setUserObject (name);
+        else                  setUserObject (name + " = " + value);
     }
 
-    public void parseEditedString (String input)
+    @Override
+    public void prepareRenderer (DefaultTreeCellRenderer renderer, boolean selected, boolean expanded, boolean hasFocus)
     {
+        renderer.setIcon (icon);
+        setFont (renderer, false, false);
+    }
+
+    @Override
+    public void add (String type, EquationTreePanel model)
+    {
+        NodeBase parent = (NodeBase) getParent ();
+        if (type.isEmpty ()) parent.add ("Annotation", model);  // By context, we assume the user wants to add another annotation.
+        else                 parent.add (type, model);
+    }
+
+    @Override
+    public void applyEdit ()
+    {
+        String input = (String) getUserObject ();
+
         String[] parts = input.split ("=", 2);
         name = parts[0];
         if (parts.length > 1) value = parts[1];
         else                  value = "";
-    }
-
-    @Override
-    public Icon getIcon (boolean expanded)
-    {
-        return icon;
-    }
-
-    @Override
-    public String toString ()
-    {
-        if (value.isEmpty ()) return name;
-        return name + " = " + value;
     }
 }

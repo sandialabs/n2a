@@ -25,8 +25,6 @@ public class ModelEditPanel extends RecordEditPanel
             "N", createRecordControlsPanel (),
             "C", pnlEquations = new EquationTreePanel (uic, doc)
         );
-
-        reload ();
     }
 
     @Override

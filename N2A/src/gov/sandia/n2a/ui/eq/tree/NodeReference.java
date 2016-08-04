@@ -8,15 +8,12 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.eq.tree;
 
+import gov.sandia.n2a.ui.eq.EquationTreePanel;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
-import java.awt.Color;
-
-import javax.swing.Icon;
 import javax.swing.ImageIcon;
-
-import replete.gui.controls.simpletree.NodeBase;
+import javax.swing.tree.DefaultTreeCellRenderer;
 
 public class NodeReference extends NodeBase
 {
@@ -29,29 +26,28 @@ public class NodeReference extends NodeBase
     {
         this.index = index;
         comment = node.get ();
+        setUserObject (index + " -- " + comment);
     }
 
     public NodeReference (String index, String comment)
     {
         this.index = index;
         this.comment = comment;
+        setUserObject (index + " -- " + comment);
     }
 
     @Override
-    public Icon getIcon (boolean expanded)
+    public void prepareRenderer (DefaultTreeCellRenderer renderer, boolean selected, boolean expanded, boolean hasFocus)
     {
-        return icon;
+        renderer.setIcon (icon);
+        setFont (renderer, false, false);
     }
 
     @Override
-    public Color getForegroundColor ()
+    public void add (String type, EquationTreePanel model)
     {
-        return Color.black;
-    }
-
-    @Override
-    public String toString ()
-    {
-        return index + " -- " + comment;
+        NodeBase parent = (NodeBase) getParent ();
+        if (type.isEmpty ()) parent.add ("Reference", model);  // By context, we assume the user wants to add another reference.
+        else                 parent.add (type, model);
     }
 }
