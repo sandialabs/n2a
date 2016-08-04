@@ -33,11 +33,8 @@ public class RunEnsembleOrient implements RunEnsemble
     public RunEnsembleOrient (MNode src)
     {
         source = src;
-        Iterator<Entry<String, MNode>> i = source.childOrCreate ("runs").iterator ();
-        while (i.hasNext ())
+        for (MNode runDoc : source.childOrCreate ("runs"))
         {
-            Entry<String, MNode> e = i.next ();
-            MNode runDoc = e.getValue ();
             runDocs.add (runDoc);
             runs.add (new RunOrient (runDoc));
         }
@@ -129,11 +126,9 @@ public class RunEnsembleOrient implements RunEnsemble
     public List<String> getOutputExprs ()
     {
         List<String> result = new ArrayList<String> ();
-        Iterator<Entry<String, MNode>> i = source.childOrCreate ("outputExpressions").iterator ();
-        while (i.hasNext ())
+        for (MNode e : source.childOrCreate ("outputExpressions"))
         {
-            Entry<String, MNode> e = i.next ();
-            result.add (e.getKey ());  // assuming all "output expression" are unique
+            result.add (e.key ());  // assuming all "output expression" are unique
         }
         return result;
     }

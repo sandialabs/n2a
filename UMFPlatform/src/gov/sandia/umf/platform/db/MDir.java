@@ -20,7 +20,6 @@ import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
@@ -34,6 +33,7 @@ import java.util.TreeMap;
 **/
 public class MDir extends MNode
 {
+    protected String name;    // MDirs could be held in a collection, so this provides a way to reference them.
 	protected File   root;    // The directory containing the files or subdirs that constitute the children of this node
 	protected String suffix;  // Relative path to document file, or null if documents are directly under root
 
@@ -42,14 +42,38 @@ public class MDir extends MNode
 
     public MDir (File root)
     {
-        this (root, null);
+        this (null, root, null);
     }
 
 	public MDir (File root, String suffix)
 	{
-	    this.root = root;
-	    this.suffix = suffix;
-	    root.mkdirs ();  // We take the liberty of forcing the dir to exist.
+	    this (null, root, suffix);
+	}
+
+    public MDir (String name, File root, String suffix)
+    {
+        this.name = name;
+        this.root = root;
+        this.suffix = suffix;
+        root.mkdirs ();  // We take the liberty of forcing the dir to exist.
+    }
+
+	public String key ()
+	{
+	    if (name == null) return root.toString ();
+	    return name;
+	}
+
+	public String getOrDefault (String defaultValue)
+	{
+	    return root.toString ();  // We crash and burn if root is null, but that should never happen.
+	}
+
+	public File pathForChild (String index)
+	{
+        File result = new File (root, index);
+        if (suffix != null  &&  ! suffix.isEmpty ()) result = new File (result, suffix);
+        return result;
 	}
 
 	public synchronized MNode child (String index)
@@ -59,18 +83,16 @@ public class MDir extends MNode
 	    if (reference != null) result = reference.get ();
 	    if (result == null)  // We have never loaded this document, or it has been garbage collected.
 	    {
-            File path = new File (index);
-            if (suffix != null) path = new File (path, suffix);
-	        if (! new File (root, path.getPath ()).canRead ()) return null;
-	        result = new MDoc (this, path.toString ());
+	        if (! pathForChild (index).canRead ()) return null;
+	        result = new MDoc (this, index);
 	        children.put (index, new SoftReference<MDoc> (result));
 	    }
         return result;
     }
 
 	/**
-	    Empty this directory of all files!
-	    This is an extremely dangerous function. It destroys all data on disk and all data pending in memory.
+	    Empty this directory of all files.
+	    This is an extremely dangerous function! It destroys all data in the directory on disk and all data pending in memory.
 	**/
     public synchronized void clear ()
     {
@@ -103,16 +125,7 @@ public class MDir extends MNode
         SoftReference<MDoc> ref = children.remove (index);
         MDoc doc = ref.get ();
         if (ref != null) writeQueue.remove (doc);
-        Path path;
-        if (suffix.isEmpty ()) path = Paths.get (root.getAbsolutePath (), index);
-        else                   path = Paths.get (root.getAbsolutePath (), index, suffix);
-        try
-        {
-            Files.delete (path);
-        }
-        catch (IOException e)
-        {
-        }
+        pathForChild (index).delete ();
     }
 
     public synchronized int length ()
@@ -140,38 +153,21 @@ public class MDir extends MNode
         MDoc result = (MDoc) child (index);
         if (result == null)  // new document
         {
-            File path = new File (index);
-            if (suffix != null) path = new File (path, suffix);
-            result = new MDoc (this, path.toString ());
+            result = new MDoc (this, index);
             children.put (index, new SoftReference<MDoc> (result));
             result.markChanged ();  // Set the new document to save
         }
         else  // existing document; move if needed
         {
-            if (value.isEmpty ()  ||  value.equals (index)) return result;
-
-            // Move the document in our internal collection.
-            children.remove (index);
-            children.put (value, new SoftReference<MDoc> (result));
+            if (value == null  ||  value.isEmpty ()  ||  value.equals (index)) return result;
+            result.set (value);  // MDoc does all the low-level work, including updating our children collection with the new index
             // Note: We don't need to mark this document to be saved, since we are moving an existing file on disk.
             // However, if the document currently has unsaved changes, they will eventually get written to the new location.
-
-            // Move the document on disk.
-            // Don't use suffix even if it is non-empty, because in that case we want to move the whole directory named by index.
-            Path oldPath = Paths.get (root.getAbsolutePath (), index);
-            Path newPath = Paths.get (root.getAbsolutePath (), index);
-            try
-            {
-                Files.move (oldPath, newPath, StandardCopyOption.REPLACE_EXISTING);
-            }
-            catch (IOException e)
-            {
-            }
         }
         return result;
     }
 
-    public synchronized Iterator<Entry<String,MNode>> iterator ()
+    public synchronized Iterator<MNode> iterator ()
     {
         TreeMap<String,MNode> dir = new TreeMap<String,MNode> ();
         String[] fileNames = root.list ();  // This may cost a lot of time in some cases. However, N2A should never have more than about 10,000 models in a dir.
@@ -191,7 +187,7 @@ public class MDir extends MNode
             dir.put (index, doc);
         }
         for (MDoc doc : writeQueue) dir.put (doc.get (), doc);  // Just in case there are new docs that aren't on the disk yet.
-        return dir.entrySet ().iterator ();
+        return new MVolatile.IteratorWrapper (dir.entrySet ().iterator ());
     }
 
     public synchronized void save ()

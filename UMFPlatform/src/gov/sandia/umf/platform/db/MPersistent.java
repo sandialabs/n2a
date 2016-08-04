@@ -7,7 +7,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.db;
 
-import java.util.Map.Entry;
 import java.util.TreeMap;
 
 public class MPersistent extends MVolatile
@@ -26,6 +25,24 @@ public class MPersistent extends MVolatile
 	    this.parent = parent;
 	}
 
+    public MPersistent (MPersistent parent, String name, String value)
+    {
+        super (name, value);
+        this.parent = parent;
+    }
+
+    /**
+        Return the highest-level MPersistent that contains us.
+        Generally, this will be an MDoc.
+    **/
+	public MNode getRoot ()
+	{
+	    MPersistent result = this;
+	    while (result.parent instanceof MPersistent) result = (MPersistent) result.parent;
+	    // Since MDir is not an MPersistent, the loop should stop on the top-level MDoc, which is what we really want.
+	    return result;
+	}
+
 	public synchronized void markChanged ()
 	{
 	    if (! needsWrite)
@@ -38,9 +55,9 @@ public class MPersistent extends MVolatile
 	public synchronized void clearChanged ()
 	{
 	    needsWrite = false;
-        for (Entry<String,MNode> i : this)
+        for (MNode i : this)
         {
-            ((MPersistent) i.getValue ()).clearChanged ();
+            ((MPersistent) i).clearChanged ();
         }
 	}
 
@@ -76,7 +93,7 @@ public class MPersistent extends MVolatile
         {
             markChanged ();
             children = new TreeMap<String,MNode> (comparator);
-            MNode result = new MPersistent (this, value);
+            MNode result = new MPersistent (this, index, value);
             children.put (index, result);
             return result;
         }
@@ -84,7 +101,7 @@ public class MPersistent extends MVolatile
         if (result == null)
         {
             markChanged ();
-            result = new MPersistent (this, value);
+            result = new MPersistent (this, index, value);
             children.put (index, result);
             return result;
         }

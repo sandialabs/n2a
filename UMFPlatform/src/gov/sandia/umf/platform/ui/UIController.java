@@ -178,16 +178,10 @@ public class UIController {
 
     public void delete (MNode record)
     {
-        final MDoc doc = (MDoc) record;
-        if (doc == null) return;
-        startAction ("Deleting", new CommonRunnable ()
+        if (record instanceof MDoc)
         {
-            public void runThread(CommonThreadContext context) throws CommonThreadShutdownException
-            {
-                doc.delete ();
-            }
-            public void cleanUp() {}
-        }, null, "deleting");
+            ((MDoc) record).delete ();
+        }
     }
 
 
@@ -463,8 +457,7 @@ public class UIController {
             public void runThread (CommonThreadContext context) throws CommonThreadShutdownException
             {
                 List<MNode> docs = new ArrayList<MNode> ();
-                Iterator<Entry<String, MNode>> i = AppData.getInstance ().models.iterator ();
-                while (i.hasNext ()) docs.add (i.next ().getValue ());
+                for (MNode i : AppData.getInstance ().models) docs.add (i);
                 onSuccessCallback.stateChanged (new ChangeEvent (docs));  // TODO: move this to callback position in startAction() ?
             }
             public void cleanUp () {}

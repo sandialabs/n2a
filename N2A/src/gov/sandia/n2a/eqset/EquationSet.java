@@ -125,15 +125,12 @@ public class EquationSet implements Comparable<EquationSet>
         Map<String,MNode> inherits = new TreeMap<String,MNode> ();
         Map<String,MNode> includes = new TreeMap<String,MNode> ();
         Map<String,MNode> others   = new TreeMap<String,MNode> ();
-        for (Entry<String,MNode> e : source)
+        for (MNode e : source)
         {
-            String index = e.getKey ();
+            String index = e.key ();
             if (index.equals ("$metadata"))
             {
-                for (Entry<String,MNode> m : e.getValue ())
-                {
-                    metadata.put (m.getKey (), m.getValue ().get ());
-                }
+                for (MNode m : e) metadata.put (m.key (), m.get ());
             }
             else if (index.equals ("$reference"))
             {
@@ -141,10 +138,10 @@ public class EquationSet implements Comparable<EquationSet>
             }
             else  // regular equation
             {
-                String value = e.getValue ().get ();
-                if      (value.contains ("$inherit")) inherits.put (e.getKey (), e.getValue ());
-                else if (value.contains ("$include")) includes.put (e.getKey (), e.getValue ());
-                else                                  others  .put (e.getKey (), e.getValue ());
+                String value = e.get ();
+                if      (value.contains ("$inherit")) inherits.put (e.key (), e);
+                else if (value.contains ("$include")) includes.put (e.key (), e);
+                else                                  others  .put (e.key (), e);
             }
         }
 
@@ -191,10 +188,7 @@ public class EquationSet implements Comparable<EquationSet>
         MNode m = source.child ("$metadata");
         if (m != null)
         {
-            for (Entry<String,MNode> e : m)
-            {
-                metadata.put (e.getKey (), e.getValue ().get ());
-            }
+            for (MNode e : m) metadata.put (e.key (), e.get ());
         }
 
         pushDown ();

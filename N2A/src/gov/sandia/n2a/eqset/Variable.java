@@ -99,17 +99,14 @@ public class Variable implements Comparable<Variable>
             rhs = parseAssignment (rhs);
             if (! rhs.isEmpty ()) add (new EquationEntry (rhs));
         }
-        for (Entry<String,MNode> i : source)
+        for (MNode i : source)
         {
-            String key = i.getKey ();
-            if (key.startsWith ("@")) add (new EquationEntry (key.substring (1), i.getValue ()));
+            String key = i.key ();
+            if (key.startsWith ("@")) add (new EquationEntry (key.substring (1), i));
             if (key.equals ("$metadata"))
             {
                 if (metadata == null) metadata = new TreeMap<String,String> ();
-                for (Entry<String,MNode> m : i.getValue ())
-                {
-                    metadata.put (m.getKey (), m.getValue ().get ());
-                }
+                for (MNode m : i) metadata.put (m.key (), m.get ());
             }
             if (key.equals ("$reference"))
             {

@@ -21,10 +21,7 @@ import java.awt.event.KeyListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map.Entry;
-
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
 import javax.swing.JLabel;
@@ -93,10 +90,9 @@ public class SearchPanel extends JPanel implements DefaultButtonEnabledPanel
     {
         uiController = uic;
         mdlQuery = new NoFireComboBoxModel ();
-        Iterator<Entry<String,MNode>> queries = AppState.getState ().childOrCreate ("Queries").iterator ();
-        while (queries.hasNext ())
+        for (MNode query : AppState.getState ().childOrCreate ("Queries"))
         {
-            mdlQuery.addElement (queries.next ().getValue ().get ());
+            mdlQuery.addElement (query.get ());
         }
 
         lstResults = new JList<MNode> (mdlResults = new DefaultListModel<MNode> ());

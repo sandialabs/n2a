@@ -14,6 +14,7 @@ import java.util.TreeMap;
 
 public class MVolatile extends MNode
 {
+    protected String name;
 	protected String value;
 	protected NavigableMap<String,MNode> children;
 
@@ -23,7 +24,19 @@ public class MVolatile extends MNode
 
 	public MVolatile (String value)
 	{
-	    if (! value.isEmpty ()) this.value = value;
+	    if (value != null  &&  ! value.isEmpty ()) this.value = value;
+	}
+
+    public MVolatile (String name, String value)
+    {
+        if (name  != null  &&  ! name .isEmpty ()) this.name  = name;
+        if (value != null  &&  ! value.isEmpty ()) this.value = value;
+    }
+
+	public String key ()
+	{
+	    if (name == null) return "";
+	    return name;
 	}
 
 	public synchronized MNode child (String index)
@@ -66,14 +79,14 @@ public class MVolatile extends MNode
         if (children == null)
         {
             children = new TreeMap<String,MNode> (comparator);
-            MNode result = new MVolatile (value);
+            MNode result = new MVolatile (index, value);
             children.put (index, result);
             return result;
         }
         MNode result = children.get (index);
         if (result == null)
         {
-            result = new MVolatile (value);
+            result = new MVolatile (index, value);
             children.put (index, result);
             return result;
         }
@@ -81,9 +94,34 @@ public class MVolatile extends MNode
         return result;
     }
 
-    public synchronized Iterator<Entry<String,MNode>> iterator ()
+    public static class IteratorWrapper implements Iterator<MNode>
+    {
+        Iterator<Entry<String,MNode>> iterator;
+
+        public IteratorWrapper (Iterator<Entry<String,MNode>> iterator)
+        {
+            this.iterator = iterator;
+        }
+
+        public boolean hasNext ()
+        {
+            return iterator.hasNext ();
+        }
+
+        public MNode next ()
+        {
+            return iterator.next ().getValue ();
+        }
+
+        public void remove ()
+        {
+            iterator.remove ();
+        }
+    }
+
+    public synchronized Iterator<MNode> iterator ()
     {
         if (children == null) return new MNode.IteratorEmpty ();
-        return children.entrySet ().iterator ();
+        return new IteratorWrapper (children.entrySet ().iterator ());
     }
 }

@@ -13,8 +13,11 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.lang.ref.SoftReference;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.TreeMap;
 
 /**
@@ -32,11 +35,36 @@ import java.util.TreeMap;
 **/
 public class MDoc extends MPersistent
 {
-	public MDoc (MDir parent, String fileName)
-	{
-	    super (null, fileName);  // We cheat a little here, since MDir is not an MPersistent. TODO: Should MDir be an MPersistent?
-	    this.parent = parent;
-	}
+    /**
+        Constructs a document as a child of an MDir.
+        In this case, the key contains the file name in the dir, and the full path is constructed
+        when needed using information from the parent.
+    **/
+    public MDoc (MDir parent, String index)
+    {
+        this (parent, index, null);
+    }
+
+    /**
+        Constructs a stand-alone document.
+        In this case, the value contains the full path to the file on disk.
+    **/
+    public MDoc (String path)
+    {
+        this (null, null, path);
+    }
+
+    public MDoc (MDir parent, String name, String path)
+    {
+        super (null, name, path);  // We cheat a little here, since MDir is not an MPersistent.
+        this.parent = parent;
+    }
+
+    public File path ()
+    {
+        if (parent == null) return new File (value);
+        return ((MDir) parent).pathForChild (name);
+    }
 
     public synchronized void markChanged ()
     {
@@ -69,7 +97,7 @@ public class MDoc extends MPersistent
                 System.err.println ("Failed to delete file: " + value);
             }
         }
-        else parent.clear (value);  // value is our file name, and thus our index
+        else parent.clear (name);
     }
 
     public synchronized MNode child (String index)
@@ -78,11 +106,37 @@ public class MDoc extends MPersistent
         return children.get (index);
     }
 
+    /**
+        Moves the file on disk.
+        This works both on stand-alone documents and documents stored in an MDir.
+        In the MDir case, the key is updated rather than the value.
+    **/
     public void set (String value)
     {
-        // Move the file on disk and in the MDir's children collection.
-        // To avoid an infinite loop, MDir.set(String,String) does not call this function.
-        ((MDir) parent).set (value, this.value);
+        try
+        {
+            if (parent == null)
+            {
+                Files.move (Paths.get (this.value), Paths.get (value), StandardCopyOption.REPLACE_EXISTING);
+                this.value = value;
+            }
+            else
+            {
+                MDir dir = (MDir) parent;
+                Path oldPath = Paths.get (dir.pathForChild (name ).getAbsolutePath ());
+                Path newPath = Paths.get (dir.pathForChild (value).getAbsolutePath ());
+                Files.move (oldPath, newPath, StandardCopyOption.REPLACE_EXISTING);
+
+                // change the key to match the new file
+                dir.children.remove (name);
+                dir.children.put (value, new SoftReference<MDoc> (this));
+                name = value;
+            }
+        }
+        catch (IOException e)
+        {
+            System.err.println ("Failed to move file: " + this.value + " --> " + value);
+        }
     }
 
     public synchronized MNode set (String value, String index)
@@ -97,13 +151,10 @@ public class MDoc extends MPersistent
 	public synchronized void load ()
 	{
 	    if (children != null) return;  // already loaded
-	    if (value == null) return;  // we have no file name, so can't load
 	    children = new TreeMap<String,MNode> (comparator);
         try
         {
-            File file;
-            if (parent == null) file = new File (value);
-            else                file = new File (((MDir) parent).root, value);
+            File file = path ();
             BufferedReader reader = new BufferedReader (new FileReader (file));
             String line = reader.readLine ().trim ();
             String[] pieces = line.split ("=", 2);
@@ -128,9 +179,7 @@ public class MDoc extends MPersistent
 	    if (! needsWrite) return;
 	    try
 	    {
-            File file;
-            if (parent == null) file = new File (value);
-            else                file = new File (((MDir) parent).root, value);
+            File file = path ();
 	        BufferedWriter writer = new BufferedWriter (new FileWriter (file));
 	        writer.write (String.format ("N2A.schema=1%n"));
 	        write (writer, "");

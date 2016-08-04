@@ -24,7 +24,7 @@ public class AppState extends MDoc
 
     public AppState ()
     {
-        super (null, new File (UMF.getAppResourceDir (), "client.state").getAbsolutePath ());
+        super (new File (UMF.getAppResourceDir (), "client.state").getAbsolutePath ());
         UMF.getAppResourceDir ().mkdirs ();  // ensure the folder exists
     }
 }

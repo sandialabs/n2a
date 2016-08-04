@@ -14,59 +14,20 @@ import java.io.Writer;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Iterator;
-import java.util.Map;
-import java.util.Map.Entry;
+import java.util.List;
 
 /**
     A hierarchical key-value storage system, with subclasses that provide persistence.
     The "M" in MNode refers to the MUMPS language, in which variables have this hierarchical structure.
 
-    This class and all its descendents are thread-safe.
+    This class and all its descendants are thread-safe.
 **/
-public class MNode implements Iterable<Map.Entry<String,MNode>>
+public class MNode implements Iterable<MNode>, Comparable<MNode>
 {
-    public static class MOrder implements Comparator<String>
+    public String key ()
     {
-        // It might be possible to write a more efficient M collation routine by sifting through
-        // each string, character by character. It would do the usual string comparison while
-        // simultaneously converting each string into a number. As long as a string still
-        // appears to be a number, conversion continues.
-        // This current version is easier to write and understand, but less efficient.
-        public int compare (String A, String B)
-        {
-            if (A.equals (B)) return 0;  // If strings follow M collation rules, then compare for equals works for numbers.
-
-            Double Avalue = null;
-            try
-            {
-                Avalue = Double.valueOf (A);
-            }
-            catch (NumberFormatException e)
-            {
-            }
-
-            Double Bvalue = null;
-            try
-            {
-                Bvalue = Double.valueOf (B);
-            }
-            catch (NumberFormatException e)
-            {
-            }
-
-            if (Avalue == null)  // A is a string
-            {
-                if (Bvalue == null) return A.compareTo (B);  // Both A and B are strings
-                return 1;  // string > number
-            }
-            else  // A is a number
-            {
-                if (Bvalue == null) return -1;  // number < string
-                return (int) Math.signum (Avalue - Bvalue);
-            }
-        }
+        return "";
     }
-    public static MOrder comparator = new MOrder ();
 
     /**
         Returns the child indicated by the given index, or null if it doesn't exist.
@@ -91,6 +52,20 @@ public class MNode implements Iterable<Map.Entry<String,MNode>>
     }
 
     /**
+        Returns a child node from arbitrary depth, or null if any part of the path doesn't exist.
+    **/
+    public synchronized MNode child (List<String> indices)
+    {
+        MNode result = this;
+        for (String index : indices)
+        {
+            result = result.child (index);
+            if (result == null) break;
+        }
+        return result;
+    }
+
+    /**
         Retrieves a child node from arbitrary depth, or creates it if nonexistent.
         Like a combination of child() and set().
         The benefit of getting back a node rather than a value is ease of access
@@ -111,8 +86,9 @@ public class MNode implements Iterable<Map.Entry<String,MNode>>
     /**
         Remove all children.
     **/
-    public void clear ()
+    public synchronized void clear ()
     {
+        for (MNode n : this) clear (n.key ());
     }
 
     /**
@@ -120,6 +96,18 @@ public class MNode implements Iterable<Map.Entry<String,MNode>>
     **/
     public void clear (String index)
     {
+    }
+
+    public synchronized void clear (String index0, String... deeperIndices)
+    {
+        MNode c = child (index0);
+        int last = deeperIndices.length - 1;
+        for (int i = 0; i < last; i++)
+        {
+            if (c == null) return;  // Nothing to clear
+            c = c.child (deeperIndices[i]);
+        }
+        if (c != null) c.clear (deeperIndices[last]);
     }
 
     /**
@@ -256,14 +244,14 @@ public class MNode implements Iterable<Map.Entry<String,MNode>>
         }
     }
 
-    public static class IteratorEmpty implements Iterator<Entry<String,MNode>>
+    public static class IteratorEmpty implements Iterator<MNode>
     {
         public boolean hasNext ()
         {
             return false;
         }
 
-        public Entry<String,MNode> next ()
+        public MNode next ()
         {
             return null;
         }
@@ -274,7 +262,7 @@ public class MNode implements Iterable<Map.Entry<String,MNode>>
         }
     }
 
-    public Iterator<Entry<String, MNode>> iterator ()
+    public Iterator<MNode> iterator ()
     {
         return new MNode.IteratorEmpty ();
     }
@@ -284,27 +272,19 @@ public class MNode implements Iterable<Map.Entry<String,MNode>>
         /**
             @return true to recurse below current node. false if further recursion below this node is not needed.
         **/
-        public boolean visit (MNode node, String index)
+        public boolean visit (MNode node)
         {
             return false;  // Since this default implementation doesn't do anything, might as well stop.
         }
     }
 
-    public void visit (Visitor v)
-    {
-        visit (v, "");
-    }
-
     /**
         Execute some operation on each node in the tree. Traversal is depth-first.
     **/
-    public synchronized void visit (Visitor v, String index)
+    public synchronized void visit (Visitor v)
     {
-        v.visit (this, index);
-        for (Entry<String,MNode> e : this)  // We are an Iterable. In particular, we iterate over the children nodes.
-        {
-            e.getValue ().visit (v, e.getKey ());
-        }
+        v.visit (this);
+        for (MNode c : this) c.visit (v);  // We are an Iterable. In particular, we iterate over the children nodes.
     }
 
     /**
@@ -318,12 +298,12 @@ public class MNode implements Iterable<Map.Entry<String,MNode>>
     {
         String value = that.get ();
         if (! value.isEmpty ()) set (value);
-        for (Entry<String,MNode> e : that)
+        for (MNode thatChild : that)
         {
-            String index = e.getKey ();
+            String index = thatChild.key ();
             MNode c = child (index);
             if (c == null) c = set ("", index);  // ensure a target child node exists
-            c.merge (e.getValue ());
+            c.merge (thatChild);
         }
     }
 
@@ -453,11 +433,10 @@ public class MNode implements Iterable<Map.Entry<String,MNode>>
     public synchronized void write (Writer writer, String space) throws IOException
     {
         String space2 = space + " ";
-        for (Entry<String,MNode> e : this)  // if this node has no children, nothing at all is written
+        for (MNode c : this)  // if this node has no children, nothing at all is written
         {
-            MNode child = e.getValue ();
-            String index = e.getKey ();
-            String value = child.get ();
+            String index = c.key ();
+            String value = c.get ();
             String newLine = String.format ("%n");
             if (value.isEmpty ())
             {
@@ -472,8 +451,69 @@ public class MNode implements Iterable<Map.Entry<String,MNode>>
                 }
                 writer.write (String.format ("%s%s=%s%n", space, index, value));
             }
-            child.write (writer, space2);
+            c.write (writer, space2);
         }
+    }
+
+    // It might be possible to write a more efficient M collation routine by sifting through
+    // each string, character by character. It would do the usual string comparison while
+    // simultaneously converting each string into a number. As long as a string still
+    // appears to be a number, conversion continues.
+    // This current version is easier to write and understand, but less efficient.
+    public static int compare (String A, String B)
+    {
+        if (A.equals (B)) return 0;  // If strings follow M collation rules, then compare for equals works for numbers.
+
+        Double Avalue = null;
+        try
+        {
+            Avalue = Double.valueOf (A);
+        }
+        catch (NumberFormatException e)
+        {
+        }
+
+        Double Bvalue = null;
+        try
+        {
+            Bvalue = Double.valueOf (B);
+        }
+        catch (NumberFormatException e)
+        {
+        }
+
+        if (Avalue == null)  // A is a string
+        {
+            if (Bvalue == null) return A.compareTo (B);  // Both A and B are strings
+            return 1;  // string > number
+        }
+        else  // A is a number
+        {
+            if (Bvalue == null) return -1;  // number < string
+            return (int) Math.signum (Avalue - Bvalue);
+        }
+    }
+
+    public static class MOrder implements Comparator<String>
+    {
+        public int compare (String A, String B)
+        {
+            return MNode.compare (A, B);
+        }
+    }
+    public static MOrder comparator = new MOrder ();
+
+    @Override
+    public int compareTo (MNode that)
+    {
+        return compare (key (), that.key ());
+    }
+
+    @Override
+    public boolean equals (Object that)
+    {
+        if (that instanceof MNode) return compareTo ((MNode) that) == 0;
+        return false;
     }
 
     public String toString ()
