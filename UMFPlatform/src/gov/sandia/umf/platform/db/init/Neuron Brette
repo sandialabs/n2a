@@ -9,7 +9,7 @@ $metadata
    
    This part does not specify sizes, which means V and I really represent voltage/current DENSITIES.
    Alternatively, one can imagine this represents a 1 cm^2 compartment.
-parent=$inherit("Neuron Hodgkin-Huxley")
+$inherit="Neuron Hodgkin-Huxley"
 alpha_m =: 1000.0 * 0.32 * (13.0 - 1000.0 * V + VT) / (exp((13.0 - 1000.0 * V + VT) / 4.0) - 1.0)
 beta_m =: 1000.0 * 0.28 * (1000.0 * V - VT - 40.0) / (exp((1000.0 * V - VT - 40.0) / 5.0) - 1.0)
 alpha_h =: 1000.0 * 0.128 * exp((17.0 - 1000.0 * V + VT) / 18.0)

@@ -7,20 +7,31 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.eq.tree;
 
+import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.EquationTreePanel;
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import javax.swing.ImageIcon;
 import javax.swing.tree.DefaultTreeCellRenderer;
-import javax.swing.tree.TreePath;
+import javax.swing.tree.DefaultTreeModel;
 
 public class NodeReferences extends NodeBase
 {
     protected static ImageIcon icon = ImageUtil.getImage ("properties.gif");
 
-    public NodeReferences ()
+    public NodeReferences (MPart source)
     {
+        this.source = source;
         setUserObject ("$reference");
+    }
+
+    public void build (DefaultTreeModel model)
+    {
+        for (MNode c : source)
+        {
+            model.insertNodeInto (new NodeReference ((MPart) c), this, this.getChildCount ());
+        }
     }
 
     @Override
@@ -31,20 +42,26 @@ public class NodeReferences extends NodeBase
     }
 
     @Override
-    public void add (String type, EquationTreePanel panel)
+    public NodeBase add (String type, EquationTreePanel panel)
     {
         if (type.isEmpty ()  ||  type.equals ("Reference"))
         {
             // Add a new reference to our children
-            NodeBase child = new NodeReference ("", "");
+            int suffix = 1;
+            while (source.child ("r" + suffix) != null) suffix++;
+            NodeBase child = new NodeReference ((MPart) source.set ("", "r" + suffix));
             panel.model.insertNodeInto (child, this, getChildCount ());
-            TreePath path = new TreePath (child.getPath ());
-            panel.tree.scrollPathToVisible (path);  // TODO: is this really necessary? IE: does startEditingAtPath() take care of this for us?
-            panel.tree.startEditingAtPath (path);
+            return child;
         }
         else
         {
-            ((NodeBase) getParent ()).add (type, panel);
+            return ((NodeBase) getParent ()).add (type, panel);
         }
+    }
+
+    @Override
+    public boolean allowEdit ()
+    {
+        return false;
     }
 }

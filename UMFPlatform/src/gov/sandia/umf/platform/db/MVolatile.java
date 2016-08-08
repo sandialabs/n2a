@@ -94,6 +94,15 @@ public class MVolatile extends MNode
         return result;
     }
 
+    public synchronized void move (String fromIndex, String toIndex)
+    {
+        if (children == null) children = new TreeMap<String,MNode> (comparator);
+        MNode source = children.get (fromIndex);
+        children.remove (toIndex);
+        children.remove (fromIndex);
+        if (source != null) children.put (toIndex, source);
+    }
+
     public static class IteratorWrapper implements Iterator<MNode>
     {
         Iterator<Entry<String,MNode>> iterator;

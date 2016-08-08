@@ -244,6 +244,44 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         }
     }
 
+    /**
+        Deep copies the source node into this node, while leaving any non-overlapping values in
+        this node unchanged. The value of this node will only be replaced if the value of the source
+        node is not empty. In either case, any matching children are then merged. Any children in the
+        source with no match in this node are deep-copied. Any children in this node with no match in
+        the source remain unchanged.
+    **/
+    public synchronized void merge (MNode that)
+    {
+        String value = that.get ();
+        if (! value.isEmpty ()) set (value);
+        for (MNode thatChild : that)
+        {
+            String index = thatChild.key ();
+            MNode c = child (index);
+            if (c == null) c = set ("", index);  // ensure a target child node exists
+            c.merge (thatChild);
+        }
+    }
+
+    /**
+        Changes the key of a child.
+        Any previously existing node at the destination key will be completely erased and replaced.
+        An entry will no longer exist at the source key.
+        If the source does not exist before the move, then neither node will exist afterward.
+    **/
+    public synchronized void move (String fromIndex, String toIndex)
+    {
+        clear (toIndex);
+        MNode source = child (fromIndex);
+        if (source != null)
+        {
+            MNode destination = set ("", toIndex);
+            destination.merge (source);
+        }
+        clear (fromIndex);
+    }
+
     public static class IteratorEmpty implements Iterator<MNode>
     {
         public boolean hasNext ()
@@ -285,26 +323,6 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     {
         v.visit (this);
         for (MNode c : this) c.visit (v);  // We are an Iterable. In particular, we iterate over the children nodes.
-    }
-
-    /**
-        Deep copies the source node into this node, while leaving any non-overlapping values in
-        this node unchanged. The value of this node will only be replaced if the value of the source
-        node is not empty. In either case, any matching children are then merged. Any children in the
-        source with no match in this node are deep-copied. Any children in this node with no match in
-        the source remain unchanged.
-    **/
-    public synchronized void merge (MNode that)
-    {
-        String value = that.get ();
-        if (! value.isEmpty ()) set (value);
-        for (MNode thatChild : that)
-        {
-            String index = thatChild.key ();
-            MNode c = child (index);
-            if (c == null) c = set ("", index);  // ensure a target child node exists
-            c.merge (thatChild);
-        }
     }
 
     /**
@@ -411,14 +429,12 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     }
 
     /**
-        Produces an indented hierarchical list of indices and values from entire tree.
-        Note that an empty value simply produces no characters rather than two quote marks.
+        Convenience function for calling write(Writer,String) with no initial indent.
     **/
     public synchronized void write (Writer writer)
     {
         try
         {
-            writer.write (String.format ("%s%n", get ()));  // At the top level, we don't know any index referring to us, so simply dump the value.
             write (writer, "");
         }
         catch (IOException e)
@@ -428,31 +444,32 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     /**
         Produces an indented hierarchical list of indices and values from entire tree.
-        Also note that an empty value simply produces no characters rather than two quote marks.
+        Note that this function is not exactly idempotent with read(). Rather, this function
+        writes the node, then its children. read() only reads children. To use write() in
+        a way that is exactly idempotent with read(), use a line like:
+        <code>for (MNode c : NodeWhoseChildrenYouWantToWrite) c.write (writer, indent);</code>
     **/
     public synchronized void write (Writer writer, String space) throws IOException
     {
-        String space2 = space + " ";
-        for (MNode c : this)  // if this node has no children, nothing at all is written
+        String index = key ();
+        String value = get ();
+        if (value.isEmpty ())
         {
-            String index = c.key ();
-            String value = c.get ();
-            String newLine = String.format ("%n");
-            if (value.isEmpty ())
-            {
-                writer.write (String.format ("%s%s%n", space, index));
-            }
-            else
-            {
-                if (value.contains (newLine))  // go into extended text write mode
-                {
-                    value = value.replace (newLine, newLine + space + "  ");
-                    value = "|" + newLine + space + "  " + value;
-                }
-                writer.write (String.format ("%s%s=%s%n", space, index, value));
-            }
-            c.write (writer, space2);
+            writer.write (String.format ("%s%s%n", space, index));
         }
+        else
+        {
+            String newLine = String.format ("%n");
+            if (value.contains (newLine))  // go into extended text write mode
+            {
+                value = value.replace (newLine, newLine + space + "  ");
+                value = "|" + newLine + space + "  " + value;
+            }
+            writer.write (String.format ("%s%s=%s%n", space, index, value));
+        }
+
+        String space2 = space + " ";
+        for (MNode c : this) c.write (writer, space2);  // if this node has no children, nothing at all is written
     }
 
     // It might be possible to write a more efficient M collation routine by sifting through

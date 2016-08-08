@@ -31,17 +31,10 @@ public class MPersistent extends MVolatile
         this.parent = parent;
     }
 
-    /**
-        Return the highest-level MPersistent that contains us.
-        Generally, this will be an MDoc.
-    **/
-	public MNode getRoot ()
-	{
-	    MPersistent result = this;
-	    while (result.parent instanceof MPersistent) result = (MPersistent) result.parent;
-	    // Since MDir is not an MPersistent, the loop should stop on the top-level MDoc, which is what we really want.
-	    return result;
-	}
+    public MNode getParent ()
+    {
+        return parent;
+    }
 
 	public synchronized void markChanged ()
 	{
@@ -69,7 +62,7 @@ public class MPersistent extends MVolatile
 
 	public synchronized void set (String value)
     {
-        if (value.isEmpty ())
+        if (value == null  ||  value.isEmpty ())
         {
             if (this.value != null)
             {
@@ -79,7 +72,7 @@ public class MPersistent extends MVolatile
         }
         else
         {
-            if (! this.value.equals (value))
+            if (this.value == null  ||  ! this.value.equals (value))
             {
                 this.value = value;
                 markChanged ();
@@ -107,5 +100,19 @@ public class MPersistent extends MVolatile
         }
         result.set (value);
         return result;
+    }
+
+    public synchronized void move (String fromIndex, String toIndex)
+    {
+        if (children == null) return;  // Nothing to move
+        MNode source = children.get (fromIndex);
+        children.remove (toIndex);
+        children.remove (fromIndex);
+        if (source != null)
+        {
+            children.put (toIndex, source);
+            if (source instanceof MPersistent) ((MPersistent) source).markChanged ();
+        }
+        markChanged ();
     }
 }

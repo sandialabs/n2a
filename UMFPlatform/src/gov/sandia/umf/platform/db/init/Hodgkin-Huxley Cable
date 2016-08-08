@@ -4,11 +4,11 @@ $metadata
 $p = $t < 100
 $t' = 0.1
 HH=$include("Neuron Hodgkin-Huxley")
-HH.$n=3
-HH.I_inj = 10 @ $index == 0
-HH.output = trace(V)
+ $n=3
+ I_inj = 10 @ $index == 0
+ output = trace(V)
 C=$include("Hodgkin-Huxley Coupling")
-C.A=HH
-C.B=HH
-C.$p=A.$index == B.$index - 1
+ A=HH
+ B=HH
+ $p=A.$index == B.$index - 1
 

@@ -20,6 +20,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
@@ -33,9 +34,10 @@ import java.util.TreeMap;
 **/
 public class MDir extends MNode
 {
-    protected String name;    // MDirs could be held in a collection, so this provides a way to reference them.
-	protected File   root;    // The directory containing the files or subdirs that constitute the children of this node
-	protected String suffix;  // Relative path to document file, or null if documents are directly under root
+    protected String  name;    // MDirs could be held in a collection, so this provides a way to reference them.
+	protected File    root;    // The directory containing the files or subdirs that constitute the children of this node
+	protected String  suffix;  // Relative path to document file, or null if documents are directly under root
+	protected boolean loaded;  // Indicates that an initial read of the dir has been done. After that, it is not necessary to monitor the dir, only keep track of documents internally.
 
 	protected NavigableMap<String,SoftReference<MDoc>> children = new TreeMap<String,SoftReference<MDoc>> ();
 	protected Set<MDoc> writeQueue = new HashSet<MDoc> ();  // By storing strong references to docs that need to be saved, we prevent them from being garbage collected until that is done.
@@ -167,27 +169,87 @@ public class MDir extends MNode
         return result;
     }
 
+    public synchronized void move (String fromIndex, String toIndex)
+    {
+        save ();  // If this turns out to be too much work, then scan the write queue for fromIndex and save it directly.
+
+        // This operation is independent of bookkeeping in children
+        Path fromPath = Paths.get (pathForChild (fromIndex).getAbsolutePath ());
+        Path toPath   = Paths.get (pathForChild (toIndex  ).getAbsolutePath ());
+        try
+        {
+            Files.deleteIfExists (toPath);
+            Files.move (fromPath, toPath, StandardCopyOption.REPLACE_EXISTING);
+        }
+        catch (IOException e)
+        {
+            System.err.println ("Failed to move file: " + fromIndex + " --> " + toIndex);
+        }
+
+        MDoc source = null;
+        SoftReference<MDoc> ref = children.get (fromIndex);
+        if (ref != null) source = ref.get ();
+        children.remove (toIndex);
+        children.remove (fromIndex);
+        if (source != null)
+        {
+            source.name = toIndex;
+            children.put (toIndex, new SoftReference<MDoc> (source));
+        }
+    }
+
+    public class IteratorWrapperSoft implements Iterator<MNode>
+    {
+        Iterator<Entry<String,SoftReference<MDoc>>> iterator;
+
+        public IteratorWrapperSoft (Iterator<Entry<String,SoftReference<MDoc>>> iterator)
+        {
+            this.iterator = iterator;
+        }
+
+        public boolean hasNext ()
+        {
+            return iterator.hasNext ();
+        }
+
+        public MNode next ()
+        {
+            Entry<String,SoftReference<MDoc>> e = iterator.next ();
+            MDoc doc = e.getValue ().get ();
+            if (doc == null)
+            {
+                doc = new MDoc (MDir.this, e.getKey ());
+                e.setValue (new SoftReference<MDoc> (doc));
+            }
+            return doc;
+        }
+
+        public void remove ()
+        {
+            iterator.remove ();
+        }
+    }
+
     public synchronized Iterator<MNode> iterator ()
     {
-        TreeMap<String,MNode> dir = new TreeMap<String,MNode> ();
-        String[] fileNames = root.list ();  // This may cost a lot of time in some cases. However, N2A should never have more than about 10,000 models in a dir.
-        for (String index : fileNames)
+        if (! loaded)
         {
-            MDoc doc;
-            SoftReference<MDoc> ref = children.get (index);
-            if (ref == null)
+            String[] fileNames = root.list ();  // This may cost a lot of time in some cases. However, N2A should never have more than about 10,000 models in a dir.
+            for (String index : fileNames)
             {
-                doc = new MDoc (this, index);
-                children.put (index, new SoftReference<MDoc> (doc));
+                // This is a slightly more compact version of child(index)
+                MDoc doc = null;
+                SoftReference<MDoc> ref = children.get (index);
+                if (ref != null) doc = ref.get ();
+                if (doc == null)
+                {
+                    doc = new MDoc (this, index);
+                    children.put (index, new SoftReference<MDoc> (doc));
+                }
             }
-            else
-            {
-                doc = ref.get ();
-            }
-            dir.put (index, doc);
+            loaded = true;
         }
-        for (MDoc doc : writeQueue) dir.put (doc.get (), doc);  // Just in case there are new docs that aren't on the disk yet.
-        return new MVolatile.IteratorWrapper (dir.entrySet ().iterator ());
+        return new IteratorWrapperSoft (children.entrySet ().iterator ());
     }
 
     public synchronized void save ()

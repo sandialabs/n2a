@@ -7,7 +7,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform;
 
-import gov.sandia.umf.platform.connect.orientdb.ui.ConnectionManager;
 import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.plugins.UMFPluginManager;
@@ -81,7 +80,6 @@ public class UMF
 
     private static MainFrame mainFrame;
     private static UIController uiController;
-    private static ConnectionManager dataModelMgr2;
     private static LoadingWindow loadingFrame;
 
     // Misc
@@ -278,7 +276,7 @@ public class UMF
 
     private static void createAndShowMainFrame ()
     {
-        uiController = new UIController (dataModelMgr2);
+        uiController = new UIController ();
         mainFrame    = new MainFrame (uiController);
         MainFrame.setInstance (mainFrame);
         uiController.setParentReference (mainFrame);

@@ -60,7 +60,7 @@ public class MDoc extends MPersistent
         this.parent = parent;
     }
 
-    public File path ()
+    public synchronized File path ()
     {
         if (parent == null) return new File (value);
         return ((MDir) parent).pathForChild (name);
@@ -107,31 +107,16 @@ public class MDoc extends MPersistent
     }
 
     /**
-        Moves the file on disk.
-        This works both on stand-alone documents and documents stored in an MDir.
-        In the MDir case, the key is updated rather than the value.
+        If this is a stand-alone document, then moves the file on disk.
+        Otherwise, does nothing.
     **/
-    public void set (String value)
+    public synchronized void set (String value)
     {
+        if (parent != null) return;
         try
         {
-            if (parent == null)
-            {
-                Files.move (Paths.get (this.value), Paths.get (value), StandardCopyOption.REPLACE_EXISTING);
-                this.value = value;
-            }
-            else
-            {
-                MDir dir = (MDir) parent;
-                Path oldPath = Paths.get (dir.pathForChild (name ).getAbsolutePath ());
-                Path newPath = Paths.get (dir.pathForChild (value).getAbsolutePath ());
-                Files.move (oldPath, newPath, StandardCopyOption.REPLACE_EXISTING);
-
-                // change the key to match the new file
-                dir.children.remove (name);
-                dir.children.put (value, new SoftReference<MDoc> (this));
-                name = value;
-            }
+            Files.move (Paths.get (this.value), Paths.get (value), StandardCopyOption.REPLACE_EXISTING);
+            this.value = value;
         }
         catch (IOException e)
         {
@@ -182,7 +167,7 @@ public class MDoc extends MPersistent
             File file = path ();
 	        BufferedWriter writer = new BufferedWriter (new FileWriter (file));
 	        writer.write (String.format ("N2A.schema=1%n"));
-	        write (writer, "");
+	        for (MNode c : this) c.write (writer, "");  // only write out our children, not ourself (top top-level node)
 	        writer.close ();
 	        clearChanged ();
 	    }

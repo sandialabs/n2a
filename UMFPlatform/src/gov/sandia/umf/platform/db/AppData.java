@@ -1,12 +1,27 @@
 package gov.sandia.umf.platform.db;
 
+import java.awt.EventQueue;
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
+
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 
 import gov.sandia.umf.platform.UMF;
-import gov.sandia.umf.platform.ui.AboutDialog;
 
 /**
     Manages all user data associated with the application.
@@ -30,6 +45,20 @@ public class AppData
 
     protected boolean stop;
     protected Thread saveThread;
+
+    protected List<ChangeListener> listeners = new ArrayList<ChangeListener> ();
+    public synchronized void addRestoreListener (ChangeListener listener)
+    {
+        listeners.add (listener);
+    }
+    public synchronized void fireRestored ()
+    {
+        if (listeners.size () > 0)
+        {
+            ChangeEvent e = new ChangeEvent (this);
+            for (ChangeListener c : listeners) c.stateChanged (e);
+        }
+    }
 
     public AppData ()
     {
@@ -106,6 +135,73 @@ public class AppData
         models.save ();
         references.save ();
         runs.save ();  // The reason to save runs is if we record data in them about process status. If no data is changed, could get rid of this save.
+    }
+
+    public void backup (File destination)
+    {
+        save ();
+
+        // Assemble file list
+        String stem = UMF.getAppResourceDir ().getAbsolutePath ();
+        List<String> paths = new LinkedList<String> ();
+        for (String f : models    .root.list ()) paths.add (new File ("models",     f).getPath ());
+        for (String f : references.root.list ()) paths.add (new File ("references", f).getPath ());
+
+        // Dump to zip
+        try
+        {
+            FileOutputStream fos = new FileOutputStream (destination);
+            ZipOutputStream zos = new ZipOutputStream (fos);
+            try
+            {
+                for (String path : paths)
+                {
+                    zos.putNextEntry (new ZipEntry (path));
+                    Files.copy (Paths.get (stem, path), zos);
+                }
+            }
+            finally
+            {
+                zos.closeEntry ();
+                zos.close ();
+                fos.close ();
+            }
+        }
+        catch (IOException error)
+        {
+            System.err.println (error.toString ());
+        }
+    }
+
+    public void restore (File source, boolean removeAdded)
+    {
+        // Purge existing files
+        if (removeAdded)
+        {
+            models.clear ();
+            references.clear ();
+        }
+
+        // Read the zip file
+        try
+        {
+            String stem = UMF.getAppResourceDir ().getAbsolutePath ();
+            ZipFile zipFile = new ZipFile (source);
+            Enumeration<? extends ZipEntry> entries = zipFile.entries ();
+            while (entries.hasMoreElements ())
+            {
+                ZipEntry entry = entries.nextElement ();
+                InputStream stream = zipFile.getInputStream (entry);
+                Files.copy (stream, Paths.get (stem, entry.getName ()), StandardCopyOption.REPLACE_EXISTING);
+            }
+            zipFile.close ();
+        }
+        catch (IOException error)
+        {
+            System.err.println (error.toString ());
+        }
+
+        fireRestored ();
     }
 
     public void quit ()

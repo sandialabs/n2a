@@ -7,11 +7,13 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.eq;
 
-import gov.sandia.n2a.eqset.EquationSet;
+import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
+import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
-import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 import gov.sandia.umf.platform.db.MNode;
+import gov.sandia.umf.platform.db.MPersistent;
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
 import gov.sandia.umf.platform.plugins.Run;
 import gov.sandia.umf.platform.plugins.RunOrient;
@@ -20,13 +22,17 @@ import gov.sandia.umf.platform.plugins.extpoints.Simulator;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
+import java.awt.Color;
 import java.awt.Component;
+import java.awt.EventQueue;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.Enumeration;
+import java.util.EventObject;
 
 import javax.swing.Box;
 import javax.swing.JButton;
@@ -35,17 +41,13 @@ import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JTree;
 import javax.swing.SwingUtilities;
+import javax.swing.event.CellEditorListener;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
-import javax.swing.event.TreeModelEvent;
-import javax.swing.event.TreeModelListener;
-import javax.swing.event.TreeSelectionEvent;
-import javax.swing.event.TreeSelectionListener;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellEditor;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
-import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 import javax.swing.tree.TreeSelectionModel;
 
@@ -56,7 +58,6 @@ import replete.plugins.PluginManager;
 import replete.threads.CommonThread;
 import replete.threads.CommonThreadShutdownException;
 import replete.util.ExceptionUtil;
-import replete.util.GUIUtil;
 import replete.util.Lay;
 import replete.util.User;
 
@@ -80,25 +81,35 @@ public class EquationTreePanel extends JPanel
     protected JButton btnRun;
     protected JPopupMenu mnuEqPopup;
 
+    public class NodeEditor extends DefaultTreeCellEditor
+    {
+        public NodeBase editingNode;
+
+        public NodeEditor (JTree tree, DefaultTreeCellRenderer renderer)
+        {
+            super (tree, renderer);
+        }
+        
+        @Override
+        public boolean isCellEditable (EventObject e)
+        {
+            if (! super.isCellEditable (e)) return false;
+            Object o = lastPath.getLastPathComponent ();
+            if (! (o instanceof NodeBase)) return false;
+            editingNode = (NodeBase) o;
+            return editingNode.allowEdit ();
+        }
+    }
+
     public EquationTreePanel (UIController uic, MNode record)
     {
-        uiController = uic;
-        uiController.addPropListener (new ChangeListener ()
-        {
-            public void stateChanged (ChangeEvent e)
-            {
-                tree.updateUI ();
-            }
-        });
-
-        // Tree
-
         root  = new NodePart ();
         model = new DefaultTreeModel (root);
-        loadRootFromDB (record);
         tree  = new JTree (model);
+        loadRootFromDB (record);
 
         tree.setExpandsSelectedPaths (true);
+        tree.setScrollsOnExpand (true);
         tree.getSelectionModel ().setSelectionMode (TreeSelectionModel.SINGLE_TREE_SELECTION);  // No multiple selection. It only makes deletes and moves more complicated.
         tree.setEditable (true);
 
@@ -108,16 +119,30 @@ public class EquationTreePanel extends JPanel
             public Component getTreeCellRendererComponent (JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
             {
                 super.getTreeCellRendererComponent (tree, value, selected, expanded, leaf, row, hasFocus);
-                ((NodeBase) value).prepareRenderer (this, selected, expanded, hasFocus);
+                NodeBase n = (NodeBase) value;
+                if (n.source.isFromTopDocument ()) setForeground (Color.black);
+                else                               setForeground (Color.blue);
+                n.prepareRenderer (this, selected, expanded, hasFocus);
                 return this;
             }
         };
         tree.setCellRenderer (renderer);
 
-        tree.setCellEditor (new DefaultTreeCellEditor (tree, renderer)
+        NodeEditor editor = new NodeEditor (tree, renderer);
+        editor.addCellEditorListener (new CellEditorListener ()
         {
-            
+            @Override
+            public void editingStopped (ChangeEvent e)
+            {
+                editor.editingNode.applyEdit (model);
+            }
+
+            @Override
+            public void editingCanceled (ChangeEvent e)
+            {
+            }
         });
+        tree.setCellEditor (editor);
 
         tree.addMouseListener (new MouseAdapter ()
         {
@@ -156,7 +181,7 @@ public class EquationTreePanel extends JPanel
                 }
                 else if (keycode == KeyEvent.VK_INSERT)
                 {
-                    getSelected ().add ("", EquationTreePanel.this);
+                    addAtSelected ("");
                 }
                 else if (keycode == KeyEvent.VK_ENTER)
                 {
@@ -174,34 +199,6 @@ public class EquationTreePanel extends JPanel
                         moveSelected (1);
                     }
                 }
-            }
-        });
-
-        model.addTreeModelListener (new TreeModelListener ()
-        {
-            public void treeNodesChanged (TreeModelEvent e)
-            {
-                NodeBase parent = (NodeBase) e.getTreePath ().getLastPathComponent ();
-                int[] childIndices = e.getChildIndices ();
-                NodeBase changed;
-                if (childIndices == null) changed = parent;
-                else                      changed = (NodeBase) parent.getChildAt (childIndices[0]);
-
-                // TODO: tell node to update the EquationSet and database
-                System.out.println("The user has finished editing the node.");
-                System.out.println("New value: " + changed.getUserObject ());
-            }
-
-            public void treeNodesInserted (TreeModelEvent e)
-            {
-            }
-
-            public void treeNodesRemoved (TreeModelEvent e)
-            {
-            }
-
-            public void treeStructureChanged (TreeModelEvent e)
-            {
             }
         });
 
@@ -241,9 +238,9 @@ public class EquationTreePanel extends JPanel
         btnRun.addActionListener (runListener);
 
         // Context Menus
-        JMenuItem mnuAddNew = new JMenuItem ("Add Equation", ImageUtil.getImage ("compnew.gif"));
-        mnuAddNew.setActionCommand ("Equation");
-        mnuAddNew.addActionListener (addListener);
+        JMenuItem mnuAddEquation = new JMenuItem ("Add Equation", ImageUtil.getImage ("compnew.gif"));
+        mnuAddEquation.setActionCommand ("Equation");
+        mnuAddEquation.addActionListener (addListener);
 
         JMenuItem mnuAddAnnot = new JMenuItem ("Add Annotation", ImageUtil.getImage ("addannot.gif"));
         mnuAddAnnot.setActionCommand ("Annotation");
@@ -254,7 +251,7 @@ public class EquationTreePanel extends JPanel
         mnuAddRef.addActionListener (addListener);
 
         mnuEqPopup = new JPopupMenu ();
-        mnuEqPopup.add (mnuAddNew);
+        mnuEqPopup.add (mnuAddEquation);
         mnuEqPopup.add (mnuAddAnnot);
         mnuEqPopup.add (mnuAddRef);
 
@@ -275,7 +272,7 @@ public class EquationTreePanel extends JPanel
 
     public void setEquations (final MNode eqs)
     {
-        GUIUtil.safe (new Runnable ()
+        EventQueue.invokeLater (new Runnable ()
         {
             public void run ()
             {
@@ -286,13 +283,22 @@ public class EquationTreePanel extends JPanel
 
     public void loadRootFromDB (MNode doc)
     {
-        record = doc;
+        if (doc != null) record = doc;
         try
         {
-            EquationSet s = new EquationSet (record);
-            s.resolveConnectionBindings ();
-            root.part = s;
-            root.build (model);
+            if (record == null)
+            {
+                root = null;
+                model.setRoot (root);
+            }
+            else
+            {
+                root = new NodePart (MPart.collate ((MPersistent) record));
+                model.setRoot (root);
+                root.build (model);
+                root.findConnections ();
+                tree.expandRow (0);
+            }
         }
         catch (Exception e)
         {
@@ -301,20 +307,11 @@ public class EquationTreePanel extends JPanel
         }
     }
 
-    public NodeBase getSelected ()
-    {
-        NodeBase result = null;
-        TreePath path = tree.getSelectionPath ();
-        if (path != null) result = (NodeBase) path.getLastPathComponent ();
-        if (result == null) return root;
-        return result;
-    }
-
     ActionListener addListener = new ActionListener ()
     {
         public void actionPerformed (ActionEvent e)
         {
-            getSelected ().add (e.getActionCommand (), EquationTreePanel.this);
+            addAtSelected (e.getActionCommand ());
         }
     };
 
@@ -399,6 +396,35 @@ public class EquationTreePanel extends JPanel
         }
     };
 
+    public NodeBase getSelected ()
+    {
+        NodeBase result = null;
+        TreePath path = tree.getSelectionPath ();
+        if (path != null) result = (NodeBase) path.getLastPathComponent ();
+        if (result == null) return root;
+        return result;
+    }
+
+    public void addAtSelected (String type)
+    {
+        NodeBase selected = getSelected ();
+        if (selected == null)
+        {
+            // TODO: Create new document 
+        }
+        else
+        {
+            NodeBase editMe = selected.add (type, this);
+            if (editMe != null)
+            {
+                TreePath path = new TreePath (editMe.getPath ());
+                tree.scrollPathToVisible (path);
+                tree.setSelectionPath (path);
+                tree.startEditingAtPath (path);
+            }
+        }
+    }
+
     public void deleteSelected ()
     {
         // TODO: Implement node delete
@@ -412,20 +438,60 @@ public class EquationTreePanel extends JPanel
         {
             DefaultMutableTreeNode node   = (DefaultMutableTreeNode) path.getLastPathComponent ();
             DefaultMutableTreeNode parent = (DefaultMutableTreeNode) node.getParent ();
-            if (parent != null)
+            if (parent instanceof NodePart)  // Only parts support $metadata.gui.order
             {
                 int index = parent.getIndex (node) + direction;
                 if (index >= 0  &&  index < parent.getChildCount ())
                 {
-                    Object neighbor = parent.getChildAt (index);
-                    if (neighbor instanceof NodeVariable  ||  neighbor instanceof NodePart)
+                    model.removeNodeFromParent (node);
+                    model.insertNodeInto (node, parent, index);
+
+                    NodeAnnotations metadataNode = null;
+                    String order = null;
+                    Enumeration i = parent.children ();
+                    while (i.hasMoreElements ())
                     {
-                        model.removeNodeFromParent (node);
-                        model.insertNodeInto (node, parent, index);
-                        path = new TreePath (model.getPathToRoot (node));
-                        tree.setSelectionPath (path);
-                        // TODO: update containing part.$metadata.gui.order
+                        NodeBase c = (NodeBase) i.nextElement ();
+                        String key = c.source.key ();
+                        if (order == null) order = key;
+                        else               order = order + "," + key;
+                        if (key.equals ("$metadata")) metadataNode = (NodeAnnotations) c;
                     }
+
+                    NodePart p = (NodePart) parent;
+                    MPart metadataPart = null;
+                    if (metadataNode == null)
+                    {
+                        metadataPart = (MPart) p.source.set ("", "$metadata");
+                        model.insertNodeInto (new NodeAnnotations (metadataPart), p, 0);
+                        if (order.isEmpty ()) order = "$metadata";
+                        else                  order = "$metadata" + "," + order;
+                    }
+                    NodeAnnotation orderNode = null;
+                    i = metadataNode.children ();
+                    while (i.hasMoreElements ())
+                    {
+                        NodeAnnotation a = (NodeAnnotation) i.nextElement ();
+                        if (a.source.key ().equals ("gui.order"))
+                        {
+                            orderNode = a;
+                            break;
+                        }
+                    }
+                    if (orderNode == null)
+                    {
+                        orderNode = new NodeAnnotation ((MPart) metadataNode.source.set (order, "gui.order"));
+                        model.insertNodeInto (orderNode, metadataNode, metadataNode.getChildCount ());
+                    }
+                    else
+                    {
+                        orderNode.source.set (order);
+                        orderNode.setUserObject ("gui.order=" + order);
+                        model.nodeChanged (orderNode);
+                    }
+
+                    path = new TreePath (model.getPathToRoot (node));
+                    tree.setSelectionPath (path);
                 }
             }
         }

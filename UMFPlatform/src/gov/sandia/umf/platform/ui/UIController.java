@@ -8,8 +8,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.umf.platform.ui;
 
 import gov.sandia.umf.platform.UMF;
-import gov.sandia.umf.platform.connect.orientdb.ui.BackupDialog;
-import gov.sandia.umf.platform.connect.orientdb.ui.ConnectionManager;
 import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.db.MDoc;
@@ -36,10 +34,8 @@ import java.awt.Component;
 import java.awt.Cursor;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 
 import javax.swing.Icon;
 import javax.swing.JDialog;
@@ -73,54 +69,14 @@ import replete.util.ReflectionUtil;
 // TODO: will probably need a UI model (kinda like a "selected model")
 // to handle in a nice way the open tabs.
 
-public class UIController {
-
-
-    ////////////
-    // FIELDS //
-    ////////////
-
-    // Const
-
-//    private static Logger logger = Logger.getLogger(Main.class);  // ui
-
-    // Core
-
-    public ConnectionManager dataModelMgr2;  // Orient stuff
-
-    // UI
-
+public class UIController
+{
     private MainFrame parentRef;
     private MainTabbedPane tabs;  // In lieu of more complicated "tab model" concept.
     private UIActionManager actions;
 
-    // Misc
-
     private Map<String, String[]> popupHelp;
     private static Logger logger = Logger.getLogger(UIController.class);
-
-
-    //////////////
-    // NOTIFIER //
-    //////////////
-
-    protected ChangeNotifier propNotifier = new ChangeNotifier(this);
-    public void addPropListener(ChangeListener listener) {
-        propNotifier.addListener(listener);
-    }
-    protected void firePropNotifier() {
-        propNotifier.fireStateChanged();
-    }
-
-
-    /////////////////
-    // CONSTRUCTOR //
-    /////////////////
-
-    public UIController (ConnectionManager mgr2)
-    {
-        dataModelMgr2 = mgr2;
-    }
 
 
     //////////////////////////
@@ -132,9 +88,6 @@ public class UIController {
     // To be used ONLY for a dialog's parent!!!
     public MainFrame getParentRef() {
         return parentRef;
-    }
-    public ConnectionManager getDMM() {
-        return dataModelMgr2;
     }
     public MainTabbedPane getTabs() {
         return tabs;
@@ -303,9 +256,6 @@ public class UIController {
     public void showPreferences() {
         PreferencesDialog dlg = new PreferencesDialog(parentRef);
         dlg.setVisible(true);
-        if(dlg.getResult() == PreferencesDialog.OK) {
-            firePropNotifier();
-        }
     }
 
     public void showPluginDialog() {

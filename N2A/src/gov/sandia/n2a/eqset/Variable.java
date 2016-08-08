@@ -108,10 +108,7 @@ public class Variable implements Comparable<Variable>
                 if (metadata == null) metadata = new TreeMap<String,String> ();
                 for (MNode m : i) metadata.put (m.key (), m.get ());
             }
-            if (key.equals ("$reference"))
-            {
-                // TODO: handle references
-            }
+            // Ignore references, as they have no function in simulation.
         }
     }
 
@@ -141,6 +138,33 @@ public class Variable implements Comparable<Variable>
         {
             order++;
             name = name.substring (0, name.length () - 1);
+        }
+    }
+
+    /**
+        Utility class for separating the RHS of an equation, as it might appear in a document line,
+        into its respective components.
+        This appears as an inner class of Variable because the most maintenance-sensitive part
+        of this is the combiner characters, and those are defined in Variable.
+    **/
+    public static class ParsedValue
+    {
+        public String combiner;
+        public String expression;
+        public String conditional;
+
+        public ParsedValue (String value)
+        {
+            // Extract the combiner string, if any
+            combiner = value.substring (0, 1);
+            if ("+*/<>:".contains (combiner)) value = value.substring (1).trim ();
+            else combiner = "";
+
+            // Extract the conditional expression, if any
+            String[] pieces = value.split ("@", 2);
+            expression = pieces[0];
+            if (pieces.length < 2) conditional = "";
+            else                   conditional = pieces[1].trim ();
         }
     }
 

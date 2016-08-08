@@ -16,6 +16,6 @@ $metadata
    For full usability as a Xyce device, we need to specify the units of all the constants, so they can be scaled correctly. Xyce expects SI units: Volts, amps, Farads, etc.
    
    Models a Hodgkin-Huxley compartment fully as well as a Hodgkin-Huxley point neuron.
-parent=$inherit("Compartment Passive")
+$inherit="Compartment Passive"
 Na=$include("Channel Na")
 K=$include("Channel K")

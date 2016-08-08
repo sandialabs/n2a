@@ -8,12 +8,11 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.eq.tree;
 
-import java.util.Map.Entry;
+import java.util.Enumeration;
+import java.util.TreeMap;
 
-import gov.sandia.n2a.eqset.EquationEntry;
+import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.language.Constant;
-import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.ui.eq.EquationTreePanel;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
@@ -25,115 +24,254 @@ import javax.swing.tree.TreePath;
 
 public class NodeVariable extends NodeBase
 {
-    protected static ImageIcon icon = ImageUtil.getImage ("delta.png");
+    protected static ImageIcon iconVariable = ImageUtil.getImage ("delta.png");
+    protected static ImageIcon iconBinding  = ImageUtil.getImage ("connect.gif");
 
-    public Variable variable;
+    protected boolean isBinding;
 
-    public NodeVariable (Variable variable)
+    public NodeVariable (MPart source)
     {
-        this.variable = variable;
+        this.source = source;
     }
 
-    @Override
-    public void add (String type, EquationTreePanel panel)
+    public void build (DefaultTreeModel model)
     {
-        NodeBase editMe;
-        if (type.isEmpty ()  ||  type.equals ("Equation"))
+        setUserObject (source.key () + "=" + source.get ());
+        removeAllChildren ();
+
+        for (MNode n : source)
         {
-            int count = variable.equations.size ();
-            if (count == 0)
-            {
-                editMe = this;
-            }
-            else
-            {
-                if (count == 1)  // We are about to switch from single-line form to multi-conditional, so make a tree node for the existing equation.
-                {
-                    setUserObject (variable.nameString () + "=" + variable.combinerString ());
-                    panel.model.insertNodeInto (new NodeEquation (variable.equations.first ()), this, 0);
-                }
-                EquationEntry ee = new EquationEntry (variable, "");
-                while (true)
-                {
-                    ee.expression = new Constant (new Scalar (count));
-                    ee.conditional = new Constant (new Scalar (count));
-                    ee.ifString = ee.conditional.render ();
-                    if (variable.find (ee) == null) break;
-                    count++;
-                }
-                ee.ifString = ee.conditional.render ();
-                variable.add (ee);
-                editMe = new NodeEquation (ee);
-                editMe.setUserObject ("");
-                panel.model.insertNodeInto (editMe, this, 0);
-            }
+            String key = n.key ();
+            if (key.startsWith ("@")) model.insertNodeInto (new NodeEquation ((MPart) n), this, getChildCount ());
         }
-        else if (type.equals ("Annotation"))
+
+        MPart metadata = (MPart) source.child ("$metadata");
+        if (metadata != null)
         {
-            editMe = new NodeAnnotation ("", "");
-            int index = variable.equations.size ();
-            if (index < 2) index = 0;
-            index += variable.metadata.size ();
-            panel.model.insertNodeInto (editMe, this, index);
+            for (MNode m : metadata) model.insertNodeInto (new NodeAnnotation ((MPart) m), this, getChildCount ());
         }
-        else if (type.equals ("Reference"))
+
+        MPart references = (MPart) source.child ("$reference");
+        if (references != null)
         {
-            editMe = new NodeReference ("", "");
-            panel.model.insertNodeInto (editMe, this, getChildCount ());
+            for (MNode r : references) model.insertNodeInto (new NodeReference ((MPart) r), this, getChildCount ());
+        }
+    }
+
+    /**
+        Examines a fully-built tree to determine the value of the isBinding member.
+    **/
+    public void findConnections ()
+    {
+        isBinding = false;
+
+        NodePart parent = (NodePart) getParent ();
+        String value = source.get ().trim ();
+        if (value.contains ("$connect"))
+        {
+            isBinding = true;
         }
         else
         {
-            ((NodeBase) getParent ()).add (type, panel);  // refer all other requests up the tree
-            return;
+            // Determine if our LHS has the right form.
+            String name = source.key ().trim ();
+            if (name.endsWith ("'")) return;
+
+            // Determine if our RHS has the right form. If so, scan for the referent.
+            if (value.matches ("[a-zA-Z_$][a-zA-Z0-9_$.]*"))
+            {
+                NodeBase referent = parent.resolveName (value);
+                if (referent instanceof NodePart) isBinding = true;
+            }
         }
 
-        TreePath path = new TreePath (editMe.getPath ());
-        panel.tree.scrollPathToVisible (path);
-        panel.tree.startEditingAtPath (path);
+        if (isBinding) parent.isConnection = true;
     }
 
     @Override
     public void prepareRenderer (DefaultTreeCellRenderer renderer, boolean selected, boolean expanded, boolean hasFocus)
     {
-        renderer.setIcon (icon);
+        if (isBinding) renderer.setIcon (iconBinding);
+        else           renderer.setIcon (iconVariable);
         setFont (renderer, false, false);
         // TODO: set color based on override status
     }
 
-    public void parseEditedString (String input)
+    @Override
+    public NodeBase add (String type, EquationTreePanel panel)
     {
+        if (type.isEmpty ())
+        {
+            if (getChildCount () == 0  ||  panel.tree.isCollapsed (new TreePath (getPath ()))) return ((NodeBase) getParent ()).add ("Variable", panel);
+            type = "Equation";
+        }
+
+        NodeBase result;
+        if (type.equals ("Equation"))
+        {
+            TreeMap<String,MNode> equations = new TreeMap<String,MNode> ();
+            for (MNode n : source)
+            {
+                String key = n.key ();
+                if (key.startsWith ("@")) equations.put (key.substring (1), n);
+            }
+
+            // The minimum number of equations is 2. There should never be exactly 1 equation, because that is single-line form, which should have no child equations at all.
+            if (equations.size () == 0)  // We are about to switch from single-line form to multi-conditional, so make a tree node for the existing equation.
+            {
+                Variable.ParsedValue pieces = new Variable.ParsedValue (source.get ());
+                source.set (pieces.combiner);
+                setUserObject (source.key () + "=" + pieces.combiner);
+                MPart equation = (MPart) source.set (pieces.expression, "@" + pieces.conditional);
+                equations.put (pieces.conditional, equation);
+                panel.model.insertNodeInto (new NodeEquation (equation), this, 0);
+            }
+
+            int suffix = equations.size ();
+            String conditional;
+            while (true)
+            {
+                conditional = String.valueOf (suffix);
+                if (equations.get (conditional) == null) break;
+                suffix++;
+            }
+            MPart equation = (MPart) source.set (conditional, "@" + conditional);
+            result = new NodeEquation (equation);
+            result.setUserObject ("");
+            panel.model.insertNodeInto (result, this, 0);
+        }
+        else if (type.equals ("Annotation"))
+        {
+            // Determine index at which to insert new annotation
+            int firstReference = 0;
+            while (firstReference < getChildCount ()  &&  ! (getChildAt (firstReference) instanceof NodeReference)) firstReference++;
+
+            // Determine a unique key for the annotation
+            MPart metadata = (MPart) source.childOrCreate ("$metadata");
+            int suffix = 1;
+            while (metadata.child ("a" + suffix) != null) suffix++;
+
+            result = new NodeAnnotation ((MPart) metadata.set ("", "a" + suffix));
+            result.setUserObject ("");
+            panel.model.insertNodeInto (result, this, firstReference);
+        }
+        else if (type.equals ("Reference"))
+        {
+            MPart references = (MPart) source.childOrCreate ("$reference");
+            int suffix = 1;
+            while (references.child ("r" + suffix) != null) suffix++;
+
+            result = new NodeReference ((MPart) references.set ("", "r" + suffix));
+            result.setUserObject ("");
+            panel.model.insertNodeInto (result, this, getChildCount ());
+        }
+        else
+        {
+            return ((NodeBase) getParent ()).add (type, panel);  // refer all other requests up the tree
+        }
+        return result;
     }
 
-    public void build (DefaultTreeModel model)
+    @Override
+    public void applyEdit (DefaultTreeModel model)
     {
-        String label = variable.nameString ();
-        if (variable.equations.size () > 0)
-        {
-            label = label + "=" + variable.combinerString ();
-            if (variable.equations.size () == 1) label = label + variable.equations.first ().toString ();  // Otherwise, we use child nodes to display the equations.
-        }
-        setUserObject (label);
+        String input = (String) getUserObject ();
+        String[] parts = input.split ("=", 2);
+        String name = parts[0];
+        String value;
+        if (parts.length > 1) value = parts[1];
+        else                  value = "";
 
-        removeAllChildren ();
+        NodeBase existingVariable = null;
+        String oldKey = source.key ();
+        NodeBase parent = (NodeBase) getParent ();
+        if (! name.equals (oldKey)) existingVariable = parent.child (name);
 
-        if (variable.equations.size () > 1)  // for a single equation, the variable line itself suffices
+        if (name.equals (oldKey)  ||  existingVariable != null)  // No name change, or name change not permitted.
         {
-            for (EquationEntry e : variable.equations)
+            // Update ourselves. Exact action depends on whether we are single-line or multi-conditional.
+            TreeMap<String,NodeEquation> equations = new TreeMap<String,NodeEquation> ();
+            Enumeration i = children ();
+            while (i.hasMoreElements ())
             {
-                model.insertNodeInto (new NodeEquation (e), this, getChildCount ());
+                Object o = i.nextElement ();
+                if (o instanceof NodeEquation)
+                {
+                    NodeEquation e = (NodeEquation) o;
+                    equations.put (e.source.key ().substring (1), e);
+                }
+            }
+
+            if (equations.size () == 0)
+            {
+                source.set (value);
+            }
+            else
+            {
+                Variable.ParsedValue pieces = new Variable.ParsedValue (value);
+                source.set (pieces.combiner);
+
+                NodeEquation e = equations.get (pieces.conditional);
+                if (e == null)  // no matching equation
+                {
+                    MPart equation = (MPart) source.set (pieces.expression, "@" + pieces.conditional);
+                    model.insertNodeInto (new NodeEquation (equation), this, 0);
+                }
+                else  // conditional matched an existing equation, so just replace the expression
+                {
+                    e.source.set (pieces.expression);
+                    e.setUserObject (pieces.expression + e.source.key ());  // key starts with "@"
+                    model.nodeChanged (e);
+                }
+            }
+
+            if (equations.size () > 0  ||  existingVariable != null)  // Necessary to change displayed value
+            {
+                setUserObject (oldKey + "=" + source.get ());
+                model.nodeChanged (this);
             }
         }
-        for (Entry<String,String> m : variable.getMetadata ())
+        else  // The name was changed. Move the whole tree under us to a new location. This may also expose an overridden variable.
         {
-            model.insertNodeInto (new NodeAnnotation (m.getKey (), m.getValue ()), this, getChildCount ());
-        }
-        MNode references = variable.source.child ("$reference");  // TODO: should have collated references in the Variable object
-        if (references != null  &&  references.length () > 0)
-        {
-            for (MNode r : references)
+            // Inject the changed equation into the underlying data first, then move and rebuild the displayed nodes as necessary.
+            TreeMap<String,MNode> equations = new TreeMap<String,MNode> ();
+            for (MNode n : source)
             {
-                model.insertNodeInto (new NodeReference (r.key (), r.get ()), this, getChildCount ());
+                String key = n.key ();
+                if (key.startsWith ("@")) equations.put (key.substring (1), n);
             }
+            if (equations.size () == 0)
+            {
+                source.set (value);
+            }
+            else
+            {
+                Variable.ParsedValue pieces = new Variable.ParsedValue (value);
+                source.set (pieces.combiner);
+
+                MNode e = equations.get (pieces.conditional);
+                if (e == null) source.set (pieces.expression, "@" + pieces.conditional);
+                else                e.set (pieces.expression);
+            }
+
+            // Change ourselves into the new key=value pair
+            MPart p = source.getParent ();
+            p.move (oldKey, name);
+            MPart newPart = (MPart) p.child (name);
+            if (p.child (oldKey) == null)
+            {
+                // We were not associated with an override, so we can re-use this tree node.
+                source = newPart;
+            }
+            else
+            {
+                // Make a new tree node, and leave this one to present the non-overridden value.
+                // Note that our source is still set to the old part.
+                NodeVariable v = new NodeVariable (newPart);
+                model.insertNodeInto (v, parent, parent.getIndex (this));
+                v.build (model);
+            }
+            build (model);
         }
     }
 }

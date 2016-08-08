@@ -11,7 +11,6 @@ import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
-import java.awt.Color;
 import java.awt.Font;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -25,9 +24,6 @@ import replete.util.Lay;
 
 public abstract class RecordEditPanel extends JPanel
 {
-    public static final Color DARK_BLUE = new Color(0, 0, 150);
-    public static final String SPC = "    ";
-
     protected UIController uiController;
     protected MNode record;
     protected JLabel lblTitle;
