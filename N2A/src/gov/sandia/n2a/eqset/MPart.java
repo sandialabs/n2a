@@ -136,6 +136,16 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         return result;
     }
 
+    /**
+        Given a tree that is fully built, rebuild the sub-tree under a $include statement.
+        Also handle the case where the $include is removed. In this case, there might still be
+        an equation tree in the top-document that is meant to function as a sub-part.
+    **/
+    public synchronized void updateInclude ()
+    {
+        
+    }
+
     public synchronized void resetOverride ()
     {
         fromTopDocument = false;

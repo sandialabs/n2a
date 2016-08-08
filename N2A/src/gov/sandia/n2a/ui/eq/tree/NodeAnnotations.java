@@ -14,7 +14,6 @@ import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import javax.swing.ImageIcon;
 import javax.swing.tree.DefaultTreeCellRenderer;
-import javax.swing.tree.DefaultTreeModel;
 
 public class NodeAnnotations extends NodeBase
 {
@@ -26,12 +25,9 @@ public class NodeAnnotations extends NodeBase
         setUserObject ("$metadata");
     }
 
-    public void build (DefaultTreeModel model)
+    public void build ()
     {
-        for (MNode c : source)
-        {
-            model.insertNodeInto (new NodeAnnotation ((MPart) c), this, this.getChildCount ());
-        }
+        for (MNode c : source) add (new NodeAnnotation ((MPart) c));
     }
 
     @Override

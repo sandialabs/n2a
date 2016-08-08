@@ -169,6 +169,11 @@ public class MDir extends MNode
         return result;
     }
 
+    /**
+        Renames an MDoc on disk.
+        If you already hold a reference to the MDoc named by fromIndex, then that reference remains valid
+        after the move.
+    **/
     public synchronized void move (String fromIndex, String toIndex)
     {
         save ();  // If this turns out to be too much work, then scan the write queue for fromIndex and save it directly.

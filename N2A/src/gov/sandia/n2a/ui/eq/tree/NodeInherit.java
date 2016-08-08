@@ -58,8 +58,9 @@ public class NodeInherit extends NodeBase
         try
         {
             root.source = MPart.collate (doc);
-            root.build (model);
+            root.build ();
             root.findConnections ();
+            model.reload ();
         }
         catch (Exception e)
         {

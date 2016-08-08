@@ -11,11 +11,14 @@ package gov.sandia.n2a.ui.eq.tree;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.TreeMap;
 
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.ui.eq.EquationTreePanel;
 import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.db.MNode;
+import gov.sandia.umf.platform.db.MPersistent;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import javax.swing.ImageIcon;
@@ -40,7 +43,7 @@ public class NodePart extends NodeBase
         this.source = source;
     }
 
-    public void build (DefaultTreeModel model)
+    public void build ()
     {
         String key  = source.key ();
         String name = source.getOrDefault (key, "$metadata", "name");
@@ -61,53 +64,53 @@ public class NodePart extends NodeBase
             MNode c = source.child (k);
             if (c != null)
             {
-                buildTriage (model, (MPart) c);
+                buildTriage ((MPart) c);
                 sorted.add (k);
             }
         }
         for (MNode c : source)  // output everything else
         {
             if (sorted.contains (c.key ())) continue;
-            buildTriage (model, (MPart) c);
+            buildTriage ((MPart) c);
         }
     }
 
-    public void buildTriage (DefaultTreeModel model, MPart line)
+    public void buildTriage (MPart line)
     {
         String key = line.key ();
         if (key.equals ("$metadata"))
         {
             NodeAnnotations a = new NodeAnnotations (line);
-            model.insertNodeInto (a, this, getChildCount ());
-            a.build (model);
+            add (a);
+            a.build ();
             return;
         }
         else if (key.equals ("$reference"))
         {
             NodeReferences r = new NodeReferences (line);
-            model.insertNodeInto (r, this, getChildCount ());
-            r.build (model);
+            add (r);
+            r.build ();
             return;
         }
 
         if (line.isPart ())
         {
             NodePart p = new NodePart (line);
-            model.insertNodeInto (p, this, getChildCount ());
-            p.build (model);
+            add (p);
+            p.build ();
             return;
         }
 
         if (line.key ().equals ("$inherit"))
         {
             NodeInherit i = new NodeInherit (line);
-            model.insertNodeInto (i, this, getChildCount ());
+            add (i);
         }
         else
         {
             NodeVariable v = new NodeVariable (line);
-            model.insertNodeInto (v, this, getChildCount ());
-            v.build (model);
+            add (v);
+            v.build ();
         }
         // Note: connection bindings will be marked later, after full tree is assembled.
         // This allows us to take advantage of the work done to identify sub-parts.
@@ -236,28 +239,104 @@ public class NodePart extends NodeBase
     @Override
     public void applyEdit (DefaultTreeModel model)
     {
-        if (isRoot ())  // Edits to root rename the document on disk
-        {
-            String newName = (String) getUserObject ();
-            String oldName = source.key ();
-            if (newName.equals (oldName)) return;
+        String input = (String) getUserObject ();
+        String oldKey = source.key ();
 
-            String stem = newName;
+        if (isRoot ())  // Edits root to rename the document on disk
+        {
+            if (input.equals (oldKey)) return;
+            if (input.contains ("="))
+            {
+                setUserObject (oldKey);
+                return;
+            }
+
+            String stem = input;
             int suffix = 0;
             MNode models = AppData.getInstance ().models;
-            MNode existingDocument = models.child (newName);
+            MNode existingDocument = models.child (input);
             while (existingDocument != null)
             {
                 suffix++;
-                newName = stem + " " + suffix;
-                existingDocument = models.child (newName);
+                input = stem + " " + suffix;
+                existingDocument = models.child (input);
             }
 
-            source.set (newName);  // Changing the value of an MDoc renames it on disk.
+            MNode dir = source.getParent ();
+            dir.move (oldKey, input);  // MDir promises to maintain object identity during the move, so our source reference is still valid.
+            return;
         }
-        else  // Edits to a top-level part either change its name or its include. Note it is possible for a part to exist without an include.
+
+        String[] parts = input.split ("=", 2);
+        String name = parts[0];
+        String value;
+        if (parts.length > 1) value = parts[1];
+        else                  value = "";
+
+        NodeBase existingPart = null;
+        NodeBase parent = (NodeBase) getParent ();
+        if (! name.equals (oldKey)) existingPart = parent.child (name);
+
+        if (name.equals (oldKey)  ||  existingPart != null)  // No name change, or name change not permitted.
         {
-            
+            String oldValue = source.get ();
+            if (! value.equals (oldValue))
+            {
+                source.set (value);
+                source.updateInclude ();
+                build ();
+                model.nodeStructureChanged (this);
+            }
+
+            if (existingPart != null)  // Necessary to change displayed value
+            {
+                setUserObject (oldKey + "=" + value);
+                model.nodeChanged (this);
+            }
+        }
+        else  // The name was changed. Move the whole tree under us to a new location. This may also expose an overridden variable.
+        {
+            // Inject the changed equation into the underlying data first, then move and rebuild the displayed nodes as necessary.
+            TreeMap<String,MNode> equations = new TreeMap<String,MNode> ();
+            for (MNode n : source)
+            {
+                String key = n.key ();
+                if (key.startsWith ("@")) equations.put (key.substring (1), n);
+            }
+            if (equations.size () == 0)
+            {
+                source.set (value);
+            }
+            else
+            {
+                Variable.ParsedValue pieces = new Variable.ParsedValue (value);
+                source.set (pieces.combiner);
+
+                MNode e = equations.get (pieces.conditional);
+                if (e == null) source.set (pieces.expression, "@" + pieces.conditional);
+                else                e.set (pieces.expression);
+            }
+
+            // Change ourselves into the new key=value pair
+            MPart p = source.getParent ();
+            p.move (oldKey, name);
+            MPart newPart = (MPart) p.child (name);
+            if (p.child (oldKey) == null)
+            {
+                // We were not associated with an override, so we can re-use this tree node.
+                source = newPart;
+            }
+            else
+            {
+                // Make a new tree node, and leave this one to present the non-overridden value.
+                // Note that our source is still set to the old part.
+                NodeVariable v = new NodeVariable (newPart);
+                model.insertNodeInto (v, parent, parent.getIndex (this));
+                v.build ();
+                model.nodeStructureChanged (v);
+            }
+            build ();
+            model.nodeStructureChanged (this);
         }
     }
 }

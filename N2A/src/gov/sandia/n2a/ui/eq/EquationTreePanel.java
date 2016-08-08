@@ -294,9 +294,9 @@ public class EquationTreePanel extends JPanel
             else
             {
                 root = new NodePart (MPart.collate ((MPersistent) record));
-                model.setRoot (root);
-                root.build (model);
+                root.build ();
                 root.findConnections ();
+                model.setRoot (root);
                 tree.expandRow (0);
             }
         }

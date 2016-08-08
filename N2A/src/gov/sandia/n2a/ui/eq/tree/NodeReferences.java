@@ -14,7 +14,6 @@ import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import javax.swing.ImageIcon;
 import javax.swing.tree.DefaultTreeCellRenderer;
-import javax.swing.tree.DefaultTreeModel;
 
 public class NodeReferences extends NodeBase
 {
@@ -26,12 +25,9 @@ public class NodeReferences extends NodeBase
         setUserObject ("$reference");
     }
 
-    public void build (DefaultTreeModel model)
+    public void build ()
     {
-        for (MNode c : source)
-        {
-            model.insertNodeInto (new NodeReference ((MPart) c), this, this.getChildCount ());
-        }
+        for (MNode c : source) add (new NodeReference ((MPart) c));
     }
 
     @Override

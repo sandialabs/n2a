@@ -34,7 +34,7 @@ public class NodeVariable extends NodeBase
         this.source = source;
     }
 
-    public void build (DefaultTreeModel model)
+    public void build ()
     {
         setUserObject (source.key () + "=" + source.get ());
         removeAllChildren ();
@@ -42,19 +42,19 @@ public class NodeVariable extends NodeBase
         for (MNode n : source)
         {
             String key = n.key ();
-            if (key.startsWith ("@")) model.insertNodeInto (new NodeEquation ((MPart) n), this, getChildCount ());
+            if (key.startsWith ("@")) add (new NodeEquation ((MPart) n));
         }
 
         MPart metadata = (MPart) source.child ("$metadata");
         if (metadata != null)
         {
-            for (MNode m : metadata) model.insertNodeInto (new NodeAnnotation ((MPart) m), this, getChildCount ());
+            for (MNode m : metadata) add (new NodeAnnotation ((MPart) m));
         }
 
         MPart references = (MPart) source.child ("$reference");
         if (references != null)
         {
-            for (MNode r : references) model.insertNodeInto (new NodeReference ((MPart) r), this, getChildCount ());
+            for (MNode r : references) add (new NodeReference ((MPart) r));
         }
     }
 
@@ -269,9 +269,11 @@ public class NodeVariable extends NodeBase
                 // Note that our source is still set to the old part.
                 NodeVariable v = new NodeVariable (newPart);
                 model.insertNodeInto (v, parent, parent.getIndex (this));
-                v.build (model);
+                v.build ();
+                model.nodeStructureChanged (v);
             }
-            build (model);
+            build ();
+            model.nodeStructureChanged (this);
         }
     }
 }
