@@ -13,6 +13,7 @@ import gov.sandia.n2a.ui.eq.EquationTreePanel;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import javax.swing.ImageIcon;
+import javax.swing.JTree;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
 
@@ -23,7 +24,11 @@ public class NodeAnnotation extends NodeBase
     public NodeAnnotation (MPart source)
     {
         this.source = source;
+        setUserObject ();
+    }
 
+    public void setUserObject ()
+    {
         String name  = source.key ();
         String value = source.get ();
         if (value.isEmpty ()) setUserObject (name);
@@ -38,15 +43,15 @@ public class NodeAnnotation extends NodeBase
     }
 
     @Override
-    public NodeBase add (String type, EquationTreePanel model)
+    public NodeBase add (String type, JTree tree)
     {
         NodeBase parent = (NodeBase) getParent ();
-        if (type.isEmpty ()) return parent.add ("Annotation", model);  // By context, we assume the user wants to add another annotation.
-        else                 return parent.add (type, model);
+        if (type.isEmpty ()) return parent.add ("Annotation", tree);  // By context, we assume the user wants to add another annotation.
+        else                 return parent.add (type, tree);
     }
 
     @Override
-    public void applyEdit (DefaultTreeModel model)
+    public void applyEdit (JTree tree)
     {
         String input = (String) getUserObject ();
         String[] parts = input.split ("=", 2);
@@ -60,6 +65,7 @@ public class NodeAnnotation extends NodeBase
         NodeBase parent = (NodeBase) getParent ();
         if (! name.equals (oldKey)) existingAnnotation = parent.child (name);
 
+        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
         if (name.equals (oldKey))  // Name is the same
         {
             source.set (value);
@@ -67,8 +73,7 @@ public class NodeAnnotation extends NodeBase
         else if (existingAnnotation != null)  // Name is already taken, so change not permitted. 
         {
             source.set (value);
-            if (value.isEmpty ()) setUserObject (oldKey);
-            else                  setUserObject (oldKey + "=" + value);
+            setUserObject ();
             model.nodeChanged (this);
         }
         else  // Name is changed
@@ -78,6 +83,26 @@ public class NodeAnnotation extends NodeBase
             p.clear (oldKey);
             if (p.child (oldKey) == null) source = newPart;  // We were not associated with an override, so we can re-use this tree node.
             else model.insertNodeInto (new NodeAnnotation (newPart), parent, parent.getChildCount ());  // Make a new tree node, and leave this one to present the non-overridden value.
+        }
+    }
+
+    @Override
+    public void delete (JTree tree)
+    {
+        if (! source.isFromTopDocument ()) return;
+
+        MPart mparent = source.getParent ();
+        String key = source.key ();
+        mparent.clear (key);  // If this merely clears an override, then our source object retains its identity.
+        if (mparent.child (key) == null)  // but we do need to test if it is still in the tree
+        {
+            NodeBase parent = (NodeBase) getParent ();
+            ((DefaultTreeModel) tree.getModel ()).removeNodeFromParent (this);
+            if (parent.getChildCount () == 0) parent.delete (tree);
+        }
+        else
+        {
+            setUserObject ();
         }
     }
 }

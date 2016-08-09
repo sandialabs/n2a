@@ -18,6 +18,7 @@ import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import javax.swing.ImageIcon;
+import javax.swing.JTree;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
@@ -98,15 +99,16 @@ public class NodeVariable extends NodeBase
     }
 
     @Override
-    public NodeBase add (String type, EquationTreePanel panel)
+    public NodeBase add (String type, JTree tree)
     {
         if (type.isEmpty ())
         {
-            if (getChildCount () == 0  ||  panel.tree.isCollapsed (new TreePath (getPath ()))) return ((NodeBase) getParent ()).add ("Variable", panel);
+            if (getChildCount () == 0  ||  tree.isCollapsed (new TreePath (getPath ()))) return ((NodeBase) getParent ()).add ("Variable", tree);
             type = "Equation";
         }
 
         NodeBase result;
+        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
         if (type.equals ("Equation"))
         {
             TreeMap<String,MNode> equations = new TreeMap<String,MNode> ();
@@ -124,7 +126,7 @@ public class NodeVariable extends NodeBase
                 setUserObject (source.key () + "=" + pieces.combiner);
                 MPart equation = (MPart) source.set (pieces.expression, "@" + pieces.conditional);
                 equations.put (pieces.conditional, equation);
-                panel.model.insertNodeInto (new NodeEquation (equation), this, 0);
+                model.insertNodeInto (new NodeEquation (equation), this, 0);
             }
 
             int suffix = equations.size ();
@@ -138,7 +140,7 @@ public class NodeVariable extends NodeBase
             MPart equation = (MPart) source.set (conditional, "@" + conditional);
             result = new NodeEquation (equation);
             result.setUserObject ("");
-            panel.model.insertNodeInto (result, this, 0);
+            model.insertNodeInto (result, this, 0);
         }
         else if (type.equals ("Annotation"))
         {
@@ -153,7 +155,7 @@ public class NodeVariable extends NodeBase
 
             result = new NodeAnnotation ((MPart) metadata.set ("", "a" + suffix));
             result.setUserObject ("");
-            panel.model.insertNodeInto (result, this, firstReference);
+            model.insertNodeInto (result, this, firstReference);
         }
         else if (type.equals ("Reference"))
         {
@@ -163,17 +165,17 @@ public class NodeVariable extends NodeBase
 
             result = new NodeReference ((MPart) references.set ("", "r" + suffix));
             result.setUserObject ("");
-            panel.model.insertNodeInto (result, this, getChildCount ());
+            model.insertNodeInto (result, this, getChildCount ());
         }
         else
         {
-            return ((NodeBase) getParent ()).add (type, panel);  // refer all other requests up the tree
+            return ((NodeBase) getParent ()).add (type, tree);  // refer all other requests up the tree
         }
         return result;
     }
 
     @Override
-    public void applyEdit (DefaultTreeModel model)
+    public void applyEdit (JTree tree)
     {
         String input = (String) getUserObject ();
         String[] parts = input.split ("=", 2);
@@ -187,6 +189,7 @@ public class NodeVariable extends NodeBase
         NodeBase parent = (NodeBase) getParent ();
         if (! name.equals (oldKey)) existingVariable = parent.child (name);
 
+        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
         if (name.equals (oldKey)  ||  existingVariable != null)  // No name change, or name change not permitted.
         {
             // Update ourselves. Exact action depends on whether we are single-line or multi-conditional.
@@ -272,6 +275,26 @@ public class NodeVariable extends NodeBase
                 v.build ();
                 model.nodeStructureChanged (v);
             }
+            build ();
+            model.nodeStructureChanged (this);
+        }
+    }
+
+    @Override
+    public void delete (JTree tree)
+    {
+        if (! source.isFromTopDocument ()) return;
+
+        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+        MPart mparent = source.getParent ();
+        String key = source.key ();
+        mparent.clear (key);  // If this merely clears an override, then our source object retains its identity.
+        if (mparent.child (key) == null)  // but we do need to test if it is still in the tree
+        {
+            model.removeNodeFromParent (this);
+        }
+        else
+        {
             build ();
             model.nodeStructureChanged (this);
         }

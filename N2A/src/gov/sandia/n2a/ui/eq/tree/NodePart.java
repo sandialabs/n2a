@@ -11,17 +11,15 @@ package gov.sandia.n2a.ui.eq.tree;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.TreeMap;
 
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.ui.eq.EquationTreePanel;
 import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.db.MPersistent;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import javax.swing.ImageIcon;
+import javax.swing.JTree;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
@@ -175,8 +173,10 @@ public class NodePart extends NodeBase
     }
 
     @Override
-    public NodeBase add (String type, EquationTreePanel panel)
+    public NodeBase add (String type, JTree tree)
     {
+        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+
         NodeAnnotations a = null;
         NodeReferences  r = null;
         int lastSubpart  = -1;
@@ -197,25 +197,25 @@ public class NodePart extends NodeBase
             if (a == null)
             {
                 a = new NodeAnnotations ((MPart) source.set ("", "$metadata"));
-                panel.model.insertNodeInto (a, this, 0);
+                model.insertNodeInto (a, this, 0);
             }
-            return a.add (type, panel);
+            return a.add (type, tree);
         }
         else if (type.equals ("Reference"))
         {
             if (r == null)
             {
                 r = new NodeReferences ((MPart) source.set ("", "$reference"));
-                panel.model.insertNodeInto (r, this, 0);
+                model.insertNodeInto (r, this, 0);
             }
-            return r.add (type, panel);
+            return r.add (type, tree);
         }
         else if (type.equals ("Part"))
         {
             int suffix = 0;
             while (source.child ("p" + suffix) != null) suffix++;
             NodeBase child = new NodePart ((MPart) source.set ("$include(\"\")", "p" + suffix));
-            panel.model.insertNodeInto (child, this, lastSubpart);
+            model.insertNodeInto (child, this, lastSubpart);
             return child;
         }
         else  // treat all other requests as "Variable"
@@ -223,7 +223,7 @@ public class NodePart extends NodeBase
             int suffix = 0;
             while (source.child ("x" + suffix) != null) suffix++;
             NodeBase child = new NodeVariable ((MPart) source.set ("0", "x" + suffix));
-            panel.model.insertNodeInto (child, this, lastVariable);
+            model.insertNodeInto (child, this, lastVariable);
             return child;
         }
     }
@@ -237,12 +237,12 @@ public class NodePart extends NodeBase
     }
 
     @Override
-    public void applyEdit (DefaultTreeModel model)
+    public void applyEdit (JTree tree)
     {
         String input = (String) getUserObject ();
         String oldKey = source.key ();
 
-        if (isRoot ())  // Edits root to rename the document on disk
+        if (isRoot ())  // Edits to root cause a rename of the document on disk
         {
             if (input.equals (oldKey)) return;
             if (input.contains ("="))
@@ -278,6 +278,7 @@ public class NodePart extends NodeBase
         NodeBase parent = (NodeBase) getParent ();
         if (! name.equals (oldKey)) existingPart = parent.child (name);
 
+        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
         if (name.equals (oldKey)  ||  existingPart != null)  // No name change, or name change not permitted.
         {
             if (! value.equals (oldValue))
@@ -288,7 +289,7 @@ public class NodePart extends NodeBase
                 model.nodeStructureChanged (this);
             }
 
-            if (existingPart != null)  // Necessary to change displayed value
+            if (existingPart != null)  // Show that we rejected the name change.
             {
                 setUserObject (oldKey + "=" + value);
                 model.nodeChanged (this);
@@ -301,9 +302,9 @@ public class NodePart extends NodeBase
 
             // Save changes and move the subtree
             source.set (value);  // Save the new value, which could be the same as the old value. TODO: If this sets the value back to the original in an inherited variable, then we might have nothing to move.
-            MPart mparent = source.getParent ();
-            mparent.clear (oldKey, false);  // Undoes the override in the collated tree, but data remains in the top-level document.
+            MPart       mparent   = source.getParent ();
             MPersistent docParent = mparent.getSource ();
+            mparent.clear (oldKey, false);  // Undoes the override in the collated tree, but data remains in the top-level document.
             docParent.move (oldKey, name);
 
             // Update the displayed tree
@@ -318,24 +319,12 @@ public class NodePart extends NodeBase
                     // We need to rebuild the entire tree, because the subtree built from the $include
                     // is indistinguishable from inherited equations. Thus, there is no simple way
                     // to back them out.
-                    NodePart root = (NodePart) getParent ();  // guaranteed by our allowEdit() method
-                    MPersistent doc = root.source.getSource ();
-                    try
-                    {
-                        root.source = MPart.collate (doc);
-                        root.build ();
-                        root.findConnections ();
-                        model.reload ();
-                    }
-                    catch (Exception e)
-                    {
-                        System.err.println ("Exception while parsing model: " + e);
-                    }
+                    reloadTree (tree);
                     return;
                 }
                 else
                 {
-                    // Make a new tree node to hold the equation left behind.
+                    // Make a new tree node to hold the variable left behind.
                     if (oldPart.isPart ())
                     {
                         NodePart p = new NodePart (oldPart);
@@ -361,11 +350,24 @@ public class NodePart extends NodeBase
             }
             else
             {
-                mparent.update (newDocNode);
+                mparent.update (newDocNode);  // re-collate this node to weave in the included part
                 source = (MPart) mparent.child (name);
-                build ();
+                build ();  // reconstruct this subtree in the gui
                 model.nodeStructureChanged (this);
             }
         }
+    }
+
+    @Override
+    public void delete (JTree tree)
+    {
+        if (! source.isFromTopDocument ()) return;
+        if (isRoot ()) return;  // Can only delete the whole model from the search panel.
+
+        MPart mparent = source.getParent ();
+        String key = source.key ();
+        mparent.clear (key);
+        if (mparent.child (key) == null) ((DefaultTreeModel) tree.getModel ()).removeNodeFromParent (this);
+        else reloadTree (tree);  // See comments about clearing an include in applyEdit()
     }
 }

@@ -9,13 +9,12 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.ui.eq.tree;
 
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.umf.platform.db.MPersistent;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import javax.swing.ImageIcon;
+import javax.swing.JTree;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellRenderer;
-import javax.swing.tree.DefaultTreeModel;
 
 public class NodeInherit extends NodeBase
 {
@@ -41,7 +40,7 @@ public class NodeInherit extends NodeBase
     }
 
     @Override
-    public void applyEdit (DefaultTreeModel model)
+    public void applyEdit (JTree tree)
     {
         String input = (String) getUserObject ();
         String[] parts = input.split ("=", 2);
@@ -53,18 +52,18 @@ public class NodeInherit extends NodeBase
         if (value.equals (oldValue)) return;
         source.set (value);
 
-        NodePart root = (NodePart) getParent ();  // guaranteed by our allowEdit() method
-        MPersistent doc = root.source.getSource ();
-        try
-        {
-            root.source = MPart.collate (doc);
-            root.build ();
-            root.findConnections ();
-            model.reload ();
-        }
-        catch (Exception e)
-        {
-            System.err.println ("Exception while parsing model: " + e);
-        }
+        reloadTree (tree);
+    }
+
+    @Override
+    public void delete (JTree tree)
+    {
+        if (! source.isFromTopDocument ()) return;
+
+        MPart mparent = source.getParent ();
+        String key = source.key ();  // "$inherit"
+        mparent.clear (key);
+
+        reloadTree (tree);
     }
 }

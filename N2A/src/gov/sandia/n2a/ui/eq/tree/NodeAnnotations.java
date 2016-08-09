@@ -8,12 +8,13 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.ui.eq.tree;
 
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.eq.EquationTreePanel;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import javax.swing.ImageIcon;
+import javax.swing.JTree;
 import javax.swing.tree.DefaultTreeCellRenderer;
+import javax.swing.tree.DefaultTreeModel;
 
 public class NodeAnnotations extends NodeBase
 {
@@ -38,7 +39,7 @@ public class NodeAnnotations extends NodeBase
     }
 
     @Override
-    public NodeBase add (String type, EquationTreePanel panel)
+    public NodeBase add (String type, JTree tree)
     {
         if (type.isEmpty ()  ||  type.equals ("Annotation"))
         {
@@ -46,12 +47,12 @@ public class NodeAnnotations extends NodeBase
             int suffix = 1;
             while (source.child ("a" + suffix) != null) suffix++;
             NodeBase child = new NodeAnnotation ((MPart) source.set ("", "a" + suffix));
-            panel.model.insertNodeInto (child, this, getChildCount ());
+            ((DefaultTreeModel) tree.getModel ()).insertNodeInto (child, this, getChildCount ());
             return child;
         }
         else
         {
-            return ((NodeBase) getParent ()).add (type, panel);
+            return ((NodeBase) getParent ()).add (type, tree);
         }
     }
 
@@ -59,5 +60,16 @@ public class NodeAnnotations extends NodeBase
     public boolean allowEdit ()
     {
         return false;
+    }
+
+    @Override
+    public void delete (JTree tree)
+    {
+        if (! source.isFromTopDocument ()) return;
+
+        MPart mparent = source.getParent ();
+        String key = source.key ();  // "$metadata"
+        mparent.clear (key);
+        if (mparent.child (key) == null) ((DefaultTreeModel) tree.getModel ()).removeNodeFromParent (this);
     }
 }

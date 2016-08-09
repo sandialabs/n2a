@@ -8,11 +8,14 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.eq.tree;
 
+import java.util.Enumeration;
+import java.util.TreeMap;
+
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.eq.EquationTreePanel;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import javax.swing.ImageIcon;
+import javax.swing.JTree;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
 
@@ -23,9 +26,14 @@ public class NodeEquation extends NodeBase
     public NodeEquation (MPart source)
     {
         this.source = source;
+        setUserObject ();
+    }
+
+    public void setUserObject ()
+    {
         String key = source.key ();
         if (key.equals ("@")) setUserObject (source.get ());
-        else                  setUserObject (source.get () + source.key ());  // key should start with "@"
+        else                  setUserObject (source.get () + key);  // key should start with "@"
     }
 
     @Override
@@ -36,14 +44,14 @@ public class NodeEquation extends NodeBase
     }
 
     @Override
-    public NodeBase add (String type, EquationTreePanel panel)
+    public NodeBase add (String type, JTree tree)
     {
         if (type.isEmpty ()) type = "Equation";
-        return ((NodeBase) getParent ()).add (type, panel);
+        return ((NodeBase) getParent ()).add (type, tree);
     }
 
     @Override
-    public void applyEdit (DefaultTreeModel model)
+    public void applyEdit (JTree tree)
     {
         String input = (String) getUserObject ();
         String[] parts = input.split ("@", 2);
@@ -57,6 +65,7 @@ public class NodeEquation extends NodeBase
         NodeBase parent = (NodeBase) getParent ();
         if (! conditional.equals (oldKey)) existingEquation = parent.child (conditional);
 
+        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
         if (conditional.equals (oldKey))  // Condition is the same
         {
             source.set (expression);
@@ -64,7 +73,7 @@ public class NodeEquation extends NodeBase
         else if (existingEquation != null)  // Condition already exists, so no change allowed
         {
             source.set (expression);
-            setUserObject (expression + oldKey);
+            setUserObject ();
             model.nodeChanged (this);
         }
         else  // The name was changed.
@@ -74,6 +83,47 @@ public class NodeEquation extends NodeBase
             p.clear (oldKey);
             if (p.child (oldKey) == null) source = newPart;  // We were not associated with an override, so we can re-use this tree node.
             else model.insertNodeInto (new NodeEquation (newPart), parent, parent.getChildCount ());  // Make a new tree node, and leave this one to present the non-overridden value.
+        }
+    }
+
+    @Override
+    public void delete (JTree tree)
+    {
+        if (! source.isFromTopDocument ()) return;
+
+        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+        MPart mparent = source.getParent ();
+        String key = source.key ();
+        mparent.clear (key);  // If this merely clears an override, then our source object retains its identity.
+        if (mparent.child (key) == null)  // but we do need to test if it is still in the tree
+        {
+            NodeVariable variable = (NodeVariable) getParent ();
+            model.removeNodeFromParent (this);
+
+            // If we are down to only 1 equation, then fold it back into a single-line variable.
+            TreeMap<String,NodeEquation> equations = new TreeMap<String,NodeEquation> ();
+            Enumeration i = children ();
+            while (i.hasMoreElements ())
+            {
+                Object o = i.nextElement ();
+                if (o instanceof NodeEquation)
+                {
+                    NodeEquation e = (NodeEquation) o;
+                    equations.put (e.source.key ().substring (1), e);
+                }
+            }
+            if (equations.size () == 1)
+            {
+                NodeBase e = equations.firstEntry ().getValue ();
+                variable.source.set (variable.source.get () + e.source.get () + e.source.key ());
+                model.removeNodeFromParent (e);
+                model.nodeChanged (variable);
+            }
+        }
+        else
+        {
+            setUserObject ();
+            model.nodeChanged (this);
         }
     }
 }

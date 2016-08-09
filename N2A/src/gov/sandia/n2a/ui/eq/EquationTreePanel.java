@@ -134,7 +134,7 @@ public class EquationTreePanel extends JPanel
             @Override
             public void editingStopped (ChangeEvent e)
             {
-                editor.editingNode.applyEdit (model);
+                editor.editingNode.applyEdit (tree);
             }
 
             @Override
@@ -414,7 +414,7 @@ public class EquationTreePanel extends JPanel
         }
         else
         {
-            NodeBase editMe = selected.add (type, this);
+            NodeBase editMe = selected.add (type, tree);
             if (editMe != null)
             {
                 TreePath path = new TreePath (editMe.getPath ());
@@ -427,8 +427,8 @@ public class EquationTreePanel extends JPanel
 
     public void deleteSelected ()
     {
-        // TODO: Implement node delete
-        System.out.println ("Would have removed a tree node, if the code were written.");
+        NodeBase selected = getSelected ();
+        if (selected != null) selected.delete (tree);
     }
 
     public void moveSelected (int direction)
