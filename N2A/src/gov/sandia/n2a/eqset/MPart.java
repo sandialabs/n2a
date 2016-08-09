@@ -10,6 +10,7 @@ package gov.sandia.n2a.eqset;
 import java.util.Iterator;
 import java.util.NavigableMap;
 import java.util.TreeMap;
+
 import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.db.MPersistent;
@@ -36,7 +37,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     protected MPart container;
     protected NavigableMap<String,MNode> children;
 
-    protected MPart (MPart container, MPersistent source, boolean fromTopDocument)
+    public MPart (MPart container, MPersistent source, boolean fromTopDocument)
     {
         this.fromTopDocument = fromTopDocument;
         this.container       = container;
@@ -44,7 +45,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         original             = source;
     }
 
-    protected MPart (MPart container, MPersistent source, MPersistent original, boolean fromTopDocument)
+    public MPart (MPart container, MPersistent source, MPersistent original, boolean fromTopDocument)
     {
         this.fromTopDocument = fromTopDocument;
         this.container       = container;
@@ -140,10 +141,51 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         Given a tree that is fully built, rebuild the sub-tree under a $include statement.
         Also handle the case where the $include is removed. In this case, there might still be
         an equation tree in the top-document that is meant to function as a sub-part.
+        This function should only be called on nodes that currently have fromTopDocument==true.
     **/
-    public synchronized void updateInclude ()
+    public synchronized void update ()
     {
-        
+        // This is basically a copy of the equation-processing loop in collate(), but with some stronger assumptions.
+        if (children != null) clearRecursive (false);  // reset nodes derived from top document back to their non-overridden state
+        // Build a new equation node, separately from myself because I may be carrying inherited equations
+        MPart equation = new MPart (container, source, true);
+        equation.buildTree ();
+        String value = source.get ();
+        if (value.contains ("$include"))
+        {
+            MPersistent partSource = null;
+            String[] pieces = value.split ("\"");
+            if (pieces.length > 1) partSource = (MPersistent) AppData.getInstance ().models.child (pieces[1]);
+            if (partSource != null)
+            {
+                MPart part;
+                try
+                {
+                    part = collate (container, partSource);
+                    part.resetOverride ();
+                    part.mergeChildren (equation);
+                    equation.children = part.children;
+                    for (MNode c : equation) ((MPart) c).container = equation;
+                }
+                catch (Exception e)
+                {
+                    System.err.println ("Failed to construct included tree: " + e);
+                }
+            }
+        }
+        mergeChildren (equation);
+    }
+
+    /**
+        Incorporate a newly-created node of the document into the existing collated tree.
+        Assumes this node represents the parent of the given source, and that none of our
+        children represent the source itself.
+    **/
+    public synchronized void update (MPersistent source)
+    {
+        MPart c = new MPart (this, source, true);
+        children.put (source.key (), c);
+        c.update ();
     }
 
     public synchronized void resetOverride ()
@@ -247,20 +289,20 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     {
         if (children == null) return;
         if (! fromTopDocument) return; // Nothing to do.
-        clearRecursive ();
+        clearRecursive (true);
     }
 
     /**
         Assuming that source in the current node belongs to the top-level document, reset all overridden children back to their original state.
     **/
-    public synchronized void clearRecursive ()
+    public synchronized void clearRecursive (boolean doRemove)
     {
         Iterator<MNode> i = source.iterator ();  // Implicitly, everything we iterate over will be from the top document.
         while (i.hasNext ())
         {
             String key = i.next ().key ();
             MPart c = (MPart) children.get (key);  // This should exist, unless a bug somewhere rendered the tree inconsistent.
-            c.clearRecursive ();
+            c.clearRecursive (doRemove);
             if (c.source == c.original)  // The child existed solely through override, so remove it completely.
             {
                 children.remove (key);
@@ -270,7 +312,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
                 c.fromTopDocument = false;
                 c.source = c.original;
             }
-            i.remove ();
+            if (doRemove) i.remove ();
         }
     }
 
@@ -281,13 +323,18 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     **/
     public synchronized void clear (String index)
     {
+        clear (index, true);
+    }
+
+    public synchronized void clear (String index, boolean doRemove)
+    {
         if (children == null) return;
         if (! fromTopDocument) return;  // This node is not overridden, so none of the children will be.
         if (source.child (index) == null) return;  // The child is not overridden, so nothing to do.
 
         // Actually clear the child
         MPart c = (MPart) children.get (index);
-        c.clearRecursive ();
+        c.clearRecursive (doRemove);
         if (c.source == c.original)
         {
             children.remove (index);
@@ -297,7 +344,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
             c.fromTopDocument = false;
             c.source = c.original;
         }
-        source.clear (index);
+        if (doRemove) source.clear (index);
     }
 
     public synchronized int length ()

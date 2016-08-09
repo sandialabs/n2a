@@ -65,7 +65,6 @@ public class NodeInherit extends NodeBase
         catch (Exception e)
         {
             System.err.println ("Exception while parsing model: " + e);
-            e.printStackTrace ();
         }
     }
 }

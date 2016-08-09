@@ -128,7 +128,7 @@ public class EquationTreePanel extends JPanel
         };
         tree.setCellRenderer (renderer);
 
-        NodeEditor editor = new NodeEditor (tree, renderer);
+        final NodeEditor editor = new NodeEditor (tree, renderer);
         editor.addCellEditorListener (new CellEditorListener ()
         {
             @Override
