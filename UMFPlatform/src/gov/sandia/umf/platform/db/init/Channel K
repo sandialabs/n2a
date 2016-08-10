@@ -1,6 +1,4 @@
 N2A.schema=1
-$metadata
- name=Channel K
 $inherit="Channel"
 I = G * n ^ 4 * (E - V)
 n' = alpha_n * (1 - n) - beta_n * n

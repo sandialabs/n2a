@@ -1,6 +1,5 @@
 N2A.schema=1
 $metadata
- name=STPU Connector
  stpu.component=stpu.lif2lif
 A=$connect("Neuron LIF")
 B=$connect("Neuron LIF")

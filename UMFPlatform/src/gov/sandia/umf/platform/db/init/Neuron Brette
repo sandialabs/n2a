@@ -1,6 +1,5 @@
 N2A.schema=1
 $metadata
- name=Neuron Brette
  xyce.device=neuron9
  notes=|
    Based on equations from Brette et al 2007, which in turn are based on a model by Traub

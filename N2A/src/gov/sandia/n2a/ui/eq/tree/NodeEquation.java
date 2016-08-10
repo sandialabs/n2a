@@ -94,15 +94,15 @@ public class NodeEquation extends NodeBase
         DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
         MPart mparent = source.getParent ();
         String key = source.key ();
-        mparent.clear (key);  // If this merely clears an override, then our source object retains its identity.
-        if (mparent.child (key) == null)  // but we do need to test if it is still in the tree
+        mparent.clear (key);
+        if (mparent.child (key) == null)
         {
             NodeVariable variable = (NodeVariable) getParent ();
             model.removeNodeFromParent (this);
 
             // If we are down to only 1 equation, then fold it back into a single-line variable.
             TreeMap<String,NodeEquation> equations = new TreeMap<String,NodeEquation> ();
-            Enumeration i = children ();
+            Enumeration i = variable.children ();
             while (i.hasMoreElements ())
             {
                 Object o = i.nextElement ();
@@ -115,7 +115,11 @@ public class NodeEquation extends NodeBase
             if (equations.size () == 1)
             {
                 NodeBase e = equations.firstEntry ().getValue ();
-                variable.source.set (variable.source.get () + e.source.get () + e.source.key ());
+                String ekey = e.source.key ();
+                variable.source.clear (ekey);
+                if (ekey.equals ("@")) variable.source.set (variable.source.get () + e.source.get ());
+                else                   variable.source.set (variable.source.get () + e.source.get () + ekey);
+                variable.setUserObject (variable.source.key () + "=" + variable.source.get ());
                 model.removeNodeFromParent (e);
                 model.nodeChanged (variable);
             }

@@ -94,6 +94,7 @@ public class EquationTreePanel extends JPanel
         public boolean isCellEditable (EventObject e)
         {
             if (! super.isCellEditable (e)) return false;
+            if (lastPath == null) return false;
             Object o = lastPath.getLastPathComponent ();
             if (! (o instanceof NodeBase)) return false;
             editingNode = (NodeBase) o;

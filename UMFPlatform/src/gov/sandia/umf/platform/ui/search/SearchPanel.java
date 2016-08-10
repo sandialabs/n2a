@@ -236,8 +236,7 @@ public class SearchPanel extends JPanel implements DefaultButtonEnabledPanel
     {
         public Component getListCellRendererComponent (JList<? extends MNode> list, MNode node, int index, boolean isSelected, boolean cellHasFocus)
         {
-            String name = node.get ("$metadata", "name");
-            if (name.isEmpty ()) name = node.get ();
+            String name = node.key ();
             setText (name);
             return this;
         }

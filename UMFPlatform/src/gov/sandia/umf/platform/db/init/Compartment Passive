@@ -1,6 +1,4 @@
 N2A.schema=1
-$metadata
- name=Compartment Passive
 V' = (G_m * (V_rest - V) + I_inj) / C_m
 G_m = 0.3
  $metadata

@@ -100,7 +100,11 @@ public class MVolatile extends MNode
         MNode source = children.get (fromIndex);
         children.remove (toIndex);
         children.remove (fromIndex);
-        if (source != null) children.put (toIndex, source);
+        if (source != null)
+        {
+            ((MVolatile) source).name = toIndex;  // If this cast ceases to be a safe assumption, then the M hierarchy needs re-design.
+            children.put (toIndex, source);
+        }
     }
 
     public static class IteratorWrapper implements Iterator<MNode>

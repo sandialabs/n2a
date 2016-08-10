@@ -13,9 +13,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.lang.ref.SoftReference;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.TreeMap;
@@ -106,6 +104,18 @@ public class MDoc extends MPersistent
         return children.get (index);
     }
 
+    public synchronized void clear (String index)
+    {
+        if (children == null) load ();
+        super.clear (index);
+    }
+
+    public synchronized int length ()
+    {
+        if (children == null) load ();
+        return children.size ();
+    }
+
     /**
         If this is a stand-alone document, then moves the file on disk.
         Otherwise, does nothing.
@@ -128,6 +138,12 @@ public class MDoc extends MPersistent
     {
         if (children == null) load ();
         return super.set (value, index);
+    }
+
+    public synchronized void move (String fromIndex, String toIndex)
+    {
+        if (children == null) load ();
+        super.move (fromIndex, toIndex);
     }
 
 	/**

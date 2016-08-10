@@ -9,7 +9,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.ui.eq.tree;
 
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.eq.EquationTreePanel;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import javax.swing.ImageIcon;
@@ -67,7 +66,7 @@ public class NodeReference extends NodeBase
         {
             source.set (value);
         }
-        else if (existingReference != null)  // Name is already taken, so change not permitted. 
+        else if (name.isEmpty ()  ||  existingReference != null)  // Name change is forbidden 
         {
             source.set (value);
             setUserObject ();

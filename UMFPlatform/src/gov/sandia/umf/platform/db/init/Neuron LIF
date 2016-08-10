@@ -1,6 +1,5 @@
 N2A.schema=1
 $metadata
- name=Neuron LIF
  stpu.component=stpu.lif
 v = v_reset @ v >= v_thresh
 v' = -leakage * (v - v_reset)

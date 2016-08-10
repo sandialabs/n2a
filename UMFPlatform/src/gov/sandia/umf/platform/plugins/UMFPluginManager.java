@@ -20,7 +20,6 @@ import java.util.Map;
 import replete.plugins.ExtensionPoint;
 import replete.plugins.Plugin;
 import replete.plugins.PluginManager;
-import replete.util.CodeUtil;
 
 public class UMFPluginManager {
     private static Map<String, RecordHandler> recordHandlers = new HashMap<String, RecordHandler>();

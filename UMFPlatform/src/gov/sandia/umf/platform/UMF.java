@@ -121,8 +121,6 @@ public class UMF
         Application.setName ("Unified Modeling Framework");
         Application.setTitle ("Unified Modeling Framework");
 
-        AppState.getState ().load ();
-
         String[] pluginMem = ArrayUtil.translate (String.class, pluginValuesCL);
 
         File[] pluginDirs = ArrayUtil.translate (File.class, pluginDirsCL, new ArrayTranslator ()

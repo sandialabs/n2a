@@ -181,11 +181,12 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         Assumes this node represents the parent of the given source, and that none of our
         children represent the source itself.
     **/
-    public synchronized void update (MPersistent source)
+    public synchronized MPart update (MPersistent source)
     {
         MPart c = new MPart (this, source, true);
         children.put (source.key (), c);
         c.update ();
+        return c;
     }
 
     public synchronized void resetOverride ()
@@ -264,6 +265,13 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         return container;
     }
 
+    public MPart getRoot ()
+    {
+        MPart result = this;
+        while (result.container != null) result = result.container;
+        return result;
+    }
+
     public MPersistent getSource ()
     {
         return source;
@@ -295,14 +303,14 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     /**
         Assuming that source in the current node belongs to the top-level document, reset all overridden children back to their original state.
     **/
-    public synchronized void clearRecursive (boolean doRemove)
+    public synchronized void clearRecursive (boolean removeFromTopDocument)
     {
         Iterator<MNode> i = source.iterator ();  // Implicitly, everything we iterate over will be from the top document.
         while (i.hasNext ())
         {
             String key = i.next ().key ();
             MPart c = (MPart) children.get (key);  // This should exist, unless a bug somewhere rendered the tree inconsistent.
-            c.clearRecursive (doRemove);
+            c.clearRecursive (removeFromTopDocument);
             if (c.source == c.original)  // The child existed solely through override, so remove it completely.
             {
                 children.remove (key);
@@ -312,7 +320,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
                 c.fromTopDocument = false;
                 c.source = c.original;
             }
-            if (doRemove) i.remove ();
+            if (removeFromTopDocument) i.remove ();
         }
     }
 
@@ -326,7 +334,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         clear (index, true);
     }
 
-    public synchronized void clear (String index, boolean doRemove)
+    public synchronized void clear (String index, boolean removeFromTopDocument)
     {
         if (children == null) return;
         if (! fromTopDocument) return;  // This node is not overridden, so none of the children will be.
@@ -334,7 +342,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
 
         // Actually clear the child
         MPart c = (MPart) children.get (index);
-        c.clearRecursive (doRemove);
+        c.clearRecursive (removeFromTopDocument);
         if (c.source == c.original)
         {
             children.remove (index);
@@ -344,7 +352,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
             c.fromTopDocument = false;
             c.source = c.original;
         }
-        if (doRemove) source.clear (index);
+        if (removeFromTopDocument) source.clear (index);
     }
 
     public synchronized int length ()

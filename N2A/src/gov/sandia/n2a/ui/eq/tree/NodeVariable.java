@@ -13,7 +13,6 @@ import java.util.TreeMap;
 
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.ui.eq.EquationTreePanel;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
@@ -183,35 +182,77 @@ public class NodeVariable extends NodeBase
         String value;
         if (parts.length > 1) value = parts[1];
         else                  value = "";
+        Variable.ParsedValue pieces = new Variable.ParsedValue (value);
 
+        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
         NodeBase existingVariable = null;
         String oldKey = source.key ();
         NodeBase parent = (NodeBase) getParent ();
         if (! name.equals (oldKey)) existingVariable = parent.child (name);
 
-        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
-        if (name.equals (oldKey)  ||  existingVariable != null)  // No name change, or name change not permitted.
+        if (existingVariable != null  &&  getChildCount () == 0)  // see if we can merge into the other variable with an acceptably low level of damage
         {
-            // Update ourselves. Exact action depends on whether we are single-line or multi-conditional.
-            TreeMap<String,NodeEquation> equations = new TreeMap<String,NodeEquation> ();
+            boolean existingEquationMatch = false;
+            int     existingEquationCount = 0;
             Enumeration i = children ();
             while (i.hasMoreElements ())
             {
                 Object o = i.nextElement ();
                 if (o instanceof NodeEquation)
                 {
+                    existingEquationCount++;
                     NodeEquation e = (NodeEquation) o;
-                    equations.put (e.source.key ().substring (1), e);
+                    if (e.source.key ().substring (1).equals (pieces.conditional)) existingEquationMatch = true;
                 }
             }
 
+            Variable.ParsedValue existingPieces = new Variable.ParsedValue (existingVariable.source.get ());
+
+            if ((existingEquationCount > 0  &&  ! existingEquationMatch)  ||  ! existingPieces.conditional.equals (pieces.conditional))
+            {
+                // Merge into existing variable and remove ourselves from tree.
+
+                if (! existingPieces.expression.isEmpty ()  ||  ! existingPieces.conditional.isEmpty ())
+                {
+                    MPart equation = (MPart) existingVariable.source.set (existingPieces.expression, "@" + existingPieces.conditional);
+                    model.insertNodeInto (new NodeEquation (equation), existingVariable, 0);
+                }
+                existingVariable.source.set (pieces.combiner);  // override the combiner, just as if we had entered an equation directly on the existing variable
+                existingVariable.setUserObject (name + "=" + pieces.combiner);
+                model.nodeChanged (existingVariable);
+
+                MPart equation = (MPart) existingVariable.source.set (pieces.expression, "@" + pieces.conditional);
+                NodeEquation e = new NodeEquation (equation);
+                model.insertNodeInto (e, existingVariable, 0);
+                model.removeNodeFromParent (this);
+                parent.source.clear (oldKey);
+                tree.setSelectionPath (new TreePath (e.getPath ()));
+
+                return;
+            }
+        }
+
+        TreeMap<String,NodeEquation> equations = new TreeMap<String,NodeEquation> ();
+        Enumeration i = children ();
+        while (i.hasMoreElements ())
+        {
+            Object o = i.nextElement ();
+            if (o instanceof NodeEquation)
+            {
+                NodeEquation e = (NodeEquation) o;
+                equations.put (e.source.key ().substring (1), e);
+            }
+        }
+
+        if (name.equals (oldKey)  ||  name.isEmpty ()  ||  existingVariable != null)  // No name change, or name change forbidden
+        {
+            // Update ourselves. Exact action depends on whether we are single-line or multi-conditional.
             if (equations.size () == 0)
             {
                 source.set (value);
             }
             else
             {
-                Variable.ParsedValue pieces = new Variable.ParsedValue (value);
                 source.set (pieces.combiner);
 
                 NodeEquation e = equations.get (pieces.conditional);
@@ -237,24 +278,17 @@ public class NodeVariable extends NodeBase
         else  // The name was changed. Move the whole tree under us to a new location. This may also expose an overridden variable.
         {
             // Inject the changed equation into the underlying data first, then move and rebuild the displayed nodes as necessary.
-            TreeMap<String,MNode> equations = new TreeMap<String,MNode> ();
-            for (MNode n : source)
-            {
-                String key = n.key ();
-                if (key.startsWith ("@")) equations.put (key.substring (1), n);
-            }
             if (equations.size () == 0)
             {
                 source.set (value);
             }
             else
             {
-                Variable.ParsedValue pieces = new Variable.ParsedValue (value);
                 source.set (pieces.combiner);
 
-                MNode e = equations.get (pieces.conditional);
-                if (e == null) source.set (pieces.expression, "@" + pieces.conditional);
-                else                e.set (pieces.expression);
+                NodeEquation e = equations.get (pieces.conditional);
+                if (e == null) source.set (pieces.expression, "@" + pieces.conditional);  // create a new equation
+                else         e.source.set (pieces.expression);  // blow away the existing expression in the matching equation
             }
 
             // Change ourselves into the new key=value pair
@@ -268,7 +302,7 @@ public class NodeVariable extends NodeBase
             }
             else
             {
-                // Make a new tree node, and leave this one to present the non-overridden value.
+                // Make a new node for the renamed tree, and leave us to present the other non-overridden tree.
                 // Note that our source is still set to the old part.
                 NodeVariable v = new NodeVariable (newPart);
                 model.insertNodeInto (v, parent, parent.getIndex (this));

@@ -1,6 +1,4 @@
 N2A.schema=1
-$metadata
- name=Hodgkin-Huxley Cable
 $p = $t < 100
 $t' = 0.1
 HH=$include("Neuron Hodgkin-Huxley")

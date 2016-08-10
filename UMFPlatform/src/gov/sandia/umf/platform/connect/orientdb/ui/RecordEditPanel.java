@@ -59,7 +59,7 @@ public abstract class RecordEditPanel extends JPanel
 
     public void updateRecordTitle ()
     {
-        lblTitle.setText (record.getOrDefault ("Untitled", "$metadata", "name"));
+        lblTitle.setText (record.key ());
     }
 
     public void doInitialFocus ()

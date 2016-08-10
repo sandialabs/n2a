@@ -41,17 +41,21 @@ public class NodePart extends NodeBase
         this.source = source;
     }
 
-    public void build ()
+    public void setUserObject ()
     {
-        String key  = source.key ();
-        String name = source.getOrDefault (key, "$metadata", "name");
-        if (isRoot ())            setUserObject (name);
+        String key = source.key ();
+        if (isRoot ())            setUserObject (key);
         else
         {
             String value = source.get ();
             if (value.isEmpty ()) setUserObject (key);
             else                  setUserObject (key + "=" + value);
         }
+    }
+
+    public void build ()
+    {
+        setUserObject ();
         removeAllChildren ();
 
         String order = source.get ("$metadata", "gui.order");
@@ -245,7 +249,7 @@ public class NodePart extends NodeBase
         if (isRoot ())  // Edits to root cause a rename of the document on disk
         {
             if (input.equals (oldKey)) return;
-            if (input.contains ("="))
+            if (input.contains ("=")  ||  input.isEmpty ())
             {
                 setUserObject (oldKey);
                 return;
@@ -274,86 +278,75 @@ public class NodePart extends NodeBase
         else                  value = "";
 
         String oldValue = source.get ();
-        NodeBase existingPart = null;
         NodeBase parent = (NodeBase) getParent ();
-        if (! name.equals (oldKey)) existingPart = parent.child (name);
+        if (! name.equals (oldKey)  &&  (name.isEmpty ()  ||  parent.child (name) != null)) name = oldKey;  // reject name change
+        boolean renamed = ! name.equals (oldKey);
+        if (! renamed  &&  value.equals (oldValue)) return;  // nothing to do
 
+        // Save changes and move the subtree
+        source.set (value);  // Save the new value, which could be the same as the old value, or even a reset to the non-overridden state.
+        MPart       mparent   = source.getParent ();
+        MPersistent docParent = mparent.getSource ();
+        mparent.clear (oldKey, false);  // Undoes the override in the collated tree, but data remains in the top-level document.
+        if (renamed) docParent.move (oldKey, name);
+
+        // Update the displayed tree
+
+        //   Handle any overridden structure
         DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
-        if (name.equals (oldKey)  ||  existingPart != null)  // No name change, or name change not permitted.
+        MPart oldPart = (MPart) mparent.child (oldKey);
+        if (oldPart != null)  // This node overrode some inherited values.
         {
-            if (! value.equals (oldValue))
+            if (oldValue.contains ("$include"))  // the usual case
             {
-                source.set (value);
-                source.update ();
-                build ();
-                model.nodeStructureChanged (this);
+                // We need to rebuild the entire tree, because the subtree built from the $include
+                // is indistinguishable from inherited equations. Thus, there is no simple way
+                // to back them out.
+                reloadTree (tree);
+                return;
             }
-
-            if (existingPart != null)  // Show that we rejected the name change.
+            if (renamed)  // Make a new tree node to hold the variable left behind.
             {
-                setUserObject (oldKey + "=" + value);
-                model.nodeChanged (this);
-            }
-        }
-        else  // The name was changed. Move the whole tree under us to a new location. This may also expose an overridden variable.
-        {
-            // Note: All the complexity in this section exists mainly to avoid rebuilding the tree from scratch,
-            // along with the associated gui disruption.
-
-            // Save changes and move the subtree
-            source.set (value);  // Save the new value, which could be the same as the old value. TODO: If this sets the value back to the original in an inherited variable, then we might have nothing to move.
-            MPart       mparent   = source.getParent ();
-            MPersistent docParent = mparent.getSource ();
-            mparent.clear (oldKey, false);  // Undoes the override in the collated tree, but data remains in the top-level document.
-            docParent.move (oldKey, name);
-
-            // Update the displayed tree
-            // This current node will be used for the renamed subtree, and a new node will be created
-            // for any subtree left behind. However, it may be necessary to rebuild the whole tree,
-            // in which case nothing is re-used or created.
-            MPart oldPart = (MPart) mparent.child (oldKey);
-            if (oldPart != null)  // There is still a subtree at the old location.
-            {
-                if (oldValue.contains ("$include"))  // the usual case
+                if (oldPart.isPart ())
                 {
-                    // We need to rebuild the entire tree, because the subtree built from the $include
-                    // is indistinguishable from inherited equations. Thus, there is no simple way
-                    // to back them out.
-                    reloadTree (tree);
-                    return;
+                    NodePart p = new NodePart (oldPart);
+                    model.insertNodeInto (p, parent, parent.getIndex (this));
+                    p.build ();
+                    model.nodeStructureChanged (p);
                 }
                 else
                 {
-                    // Make a new tree node to hold the variable left behind.
-                    if (oldPart.isPart ())
-                    {
-                        NodePart p = new NodePart (oldPart);
-                        model.insertNodeInto (p, parent, parent.getIndex (this));
-                        p.build ();
-                        model.nodeStructureChanged (p);
-                    }
-                    else
-                    {
-                        NodeVariable v = new NodeVariable (oldPart);
-                        model.insertNodeInto (v, parent, parent.getIndex (this));
-                        v.build ();
-                        model.nodeStructureChanged (v);
-                    }
+                    NodeVariable v = new NodeVariable (oldPart);
+                    model.insertNodeInto (v, parent, parent.getIndex (this));
+                    v.build ();
+                    model.nodeStructureChanged (v);
                 }
             }
+        }
 
-            // Re-use the current node for the renamed subtree.
-            MPersistent newDocNode = (MPersistent) docParent.child (name);
-            if (newDocNode == null)  // It could be null if the change the user made reverted the old node back to a non-overridden state.
+        //   Update the current node
+        MPersistent newDocNode = (MPersistent) docParent.child (name);
+        if (newDocNode == null)  // It could be null if the change the user made reverted the old node back to a non-overridden state.
+        {
+            model.removeNodeFromParent (this);
+        }
+        else
+        {
+            MPart newPart = mparent.update (newDocNode);  // re-collate this node to weave in any included part
+            if (newPart.isPart ())
             {
-                model.removeNodeFromParent (this);
-            }
-            else
-            {
-                mparent.update (newDocNode);  // re-collate this node to weave in the included part
-                source = (MPart) mparent.child (name);
-                build ();  // reconstruct this subtree in the gui
+                source = newPart;
+                build ();
                 model.nodeStructureChanged (this);
+            }
+            else  // replace ourselves with a variable
+            {
+                int position = parent.getIndex (this);
+                model.removeNodeFromParent (this);
+                NodeVariable v = new NodeVariable (newPart);
+                model.insertNodeInto (v, parent, position);
+                v.build ();
+                model.nodeStructureChanged (v);
             }
         }
     }

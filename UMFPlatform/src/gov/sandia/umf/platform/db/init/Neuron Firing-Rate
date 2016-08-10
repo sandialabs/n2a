@@ -1,6 +1,5 @@
 N2A.schema=1
 $metadata
- name=Neuron Firing-Rate
  notes=|
    Sigmoid f-I firing rate relationship
    I_inj = input current; 0 by default

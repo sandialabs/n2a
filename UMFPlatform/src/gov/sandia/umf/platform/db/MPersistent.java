@@ -36,6 +36,13 @@ public class MPersistent extends MVolatile
         return parent;
     }
 
+    public MNode getRoot ()
+    {
+        MPersistent result = this;
+        while (result.parent instanceof MPersistent) result = (MPersistent) result.parent;
+        return result;
+    }
+
 	public synchronized void markChanged ()
 	{
 	    if (! needsWrite)
@@ -57,6 +64,12 @@ public class MPersistent extends MVolatile
 	public synchronized void clear ()
     {
         super.clear ();
+        markChanged ();
+    }
+
+    public synchronized void clear (String index)
+    {
+        super.clear (index);
         markChanged ();
     }
 
@@ -111,7 +124,9 @@ public class MPersistent extends MVolatile
         if (source != null)
         {
             children.put (toIndex, source);
-            if (source instanceof MPersistent) ((MPersistent) source).markChanged ();
+            MPersistent p = (MPersistent) source;
+            p.name = toIndex;
+            p.markChanged ();  // Cast should be a safe assumption
         }
         markChanged ();
     }

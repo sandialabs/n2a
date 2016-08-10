@@ -1,6 +1,5 @@
 N2A.schema=1
 $metadata
- name=STPU Input
  stpu.component=stpu.input
 I = matrixRaw("../../stpu/stpuinput.input", 0.0, $index)
  $metadata

@@ -33,7 +33,6 @@ public class ModelRecordHandler implements RecordHandler
             if (models.child (index) == null)
             {
                 result = models.set ("", index);
-                result.set (index, "name");
                 return result;
             }
         }

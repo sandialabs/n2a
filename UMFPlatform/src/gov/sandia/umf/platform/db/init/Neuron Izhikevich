@@ -1,6 +1,5 @@
 N2A.schema=1
 $metadata
- name=Neuron Izhikevich
  xyce.device=neuron7
 v' = 1.0 / Cm * (k * (v - vr) * (v - vt) - u + I)
  $metadata
