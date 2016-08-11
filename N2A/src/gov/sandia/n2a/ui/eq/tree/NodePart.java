@@ -24,6 +24,7 @@ import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreeNode;
+import javax.swing.tree.TreePath;
 
 public class NodePart extends NodeBase
 {
@@ -193,8 +194,21 @@ public class NodePart extends NodeBase
             else if (t instanceof NodePart)        lastSubpart  = i;
             else                                   lastVariable = i;
         }
-        if (lastSubpart  < 0) lastSubpart  = getChildCount ();
-        if (lastVariable < 0) lastVariable = getChildCount ();
+        if (lastSubpart  < 0) lastSubpart  = getChildCount () - 1;
+        if (lastVariable < 0) lastVariable = getChildCount () - 1;
+
+        TreePath path = tree.getSelectionPath ();
+        if (path != null)
+        {
+            NodeBase selected = (NodeBase) path.getLastPathComponent ();
+            if (selected.isNodeChild (this))
+            {
+                // When we have a specific item selected, the user expects the new item to appear directly below it.
+                int selectedIndex = getIndex (selected);
+                lastSubpart  = selectedIndex;
+                lastVariable = selectedIndex;
+            }
+        }
 
         if (type.equals ("Annotation"))
         {
@@ -219,7 +233,7 @@ public class NodePart extends NodeBase
             int suffix = 0;
             while (source.child ("p" + suffix) != null) suffix++;
             NodeBase child = new NodePart ((MPart) source.set ("$include(\"\")", "p" + suffix));
-            model.insertNodeInto (child, this, lastSubpart);
+            model.insertNodeInto (child, this, lastSubpart + 1);
             return child;
         }
         else  // treat all other requests as "Variable"
@@ -227,7 +241,7 @@ public class NodePart extends NodeBase
             int suffix = 0;
             while (source.child ("x" + suffix) != null) suffix++;
             NodeBase child = new NodeVariable ((MPart) source.set ("0", "x" + suffix));
-            model.insertNodeInto (child, this, lastVariable);
+            model.insertNodeInto (child, this, lastVariable + 1);
             return child;
         }
     }
@@ -266,8 +280,14 @@ public class NodePart extends NodeBase
                 existingDocument = models.child (input);
             }
 
-            MNode dir = source.getParent ();
+            MNode dir = source.getSource ().getParent ();
             dir.move (oldKey, input);  // MDir promises to maintain object identity during the move, so our source reference is still valid.
+            return;
+        }
+
+        if (input.isEmpty ())
+        {
+            delete (tree);
             return;
         }
 
@@ -277,11 +297,23 @@ public class NodePart extends NodeBase
         if (parts.length > 1) value = parts[1];
         else                  value = "";
 
+        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
         String oldValue = source.get ();
         NodeBase parent = (NodeBase) getParent ();
-        if (! name.equals (oldKey)  &&  (name.isEmpty ()  ||  parent.child (name) != null)) name = oldKey;  // reject name change
-        boolean renamed = ! name.equals (oldKey);
-        if (! renamed  &&  value.equals (oldValue)) return;  // nothing to do
+        boolean renamed = ! name.equals (oldKey)  &&  ! name.isEmpty ()  &&  parent.child (name) == null;
+        if (! renamed)
+        {
+            if (value.equals (oldValue))  // nothing to do
+            {
+                if (! name.equals (oldKey))  // except maybe undo a rejected name change
+                {
+                    setUserObject ();
+                    model.nodeChanged (this);
+                }
+                return;
+            }
+            name = oldKey;  // for use below
+        }
 
         // Save changes and move the subtree
         source.set (value);  // Save the new value, which could be the same as the old value, or even a reset to the non-overridden state.
@@ -293,7 +325,6 @@ public class NodePart extends NodeBase
         // Update the displayed tree
 
         //   Handle any overridden structure
-        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
         MPart oldPart = (MPart) mparent.child (oldKey);
         if (oldPart != null)  // This node overrode some inherited values.
         {

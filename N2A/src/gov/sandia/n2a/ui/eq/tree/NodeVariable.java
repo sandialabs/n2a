@@ -100,6 +100,8 @@ public class NodeVariable extends NodeBase
     @Override
     public NodeBase add (String type, JTree tree)
     {
+        if (isBinding) return ((NodeBase) getParent ()).add ("Variable", tree);
+
         if (type.isEmpty ())
         {
             if (getChildCount () == 0  ||  tree.isCollapsed (new TreePath (getPath ()))) return ((NodeBase) getParent ()).add ("Variable", tree);
@@ -177,6 +179,12 @@ public class NodeVariable extends NodeBase
     public void applyEdit (JTree tree)
     {
         String input = (String) getUserObject ();
+        if (input.isEmpty ())
+        {
+            delete (tree);
+            return;
+        }
+
         String[] parts = input.split ("=", 2);
         String name = parts[0];
         String value;

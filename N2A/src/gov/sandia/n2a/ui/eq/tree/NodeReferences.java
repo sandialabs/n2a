@@ -46,9 +46,10 @@ public class NodeReferences extends NodeBase
             // Add a new reference to our children
             int suffix = 1;
             while (source.child ("r" + suffix) != null) suffix++;
-            NodeBase child = new NodeReference ((MPart) source.set ("", "r" + suffix));
-            ((DefaultTreeModel) tree.getModel ()).insertNodeInto (child, this, getChildCount ());
-            return child;
+            NodeBase result = new NodeReference ((MPart) source.set ("", "r" + suffix));
+            ((DefaultTreeModel) tree.getModel ()).insertNodeInto (result, this, getChildCount ());
+            result.setUserObject ("");
+            return result;
         }
         else
         {

@@ -54,6 +54,12 @@ public class NodeEquation extends NodeBase
     public void applyEdit (JTree tree)
     {
         String input = (String) getUserObject ();
+        if (input.isEmpty ())
+        {
+            delete (tree);
+            return;
+        }
+
         String[] parts = input.split ("@", 2);
         String expression = parts[0];
         String conditional;

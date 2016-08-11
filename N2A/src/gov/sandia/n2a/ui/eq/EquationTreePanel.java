@@ -44,10 +44,13 @@ import javax.swing.SwingUtilities;
 import javax.swing.event.CellEditorListener;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import javax.swing.event.TreeExpansionEvent;
+import javax.swing.event.TreeWillExpandListener;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellEditor;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
+import javax.swing.tree.ExpandVetoException;
 import javax.swing.tree.TreePath;
 import javax.swing.tree.TreeSelectionModel;
 
@@ -72,14 +75,16 @@ public class EquationTreePanel extends JPanel
     public NodePart         root;
 
     // Controls
-    protected JButton btnAddAnnot;
-    protected JButton btnAddRef;
-    protected JButton btnAddEqn;
-    protected JButton btnRemove;
-    protected JButton btnMoveUp;
-    protected JButton btnMoveDown;
-    protected JButton btnRun;
-    protected JPopupMenu mnuEqPopup;
+    protected JButton buttonAddPart;
+    protected JButton buttonAddVariable;
+    protected JButton buttonAddEquation;
+    protected JButton buttonAddAnnotation;
+    protected JButton buttonAddReference;
+    protected JButton buttonRemove;
+    protected JButton buttonMoveUp;
+    protected JButton buttonMoveDown;
+    protected JButton buttonRun;
+    protected JPopupMenu menuPopup;
 
     public class NodeEditor extends DefaultTreeCellEditor
     {
@@ -141,6 +146,9 @@ public class EquationTreePanel extends JPanel
             @Override
             public void editingCanceled (ChangeEvent e)
             {
+                Object o = editor.editingNode.getUserObject ();
+                if (o != null) System.out.println ("got:" + o);
+                if (! (o instanceof String)  ||  ((String) o).isEmpty ()) editor.editingNode.delete (tree);
             }
         });
         tree.setCellEditor (editor);
@@ -155,7 +163,7 @@ public class EquationTreePanel extends JPanel
                     if (path != null)
                     {
                         tree.setSelectionPath (path);
-                        mnuEqPopup.show (tree, e.getX (), e.getY ());
+                        menuPopup.show (tree, e.getX (), e.getY ());
                     }
                 }
             }
@@ -203,69 +211,106 @@ public class EquationTreePanel extends JPanel
             }
         });
 
+        tree.addTreeWillExpandListener (new TreeWillExpandListener ()
+        {
+            @Override
+            public void treeWillExpand (TreeExpansionEvent event) throws ExpandVetoException
+            {
+            }
+
+            @Override
+            public void treeWillCollapse (TreeExpansionEvent event) throws ExpandVetoException
+            {
+                TreePath path = event.getPath ();
+                if (((NodeBase) path.getLastPathComponent ()).isRoot ()) throw new ExpandVetoException (event);
+            }
+        });
+
         // Side Buttons
 
-        btnAddEqn = new IconButton (ImageUtil.getImage ("compnew.gif"), 2);
-        btnAddEqn.setToolTipText ("Add Equation");
-        btnAddEqn.setActionCommand ("Equation");
-        btnAddEqn.addActionListener (addListener);
+        buttonAddPart = new IconButton (ImageUtil.getImage ("comp.gif"), 2);
+        buttonAddPart.setToolTipText ("Add Part");
+        buttonAddPart.setActionCommand ("Part");
+        buttonAddPart.addActionListener (addListener);
 
-        btnAddAnnot = new IconButton (ImageUtil.getImage ("addannot.gif"), 2);
-        btnAddAnnot.setToolTipText ("Add Annotation");
-        btnAddAnnot.setActionCommand ("Annotation");
-        btnAddAnnot.addActionListener (addListener);
+        buttonAddVariable = new IconButton (ImageUtil.getImage ("delta.png"), 2);
+        buttonAddVariable.setToolTipText ("Add Variable");
+        buttonAddVariable.setActionCommand ("Variable");
+        buttonAddVariable.addActionListener (addListener);
 
-        btnAddRef = new IconButton (ImageUtil.getImage ("booknew.gif"), 2);
-        btnAddRef.setToolTipText ("Add Reference");
-        btnAddRef.setActionCommand ("Reference");
-        btnAddRef.addActionListener (addListener);
+        buttonAddEquation = new IconButton (ImageUtil.getImage ("equation.png"), 2);
+        buttonAddEquation.setToolTipText ("Add Equation");
+        buttonAddEquation.setActionCommand ("Equation");
+        buttonAddEquation.addActionListener (addListener);
 
-        btnRemove = new IconButton (ImageUtil.getImage ("remove.gif"), 2);
-        btnRemove.setToolTipText ("Remove");
-        btnRemove.addActionListener (deleteListener);
+        buttonAddAnnotation = new IconButton (ImageUtil.getImage ("edit.gif"), 2);
+        buttonAddAnnotation.setToolTipText ("Add Annotation");
+        buttonAddAnnotation.setActionCommand ("Annotation");
+        buttonAddAnnotation.addActionListener (addListener);
 
-        btnMoveUp = new IconButton (ImageUtil.getImage ("up.gif"), 2);
-        btnMoveUp.setToolTipText ("Move Up");
-        btnMoveUp.setActionCommand ("-1");
-        btnMoveUp.addActionListener (moveListener);
+        buttonAddReference = new IconButton (ImageUtil.getImage ("book.gif"), 2);
+        buttonAddReference.setToolTipText ("Add Reference");
+        buttonAddReference.setActionCommand ("Reference");
+        buttonAddReference.addActionListener (addListener);
 
-        btnMoveDown = new IconButton (ImageUtil.getImage ("down.gif"), 2);
-        btnMoveDown.setToolTipText ("Move Down");
-        btnMoveDown.setActionCommand ("1");
-        btnMoveDown.addActionListener (moveListener);
+        buttonRemove = new IconButton (ImageUtil.getImage ("remove.gif"), 2);
+        buttonRemove.setToolTipText ("Remove");
+        buttonRemove.addActionListener (deleteListener);
 
-        btnRun = new IconButton (ImageUtil.getImage ("run.gif"), 2);
-        btnRun.setToolTipText ("Run");
-        btnRun.addActionListener (runListener);
+        buttonMoveUp = new IconButton (ImageUtil.getImage ("up.gif"), 2);
+        buttonMoveUp.setToolTipText ("Move Up");
+        buttonMoveUp.setActionCommand ("-1");
+        buttonMoveUp.addActionListener (moveListener);
+
+        buttonMoveDown = new IconButton (ImageUtil.getImage ("down.gif"), 2);
+        buttonMoveDown.setToolTipText ("Move Down");
+        buttonMoveDown.setActionCommand ("1");
+        buttonMoveDown.addActionListener (moveListener);
+
+        buttonRun = new IconButton (ImageUtil.getImage ("run.gif"), 2);
+        buttonRun.setToolTipText ("Run");
+        buttonRun.addActionListener (runListener);
 
         // Context Menus
-        JMenuItem mnuAddEquation = new JMenuItem ("Add Equation", ImageUtil.getImage ("compnew.gif"));
-        mnuAddEquation.setActionCommand ("Equation");
-        mnuAddEquation.addActionListener (addListener);
+        JMenuItem menuAddPart = new JMenuItem ("Add Part", ImageUtil.getImage ("comp.gif"));
+        menuAddPart.setActionCommand ("Part");
+        menuAddPart.addActionListener (addListener);
 
-        JMenuItem mnuAddAnnot = new JMenuItem ("Add Annotation", ImageUtil.getImage ("addannot.gif"));
-        mnuAddAnnot.setActionCommand ("Annotation");
-        mnuAddAnnot.addActionListener (addListener);
+        JMenuItem menuAddVariable = new JMenuItem ("Add Variable", ImageUtil.getImage ("delta.png"));
+        menuAddVariable.setActionCommand ("Variable");
+        menuAddVariable.addActionListener (addListener);
 
-        JMenuItem mnuAddRef = new JMenuItem ("Add Reference", ImageUtil.getImage ("booknew.gif"));
-        mnuAddRef.setActionCommand ("Reference");
-        mnuAddRef.addActionListener (addListener);
+        JMenuItem menuAddEquation = new JMenuItem ("Add Equation", ImageUtil.getImage ("equation.png"));
+        menuAddEquation.setActionCommand ("Equation");
+        menuAddEquation.addActionListener (addListener);
 
-        mnuEqPopup = new JPopupMenu ();
-        mnuEqPopup.add (mnuAddEquation);
-        mnuEqPopup.add (mnuAddAnnot);
-        mnuEqPopup.add (mnuAddRef);
+        JMenuItem menuAddAnnotation = new JMenuItem ("Add Annotation", ImageUtil.getImage ("edit.gif"));
+        menuAddAnnotation.setActionCommand ("Annotation");
+        menuAddAnnotation.addActionListener (addListener);
+
+        JMenuItem menuAddReference = new JMenuItem ("Add Reference", ImageUtil.getImage ("book.gif"));
+        menuAddReference.setActionCommand ("Reference");
+        menuAddReference.addActionListener (addListener);
+
+        menuPopup = new JPopupMenu ();
+        menuPopup.add (menuAddPart);
+        menuPopup.add (menuAddVariable);
+        menuPopup.add (menuAddEquation);
+        menuPopup.add (menuAddAnnotation);
+        menuPopup.add (menuAddReference);
 
         Lay.BLtg (this,
             "C", Lay.p (Lay.sp (tree), "eb=5r"),
             "E", Lay.BxL ("Y",
-                Lay.BL (btnAddEqn,   "eb=5b,alignx=0.5,maxH=20"),
-                Lay.BL (btnAddAnnot, "eb=5b,alignx=0.5,maxH=20"),
-                Lay.BL (btnAddRef,   "eb=20b,alignx=0.5,maxH=20"),
-                Lay.BL (btnRemove,   "eb=20b,alignx=0.5,maxH=20"),
-                Lay.BL (btnMoveUp,   "eb=5b,alignx=0.5,maxH=20"),
-                Lay.BL (btnMoveDown, "eb=20b,alignx=0.5,maxH=20"),
-                Lay.BL (btnRun,      "eb=5b,alignx=0.5,maxH=20"),
+                Lay.BL (buttonAddPart,       "eb=5b,alignx=0.5,maxH=20"),
+                Lay.BL (buttonAddVariable,   "eb=5b,alignx=0.5,maxH=20"),
+                Lay.BL (buttonAddEquation,   "eb=5b,alignx=0.5,maxH=20"),
+                Lay.BL (buttonAddAnnotation, "eb=5b,alignx=0.5,maxH=20"),
+                Lay.BL (buttonAddReference,  "eb=20b,alignx=0.5,maxH=20"),
+                Lay.BL (buttonRemove,        "eb=20b,alignx=0.5,maxH=20"),
+                Lay.BL (buttonMoveUp,        "eb=5b,alignx=0.5,maxH=20"),
+                Lay.BL (buttonMoveDown,      "eb=20b,alignx=0.5,maxH=20"),
+                Lay.BL (buttonRun,           "eb=5b,alignx=0.5,maxH=20"),
                 Box.createVerticalGlue ()
             )
         );
@@ -464,7 +509,8 @@ public class EquationTreePanel extends JPanel
                     if (metadataNode == null)
                     {
                         metadataPart = (MPart) p.source.set ("", "$metadata");
-                        model.insertNodeInto (new NodeAnnotations (metadataPart), p, 0);
+                        metadataNode = new NodeAnnotations (metadataPart);
+                        model.insertNodeInto (metadataNode, p, 0);
                         if (order.isEmpty ()) order = "$metadata";
                         else                  order = "$metadata" + "," + order;
                     }

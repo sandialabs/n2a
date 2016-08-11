@@ -155,6 +155,14 @@ public class Variable implements Comparable<Variable>
 
         public ParsedValue (String value)
         {
+            if (value.isEmpty ())
+            {
+                combiner = "";
+                expression = "";
+                conditional = "";
+                return;
+            }
+
             // Extract the combiner string, if any
             combiner = value.substring (0, 1);
             if ("+*/<>:".contains (combiner)) value = value.substring (1).trim ();

@@ -43,6 +43,12 @@ public class NodeInherit extends NodeBase
     public void applyEdit (JTree tree)
     {
         String input = (String) getUserObject ();
+        if (input.isEmpty ())
+        {
+            delete (tree);
+            return;
+        }
+
         String[] parts = input.split ("=", 2);
         String value;
         if (parts.length > 1) value = parts[1];

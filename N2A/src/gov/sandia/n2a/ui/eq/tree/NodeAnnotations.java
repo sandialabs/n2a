@@ -46,9 +46,10 @@ public class NodeAnnotations extends NodeBase
             // Add a new annotation to our children
             int suffix = 1;
             while (source.child ("a" + suffix) != null) suffix++;
-            NodeBase child = new NodeAnnotation ((MPart) source.set ("", "a" + suffix));
-            ((DefaultTreeModel) tree.getModel ()).insertNodeInto (child, this, getChildCount ());
-            return child;
+            NodeBase result = new NodeAnnotation ((MPart) source.set ("", "a" + suffix));
+            ((DefaultTreeModel) tree.getModel ()).insertNodeInto (result, this, getChildCount ());
+            result.setUserObject ("");
+            return result;
         }
         else
         {

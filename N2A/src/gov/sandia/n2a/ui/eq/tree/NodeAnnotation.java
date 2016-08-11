@@ -53,6 +53,12 @@ public class NodeAnnotation extends NodeBase
     public void applyEdit (JTree tree)
     {
         String input = (String) getUserObject ();
+        if (input.isEmpty ())
+        {
+            delete (tree);
+            return;
+        }
+
         String[] parts = input.split ("=", 2);
         String name = parts[0];
         String value;
