@@ -156,7 +156,6 @@ public class RunQueue {
                     break;
                 }
                 try {
-                    logger.debug(System.currentTimeMillis() + " checking sim queue");
                     if (!simsToRun.isEmpty()) {
                         if (simsToRun.peek().resourcesAvailable()) {
                             logger.debug(System.currentTimeMillis() + " submitting run");

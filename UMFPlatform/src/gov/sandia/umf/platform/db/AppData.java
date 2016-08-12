@@ -46,20 +46,6 @@ public class AppData
     protected boolean stop;
     protected Thread saveThread;
 
-    protected List<ChangeListener> listeners = new ArrayList<ChangeListener> ();
-    public synchronized void addRestoreListener (ChangeListener listener)
-    {
-        listeners.add (listener);
-    }
-    public synchronized void fireRestored ()
-    {
-        if (listeners.size () > 0)
-        {
-            ChangeEvent e = new ChangeEvent (this);
-            for (ChangeListener c : listeners) c.stateChanged (e);
-        }
-    }
-
     public AppData ()
     {
         File root = UMF.getAppResourceDir ();
@@ -201,7 +187,8 @@ public class AppData
             System.err.println (error.toString ());
         }
 
-        fireRestored ();
+        models    .fireChanged ();
+        references.fireChanged ();
     }
 
     public void quit ()

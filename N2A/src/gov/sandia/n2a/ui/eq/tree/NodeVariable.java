@@ -16,9 +16,9 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
+import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
-import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 
@@ -89,14 +89,12 @@ public class NodeVariable extends NodeBase
     }
 
     @Override
-    public void prepareRenderer (DefaultTreeCellRenderer renderer, boolean selected, boolean expanded, boolean hasFocus)
+    public Icon getIcon (boolean expanded)
     {
-        if (isBinding) renderer.setIcon (iconBinding);
-        else           renderer.setIcon (iconVariable);
-        setFont (renderer, false, false);
-        // TODO: set color based on override status
+        if (isBinding) return iconBinding;
+        else           return iconVariable;
     }
-
+    
     @Override
     public NodeBase add (String type, JTree tree)
     {
@@ -193,16 +191,19 @@ public class NodeVariable extends NodeBase
         Variable.ParsedValue pieces = new Variable.ParsedValue (value);
 
         DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
-        NodeBase existingVariable = null;
+        NodeBase existing = null;
         String oldKey = source.key ();
         NodeBase parent = (NodeBase) getParent ();
-        if (! name.equals (oldKey)) existingVariable = parent.child (name);
+        if (! name.equals (oldKey)) existing = parent.child (name);
 
-        if (existingVariable != null  &&  getChildCount () == 0)  // see if we can merge into the other variable with an acceptably low level of damage
+        // See if the other node is a variable, and if we can merge into it with an acceptably low level of damage
+        NodeVariable existingVariable = null;
+        if (existing instanceof NodeVariable) existingVariable = (NodeVariable) existing;
+        if (existingVariable != null  &&  getChildCount () == 0  &&  ! pieces.expression.isEmpty ())
         {
             boolean existingEquationMatch = false;
             int     existingEquationCount = 0;
-            Enumeration i = children ();
+            Enumeration i = existingVariable.children ();
             while (i.hasMoreElements ())
             {
                 Object o = i.nextElement ();
@@ -216,7 +217,8 @@ public class NodeVariable extends NodeBase
 
             Variable.ParsedValue existingPieces = new Variable.ParsedValue (existingVariable.source.get ());
 
-            if ((existingEquationCount > 0  &&  ! existingEquationMatch)  ||  ! existingPieces.conditional.equals (pieces.conditional))
+            if (   (existingEquationCount  > 0  &&  ! existingEquationMatch)
+                || (existingEquationCount == 0  &&  ! existingPieces.conditional.equals (pieces.conditional)))
             {
                 // Merge into existing variable and remove ourselves from tree.
 
@@ -236,6 +238,8 @@ public class NodeVariable extends NodeBase
                 parent.source.clear (oldKey);
                 tree.setSelectionPath (new TreePath (e.getPath ()));
 
+                existingVariable.findConnections ();
+
                 return;
             }
         }
@@ -252,7 +256,7 @@ public class NodeVariable extends NodeBase
             }
         }
 
-        if (name.equals (oldKey)  ||  name.isEmpty ()  ||  existingVariable != null)  // No name change, or name change forbidden
+        if (name.equals (oldKey)  ||  name.isEmpty ()  ||  existing != null)  // No name change, or name change forbidden
         {
             // Update ourselves. Exact action depends on whether we are single-line or multi-conditional.
             if (equations.size () == 0)
@@ -271,13 +275,16 @@ public class NodeVariable extends NodeBase
                 }
                 else  // conditional matched an existing equation, so just replace the expression
                 {
-                    e.source.set (pieces.expression);
-                    e.setUserObject (pieces.expression + e.source.key ());  // key starts with "@"
-                    model.nodeChanged (e);
+                    if (! pieces.expression.isEmpty ())  // but only if the expression actually contains something
+                    {
+                        e.source.set (pieces.expression);
+                        e.setUserObject (pieces.expression + e.source.key ());  // key starts with "@"
+                        model.nodeChanged (e);
+                    }
                 }
             }
 
-            if (equations.size () > 0  ||  existingVariable != null)  // Necessary to change displayed value
+            if (equations.size () > 0  ||  existing != null)  // Necessary to change displayed value
             {
                 setUserObject (oldKey + "=" + source.get ());
                 model.nodeChanged (this);
@@ -295,8 +302,8 @@ public class NodeVariable extends NodeBase
                 source.set (pieces.combiner);
 
                 NodeEquation e = equations.get (pieces.conditional);
-                if (e == null) source.set (pieces.expression, "@" + pieces.conditional);  // create a new equation
-                else         e.source.set (pieces.expression);  // blow away the existing expression in the matching equation
+                if (e == null)                             source.set (pieces.expression, "@" + pieces.conditional);  // create a new equation
+                else if (! pieces.expression.isEmpty ()) e.source.set (pieces.expression);  // blow away the existing expression in the matching equation
             }
 
             // Change ourselves into the new key=value pair
@@ -316,10 +323,13 @@ public class NodeVariable extends NodeBase
                 model.insertNodeInto (v, parent, parent.getIndex (this));
                 v.build ();
                 model.nodeStructureChanged (v);
+                v.findConnections ();
             }
             build ();
             model.nodeStructureChanged (this);
         }
+
+        findConnections ();
     }
 
     @Override

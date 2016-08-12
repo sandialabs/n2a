@@ -7,6 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.db;
 
+import java.awt.EventQueue;
 import java.io.File;
 import java.io.IOException;
 import java.lang.ref.SoftReference;
@@ -17,13 +18,18 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
+
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 
 /**
     A top-level node which maps to a directory on the file system.
@@ -41,6 +47,33 @@ public class MDir extends MNode
 
 	protected NavigableMap<String,SoftReference<MDoc>> children = new TreeMap<String,SoftReference<MDoc>> ();
 	protected Set<MDoc> writeQueue = new HashSet<MDoc> ();  // By storing strong references to docs that need to be saved, we prevent them from being garbage collected until that is done.
+
+    protected List<ChangeListener> listeners = new ArrayList<ChangeListener> ();
+
+    /**
+        Adds a listener that will be notified whenever a change occurs to our collection of children.
+    **/
+    public synchronized void addChangeListener (ChangeListener listener)
+    {
+        listeners.add (listener);
+    }
+
+    public synchronized void fireChanged ()
+    {
+        if (listeners.size () > 0)
+        {
+            EventQueue.invokeLater (new Runnable ()
+            {
+                @Override
+                public void run ()
+                {
+                    ChangeEvent e = new ChangeEvent (this);
+                    for (ChangeListener c : listeners) c.stateChanged (e);
+                }
+                
+            });
+        }
+    }
 
     public MDir (File root)
     {
@@ -120,6 +153,8 @@ public class MDir extends MNode
         catch (IOException e)
         {
         }
+
+        fireChanged ();
     }
 
     public synchronized void clear (String index)
@@ -128,6 +163,8 @@ public class MDir extends MNode
         MDoc doc = ref.get ();
         if (ref != null) writeQueue.remove (doc);
         pathForChild (index).delete ();
+
+        fireChanged ();
     }
 
     public synchronized int length ()
@@ -166,6 +203,7 @@ public class MDir extends MNode
             // Note: We don't need to mark this document to be saved, since we are moving an existing file on disk.
             // However, if the document currently has unsaved changes, they will eventually get written to the new location.
         }
+        fireChanged ();
         return result;
     }
 
@@ -201,6 +239,8 @@ public class MDir extends MNode
             source.name = toIndex;
             children.put (toIndex, new SoftReference<MDoc> (source));
         }
+
+        fireChanged ();
     }
 
     public class IteratorWrapperSoft implements Iterator<MNode>

@@ -22,11 +22,14 @@ import gov.sandia.umf.platform.plugins.extpoints.Simulator;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
-import java.awt.Color;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.EventQueue;
+import java.awt.Font;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.FocusEvent;
+import java.awt.event.FocusListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
@@ -35,12 +38,17 @@ import java.util.Enumeration;
 import java.util.EventObject;
 
 import javax.swing.Box;
+import javax.swing.DefaultCellEditor;
+import javax.swing.Icon;
+import javax.swing.InputMap;
 import javax.swing.JButton;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JTree;
+import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
+import javax.swing.border.EmptyBorder;
 import javax.swing.event.CellEditorListener;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -51,6 +59,8 @@ import javax.swing.tree.DefaultTreeCellEditor;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.ExpandVetoException;
+import javax.swing.tree.TreeCellEditor;
+import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 import javax.swing.tree.TreeSelectionModel;
 
@@ -80,21 +90,71 @@ public class EquationTreePanel extends JPanel
     protected JButton buttonAddEquation;
     protected JButton buttonAddAnnotation;
     protected JButton buttonAddReference;
-    protected JButton buttonRemove;
+    protected JButton buttonDelete;
     protected JButton buttonMoveUp;
     protected JButton buttonMoveDown;
     protected JButton buttonRun;
     protected JPopupMenu menuPopup;
 
+    public class NodeRenderer extends DefaultTreeCellRenderer
+    {
+        protected Font  baseFont;
+        protected float baseFontSize;
+
+        @Override
+        public Component getTreeCellRendererComponent (JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
+        {
+            //System.out.println ("getting renderer");
+            super.getTreeCellRendererComponent (tree, value, selected, expanded, leaf, row, hasFocus);
+
+            if (baseFont == null)
+            {
+                baseFont = getFont ().deriveFont (Font.PLAIN);
+                baseFontSize = baseFont.getSize2D ();
+            }
+
+            NodeBase n = (NodeBase) value;
+            setFont (getFontFor (n));
+            setForeground (n.getForegroundColor ());
+            setIcon (getIconFor (n, expanded, leaf));
+
+            return this;
+        }
+
+        public Icon getIconFor (NodeBase node, boolean expanded, boolean leaf)
+        {
+            Icon result = node.getIcon (expanded);  // A node knows whether it should hold other nodes or not, so don't pass leaf to it.
+            if (result != null) return result;
+            if (leaf)     return getDefaultLeafIcon ();
+            if (expanded) return getDefaultOpenIcon ();
+            return               getDefaultClosedIcon ();
+        }
+
+        public Font getFontFor (NodeBase node)
+        {
+            int   style = node.getFontStyle ();
+            float scale = node.getFontScale ();
+            if (style != Font.PLAIN  ||  scale != 1) return baseFont.deriveFont (style, baseFontSize * scale);
+            return baseFont;
+        }
+    }
+
     public class NodeEditor extends DefaultTreeCellEditor
     {
-        public NodeBase editingNode;
+        public NodeBase         editingNode;
+        public DefaultTextField textField;
 
         public NodeEditor (JTree tree, DefaultTreeCellRenderer renderer)
         {
             super (tree, renderer);
         }
-        
+
+        @Override
+        public Font getFont ()
+        {
+            return ((NodeRenderer) renderer).getFontFor (editingNode);
+        }
+
         @Override
         public boolean isCellEditable (EventObject e)
         {
@@ -104,6 +164,70 @@ public class EquationTreePanel extends JPanel
             if (! (o instanceof NodeBase)) return false;
             editingNode = (NodeBase) o;
             return editingNode.allowEdit ();
+        }
+
+        /**
+            Set editingIcon and offset.
+        **/
+        @Override
+        protected void determineOffset (JTree tree, Object value, boolean isSelected, boolean expanded, boolean leaf, int row)
+        {
+            editingIcon = ((NodeRenderer) renderer).getIconFor ((NodeBase) value, expanded, leaf);
+            offset = renderer.getIconTextGap () + editingIcon.getIconWidth ();
+        }
+
+        @Override
+        protected TreeCellEditor createTreeCellEditor ()
+        {
+            textField = new DefaultTextField (new EmptyBorder (0, 0, 0, 0))
+            {
+                @Override
+                public Dimension getPreferredSize ()
+                {
+                    Dimension result = super.getPreferredSize ();
+                    result.width = Math.max (result.width, tree.getWidth () - (editingNode.getLevel () + 1) * offset - 5);  // The extra 5 pixels come from DefaultTreeCellEditor.EditorContainer.getPreferredSize()
+                    return result;
+                }
+            };
+
+            textField.addFocusListener (new FocusListener ()
+            {
+                @Override
+                public void focusGained (FocusEvent e)
+                {
+                    // Analyze text of control and set an appropriate selection
+                    String text = textField.getText ();
+                    int equals = text.indexOf ('=');
+                    int at     = text.indexOf ('@');
+                    if (equals >= 0  &&  equals < text.length () - 1)  // also check for combiner character
+                    {
+                        if (":+*/<>".indexOf (text.charAt (equals + 1)) >= 0) equals++;
+                    }
+                    if (at < 0)
+                    {
+                        if (equals >= 0)
+                        {
+                            textField.setCaretPosition (text.length ());
+                            textField.moveCaretPosition (equals + 1);
+                        }
+                        // Otherwise use the default, which selects all and places caret at the end.
+                    }
+                    else
+                    {
+                        textField.setCaretPosition (equals + 1);
+                        textField.moveCaretPosition (at);
+                    }
+                }
+
+                @Override
+                public void focusLost (FocusEvent e)
+                {
+                }
+            });
+
+            DefaultCellEditor result = new DefaultCellEditor (textField);
+            result.setClickCountToStart (1);
+            return result;
         }
     }
 
@@ -119,19 +243,14 @@ public class EquationTreePanel extends JPanel
         tree.getSelectionModel ().setSelectionMode (TreeSelectionModel.SINGLE_TREE_SELECTION);  // No multiple selection. It only makes deletes and moves more complicated.
         tree.setEditable (true);
 
-        DefaultTreeCellRenderer renderer = new DefaultTreeCellRenderer ()
-        {
-            @Override
-            public Component getTreeCellRendererComponent (JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
-            {
-                super.getTreeCellRendererComponent (tree, value, selected, expanded, leaf, row, hasFocus);
-                NodeBase n = (NodeBase) value;
-                if (n.source.isFromTopDocument ()) setForeground (Color.black);
-                else                               setForeground (Color.blue);
-                n.prepareRenderer (this, selected, expanded, hasFocus);
-                return this;
-            }
-        };
+        // Remove key bindings that we wish to use for changing order of nodes
+        InputMap inputMap = tree.getInputMap ();
+        inputMap             .remove (KeyStroke.getKeyStroke ("shift pressed UP"));
+        inputMap.getParent ().remove (KeyStroke.getKeyStroke ("shift pressed UP"));
+        inputMap             .remove (KeyStroke.getKeyStroke ("shift pressed DOWN"));
+        inputMap.getParent ().remove (KeyStroke.getKeyStroke ("shift pressed DOWN"));
+
+        NodeRenderer renderer = new NodeRenderer ();
         tree.setCellRenderer (renderer);
 
         final NodeEditor editor = new NodeEditor (tree, renderer);
@@ -141,13 +260,13 @@ public class EquationTreePanel extends JPanel
             public void editingStopped (ChangeEvent e)
             {
                 editor.editingNode.applyEdit (tree);
+                updateOrder ();
             }
 
             @Override
             public void editingCanceled (ChangeEvent e)
             {
                 Object o = editor.editingNode.getUserObject ();
-                if (o != null) System.out.println ("got:" + o);
                 if (! (o instanceof String)  ||  ((String) o).isEmpty ()) editor.editingNode.delete (tree);
             }
         });
@@ -155,7 +274,7 @@ public class EquationTreePanel extends JPanel
 
         tree.addMouseListener (new MouseAdapter ()
         {
-            public void mouseReleased (MouseEvent e)  // TODO: Since this is a popup menu, would it make sense for this to be mousePressed() instead?
+            public void mouseReleased (MouseEvent e)
             {
                 if (SwingUtilities.isRightMouseButton (e)  &&   e.getClickCount () == 1)
                 {
@@ -186,7 +305,7 @@ public class EquationTreePanel extends JPanel
                 int keycode = e.getKeyCode ();
                 if (keycode == KeyEvent.VK_DELETE)
                 {
-                    deleteSelected ();
+                    deleteSelected (e.isControlDown ());
                 }
                 else if (keycode == KeyEvent.VK_INSERT)
                 {
@@ -194,10 +313,9 @@ public class EquationTreePanel extends JPanel
                 }
                 else if (keycode == KeyEvent.VK_ENTER)
                 {
-                    TreePath path = tree.getSelectionPath ();
-                    if (path != null) tree.startEditingAtPath (path);
+                    editSelected ();
                 }
-                else if (e.isAltDown ())
+                else if (e.isShiftDown ())
                 {
                     if (keycode == KeyEvent.VK_UP)
                     {
@@ -216,6 +334,7 @@ public class EquationTreePanel extends JPanel
             @Override
             public void treeWillExpand (TreeExpansionEvent event) throws ExpandVetoException
             {
+                //System.out.println ("about to expand");
             }
 
             @Override
@@ -223,6 +342,7 @@ public class EquationTreePanel extends JPanel
             {
                 TreePath path = event.getPath ();
                 if (((NodeBase) path.getLastPathComponent ()).isRoot ()) throw new ExpandVetoException (event);
+                //System.out.println ("about to collapse");
             }
         });
 
@@ -253,9 +373,9 @@ public class EquationTreePanel extends JPanel
         buttonAddReference.setActionCommand ("Reference");
         buttonAddReference.addActionListener (addListener);
 
-        buttonRemove = new IconButton (ImageUtil.getImage ("remove.gif"), 2);
-        buttonRemove.setToolTipText ("Remove");
-        buttonRemove.addActionListener (deleteListener);
+        buttonDelete = new IconButton (ImageUtil.getImage ("remove.gif"), 2);
+        buttonDelete.setToolTipText ("Delete");
+        buttonDelete.addActionListener (deleteListener);
 
         buttonMoveUp = new IconButton (ImageUtil.getImage ("up.gif"), 2);
         buttonMoveUp.setToolTipText ("Move Up");
@@ -307,7 +427,7 @@ public class EquationTreePanel extends JPanel
                 Lay.BL (buttonAddEquation,   "eb=5b,alignx=0.5,maxH=20"),
                 Lay.BL (buttonAddAnnotation, "eb=5b,alignx=0.5,maxH=20"),
                 Lay.BL (buttonAddReference,  "eb=20b,alignx=0.5,maxH=20"),
-                Lay.BL (buttonRemove,        "eb=20b,alignx=0.5,maxH=20"),
+                Lay.BL (buttonDelete,        "eb=20b,alignx=0.5,maxH=20"),
                 Lay.BL (buttonMoveUp,        "eb=5b,alignx=0.5,maxH=20"),
                 Lay.BL (buttonMoveDown,      "eb=20b,alignx=0.5,maxH=20"),
                 Lay.BL (buttonRun,           "eb=5b,alignx=0.5,maxH=20"),
@@ -335,7 +455,7 @@ public class EquationTreePanel extends JPanel
             if (record == null)
             {
                 root = null;
-                model.setRoot (root);
+                model.setRoot (null);
             }
             else
             {
@@ -365,7 +485,8 @@ public class EquationTreePanel extends JPanel
     {
         public void actionPerformed (ActionEvent e)
         {
-            deleteSelected ();
+            boolean shift = (e.getModifiers () & ActionEvent.CTRL_MASK) != 0;
+            deleteSelected (shift);
         }
     };
 
@@ -471,10 +592,41 @@ public class EquationTreePanel extends JPanel
         }
     }
 
-    public void deleteSelected ()
+    public void editSelected ()
+    {
+        TreePath path = tree.getSelectionPath ();
+        if (path != null) tree.startEditingAtPath (path);
+
+        path = tree.getSelectionPath ();  // This can change quite a bit in the NodeBase.applyEdit() function.
+        if (path != null) updateOverrides (path);
+    }
+
+    public void deleteSelected (boolean controlKeyDown)
     {
         NodeBase selected = getSelected ();
-        if (selected != null) selected.delete (tree);
+        if (selected != null)
+        {
+            if (selected.isRoot ())
+            {
+                if (controlKeyDown) selected.delete (tree);  // Only delete the root (entire document) if the user does something extra to say they really mean it.
+            }
+            else
+            {
+                NodeBase parent = (NodeBase) selected.getParent ();
+                int index = parent.getIndex (selected);
+
+                selected.delete (tree);
+
+                index = Math.min (index, parent.getChildCount () - 1);
+                TreePath path;
+                if (index < 0) path = new TreePath (                          parent.getPath ());
+                else           path = new TreePath (((DefaultMutableTreeNode) parent.getChildAt (index)).getPath ());
+                tree.setSelectionPath (path);
+
+                updateOrder ();
+                updateOverrides (path);
+            }
+        }
     }
 
     public void moveSelected (int direction)
@@ -541,6 +693,63 @@ public class EquationTreePanel extends JPanel
                     tree.setSelectionPath (path);
                 }
             }
+        }
+    }
+
+    /**
+        Records the current order of nodes in "gui.order", provided that metadata field exists.
+        Otherwise, we assume the user doesn't care.
+    **/
+    public void updateOrder ()
+    {
+        // Find $metadata/gui.order for the currently selected node. If it exists, update it.
+        // Note that this is a modified version of moveSelected() which does not actually move
+        // anything, and which only modifies an existing $metadata/gui.order, not create a new one.
+        TreePath path = tree.getSelectionPath ();
+        if (path != null)
+        {
+            DefaultMutableTreeNode node   = (DefaultMutableTreeNode) path.getLastPathComponent ();
+            DefaultMutableTreeNode parent = (DefaultMutableTreeNode) node.getParent ();
+            if (parent instanceof NodePart)  // Only parts support $metadata.gui.order
+            {
+                NodeAnnotations metadataNode = null;
+                String order = null;
+                Enumeration i = parent.children ();
+                while (i.hasMoreElements ())
+                {
+                    NodeBase c = (NodeBase) i.nextElement ();
+                    String key = c.source.key ();
+                    if (order == null) order = key;
+                    else               order = order + "," + key;
+                    if (key.equals ("$metadata")) metadataNode = (NodeAnnotations) c;
+                }
+                if (metadataNode == null) return;
+
+                i = metadataNode.children ();
+                while (i.hasMoreElements ())
+                {
+                    NodeAnnotation a = (NodeAnnotation) i.nextElement ();
+                    if (a.source.key ().equals ("gui.order"))
+                    {
+                        a.source.set (order);
+                        a.setUserObject ("gui.order=" + order);
+                        model.nodeChanged (a);
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+        Redisplay any nodes that might have been reset to non-overridden state.
+    **/
+    public void updateOverrides (TreePath path)
+    {
+        for (int i = path.getPathCount () - 1; i >= 0; i--)
+        {
+            NodeBase n = (NodeBase) path.getPathComponent (i);
+            if (! n.source.isFromTopDocument ()) model.nodeChanged (n);
         }
     }
 }

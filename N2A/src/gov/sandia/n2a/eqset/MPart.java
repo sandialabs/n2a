@@ -298,6 +298,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         if (children == null) return;
         if (! fromTopDocument) return; // Nothing to do.
         clearRecursive (true);
+        clearPath ();
     }
 
     /**
@@ -352,7 +353,11 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
             c.fromTopDocument = false;
             c.source = c.original;
         }
-        if (removeFromTopDocument) source.clear (index);
+        if (removeFromTopDocument)
+        {
+            source.clear (index);
+            clearPath ();
+        }
     }
 
     public synchronized int length ()
@@ -393,60 +398,50 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         return false;
     }
 
-    public synchronized void set (String value)
-    {
-        if (source.get ().equals (value)) return;  // No change, so nothing to do.
+    /**
+        If an override is no longer needed on this node, reset it to its original state, and make
+        a recursive call to our parent. This is effectively the anti-operation to override().
 
-        // Check if this is a reset
-        if (fromTopDocument  &&  source != original  &&  value.equals (original.get ())  &&  ! overrideNecessary ())
+        @TODO There is an issue with clearing when the path leads through a $include node.
+        The override path only has the name of the part, not the full $include statement. Thus the
+        value never reverts to the original, so we never detect it. Switching to a "lay-under"
+        scheme rather than the current "lay-over" scheme (as implemented in collate()) should resolve this.
+    **/
+    public synchronized void clearPath ()
+    {
+        if (fromTopDocument  &&  source != original  &&  source.get ().equals (original.get ())  &&  ! overrideNecessary ())
         {
             source.getParent ().clear (source.key ());  // delete ourselves from the top-level document
             source = original;
             fromTopDocument = false;
-            return;
+            container.clearPath ();
         }
+    }
 
+    public synchronized void set (String value)
+    {
+        if (source.get ().equals (value)) return;  // No change, so nothing to do.
         override ();
         source.set (value);
+        clearPath ();
     }
 
     public synchronized MNode set (String value, String index)
     {
-        // Check if the given value is actually a reset back to the non-overridden state.
         MPart result = null;
         if (children != null) result = (MPart) children.get (index);
         if (result != null)
         {
-            if (result.get ().equals (value)) return result;  // Child exists and does not change, so nothing to do.
-            if (result.fromTopDocument  &&  result.source != result.original  &&  value.equals (result.original.get ())  &&  ! result.overrideNecessary ())
-            {
-                // similar to clearPart(index)
-                source.clear (index);  // remove from top-level document
-                result.source = result.original;
-                result.fromTopDocument = false;
-                return result;
-            }
-        }
-
-        // Set the value in the top-doc tree, and do all bookkeeping for override.
-        override ();
-        MPersistent s = (MPersistent) source.set (value, index);  // override() above ensures that source is a member of the top-level document tree
-        if (children == null) children = new TreeMap<String,MNode> (comparator);
-        if (result == null)  // We don't have the child, so by construction it is not in any source document.
-        {
-            result = new MPart (this, s, true);
-            children.put (index, result);
+            result.set (value);
             return result;
         }
 
-        // The child node already exists, and its value in the source document has already been changed.
-        // We only need to ensure that the bookkeeping for override is done.
-        if (result.source != s)
-        {
-            result.fromTopDocument = true;
-            result.original = result.source;
-            result.source = s;
-        }
+        // We don't have the child, so by construction it is not in any source document.
+        override ();
+        MPersistent s = (MPersistent) source.set (value, index);  // override() ensures that source is a member of the top-level document tree
+        result = new MPart (this, s, true);
+        if (children == null) children = new TreeMap<String,MNode> (comparator);
+        children.put (index, result);
         return result;
     }
 

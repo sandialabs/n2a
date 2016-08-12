@@ -11,9 +11,9 @@ package gov.sandia.n2a.ui.eq.tree;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
+import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
-import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
 
 public class NodeAnnotation extends NodeBase
@@ -35,10 +35,9 @@ public class NodeAnnotation extends NodeBase
     }
 
     @Override
-    public void prepareRenderer (DefaultTreeCellRenderer renderer, boolean selected, boolean expanded, boolean hasFocus)
+    public Icon getIcon (boolean expanded)
     {
-        renderer.setIcon (icon);
-        setFont (renderer, false, false);
+        return icon;
     }
 
     @Override

@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.eq.tree;
 
+import java.awt.Font;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Set;
@@ -18,10 +19,10 @@ import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.db.MPersistent;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
+import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
 import javax.swing.tree.DefaultMutableTreeNode;
-import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
@@ -119,6 +120,26 @@ public class NodePart extends NodeBase
         // This allows us to take advantage of the work done to identify sub-parts.
     }
 
+    @Override
+    public Icon getIcon (boolean expanded)
+    {
+        if (isConnection) return iconConnection;
+        else              return iconCompartment;
+    }
+
+    @Override
+    public float getFontScale ()
+    {
+        if (isRoot ()) return 2f;
+        return 1;
+    }
+
+    @Override
+    public int getFontStyle ()
+    {
+        return Font.BOLD;
+    }
+
     /**
         Examines a fully-built tree to determine the value of the isConnection member.
     **/
@@ -170,14 +191,6 @@ public class NodePart extends NodeBase
     }
 
     @Override
-    public void prepareRenderer (DefaultTreeCellRenderer renderer, boolean selected, boolean expanded, boolean hasFocus)
-    {
-        if (isConnection) renderer.setIcon (iconConnection);
-        else              renderer.setIcon (iconCompartment);
-        setFont (renderer, isRoot (), false);
-    }
-
-    @Override
     public NodeBase add (String type, JTree tree)
     {
         DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
@@ -201,7 +214,7 @@ public class NodePart extends NodeBase
         if (path != null)
         {
             NodeBase selected = (NodeBase) path.getLastPathComponent ();
-            if (selected.isNodeChild (this))
+            if (isNodeChild (selected))
             {
                 // When we have a specific item selected, the user expects the new item to appear directly below it.
                 int selectedIndex = getIndex (selected);
@@ -385,13 +398,21 @@ public class NodePart extends NodeBase
     @Override
     public void delete (JTree tree)
     {
-        if (! source.isFromTopDocument ()) return;
-        if (isRoot ()) return;  // Can only delete the whole model from the search panel.
+        if (! source.isFromTopDocument ()) return;  // This should be true of root, as well as any other node we might try to delete.
+
+        String key = source.key ();
+        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+        if (isRoot ())
+        {
+            MNode dir = source.getSource ().getParent ();
+            dir.clear (key);
+            model.setRoot (null);
+            return;
+        }
 
         MPart mparent = source.getParent ();
-        String key = source.key ();
         mparent.clear (key);
-        if (mparent.child (key) == null) ((DefaultTreeModel) tree.getModel ()).removeNodeFromParent (this);
+        if (mparent.child (key) == null) model.removeNodeFromParent (this);
         else reloadTree (tree);  // See comments about clearing an include in applyEdit()
     }
 }

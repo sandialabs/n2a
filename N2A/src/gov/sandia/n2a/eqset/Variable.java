@@ -244,28 +244,12 @@ public class Variable implements Comparable<Variable>
         // TODO: merge references
     }
 
-    /**
-        Store changes to metadata into the DB, in a way that will play back correctly when our
-        containing EquationSet tree is re-built from the top-level model document.
-    **/
-    public void updateDB (String tag, String value)
-    {
-        String path = nameString ();
-        EquationSet s = container;
-        while (s.container != null)
-        {
-            path = container.name + "." + path;
-            s = s.container;
-        }
-        s.source.set (value, path, "$metadata", tag);
-    }
-
     public void flattenExpressions (Variable v)
     {
         if (equations == null) equations = new TreeSet<EquationEntry> ();
         for (EquationEntry e : v.equations)
         {
-            if (v.assignment > REPLACE)  // assuming UNKNOWN=0 and REPLACE=1, and all other constants are greater 
+            if (v.assignment > REPLACE)  // assuming all other constants are greater 
             {
                 EquationEntry e2 = equations.floor (e);
                 if (e.compareTo (e2) == 0)  // conditionals are exactly the same

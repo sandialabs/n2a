@@ -12,11 +12,12 @@ import java.util.Enumeration;
 import java.util.TreeMap;
 
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
+import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
-import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
 
 public class NodeEquation extends NodeBase
@@ -37,10 +38,9 @@ public class NodeEquation extends NodeBase
     }
 
     @Override
-    public void prepareRenderer (DefaultTreeCellRenderer renderer, boolean selected, boolean expanded, boolean hasFocus)
+    public Icon getIcon (boolean expanded)
     {
-        renderer.setIcon (icon);
-        setFont (renderer, false, false);
+        return icon;
     }
 
     @Override
@@ -60,35 +60,46 @@ public class NodeEquation extends NodeBase
             return;
         }
 
-        String[] parts = input.split ("@", 2);
-        String expression = parts[0];
-        String conditional;
-        if (parts.length > 1) conditional = "@" + parts[1];
-        else                  conditional = "@";
+        Variable.ParsedValue pieces = new Variable.ParsedValue (input);
+        String conditional = "@" + pieces.conditional;  // ParsedValue removes the @
 
         NodeBase existingEquation = null;
         String oldKey = source.key ();
-        NodeBase parent = (NodeBase) getParent ();
+        NodeVariable parent = (NodeVariable) getParent ();
         if (! conditional.equals (oldKey)) existingEquation = parent.child (conditional);
 
         DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
         if (conditional.equals (oldKey))  // Condition is the same
         {
-            source.set (expression);
+            source.set (pieces.expression);
         }
         else if (existingEquation != null)  // Condition already exists, so no change allowed
         {
-            source.set (expression);
+            source.set (pieces.expression);
             setUserObject ();
             model.nodeChanged (this);
         }
         else  // The name was changed.
         {
             MPart p = source.getParent ();
-            MPart newPart = (MPart) p.set (expression, conditional);
+            MPart newPart = (MPart) p.set (pieces.expression, conditional);
             p.clear (oldKey);
             if (p.child (oldKey) == null) source = newPart;  // We were not associated with an override, so we can re-use this tree node.
             else model.insertNodeInto (new NodeEquation (newPart), parent, parent.getChildCount ());  // Make a new tree node, and leave this one to present the non-overridden value.
+        }
+
+        // The fact that we are modifying an equation indicates that the main variable will display only a combiner.
+        // We always override it.
+        if (! pieces.combiner.isEmpty ())
+        {
+            if (! parent.source.get ().equals (pieces.combiner))
+            {
+                parent.source.set (pieces.combiner);
+                parent.setUserObject (parent.source.key () + "=" + parent.source.get ());
+                model.nodeChanged (parent);
+            }
+            setUserObject ();
+            model.nodeChanged (this);
         }
     }
 

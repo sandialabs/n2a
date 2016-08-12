@@ -7,14 +7,17 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.eq.tree;
 
+import java.awt.Font;
+
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
+import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
-import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
+import javax.swing.tree.TreePath;
 
 public class NodeReferences extends NodeBase
 {
@@ -32,10 +35,16 @@ public class NodeReferences extends NodeBase
     }
 
     @Override
-    public void prepareRenderer (DefaultTreeCellRenderer renderer, boolean selected, boolean expanded, boolean hasFocus)
+    public Icon getIcon (boolean expanded)
     {
-        renderer.setIcon (icon);
-        setFont (renderer, false, true);
+        if (expanded) return icon;
+        return NodeReference.icon;
+    }
+
+    @Override
+    public int getFontStyle ()
+    {
+        return Font.ITALIC;
     }
 
     @Override
@@ -47,7 +56,16 @@ public class NodeReferences extends NodeBase
             int suffix = 1;
             while (source.child ("r" + suffix) != null) suffix++;
             NodeBase result = new NodeReference ((MPart) source.set ("", "r" + suffix));
-            ((DefaultTreeModel) tree.getModel ()).insertNodeInto (result, this, getChildCount ());
+
+            int selectedIndex = getChildCount () - 1;
+            TreePath path = tree.getSelectionPath ();
+            if (path != null)
+            {
+                NodeBase selected = (NodeBase) path.getLastPathComponent ();
+                if (isNodeChild (selected)) selectedIndex = getIndex (selected);
+            }
+
+            ((DefaultTreeModel) tree.getModel ()).insertNodeInto (result, this, selectedIndex + 1);
             result.setUserObject ("");
             return result;
         }

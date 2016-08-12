@@ -10,35 +10,45 @@ package gov.sandia.n2a.ui.eq.tree;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.umf.platform.db.MPersistent;
 
+import java.awt.Color;
 import java.awt.EventQueue;
 import java.awt.Font;
 import java.util.ArrayList;
 import java.util.Enumeration;
 
+import javax.swing.Icon;
 import javax.swing.JTree;
 import javax.swing.tree.DefaultMutableTreeNode;
-import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 
 public class NodeBase extends DefaultMutableTreeNode
 {
-    protected Font baseFont;
     public MPart source;
 
-    public void prepareRenderer (DefaultTreeCellRenderer renderer, boolean selected, boolean expanded, boolean hasFocus)
+    public Icon getIcon (boolean expanded)
     {
-        setFont (renderer, false, false);
+        return null;
     }
 
-    public void setFont (DefaultTreeCellRenderer renderer, boolean bold, boolean italic)
+    public Color getForegroundColor ()
     {
-        if (baseFont == null) baseFont = renderer.getFont ();
-        int style = Font.PLAIN;
-        if (italic) style += Font.ITALIC;
-        if (bold)   style += Font.BOLD;
-        if (baseFont.getStyle () != style) renderer.setFont (baseFont.deriveFont (style));
+        if (source.isFromTopDocument ()) return (Color.black);
+        return                                   Color.blue;
+    }
+
+    /**
+        Returns relative scaling of font w.r.t. size used in most of the tree.
+    **/
+    public float getFontScale ()
+    {
+        return 1;
+    }
+
+    public int getFontStyle ()
+    {
+        return Font.PLAIN;
     }
 
     public NodeBase child (String key)
@@ -90,6 +100,7 @@ public class NodeBase extends DefaultMutableTreeNode
             root.findConnections ();
             ((DefaultTreeModel) tree.getModel ()).reload ();
 
+            // Re-select the current node, or as close as possible.
             EventQueue.invokeLater (new Runnable ()
             {
                 public void run ()
