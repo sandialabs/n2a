@@ -183,16 +183,33 @@ public class NodeVariable extends NodeBase
             return;
         }
 
+        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+        String oldKey = source.key ();
+
         String[] parts = input.split ("=", 2);
         String name = parts[0];
         String value;
-        if (parts.length > 1) value = parts[1];
-        else                  value = "";
+        if (parts.length > 1)
+        {
+            value = parts[1];
+        }
+        else
+        {
+            if (name.matches ("[a-zA-Z_$][a-zA-Z0-9_$.]*[']*"))  // It's truly a variable name
+            {
+                value = "";
+            }
+            else  // The user actually passed a naked expression, so resurrect the old (probably auto-assigned) variable name.
+            {
+                value = name;
+                name = oldKey;
+                setUserObject (name + "=" + value);
+                model.nodeChanged (this);
+            }
+        }
         Variable.ParsedValue pieces = new Variable.ParsedValue (value);
 
-        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
         NodeBase existing = null;
-        String oldKey = source.key ();
         NodeBase parent = (NodeBase) getParent ();
         if (! name.equals (oldKey)) existing = parent.child (name);
 
