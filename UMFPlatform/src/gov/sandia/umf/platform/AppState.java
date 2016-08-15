@@ -16,7 +16,7 @@ public class AppState extends MDoc
     public ProductCustomization prodCustomization;
 
     protected static AppState instance;
-    public static AppState getState ()
+    public static AppState getInstance ()
     {
         if (instance == null) instance = new AppState ();
         return instance;

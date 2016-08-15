@@ -9,8 +9,6 @@ package gov.sandia.n2a;
 
 import gov.sandia.n2a.exporters.LEMSExporter;
 import gov.sandia.n2a.language.Operator;
-import gov.sandia.n2a.records.ModelRecordHandler;
-import gov.sandia.n2a.records.ReferenceRecordHandler;
 import gov.sandia.umf.platform.plugins.UMFPluginManager;
 import gov.sandia.umf.platform.plugins.extpoints.MenuItems;
 import gov.sandia.umf.platform.plugins.extpoints.UMFMenuActionListener;
@@ -70,25 +68,7 @@ public class N2APlugin extends DefaultPlugin {
             new N2AProductCustomization(),
             new LEMSExporter(),
             new ModelRecordHandler(),
-            new ReferenceRecordHandler(),
-            new MenuItems ()
-            {
-                public Map<String, UMFMenuBarActionDescriptor> getMenuItems ()
-                {
-                    Map<String, UMFMenuBarActionDescriptor> map = new LinkedHashMap<String, UMFMenuBarActionDescriptor> ();
-                    map.put ("newModelOrient", new UMFMenuBarActionDescriptor (
-                        "fileMenu/newMenu", "New Model", 'N', ImageUtil.getImage ("modelnew.gif"), null, false, 0, false,
-                        new UMFMenuActionListener ()
-                        {
-                            public void actionPerformed (UIController uiController, ActionEvent e)
-                            {
-                                uiController.openRecord (UMFPluginManager.getHandler ("Model").createNewRecord ());
-                            }
-                        }
-                    ));
-                    return map;
-                }
-            }
+            new ReferenceRecordHandler()
         };
     }
 

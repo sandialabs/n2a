@@ -63,16 +63,6 @@ public class MainFrameActionMap extends UIActionMap {
             allEnabledStateMap, false, 0, false, null));
         addAction(action);
 
-        // New (menu items populated later)
-
-        action = new UIAction("newMenu");
-        action.addDescriptor(new MenuBarActionDescriptor("fileMenu", "New", 'N', allEnabledStateMap));
-        addAction(action);
-
-        action = new UIAction(sepId());
-        action.addDescriptor(new MenuBarActionDescriptor());
-        addAction(action);
-
         ActionListener listener = new ActionListener ()
         {
             public void actionPerformed(ActionEvent e)
@@ -85,30 +75,6 @@ public class MainFrameActionMap extends UIActionMap {
             i("save.gif"), allEnabledStateMap, false, 'S', true, listener));
         action.addDescriptor(new ToolBarActionDescriptor("fileMenu1", "Save", i("save.gif"),
             allEnabledStateMap, false, listener));
-        addAction(action);
-
-        listener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.openImportDialog();
-            }
-        };
-        action = new UIAction("import");
-        action.addDescriptor(new MenuBarActionDescriptor("fileMenu", "Import...", 0,
-            i("import.gif"), allEnabledStateMap, listener));
-        //action.addDescriptor(new ToolBarActionDescriptor("fileMenu", "Close All", i("closeall.gif"),
-       //     allEnabledStateMap, false, listener));
-        addAction(action);
-
-        listener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.openExportDialog();
-            }
-        };
-        action = new UIAction("export");
-        action.addDescriptor(new MenuBarActionDescriptor("fileMenu", "Export...", 0,
-            i("export.gif"), allEnabledStateMap, listener));
-        //action.addDescriptor(new ToolBarActionDescriptor("fileMenu", "Close All", i("closeall.gif"),
-       //     allEnabledStateMap, false, listener));
         addAction(action);
 
         listener = new ActionListener ()
@@ -132,47 +98,8 @@ public class MainFrameActionMap extends UIActionMap {
             allEnabledStateMap, false, 0, true, exitListener));
         addAction(action);
 
-        // ACTIONS //
-
-        //action = new UIAction("viewMenu");
-        //action.addDescriptor(new MenuBarActionDescriptor("", "View", 'V', null, allEnabledStateMap, false, 0, false, null));
-        //addAction(action);
-
         action = new UIAction(sepId());
         action.addDescriptor(new MenuBarActionDescriptor());
-        addAction(action);
-
-        // TOOLS //
-
-        action = new UIAction("toolsMenu");
-        action.addDescriptor(new MenuBarActionDescriptor("", "Tools", 'T', null,
-            allEnabledStateMap, false, 0, false, null));
-        addAction(action);
-
-        ActionListener redSkyListener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.openChildWindow("jobs", null);
-            }
-        };
-        action = new UIAction("runmgr");
-        action.addDescriptor(new MenuBarActionDescriptor("toolsMenu", "Run Manager", 'R',
-            i("redsky2.gif"), allEnabledStateMap, false, 'J', true, redSkyListener));
-        action.addDescriptor(new ToolBarActionDescriptor("toolsMenu", "Run Manager", i("redsky2.gif"),
-            allEnabledStateMap, false, redSkyListener));
-        addAction(action);
-
-        action = new UIAction(sepId());
-        action.addDescriptor(new MenuBarActionDescriptor());
-        addAction(action);
-
-        ActionListener preferencesListener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.showPreferences();
-            }
-        };
-        action = new UIAction("prefs");
-        action.addDescriptor(new MenuBarActionDescriptor("toolsMenu", "Preferences", 'P',
-            i("properties.gif"), allEnabledStateMap, false, 0, false, preferencesListener));
         addAction(action);
 
         // L&F //
@@ -180,12 +107,6 @@ public class MainFrameActionMap extends UIActionMap {
         // TODO: Move to window menu.
         action = new UIAction("lafMenu");
         action.addDescriptor(new MenuBarActionDescriptor("", LafManager.createLafMenu(), allEnabledStateMap));
-        addAction(action);
-        // WINDOW //
-
-        action = new UIAction("windowMenu");
-        action.addDescriptor(new MenuBarActionDescriptor("", "Window", 'W', null,
-            allEnabledStateMap, false, 0, false, null));
         addAction(action);
 
         // HELP //

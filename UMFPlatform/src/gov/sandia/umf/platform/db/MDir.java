@@ -7,7 +7,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.db;
 
-import java.awt.EventQueue;
 import java.io.File;
 import java.io.IOException;
 import java.lang.ref.SoftReference;
@@ -62,16 +61,8 @@ public class MDir extends MNode
     {
         if (listeners.size () > 0)
         {
-            EventQueue.invokeLater (new Runnable ()
-            {
-                @Override
-                public void run ()
-                {
-                    ChangeEvent e = new ChangeEvent (this);
-                    for (ChangeListener c : listeners) c.stateChanged (e);
-                }
-                
-            });
+            ChangeEvent e = new ChangeEvent (this);
+            for (ChangeListener c : listeners) c.stateChanged (e);
         }
     }
 
@@ -194,7 +185,14 @@ public class MDir extends MNode
         {
             result = new MDoc (this, index);
             children.put (index, new SoftReference<MDoc> (result));
-            result.markChanged ();  // Set the new document to save
+
+            // Set the new document to save.
+            // Due to subtle interactions with MDoc.save() and load(), this will not actually force an empty MDoc to exist.
+            // Specifically, load() on a non-existent file with clear the needsWrite flag. The load() call is forced by
+            // the save() call in order to iterate of children. If, OTOH, children are added and removed before save(),
+            // the empty MDoc will still be flagged to write. Whether this is a bug or a feature is debatable. The
+            // net effect for the N2A application is that new models that are not actually filled in will evaporate.
+            result.markChanged ();
         }
         else  // existing document; move if needed
         {

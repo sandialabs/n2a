@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2016 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -12,9 +12,12 @@ import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.FocusEvent;
+import java.awt.event.FocusListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
@@ -25,14 +28,17 @@ import java.util.List;
 
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
-import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.ListCellRenderer;
-import javax.swing.event.ListSelectionEvent;
-import javax.swing.event.ListSelectionListener;
+import javax.swing.ListSelectionModel;
+import javax.swing.border.EmptyBorder;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.DefaultHighlighter;
+import javax.swing.text.Highlighter;
 
+import sun.swing.DefaultLookup;
 import replete.util.Lay;
 
 public class SearchPanel extends JPanel
@@ -41,7 +47,9 @@ public class SearchPanel extends JPanel
     protected JButton                 buttonClear;
     protected JList<MNode>            list;
     protected DefaultListModel<MNode> model;
+    protected EquationTreePanel       panelEquations;  // reference to other side of our panel pair, so we can send updates (alternative to a listener arrangement)
 
+    // Retrieve records matching the filter text, and deliver them to the model.
     public class SearchThread extends Thread
     {
         public String query;
@@ -77,30 +85,22 @@ public class SearchPanel extends JPanel
 
     public void fireRecordSelected ()
     {
-        System.out.println ("record selected");
+        panelEquations.setEquations (model.get (list.getSelectedIndex ()));
     }
 
-    public SearchPanel ()
+    public SearchPanel (EquationTreePanel panelEquations)
     {
+        this.panelEquations = panelEquations;
+
         list = new JList<MNode> (model = new DefaultListModel<MNode> ());
+        list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
         list.setCellRenderer (new MNodeRenderer ());
-        list.getSelectionModel ().addListSelectionListener (new ListSelectionListener ()
-        {
-            public void valueChanged (ListSelectionEvent arg0)
-            {
-                fireRecordSelected ();
-            }
-        });
         list.addMouseListener (new MouseAdapter ()
         {
             @Override
             public void mousePressed (MouseEvent e)
             {
-                int index = list.getSelectedIndex ();
-                if (e.getClickCount () > 1 && index != -1)
-                {
-                    fireRecordSelected ();
-                }
+                if (e.getClickCount () > 1) fireRecordSelected ();
             }
         });
         list.addKeyListener (new KeyAdapter ()
@@ -110,51 +110,59 @@ public class SearchPanel extends JPanel
             {
                 if (e.getKeyCode () == KeyEvent.VK_ENTER)
                 {
-                    if (list.getSelectedIndex () != -1)
-                    {
-                        fireRecordSelected ();
-                    }
+                    fireRecordSelected ();
                     e.consume ();
-                }
-                else if (e.getKeyCode () == KeyEvent.VK_UP)
-                {
-                    if (list.getSelectedIndex() == 0) textQuery.requestFocusInWindow();
                 }
             }
         });
-
-        // Enable the user to navigate down to the list using the down-arrow key.
-        // This needs to be a named object so it can be attached to both the text
-        // field and the clear button.
-        KeyListener downToTableListener = new KeyAdapter ()
+        list.addFocusListener (new FocusListener ()
         {
+            int lastSelection = -1;
+
+            @Override
+            public void focusGained (FocusEvent e)
+            {
+                if (lastSelection < 0  ||  lastSelection >= model.getSize ()) list.setSelectedIndex (0);
+                else                                                          list.setSelectedIndex (lastSelection);
+            }
+
+            @Override
+            public void focusLost (FocusEvent e)
+            {
+                lastSelection = list.getSelectedIndex ();
+            }
+        });
+
+        textQuery = new JTextField ();
+        textQuery.addKeyListener (new KeyListener ()
+        {
+            @Override
+            public void keyTyped (KeyEvent e)
+            {
+            }
+
             @Override
             public void keyPressed (KeyEvent e)
             {
-                if (e.getKeyCode () == KeyEvent.VK_DOWN)
-                {
-                    if (model.size () != 0)
-                    {
-                        list.requestFocusInWindow ();
-                        if (list.getSelectedIndex () == -1)
-                        {
-                            list.setSelectedIndex (0);
-                        }
-                    }
-                }
             }
-        };
 
-        textQuery = new JTextField ();
-        textQuery.addKeyListener (downToTableListener);
+            @Override
+            public void keyReleased (KeyEvent e)
+            {
+                search ();
+            }
+        });
 
-        buttonClear = new JButton (ImageUtil.getImage ("remove.gif"));
-        buttonClear.addKeyListener (downToTableListener);
+        buttonClear = new JButton (ImageUtil.getImage ("backspace.png"));
+        buttonClear.setPreferredSize (new Dimension (22, 22));
+        buttonClear.setOpaque (false);
+        buttonClear.setFocusable (false);
         buttonClear.addActionListener (new ActionListener ()
         {
             public void actionPerformed (ActionEvent e)
             {
                 textQuery.setText ("");
+                search ();
             }
         });
 
@@ -162,11 +170,12 @@ public class SearchPanel extends JPanel
             "N", Lay.BL (
                 "C", textQuery,
                 "E", buttonClear,
-                "eb=10,hgap=7,opaque=false"
+                "eb=2,hgap=2"
             ),
-            "C", Lay.sp (list),
-            "opaque=false"
+            "C", Lay.sp (list)
         );
+
+        search ();  // This will safely block until the models dir is loaded. If that takes too long for comfort, other arrangements are possible.
     }
 
     public void search ()
@@ -184,18 +193,39 @@ public class SearchPanel extends JPanel
         }
 
         String query = textQuery.getText ();
-        if (query == null) query = "";
         thread = new SearchThread (query.trim ());
         thread.start ();
     }
 
-    public class MNodeRenderer extends JLabel implements ListCellRenderer<MNode>
+    protected static class MNodeRenderer extends JTextField implements ListCellRenderer<MNode>
     {
+        protected static DefaultHighlighter.DefaultHighlightPainter painter;
+
+        public MNodeRenderer ()
+        {
+            painter = new DefaultHighlighter.DefaultHighlightPainter (DefaultLookup.getColor (this, ui, "List.selectionBackground"));
+            setBorder (new EmptyBorder (0, 0, 0, 0));
+        }
+
         public Component getListCellRendererComponent (JList<? extends MNode> list, MNode node, int index, boolean isSelected, boolean cellHasFocus)
         {
             String name = node.key ();
             if (name.isEmpty ()) name = node.get ();
             setText (name);
+
+            if (isSelected)
+            {
+                Highlighter h = getHighlighter ();
+                h.removeAllHighlights ();
+                try
+                {
+                    h.addHighlight (0, name.length (), painter);
+                }
+                catch (BadLocationException e)
+                {
+                }
+            }
+
             return this;
         }
     }

@@ -245,7 +245,8 @@ public class NodePart extends NodeBase
         {
             int suffix = 0;
             while (source.child ("p" + suffix) != null) suffix++;
-            NodeBase child = new NodePart ((MPart) source.set ("$include(\"\")", "p" + suffix));
+            NodePart child = new NodePart ((MPart) source.set ("$include(\"\")", "p" + suffix));
+            child.setUserObject ();
             model.insertNodeInto (child, this, lastSubpart + 1);
             return child;
         }

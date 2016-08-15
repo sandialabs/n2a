@@ -1,6 +1,5 @@
 package gov.sandia.umf.platform.db;
 
-import java.awt.EventQueue;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -10,16 +9,12 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
-
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
 
 import gov.sandia.umf.platform.UMF;
 
@@ -51,10 +46,10 @@ public class AppData
         File root = UMF.getAppResourceDir ();
         models     = new MDir (new File (root, "models"));
         references = new MDir (new File (root, "references"));
-        runs       = new MDir (new File (root, "models"), "model");
+        runs       = new MDir (new File (root, "jobs"), "model");  // model is the fully collated model with added metadata. Backend output needs to go to a different file.
 
         stop = false;
-        saveThread = new Thread ("Save Thread")
+        saveThread = new Thread ("Save AppData")
         {
             public void run ()
             {
@@ -71,6 +66,7 @@ public class AppData
                 }
             };
         };
+        saveThread.setDaemon (true);  // This thread should be killed gracefully by a call to quit() before the app shuts down. But if not, we don't want it to keep the VM alive.
         saveThread.start ();
     }
 
@@ -116,7 +112,7 @@ public class AppData
         }
     }
 
-    public void save ()
+    public synchronized void save ()
     {
         models.save ();
         references.save ();

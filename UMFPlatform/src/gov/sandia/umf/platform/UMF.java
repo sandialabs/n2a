@@ -10,8 +10,6 @@ package gov.sandia.umf.platform;
 import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.plugins.UMFPluginManager;
-import gov.sandia.umf.platform.plugins.base.PlatformPlugin;
-import gov.sandia.umf.platform.plugins.base.PlatformProductCustomization;
 import gov.sandia.umf.platform.plugins.extpoints.ProductCustomization;
 import gov.sandia.umf.platform.runs.RunQueue;
 import gov.sandia.umf.platform.ui.AboutDialog;
@@ -141,11 +139,11 @@ public class UMF
 
         setUncaughtExceptionHandler (null);
 
-        AppState.getState ().prodCustomization = chooseProductCustomization (prodCust);
+        AppState.getInstance ().prodCustomization = chooseProductCustomization (prodCust);
 
         // Read L&F from properties.
-        String lafClassName = AppState.getState ().get ("LookAndFeel");
-        String lafTheme = AppState.getState ().get ("Theme");
+        String lafClassName = AppState.getInstance ().get ("LookAndFeel");
+        String lafTheme = AppState.getInstance ().get ("Theme");
         LafManager.initialize (lafClassName, lafTheme);
 
         LogManager.setLogFile (new File (getAppLogDir (), "n2a.log"));
@@ -226,7 +224,7 @@ public class UMF
 
     private static void getWindowLayoutProps ()
     {
-        MNode winProps = AppState.getState ().childOrCreate ("WinLayout");
+        MNode winProps = AppState.getInstance ().childOrCreate ("WinLayout");
         winProps.clear ();
 
         winProps.set (mainFrame.getX             (), "MainFrame", "x");
@@ -278,13 +276,12 @@ public class UMF
         mainFrame    = new MainFrame (uiController);
         MainFrame.setInstance (mainFrame);
         uiController.setParentReference (mainFrame);
-        uiController.setTabbedPane (mainFrame.getTabbedPane ());
         uiController.setPopupHelp (popupHelp);
         mainFrame.addAttemptToCloseListener (new CommonWindowClosingListener ()
         {
             public void stateChanged (CommonWindowClosingEvent e)
             {
-                AppState appState = AppState.getState ();
+                AppState appState = AppState.getInstance ();
                 appState.set (LafManager.getCurrentLaf ().getCls (),      "LookAndFeel");
                 appState.set (LafManager.getCurrentLaf ().getCurTheme (), "Theme");
                 getWindowLayoutProps ();
@@ -302,7 +299,7 @@ public class UMF
         RunQueue.getInstance().setUiController (uiController);   // Also, starts the queue.
 
 
-        MNode winProps = AppState.getState ().childOrCreate ("WinLayout");
+        MNode winProps = AppState.getInstance ().childOrCreate ("WinLayout");
 
         MNode m = winProps.child ("MainFrame");
         if (m != null)
@@ -331,8 +328,6 @@ public class UMF
         setUncaughtExceptionHandler(mainFrame);
         Dialogs.registerApplicationWindow(mainFrame, Application.getName());
         if (loadingFrame != null) loadingFrame.dispose ();
-
-        mainFrame.init ();
     }
 
     private static void ensureSizeLoc (CommonWindow win, MNode winProps)

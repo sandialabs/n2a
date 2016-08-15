@@ -12,11 +12,11 @@ import gov.sandia.umf.platform.execenvs.ExecutionEnv;
 import gov.sandia.umf.platform.plugins.extpoints.Simulator;
 import gov.sandia.umf.platform.ui.HelpCapableWindow;
 import gov.sandia.umf.platform.ui.HelpLabels;
+import gov.sandia.umf.platform.ui.HelpNotesPanel;
 import gov.sandia.umf.platform.ui.MainGlassPane;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.ensemble.ParameterDetailsPanel;
 import gov.sandia.umf.platform.ui.ensemble.images.ImageUtil;
-import gov.sandia.umf.platform.ui.general.HelpNotesPanel;
 
 import java.awt.Cursor;
 import java.awt.event.ActionEvent;

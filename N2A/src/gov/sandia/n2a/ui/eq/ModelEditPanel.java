@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2016 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -7,29 +7,46 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.eq;
 
-import gov.sandia.umf.platform.connect.orientdb.ui.RecordEditPanel;
-import gov.sandia.umf.platform.db.MNode;
+import java.awt.BorderLayout;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+
+import javax.swing.JPanel;
+import javax.swing.JSplitPane;
+
+import gov.sandia.umf.platform.AppState;
 import gov.sandia.umf.platform.ui.UIController;
-import replete.util.Lay;
 
-// TODO: When save is clicked from the main menu (or toolbar), any currently editing field should lose focus and write its value back to the associated MNode.
-public class ModelEditPanel extends RecordEditPanel
+public class ModelEditPanel extends JPanel
 {
-    public EquationTreePanel pnlEquations;
+    public JSplitPane        split;
+    public SearchPanel       panelSearch;
+    public EquationTreePanel panelEquations;
 
-    public ModelEditPanel(UIController uic, MNode doc)
+    public ModelEditPanel(UIController uic)
     {
-        super (uic, doc);
+        panelEquations = new EquationTreePanel (uic);
+        panelSearch    = new SearchPanel (panelEquations);
 
-        Lay.BLtg (this,
-            "N", createRecordControlsPanel (),
-            "C", pnlEquations = new EquationTreePanel (uic, doc)
-        );
-    }
+        split = new JSplitPane (JSplitPane.HORIZONTAL_SPLIT, panelSearch, panelEquations);
+        split.setOneTouchExpandable(true);
 
-    @Override
-    public void reload ()
-    {
-        pnlEquations.setEquations (record);
+        setLayout (new BorderLayout ());
+        add (split, BorderLayout.CENTER);
+        setFocusCycleRoot (true);
+
+        // Determine the split position.
+        int divider = AppState.getInstance ().getOrDefault (0, "ModelEditPanel", "divider");
+        if (divider > 0) split.setDividerLocation (divider);
+        split.setResizeWeight (0.25);  // always favor equation tree over search
+
+        split.addPropertyChangeListener (split.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
+        {
+            public void propertyChange (PropertyChangeEvent e)
+            {
+                Object o = e.getNewValue ();
+                if (o != null) AppState.getInstance ().set (o.toString (), "ModelEditPanel", "divider");
+            }
+        });
     }
 }

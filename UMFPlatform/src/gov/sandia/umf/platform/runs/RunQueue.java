@@ -8,23 +8,18 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.umf.platform.runs;
 
 import gov.sandia.umf.platform.UMF;
-import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.ensemble.params.ParameterSet;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
-import gov.sandia.umf.platform.execenvs.ExecutionEnv;
 import gov.sandia.umf.platform.plugins.PlatformRecord;
 import gov.sandia.umf.platform.plugins.Run;
 import gov.sandia.umf.platform.plugins.RunEnsemble;
 import gov.sandia.umf.platform.plugins.RunState;
 import gov.sandia.umf.platform.plugins.Simulation;
-import gov.sandia.umf.platform.plugins.extpoints.Simulator;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +28,6 @@ import javax.swing.Timer;
 
 import org.apache.log4j.Logger;
 
-import replete.plugins.PluginManager;
 import replete.xstream.XStreamWrapper;
 
 
@@ -221,35 +215,6 @@ public class RunQueue {
                 }
             }
         }
-    }
-
-    private PendingRunEnsemble convertToDomainObjects(NDoc dEnsemble) {
-        NDoc templateModel = dEnsemble.get("model");
-        String label = dEnsemble.get("label");
-        String envName = dEnsemble.get("environment");
-        String simType = dEnsemble.get("simulator");
-
-        ExecutionEnv chosenEnv = null;
-        for(ExecutionEnv env : ExecutionEnv.envs) {
-            if(envName.equals(env.getNamedValue("name"))) {
-                chosenEnv = env;
-                break;
-            }
-        }
-        if(chosenEnv == null) {
-            // error
-        }
-
-        Simulator chosenSim = (Simulator) PluginManager.getExtensionById(simType);
-        if(chosenSim == null) {
-            // error
-        }
-
-        ParameterSpecGroupSet groups = convert((String) dEnsemble.get("paramSpecs"));
-        List<String> output = dEnsemble.get("outputExpressions");
-
-        return new PendingRunEnsemble(templateModel, label, chosenEnv,
-            chosenSim, groups, output);
     }
 
     private ParameterSpecGroupSet convert(String paramSpecs) {

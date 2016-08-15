@@ -58,10 +58,22 @@ public class MDoc extends MPersistent
         this.parent = parent;
     }
 
-    public synchronized File path ()
+    /**
+        The value of an MDoc is defined to be its full path on disk.
+        Note that the key for an MDoc depends on what kind of collection contains it.
+        In an MDir, the key is the primary file name (without path prefix and suffix).
+        For a stand-alone document the key is arbitrary, and the document may be stored
+        in another MNode with arbitrary other objects.
+    **/
+    public synchronized String getOrDefault (String defaultValue)
     {
-        if (parent == null) return new File (value);
-        return ((MDir) parent).pathForChild (name);
+        if (parent == null)
+        {
+            if (value == null) return defaultValue;
+            return value;
+        }
+
+        return ((MDir) parent).pathForChild (name).getAbsolutePath ();
     }
 
     public synchronized void markChanged ()
@@ -122,7 +134,7 @@ public class MDoc extends MPersistent
     **/
     public synchronized void set (String value)
     {
-        if (parent != null) return;
+        if (parent != null) return;  // Alternately, we could parse out the "index" portion of the file name, but this use-case will never occur.
         try
         {
             Files.move (Paths.get (this.value), Paths.get (value), StandardCopyOption.REPLACE_EXISTING);
@@ -146,6 +158,12 @@ public class MDoc extends MPersistent
         super.move (fromIndex, toIndex);
     }
 
+    public synchronized File path ()
+    {
+        if (parent == null) return new File (value);
+        return ((MDir) parent).pathForChild (name);
+    }
+
 	/**
         We only load once. We assume no other process is modifying the files, so once loaded, we know its exact state.
 	**/
@@ -153,9 +171,9 @@ public class MDoc extends MPersistent
 	{
 	    if (children != null) return;  // already loaded
 	    children = new TreeMap<String,MNode> (comparator);
+        File file = path ();
         try
         {
-            File file = path ();
             BufferedReader reader = new BufferedReader (new FileReader (file));
             String line = reader.readLine ().trim ();
             String[] pieces = line.split ("=", 2);
@@ -170,7 +188,7 @@ public class MDoc extends MPersistent
         }
         catch (IOException e)
         {
-            System.err.println ("Failed to read file: " + value);
+            System.err.println ("Failed to read file: " + file);
         }
         clearChanged ();  // After load(), clear the slate so we can detect any changes and save the document.
 	}
@@ -178,9 +196,9 @@ public class MDoc extends MPersistent
 	public synchronized void save ()
 	{
 	    if (! needsWrite) return;
+        File file = path ();
 	    try
 	    {
-            File file = path ();
 	        BufferedWriter writer = new BufferedWriter (new FileWriter (file));
 	        writer.write (String.format ("N2A.schema=1%n"));
 	        for (MNode c : this) c.write (writer, "");  // only write out our children, not ourself (top top-level node)
@@ -189,7 +207,7 @@ public class MDoc extends MPersistent
 	    }
 	    catch (IOException e)
 	    {
-            System.err.println ("Failed to write file: " + value);
+            System.err.println ("Failed to write file: " + file);
 	    }
 	}
 }

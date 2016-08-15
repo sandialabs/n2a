@@ -8,9 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.umf.platform.ui;
 
 import gov.sandia.umf.platform.UMF;
-import gov.sandia.umf.platform.connect.orientdb.ui.NDoc;
 import gov.sandia.umf.platform.db.AppData;
-import gov.sandia.umf.platform.db.MDoc;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ensemble.params.groups.ParameterSpecGroup;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
@@ -27,9 +25,6 @@ import gov.sandia.umf.platform.ui.export.ExportParameters;
 import gov.sandia.umf.platform.ui.export.ExportParametersDialog;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 import gov.sandia.umf.platform.ui.run.CreateRunEnsembleDialog;
-import gov.sandia.umf.platform.ui.search.SearchDialogOrient;
-import gov.sandia.umf.platform.ui.search.SearchType;
-
 import java.awt.Component;
 import java.awt.Cursor;
 import java.io.IOException;
@@ -37,21 +32,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import javax.swing.Icon;
-import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
-import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
 import org.apache.log4j.Logger;
 
-import replete.event.ChangeNotifier;
 import replete.gui.windows.Dialogs;
-import replete.gui.windows.common.CommonWindow;
 import replete.logging.LogViewer;
 import replete.plugins.ExtensionPoint;
 import replete.plugins.PluginManager;
@@ -72,8 +62,6 @@ import replete.util.ReflectionUtil;
 public class UIController
 {
     private MainFrame parentRef;
-    private MainTabbedPane tabs;  // In lieu of more complicated "tab model" concept.
-    private UIActionManager actions;
 
     private Map<String, String[]> popupHelp;
     private static Logger logger = Logger.getLogger(UIController.class);
@@ -89,52 +77,11 @@ public class UIController
     public MainFrame getParentRef() {
         return parentRef;
     }
-    public MainTabbedPane getTabs() {
-        return tabs;
-    }
 
     // Mutators
 
-    public void setTabbedPane(MainTabbedPane t) {
-        tabs = t;
-    }
     public void setParentReference(MainFrame par) {
         parentRef = par;
-        actions = new UIActionManager(parentRef);
-    }
-
-
-    ///////////////////
-    // RECORD PANELS //
-    ///////////////////
-
-    public void saveSynchronousRecursive(NDoc record) {  // Not an UI operation but here for consistency.
-        record.saveRecursive();
-        //updateWorkpane(bean); // Make a notifier/listener pair someday TODO
-    }
-
-    public void saveRecursive(final NDoc bean, final ChangeListener onSuccessCallback) {
-        String beanType = bean.getClassName();
-        startAction("Saving", new CommonRunnable() {
-            public void runThread(CommonThreadContext context) throws CommonThreadShutdownException {
-                bean.saveRecursive();
-                //updateWorkpane(bean); // Make a notifier/listener pair someday TODO
-                GUIUtil.safeSync(new Runnable() {
-                    public void run() {
-                        onSuccessCallback.stateChanged(null);
-                    }
-                });
-            }
-            public void cleanUp() {}
-        }, null, "saving the " + beanType);
-    }
-
-    public void delete (MNode record)
-    {
-        if (record instanceof MDoc)
-        {
-            ((MDoc) record).delete ();
-        }
     }
 
 
@@ -189,16 +136,6 @@ public class UIController
         currentAction.start();
     }
 
-    public List<MNode> searchRecordOrient (CommonWindow win, SearchType searchType, String title, Icon selectIcon, int sel)
-    {
-        SearchDialogOrient dlg;
-        if (win instanceof JFrame) dlg = new SearchDialogOrient ((JFrame) win, title, this, searchType, selectIcon, sel);
-        else dlg = new SearchDialogOrient ((JDialog) win, title, this, searchType, selectIcon, sel);
-        dlg.setVisible (true);
-        if (dlg.getResult () != SearchDialogOrient.SEARCH) return null;
-        return dlg.getSelectedRecords ();
-    }
-
     public void closeMainFrame ()
     {
         parentRef.closeWindow ();
@@ -251,11 +188,6 @@ public class UIController
 
     public void couldNotFind() {
         Dialogs.showWarning("Could not find the requested record.  Please refresh any search results you may have displayed and/or reopen any currently open records.");
-    }
-
-    public void showPreferences() {
-        PreferencesDialog dlg = new PreferencesDialog(parentRef);
-        dlg.setVisible(true);
     }
 
     public void showPluginDialog() {
@@ -419,56 +351,25 @@ public class UIController
         AppData.getInstance ().save ();
     }
 
-    // TODO: Get rid of this code pathway. Instead, each "plugin" provides tab panels for the record types it supports. Those tabs remain up all the time, and contain a selection mechanism.
-    public void openRecord (final MNode node)
+    public void openExportDialog (MNode document)
     {
-        if (node == null) return;
-        startAction ("Opening", new CommonRunnable ()
+        ExportDialog dlg = new ExportDialog (parentRef);
+        dlg.setVisible (true);
+        if (dlg.getState () == ExportDialog.OK)
         {
-            public void runThread (CommonThreadContext context) throws CommonThreadShutdownException
+            Exporter exporter = dlg.getExporter ();
+            ExportParametersDialog dlg2 = new ExportParametersDialog (parentRef, exporter);
+            dlg2.setVisible (true);
+            if (dlg2.getState () == ExportParametersDialog.OK)
             {
-                // Need a generic way to have tasks run on the UI thread.
-                GUIUtil.safeSync (new Runnable ()
+                ExportParameters params = dlg2.getParameters ();
+                try
                 {
-                    public void run ()
-                    {
-                        tabs.openRecordTab (node);
-                    }
-                });
-            }
-
-            public void cleanUp ()
-            {
-            }
-        }, null, "opening record");
-    }
-
-    /**
-        @TODO Instead of showing a dialog, determine the currently displayed model.
-    **/
-    public void openExportDialog ()
-    {
-        List<MNode> results = searchRecordOrient (parentRef, SearchType.COMPARTMENT, "Choose Model", null, ListSelectionModel.SINGLE_SELECTION);
-        if (results != null)
-        {
-            ExportDialog dlg = new ExportDialog (parentRef);
-            dlg.setVisible (true);
-            if (dlg.getState () == ExportDialog.OK)
-            {
-                Exporter exporter = dlg.getExporter ();
-                ExportParametersDialog dlg2 = new ExportParametersDialog (parentRef, exporter);
-                dlg2.setVisible (true);
-                if (dlg2.getState () == ExportParametersDialog.OK)
+                    exporter.export (document, params);
+                }
+                catch (IOException e)
                 {
-                    ExportParameters params = dlg2.getParameters ();
-                    try
-                    {
-                        exporter.export (results.get (0), params);
-                    }
-                    catch (IOException e)
-                    {
-                        e.printStackTrace ();
-                    }
+                    e.printStackTrace ();
                 }
             }
         }

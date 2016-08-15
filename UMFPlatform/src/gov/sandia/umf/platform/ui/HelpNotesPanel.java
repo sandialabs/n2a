@@ -5,9 +5,8 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.umf.platform.ui.general;
+package gov.sandia.umf.platform.ui;
 
-import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import java.awt.event.ActionEvent;

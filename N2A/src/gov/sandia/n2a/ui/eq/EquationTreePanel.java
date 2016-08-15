@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2016 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -12,6 +12,7 @@ import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
+import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.db.MPersistent;
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
@@ -60,7 +61,6 @@ import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.ExpandVetoException;
 import javax.swing.tree.TreeCellEditor;
-import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 import javax.swing.tree.TreeSelectionModel;
 
@@ -85,17 +85,22 @@ public class EquationTreePanel extends JPanel
     public NodePart         root;
 
     // Controls
+    protected JButton buttonAddModel;
     protected JButton buttonAddPart;
     protected JButton buttonAddVariable;
     protected JButton buttonAddEquation;
     protected JButton buttonAddAnnotation;
     protected JButton buttonAddReference;
-    protected JButton buttonDelete;
     protected JButton buttonMoveUp;
     protected JButton buttonMoveDown;
     protected JButton buttonRun;
+    protected JButton buttonExport;
     protected JPopupMenu menuPopup;
 
+    /**
+        Extends the standard tree cell renderer to get icon and text style from NodeBase.
+        This is the core code that makes NodeBase work as a tree node representation.
+    **/
     public class NodeRenderer extends DefaultTreeCellRenderer
     {
         protected Font  baseFont;
@@ -104,7 +109,6 @@ public class EquationTreePanel extends JPanel
         @Override
         public Component getTreeCellRendererComponent (JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
         {
-            //System.out.println ("getting renderer");
             super.getTreeCellRendererComponent (tree, value, selected, expanded, leaf, row, hasFocus);
 
             if (baseFont == null)
@@ -139,6 +143,15 @@ public class EquationTreePanel extends JPanel
         }
     }
 
+    /**
+        Extends the standard tree cell editor to cooperate with NodeBase icon and text styles.
+        Adds a few other nice behaviors:
+        * Makes cell editing act more like a text document.
+          - No visible border
+          - Extends full width of tree panel
+          - Unfortunately, the text still shifts by one pixel between display and edit modes.
+        * Selects the value portion of an equation, facilitating the user to make simple changes.
+    **/
     public class NodeEditor extends DefaultTreeCellEditor
     {
         public NodeBase         editingNode;
@@ -231,12 +244,13 @@ public class EquationTreePanel extends JPanel
         }
     }
 
-    public EquationTreePanel (UIController uic, MNode record)
+    // The main constructor. Most of the real work of setting up the UI is here, including some fairly elaborate listeners.
+    public EquationTreePanel (UIController uic)
     {
-        root  = new NodePart ();
-        model = new DefaultTreeModel (root);
+        uiController = uic;
+
+        model = new DefaultTreeModel (null);
         tree  = new JTree (model);
-        loadRootFromDB (record);
 
         tree.setExpandsSelectedPaths (true);
         tree.setScrollsOnExpand (true);
@@ -334,7 +348,6 @@ public class EquationTreePanel extends JPanel
             @Override
             public void treeWillExpand (TreeExpansionEvent event) throws ExpandVetoException
             {
-                //System.out.println ("about to expand");
             }
 
             @Override
@@ -342,54 +355,74 @@ public class EquationTreePanel extends JPanel
             {
                 TreePath path = event.getPath ();
                 if (((NodeBase) path.getLastPathComponent ()).isRoot ()) throw new ExpandVetoException (event);
-                //System.out.println ("about to collapse");
             }
         });
 
         // Side Buttons
 
+        buttonAddModel = new IconButton (ImageUtil.getImage ("explore.gif"), 2);
+        buttonAddModel.setFocusable (false);
+        buttonAddModel.setToolTipText ("New Model");
+        buttonAddModel.addActionListener (new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                createNewModel ();
+                tree.requestFocusInWindow ();
+            }
+        });
+
         buttonAddPart = new IconButton (ImageUtil.getImage ("comp.gif"), 2);
+        buttonAddPart.setFocusable (false);
         buttonAddPart.setToolTipText ("Add Part");
         buttonAddPart.setActionCommand ("Part");
         buttonAddPart.addActionListener (addListener);
 
         buttonAddVariable = new IconButton (ImageUtil.getImage ("delta.png"), 2);
+        buttonAddVariable.setFocusable (false);
         buttonAddVariable.setToolTipText ("Add Variable");
         buttonAddVariable.setActionCommand ("Variable");
         buttonAddVariable.addActionListener (addListener);
 
         buttonAddEquation = new IconButton (ImageUtil.getImage ("equation.png"), 2);
+        buttonAddEquation.setFocusable (false);
         buttonAddEquation.setToolTipText ("Add Equation");
         buttonAddEquation.setActionCommand ("Equation");
         buttonAddEquation.addActionListener (addListener);
 
         buttonAddAnnotation = new IconButton (ImageUtil.getImage ("edit.gif"), 2);
+        buttonAddAnnotation.setFocusable (false);
         buttonAddAnnotation.setToolTipText ("Add Annotation");
         buttonAddAnnotation.setActionCommand ("Annotation");
         buttonAddAnnotation.addActionListener (addListener);
 
         buttonAddReference = new IconButton (ImageUtil.getImage ("book.gif"), 2);
+        buttonAddReference.setFocusable (false);
         buttonAddReference.setToolTipText ("Add Reference");
         buttonAddReference.setActionCommand ("Reference");
         buttonAddReference.addActionListener (addListener);
 
-        buttonDelete = new IconButton (ImageUtil.getImage ("remove.gif"), 2);
-        buttonDelete.setToolTipText ("Delete");
-        buttonDelete.addActionListener (deleteListener);
-
         buttonMoveUp = new IconButton (ImageUtil.getImage ("up.gif"), 2);
+        buttonMoveUp.setFocusable (false);
         buttonMoveUp.setToolTipText ("Move Up");
         buttonMoveUp.setActionCommand ("-1");
         buttonMoveUp.addActionListener (moveListener);
 
         buttonMoveDown = new IconButton (ImageUtil.getImage ("down.gif"), 2);
+        buttonMoveDown.setFocusable (false);
         buttonMoveDown.setToolTipText ("Move Down");
         buttonMoveDown.setActionCommand ("1");
         buttonMoveDown.addActionListener (moveListener);
 
         buttonRun = new IconButton (ImageUtil.getImage ("run.gif"), 2);
+        buttonRun.setFocusable (false);
         buttonRun.setToolTipText ("Run");
         buttonRun.addActionListener (runListener);
+
+        buttonExport = new IconButton (ImageUtil.getImage ("export.gif"), 2);
+        buttonExport.setFocusable (false);
+        buttonExport.setToolTipText ("Export");
+        buttonExport.addActionListener (exportListener);
 
         // Context Menus
         JMenuItem menuAddPart = new JMenuItem ("Add Part", ImageUtil.getImage ("comp.gif"));
@@ -420,17 +453,18 @@ public class EquationTreePanel extends JPanel
         menuPopup.add (menuAddReference);
 
         Lay.BLtg (this,
-            "C", Lay.p (Lay.sp (tree), "eb=5r"),
+            "C", Lay.p (Lay.sp (tree)),
             "E", Lay.BxL ("Y",
+                Lay.BL (buttonAddModel,      "eb=20b,alignx=0.5,maxH=20"),
                 Lay.BL (buttonAddPart,       "eb=5b,alignx=0.5,maxH=20"),
                 Lay.BL (buttonAddVariable,   "eb=5b,alignx=0.5,maxH=20"),
                 Lay.BL (buttonAddEquation,   "eb=5b,alignx=0.5,maxH=20"),
                 Lay.BL (buttonAddAnnotation, "eb=5b,alignx=0.5,maxH=20"),
                 Lay.BL (buttonAddReference,  "eb=20b,alignx=0.5,maxH=20"),
-                Lay.BL (buttonDelete,        "eb=20b,alignx=0.5,maxH=20"),
                 Lay.BL (buttonMoveUp,        "eb=5b,alignx=0.5,maxH=20"),
                 Lay.BL (buttonMoveDown,      "eb=20b,alignx=0.5,maxH=20"),
                 Lay.BL (buttonRun,           "eb=5b,alignx=0.5,maxH=20"),
+                Lay.BL (buttonExport,        "eb=5b,alignx=0.5,maxH=20"),
                 Box.createVerticalGlue ()
             )
         );
@@ -449,22 +483,15 @@ public class EquationTreePanel extends JPanel
 
     public void loadRootFromDB (MNode doc)
     {
-        if (doc != null) record = doc;
+        record = doc;
         try
         {
-            if (record == null)
-            {
-                root = null;
-                model.setRoot (null);
-            }
-            else
-            {
-                root = new NodePart (MPart.collate ((MPersistent) record));
-                root.build ();
-                root.findConnections ();
-                model.setRoot (root);
-                tree.expandRow (0);
-            }
+            root = new NodePart (MPart.collate ((MPersistent) record));
+            root.build ();
+            root.findConnections ();
+            model.setRoot (root);
+            tree.expandRow (0);
+            tree.setSelectionRow (0);
         }
         catch (Exception e)
         {
@@ -563,6 +590,14 @@ public class EquationTreePanel extends JPanel
         }
     };
 
+    ActionListener exportListener = new ActionListener ()
+    {
+        public void actionPerformed (ActionEvent e)
+        {
+            uiController.openExportDialog (record);
+        }
+    };
+
     public NodeBase getSelected ()
     {
         NodeBase result = null;
@@ -575,21 +610,49 @@ public class EquationTreePanel extends JPanel
     public void addAtSelected (String type)
     {
         NodeBase selected = getSelected ();
-        if (selected == null)
+        if (selected == null)  // only happens when root is null
         {
-            // TODO: Create new document 
+            createNewModel ();
+            if (type.equals ("Part")) return;  // For anything but Part, fall through and add it to the newly-created model.
+            selected = root;
+        }
+
+        NodeBase editMe = selected.add (type, tree);
+        if (editMe != null)
+        {
+            TreePath path = new TreePath (editMe.getPath ());
+            tree.scrollPathToVisible (path);
+            tree.setSelectionPath (path);
+            tree.startEditingAtPath (path);
+        }
+    }
+
+    public void createNewModel ()
+    {
+        MNode models = AppData.getInstance ().models;
+        String newModelName = "New Model";
+        MNode newModel = models.child (newModelName);
+        if (newModel == null)
+        {
+            newModel = models.set ("", newModelName);
         }
         else
         {
-            NodeBase editMe = selected.add (type, tree);
-            if (editMe != null)
+            newModelName += " ";
+            int suffix = 2;
+            while (true)
             {
-                TreePath path = new TreePath (editMe.getPath ());
-                tree.scrollPathToVisible (path);
-                tree.setSelectionPath (path);
-                tree.startEditingAtPath (path);
+                if (newModel.length () == 0) break;  // no children, so still a virgin
+                newModel = models.child (newModelName + suffix);
+                if (newModel == null)
+                {
+                    newModel = models.set ("", newModelName + suffix);
+                    break;
+                }
+                suffix++;
             }
         }
+        loadRootFromDB (newModel);
     }
 
     public void editSelected ()

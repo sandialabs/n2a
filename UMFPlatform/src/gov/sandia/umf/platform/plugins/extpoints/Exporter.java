@@ -7,7 +7,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.plugins.extpoints;
 
-import gov.sandia.umf.platform.db.MDoc;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.export.ExportParameters;
 import gov.sandia.umf.platform.ui.export.ExportParametersPanel;
@@ -23,6 +22,6 @@ public interface Exporter extends ExtensionPoint
     public String getName ();
     public String getDescription ();
     public ImageIcon getIcon ();
-    public void export (MNode mNode, ExportParameters params) throws IOException;
+    public void export (MNode document, ExportParameters params) throws IOException;
     public ExportParametersPanel getParametersPanel ();
 }

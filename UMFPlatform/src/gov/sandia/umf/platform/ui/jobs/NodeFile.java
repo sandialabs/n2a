@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2016 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -8,18 +8,17 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui.jobs;
 
-import gov.sandia.umf.platform.ui.images.ImageUtil;
+import java.io.File;
 
-import java.awt.Color;
+import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 
-import replete.gui.controls.simpletree.NodeBase;
-
-// Root node in tree is just a string.
-public class NodeFile extends NodeBase {
-    public enum Type {
+public class NodeFile extends NodeBase
+{
+    public enum Type
+    {
         Model   ("Model",   "file_in.gif"),
         Output  ("Output",  "file_out.gif"),
         Error   ("Error",   "file_err.gif"),
@@ -27,48 +26,30 @@ public class NodeFile extends NodeBase {
         Console ("Console", "file_cout.gif"),
         Other   ("Other",   "file_obj.gif");
 
-        private String label;
-        private ImageIcon icon;
-        Type(String lbl, String fileName) {
+        public String    label;
+        public ImageIcon icon;
+
+        Type (String lbl, String fileName)
+        {
             label = lbl;
-            icon = ImageUtil.getImage(fileName);
-        }
-        public String getLabel() {
-            return label;
-        }
-        public ImageIcon getIcon() {
-            return icon;
+            icon = ImageUtil.getImage (fileName);
         }
     }
 
-    protected String remotePath;
+    protected File path;
     protected Type type;
 
-    public NodeFile(Type t, String p) {
-        remotePath = p;
-        type = t;
+    public NodeFile (Type type, File path)
+    {
+        this.path = path;
+        this.type = type;
+        if (type != Type.Other) setUserObject (type.label);
+        else                    setUserObject (path.getName ());
     }
 
     @Override
-    public String toString() {
-        return type.getLabel();
-    }
-
-    @Override
-    public Icon getIcon(boolean expanded) {
-        return type.getIcon();
-    }
-
-    public Type getType() {
-        return type;
-    }
-
-    public String getRemotePath() {
-        return remotePath;
-    }
-
-    @Override
-    public Color getForegroundColor() {
-        return Color.black;
+    public Icon getIcon (boolean expanded)
+    {
+        return type.icon;
     }
 }
