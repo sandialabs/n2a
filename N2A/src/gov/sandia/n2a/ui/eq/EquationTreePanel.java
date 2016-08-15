@@ -563,7 +563,7 @@ public class EquationTreePanel extends JPanel
                     {
                         ExecutionEnv env = ExecutionEnv.factory ();
                         simulation.execute (run, null, env);
-                        // TODO: switch to runs tab, similar to uiController.openChildWindow ()
+                        uiController.selectTab ("Runs");
                     }
                     catch (Exception e)
                     {

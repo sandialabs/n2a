@@ -113,16 +113,6 @@ public class MainFrameActionMap extends UIActionMap {
             allEnabledStateMap, false, 0, false, null));
         addAction(action);
 
-        ActionListener helpListener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.notImpl();
-            }
-        };
-        action = new UIAction("helpContents");
-        action.addDescriptor(new MenuBarActionDescriptor("helpMenu", "Help Contents", 'H', i("help.gif"),
-            allEnabledStateMap, false, KeyEvent.VK_F1, false, helpListener));
-        addAction(action);
-
         ActionListener logListener = new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 uiController.showLogViewer();
@@ -171,33 +161,6 @@ public class MainFrameActionMap extends UIActionMap {
                 addAction(action);
             }
         }
-
-        action = new UIAction(sepId());
-        action.addDescriptor(new MenuBarActionDescriptor());
-        addAction(action);
-
-        ActionListener aboutListener2 = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.openNewRun(null);
-            }
-        };
-
-        action = new UIAction("newrun");
-        action.addDescriptor(new MenuBarActionDescriptor("fileMenu/newMenu", "New Run...", 'R', i("run.gif"),
-            allEnabledStateMap, false, 0, false, aboutListener2));
-        addAction(action);
-
-        aboutListener2 = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.openNewAnalysis(null);
-            }
-        };
-
-        action = new UIAction("newanalysis");
-        action.addDescriptor(new MenuBarActionDescriptor("fileMenu/newMenu", "New Analysis...", 'A', i("analysis.gif"),
-            allEnabledStateMap, false, 0, false, aboutListener2));
-        addAction(action);
-
     }
 
     protected ImageIcon i(String iconFileName) {

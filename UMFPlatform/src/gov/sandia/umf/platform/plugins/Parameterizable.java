@@ -9,21 +9,19 @@ package gov.sandia.umf.platform.plugins;
 
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 
-public interface Parameterizable {
+public interface Parameterizable
+{
+    /**
+        Provide a hierarchical tree of key-value pairs that represent the possible
+        parameters of this object and their default values if not otherwise specified.
+    **/
+    public ParameterDomain getAllParameters ();
 
-    // Any parameterizable object must be able to provide
-    // a hierarchical tree of key-value pairs that represent
-    // the possible parameters to the model and the default
-    // values that correspond to them if no other value is
-    // provided by the user / run ensemble framework.
-    public ParameterDomain getAllParameters();
-
-    // Any parameterizable object must be able to take in
-    // a hierarchical tree of key-value pairs that represent
-    // a small subset of parameters that should override the
-    // model's default parameters.  This tree will not include
-    // default values (values that were not changed in any
-    // way from the values provided by the getInputParameters
-    // method).
-    public void setSelectedParameters(ParameterDomain domain);
+    /**
+        Take in a hierarchical tree of key-value pairs that represent a small set
+        of overrides to this object's parameters.  This tree will not contain
+        default values (values that were not changed in any way from the values
+        provided by the getInputParameters method).
+    **/
+    public void setSelectedParameters (ParameterDomain domain);
 }

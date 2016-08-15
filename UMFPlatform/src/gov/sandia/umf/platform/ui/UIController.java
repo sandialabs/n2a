@@ -17,7 +17,6 @@ import gov.sandia.umf.platform.execenvs.ExecutionEnv;
 import gov.sandia.umf.platform.plugins.PlatformRecord;
 import gov.sandia.umf.platform.plugins.extpoints.Exporter;
 import gov.sandia.umf.platform.plugins.extpoints.Simulator;
-import gov.sandia.umf.platform.runs.Run;
 import gov.sandia.umf.platform.runs.RunEnsemble;
 import gov.sandia.umf.platform.runs.RunQueue;
 import gov.sandia.umf.platform.ui.export.ExportDialog;
@@ -29,7 +28,6 @@ import gov.sandia.umf.platform.ui.run.CreateRunEnsembleDialog;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -49,9 +47,7 @@ import replete.plugins.PluginManager;
 import replete.plugins.ui.PluginDialog;
 import replete.threads.CommonRunnable;
 import replete.threads.CommonThread;
-import replete.threads.CommonThreadContext;
 import replete.threads.CommonThreadResult;
-import replete.threads.CommonThreadShutdownException;
 import replete.util.GUIUtil;
 import replete.util.Lay;
 import replete.util.ReflectionUtil;
@@ -85,58 +81,6 @@ public class UIController
         parentRef = par;
     }
 
-
-    /////////////
-    // ACTIONS //
-    /////////////
-
-    private CommonThread currentAction = null;
-
-    public void startAction(String actionStr, CommonRunnable runnable, ChangeListener callbackListener, final String operation) {
-        startAction(actionStr, false, runnable, callbackListener, operation);
-    }
-
-    public void startAction(String actionStr, boolean suppressMouseChange,
-                             CommonRunnable runnable, final ChangeListener callbackListener, final String operation) {
-
-        if(currentAction != null) {
-            Dialogs.showWarning("Please wait for previous action to finish.");
-            return;
-        }
-
-        // UI Start Up
-        parentRef.getStatusBar().setProgressBarIndeterminate(true);
-        parentRef.getStatusBar().setShowProgressBar(true);
-        parentRef.getStatusBar().setStatusMessage(" " + actionStr + "...");
-        if(!suppressMouseChange) {
-            parentRef.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-        }
-
-        currentAction = new CommonThread(runnable);
-        currentAction.addProgressListener(new ChangeListener() {
-            public void stateChanged(ChangeEvent e) {
-                CommonThreadResult r = (CommonThreadResult) e.getSource();
-                if(r.isDone()) {
-                    currentAction = null;
-
-                    // UI Tear Down
-                    parentRef.getStatusBar().setShowProgressBar(false);
-                    parentRef.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
-                    parentRef.getStatusBar().setStatusMessage("");
-
-                    if(callbackListener != null) {
-                        callbackListener.stateChanged(null);
-                    }
-                }
-                if(r.isError()) {
-                    UMF.handleUnexpectedError(null, r.getPrimaryError(), "An error occurred while " + operation + ".");
-                }
-            }
-        });
-
-        currentAction.start();
-    }
-
     public void closeMainFrame ()
     {
         parentRef.closeWindow ();
@@ -155,8 +99,17 @@ public class UIController
         popupHelp = ph;
     }
 
-    public void openChildWindow(String string, String uniqueId) {
-        parentRef.openChildWindow(string, uniqueId);
+    public void selectTab (String tabName)
+    {
+        MainTabbedPane mtp = parentRef.getTabbedPane ();
+        for (int i = 0; i < mtp.getTabCount (); i++)
+        {
+            if (mtp.getTitleAt (i).equals (tabName))
+            {
+                mtp.setSelectedIndex (i);
+                break;
+            }
+        }
     }
 
     public void showLogViewer() {
@@ -196,157 +149,6 @@ public class UIController
         dlg.setVisible(true);
     }
 
-    public void openNewRun(Object initModel) {
-/*
-        if(initModel instanceof Model || initModel == null) {
-            Model model = (Model) initModel;
-            CreateRunDialog dlg = new CreateRunDialog(parentRef, this, model);
-            dlg.setVisible(true);
-            if(dlg.getResult() == CreateRunDialog.CREATE) {
-                Run run = dlg.getRun();
-
-                // Connect to execution environment
-                // Ask for working dir
-
-
-                // TODO: Cleaner flow, more consistent try/catch structure, messages.
-
-                // TODO: Should come from dialog, not hard coded.
-                RunState runState;
-    //            UMFPlugin plugin = PluginManager.get("gov.sandia.umf.plugins.n2a");
-                List<ExtensionPoint> simulators = PluginManager.getExtensionsForPoint(Simulator.class);
-                Simulator simulator = (Simulator) simulators.get(0);
-                try {
-
-                    runState = simulator.getInitialRunState(run);
-                    run.setState(XStreamWrapper.writeToString(runState));
-                    run.save();  // TODO: Permissions check
-                    model.getRuns().add(run);
-                    //reload();
-                } catch(Exception e1) {
-                    UMF.handleUnexpectedError(null, e1, "Could not create the run.  An error occurred.");
-                    return;
-                }
-
-                try {
-                    ExecutionEnv env = new LocalMachineEnv();
-                    simulator.submitJob(env, runState);
-
-                    int which = Dialogs.showMulti("Run for simulator 'Xyce' submitted to '" + env.getName() + "'.",
-                        "Success!", new String[]{"OK", "Proceed To &Run Manager >>"},
-                        JOptionPane.INFORMATION_MESSAGE);
-
-                    if(which == 1) {
-                        openChildWindow("jobs", null);
-                    }
-
-                } catch(Exception e1) {
-                    e1.printStackTrace();
-                    Dialogs.showDetails("An error occurred while submitting the job.",
-                        ExceptionUtil.toCompleteString(e1, 4));
-                }
-
-                openExisting(Run.class, run.getId());
-            }
-        } else {
-
-            BiaModel model = (BiaModel) initModel;
-            final CreateRunDialog dlg = new CreateRunDialog(parentRef, this, model);
-            dlg.setVisible(true);
-            if(dlg.getResult() == CreateRunDialog.CREATE) {
-                final BiaRun run = dlg.getRun();
-
-                // TODO: Cleaner flow, more consistent try/catch structure, messages.
-
-                // TODO: Should come from dialog, not hard coded.
-                String biaPluginId = PluginManager.getPluginId(new BiaPlugin());
-                List<ExtensionPoint> simulators = UMFPluginManager.getExtensionsForPoint(biaPluginId, Simulator.class);
-                final Simulator simulator = (Simulator) simulators.get(0);
-                getParentRef().waitOn();
-                final CommonThread t = new CommonThread() {
-                    @Override
-                    public void runThread() throws CommonThreadShutdownException {
-                        RunState runState = null;
-                        try {
-                            runState = simulator.getInitialRunState(run);
-                            if(runState == null) {
-                                run.setState("BIA");
-                            } else {
-                                run.setState(XStreamWrapper.writeToString(runState));
-                            }
-                            run.save();  // TODO: Permissions check
-                            model.getRuns().add(run);
-//                            reload();
-                        } catch(Exception e1) {
-                            UMF.handleUnexpectedError(null, e1, "Could not create the run.  An error occurred.");
-                            return;
-                        }
-
-                        try {
-                            ExecutionEnv env = dlg.getEnvironment();
-                            simulator.submitJob(env, runState);
-
-                            int which = Dialogs.showMulti("Run for simulator 'Xyce' submitted to '" + env.getName() + "'.",
-                                "Success!", new String[]{"OK", "Proceed To &Run Manager >>"},
-                                JOptionPane.INFORMATION_MESSAGE);
-
-                            if(which == 1) {
-                                openChildWindow("jobs", null);
-                            }
-
-                        } catch(Exception e1) {
-                            e1.printStackTrace();
-                            Dialogs.showDetails("An error occurred while submitting the job.",
-                                ExceptionUtil.toCompleteString(e1, 4));
-                        }
-
-                        openExisting(BiaRun.class, run.getId());
-                    }
-                };
-                t.addProgressListener(new ChangeListener() {
-                    public void stateChanged(ChangeEvent e) {
-                        if(t.getResult().isDone()) {
-                            getParentRef().waitOff();
-                        }
-                    }
-                });
-                t.start();
-            }
-        }*/
-    }
-
-    public void openNewAnalysis(Run initRun) {
-//        CommonFrame parent = parentRef;
-//        String searchTitle = "Select Runs for New Analysis...";
-//        List<BeanBase> chosen = searchRecord(parent,
-//            SearchType.RUN, searchTitle, null, ImageUtil.getImage("complete.gif"),
-//            ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-//        if(chosen != null) {
-//            List<ExtensionPoint> x = PluginManager.getExtensionsForPoint(Analyzer.class);
-//            Object o = JOptionPane.showInputDialog(parent, "Choose which analyzer to use.", "Select Analyzer", 0, null, x.toArray(), null);
-//            if(o != null) {
-//                for(BeanBase chosenRecord : chosen) {
-//                    Run run = (Run) chosenRecord;
-//                    RunState state = run.getDeserializedRunState();
-//                }
-//            }
-//        }
-    }
-
-    public void searchDb (final String query, final ChangeListener onSuccessCallback)
-    {
-        startAction ("Searching", new CommonRunnable ()
-        {
-            public void runThread (CommonThreadContext context) throws CommonThreadShutdownException
-            {
-                List<MNode> docs = new ArrayList<MNode> ();
-                for (MNode i : AppData.getInstance ().models) docs.add (i);
-                onSuccessCallback.stateChanged (new ChangeEvent (docs));  // TODO: move this to callback position in startAction() ?
-            }
-            public void cleanUp () {}
-        }, null, "searching the database");
-    }
-
     public void save ()
     {
         AppData.getInstance ().save ();
@@ -374,8 +176,6 @@ public class UIController
                 }
             }
         }
-    }
-    public void openImportDialog() {
     }
 
     public void backup ()

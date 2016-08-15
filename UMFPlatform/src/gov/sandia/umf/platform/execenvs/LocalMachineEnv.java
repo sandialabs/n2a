@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.umf.platform.execenvs;
 
 import gov.sandia.umf.platform.UMF;
+import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.execenvs.beans.AllJobInfo;
 import gov.sandia.umf.platform.execenvs.beans.DateGroup;
 import gov.sandia.umf.platform.execenvs.beans.Job;
@@ -60,6 +61,7 @@ public abstract class LocalMachineEnv extends ExecutionEnv
     {
         File dir = new File (getNamedValue ("directory.jobs"));
         String jobName = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + jobCount++;
+        AppData.getInstance ().runs.set ("", jobName);  // TODO: Hack to trigger update to Runs tab. Should be part of creation of true Run record on disk.
         File jobDir = new File (dir, jobName);
         if (! jobDir.mkdirs ())
         {
