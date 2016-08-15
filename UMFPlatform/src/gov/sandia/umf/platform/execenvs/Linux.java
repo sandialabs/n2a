@@ -7,9 +7,9 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.execenvs;
 
-import gov.sandia.umf.platform.plugins.Run;
-import gov.sandia.umf.platform.plugins.RunEnsemble;
-import gov.sandia.umf.platform.plugins.RunState;
+import gov.sandia.umf.platform.runs.Run;
+import gov.sandia.umf.platform.runs.RunEnsemble;
+import gov.sandia.umf.platform.runs.RunState;
 
 import java.io.File;
 import java.text.SimpleDateFormat;

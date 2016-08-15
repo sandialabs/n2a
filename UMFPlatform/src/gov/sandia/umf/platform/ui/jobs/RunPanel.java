@@ -126,7 +126,7 @@ public class RunPanel extends JPanel
         model.nodeStructureChanged (root);
         Thread refreshThread = new Thread ()
         {
-            public void run()
+            public void run ()
             {
                 try
                 {

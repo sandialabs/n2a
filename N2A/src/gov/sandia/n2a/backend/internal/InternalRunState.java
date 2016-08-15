@@ -9,7 +9,7 @@ package gov.sandia.n2a.backend.internal;
 
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.umf.platform.db.MNode;
-import gov.sandia.umf.platform.plugins.RunState;
+import gov.sandia.umf.platform.runs.RunState;
 
 public class InternalRunState extends RunState
 {

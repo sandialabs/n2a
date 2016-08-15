@@ -10,6 +10,8 @@ package gov.sandia.umf.platform.plugins;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ensemble.params.ParameterSet;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
+import gov.sandia.umf.platform.runs.Run;
+import gov.sandia.umf.platform.runs.RunEnsemble;
 
 import java.util.List;
 

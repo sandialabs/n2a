@@ -8,7 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.backend.c;
 
 import gov.sandia.umf.platform.db.MNode;
-import gov.sandia.umf.platform.plugins.RunState;
+import gov.sandia.umf.platform.runs.RunState;
 
 public class RunStateC extends RunState
 {

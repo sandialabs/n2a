@@ -67,8 +67,8 @@ public class N2APlugin extends DefaultPlugin {
         {
             new N2AProductCustomization(),
             new LEMSExporter(),
-            new ModelRecordHandler(),
-            new ReferenceRecordHandler()
+            //new ReferenceRecordHandler(),
+            new ModelRecordHandler()
         };
     }
 

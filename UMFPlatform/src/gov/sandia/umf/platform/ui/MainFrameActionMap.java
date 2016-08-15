@@ -58,11 +58,11 @@ public class MainFrameActionMap extends UIActionMap {
 
         // FILE //
 
-        UIAction action = new UIAction("fileMenu");
-        action.addDescriptor(new MenuBarActionDescriptor("", "File", 'F', null,
-            allEnabledStateMap, false, 0, false, null));
+        UIAction action = new UIAction ("fileMenu");
+        action.addDescriptor (new MenuBarActionDescriptor ("", "File", 'F', null, allEnabledStateMap, false, 0, false, null));
         addAction(action);
 
+        action = new UIAction ("save");
         ActionListener listener = new ActionListener ()
         {
             public void actionPerformed(ActionEvent e)
@@ -70,13 +70,11 @@ public class MainFrameActionMap extends UIActionMap {
                 uiController.save ();
             }
         };
-        action = new UIAction("save");
-        action.addDescriptor(new MenuBarActionDescriptor("fileMenu", "Save", 'S',
-            i("save.gif"), allEnabledStateMap, false, 'S', true, listener));
-        action.addDescriptor(new ToolBarActionDescriptor("fileMenu1", "Save", i("save.gif"),
-            allEnabledStateMap, false, listener));
-        addAction(action);
+        action.addDescriptor (new MenuBarActionDescriptor ("fileMenu", "Save", 'S', i("save.gif"), allEnabledStateMap, false, 'S', true, listener));
+        action.addDescriptor (new ToolBarActionDescriptor ("fileMenu", "Save",      i("save.gif"), allEnabledStateMap, false,            listener));
+        addAction (action);
 
+        action = new UIAction ("backup");
         listener = new ActionListener ()
         {
             public void actionPerformed (ActionEvent e)
@@ -84,7 +82,6 @@ public class MainFrameActionMap extends UIActionMap {
                 uiController.backup ();
             }
         };
-        action = new UIAction ("backup");
         action.addDescriptor (new MenuBarActionDescriptor ("fileMenu", "Backup...", 0, i ("saveall.gif"), allEnabledStateMap, listener));
         addAction (action);
 

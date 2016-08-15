@@ -5,11 +5,12 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.umf.platform.plugins;
+package gov.sandia.umf.platform.runs;
 
 import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.db.MVolatile;
+import gov.sandia.umf.platform.plugins.PlatformRecord;
 import gov.sandia.umf.platform.plugins.extpoints.Simulator;
 import replete.plugins.PluginManager;
 import replete.xstream.XStreamWrapper;
@@ -29,7 +30,7 @@ public class RunOrient implements Run
         source.set (owner,              "$owner");
         source.set (status,             "status");
         source.set (state,              "state");
-        source.set (modelSource.get (), "model");  // Since the model is most likely an MDoc, the value is the file name.
+        source.set (modelSource.key (), "model");  // Since the model is most likely an MDoc, the value is the file name.
         simulator = sim;
     }
 
@@ -44,7 +45,7 @@ public class RunOrient implements Run
     public RunOrient (PlatformRecord modelRunCopy)
     {
         source = new MVolatile ();
-        source.set (modelRunCopy.getSource ().get (), "model");
+        source.set (modelRunCopy.getSource ().key (), "model");
     }
 
     // TODO - not actually used/necessary

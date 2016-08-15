@@ -7,7 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.xyce;
 
-import gov.sandia.umf.platform.plugins.RunState;
+import gov.sandia.umf.platform.runs.RunState;
 
 // Represents the state of a given run at a given time.
 // This object is serialized to XML to the database.

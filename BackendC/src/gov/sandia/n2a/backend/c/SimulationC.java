@@ -33,9 +33,9 @@ import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
-import gov.sandia.umf.platform.plugins.RunOrient;
-import gov.sandia.umf.platform.plugins.RunState;
 import gov.sandia.umf.platform.plugins.Simulation;
+import gov.sandia.umf.platform.runs.RunOrient;
+import gov.sandia.umf.platform.runs.RunState;
 import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 
@@ -304,7 +304,6 @@ public class SimulationC implements Simulation
 
         env.setFileContents (sourceFileName, s.toString ());
         result.command = env.quotePath (env.build (sourceFileName, runtime));
-        env.submitJob (result);
         return result;
     }
 
@@ -3078,7 +3077,9 @@ public class SimulationC implements Simulation
                 Type o = c.value;
                 if (o instanceof Scalar)
                 {
-                    result.append (o.toString () + "f");  // Tell c compiler that our type is float, not double. TODO: let user select numeric type of runtime
+                    result.append (o.toString ());
+                    double value = ((Scalar) o).value;
+                    if ((int) value != value) result.append ("f");  // Tell c compiler that our type is float, not double. TODO: let user select numeric type of runtime
                     return true;
                 }
                 if (o instanceof Text)

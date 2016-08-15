@@ -9,6 +9,7 @@ package gov.sandia.umf.platform.plugins;
 
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
+import gov.sandia.umf.platform.runs.RunState;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 
 public interface Simulation extends Parameterizable {

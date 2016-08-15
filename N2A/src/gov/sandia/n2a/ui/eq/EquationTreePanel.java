@@ -16,10 +16,10 @@ import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.db.MPersistent;
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
-import gov.sandia.umf.platform.plugins.Run;
-import gov.sandia.umf.platform.plugins.RunOrient;
 import gov.sandia.umf.platform.plugins.Simulation;
 import gov.sandia.umf.platform.plugins.extpoints.Simulator;
+import gov.sandia.umf.platform.runs.Run;
+import gov.sandia.umf.platform.runs.RunOrient;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
@@ -52,7 +52,6 @@ import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.CellEditorListener;
 import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
 import javax.swing.event.TreeExpansionEvent;
 import javax.swing.event.TreeWillExpandListener;
 import javax.swing.tree.DefaultMutableTreeNode;
@@ -65,12 +64,8 @@ import javax.swing.tree.TreePath;
 import javax.swing.tree.TreeSelectionModel;
 
 import replete.gui.controls.IconButton;
-import replete.gui.windows.Dialogs;
 import replete.plugins.ExtensionPoint;
 import replete.plugins.PluginManager;
-import replete.threads.CommonThread;
-import replete.threads.CommonThreadShutdownException;
-import replete.util.ExceptionUtil;
 import replete.util.Lay;
 import replete.util.User;
 
@@ -527,11 +522,14 @@ public class EquationTreePanel extends JPanel
 
     ActionListener runListener = new ActionListener ()
     {
+        /**
+            Fire off a simulation.
+            The code below is adapted from gove.sandia.n2a.ui.model.RunDetailPanel, specifically the old-style single-run.
+            uiController.prepareAndSubmitRunEnsemble() is the way to set up a run ensemble
+        **/
         public void actionPerformed (ActionEvent e)
         {
-            // fire off a simulation
-            // The code below is adapted from gove.sandia.n2a.ui.model.RunDetailPanel, specifically the old-style single-run.
-            // uiController.prepareAndSubmitRunEnsemble() is the way to set up a run ensemble
+            if (record == null) return;
 
             Simulator simulator = null;
             Simulator internal = null;
@@ -556,37 +554,24 @@ public class EquationTreePanel extends JPanel
             final Simulator sim = simulator;
             final Run run = new RunOrient (0.0, "", null, sim, User.getName (), "Pending", null, record);  // Most of these are useless properties, now handled by backend reading metadata from model.
 
-            uiController.getParentRef ().waitOn ();
-            final CommonThread t = new CommonThread ()
+            new Thread ()
             {
-                @Override
-                public void runThread () throws CommonThreadShutdownException
+                public void run ()
                 {
                     Simulation simulation = sim.createSimulation ();
                     try
                     {
                         ExecutionEnv env = ExecutionEnv.factory ();
                         simulation.execute (run, null, env);
-                        uiController.openChildWindow ("jobs", null);
+                        // TODO: switch to runs tab, similar to uiController.openChildWindow ()
                     }
-                    catch (Exception e1)
+                    catch (Exception e)
                     {
-                        e1.printStackTrace ();
-                        Dialogs.showDetails ("An error occurred while submitting the job.", ExceptionUtil.toCompleteString (e1, 4));
+                        // TODO: Instead of throwing an exception, simulation should record all errors/warnings in a file in the job dir.
+                        e.printStackTrace ();
                     }
                 }
-            };
-            t.addProgressListener (new ChangeListener ()
-            {
-                public void stateChanged (ChangeEvent e)
-                {
-                    if (t.getResult ().isDone ())
-                    {
-                        uiController.getParentRef ().waitOff ();
-                    }
-                }
-            });
-            t.start ();
+            }.start ();
         }
     };
 

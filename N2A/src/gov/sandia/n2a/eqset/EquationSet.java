@@ -22,6 +22,7 @@ import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.db.MNode;
+import gov.sandia.umf.platform.db.MPersistent;
 import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
@@ -46,7 +47,7 @@ import javax.swing.ImageIcon;
 
 public class EquationSet implements Comparable<EquationSet>
 {
-    public MNode                               source;
+    public MPart                               source;
     public String                              name;
     public EquationSet                         container;
     public NavigableSet<Variable>              variables;
@@ -87,34 +88,19 @@ public class EquationSet implements Comparable<EquationSet>
         this.name = name;
     }
 
-    public EquationSet (MNode part) throws Exception
-    {
-        this ("", null, part);
-    }
-
     /**
         Construct the hierarchical tree of parts implied by the N2A code in the given model.
         This involves reading in other models as indicated by $inherit or $include, and
         placing variables in the correct set.
-
-        Note: Although it is possible to express an override to a $include or $inherit in
-        other models, this is forbidden. No other object-oriented lanaguage allows such changes.
-        By forbidding it, the form of a part prior to equation overriding is well-defined,
-        allowing a clean recursive construction process.
     **/
-    public EquationSet (String name, EquationSet container, MNode source) throws Exception
+    public EquationSet (MNode part) throws Exception
     {
-        EquationSet c = container;
-        while (c != null)
-        {
-            if (c.source == source)  // TODO: should this be based on Id's instead of object references?
-            {
-                throw new Exception ("Self-referential loop in part: " + source);
-            }
-            c = c.container;
-        }
+        this (null, MPart.collate ((MPersistent) part));
+    }
 
-        this.name      = name;
+    public EquationSet (EquationSet container, MPart source) throws Exception
+    {
+        this.name      = source.key ();
         this.container = container;
         this.source    = source;
         variables      = new TreeSet<Variable> ();
@@ -122,81 +108,22 @@ public class EquationSet implements Comparable<EquationSet>
         metadata       = new TreeMap<String, String> ();
 
         // Sort equations by object-oriented operation
-        Map<String,MNode> inherits = new TreeMap<String,MNode> ();
-        Map<String,MNode> includes = new TreeMap<String,MNode> ();
-        Map<String,MNode> others   = new TreeMap<String,MNode> ();
         for (MNode e : source)
         {
             String index = e.key ();
+            if (index.equals ("$inherit")) continue;
+            if (index.equals ("$reference")) continue;
             if (index.equals ("$metadata"))
             {
                 for (MNode m : e) metadata.put (m.key (), m.get ());
+                continue;
             }
-            else if (index.equals ("$reference"))
-            {
-                // TODO: process references, like metadata
-            }
-            else  // regular equation
-            {
-                String value = e.get ();
-                if      (value.contains ("$inherit")) inherits.put (e.key (), e);
-                else if (value.contains ("$include")) includes.put (e.key (), e);
-                else                                  others  .put (e.key (), e);
-            }
+
+            // That leaves only parts and variables
+            MPart p = (MPart) e;
+            if (p.isPart ()) parts    .add (new EquationSet (this, p));
+            else             variables.add (new Variable    (this, p));
         }
-
-        // Inherits
-        for (Entry<String,MNode> e : inherits.entrySet ())
-        {
-            // Get parent
-            MNode parent = null;
-            String value = e.getValue ().get ();
-            String[] pieces = value.split ("\"");
-            if (pieces.length > 1) parent = AppData.getInstance ().models.child (pieces[1]);
-            if (parent == null)
-            {
-                // TODO: add a warning to a compile results object, to display to the user
-                update (new Variable (e.getKey (), e.getValue ()));
-            }
-            else merge (new EquationSet ("", this, parent));
-        }
-
-        // Includes
-        for (Entry<String,MNode> e : includes.entrySet ())
-        {
-            String aname = e.getKey ();
-
-            MNode part = null;
-            String value = e.getValue ().get ();
-            String[] pieces = value.split ("\"");
-            if (pieces.length > 1) part = AppData.getInstance ().models.child (pieces[1]);
-            if (part == null)
-            {
-                // TODO: add a warning to a compile results object, to display to the user
-                update (new Variable (e.getKey (), e.getValue ()));
-            }
-            else parts.add (new EquationSet (aname, this, part));
-        }
-
-        // Local equations
-        for (Entry<String,MNode> e : others.entrySet ())
-        {
-            update (new Variable (e.getKey (), e.getValue ()));
-        }
-
-        // Metadata
-        MNode m = source.child ("$metadata");
-        if (m != null)
-        {
-            for (MNode e : m) metadata.put (e.key (), e.get ());
-        }
-
-        pushDown ();
-
-        // TODO: Add the ability to create implicit parts. These occur when dot notation
-        // is used in an equation set to separate out a sub-namespace, the resulting group of equations
-        // has a $n different than 1, and there is no explicit part (from a $include) with that name.
-        // pushDown() will leave such equations at the current level, which is wrong because $n is not honored.
     }
 
     /**
@@ -213,36 +140,6 @@ public class EquationSet implements Comparable<EquationSet>
     {
         v.container = this;
         return variables.add (v);
-    }
-
-    public void update (Variable v)
-    {
-        Variable existing = find (v);
-        if (existing == null)
-        {
-            // Instead of a true variable, v might also be a carrier for $metadata related to a contained part.
-            // Since parts and variables share the same namespace, it is possible to distinguish these cases.
-            if (v.order == 0)
-            {
-                EquationSet query = new EquationSet (v.name);
-                EquationSet p = parts.floor (query);
-                if (p != null  &&  p.equals (query))
-                {
-                    // Merge metadata.
-                    for (Entry<String,String> m : v.getMetadata ())
-                    {
-                        metadata.put (m.getKey (), m.getValue ());
-                    }
-                    return;
-                }
-            }
-            // It did not turn out to be an EquationSet proxy, so add it as a regular variable.
-            add (v);
-        }
-        else
-        {
-            existing.merge (v);  // equations in v take precedence over equations in existing
-        }
     }
 
     /**
@@ -282,66 +179,6 @@ public class EquationSet implements Comparable<EquationSet>
         }
 
         metadata.putAll (that.metadata);
-    }
-
-    /**
-        Move any equation that refers to a sub-namespace down into the associated equation list.
-    **/
-    public void pushDown ()
-    {
-        Set<Variable> temp = variables;
-        variables = new TreeSet<Variable> ();
-        for (Variable v : temp)
-        {
-            pushDown (v);
-        }
-    }
-
-    /**
-        Place the given Variable in an appropriate sub-part, unless it has a $up or no dot operator.
-    **/
-    public void pushDown (Variable v)
-    {
-        int index = v.name.indexOf (".");
-        if (index < 0  ||  v.name.startsWith ("$up."))
-        {
-            // Store at the current level.
-            update (v);
-        }
-        else
-        {
-            final String prefix = v.name.substring (0, index);
-            EquationSet p = parts.floor (new EquationSet (prefix));
-            if (p == null  ||  ! p.name.equals (prefix))
-            {
-                update (v);
-            }
-            else
-            {
-                v.transform (new Transformer ()
-                {
-                    public Operator transform (Operator op)
-                    {
-                        if (op instanceof AccessVariable)
-                        {
-                            AccessVariable a = (AccessVariable) op;
-                            if (a.name.startsWith (prefix + "."))
-                            {
-                                a.name = a.name.substring (prefix.length () + 1);
-                            }
-                            return op;
-                        }
-                        return null;
-                    }
-                });
-
-                if (v.name.startsWith (prefix + "."))
-                {
-                    v.name = v.name.substring (prefix.length () + 1);
-                }
-                p.pushDown (v);
-            }
-        }
     }
 
     /**

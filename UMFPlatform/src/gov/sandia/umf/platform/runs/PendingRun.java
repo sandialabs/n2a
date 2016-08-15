@@ -7,7 +7,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.runs;
 
-import gov.sandia.umf.platform.plugins.RunEnsemble;
 
 public class PendingRun {
     private RunEnsemble ensemble;

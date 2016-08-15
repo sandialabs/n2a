@@ -33,7 +33,7 @@ import java.util.TreeSet;
 
 public class Variable implements Comparable<Variable>
 {
-    public MNode                        source;
+    public MPart                        source;
     public String                       name;
     public int                          order;      // of differential
     public Type                         type;       // Stores an actual instance of the type. Necessary to get the size of Matrix. Otherwise, only class matters.
@@ -87,12 +87,13 @@ public class Variable implements Comparable<Variable>
         this.order = order;
     }
 
-    public Variable (String index, MNode source) throws Exception
+    public Variable (EquationSet container, MPart source) throws Exception
     {
+        this.container = container;
         this.source = source;
         equations = new TreeSet<EquationEntry> ();  // It is possible for Variable to be parse from MNode without any equations, but code that relies this ctor expects a non-null equations member.
 
-        parseLHS (index);
+        parseLHS (source.key ());
         String rhs = source.get ();
         if (! rhs.isEmpty ())
         {
@@ -102,7 +103,7 @@ public class Variable implements Comparable<Variable>
         for (MNode i : source)
         {
             String key = i.key ();
-            if (key.startsWith ("@")) add (new EquationEntry (key.substring (1), i));
+            if (key.startsWith ("@")) add (new EquationEntry (i));
             if (key.equals ("$metadata"))
             {
                 if (metadata == null) metadata = new TreeMap<String,String> ();

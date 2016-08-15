@@ -14,7 +14,6 @@ import gov.sandia.umf.platform.db.MNode;
 
 public class EquationEntry implements Comparable<EquationEntry>
 {
-    public MNode    source;      // Reference to the source DB object
     public Variable variable;    // Our container
     public String   ifString;    // only for sorting. TODO: get rid of ifString. Instead, convert conditional to a canonical form with well-defined sort order. This will enable us to combine logically equivalent conditions, as well prioritize more restrictive conditions.
     public Operator expression;
@@ -39,10 +38,9 @@ public class EquationEntry implements Comparable<EquationEntry>
         symbol is included in the stored index (to allow commingling with $metadata
         and $reference), but should be stripped off before calling this constructor.
     **/
-    public EquationEntry (String index, MNode source) throws Exception
+    public EquationEntry (MNode source) throws Exception
     {
-        this.source = source;
-        conditional = Operator.parse (index);
+        conditional = Operator.parse (source.key ().substring (1));
         ifString = conditional.render ();
         parseRHS (source.get ());
     }

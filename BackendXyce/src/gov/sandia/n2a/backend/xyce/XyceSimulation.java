@@ -24,9 +24,9 @@ import gov.sandia.n2a.language.function.Trace;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
-import gov.sandia.umf.platform.plugins.RunOrient;
-import gov.sandia.umf.platform.plugins.RunState;
 import gov.sandia.umf.platform.plugins.Simulation;
+import gov.sandia.umf.platform.runs.RunOrient;
+import gov.sandia.umf.platform.runs.RunState;
 import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 
