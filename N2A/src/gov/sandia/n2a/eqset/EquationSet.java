@@ -602,15 +602,7 @@ public class EquationSet implements Comparable<EquationSet>
             renderer.result.append (prefix + "." + v.nameString ());
             if (v.equations.size () > 0)
             {
-                renderer.result.append (" =");
-                switch (v.assignment)
-                {
-                    case Variable.ADD:      renderer.result.append ("+"); break;
-                    case Variable.MULTIPLY: renderer.result.append ("*"); break;
-                    case Variable.DIVIDE:   renderer.result.append ("/"); break;
-                    case Variable.MAX:      renderer.result.append (">"); break;
-                    case Variable.MIN:      renderer.result.append ("<"); break;
-                }
+                renderer.result.append (" =" + v.combinerString ());
                 if (v.equations.size () == 1)
                 {
                     renderer.result.append (" ");

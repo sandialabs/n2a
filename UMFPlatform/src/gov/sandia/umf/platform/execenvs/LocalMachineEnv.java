@@ -87,10 +87,12 @@ public abstract class LocalMachineEnv extends ExecutionEnv
     @Override
     public String build (String sourceFile, String runtime) throws Exception
     {
-        String binary = sourceFile + ".bin";
+        File sf = new File (sourceFile);
+        String stem = new File (sf.getParent (), sf.getName ().split ("\\.", 2)[0]).getAbsolutePath ();
+        String binary = stem + ".bin";
         String dir = new File (runtime).getParent ();
 
-        // Need handle cl, and maybe others as well.
+        // Need to handle cl, and maybe others as well.
         String compiler = getNamedValue ("c.compiler", "g++");
 
         String [] commands = {compiler, "-O3", "-o", binary, "-I" + dir, runtime, "-x", "c++", sourceFile};

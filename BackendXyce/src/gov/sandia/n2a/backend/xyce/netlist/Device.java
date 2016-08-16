@@ -66,7 +66,7 @@ public class Device
     // and the appropriate serial number for a specific part instance
     // Node index appears in the xyce hint : this code assumes the first hint index is 1
     // so that the variable associated with xyce.nodeIndex=1 maps to varnames[0]
-    public List<Variable> varnames;
+    public List<Variable> varnames = new ArrayList<Variable> ();
 
     // Allows for current injections on the device nodes; map below uses indices of those nodes as keys
     // and the relevant user equations as the values (typically expect only one such input, but no reason to exclude
@@ -80,7 +80,7 @@ public class Device
     // Map from part variable to name of xyce device internal variable; used primarily for tracing (printed output)
     public Map<Variable,String> ivars = new HashMap<Variable,String> ();
 
-    public Map<String,String> model;  ///< The paremeters and their values that were written out in the single .model line for this part. Used to determine if an instance-specific parm is needed or not.
+    public Map<String,String> model;  ///< The parameters and their values that were written out in the single .model line for this part. Used to determine if an instance-specific parm is needed or not.
     public String             modelName;
 
     public Device (EquationSet s) throws EvaluationException
@@ -162,11 +162,11 @@ public class Device
             Variable v = varnames.get (i);
             if (v == ground)
             {
-                nodeNames.add (i, "0");
+                nodeNames.add ("0");
             }
             else if (v != empty)
             {
-                nodeNames.add (i, getInstanceVarname (v.reference, renderer.pi));
+                nodeNames.add (getInstanceVarname (v.reference, renderer.pi));
             }
         }
 

@@ -88,12 +88,14 @@ public class NodeJob extends NodeBase
         {
             NodeBase newNode;
             String fileName = file.getName ();
+            if (fileName.startsWith ("n2a_job")) continue;
+
             if      (fileName.endsWith ("model"  )) newNode = new NodeFile (NodeFile.Type.Model,   file);
             else if (fileName.endsWith ("out"    )) newNode = new NodeFile (NodeFile.Type.Output,  file);
             else if (fileName.endsWith ("err"    )) newNode = new NodeFile (NodeFile.Type.Error,   file);
             else if (fileName.endsWith ("result" )) newNode = new NodeFile (NodeFile.Type.Result,  file);
             else if (fileName.endsWith ("console")) newNode = new NodeFile (NodeFile.Type.Console, file);
-            else continue;
+            else                                    newNode = new NodeFile (NodeFile.Type.Other,   file);
             add (newNode);
         }
         DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();

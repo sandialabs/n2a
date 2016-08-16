@@ -46,7 +46,7 @@ public class AppData
         File root = UMF.getAppResourceDir ();
         models     = new MDir (new File (root, "models"));
         references = new MDir (new File (root, "references"));
-        runs       = new MDir (new File (root, "jobs"), "model");  // model is the fully collated model with added metadata. Backend output needs to go to a different file.
+        runs       = new MDir (new File (root, "jobs"), "model");  // "model" is our internal housekeeping data, in MNode serialization form. Backend output generally goes into a simulator-specific file.
 
         stop = false;
         saveThread = new Thread ("Save AppData")

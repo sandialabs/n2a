@@ -140,7 +140,7 @@ public class SimulationC implements Simulation
 
         // Create model-specific executable
         result.jobDir = env.createJobDir ();
-        String sourceFileName = env.file (result.jobDir, "model");
+        String sourceFileName = env.file (result.jobDir, "model.cc");
 
         EquationSet e = new EquationSet (result.model);
         if (e.name.length () < 1) e.name = "Model";  // because the default is for top-level equation set to be anonymous

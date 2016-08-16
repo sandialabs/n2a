@@ -90,7 +90,7 @@ public class InternalSimulation implements Simulation
 
         // Create file for final model
         runState.jobDir = env.createJobDir ();
-        String sourceFileName = env.file (runState.jobDir, "model");
+        String sourceFileName = env.file (runState.jobDir, "model.flat");
 
         EquationSet e = new EquationSet (runState.model);
         if (e.name.length () < 1) e.name = "Model";  // because the default is for top-level equation set to be anonymous

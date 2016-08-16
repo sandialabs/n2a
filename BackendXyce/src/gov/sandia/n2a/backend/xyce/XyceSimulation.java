@@ -85,7 +85,7 @@ class XyceSimulation implements Simulation
         // set up job info
         String xyce    = env.getNamedValue ("xyce.binary");
         String jobDir  = env.createJobDir ();
-        String cirFile = env.file (jobDir, "model");
+        String cirFile = env.file (jobDir, "model.cir");
         String prnFile = env.file (jobDir, "result");  // "prn" doesn't work, at least on windows
 
         EquationSet e = new EquationSet (runRecord.getModel ());
