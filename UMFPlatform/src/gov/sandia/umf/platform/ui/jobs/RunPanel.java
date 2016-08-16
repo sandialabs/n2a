@@ -121,7 +121,8 @@ public class RunPanel extends JPanel
 
         runs = AppData.getInstance ().runs;
         for (MNode n : runs) running.add (0, new NodeJob (n));  // This should be efficient on a doubly-linked list.
-        lastAddedJob = running.get (0).source.key ();
+        if (running.size () == 0) lastAddedJob = "";
+        else                      lastAddedJob = running.get (0).source.key ();
         for (NodeJob job : running) root.add (job);
         model.nodeStructureChanged (root);
         Thread refreshThread = new Thread ()
