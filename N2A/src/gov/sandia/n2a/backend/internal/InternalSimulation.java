@@ -100,7 +100,7 @@ public class InternalSimulation implements Simulation
 
         digestModel (e, runState.jobDir);
         runState.digestedModel = e;
-        env.setFileContents (sourceFileName, e.flatList (false));
+        env.setFileContents (sourceFileName, e.dump (false));
 
         return runState;
     }

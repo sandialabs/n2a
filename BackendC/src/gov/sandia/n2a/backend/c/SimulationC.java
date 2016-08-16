@@ -176,7 +176,7 @@ public class SimulationC implements Simulation
         e.determineTypes ();
 
         e.setInit (0);
-        System.out.println (e.flatList (false));
+        System.out.println (e.dump (false));
 
         matrixNames = new HashMap<Operator,String> ();
 

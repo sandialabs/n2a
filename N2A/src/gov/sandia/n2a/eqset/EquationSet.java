@@ -549,7 +549,12 @@ public class EquationSet implements Comparable<EquationSet>
         }
     }
 
-    public String flatList (boolean showNamespace)
+    public String dump (boolean showNamespace)
+    {
+        return dump (showNamespace, "");
+    }
+
+    public String dump (boolean showNamespace, String prefix)
     {
         Renderer renderer;
         if (showNamespace)
@@ -578,12 +583,13 @@ public class EquationSet implements Comparable<EquationSet>
             renderer = new Renderer ();
         }
 
-        String prefix = prefix ();
+        renderer.result.append (prefix + name + "\n");
+        prefix = prefix + " ";
         if (connectionBindings != null)
         {
             for (Entry<String, EquationSet> e : connectionBindings.entrySet ())
             {
-                renderer.result.append (prefix + "." + e.getKey () + " = ");
+                renderer.result.append (prefix + e.getKey () + " = ");
                 EquationSet s = e.getValue ();
                 if (showNamespace)
                 {
@@ -599,9 +605,9 @@ public class EquationSet implements Comparable<EquationSet>
         }
         for (Variable v : variables)
         {
-            renderer.result.append (prefix + "." + v.nameString ());
-            if (v.equations.size () > 0)
+            if (v.equations.size () > 0)  // If no equations, then this is an implicit variable, so no need to list here.
             {
+                renderer.result.append (prefix + v.nameString ());
                 renderer.result.append (" =" + v.combinerString ());
                 if (v.equations.size () == 1)
                 {
@@ -614,7 +620,7 @@ public class EquationSet implements Comparable<EquationSet>
                     renderer.result.append ("\n");
                     for (EquationEntry e : v.equations)
                     {
-                        renderer.result.append ("  ");
+                        renderer.result.append (prefix + " ");
                         e.render (renderer);
                         renderer.result.append ("\n");
                     }
@@ -624,7 +630,7 @@ public class EquationSet implements Comparable<EquationSet>
 
         for (EquationSet e : parts)
         {
-            renderer.result.append (e.flatList (showNamespace));
+            renderer.result.append (e.dump (showNamespace, prefix));
         }
 
         return renderer.result.toString ();
