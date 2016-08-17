@@ -67,6 +67,11 @@ public class NodeBase extends DefaultMutableTreeNode
         return ((NodeBase) getParent ()).add (type, tree);  // default action is to refer the add request up the tree
     }
 
+    public NodeBase addDnD (String key, JTree tree)
+    {
+        return ((NodeBase) getParent ()).addDnD (key, tree);
+    }
+
     public boolean allowEdit ()
     {
         return true;  // Most nodes are editable. Must specifically block editing.

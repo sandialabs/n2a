@@ -94,6 +94,7 @@ public class SearchPanel extends JPanel
 
         list = new JList<MNode> (model = new DefaultListModel<MNode> ());
         list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
+        list.setDragEnabled (true);
         list.setCellRenderer (new MNodeRenderer ());
         list.addMouseListener (new MouseAdapter ()
         {

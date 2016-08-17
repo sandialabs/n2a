@@ -243,6 +243,8 @@ public class NodePart extends NodeBase
         }
         else if (type.equals ("Part"))
         {
+            if (! isRoot ()) return null;  // TODO: temporary hack until we fully handle adding parts at lower levels of tree
+
             int suffix = 0;
             while (source.child ("p" + suffix) != null) suffix++;
             NodePart child = new NodePart ((MPart) source.set ("$include(\"\")", "p" + suffix));
@@ -258,6 +260,20 @@ public class NodePart extends NodeBase
             model.insertNodeInto (child, this, lastVariable + 1);
             return child;
         }
+    }
+
+    @Override
+    public NodeBase addDnD (String key, JTree tree)
+    {
+        if (! isRoot ()) return ((NodeBase) getParent ()).addDnD (key, tree);
+
+        NodePart result = (NodePart) add ("Part", tree);
+        result.source.set ("$include(\"" + key + "\")");
+        result.source.update ();  // re-collate this node to weave in any included part
+        result.build ();
+        ((DefaultTreeModel) tree.getModel ()).nodeStructureChanged (result);
+
+        return result;
     }
 
     @Override

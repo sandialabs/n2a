@@ -27,6 +27,7 @@ import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.Font;
+import java.awt.datatransfer.DataFlavor;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.FocusEvent;
@@ -49,6 +50,7 @@ import javax.swing.JPopupMenu;
 import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
+import javax.swing.TransferHandler;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.CellEditorListener;
 import javax.swing.event.ChangeEvent;
@@ -352,6 +354,58 @@ public class EquationTreePanel extends JPanel
                 if (((NodeBase) path.getLastPathComponent ()).isRoot ()) throw new ExpandVetoException (event);
             }
         });
+
+        tree.setTransferHandler (new TransferHandler ()
+        {
+            public boolean canImport (TransferHandler.TransferSupport support)
+            {
+                if (! support.isDrop ()) return false;  // could also support pasting models from the clipboard, 
+                if (! support.isDataFlavorSupported (DataFlavor.stringFlavor)) return false;
+                return true;
+            }
+
+            public boolean importData (TransferHandler.TransferSupport support)
+            {
+                if (! canImport (support)) return false;
+
+                JTree.DropLocation dl = (JTree.DropLocation) support.getDropLocation ();
+                TreePath path = dl.getPath ();
+
+                String key;
+                try
+                {
+                    key = (String) support.getTransferable().getTransferData (DataFlavor.stringFlavor);
+                }
+                catch (Exception e)
+                {
+                    return false;
+                }
+
+                // Import the part
+                key = key.split ("=", 2)[0];  // data actually contains name=path; rather than hack the search list, simply extract the key
+                if (path == null)
+                {
+                    if (root == null) return false;  // Generally, this shouldn't happen. Instead, some default working model should always be active (even on first start).
+                    tree.setSelectionRow (0);
+                    path = tree.getSelectionPath ();
+                }
+                else
+                {
+                    tree.setSelectionPath (path);
+                }
+                NodeBase dropTarget = (NodeBase) path.getLastPathComponent ();
+                NodeBase added = dropTarget.addDnD (key, tree);
+                if (added == null) return false;
+
+                path = new TreePath (added.getPath ());
+                tree.scrollPathToVisible (path);
+                tree.setSelectionPath (path);
+                tree.requestFocusInWindow ();  // just in case the search panel is still selected
+                
+                return true;
+            }  
+        });
+
 
         // Side Buttons
 
