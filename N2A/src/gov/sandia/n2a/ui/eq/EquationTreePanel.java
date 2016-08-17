@@ -38,7 +38,6 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.Enumeration;
 import java.util.EventObject;
-
 import javax.swing.Box;
 import javax.swing.DefaultCellEditor;
 import javax.swing.Icon;
@@ -366,11 +365,8 @@ public class EquationTreePanel extends JPanel
 
             public boolean importData (TransferHandler.TransferSupport support)
             {
-                if (! canImport (support)) return false;
-
-                JTree.DropLocation dl = (JTree.DropLocation) support.getDropLocation ();
-                TreePath path = dl.getPath ();
-
+                // Collect data
+                TreePath path = ((JTree.DropLocation) support.getDropLocation ()).getPath ();
                 String key;
                 try
                 {
@@ -380,9 +376,9 @@ public class EquationTreePanel extends JPanel
                 {
                     return false;
                 }
+                key = key.split ("=", 2)[0];  // data actually contains name=path; rather than hack the search list, simply extract the key
 
                 // Import the part
-                key = key.split ("=", 2)[0];  // data actually contains name=path; rather than hack the search list, simply extract the key
                 if (path == null)
                 {
                     if (root == null) return false;  // Generally, this shouldn't happen. Instead, some default working model should always be active (even on first start).
