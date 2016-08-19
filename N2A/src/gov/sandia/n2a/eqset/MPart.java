@@ -29,151 +29,173 @@ import gov.sandia.umf.platform.db.MVolatile;
 **/
 public class MPart extends MNode  // Could derive this from MVolatile, but the extra work of implementing from scratch is worth saving an unused member variable.
 {
-    protected boolean     fromTopDocument;  // Indicates that this node is overridden by the top-level document.
+    protected boolean     fromTopDocument; // Indicates that this node is overridden by the top-level document.
     protected MPersistent source;
-    protected MPersistent original;  // The original source of this node, before it was overwritten by another document. Refers to same object as source if this node has not been overwritten, or if it is originally from the top-level doc (ie: is the first level of children under the root).
-    // Note: It is always possible to retrieve the top-level documents by following parents up. If this proves too slow, then add fields here to reference the top docs directly.
+    protected MPersistent original;        // The original source of this node, before it was overwritten by another document. Refers to same object as source if this node has not been overridden.
+    protected MPart       inheritedFrom;   // Node in the tree that contains the $include statement that generated this node. Retained even if the node is overridden.
 
     protected MPart container;
     protected NavigableMap<String,MNode> children;
 
-    public MPart (MPart container, MPersistent source, boolean fromTopDocument)
+    /**
+        Collates a full model from the given source document.
+    **/
+    public MPart (MPersistent source)
     {
-        this.fromTopDocument = fromTopDocument;
+        fromTopDocument = true;
+        container       = null;
+        this.source     = source;
+        original        = source;
+        inheritedFrom   = null;
+
+        underrideChildren (null, source);
+        expand (source);
+    }
+
+    protected MPart (MPart container, MPart inheritedFrom, MPersistent source)
+    {
+        this.fromTopDocument = inheritedFrom == null;
         this.container       = container;
         this.source          = source;
         original             = source;
-    }
-
-    public MPart (MPart container, MPersistent source, MPersistent original, boolean fromTopDocument)
-    {
-        this.fromTopDocument = fromTopDocument;
-        this.container       = container;
-        this.source          = source;
-        this.original        = original;
+        this.inheritedFrom   = inheritedFrom;
     }
 
     /**
-        Constructs a fully-collated tree, processing all $include and $inherit statements.
+        Loads all inherited structure into the sub-tree rooted at this node,
+        using existing structure placed here by higher nodes as a starting point.
+        The remainder of the tree is filled in by "underride". Assumes this sub-tree
+        is a clean structure with only entries placed by higher levels, and no
+        lingering structure that we might otherwise build now.
     **/
-    public static MPart collate (MPersistent source) throws Exception
+    public synchronized void expand ()
     {
-        return collate (null, source);
+        expand (getRoot ().source);
     }
 
     /**
-        Constructs a fully-collated tree, processing all $include and $inherit statements.
-        Assumes we are always building the top-level document, regardless of whether we are in
-        a container of not.
-        @param container If non-null, we perform a recursion check to ensure that a part does not
-        inherit or include itself.
+        Loads all our inherited equations, then recurses down to each contained part.
+        @param topDocument Used to guard against a document loading itself.
     **/
-    public static MPart collate (MPart container, MPersistent source) throws Exception
+    public synchronized void expand (MPersistent topDocument)
     {
-        // Recursion check
-        while (container != null)
+        inherit (topDocument);
+        for (MNode n : this)
         {
-            if (container.source == source)  // MDir guarantees that its MDocs have object identity, so direct comparison of references is sufficient.
-            {
-                throw new Exception ("Self-referential loop in part: " + source);
-            }
-            container = container.container;  // I guess that would be grandparent.
+            MPart p = (MPart) n;
+            if (p.isPart ()) p.expand (topDocument);
         }
-
-        MPart result = new MPart (container, source, true);
-        if (source.length () == 0) return result;
-        result.children = new TreeMap<String,MNode> (comparator);
-
-        // Inherits
-        MNode inherit = source.child ("$inherit");
-        if (inherit != null)
-        {
-            String value = inherit.get ();
-            String[] partNames = value.split (",");
-            for (String partName : partNames)
-            {
-                partName = partName.trim ().replace ("\"", "");
-                MPersistent partSource = (MPersistent) AppData.getInstance ().models.child (partName);
-                if (partSource != null) result.mergeChildren (collate (container, partSource));
-            }
-        }
-        result.resetOverride ();  // all inherited equations are by definition not from the top document
-        result.fromTopDocument = true;  // the above resetOverride() is a somewhat blunt method, so restore our true status
-
-        // Regular equations, as well as $include lines (sub-parts)
-        for (MNode e : source)
-        {
-            MPart equation = new MPart (result, (MPersistent) e, true);
-            String index = e.key ();
-            if (index.equals ("$inherit"))
-            {
-                result.children.put ("$inherit", equation);  // Replaces any $inherit we may have gotten from parents, which refer to grandparents and farther ancestors.
-                continue;
-            }
-            equation.buildTree ();
-
-            String value = e.get ();
-            if (value.contains ("$include"))
-            {
-                MPersistent partSource = null;
-                String[] pieces = value.split ("\"");  // TODO: more resilient parsing
-                if (pieces.length > 1) partSource = (MPersistent) AppData.getInstance ().models.child (pieces[1]);
-                if (partSource != null)
-                {
-                    MPart part = collate (result, partSource);
-                    part.resetOverride ();  // an included equation set is by definition not from the top document
-                    part.mergeChildren (equation);  // Anything that goes under a $include line is intended to be an override of the included part.
-                    equation.children = part.children;  // Transfer the children back over to the equation to form the final tree.
-                    for (MNode c : equation) ((MPart) c).container = equation;
-                }
-            }
-
-            // Merge a single child. Could have a separate function, but this is the only place we do this.
-            MPart existing = (MPart) result.child (index);
-            if (existing == null) result.children.put (index, equation);
-            else existing.mergePart (equation);
-        }
-
-        return result;
     }
 
     /**
-        Given a tree that is fully built, rebuild the sub-tree under a $include statement.
-        Also handle the case where the $include is removed. In this case, there might still be
-        an equation tree in the top-document that is meant to function as a sub-part.
-        This function should only be called on nodes that currently have fromTopDocument==true.
+        Initiates an underride load of all equations inherited by this node,
+        using the current value of $inherit in our collated children.
+        @param topDocument Used to guard against a document loading itself.
     **/
-    public synchronized void update ()
+    public synchronized void inherit (MPersistent topDocument)
     {
-        // This is basically a copy of the equation-processing loop in collate(), but with some stronger assumptions.
-        if (children != null) clearRecursive (false);  // reset nodes derived from top document back to their non-overridden state
-        // Build a new equation node, separately from myself because I may be carrying inherited equations
-        MPart equation = new MPart (container, source, true);
-        equation.buildTree ();
-        String value = source.get ();
-        if (value.contains ("$include"))
+        if (children == null) return;
+        MPart from = (MPart) children.get ("$inherit");
+        if (from != null) inherit (topDocument, from, from.get ());
+    }
+
+    /**
+        Injects inherited equations as children of this node.
+        Handles recursion up the hierarchy of parents.
+        @param topDocument Used to guard against a document loading itself.
+        @param from The node in the collated tree (named "$inherit") which triggered the current
+        round of inheritance. May be a child of a higher node, or a child of this node, but never a child
+        of a lower node.
+        @param value The RHS of the $inherit statement. We parse this into a set of part names
+        which we retrieve from the database.
+    **/
+    public synchronized void inherit (MPersistent topDocument, MPart from, String value)
+    {
+        String[] parenttNames = value.split (",");
+        for (String parentName : parenttNames)
         {
-            MPersistent partSource = null;
-            String[] pieces = value.split ("\"");
-            if (pieces.length > 1) partSource = (MPersistent) AppData.getInstance ().models.child (pieces[1]);
-            if (partSource != null)
+            parentName = parentName.trim ().replace ("\"", "");
+            MPersistent parentSource = (MPersistent) AppData.getInstance ().models.child (parentName);
+            if (parentSource != null  &&  parentSource != topDocument)
             {
-                MPart part;
-                try
-                {
-                    part = collate (container, partSource);
-                    part.resetOverride ();
-                    part.mergeChildren (equation);
-                    equation.children = part.children;
-                    for (MNode c : equation) ((MPart) c).container = equation;
-                }
-                catch (Exception e)
-                {
-                    System.err.println ("Failed to construct included tree: " + e);
-                }
+                underrideChildren (from, parentSource);
+                MPersistent parentFrom = (MPersistent) parentSource.child ("$inherit");
+                if (parentFrom != null) inherit (topDocument, from, parentFrom.get ());  // yes, we continue to treat the root "from" as the initiator for all the inherited equations
             }
         }
-        mergeChildren (equation);
+    }
+
+    /**
+        Injects inherited equations at this node.
+        Handles recursion down our containment hierarchy.
+        @param newSource The current node in the source document which corresponds to this node in the MPart tree.
+    **/
+    public synchronized void underride (MPart from, MPersistent newSource)
+    {
+        if (inheritedFrom == null  &&  from != this)  // The second clause is for very peculiar case. We don't allow incoming $inherit lines to underride the $inherit that brought them in, since their existence is completely contingent on it.
+        {
+            inheritedFrom = from;
+            original = newSource;
+        }
+        underrideChildren (from, newSource);
+    }
+
+    /**
+        Injects inherited equations as children of this node.
+        Handles recursion down our containment hierarchy.
+        @param newSource The current node in the source document which matches this node in the MPart tree.
+    **/
+    public synchronized void underrideChildren (MPart from, MPersistent newSource)
+    {
+        if (newSource.length () == 0) return;
+        if (children == null) children = new TreeMap<String,MNode> (comparator);
+        for (MNode n : newSource)
+        {
+            String key = n.key ();
+            MPersistent p = (MPersistent) n;
+
+            MPart c = (MPart) children.get (key);
+            if (c == null)
+            {
+                c = new MPart (this, from, p);
+                children.put (key, c);
+                c.underrideChildren (from, p);
+            }
+            else
+            {
+                c.underride (from, p);
+            }
+        }
+    }
+
+    /**
+        Remove any effects the $inherit line "from" had on this node and our children.
+        @param parentIterator Enables us to delete ourselves from the containing collection.
+        If null, this is the top node of the subtree to be purged, so we should not be
+        deleted.
+    **/
+    public synchronized void purge (MPart from, Iterator<MNode> parentIterator)
+    {
+        if (inheritedFrom == from)
+        {
+            if (source == original)  // This node exists only because of "from". Implicitly, we are not from the top document, and all our children are in the same condition.
+            {
+                if (parentIterator != null) parentIterator.remove ();
+                return;
+            }
+            else  // This node contains an underride, so simply remove that underride.
+            {
+                original = source;
+                inheritedFrom = null;
+            }
+        }
+
+        if (children == null) return;
+        MPart inherit = (MPart) children.get ("$inherit");
+        if (inherit != null  &&  inherit.inheritedFrom == from) purge (inherit, null);  // Note that in all cases, inherit.inheritedFrom != inherit
+
+        Iterator<MNode> childIterator = iterator ();
+        while (childIterator.hasNext ()) ((MPart) childIterator.next ()).purge (from, childIterator);
     }
 
     /**
@@ -183,81 +205,30 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     **/
     public synchronized MPart update (MPersistent source)
     {
-        MPart c = new MPart (this, source, true);
+        MPart c = new MPart (this, null, source);
         children.put (source.key (), c);
-        c.update ();
+        c.underrideChildren (null, source);
+        c.expand ();
         return c;
-    }
-
-    public synchronized void resetOverride ()
-    {
-        fromTopDocument = false;
-        for (MNode i : this) ((MPart) i).resetOverride ();
-    }
-
-    /**
-        Expands our source into children, without trying to interpret any of the equations (such as $inherit or $include).
-        Assumes that we currently have no children.
-    **/
-    public synchronized void buildTree ()
-    {
-        if (source.length () == 0) return;
-        if (children == null) children = new TreeMap<String,MNode> (comparator);
-        for (MNode n : source)
-        {
-            MPart p = new MPart (this, (MPersistent) n, fromTopDocument);
-            children.put (n.key (), p);
-            p.buildTree ();
-        }
-    }
-
-    /**
-        Overrides this part with the given part, then apply recursively to children.
-    **/
-    public synchronized void mergePart (MPart that)
-    {
-        if (source != that.source)
-        {
-            fromTopDocument = that.fromTopDocument;
-            original = source;
-            source = that.source;
-        }
-        mergeChildren (that);
-    }
-
-    /**
-        Overrides our children with the children of the given part.
-    **/
-    public synchronized void mergeChildren (MPart that)
-    {
-        if (that.length () == 0) return;
-        if (children == null) children = new TreeMap<String,MNode> (comparator);
-        for (MNode n : that)
-        {
-            MPart p = (MPart) n;
-            String index = p.key ();
-            MPart existing = (MPart) children.get (index);
-            if (existing == null)
-            {
-                MPart newPart = new MPart (this, p.source, p.original, p.fromTopDocument);
-                children.put (index, newPart);
-                newPart.children = p.children;  // The rest of the tree can simply be copied over, assuming "that" will not be re-used elsewhere.
-            }
-            else existing.mergePart (p);
-        }
     }
 
     /**
         Indicates if this node has the form of a sub-part.
-        Assumes the caller has already eliminated the cases of $metadata and $reference, so does not perform extra checks for these keys.
     **/
     public boolean isPart ()
     {
-        String value = source.get ();
-        if (value.contains ("$include")) return true;
-        if (! value.isEmpty ()) return false;
+        if (! source.get ().isEmpty ()) return false;  // A part never has an assignment. A variable might not have an assignment if it is multi-line.
+        String key = source.key ();
+        if (key.equals ("$inherit"  )) return false;
+        if (key.equals ("$metadata" )) return false;
+        if (key.equals ("$reference")) return false;
         for (MNode c : this) if (c.key ().startsWith ("@")) return false;  // has the form of a multi-line equation
         return true;
+    }
+
+    public boolean isFromTopDocument ()
+    {
+        return fromTopDocument;
     }
 
     public MPart getParent ()
@@ -288,78 +259,6 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         return source.key ();  // could also use original.key(), as they should always match
     }
 
-    /**
-        Removes all children of this node from the top-level document, and restores them to their non-overridden state.
-        Some of the nodes may disappear, if they existed only due to override.
-        In general, acts as if the clear is applied in the top-level document, followed by a full collation of the tree.
-    **/
-    public synchronized void clear ()
-    {
-        if (children == null) return;
-        if (! fromTopDocument) return; // Nothing to do.
-        clearRecursive (true);
-        clearPath ();
-    }
-
-    /**
-        Assuming that source in the current node belongs to the top-level document, reset all overridden children back to their original state.
-    **/
-    public synchronized void clearRecursive (boolean removeFromTopDocument)
-    {
-        Iterator<MNode> i = source.iterator ();  // Implicitly, everything we iterate over will be from the top document.
-        while (i.hasNext ())
-        {
-            String key = i.next ().key ();
-            MPart c = (MPart) children.get (key);  // This should exist, unless a bug somewhere rendered the tree inconsistent.
-            c.clearRecursive (removeFromTopDocument);
-            if (c.source == c.original)  // The child existed solely through override, so remove it completely.
-            {
-                children.remove (key);
-            }
-            else  // Otherwise, restore the original value.
-            {
-                c.fromTopDocument = false;
-                c.source = c.original;
-            }
-            if (removeFromTopDocument) i.remove ();
-        }
-    }
-
-    /**
-        Removes the named child of this node from the top-level document, and restores it to its non-overridden state.
-        The child may disappear, if it existed only due to override.
-        In general, acts as if the clear is applied in the top-level document, followed by a full collation of the tree.
-    **/
-    public synchronized void clear (String index)
-    {
-        clear (index, true);
-    }
-
-    public synchronized void clear (String index, boolean removeFromTopDocument)
-    {
-        if (children == null) return;
-        if (! fromTopDocument) return;  // This node is not overridden, so none of the children will be.
-        if (source.child (index) == null) return;  // The child is not overridden, so nothing to do.
-
-        // Actually clear the child
-        MPart c = (MPart) children.get (index);
-        c.clearRecursive (removeFromTopDocument);
-        if (c.source == c.original)
-        {
-            children.remove (index);
-        }
-        else
-        {
-            c.fromTopDocument = false;
-            c.source = c.original;
-        }
-        if (removeFromTopDocument)
-        {
-            source.clear (index);
-            clearPath ();
-        }
-    }
-
     public synchronized int length ()
     {
         if (children == null) return 0;
@@ -372,6 +271,80 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     }
 
     /**
+        Removes all children of this node from the top-level document, and restores them to their non-overridden state.
+        Some of the nodes may disappear, if they existed only due to override.
+        In general, acts as if the clear is applied in the top-level document, followed by a full collation of the tree.
+    **/
+    public synchronized void clear ()
+    {
+        if (children == null) return;
+        if (! fromTopDocument) return; // Nothing to do.
+        releaseOverrideChildren (true);
+        clearPath ();
+    }
+
+    /**
+        Removes the named child of this node from the top-level document, and restores it to its non-overridden state.
+        The child may disappear, if it existed only due to override.
+        In general, acts as if the clear is applied in the top-level document, followed by a full collation of the tree.
+    **/
+    public synchronized void clear (String index)
+    {
+        clear (index, true);
+    }
+
+    /**
+        Version of clear(String) which allows user to suppress the actual deletion of top document nodes.
+    **/
+    public synchronized void clear (String index, boolean removeFromTopDocument)
+    {
+        if (children == null) return;
+        if (! fromTopDocument) return;  // This node is not overridden, so none of the children will be.
+        if (source.child (index) == null) return;  // The child is not overridden, so nothing to do.
+        ((MPart) children.get (index)).releaseOverride (removeFromTopDocument);
+        if (removeFromTopDocument) source.clear (index);
+        clearPath ();
+    }
+
+    /**
+        Remove any top document values from this node and its children.
+        @param removeFromTopDocument Indicates that the source node should be deleted from the top-level
+        document, not simply removed from the collated tree. This gets passed to our children, but
+        note that the caller is responsible for deleting this node's source.
+    **/
+    public synchronized void releaseOverride (boolean removeFromTopDocument)
+    {
+        if (! fromTopDocument) return;  // This node is not overridden, so nothing to do.
+
+        String key = source.key ();
+        if (source == original)  // This node only exists in top doc, so it should be deleted entirely.
+        {
+            container.children.remove (key);
+        }
+        else  // This node is overridden, so release it.
+        {
+            releaseOverrideChildren (removeFromTopDocument);
+            if (key.equals ("$inherit")) container.purge (this, null);
+            fromTopDocument = false;
+            source = original;
+        }
+    }
+
+    /**
+        Assuming that source in the current node belongs to the top-level document, reset all overridden children back to their original state.
+    **/
+    public synchronized void releaseOverrideChildren (boolean removeFromTopDocument)
+    {
+        Iterator<MNode> i = source.iterator ();  // Implicitly, everything we iterate over will be from the top document.
+        while (i.hasNext ())
+        {
+            String key = i.next ().key ();
+            ((MPart) children.get (key)).releaseOverride (removeFromTopDocument);  // The key is guaranteed to be in our children collection.
+            if (removeFromTopDocument) i.remove ();
+        }
+    }
+
+    /**
         Extends the trail of overrides from the root to this node.
         Used to prepare this node for modification, where all edits must reside in top-level document.
     **/
@@ -379,14 +352,9 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     {
         if (fromTopDocument) return;
         container.override ();
-        original = source;
-        source = (MPersistent) container.source.set ("", key ());
+        original = source;  // TODO: this assignment may be redundant, since original should already be equal to source
+        source = (MPersistent) container.source.set (get (), key ());  // Most intermediate nodes will have a value of "", unless they are a variable.
         fromTopDocument = true;
-    }
-
-    public boolean isFromTopDocument ()
-    {
-        return fromTopDocument;
     }
 
     /**
@@ -401,11 +369,6 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     /**
         If an override is no longer needed on this node, reset it to its original state, and make
         a recursive call to our parent. This is effectively the anti-operation to override().
-
-        @TODO There is an issue with clearing when the path leads through a $include node.
-        The override path only has the name of the part, not the full $include statement. Thus the
-        value never reverts to the original, so we never detect it. Switching to a "lay-under"
-        scheme rather than the current "lay-over" scheme (as implemented in collate()) should resolve this.
     **/
     public synchronized void clearPath ()
     {
@@ -421,9 +384,15 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     public synchronized void set (String value)
     {
         if (source.get ().equals (value)) return;  // No change, so nothing to do.
-        override ();
+        boolean couldReset = original.get ().equals (value);
+        if (! couldReset) override ();
         source.set (value);
-        clearPath ();
+        if (couldReset) clearPath ();
+        if (source.key ().equals ("$inherit"))  // We changed a $inherit node, so rebuild our subtree.
+        {
+            container.purge (this, null);  // Undo the effect we had on the subtree.
+            container.expand ();
+        }
     }
 
     public synchronized MNode set (String value, String index)
@@ -437,11 +406,18 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         }
 
         // We don't have the child, so by construction it is not in any source document.
-        override ();
-        MPersistent s = (MPersistent) source.set (value, index);  // override() ensures that source is a member of the top-level document tree
-        result = new MPart (this, s, true);
+        override ();  // ensures that source is a member of the top-level document tree
+        MPersistent s = (MPersistent) source.set (value, index);
+        result = new MPart (this, null, s);
         if (children == null) children = new TreeMap<String,MNode> (comparator);
         children.put (index, result);
+        if (index.equals ("$inherit"))  // We've created an $inherit line, so load the inherited equations.
+        {
+            // Any parts and equations that might already exist in this subtree take precedence over the
+            // newly added $inherit and the structure/equations it brings in. Thus, we can only add
+            // structure/equations, not remove or change them.
+            expand ();
+        }
         return result;
     }
 
@@ -454,24 +430,21 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         String value = get ();
         if (value.isEmpty ())
         {
-            System.out.println (String.format ("%s%s", space, index) + "  (" + dumpHash (this) + ", " + dumpHash (container) + ")  " + fromTopDocument);
+            System.out.print (String.format ("%s%s", space, index));
         }
         else
         {
             String newLine = String.format ("%n");
-            if (value.contains (newLine))  // go into extended text write mode
-            {
-                value = value.replace (newLine, newLine + space + "  ");
-                value = "|" + newLine + space + "  " + value;
-            }
-            System.out.println (String.format ("%s%s=%s", space, index, value) + "  (" + dumpHash (this) + ", " + dumpHash (container) + ")  " + fromTopDocument);
+            value = value.split (newLine, 2)[0].trim ();
+            System.out.print (String.format ("%s%s=%s", space, index, value));
         }
+        System.out.println ("\t" + dumpHash (container) + "\t" + dumpHash (this) + "\t" + fromTopDocument + "\t" + dumpHash (source) + "\t" + dumpHash (original) + "\t" + dumpHash (inheritedFrom));
 
         String space2 = space + " ";
         for (MNode c : this) ((MPart) c).dump (space2);
     }
 
-    public static String dumpHash (MPart part)
+    public static String dumpHash (MNode part)
     {
         if (part == null) return null;
         return String.valueOf (part.hashCode ());

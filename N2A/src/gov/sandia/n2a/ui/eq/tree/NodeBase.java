@@ -32,6 +32,11 @@ public class NodeBase extends DefaultMutableTreeNode
         return null;
     }
 
+    public String getText (boolean expanded)
+    {
+        return toString ();  // parent class uses the "user object", which is the string we set elsewhere
+    }
+
     public Color getForegroundColor ()
     {
         if (source.isFromTopDocument ()) return (Color.black);
@@ -100,7 +105,7 @@ public class NodeBase extends DefaultMutableTreeNode
 
         try
         {
-            root.source = MPart.collate (doc);
+            root.source = new MPart (doc);
             root.build ();
             root.findConnections ();
             ((DefaultTreeModel) tree.getModel ()).reload ();

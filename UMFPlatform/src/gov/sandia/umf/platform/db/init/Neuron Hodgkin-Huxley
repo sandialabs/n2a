@@ -16,5 +16,7 @@ $metadata
    
    Models a Hodgkin-Huxley compartment fully as well as a Hodgkin-Huxley point neuron.
 $inherit="Compartment Passive"
-Na=$include("Channel Na")
-K=$include("Channel K")
+Na
+ $inherit="Channel Na"
+K
+ $inherit="Channel K"

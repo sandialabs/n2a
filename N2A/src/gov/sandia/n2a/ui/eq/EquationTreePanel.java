@@ -38,6 +38,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.Enumeration;
 import java.util.EventObject;
+
 import javax.swing.Box;
 import javax.swing.DefaultCellEditor;
 import javax.swing.Icon;
@@ -145,7 +146,6 @@ public class EquationTreePanel extends JPanel
         * Makes cell editing act more like a text document.
           - No visible border
           - Extends full width of tree panel
-          - Unfortunately, the text still shifts by one pixel between display and edit modes.
         * Selects the value portion of an equation, facilitating the user to make simple changes.
     **/
     public class NodeEditor extends DefaultTreeCellEditor
@@ -234,7 +234,15 @@ public class EquationTreePanel extends JPanel
                 }
             });
 
-            DefaultCellEditor result = new DefaultCellEditor (textField);
+            DefaultCellEditor result = new DefaultCellEditor (textField)
+            {
+                @Override
+                public Component getTreeCellEditorComponent (JTree tree, Object value, boolean isSelected, boolean expanded, boolean leaf, int row)
+                {
+                    // Lie about the expansion state, to force NodePart to return the true name of the part, without parenthetical info about type.
+                    return super.getTreeCellEditorComponent (tree, value, isSelected, true, leaf, row);
+                }
+            };
             result.setClickCountToStart (1);
             return result;
         }
@@ -246,7 +254,15 @@ public class EquationTreePanel extends JPanel
         uiController = uic;
 
         model = new DefaultTreeModel (null);
-        tree  = new JTree (model);
+        tree  = new JTree (model)
+        {
+            @Override
+            public String convertValueToText (Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
+            {
+                if (value == null) return "";
+                return ((NodeBase) value).getText (expanded);
+            }
+        };
 
         tree.setExpandsSelectedPaths (true);
         tree.setScrollsOnExpand (true);
@@ -269,15 +285,57 @@ public class EquationTreePanel extends JPanel
             @Override
             public void editingStopped (ChangeEvent e)
             {
+                NodeBase parent = (NodeBase) editor.editingNode.getParent ();  // Could be null if we edit the root node.
+                int index = 0;
+                if (parent != null) index = parent.getIndex (editor.editingNode) - 1;
+
                 editor.editingNode.applyEdit (tree);
+
+                TreePath path = tree.getSelectionPath ();
+                if (path == null)  // If we lose the selection, most likely applyEdit() deleted the node, and that function assumes the caller handles selection.
+                {
+                    if (parent == null)
+                    {
+                        tree.setSelectionRow (0);
+                    }
+                    else
+                    {
+                        index = Math.min (index, parent.getChildCount () - 1);
+                        if (index < 0) path = new TreePath (                          parent.getPath ());
+                        else           path = new TreePath (((DefaultMutableTreeNode) parent.getChildAt (index)).getPath ());
+                        tree.setSelectionPath (path);
+                    }
+                }
+
                 updateOrder ();
+                if (parent != null) updateOverrides (path);
             }
 
             @Override
             public void editingCanceled (ChangeEvent e)
             {
+                // We only get back an empty string if we explicitly set it before editing starts.
+                // Certain types of nodes do this when inserting a new instance into the tree, via NodeBase.add()
+                // We desire in this case that escape cause the new node to evaporate.
                 Object o = editor.editingNode.getUserObject ();
-                if (! (o instanceof String)  ||  ((String) o).isEmpty ()) editor.editingNode.delete (tree);
+                if (! (o instanceof String)) return;
+                if (((String) o).isEmpty ())
+                {
+                    // Similar behavior to deleteSelected(), but set selection to previous node, since it is likely that this node was added from there.
+                    NodeBase parent = (NodeBase) editor.editingNode.getParent ();
+                    int index = parent.getIndex (editor.editingNode) - 1;
+
+                    editor.editingNode.delete (tree);
+
+                    index = Math.min (index, parent.getChildCount () - 1);
+                    TreePath path;
+                    if (index < 0) path = new TreePath (                          parent.getPath ());
+                    else           path = new TreePath (((DefaultMutableTreeNode) parent.getChildAt (index)).getPath ());
+                    tree.setSelectionPath (path);
+
+                    updateOrder ();
+                    updateOverrides (path);
+                }
             }
         });
         tree.setCellEditor (editor);
@@ -531,7 +589,7 @@ public class EquationTreePanel extends JPanel
         record = doc;
         try
         {
-            root = new NodePart (MPart.collate ((MPersistent) record));
+            root = new NodePart (new MPart ((MPersistent) record));
             root.build ();
             root.findConnections ();
             model.setRoot (root);

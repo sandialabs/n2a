@@ -104,6 +104,7 @@ public class MDir extends MNode
 
 	public synchronized MNode child (String index)
     {
+	    if (index.isEmpty ()) return null;  // The file-existence code below can be fooled by an empty string, so explicitly guard against it.
 	    MDoc result = null;
 	    SoftReference<MDoc> reference = children.get (index);
 	    if (reference != null) result = reference.get ();
@@ -151,8 +152,7 @@ public class MDir extends MNode
     public synchronized void clear (String index)
     {
         SoftReference<MDoc> ref = children.remove (index);
-        MDoc doc = ref.get ();
-        if (ref != null) writeQueue.remove (doc);
+        if (ref != null) writeQueue.remove (ref.get ());
         pathForChild (index).delete ();
 
         fireChanged ();

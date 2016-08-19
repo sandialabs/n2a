@@ -102,7 +102,7 @@ public class NodeAnnotation extends NodeBase
         {
             NodeBase parent = (NodeBase) getParent ();
             ((DefaultTreeModel) tree.getModel ()).removeNodeFromParent (this);
-            if (parent.getChildCount () == 0) parent.delete (tree);
+            if (parent instanceof NodeAnnotations  &&  parent.getChildCount () == 0) parent.delete (tree);
         }
         else
         {

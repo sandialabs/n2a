@@ -124,12 +124,9 @@ public class MainFrame extends EscapeFrame implements HelpCapableWindow {
     }
 
     @Override
-    protected void escapePressed() {
-        if(glassPane.isHelpShowing()) {
-            glassPane.hideHelp();
-        } else {
-            super.escapePressed();
-        }
+    protected void escapePressed ()
+    {
+        if (glassPane.isHelpShowing ()) glassPane.hideHelp ();
     }
 
     public static MainFrame getInstance() {

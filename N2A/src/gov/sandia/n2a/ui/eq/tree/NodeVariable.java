@@ -307,43 +307,68 @@ public class NodeVariable extends NodeBase
                 model.nodeChanged (this);
             }
         }
-        else  // The name was changed. Move the whole tree under us to a new location. This may also expose an overridden variable.
+        else  // The name was changed. Move the whole sub-tree to a new location. This may also expose an overridden variable.
         {
-            // Inject the changed equation into the underlying data first, then move and rebuild the displayed nodes as necessary.
-            if (equations.size () == 0)
+            MPart mparent = source.getParent ();
+            MPart newPart;
+            NodeInherit inherit = null;
+            if (name.equals ("$inherit"))
             {
-                source.set (value);
+                mparent.clear (oldKey);  // We abandon everything under this node, because $inherit does not have a subtree. (It might in the future, to store UIDs of referenced parts.)
+                newPart = (MPart) mparent.set (value, name);
+                inherit = new NodeInherit (newPart);
+                model.insertNodeInto (inherit, parent, 0);
+                if (parent instanceof NodePart)  // It had better be! There is no other legal configuration.
+                {
+                    ((NodePart) parent).build ();
+                    model.nodeStructureChanged (parent);
+                }
             }
             else
             {
-                source.set (pieces.combiner);
+                // Inject the changed equation into the underlying data before renaming.
+                if (equations.size () == 0)
+                {
+                    source.set (value);
+                }
+                else
+                {
+                    source.set (pieces.combiner);
 
-                NodeEquation e = equations.get (pieces.conditional);
-                if (e == null)                             source.set (pieces.expression, "@" + pieces.conditional);  // create a new equation
-                else if (! pieces.expression.isEmpty ()) e.source.set (pieces.expression);  // blow away the existing expression in the matching equation
+                    NodeEquation e = equations.get (pieces.conditional);
+                    if (e == null)                             source.set (pieces.expression, "@" + pieces.conditional);  // create a new equation
+                    else if (! pieces.expression.isEmpty ()) e.source.set (pieces.expression);  // blow away the existing expression in the matching equation
+                }
+
+                mparent.move (oldKey, name);  // This copies the whole tree, not just overridden nodes, but leaves behind only the newly-exposed underrides.
+                newPart = (MPart) mparent.child (name);
             }
 
-            // Change ourselves into the new key=value pair
-            MPart p = source.getParent ();
-            p.move (oldKey, name);
-            MPart newPart = (MPart) p.child (name);
-            if (p.child (oldKey) == null)
+            // Presumably at this point, newPart is never null. Unless it was a $inherit, it needs somewhere to go in the tree.
+            if (mparent.child (oldKey) == null)  // This tree node can be re-used, if we need it.
             {
-                // We were not associated with an override, so we can re-use this tree node.
-                source = newPart;
+                if (inherit == null)
+                {
+                    source = newPart;
+                    build ();
+                    model.nodeStructureChanged (this);
+                }
             }
-            else
+            else  // We exposed an overridden part, which will retain its claim on this tree node.
             {
-                // Make a new node for the renamed tree, and leave us to present the other non-overridden tree.
-                // Note that our source is still set to the old part.
-                NodeVariable v = new NodeVariable (newPart);
-                model.insertNodeInto (v, parent, parent.getIndex (this));
-                v.build ();
-                model.nodeStructureChanged (v);
-                v.findConnections ();
+                if (inherit == null)  // Create a new tree node for the newly-named variable, if needed.
+                {
+                    NodeVariable v = new NodeVariable (newPart);
+                    model.insertNodeInto (v, parent, parent.getIndex (this));
+                    v.build ();
+                    model.nodeStructureChanged (v);
+                    v.findConnections ();
+                }
+
+                // The current node's source is still set to the old part.
+                build ();
+                model.nodeStructureChanged (this);
             }
-            build ();
-            model.nodeStructureChanged (this);
         }
 
         findConnections ();

@@ -14,7 +14,7 @@ import gov.sandia.umf.platform.ui.images.ImageUtil;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
-import javax.swing.tree.DefaultMutableTreeNode;
+import javax.swing.tree.DefaultTreeModel;
 
 public class NodeInherit extends NodeBase
 {
@@ -33,12 +33,6 @@ public class NodeInherit extends NodeBase
     }
 
     @Override
-    public boolean allowEdit ()
-    {
-        return ((DefaultMutableTreeNode) getParent ()).isRoot ();
-    }
-
-    @Override
     public void applyEdit (JTree tree)
     {
         String input = (String) getUserObject ();
@@ -53,11 +47,13 @@ public class NodeInherit extends NodeBase
         if (parts.length > 1) value = parts[1];
         else                  value = "";
 
-        String oldValue = source.key ();
+        String oldValue = source.get ();
         if (value.equals (oldValue)) return;
-        source.set (value);
 
-        reloadTree (tree);
+        source.set (value);  // Complex restructuring happens here.
+        NodePart parent = (NodePart) getParent ();
+        parent.build ();
+        ((DefaultTreeModel) tree.getModel ()).nodeStructureChanged (parent);
     }
 
     @Override
@@ -67,8 +63,10 @@ public class NodeInherit extends NodeBase
 
         MPart mparent = source.getParent ();
         String key = source.key ();  // "$inherit"
-        mparent.clear (key);
+        mparent.clear (key);  // Complex restructuring happens here.
 
-        reloadTree (tree);
+        NodePart parent = (NodePart) getParent ();
+        parent.build ();
+        ((DefaultTreeModel) tree.getModel ()).nodeStructureChanged (parent);
     }
 }

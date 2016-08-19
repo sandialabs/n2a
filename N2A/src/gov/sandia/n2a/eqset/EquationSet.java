@@ -95,7 +95,7 @@ public class EquationSet implements Comparable<EquationSet>
     **/
     public EquationSet (MNode part) throws Exception
     {
-        this (null, MPart.collate ((MPersistent) part));
+        this (null, new MPart ((MPersistent) part));
     }
 
     public EquationSet (EquationSet container, MPart source) throws Exception
