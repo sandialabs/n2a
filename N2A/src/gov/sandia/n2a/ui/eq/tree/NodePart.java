@@ -200,12 +200,11 @@ public class NodePart extends NodeBase
     @Override
     public NodeBase add (String type, JTree tree)
     {
-        if (type.isEmpty ()  &&  ! isRoot ()  &&  tree.isCollapsed (new TreePath (getPath ()))  &&  getChildCount () > 0)
+        if (tree.isCollapsed (new TreePath (getPath ()))  &&  getChildCount () > 0  &&  ! isRoot ())  // The node is deliberately closed to indicate user intent.
         {
-            return ((NodeBase) getParent ()).add ("Part", tree);
+            if (type.isEmpty ()) return ((NodeBase) getParent ()).add ("Part", tree);
+            return ((NodeBase) getParent ()).add (type, tree);
         }
-
-        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
 
         NodeAnnotations a = null;
         NodeReferences  r = null;
@@ -235,6 +234,7 @@ public class NodePart extends NodeBase
             }
         }
 
+        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
         if (type.equals ("Annotation"))
         {
             if (a == null)

@@ -455,7 +455,10 @@ public class EquationTreePanel extends JPanel
                 tree.scrollPathToVisible (path);
                 tree.setSelectionPath (path);
                 tree.requestFocusInWindow ();  // just in case the search panel is still selected
-                
+                // Should we go into edit mode instead?
+
+                updateOrder ();
+
                 return true;
             }  
         });
