@@ -62,8 +62,7 @@ public class NodeInherit extends NodeBase
         if (! source.isFromTopDocument ()) return;
 
         MPart mparent = source.getParent ();
-        String key = source.key ();  // "$inherit"
-        mparent.clear (key);  // Complex restructuring happens here.
+        mparent.clear ("$inherit");  // Complex restructuring happens here.
 
         NodePart parent = (NodePart) getParent ();
         parent.build ();

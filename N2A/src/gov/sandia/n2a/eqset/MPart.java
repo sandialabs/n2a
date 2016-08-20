@@ -29,7 +29,6 @@ import gov.sandia.umf.platform.db.MVolatile;
 **/
 public class MPart extends MNode  // Could derive this from MVolatile, but the extra work of implementing from scratch is worth saving an unused member variable.
 {
-    protected boolean     fromTopDocument; // Indicates that this node is overridden by the top-level document.
     protected MPersistent source;
     protected MPersistent original;        // The original source of this node, before it was overwritten by another document. Refers to same object as source if this node has not been overridden.
     protected MPart       inheritedFrom;   // Node in the tree that contains the $include statement that generated this node. Retained even if the node is overridden.
@@ -42,7 +41,6 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     **/
     public MPart (MPersistent source)
     {
-        fromTopDocument = true;
         container       = null;
         this.source     = source;
         original        = source;
@@ -54,7 +52,6 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
 
     protected MPart (MPart container, MPart inheritedFrom, MPersistent source)
     {
-        this.fromTopDocument = inheritedFrom == null;
         this.container       = container;
         this.source          = source;
         original             = source;
@@ -228,7 +225,12 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
 
     public boolean isFromTopDocument ()
     {
-        return fromTopDocument;
+        // There are only 3 cases allowed:
+        // * original == source and inheritedFrom != null -- node holds an inherited value
+        // * original == source and inheritedFrom == null -- node holds a top-level value
+        // * original != source and inheritedFrom != null -- node holds a top-level value and an underride (inherited value)
+        // The fourth case is excluded by the logic of this class (if it does its job right).
+        return original != source  ||  inheritedFrom == null;
     }
 
     public MPart getParent ()
@@ -278,7 +280,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     public synchronized void clear ()
     {
         if (children == null) return;
-        if (! fromTopDocument) return; // Nothing to do.
+        if (! isFromTopDocument ()) return; // Nothing to do.
         releaseOverrideChildren (true);
         clearPath ();
     }
@@ -299,7 +301,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     public synchronized void clear (String index, boolean removeFromTopDocument)
     {
         if (children == null) return;
-        if (! fromTopDocument) return;  // This node is not overridden, so none of the children will be.
+        if (! isFromTopDocument ()) return;  // This node is not overridden, so none of the children will be.
         if (source.child (index) == null) return;  // The child is not overridden, so nothing to do.
         ((MPart) children.get (index)).releaseOverride (removeFromTopDocument);
         if (removeFromTopDocument) source.clear (index);
@@ -314,7 +316,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     **/
     public synchronized void releaseOverride (boolean removeFromTopDocument)
     {
-        if (! fromTopDocument) return;  // This node is not overridden, so nothing to do.
+        if (! isFromTopDocument ()) return;  // This node is not overridden, so nothing to do.
 
         String key = source.key ();
         if (source == original)  // This node only exists in top doc, so it should be deleted entirely.
@@ -324,10 +326,9 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         else  // This node is overridden, so release it.
         {
             releaseOverrideChildren (removeFromTopDocument);
-            if (key.equals ("$inherit")) container.purge (this, null);
-            fromTopDocument = false;
             source = original;
         }
+        if (key.equals ("$inherit")) container.purge (this, null);
     }
 
     /**
@@ -350,11 +351,10 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     **/
     public synchronized void override ()
     {
-        if (fromTopDocument) return;
+        if (isFromTopDocument ()) return;
+        // The only way to get past the above line is if original==source
         container.override ();
-        original = source;  // TODO: this assignment may be redundant, since original should already be equal to source
         source = (MPersistent) container.source.set (get (), key ());  // Most intermediate nodes will have a value of "", unless they are a variable.
-        fromTopDocument = true;
     }
 
     /**
@@ -362,7 +362,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     **/
     public synchronized boolean overrideNecessary ()
     {
-        for (MNode c : this) if (((MPart) c).fromTopDocument) return true;
+        for (MNode c : this) if (((MPart) c).isFromTopDocument ()) return true;
         return false;
     }
 
@@ -372,11 +372,10 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     **/
     public synchronized void clearPath ()
     {
-        if (fromTopDocument  &&  source != original  &&  source.get ().equals (original.get ())  &&  ! overrideNecessary ())
+        if (source != original  &&  source.get ().equals (original.get ())  &&  ! overrideNecessary ())
         {
             source.getParent ().clear (source.key ());  // delete ourselves from the top-level document
             source = original;
-            fromTopDocument = false;
             container.clearPath ();
         }
     }
@@ -438,7 +437,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
             value = value.split (newLine, 2)[0].trim ();
             System.out.print (String.format ("%s%s=%s", space, index, value));
         }
-        System.out.println ("\t" + dumpHash (container) + "\t" + dumpHash (this) + "\t" + fromTopDocument + "\t" + dumpHash (source) + "\t" + dumpHash (original) + "\t" + dumpHash (inheritedFrom));
+        System.out.println ("\t" + dumpHash (container) + "\t" + dumpHash (this) + "\t" + isFromTopDocument () + "\t" + dumpHash (source) + "\t" + dumpHash (original) + "\t" + dumpHash (inheritedFrom));
 
         String space2 = space + " ";
         for (MNode c : this) ((MPart) c).dump (space2);
