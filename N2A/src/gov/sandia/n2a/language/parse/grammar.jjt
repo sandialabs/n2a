@@ -9,7 +9,7 @@ options
 PARSER_BEGIN(ExpressionParser)
 
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2016 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -21,6 +21,7 @@ import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 
 import java.io.StringReader;
+import javax.measure.unit.Unit;
 
 public class ExpressionParser
 {
@@ -28,7 +29,7 @@ public class ExpressionParser
     {
         try
         {
-            ExpressionParser parser = new ExpressionParser (new StringReader (line + "\n"));
+            ExpressionParser parser = new ExpressionParser (new StringReader (line));
             Node startNode = parser.Start ();
             SimpleNode result = (SimpleNode) startNode.jjtGetChild (0);
             return result;
@@ -41,106 +42,86 @@ public class ExpressionParser
 }
 PARSER_END(ExpressionParser)
 
-/***************************************************************
-SKIP
-***************************************************************/
 
-<DEFAULT> SKIP :
+// Tokens --------------------------------------------------------------------
+
+<*> SKIP:
 {
-  " "
-  | "\t"
-  | "\n"
-  | "\r"
+    " " | "\t"
+}
 
-  | <"//" (~["\n","\r"])* ("\n"|"\r"|"\r\n")>         // Should include EOF, will add \n in input until this is fixed.
-  | <"/*" (~["*"])* "*" (~["/"] (~["*"])* "*")* "/">
+TOKEN:
+{
+      <COMMA:   "," >
+    | <SEMI:    ";" >
+    | <GT:      ">" >
+    | <LT:      "<" >
+    | <EQ:      "==">
+    | <LE:      "<=">
+    | <GE:      ">=">
+    | <NE:      "!=">
+    | <AND:     "&&">
+    | <OR:      "||">
+    | <PLUS:    "+" >
+    | <MINUS:   "-" >
+    | <MUL:     "*" >
+    | <HADAMUL: "&" >
+    | <DIV:     "/" >
+    | <MOD:     "%" >
+    | <NOT:     "!" >
+    | <POWER:   "^" >
+    | <TILDE:   "~" >
+    | <LSQ:     "[" >
+    | <RSQ:     "]" >
+    | <LRND:    "(" >
+    | <RRND:    ")" >
+
+    | <IDENTIFIER: <LETTER>(<LETTER>|<DIGIT>)*(<PRIME>)*>
+    | <#LETTER: ["A"-"Z", "a"-"z", "_", "$", "."]>
+    | <#DIGIT:  ["0"-"9"]>
+    | <#PRIME:  "'">
+
+    | <NUMBER:
+          (<DIGIT>)+ "." (<DIGIT>)* (<EXPONENT>)?
+        |            "." (<DIGIT>)+ (<EXPONENT>)?
+        | (<DIGIT>)+                (<EXPONENT>)?> : PossibleUnit
+    | <#EXPONENT: ["e","E"] (["+","-"])? (<DIGIT>)+>
+
+    | <STRING: "\"" ((~["\"","\\"]) | ("\\" ["n","t","b","r","f","\\","'","\""]))* "\"">
+}
+
+<PossibleUnit> TOKEN:
+{
+      <UNIT:
+        ["\"","#","'","0"-":","?"-"]","_"-"{"]  // Everything in ASCII 33-126, except forbidden start characters and }
+        (["!"-"'","*"-"|","~"])*                // Everything in ASCII 33-126, except parentheses and }
+        (["}"])?> : DEFAULT                     // If there is a }, it always ends the unit expression.
+
+    | <UCOMMA:   ","  > {matchedToken.kind = ExpressionParserConstants.COMMA;  }: DEFAULT
+    | <USEMI:    ";"  > {matchedToken.kind = ExpressionParserConstants.SEMI;   }: DEFAULT
+    | <UGT:      ">"  > {matchedToken.kind = ExpressionParserConstants.GT;     }: DEFAULT
+    | <ULT:      "<"  > {matchedToken.kind = ExpressionParserConstants.LT;     }: DEFAULT
+    | <UEQ:      "==" > {matchedToken.kind = ExpressionParserConstants.EQ;     }: DEFAULT
+    | <ULE:      "<=" > {matchedToken.kind = ExpressionParserConstants.LE;     }: DEFAULT
+    | <UGE:      ">=" > {matchedToken.kind = ExpressionParserConstants.GE;     }: DEFAULT
+    | <UNE:      "!=" > {matchedToken.kind = ExpressionParserConstants.NE;     }: DEFAULT
+    | <UAND:     "&&" > {matchedToken.kind = ExpressionParserConstants.AND;    }: DEFAULT
+    | <UOR:      "||" > {matchedToken.kind = ExpressionParserConstants.OR;     }: DEFAULT
+    | <UPLUS:    "+"  > {matchedToken.kind = ExpressionParserConstants.PLUS;   }: DEFAULT
+    | <UMINUS:   "-"  > {matchedToken.kind = ExpressionParserConstants.MINUS;  }: DEFAULT
+    | <UMUL:     "*"  > {matchedToken.kind = ExpressionParserConstants.MUL;    }: DEFAULT
+    | <UHADAMUL: "&"  > {matchedToken.kind = ExpressionParserConstants.HADAMUL;}: DEFAULT
+    | <UDIV:     "/"  > {matchedToken.kind = ExpressionParserConstants.DIV;    }: DEFAULT
+    | <UMOD:     "%"  > {matchedToken.kind = ExpressionParserConstants.MOD;    }: DEFAULT
+    | <UNOT:     "!"  > {matchedToken.kind = ExpressionParserConstants.NOT;    }: DEFAULT
+    | <UPOWER:   "^"  > {matchedToken.kind = ExpressionParserConstants.POWER;  }: DEFAULT
+    | <UTILDE:   "~"  > {matchedToken.kind = ExpressionParserConstants.TILDE;  }: DEFAULT
+    | <ULRND:    "("  > {matchedToken.kind = ExpressionParserConstants.LRND;   }: DEFAULT
+    | <URRND:    ")"  > {matchedToken.kind = ExpressionParserConstants.RRND;   }: DEFAULT
 }
 
 
-/***************************************************************
-TOKENS
-***************************************************************/
-
-<DEFAULT> TOKEN:
-{
-    <FLOATING_POINT_LITERAL:
-          (["0"-"9"])+ "." (["0"-"9"])* (<EXPONENT>)?
-        | "." (["0"-"9"])+ (<EXPONENT>)?
-        | (["0"-"9"])+ (<EXPONENT>)? > |
-    <#EXPONENT: ["e","E"] (["+","-"])? (["0"-"9"])+> |
-    <STRING_LITERAL:
-        "\""
-        (     (~["\"","\\","\n","\r"])
-            | ("\\" ["n","t","b","r","f","\\","'","\""])
-        )*
-        "\"" >
-}
-
-<DEFAULT> TOKEN:
-{
-    <IDENTIFIER: <LETTER>(<LETTER>|<DIGIT>)*(<TICKMARK>)*> |
-    <#LETTER: ["A"-"Z", "a"-"z", "_", "$", "."]> |
-    <#DIGIT: ["0"-"9"] > | 
-    <#TICKMARK: "'" >
-}
-
-<DEFAULT> TOKEN:
-{
-    < ASSIGN: <NASSIGN>|<AASSIGN>|<CASSIGN> > |
-
-    < #NASSIGN: "="  > |
-    < #AASSIGN: "+=" > |
-    < #CASSIGN: ":=" > |
-    
-    < COMMA:   ","  > |
-    < SEMI:    ";"  > |
-    < GT:      ">"  > |
-    < LT:      "<"  > |
-    < EQ:      "==" > |
-    < LE:      "<=" > |
-    < GE:      ">=" > |
-    < NE:      "!=" > |
-    < AND:     "&&" > |
-    < OR:      "||" > |
-    < PLUS:    "+"  > |
-    < MINUS:   "-"  > |
-    < MUL:     "*"  > |
-    < HADAMUL: "&"  > |
-    < DIV:     "/"  > |
-    < MOD:     "%"  > |
-    < NOT:     "!"  > |
-    < POWER:   "^"  > |
-    < TILDE:   "~"  > |
-    < LSQ:     "["  > |
-    < RSQ:     "]"  > |
-    < LRND:    "("  > |
-    < RRND:    ")"  >
-}
-
-/* Switches to the IN_UNITS lexical state for different parsing of the unit expressions */
-<DEFAULT> TOKEN:
-{
-    < LBRC: "{" > : IN_UNITS
-}
-
-/* Switches back to the DEFAULT lexical state for normal parsing */
-<IN_UNITS> TOKEN:
-{
-    < RBRC: "}" > : DEFAULT
-}
-
-/* Unit expressions are allowed to be a lot less structured, as the
-   parsing will be done by JScience, not this parser. Only those characters
-   that could conceivably be present in unit expressions are allowed here. */
-<IN_UNITS> TOKEN:
-{
-    < UNITS: (["A"-"Z", "a"-"z", "_", "0"-"9", ".", "(", ")", "+", "-", "*", "/", "^"])+ >
-}
-
-
-/***************************************************************
-GRAMMAR START
-***************************************************************/
+// Grammar -------------------------------------------------------------------
 
 ASTStart Start() #Start : {}
 {
@@ -340,17 +321,19 @@ void Identifier() #Identifier : {Token t;}
     }
 }
 
-void Constant() #Constant : {Token t;}
+void Constant() #Constant : {Token t; Token u = null;}
 {
-    t = <STRING_LITERAL>
+    t = <STRING>
     {
         Text text = new Text (t.image.substring (1, t.image.length() - 1));
         text.removeEscapes ();
         jjtThis.jjtSetValue (text);
     }
       |
-    t = <FLOATING_POINT_LITERAL>
+    t = <NUMBER> [u = <UNIT>]
     {
-        jjtThis.jjtSetValue (new Scalar (Double.parseDouble (t.image)));
+        double value = Double.parseDouble (t.image);
+        if (u != null) value = Unit.valueOf (u.image).toStandardUnit ().convert (value);
+        jjtThis.jjtSetValue (new Scalar (value));
     }
 }

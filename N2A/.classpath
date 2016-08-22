@@ -4,14 +4,9 @@
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.junit.JUNIT_CONTAINER/4"/>
 	<classpathentry combineaccessrules="false" kind="src" path="/UMFPlatform"/>
-	<classpathentry kind="lib" path="/UMFPlatform/lib/orientdb-1.3.0/orient-commons-1.3.0.jar"/>
-	<classpathentry kind="lib" path="/UMFPlatform/lib/orientdb-1.3.0/orientdb-client-1.3.0.jar"/>
-	<classpathentry kind="lib" path="/UMFPlatform/lib/orientdb-1.3.0/orientdb-core-1.3.0.jar"/>
-	<classpathentry kind="lib" path="/UMFPlatform/lib/orientdb-1.3.0/orientdb-enterprise-1.3.0.jar"/>
 	<classpathentry kind="lib" path="lib/jscience-4.3/jscience.jar"/>
 	<classpathentry kind="lib" path="/UMFPlatform/lib/log4j-1.2.17/log4j-1.2.17.jar"/>
 	<classpathentry kind="lib" path="lib/jgraphx/jgraphx.jar"/>
 	<classpathentry kind="lib" path="/UMFPlatform/lib/replete.jar"/>
-	<classpathentry kind="lib" path="lib/javadev.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

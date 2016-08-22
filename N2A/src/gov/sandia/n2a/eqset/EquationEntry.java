@@ -40,9 +40,9 @@ public class EquationEntry implements Comparable<EquationEntry>
     **/
     public EquationEntry (MNode source) throws Exception
     {
+        expression  = Operator.parse (source.get ());
         conditional = Operator.parse (source.key ().substring (1));
         ifString = conditional.render ();
-        parseRHS (source.get ());
     }
 
     /**
@@ -51,12 +51,6 @@ public class EquationEntry implements Comparable<EquationEntry>
     **/
     public EquationEntry (String rhs) throws Exception
     {
-        parseRHS (rhs);
-    }
-
-    public void parseRHS (String rhs) throws Exception
-    {
-        // conditional
         String[] parts = rhs.split ("@");
         expression = Operator.parse (parts[0]);
         ifString = "";
