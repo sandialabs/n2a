@@ -12,10 +12,9 @@ You can tell an instance to change into another kind of part, or you can split a
 
 ## Development Status ##
 
-The N2A tool is still under development. You are welcome to download and try it out, but it requires significant work to be ready for full deployment. Key issues include:
-- The user interface has not evolved as fast as the language. It needs to be updated and simplified.
-- The database engine for storing models is unreliable. We will replace it with a simpler approach based on storing plain text documents in a directory.
-- Lacks support for standard neural simulation tools, such as NEURON. We will add NeuroML export to take advantage of existing tools.
+The N2A tool is almost ready for a 1.0 release. Remaining work includes:
+- Support for NeuroML import/export.
+- Backends for commonly-used simulators. Plans are to develop a direct NEST backend, and use the jNeuroML library as a bridge to other simulators.
 
 ## Download ##
 
