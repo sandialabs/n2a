@@ -9,7 +9,7 @@ package gov.sandia.umf.platform.ui.run;
 
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
-import gov.sandia.umf.platform.plugins.extpoints.Simulator;
+import gov.sandia.umf.platform.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.ui.HelpCapableWindow;
 import gov.sandia.umf.platform.ui.HelpLabels;
 import gov.sandia.umf.platform.ui.HelpNotesPanel;
@@ -75,7 +75,7 @@ public class CreateRunEnsembleDialog extends EscapeDialog implements HelpCapable
 
     public CreateRunEnsembleDialog(JFrame parent, UIController uic, final long estDur,
             /*TEMP*/String modName, String modOwner, long modLm,/*TEMP*/
-            final Object model, Simulator[] simulators, Simulator defaultSimulator,
+            final Object model, Backend[] simulators, Backend defaultSimulator,
             ExecutionEnv[] envs, ExecutionEnv defaultEnv, final boolean askNoOutputs) {
 
         super(parent, "Create New Run Ensemble", true);
@@ -208,7 +208,7 @@ public class CreateRunEnsembleDialog extends EscapeDialog implements HelpCapable
     public ExecutionEnv getEnvironment() {
         return pnlRun.getEnvironment();
     }
-    public Simulator getSimulator() {
+    public Backend getSimulator() {
         return pnlRun.getSimulator();
     }
     public ParameterSpecGroupSet getParameterSpecGroupSet() {

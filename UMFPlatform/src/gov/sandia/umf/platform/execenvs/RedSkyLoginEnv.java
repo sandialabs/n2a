@@ -7,8 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.execenvs;
 
-import gov.sandia.umf.platform.runs.RunEnsemble;
-import gov.sandia.umf.platform.runs.RunState;
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ssh.RedSkyConnection;
 import gov.sandia.umf.platform.ssh.RedSkyConnection.Result;
 
@@ -41,10 +40,9 @@ public class RedSkyLoginEnv extends RedSkyEnv
     }
 
     @Override
-    public void submitJob (RunState run) throws Exception
+    public void submitJob (MNode job, String command) throws Exception
     {
-        String command = run.getNamedValue ("command");
-        String jobDir  = run.getNamedValue ("jobDir");
+        String jobDir = job.get ("$metadata", "remote.dir");  // Of course, this is a dir this class generated for the job.
         RedSkyConnection.exec (command + " > '" + jobDir + "/out' 2> '" + jobDir + "/err' &", true);
     }
 

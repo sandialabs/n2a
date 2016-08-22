@@ -13,15 +13,13 @@ import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.umf.platform.db.AppData;
+import gov.sandia.umf.platform.db.MDoc;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.db.MPersistent;
-import gov.sandia.umf.platform.execenvs.ExecutionEnv;
-import gov.sandia.umf.platform.plugins.Simulation;
-import gov.sandia.umf.platform.plugins.extpoints.Simulator;
-import gov.sandia.umf.platform.runs.Run;
-import gov.sandia.umf.platform.runs.RunOrient;
+import gov.sandia.umf.platform.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
+import gov.sandia.umf.platform.ui.jobs.RunPanel;
 
 import java.awt.Component;
 import java.awt.Dimension;
@@ -36,8 +34,11 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Enumeration;
 import java.util.EventObject;
+import java.util.Locale;
 
 import javax.swing.Box;
 import javax.swing.DefaultCellEditor;
@@ -69,12 +70,12 @@ import replete.gui.controls.IconButton;
 import replete.plugins.ExtensionPoint;
 import replete.plugins.PluginManager;
 import replete.util.Lay;
-import replete.util.User;
 
 public class EquationTreePanel extends JPanel
 {
     protected UIController uiController;
     protected MNode record;
+    protected int jobCount = 0;  // for launching jobs
 
     // Tree & Its Model
     public JTree            tree;
@@ -642,12 +643,12 @@ public class EquationTreePanel extends JPanel
         {
             if (record == null) return;
 
-            Simulator simulator = null;
-            Simulator internal = null;
+            Backend simulator = null;
+            Backend internal = null;
             String simulatorName = record.get ("$metadata", "backend");
-            for (ExtensionPoint ext : PluginManager.getExtensionsForPoint (Simulator.class))
+            for (ExtensionPoint ext : PluginManager.getExtensionsForPoint (Backend.class))
             {
-                Simulator s = (Simulator) ext;
+                Backend s = (Backend) ext;
                 if (s.getName ().equalsIgnoreCase (simulatorName))
                 {
                     simulator = s;
@@ -662,19 +663,22 @@ public class EquationTreePanel extends JPanel
                 return;
             }
 
-            final Simulator sim = simulator;
-            final Run run = new RunOrient (0.0, "", null, sim, User.getName (), "Pending", null, record);  // Most of these are useless properties, now handled by backend reading metadata from model.
+            final Backend sim = simulator;
+            RunPanel panel = (RunPanel) uiController.selectTab ("Runs");
+            MNode runs = AppData.getInstance ().runs;
+            String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + jobCount++;
+            runs.set (record.key (), jobKey, "$inherit");
+            final MNode job = runs.child (jobKey);
+            job.merge (root.source);
+            ((MDoc) job).save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
 
             new Thread ()
             {
                 public void run ()
                 {
-                    Simulation simulation = sim.createSimulation ();
                     try
                     {
-                        ExecutionEnv env = ExecutionEnv.factory ();
-                        simulation.execute (run, null, env);
-                        uiController.selectTab ("Runs");
+                        sim.execute (job);
                     }
                     catch (Exception e)
                     {

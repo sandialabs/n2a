@@ -9,10 +9,7 @@ package gov.sandia.umf.platform.plugins;
 
 import gov.sandia.umf.platform.UMF;
 import gov.sandia.umf.platform.plugins.extpoints.RecordHandler;
-import gov.sandia.umf.platform.plugins.extpoints.Simulator;
-
 import java.io.File;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,17 +18,11 @@ import replete.plugins.PluginManager;
 
 public class UMFPluginManager
 {
-    public static Map<String, RecordHandler>   recordHandlers   = new HashMap<String, RecordHandler> ();
-    public static Map<String, List<Simulator>> recordSimulators = new HashMap<String, List<Simulator>> ();
+    public static Map<String, RecordHandler> recordHandlers   = new HashMap<String, RecordHandler> ();
 
     public static RecordHandler getHandler (String recordType)
     {
         return recordHandlers.get (recordType);
-    }
-
-    public static List<Simulator> getSimulators (String recordType)
-    {
-        return recordSimulators.get (recordType);
     }
 
     public static void init ()
@@ -48,26 +39,6 @@ public class UMFPluginManager
             else
             {
                 recordHandlers.put (handled, handler);
-            }
-        }
-
-        List<ExtensionPoint> simulators = PluginManager.getExtensionsForPoint (Simulator.class);
-        for (ExtensionPoint simulator0 : simulators)
-        {
-            Simulator simulator = (Simulator) simulator0;
-            String[] handledSet = simulator.getCompatibleModelTypes ();
-            if (handledSet != null)
-            {
-                for (String handled : handledSet)
-                {
-                    List<Simulator> allSim = recordSimulators.get (handled);
-                    if (allSim == null)
-                    {
-                        allSim = new ArrayList<Simulator> ();
-                        recordSimulators.put (handled, allSim);
-                    }
-                    allSim.add (simulator);
-                }
             }
         }
     }

@@ -12,7 +12,7 @@ import gov.sandia.umf.platform.plugins.extpoints.Exporter;
 import gov.sandia.umf.platform.plugins.extpoints.MenuItems;
 import gov.sandia.umf.platform.plugins.extpoints.ProductCustomization;
 import gov.sandia.umf.platform.plugins.extpoints.RecordHandler;
-import gov.sandia.umf.platform.plugins.extpoints.Simulator;
+import gov.sandia.umf.platform.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import javax.swing.ImageIcon;
@@ -62,7 +62,7 @@ public class PlatformPlugin extends DefaultPlugin {
         return new Class[]
         {
            ProductCustomization.class,
-           Simulator.class,
+           Backend.class,
            Analyzer.class,
            MenuItems.class,
            RecordHandler.class,

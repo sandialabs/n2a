@@ -11,7 +11,6 @@ import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.plugins.UMFPluginManager;
 import gov.sandia.umf.platform.plugins.extpoints.ProductCustomization;
-import gov.sandia.umf.platform.runs.RunQueue;
 import gov.sandia.umf.platform.ui.AboutDialog;
 import gov.sandia.umf.platform.ui.MainFrame;
 import gov.sandia.umf.platform.ui.UIController;
@@ -286,11 +285,9 @@ public class UMF
         {
             public void stateChanged (ChangeEvent e)
             {
-                RunQueue.getInstance ().stop ();
                 AppData.getInstance ().save ();
             }
         });
-        RunQueue.getInstance().setUiController (uiController);   // Also, starts the queue.
 
 
         MNode winProps = AppState.getInstance ().childOrCreate ("WinLayout");

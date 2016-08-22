@@ -8,7 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.umf.platform.ui.run;
 
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
-import gov.sandia.umf.platform.plugins.extpoints.Simulator;
+import gov.sandia.umf.platform.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.ui.HelpLabels;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.ensemble.images.ImageUtil;
@@ -54,13 +54,13 @@ public class SetupPanel extends JPanel {
 
     public SetupPanel(CreateRunEnsembleDialog parentRef, UIController uic,
             /*TEMP*/String modName, String modOwner, long modLm,/*TEMP*/
-            Simulator[] simulators, Simulator defaultSimulator,
+            Backend[] simulators, Backend defaultSimulator,
             ExecutionEnv[] envs, ExecutionEnv defaultEnv) {
         uiController = uic;
 
         // Populate simulator combo box model.
         mdlSimulators = new DefaultComboBoxModel();
-        for(Simulator simulator : simulators) {
+        for(Backend simulator : simulators) {
             mdlSimulators.addElement(new SimulatorWrapper(simulator));
         }
 
@@ -182,7 +182,7 @@ public class SetupPanel extends JPanel {
     public String getLabel() {
         return txtLabel.getText();
     }
-    public Simulator getSimulator() {
+    public Backend getSimulator() {
         return ((SimulatorWrapper) cboSimulators.getSelectedItem()).simulator;
     }
     public ExecutionEnv getEnvironment() {
@@ -208,8 +208,8 @@ public class SetupPanel extends JPanel {
     /////////////////
 
     public class SimulatorWrapper {
-        public Simulator simulator;
-        public SimulatorWrapper(Simulator sim) {
+        public Backend simulator;
+        public SimulatorWrapper(Backend sim) {
             simulator = sim;
         }
         @Override

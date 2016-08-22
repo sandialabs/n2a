@@ -11,16 +11,16 @@ import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.db.MVolatile;
 import gov.sandia.umf.platform.plugins.PlatformRecord;
-import gov.sandia.umf.platform.plugins.extpoints.Simulator;
+import gov.sandia.umf.platform.plugins.extpoints.Backend;
 import replete.plugins.PluginManager;
 import replete.xstream.XStreamWrapper;
 
 public class RunOrient implements Run
 {
     private MNode source;
-    private Simulator simulator = null;
+    private Backend simulator = null;
 
-    public RunOrient (Double simDuration, String name, String notes, Simulator sim, String owner, String status, String state, MNode modelSource)
+    public RunOrient (Double simDuration, String name, String notes, Backend sim, String owner, String status, String state, MNode modelSource)
     {
         source = new MVolatile ();
         source.set (name,               "name");
@@ -50,17 +50,17 @@ public class RunOrient implements Run
 
     // TODO - not actually used/necessary
     @Override
-    public void setSimulator(Simulator sim) {
+    public void setSimulator(Backend sim) {
         simulator = sim;
         source.set("simulator", sim.getName());
     }
 
     // TODO - once we're off old RunDetailPanel, this won't be necessary
     @Override
-    public Simulator getSimulator() {
+    public Backend getSimulator() {
         if(simulator == null) {
         	// TODO - this is wrong
-            simulator = (Simulator) PluginManager.getExtensionById(getName());
+            simulator = (Backend) PluginManager.getExtensionById(getName());
         }
         return simulator;
     }

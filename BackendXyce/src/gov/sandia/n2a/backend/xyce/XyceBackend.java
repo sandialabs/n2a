@@ -10,7 +10,7 @@ package gov.sandia.n2a.backend.xyce;
 import gov.sandia.n2a.backend.internal.Euler;
 import gov.sandia.n2a.backend.internal.InstanceTemporaries;
 import gov.sandia.n2a.backend.internal.InternalBackendData;
-import gov.sandia.n2a.backend.internal.InternalSimulation;
+import gov.sandia.n2a.backend.internal.InternalBackend;
 import gov.sandia.n2a.backend.internal.Population;
 import gov.sandia.n2a.backend.xyce.netlist.Symbol;
 import gov.sandia.n2a.backend.xyce.netlist.XyceRenderer;
@@ -22,91 +22,67 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Trace;
 import gov.sandia.n2a.language.type.Instance;
-import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
+import gov.sandia.umf.platform.db.MNode;
+import gov.sandia.umf.platform.ensemble.params.specs.ParameterSpecification;
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
-import gov.sandia.umf.platform.plugins.Simulation;
-import gov.sandia.umf.platform.runs.RunOrient;
-import gov.sandia.umf.platform.runs.RunState;
+import gov.sandia.umf.platform.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 
+import java.io.File;
 import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
-class XyceSimulation implements Simulation
+class XyceBackend implements Backend
 {
-    public String       duration = "1.0";  // default
-    public long         seed     = System.currentTimeMillis ();  // default
-    public String       intMethodValue;
-    public ExecutionEnv execEnv;
-    public RunOrient    runRecord;
+    @Override
+    public String getName ()
+    {
+        return "Xyce";
+    }
 
-    public ParameterDomain getAllParameters ()
+    @Override
+    public ParameterDomain getSimulatorParameters ()
     {
         ParameterDomain inputs = new ParameterDomain ();
         // TODO:  add real integration options, etc. - also need code to make sure they get in netlist!
-        // and perhaps that's how run duration should get there too?
-        inputs.addParameter (new Parameter ("duration",        duration));
-        inputs.addParameter (new Parameter ("seed",            seed));
+        inputs.addParameter (new Parameter ("duration",        1.0));
+        inputs.addParameter (new Parameter ("seed",            0));
         inputs.addParameter (new Parameter ("xyce.integrator", "trapezoid"));
         return inputs;
     }
 
     @Override
-    public void setSelectedParameters (ParameterDomain domain)
+    public ParameterDomain getOutputVariables (MNode model)
     {
-        Map<Object, Parameter> params = domain.getParameterMap ();
-        if (params.containsKey ("duration"))
+        try
         {
-            Double dur = (Double) params.get ("duration").getDefaultValue ();
-            duration = dur.toString ();
+            MNode n = (MNode) model;
+            if (n == null) return null;
+            EquationSet s = new EquationSet (n);
+            if (s.name.length () < 1) s.name = "Model";
+            s.resolveLHS ();
+            return s.getOutputParameters ();
         }
-        if (params.containsKey ("seed"))
+        catch (Exception error)
         {
-            seed = ((Number) params.get ("seed").getDefaultValue ()).longValue ();
-        }
-        if (params.containsKey ("xyce.integrator"))
-        {
-            intMethodValue = (String) params.get ("xyce.integrator").getDefaultValue ();
+            return null;
         }
     }
 
-    public RunState prepare (Object run, ParameterSpecGroupSet groups, ExecutionEnv env) throws Exception
+    @Override
+    public boolean canHandleRunEnsembleParameter (MNode model, Object key, ParameterSpecification spec)
     {
-        // handle any parameters that still need to be set
-        runRecord = (RunOrient) run;
-        // don't want to overwrite sim duration if it was set in RunOrient by RunDetailPanel
-        // but if we created this the 'new' way, it won't exist in RunOrient yet
-        if (runRecord.getSource ().get ("duration") == null) runRecord.setSimDuration (Double.valueOf (duration));
-
-        // set up job info
-        String xyce    = env.getNamedValue ("xyce.binary");
-        String jobDir  = env.createJobDir ();
-        String cirFile = env.file (jobDir, "model.cir");
-        String prnFile = env.file (jobDir, "result");  // "prn" doesn't work, at least on windows
-
-        EquationSet e = new EquationSet (runRecord.getModel ());
-        if (e.name.length () < 1) e.name = "Model";  // because the default is for top-level equation set to be anonymous
-        Euler simulator = InternalSimulation.constructStaticNetwork (e, jobDir);
-        analyze (e);
-
-        FileWriter writer = new FileWriter (cirFile);
-        generateNetlist (simulator, writer);
-        writer.close ();
-
-        // save job info 
-        XyceRunState runState = new XyceRunState();
-        runState.jobDir = jobDir;
-        runState.command = xyce + " " + env.quotePath (cirFile) + " -o " + env.quotePath (prnFile);
-        execEnv = env;
-        return runState;
+        return false;
     }
 
-    public boolean resourcesAvailable()
+    @Override
+    public boolean canRunNow (MNode job)
     {
+        ExecutionEnv execEnv = ExecutionEnv.factory (job.getOrDefault ("localhost", "$metadata", "host"));
+
         // TODO - estimate what memory and CPU resources this sim needs
         // getting good estimates could be very difficult...
         // maybe do this during prepare, through ModelInstance 
@@ -166,22 +142,32 @@ class XyceSimulation implements Simulation
         return false;
     }
 
-    public void submit () throws Exception
-    {
-        execEnv.submitJob (runRecord.getState ());
-    }
-
-    public void submit (ExecutionEnv env, RunState runState) throws Exception
-    {
-        env.submitJob (runState);
-    }
-    
     @Override
-    public RunState execute (Object run, ParameterSpecGroupSet groups, ExecutionEnv env) throws Exception
+    public void execute (MNode job) throws Exception
     {
-        RunState runState = prepare (run, groups, env);
-        env.submitJob (runState);
-        return runState;
+        ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("localhost", "$metadata", "host"));
+
+        // Ensure essential metadata is set
+        if (job.child ("$metadata", "duration"       ) == null) job.set ("1.0",                       "$metadata", "duration");
+        if (job.child ("$metadata", "seed"           ) == null) job.set (System.currentTimeMillis (), "$metadata", "seed");
+        if (job.child ("$metadata", "xyce.integrator") == null) job.set ("trapezoid",                 "$metadata", "xyce.integrator");
+
+        // set up job info
+        String xyce    = env.getNamedValue ("xyce.binary");
+        String jobDir  = new File (job.get ()).getParent ();  // TODO: generalize for remote jobs
+        String cirFile = env.file (jobDir, "model.cir");
+        String prnFile = env.file (jobDir, "result");  // "prn" doesn't work, at least on windows
+
+        EquationSet e = new EquationSet (job);
+        if (e.name.length () < 1) e.name = "Model";  // because the default is for top-level equation set to be anonymous
+        Euler simulator = InternalBackend.constructStaticNetwork (e, jobDir);
+        analyze (e);
+
+        FileWriter writer = new FileWriter (cirFile);
+        generateNetlist (job, simulator, writer);
+        writer.close ();
+
+        env.submitJob (job, xyce + " " + env.quotePath (cirFile) + " -o " + env.quotePath (prnFile));
     }
 
     public void analyze (EquationSet s)
@@ -193,7 +179,7 @@ class XyceSimulation implements Simulation
         bed.analyze (s);
     }
 
-    public void generateNetlist (Euler simulator, FileWriter writer) throws Exception
+    public void generateNetlist (MNode job, Euler simulator, FileWriter writer) throws Exception
     {
         Population toplevel = simulator.wrapper.populations[0];
         XyceRenderer renderer = new XyceRenderer (simulator);
@@ -201,8 +187,9 @@ class XyceSimulation implements Simulation
         // Header
         writer.append (toplevel.equations.name + "\n");
         writer.append ("\n");
-        writer.append ("* seed: " + seed + "\n");
-        writer.append (".tran 0 " + duration + "\n");
+        writer.append ("* seed: " + job.get ("$metadata", "seed") + "\n");
+        writer.append (".tran 0 " + job.get ("$metadata", "duration") + "\n");
+        //job.get ("$metadata", "xyce.integrator")  // TODO: add this to netlist
 
         // Equations
         for (Instance i : simulator)

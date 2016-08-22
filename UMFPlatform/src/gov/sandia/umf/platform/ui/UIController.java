@@ -7,7 +7,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui;
 
-import gov.sandia.umf.platform.UMF;
 import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ensemble.params.groups.ParameterSpecGroup;
@@ -16,9 +15,8 @@ import gov.sandia.umf.platform.ensemble.params.specs.ParameterSpecification;
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
 import gov.sandia.umf.platform.plugins.PlatformRecord;
 import gov.sandia.umf.platform.plugins.extpoints.Exporter;
-import gov.sandia.umf.platform.plugins.extpoints.Simulator;
+import gov.sandia.umf.platform.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.runs.RunEnsemble;
-import gov.sandia.umf.platform.runs.RunQueue;
 import gov.sandia.umf.platform.ui.export.ExportDialog;
 import gov.sandia.umf.platform.ui.export.ExportParameters;
 import gov.sandia.umf.platform.ui.export.ExportParametersDialog;
@@ -26,7 +24,6 @@ import gov.sandia.umf.platform.ui.images.ImageUtil;
 import gov.sandia.umf.platform.ui.run.CreateRunEnsembleDialog;
 
 import java.awt.Component;
-import java.awt.Cursor;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -35,9 +32,6 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
-
 import org.apache.log4j.Logger;
 
 import replete.gui.windows.Dialogs;
@@ -45,9 +39,6 @@ import replete.logging.LogViewer;
 import replete.plugins.ExtensionPoint;
 import replete.plugins.PluginManager;
 import replete.plugins.ui.PluginDialog;
-import replete.threads.CommonRunnable;
-import replete.threads.CommonThread;
-import replete.threads.CommonThreadResult;
 import replete.util.GUIUtil;
 import replete.util.Lay;
 import replete.util.ReflectionUtil;
@@ -99,7 +90,7 @@ public class UIController
         popupHelp = ph;
     }
 
-    public void selectTab (String tabName)
+    public Component selectTab (String tabName)
     {
         MainTabbedPane mtp = parentRef.getTabbedPane ();
         for (int i = 0; i < mtp.getTabCount (); i++)
@@ -107,9 +98,10 @@ public class UIController
             if (mtp.getTitleAt (i).equals (tabName))
             {
                 mtp.setSelectedIndex (i);
-                break;
+                return mtp.getComponent (i);
             }
         }
+        return null;
     }
 
     public void showLogViewer() {
@@ -188,14 +180,14 @@ public class UIController
     // RUN ENSEMBLES //
     ///////////////////
 
-    public boolean prepareAndSubmitRunEnsemble(Component parentComponent, PlatformRecord model) throws Exception {
+    public boolean prepareAndSubmitRunEnsemble(Component parentComponent, MNode model) throws Exception {
 
         // Set up simulators.
-        List<ExtensionPoint> simEP = PluginManager.getExtensionsForPoint(Simulator.class);
-        Simulator[] simulators = new Simulator[simEP.size()];
+        List<ExtensionPoint> simEP = PluginManager.getExtensionsForPoint(Backend.class);
+        Backend[] simulators = new Backend[simEP.size()];
         int s = 0;
         for(ExtensionPoint ep : simEP) {
-            simulators[s++] = (Simulator) ep;
+            simulators[s++] = (Backend) ep;
         }
 
         // Set up execution environments.
@@ -217,7 +209,7 @@ public class UIController
 
             String label = dlg.getLabel();
             ExecutionEnv env = dlg.getEnvironment();
-            Simulator simulator = dlg.getSimulator();
+            Backend simulator = dlg.getSimulator();
             ParameterSpecGroupSet groups = dlg.getParameterSpecGroupSet();
             ParameterSpecGroupSet simHandledGroups;
             try {
@@ -230,13 +222,13 @@ public class UIController
             List<String> outputExpressions = dlg.getSelectedOutputExpressions();
 
             logger.debug(System.currentTimeMillis() + " calling addRunEnsemble");
-            RunEnsemble re = model.addRunEnsemble(label,
-                    env.toString(), PluginManager.getExtensionId(simulator),
-                    groups, simHandledGroups, outputExpressions);
+            //RunEnsemble re = model.addRunEnsemble(label,
+            //        env.toString(), PluginManager.getExtensionId(simulator),
+            //        groups, simHandledGroups, outputExpressions);
 
             // TODO - submit to RunQueue here and have it take care of the rest
-            RunQueue runQueue = RunQueue.getInstance();
-            runQueue.submitEnsemble(model, re);
+            //RunQueue runQueue = RunQueue.getInstance();
+            //runQueue.submitEnsemble(model, re);
 /*            
             int runNum = 0;
             for(ParameterSet set : groups.generateAllSetsFromSpecs(false)) {
@@ -275,9 +267,9 @@ public class UIController
     
     // Any group in origSet for which the Simulator can handle parameterization
     // is removed from origSet and added to the returned set
-    private ParameterSpecGroupSet divideEnsembleParams(Object model,
+    private ParameterSpecGroupSet divideEnsembleParams(MNode model,
             ParameterSpecGroupSet origSet, 
-            Simulator sim) {
+            Backend sim) {
         // Three cases:
         // 1) framework handles all in group
         // 2) simulator handles all in group

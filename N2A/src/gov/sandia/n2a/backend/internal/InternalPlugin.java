@@ -45,6 +45,6 @@ public class InternalPlugin extends DefaultPlugin
 	@Override
 	public ExtensionPoint[] getExtensions ()
 	{
-		return new ExtensionPoint[] {new InternalSimulator ()};
+		return new ExtensionPoint[] {new InternalBackend ()};
 	}
 }

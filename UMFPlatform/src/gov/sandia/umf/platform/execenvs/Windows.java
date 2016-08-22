@@ -7,8 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.execenvs;
 
-import gov.sandia.umf.platform.runs.RunEnsemble;
-import gov.sandia.umf.platform.runs.RunState;
+import gov.sandia.umf.platform.db.MNode;
 
 import java.io.File;
 import java.util.Set;
@@ -40,10 +39,10 @@ public class Windows extends LocalMachineEnv
     }
 
     @Override
-    public void submitJob (RunState run) throws Exception
+    public void submitJob (MNode job, String command) throws Exception
     {
-        String command = run.getNamedValue ("command");
-        String jobDir  = run.getNamedValue ("jobDir");
+        String jobDir = new File (job.get ()).getParent ();
+
         File out = new File (jobDir, "out");
         File err = new File (jobDir, "err");
 

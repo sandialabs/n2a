@@ -14,7 +14,7 @@ import gov.sandia.umf.platform.ensemble.params.ParameterSet;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
 import gov.sandia.umf.platform.plugins.PlatformRecord;
-import gov.sandia.umf.platform.plugins.extpoints.Simulator;
+import gov.sandia.umf.platform.plugins.extpoints.Backend;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -93,9 +93,9 @@ public class RunEnsemble
         return chosenEnv;
     }
 
-    public Simulator getSimulator() {
+    public Backend getSimulator() {
         String simType = source.get("simulator");
-        return (Simulator) PluginManager.getExtensionById(simType);
+        return (Backend) PluginManager.getExtensionById(simType);
     }
 
     public ParameterSpecGroupSet getGroups() {

@@ -32,7 +32,7 @@ public class NodeJob extends NodeBase
     public NodeJob (MNode source)
     {
         this.source = source;
-        setUserObject (source.key ());
+        setUserObject (source.getOrDefault (source.key (), "$inherit"));
     }
 
     @Override
@@ -88,10 +88,11 @@ public class NodeJob extends NodeBase
         {
             NodeBase newNode;
             String fileName = file.getName ();
-            if (fileName.startsWith ("n2a_job")) continue;
 
-            if      (fileName.endsWith ("model"  )) newNode = new NodeFile (NodeFile.Type.Model,   file);
-            else if (fileName.endsWith ("out"    )) newNode = new NodeFile (NodeFile.Type.Output,  file);
+            if (fileName.startsWith ("n2a_job")) continue;
+            if (fileName.endsWith   ("model"  )) continue;  // This is the file associated with our own "source"
+
+            if      (fileName.endsWith ("out"    )) newNode = new NodeFile (NodeFile.Type.Output,  file);
             else if (fileName.endsWith ("err"    )) newNode = new NodeFile (NodeFile.Type.Error,   file);
             else if (fileName.endsWith ("result" )) newNode = new NodeFile (NodeFile.Type.Result,  file);
             else if (fileName.endsWith ("console")) newNode = new NodeFile (NodeFile.Type.Console, file);

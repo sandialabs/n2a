@@ -20,9 +20,11 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.File;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+
 import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -31,8 +33,6 @@ import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTree;
 import javax.swing.SwingUtilities;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
 import javax.swing.event.TreeExpansionEvent;
 import javax.swing.event.TreeWillExpandListener;
 import javax.swing.tree.DefaultTreeCellRenderer;
@@ -53,12 +53,10 @@ public class RunPanel extends JPanel
 
     public JTextArea        displayText;
     public JScrollPane      displayPane = new JScrollPane ();
-    public ExecutionEnv     env = ExecutionEnv.factory ();
     public JButton          buttonGraph;
     public String           displayPath;
     public MDir             runs;  // Copied from AppData for convenience
     public List<NodeJob>    running = new LinkedList<NodeJob> ();  // Jobs that we are actively monitoring because they may still be running.
-    public String           lastAddedJob;  // keys run in lexical order, so newly added runs will always compare greater than existing ones
 
     public RunPanel ()
     {
@@ -119,10 +117,7 @@ public class RunPanel extends JPanel
             }
         });
 
-        runs = AppData.getInstance ().runs;
-        for (MNode n : runs) running.add (0, new NodeJob (n));  // This should be efficient on a doubly-linked list.
-        if (running.size () == 0) lastAddedJob = "";
-        else                      lastAddedJob = running.get (0).source.key ();
+        for (MNode n : AppData.getInstance ().runs) running.add (0, new NodeJob (n));  // This should be efficient on a doubly-linked list.
         for (NodeJob job : running) root.add (job);
         model.nodeStructureChanged (root);
         Thread refreshThread = new Thread ()
@@ -153,29 +148,6 @@ public class RunPanel extends JPanel
         };
         refreshThread.setDaemon (true);
         refreshThread.start ();
-        runs.addChangeListener (new ChangeListener ()
-        {
-            public void stateChanged (ChangeEvent e)
-            {
-                // TODO: may need to pass this off to another thread
-                // TODO: MDir may continue to change, even after we start iterating over it. Thus, we need to either trap a ConcurrentModificationException, or better yet, create a safe iterator in MDir.
-                // TODO: a reverse iterator in MDir would save a lot of overhead here
-                for (MNode run : runs)
-                {
-                    String key = run.key ();
-                    if (key.compareTo (lastAddedJob) > 0)
-                    {
-                        NodeJob node = new NodeJob (run);
-                        synchronized (running)
-                        {
-                            running.add (0, node);
-                        }
-                        model.insertNodeInto (node, root, 0);
-                        lastAddedJob = key;
-                    }
-                }
-            }
-        });
 
         displayText = new JTextArea ();
         displayText.setEditable(false);
@@ -250,10 +222,14 @@ public class RunPanel extends JPanel
     {
         TreePath path = tree.getSelectionPath ();
         if (path == null) return;
-        NodeFile node = (NodeFile) path.getLastPathComponent ();
-        displayPath = node.path.getAbsolutePath ();
+
         if (displayPane.getViewport ().getView () != displayText) displayPane.setViewportView (displayText);
         displayText.setText ("loading...");
+
+        NodeFile node = (NodeFile) path.getLastPathComponent ();
+        displayPath = node.path.getAbsolutePath ();
+        MNode job = ((NodeJob) node.getParent ()).source;
+        ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("localhost", "$metadata", "host"));
 
         new Thread ("RunPanel Fetch File")
         {
@@ -263,6 +239,7 @@ public class RunPanel extends JPanel
                 {
                     // This is the potentially long operation.
                     // TODO: What if the file is too big to load & show? Need a viewer that can work with partial segments of a file.
+                    // TODO: handling of paths for remote files needs work. There are actually two paths: our local dir and the remote dir, and in general they are different.
                     final String contents = env.getFileContents (displayPath);
 
                     EventQueue.invokeLater (new Runnable ()
@@ -286,16 +263,27 @@ public class RunPanel extends JPanel
     {
         TreePath path = tree.getSelectionPath ();
         if (path == null) return;
-        NodeJob  job    = (NodeJob) path.getLastPathComponent ();
-        NodeBase parent = (NodeBase) job.getParent ();
+        NodeJob  job = (NodeJob) path.getLastPathComponent ();
+        ExecutionEnv env = ExecutionEnv.factory (job.source.getOrDefault ("localhost", "$metadata", "host"));
+        String jobDir = new File (job.source.get ()).getParent ();
         try
         {
-            env.deleteJob (job.toString ());
+            env.deleteJob (jobDir);
             model.removeNodeFromParent (job);
             job.complete = 2;  // Force the monitor thread to remove it. This is not thread-safe, but should cause no harm.
         }
         catch (Exception e)
         {
         }
+    }
+
+    public void addNewRun (MNode run)
+    {
+        NodeJob node = new NodeJob (run);
+        synchronized (running)
+        {
+            running.add (0, node);
+        }
+        model.insertNodeInto (node, root, 0);
     }
 }

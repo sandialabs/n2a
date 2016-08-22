@@ -45,6 +45,6 @@ public class PluginC extends DefaultPlugin
 	@Override
 	public ExtensionPoint[] getExtensions ()
 	{
-		return new ExtensionPoint[] {new SimulatorC ()};
+		return new ExtensionPoint[] {new BackendC ()};
 	}
 }

@@ -10,7 +10,7 @@ package gov.sandia.umf.platform.ui.run;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
 import gov.sandia.umf.platform.plugins.Parameterizable;
-import gov.sandia.umf.platform.plugins.extpoints.Simulator;
+import gov.sandia.umf.platform.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.ensemble.FixedParameterSpacePanel;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
@@ -46,7 +46,7 @@ public class RunPanel extends JPanel {
 
     public RunPanel(CreateRunEnsembleDialog parentRef, UIController uic, long estDur,
             /*TEMP*/String modName, String modOwner, long modLm,/*TEMP*/
-            final Object model, Simulator[] simulators, Simulator defaultSimulator,
+            final Object model, Backend[] simulators, Backend defaultSimulator,
             ExecutionEnv[] envs, ExecutionEnv defaultEnv) {
 
         ParameterDomain domains = ((Parameterizable) model).getAllParameters();
@@ -67,10 +67,10 @@ public class RunPanel extends JPanel {
 
         pnlSetup.addSimulatorChangeListener(new ChangeListener() {
             public void stateChanged(ChangeEvent e) {
-                Simulator sim = pnlSetup.getSimulator();
+                Backend sim = pnlSetup.getSimulator();
                 pnlParams.setSimulationInputParameters(sim.getSimulatorParameters());
-                ParameterDomain domain = sim.getOutputVariables(model);  // TODO?
-                pnlOutputs.setOutputParameters(domain);
+                //ParameterDomain domain = sim.getOutputVariables(model);  // TODO?
+                //pnlOutputs.setOutputParameters(domain);
             }
         });
         pnlSetup.fireSimulatorChangeNotifier();
@@ -107,7 +107,7 @@ public class RunPanel extends JPanel {
     public ExecutionEnv getEnvironment() {
         return pnlSetup.getEnvironment();
     }
-    public Simulator getSimulator() {
+    public Backend getSimulator() {
         return pnlSetup.getSimulator();
     }
     public ParameterSpecGroupSet getParameterSpecGroupSet() {

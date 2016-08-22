@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2016 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -7,102 +7,98 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.internal;
 
-import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.umf.platform.UMF;
-import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
-import gov.sandia.umf.platform.execenvs.ExecutionEnv;
-import gov.sandia.umf.platform.plugins.Simulation;
-import gov.sandia.umf.platform.runs.RunOrient;
-import gov.sandia.umf.platform.runs.RunState;
+import gov.sandia.umf.platform.db.MNode;
+import gov.sandia.umf.platform.ensemble.params.specs.ParameterSpecification;
+import gov.sandia.umf.platform.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.util.Map.Entry;
-import java.util.TreeMap;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
-public class InternalSimulation implements Simulation
+public class InternalBackend implements Backend
 {
-    public TreeMap<String,String> metadata = new TreeMap<String, String> ();
-    public InternalRunState runState;
+    @Override
+    public String getName ()
+    {
+        return "Internal";
+    }
 
     @Override
-    public ParameterDomain getAllParameters ()
+    public ParameterDomain getSimulatorParameters ()
+    {
+        ParameterDomain result = new ParameterDomain ();
+        result.addParameter (new Parameter ("duration",            "1.0"  ));  // default is 1 second
+        result.addParameter (new Parameter ("internal.integrator", "Euler"));  // alt is "RungeKutta"
+        return result;
+    }
+
+    @Override
+    public ParameterDomain getOutputVariables (MNode model)
     {
         return null;
     }
 
     @Override
-    public void setSelectedParameters (ParameterDomain domain)
+    public boolean canHandleRunEnsembleParameter (MNode model, Object key, ParameterSpecification spec)
     {
-        for (Entry<Object, Parameter> p : domain.getParameterMap ().entrySet ())
-        {
-            String name  = p.getKey ().toString ();
-            String value = p.getValue ().getDefaultValue ().toString ();
-            metadata.put (name, value);
-        }
+        return false;
     }
 
     @Override
-    public RunState execute (Object run, ParameterSpecGroupSet groups, ExecutionEnv env) throws Exception
-    {
-        RunState result = prepare (run, groups, env);
-        submit ();
-        return result;
-    }
-
-    @Override
-    public void submit () throws Exception
-    {
-        Runnable run = new Runnable ()
-        {
-            public void run ()
-            {
-                Euler simulator = new Euler (new Wrapper (runState.digestedModel), runState.jobDir);
-                try
-                {
-                    simulator.run ();
-                }
-                catch (Exception e)
-                {
-                    simulator.err.println (e);
-                    e.printStackTrace (simulator.err);
-                }
-            }
-        };
-        new Thread (run).start ();
-    }
-
-    @Override
-    public boolean resourcesAvailable()
+    public boolean canRunNow (MNode job)
     {
         return true;
     }
 
     @Override
-    public RunState prepare (Object run, ParameterSpecGroupSet groups, ExecutionEnv env) throws Exception
+    public void execute (MNode job) throws Exception
     {
-        // from prepare method
-        runState = new InternalRunState ();
-        runState.model = ((RunOrient) run).getModel ();
+        // Prepare
+        EquationSet digestedModel = new EquationSet (job);
+        if (digestedModel.name.length () < 1) digestedModel.name = "Model";  // because the default is for top-level equation set to be anonymous
 
-        // Create file for final model
-        runState.jobDir = env.createJobDir ();
-        String sourceFileName = env.file (runState.jobDir, "model.flat");
+        String jobDir = new File (job.get ()).getParent ();  // assumes the MNode "job" is really and MDoc. In any case, the value of the node should point to a file on disk where it is stored in a directory just for it.
+        Files.createFile (Paths.get (jobDir, "started"));
+        digestModel (digestedModel, jobDir);
 
-        EquationSet e = new EquationSet (runState.model);
-        if (e.name.length () < 1) e.name = "Model";  // because the default is for top-level equation set to be anonymous
+        // Dump diagnostic information about model assembly. Unlike the collated model in "job", this one includes results of flattening and other transformations.
+        // Not really needed anymore.
+        //String flat = digestedModel.dump (false);
+        //Files.copy (new ByteArrayInputStream (flat.getBytes ("UTF-8")), Paths.get (jobDir, "model.flat"));
 
-        // TODO: fix run ensembles to put metadata directly in a special derived part
-        for (Entry<String,String> m : metadata.entrySet ()) e.setNamedValue (m.getKey (), m.getValue ());
+        // Submit
+        Runnable run = new Runnable ()
+        {
+            public void run ()
+            {
+                Euler simulator = new Euler (new Wrapper (digestedModel), jobDir);
+                try
+                {
+                    simulator.run ();
+                    Files.copy (new ByteArrayInputStream ("success".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
+                }
+                catch (Exception e)
+                {
+                    simulator.err.println (e);
+                    e.printStackTrace (simulator.err);
 
-        digestModel (e, runState.jobDir);
-        runState.digestedModel = e;
-        env.setFileContents (sourceFileName, e.dump (false));
-
-        return runState;
+                    try
+                    {
+                        Files.copy (new ByteArrayInputStream ("failure".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
+                    }
+                    catch (Exception f)
+                    {
+                    }
+                }
+            }
+        };
+        new Thread (run).start ();
     }
 
     /**

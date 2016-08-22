@@ -20,9 +20,7 @@ import gov.sandia.n2a.language.function.Trace;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
-import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.db.MNode;
-import gov.sandia.umf.platform.db.MPersistent;
 import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
@@ -47,7 +45,6 @@ import javax.swing.ImageIcon;
 
 public class EquationSet implements Comparable<EquationSet>
 {
-    public MPart                               source;
     public String                              name;
     public EquationSet                         container;
     public NavigableSet<Variable>              variables;
@@ -95,14 +92,13 @@ public class EquationSet implements Comparable<EquationSet>
     **/
     public EquationSet (MNode part) throws Exception
     {
-        this (null, new MPart ((MPersistent) part));
+        this (null, part);
     }
 
-    public EquationSet (EquationSet container, MPart source) throws Exception
+    public EquationSet (EquationSet container, MNode source) throws Exception
     {
         this.name      = source.key ();
         this.container = container;
-        this.source    = source;
         variables      = new TreeSet<Variable> ();
         parts          = new TreeSet<EquationSet> ();
         metadata       = new TreeMap<String, String> ();
@@ -120,9 +116,8 @@ public class EquationSet implements Comparable<EquationSet>
             }
 
             // That leaves only parts and variables
-            MPart p = (MPart) e;
-            if (p.isPart ()) parts    .add (new EquationSet (this, p));
-            else             variables.add (new Variable    (this, p));
+            if (MPart.isPart (e)) parts    .add (new EquationSet (this, e));
+            else                  variables.add (new Variable    (this, e));
         }
     }
 

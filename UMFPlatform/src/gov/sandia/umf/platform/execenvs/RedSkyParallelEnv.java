@@ -7,8 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.execenvs;
 
-import gov.sandia.umf.platform.runs.RunEnsemble;
-import gov.sandia.umf.platform.runs.RunState;
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ssh.RedSkyConnection;
 import gov.sandia.umf.platform.ssh.RedSkyConnection.Result;
 
@@ -40,15 +39,16 @@ public class RedSkyParallelEnv extends RedSkyEnv
     }
 
     @Override
-    public void submitJob (RunState run) throws Exception
+    public void submitJob (MNode job, String command) throws Exception
     {
-        String command = run.getNamedValue ("command");
-        String jobDir  = run.getNamedValue ("jobDir");
+        String jobDir = job.get          (     "$metadata", "remote.dir");
+        String cores  = job.getOrDefault ("1", "$metadata", "cores");
+        String nodes  = job.getOrDefault ("1", "$metadata", "remote.nodes");
 
         setFileContents (jobDir + "/n2a_job",
             "#!/bin/bash\n"
-            +  "mpiexec --npernode " + run.getNamedValue ("cores", "1")
-            + " numa_wrapper --ppn " + run.getNamedValue ("cores", "1")
+            +  "mpiexec --npernode " + cores
+            + " numa_wrapper --ppn " + cores
             + " " + command
         );
 
@@ -56,7 +56,7 @@ public class RedSkyParallelEnv extends RedSkyEnv
         Result r = RedSkyConnection.exec
         (
             "sbatch"
-            + " --nodes="            + run.getNamedValue ("cluster.nodes", "1")
+            + " --nodes="            + nodes
             + " --time=24:00:00"
             + " --account="          + getNamedValue ("cluster.account", "FY139768")
             + " --job-name=N2A"

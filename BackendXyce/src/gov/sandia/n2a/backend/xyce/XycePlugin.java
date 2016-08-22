@@ -46,7 +46,7 @@ public class XycePlugin extends DefaultPlugin
     {
         return new ExtensionPoint[]
         {
-            new XyceSimulator(),
+            new XyceBackend (),
             Sinewave.factory ()
         };
     }

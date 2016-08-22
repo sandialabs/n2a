@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2016 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -31,14 +31,9 @@ import gov.sandia.n2a.language.operator.Power;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
-import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
-import gov.sandia.umf.platform.plugins.Simulation;
-import gov.sandia.umf.platform.runs.RunOrient;
-import gov.sandia.umf.platform.runs.RunState;
-import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
-import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
-
+import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -47,56 +42,18 @@ import java.util.List;
 import java.util.NavigableSet;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.TreeSet;
 
 import replete.util.FileUtil;
 
-public class SimulationC implements Simulation
+public class JobC
 {
     static boolean rebuildRuntime = true;  // always rebuild runtime once per session
-    public TreeMap<String,String> metadata = new TreeMap<String, String> ();
-    public HashMap<Operator,String> matrixNames;
+    public HashMap<Operator,String> matrixNames;  // TODO: this is not thread-safe. Should have a C-run-specific object to carry this during generation.
 
-    private ExecutionEnv execEnv;
-    private RunState runState;
-
-    @Override
-    public ParameterDomain getAllParameters ()
+    public void execute (MNode job) throws Exception
     {
-        return null;
-    }
-
-    @Override
-    public void setSelectedParameters (ParameterDomain domain)
-    {
-        for (Entry<Object, Parameter> p : domain.getParameterMap ().entrySet ())
-        {
-            String name  = p.getKey ().toString ();
-            String value = p.getValue ().getDefaultValue ().toString ();
-            metadata.put (name, value);
-        }
-    }
-
-    @Override
-    public void submit () throws Exception
-    {
-        execEnv.submitJob (runState);
-    }
-
-    @Override
-    public boolean resourcesAvailable()
-    {
-        return true;
-    }
-
-    @Override
-    public RunState prepare (Object run, ParameterSpecGroupSet groups, ExecutionEnv env) throws Exception
-    {
-        RunStateC result = new RunStateC ();
-        result.model = ((RunOrient) run).getModel ();
-        execEnv = env;
-        runState = result;
+        ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("localhost", "$metadata", "host"));
 
         // Ensure runtime is built
         String runtimeDir = env.getNamedValue ("c.directory");
@@ -122,7 +79,7 @@ public class SimulationC implements Simulation
             String[] sourceFiles = {"runtime.cc", "runtime.h", "Neighbor.cc"};
             for (String s : sourceFiles)
             {
-                String contents = FileUtil.getTextContent (SimulatorC.class.getResource ("runtime/" + s).openStream ());
+                String contents = FileUtil.getTextContent (JobC.class.getResource ("runtime/" + s).openStream ());
                 env.setFileContents (env.file (runtimeDir, s), contents);
             }
 
@@ -131,7 +88,7 @@ public class SimulationC implements Simulation
             sourceFiles = new String [] {"archive.h", "blasproto.h", "math.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "neighbor.h", "pointer.h", "string.h", "Vector.tcc"};
             for (String s : sourceFiles)
             {
-                String contents = FileUtil.getTextContent (SimulatorC.class.getResource ("runtime/fl/" + s).openStream ());
+                String contents = FileUtil.getTextContent (JobC.class.getResource ("runtime/fl/" + s).openStream ());
                 env.setFileContents (env.file (flDir, s), contents);
             }
 
@@ -139,14 +96,11 @@ public class SimulationC implements Simulation
         }
 
         // Create model-specific executable
-        result.jobDir = env.createJobDir ();
-        String sourceFileName = env.file (result.jobDir, "model.cc");
+        String jobDir = new File (job.get ()).getParent ();  // TODO: generalize for remote jobs
+        String sourceFileName = env.file (jobDir, "model.cc");
 
-        EquationSet e = new EquationSet (result.model);
+        EquationSet e = new EquationSet (job);
         if (e.name.length () < 1) e.name = "Model";  // because the default is for top-level equation set to be anonymous
-
-        // TODO: fix run ensembles to put metadata directly in a special derived part
-        for (Entry<String,String> m : metadata.entrySet ()) e.setNamedValue (m.getKey (), m.getValue ());
 
         e.resolveConnectionBindings ();
         e.flatten ();
@@ -303,16 +257,8 @@ public class SimulationC implements Simulation
         s.append ("}\n");
 
         env.setFileContents (sourceFileName, s.toString ());
-        result.command = env.quotePath (env.build (sourceFileName, runtime));
-        return result;
-    }
-
-    @Override
-    public RunState execute (Object run, ParameterSpecGroupSet groups, ExecutionEnv env) throws Exception
-    {
-        RunState result = prepare (run, groups, env);
-        env.submitJob (result);
-        return result;
+        String command = env.quotePath (env.build (sourceFileName, runtime));
+        env.submitJob (job, command);
     }
 
     public void generateClassList (EquationSet s, StringBuilder result)

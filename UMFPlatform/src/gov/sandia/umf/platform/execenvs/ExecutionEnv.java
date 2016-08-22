@@ -7,8 +7,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.execenvs;
 
+import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.execenvs.beans.AllJobInfo;
-import gov.sandia.umf.platform.runs.RunState;
 
 import java.io.File;
 import java.lang.management.ManagementFactory;
@@ -25,12 +25,13 @@ public abstract class ExecutionEnv
 
     public static ExecutionEnv windows = new Windows ();
     public static ExecutionEnv linux   = new Linux ();
+    public static ExecutionEnv redsky  = new RedSkyParallelEnv ();  // TODO: Generalize redsky to arbitrary remote computing platforms
     
     static
     {
         envs.add (linux);
         envs.add (windows);
-        envs.add (new RedSkyParallelEnv ());
+        envs.add (redsky);
         envs.add (new RedSkyLoginEnv ());
     }
 
@@ -39,8 +40,11 @@ public abstract class ExecutionEnv
     /**
         Determine our local environment and return the appropriate class.
     **/
-    public static ExecutionEnv factory ()
+    public static ExecutionEnv factory (String host)
     {
+        if (host.equals ("redsky")) return redsky;  // TODO: generalize this to a collection of configured remote hosts
+
+        // The default is localhost, and in particular linux
         if (System.getProperty ("os.name").startsWith ("Windows")) return windows;
         return linux;
     }
@@ -75,7 +79,7 @@ public abstract class ExecutionEnv
      * Sets up piping of the program's stdout and stderr to files "out" and "err" respectively.
      * If a file called "in" exists in the jobDir, then pipes it into the program.
      */
-    public abstract void         submitJob         (RunState run)                      throws Exception;
+    public abstract void         submitJob         (MNode job, String command)         throws Exception;
     public abstract void         setFileContents   (String path, String content)       throws Exception;
     public abstract String       getFileContents   (String path)                       throws Exception;
     public abstract void         deleteJob         (String jobName)                    throws Exception;

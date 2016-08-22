@@ -7,27 +7,17 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.execenvs;
 
-import gov.sandia.umf.platform.runs.Run;
-import gov.sandia.umf.platform.runs.RunEnsemble;
-import gov.sandia.umf.platform.runs.RunState;
+import gov.sandia.umf.platform.db.MNode;
 
 import java.io.File;
-import java.text.SimpleDateFormat;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.Locale;
 import java.util.Set;
 import java.util.TreeSet;
-
-import org.apache.log4j.Logger;
 
 import replete.process.ProcessUtil;
 import replete.util.FileUtil;
 
 public class Linux extends LocalMachineEnv
 {
-    private static Logger logger = Logger.getLogger(Linux.class);
-
     @Override
     public Set<Integer> getActiveProcs () throws Exception
     {
@@ -62,10 +52,10 @@ public class Linux extends LocalMachineEnv
     }
 
     @Override
-    public void submitJob (RunState run) throws Exception
+    public void submitJob (MNode job, String command) throws Exception
     {
-        String command = run.getNamedValue ("command");
-        String jobDir  = run.getNamedValue ("jobDir");
+        String jobDir = new File (job.get ()).getParent ();
+
         File out = new File (jobDir, "out");
         File err = new File (jobDir, "err");
 
