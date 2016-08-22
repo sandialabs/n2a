@@ -217,6 +217,7 @@ public class RunPanel extends JPanel
                     	}
                     	else
                     	{
+                    	    displayPath = nf.path.getAbsolutePath ();
                             Plot plot = new Plot (displayPath);
                             if (! plot.columns.isEmpty ()) displayPane.setViewportView (plot.createGraphPanel ());
                     	}

@@ -4,17 +4,12 @@
 	<classpathentry kind="con" path="org.eclipse.jdt.junit.JUNIT_CONTAINER/4"/>
 	<classpathentry kind="lib" path="lib/jsch-0.1.48/jsch-0.1.48.jar"/>
 	<classpathentry kind="lib" path="lib/log4j-1.2.17/log4j-1.2.17.jar"/>
-	<classpathentry kind="lib" path="lib/javamail-1.4.5/mail.jar"/>
 	<classpathentry kind="lib" path="lib/jcommon-1.0.17/jcommon-1.0.17.jar"/>
 	<classpathentry kind="lib" path="lib/jfreechart-1.0.14/jfreechart-1.0.14.jar"/>
 	<classpathentry kind="lib" path="lib/xstream-1.4.3/xpp3_min-1.1.4c.jar"/>
 	<classpathentry kind="lib" path="lib/xstream-1.4.3/xstream-1.4.3.jar"/>
 	<classpathentry kind="lib" path="lib/xstream-1.4.3/xmlpull-1.1.3.1.jar"/>
-	<classpathentry kind="lib" path="lib/orientdb-1.3.0/orient-commons-1.3.0.jar"/>
-	<classpathentry kind="lib" path="lib/orientdb-1.3.0/orientdb-client-1.3.0.jar"/>
-	<classpathentry kind="lib" path="lib/orientdb-1.3.0/orientdb-core-1.3.0.jar"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
 	<classpathentry kind="lib" path="lib/replete.jar" sourcepath="/Replete"/>
-	<classpathentry kind="lib" path="lib/json.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

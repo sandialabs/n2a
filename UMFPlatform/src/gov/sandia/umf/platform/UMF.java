@@ -20,8 +20,6 @@ import java.io.File;
 import java.lang.Thread.UncaughtExceptionHandler;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -31,8 +29,6 @@ import javax.swing.event.ChangeListener;
 
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
-import org.json.JSONObject;
-
 import replete.cli.CommandLineParser;
 import replete.cli.errors.CommandLineParseException;
 import replete.cli.options.Option;
@@ -51,7 +47,6 @@ import replete.plugins.PluginManager;
 import replete.util.Application;
 import replete.util.ArrayUtil;
 import replete.util.ArrayUtil.ArrayTranslator;
-import replete.util.FileUtil;
 
 public class UMF
 {
@@ -148,8 +143,7 @@ public class UMF
 
         LogManager.setLogFile (new File (getAppLogDir (), "n2a.log"));
 
-        // Read popup help.
-        popupHelp = readPopupHelp ();
+        // TODO: Read popup help in M format
 
         // Start data handling
         AppData data = AppData.getInstance ();
@@ -340,20 +334,6 @@ public class UMF
         if (x >= 0  &&  y >= 0) win.setLocation (x, y);
         else                    win.setLocationRelativeTo (win.getParent ());
         win.ensureOnScreen (true);
-    }
-
-    private static Map<String, String[]> readPopupHelp() {
-        String content = FileUtil.getTextContent(UMF.class.getResourceAsStream("ui/help.txt"));
-        JSONObject obj = new JSONObject(content);
-        Iterator<?> iter = obj.keys();
-        Map<String, String[]> popupHelp = new HashMap<String, String[]>();
-        while(iter.hasNext()) {
-            String key = (String) iter.next();
-            JSONObject entry = obj.getJSONObject(key);
-            String[] topicContent = new String[] {entry.getString("topic"), entry.getString("content")};
-            popupHelp.put(key, topicContent);
-        }
-        return popupHelp;
     }
 
 
