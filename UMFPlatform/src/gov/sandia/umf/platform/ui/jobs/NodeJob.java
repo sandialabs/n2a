@@ -13,6 +13,8 @@ import java.io.File;
 import java.util.Date;
 
 import gov.sandia.umf.platform.db.MNode;
+import gov.sandia.umf.platform.plugins.UMFPluginManager;
+import gov.sandia.umf.platform.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import javax.swing.Icon;
@@ -22,7 +24,7 @@ import javax.swing.tree.DefaultTreeModel;
 
 public class NodeJob extends NodeBase
 {
-    protected static ImageIcon iconInProgress = ImageUtil.getImage ("inprogress.gif");
+    protected static ImageIcon iconInProgress = ImageUtil.getImage ("run.gif");
     protected static ImageIcon iconComplete   = ImageUtil.getImage ("complete.gif");
     protected static ImageIcon iconUnknown    = ImageUtil.getImage ("help.gif");
     protected static ImageIcon iconFailed     = ImageUtil.getImage ("remove.gif");
@@ -31,6 +33,7 @@ public class NodeJob extends NodeBase
     protected float complete = -1;  // A number between 0 and 1, where 0 means just started, and 1 means done. -1 means unknown. 2 means failed
     protected Date dateStarted = null;
     protected Date dateFinished = null;
+    protected double expectedSimTime = 0;  // If greater than 0, then we can use this to estimate percent complete.
 
     public NodeJob (MNode source)
     {
@@ -78,10 +81,21 @@ public class NodeJob extends NodeBase
                 dateFinished = new Date (finished.lastModified ());
             }
         }
-        // TODO: add feature to backend to monitor progress
-        // We can determine backend from the model file
-        // time stamps on "started" and "finished" convey information about job
-        // contents of those files may convey additional detail
+
+        if (expectedSimTime >= 0  &&  complete >= 0  &&  complete < 1)
+        {
+            Backend simulator = UMFPluginManager.getBackend (source.get ("$metadata", "backend"));
+            if (expectedSimTime == 0) expectedSimTime = simulator.expectedDuration (source);
+            if (expectedSimTime == 0)
+            {
+                expectedSimTime = -1;
+            }
+            else
+            {
+                double t = simulator.currentSimTime (source);
+                if (t != 0) complete = (float) (t / expectedSimTime);
+            }
+        }
 
         if (complete != oldComplete)
         {

@@ -311,7 +311,7 @@ public class NodePart extends NodeBase
 
             String stem = name;
             int suffix = 0;
-            MNode models = AppData.getInstance ().models;
+            MNode models = AppData.models;
             MNode existingDocument = models.child (name);
             while (existingDocument != null)
             {

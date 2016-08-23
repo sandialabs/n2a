@@ -27,21 +27,14 @@ import gov.sandia.umf.platform.UMF;
 **/
 public class AppData
 {
-    protected static AppData instance;
-    public static AppData getInstance ()
-    {
-        if (instance == null) instance = new AppData ();
-        return instance;
-    }
+    public static MDir models;
+    public static MDir references;
+    public static MDir runs;
 
-    public MDir models;
-    public MDir references;
-    public MDir runs;
+    protected static boolean stop;
+    protected static Thread saveThread;
 
-    protected boolean stop;
-    protected Thread saveThread;
-
-    public AppData ()
+    static
     {
         File root = UMF.getAppResourceDir ();
         models     = new MDir (new File (root, "models"));
@@ -58,7 +51,7 @@ public class AppData
                     try
                     {
                         sleep (30000);
-                        instance.save ();
+                        AppData.save ();
                     }
                     catch (InterruptedException e)
                     {
@@ -70,7 +63,7 @@ public class AppData
         saveThread.start ();
     }
 
-    public void checkInitialDB ()
+    public static void checkInitialDB ()
     {
         if (models.length () > 0) return;
 
@@ -112,14 +105,14 @@ public class AppData
         }
     }
 
-    public synchronized void save ()
+    public synchronized static void save ()
     {
         models.save ();
         references.save ();
         runs.save ();  // The reason to save runs is if we record data in them about process status. If no data is changed, could get rid of this save.
     }
 
-    public void backup (File destination)
+    public static void backup (File destination)
     {
         save ();
 
@@ -155,7 +148,7 @@ public class AppData
         }
     }
 
-    public void restore (File source, boolean removeAdded)
+    public static void restore (File source, boolean removeAdded)
     {
         // Purge existing files
         if (removeAdded)
@@ -187,7 +180,7 @@ public class AppData
         references.fireChanged ();
     }
 
-    public void quit ()
+    public static void quit ()
     {
         stop = true;
         saveThread.interrupt ();

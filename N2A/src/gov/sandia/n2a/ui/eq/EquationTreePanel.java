@@ -16,6 +16,7 @@ import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.db.MDoc;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.db.MPersistent;
+import gov.sandia.umf.platform.plugins.UMFPluginManager;
 import gov.sandia.umf.platform.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
@@ -643,29 +644,10 @@ public class EquationTreePanel extends JPanel
         {
             if (record == null) return;
 
-            Backend simulator = null;
-            Backend internal = null;
             String simulatorName = record.get ("$metadata", "backend");
-            for (ExtensionPoint ext : PluginManager.getExtensionsForPoint (Backend.class))
-            {
-                Backend s = (Backend) ext;
-                if (s.getName ().equalsIgnoreCase (simulatorName))
-                {
-                    simulator = s;
-                    break;
-                }
-                if (s.getName ().equals ("Internal")) internal = s;
-            }
-            if (simulator == null) simulator = internal;
-            if (simulator == null)
-            {
-                System.err.println ("Couldn't find internal simulator");
-                return;
-            }
-
-            final Backend sim = simulator;
+            final Backend simulator = UMFPluginManager.getBackend (simulatorName);
             RunPanel panel = (RunPanel) uiController.selectTab ("Runs");
-            MNode runs = AppData.getInstance ().runs;
+            MNode runs = AppData.runs;
             String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + jobCount++;
             runs.set (record.key (), jobKey, "$inherit");
             final MNode job = runs.child (jobKey);
@@ -678,7 +660,7 @@ public class EquationTreePanel extends JPanel
                 {
                     try
                     {
-                        sim.execute (job);
+                        simulator.execute (job);
                     }
                     catch (Exception e)
                     {
@@ -731,7 +713,7 @@ public class EquationTreePanel extends JPanel
 
     public void createNewModel ()
     {
-        MNode models = AppData.getInstance ().models;
+        MNode models = AppData.models;
         String newModelName = "New Model";
         MNode newModel = models.child (newModelName);
         if (newModel == null)

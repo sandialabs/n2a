@@ -170,7 +170,7 @@ public abstract class LocalMachineEnv extends ExecutionEnv
         }
         if (name.equalsIgnoreCase ("directory.jobs"))  // name "env.directory.job" if this is moved to global scope
         {
-            return AppData.getInstance ().runs.get ();
+            return AppData.runs.get ();
         }
         if (name.equalsIgnoreCase ("c.directory"))
         {

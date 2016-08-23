@@ -107,7 +107,7 @@ public class MainFrame extends EscapeFrame implements HelpCapableWindow {
                 {
                     destroyChildWindow(win);
                 }
-                AppData.getInstance ().quit ();  // Save data before exiting.
+                AppData.quit ();  // Save data before exiting.
             }
         });
     }

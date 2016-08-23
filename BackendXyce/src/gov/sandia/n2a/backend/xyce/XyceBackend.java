@@ -23,7 +23,6 @@ import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Trace;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.umf.platform.db.MNode;
-import gov.sandia.umf.platform.ensemble.params.specs.ParameterSpecification;
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
 import gov.sandia.umf.platform.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
@@ -37,7 +36,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-class XyceBackend implements Backend
+class XyceBackend extends Backend
 {
     @Override
     public String getName ()
@@ -72,12 +71,6 @@ class XyceBackend implements Backend
         {
             return null;
         }
-    }
-
-    @Override
-    public boolean canHandleRunEnsembleParameter (MNode model, Object key, ParameterSpecification spec)
-    {
-        return false;
     }
 
     @Override
@@ -170,6 +163,21 @@ class XyceBackend implements Backend
         writer.close ();
 
         env.submitJob (job, xyce + " " + env.quotePath (cirFile) + " -o " + env.quotePath (prnFile));
+    }
+
+    @Override
+    public double expectedDuration (MNode job)
+    {
+        return InternalBackend.getDurationFromP (job);
+    }
+
+    @Override
+    public double currentSimTime (MNode job)
+    {
+        // TODO: Write a pareser than can handle Xyce output.
+        // Need to search for second column.
+        // Does it use spaces or tabs?
+        return 0;
     }
 
     public void analyze (EquationSet s)

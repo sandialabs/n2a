@@ -64,7 +64,7 @@ public class SearchPanel extends JPanel
         @Override
         public void run ()
         {
-            for (MNode i : AppData.getInstance ().models)
+            for (MNode i : AppData.models)
             {
                 if (i.key ().toLowerCase ().contains (query)) results.add (i);
                 if (stop) return;

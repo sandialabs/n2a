@@ -7,14 +7,14 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.c;
 
+import gov.sandia.n2a.backend.internal.InternalBackend;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.umf.platform.db.MNode;
-import gov.sandia.umf.platform.ensemble.params.specs.ParameterSpecification;
 import gov.sandia.umf.platform.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 
-public class BackendC implements Backend
+public class BackendC extends Backend
 {
     @Override
     public String getName ()
@@ -49,21 +49,20 @@ public class BackendC implements Backend
     }
 
     @Override
-    public boolean canHandleRunEnsembleParameter (MNode model, Object key, ParameterSpecification spec)
-    {
-        // For now, all parameter variation must be outside the generated C code.
-        return false;
-    }
-
-    @Override
-    public boolean canRunNow (MNode job)
-    {
-        return true;
-    }
-
-    @Override
     public void execute (MNode job) throws Exception
     {
         new JobC ().execute (job);
+    }
+
+    @Override
+    public double expectedDuration (MNode job)
+    {
+        return InternalBackend.getDurationFromP (job);
+    }
+
+    @Override
+    public double currentSimTime (MNode job)
+    {
+        return InternalBackend.getSimTimeFromOutput (job);
     }
 }

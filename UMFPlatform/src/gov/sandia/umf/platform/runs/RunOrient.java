@@ -76,7 +76,7 @@ public class RunOrient implements Run
 
     public MNode getModel ()
     {
-        return AppData.getInstance ().models.child (source.get ("model"));
+        return AppData.models.child (source.get ("model"));
     }
 
     @Override

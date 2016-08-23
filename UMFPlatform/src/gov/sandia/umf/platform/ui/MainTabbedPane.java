@@ -39,7 +39,7 @@ public class MainTabbedPane extends JTabbedPane
         String order = AppState.getInstance ().getOrDefault ("Model", "MainTabbedPane", "order");
         Set<String> sorted = new HashSet<String> ();
         String[] titles = order.split (",");  // comma-separated list
-        Map<String,RecordHandler> handlers = UMFPluginManager.recordHandlers;
+        Map<String,RecordHandler> handlers = UMFPluginManager.getRecordHandlers ();
         for (String title : titles)
         {
             RecordHandler handler = handlers.get (title);

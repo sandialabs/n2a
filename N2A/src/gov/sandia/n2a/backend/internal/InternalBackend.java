@@ -9,19 +9,25 @@ package gov.sandia.n2a.backend.internal;
 
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.language.AccessVariable;
+import gov.sandia.n2a.language.Constant;
+import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.operator.LT;
+import gov.sandia.n2a.language.parse.ParseException;
+import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.umf.platform.UMF;
 import gov.sandia.umf.platform.db.MNode;
-import gov.sandia.umf.platform.ensemble.params.specs.ParameterSpecification;
 import gov.sandia.umf.platform.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
-public class InternalBackend implements Backend
+public class InternalBackend extends Backend
 {
     @Override
     public String getName ()
@@ -36,24 +42,6 @@ public class InternalBackend implements Backend
         result.addParameter (new Parameter ("duration",            "1.0"  ));  // default is 1 second
         result.addParameter (new Parameter ("internal.integrator", "Euler"));  // alt is "RungeKutta"
         return result;
-    }
-
-    @Override
-    public ParameterDomain getOutputVariables (MNode model)
-    {
-        return null;
-    }
-
-    @Override
-    public boolean canHandleRunEnsembleParameter (MNode model, Object key, ParameterSpecification spec)
-    {
-        return false;
-    }
-
-    @Override
-    public boolean canRunNow (MNode job)
-    {
-        return true;
     }
 
     @Override
@@ -92,6 +80,104 @@ public class InternalBackend implements Backend
             }
         };
         new Thread (run).start ();
+    }
+
+    @Override
+    public double expectedDuration (MNode job)
+    {
+        return getDurationFromP (job);
+    }
+
+    @Override
+    public double currentSimTime (MNode job)
+    {
+        return getSimTimeFromOutput (job);
+    }
+
+    public static double getDurationFromP (MNode job)
+    {
+        String p = job.get ("$p");
+        if (p.isEmpty ()) return 0;
+        Operator expression = null;
+        try
+        {
+            expression = Operator.parse (p);
+            if (expression instanceof LT)
+            {
+                LT comparison = (LT) expression;
+                if (comparison.operand0 instanceof AccessVariable)
+                {
+                    AccessVariable av = (AccessVariable) comparison.operand0;
+                    if (av.name.equals ("$t"))
+                    {
+                        if (comparison.operand1 instanceof Constant)
+                        {
+                            Constant c = (Constant) comparison.operand1;
+                            if (c.value instanceof Scalar) return ((Scalar) c.value).value;
+                        }
+                    }
+                }
+            }
+        }
+        catch (ParseException e)
+        {
+        }
+        return 0;
+    }
+
+    /**
+        Assumes that $t is output in first column.
+        Note that this does not hold true for Xyce.
+    **/
+    public static double getSimTimeFromOutput (MNode job)
+    {
+        double result = 0;
+        File out = new File (new File (job.get ()).getParentFile (), "out");
+        RandomAccessFile raf;
+        try
+        {
+            raf = new RandomAccessFile (out, "r");
+            long lineLength = 16;  // Initial guess. About long enough to catch two columns. Smaller initial value gives more accurate result, but costs more in terms of repeated scans.
+            while (true)
+            {
+                String column = "";
+                boolean gotNL = false;
+                boolean gotTab = false;
+                long length = raf.length ();
+                if (length < lineLength) break;
+                raf.seek (length - lineLength);
+                for (long i = 0; i < lineLength; i++)
+                {
+                    char c = (char) raf.read ();  // Technically, the file is in UTF-8, but this will only matter in column headings. We are looking for a float string, which will be in all lower ASCII.
+                    if (c == '\n'  ||  c == '\r')
+                    {
+                        gotNL = true;
+                        continue;
+                    }
+                    if (gotNL)
+                    {
+                        if (c == '\t')
+                        {
+                            gotTab = true;
+                            break;
+                        }
+                        column = column + c;
+                    }
+                }
+                if (gotNL  &&  gotTab)
+                {
+                    result = Double.parseDouble (column);
+                    break;
+                }
+                lineLength *= 2;
+            }
+
+            raf.close ();
+        }
+        catch (Exception e)
+        {
+        }
+        return result;
     }
 
     /**

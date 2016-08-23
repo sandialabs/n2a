@@ -143,7 +143,7 @@ public class UIController
 
     public void save ()
     {
-        AppData.getInstance ().save ();
+        AppData.save ();
     }
 
     public void openExportDialog (MNode document)

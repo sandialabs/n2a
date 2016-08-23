@@ -140,7 +140,7 @@ public class RunPanel extends JPanel
                     // Initial load
                     synchronized (running)
                     {
-                        for (MNode n : AppData.getInstance ().runs) running.add (0, new NodeJob (n));  // This should be efficient on a doubly-linked list.
+                        for (MNode n : AppData.runs) running.add (0, new NodeJob (n));  // This should be efficient on a doubly-linked list.
                         for (NodeJob job : running) root.add (job);
                     }
                     EventQueue.invokeLater (new Runnable ()
@@ -310,8 +310,11 @@ public class RunPanel extends JPanel
 
         StringBuilder contents = new StringBuilder ();
         contents.append ("Status:");
-        if (job.complete < 0) contents.append (" Waiting");
+        if      (job.complete < 0)                       contents.append (" Waiting");
+        else if (job.complete == 0)                      contents.append (" Started");
         else if (job.complete > 0  &&  job.complete < 1) contents.append (" " + Math.round (job.complete * 100) + "%");
+        else if (job.complete == 1)                      contents.append (" Success");
+        else                                             contents.append (" Failed");
         contents.append ("\n");
         if (job.dateStarted  != null) contents.append ("  started:  " + job.dateStarted  + "\n");
         if (job.dateFinished != null) contents.append ("  finished: " + job.dateFinished + "\n");

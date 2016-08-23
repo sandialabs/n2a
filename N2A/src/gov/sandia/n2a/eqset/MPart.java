@@ -112,7 +112,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         for (String parentName : parenttNames)
         {
             parentName = parentName.trim ().replace ("\"", "");
-            MPersistent parentSource = (MPersistent) AppData.getInstance ().models.child (parentName);
+            MPersistent parentSource = (MPersistent) AppData.models.child (parentName);
             if (parentSource != null  &&  parentSource != topDocument)
             {
                 underrideChildren (from, parentSource);

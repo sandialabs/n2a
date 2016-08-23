@@ -12,32 +12,41 @@ import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 import replete.plugins.ExtensionPoint;
 
-public interface Backend extends ExtensionPoint
+public abstract class Backend implements ExtensionPoint
 {
     /**
         Returns the display name for this back-end.
     **/
-    public String getName ();
+    public abstract String getName ();
 
     /**
         Give the list of parameters that can be used to configure the
         simulator during an actual simulation.
     **/
-    public ParameterDomain getSimulatorParameters ();
+    public ParameterDomain getSimulatorParameters ()
+    {
+        return null;
+    }
 
     /**
         Enumerate all the variables that could be named in an output expression.
         Output expressions produce diagnostic information that is dumped during
         an actual simulation.
     **/
-    public ParameterDomain getOutputVariables (MNode model);
+    public ParameterDomain getOutputVariables (MNode model)
+    {
+        return null;
+    }
 
     /**
         Indicates whether the given parameter can be varied within the simulation.
         If not, we must launch multiple simulations to vary it.
         @return true if the parameter can be varied directly within the simulation
     **/
-    public boolean canHandleRunEnsembleParameter (MNode model, Object key, ParameterSpecification spec);
+    public boolean canHandleRunEnsembleParameter (MNode model, Object key, ParameterSpecification spec)
+    {
+        return false;
+    }
 
     /**
         Indicates that resources are available to execute the job.
@@ -46,11 +55,34 @@ public interface Backend extends ExtensionPoint
         * The nature of the specific backend, such as how much resources it needs to handle the given model size.
         * The target machine (available memory, CPUs, etc.) Information needed to determine this should be embedded in the job metadata.
     **/
-    public boolean canRunNow (MNode job);
+    public boolean canRunNow (MNode job)
+    {
+        return true;
+    }
 
     /**
         For a local machine, start the process that actually computes the job.
         For a remote system, submit the job to whatever scheduler may exist there.
     **/
-    public void execute (MNode job) throws Exception;
+    public void execute (MNode job) throws Exception
+    {
+    }
+
+    /**
+        Determine how much sim time the simulation will take.
+        @return Expected sim time in seconds, or zero if unable to estimate.
+        Note: Infinity is a possible answer, if the model is intended for continuous operation.
+    **/
+    public double expectedDuration (MNode job)
+    {
+        return 0;
+    }
+
+    /**
+        Return an estimate of the current $t in the active simulation.
+    **/
+    public double currentSimTime (MNode job)
+    {
+        return 0;
+    }
 }

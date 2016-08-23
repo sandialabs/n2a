@@ -129,8 +129,6 @@ public class UMF
             System.err.println (PluginManager.getInitializationErrors ());
         }
 
-        UMFPluginManager.init ();
-
         setUncaughtExceptionHandler (null);
 
         AppState.getInstance ().prodCustomization = chooseProductCustomization (prodCust);
@@ -145,8 +143,7 @@ public class UMF
         // TODO: Read popup help in M format
 
         // Start data handling
-        AppData data = AppData.getInstance ();
-        data.checkInitialDB ();
+        AppData.checkInitialDB ();
 
         // Create the main frame.
         createAndShowMainFrame ();
@@ -285,7 +282,7 @@ public class UMF
         {
             public void stateChanged (ChangeEvent e)
             {
-                AppData.getInstance ().save ();
+                AppData.save ();
             }
         });
 

@@ -75,7 +75,7 @@ public class RunEnsemble
 
     public MNode getTemplateModelDoc ()
     {
-        return AppData.getInstance ().models.child (source.get ("model"));
+        return AppData.models.child (source.get ("model"));
     }
 
     public ExecutionEnv getEnvironment() {

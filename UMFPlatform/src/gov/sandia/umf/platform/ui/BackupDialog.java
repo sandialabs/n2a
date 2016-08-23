@@ -164,7 +164,7 @@ public class BackupDialog extends EscapeDialog
         dir.mkdirs ();
         String fileName = new SimpleDateFormat ("yyyyMMddHHmmss", Locale.ROOT).format (new Date ()) + ".zip";
         File destination = new File (dir, fileName);
-        AppData.getInstance ().backup (destination);
+        AppData.backup (destination);
         populateList ();
     }
 
@@ -172,7 +172,7 @@ public class BackupDialog extends EscapeDialog
     {
         BackupEntry restoreMe = list.getSelectedValue ();
         if (restoreMe == null) return;
-        AppData.getInstance ().restore (restoreMe.file, RemoveAdded.isSelected ());
+        AppData.restore (restoreMe.file, RemoveAdded.isSelected ());
     }
 
     public void delete ()

@@ -853,6 +853,22 @@ public class EquationSet implements Comparable<EquationSet>
             v.equations = new TreeSet<EquationEntry> ();
         }
 
+        if (container == null)           // top-level model
+        {
+            v = new Variable ("$p", 0);  // must have a termination condition
+            if (add (v))                 // but it doesn't
+            {
+                try
+                {
+                    v.add (new EquationEntry ("$t<1"));  // Limit sim time to 1 second
+                }
+                catch (Exception parseError)
+                {
+                    // This exception should never happen, because we are good are writing equations.
+                }
+            }
+        }
+
         v = new Variable ("$live", 0);  // $live functions much the same as $init. See setInit().
         if (add (v))
         {
