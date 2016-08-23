@@ -10,6 +10,7 @@ package gov.sandia.umf.platform.ui.jobs;
 
 import java.awt.EventQueue;
 import java.io.File;
+import java.util.Date;
 
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
@@ -28,6 +29,8 @@ public class NodeJob extends NodeBase
 
     protected MNode source;
     protected float complete = -1;  // A number between 0 and 1, where 0 means just started, and 1 means done. -1 means unknown. 2 means failed
+    protected Date dateStarted = null;
+    protected Date dateFinished = null;
 
     public NodeJob (MNode source)
     {
@@ -51,14 +54,30 @@ public class NodeJob extends NodeBase
         return iconInProgress;
     }
 
-    public void monitorProgress (final DefaultTreeModel model)
+    public void monitorProgress (final RunPanel panel)
     {
-        if (complete == -2) return;
+        if (complete >= 1) return;
 
         float oldComplete = complete;
         File path = new File (source.get ()).getParentFile ();
-        if (complete == -1  &&  new File (path, "started" ).exists ()) complete = 0;
-        if (complete == 0   &&  new File (path, "finished").exists ()) complete = 1;
+        if (complete == -1)
+        {
+            File started = new File (path, "started"); 
+            if (started.exists ())
+            {
+                complete = 0;
+                dateStarted = new Date (started.lastModified ());
+            }
+        }
+        if (complete < 1)
+        {
+            File finished = new File (path, "finished");
+            if (finished.exists ())
+            {
+                complete = 1;
+                dateFinished = new Date (finished.lastModified ());
+            }
+        }
         // TODO: add feature to backend to monitor progress
         // We can determine backend from the model file
         // time stamps on "started" and "finished" convey information about job
@@ -70,7 +89,8 @@ public class NodeJob extends NodeBase
             {
                 public void run ()
                 {
-                    model.nodeChanged (NodeJob.this);
+                    panel.model.nodeChanged (NodeJob.this);
+                    if (panel.displayNode == NodeJob.this) panel.viewJob ();
                 }
             });
         }

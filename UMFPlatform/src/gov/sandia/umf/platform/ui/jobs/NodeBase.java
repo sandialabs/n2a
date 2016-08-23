@@ -17,9 +17,4 @@ public class NodeBase extends DefaultMutableTreeNode
     {
         return null;
     }
-
-    public void delete (JTree tree)
-    {
-        // Default action is to ignore request. Only nodes that can actually be deleted need to override this.
-    }
 }

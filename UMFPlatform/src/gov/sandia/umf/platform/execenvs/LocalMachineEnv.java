@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.umf.platform.execenvs;
 
 import gov.sandia.umf.platform.UMF;
+import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.execenvs.beans.AllJobInfo;
 import gov.sandia.umf.platform.execenvs.beans.DateGroup;
 import gov.sandia.umf.platform.execenvs.beans.Job;
@@ -169,15 +170,7 @@ public abstract class LocalMachineEnv extends ExecutionEnv
         }
         if (name.equalsIgnoreCase ("directory.jobs"))  // name "env.directory.job" if this is moved to global scope
         {
-            try
-            {
-                File n2a = UMF.getAppResourceDir ();
-                return new File (n2a, "jobs").getAbsolutePath ();
-            }
-            catch (Exception e)
-            {
-                return defaultValue;
-            }
+            return AppData.getInstance ().runs.get ();
         }
         if (name.equalsIgnoreCase ("c.directory"))
         {

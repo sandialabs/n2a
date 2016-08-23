@@ -92,7 +92,8 @@ public class MDir extends MNode
 
 	public String getOrDefault (String defaultValue)
 	{
-	    return root.toString ();  // We crash and burn if root is null, but that should never happen.
+	    if (root == null) return defaultValue;  // This should never happen.
+	    return root.getAbsolutePath ();
 	}
 
 	public File pathForChild (String index)
