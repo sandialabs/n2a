@@ -60,17 +60,10 @@ public class InternalBackend implements Backend
     public void execute (MNode job) throws Exception
     {
         // Prepare
-        EquationSet digestedModel = new EquationSet (job);
-        if (digestedModel.name.length () < 1) digestedModel.name = "Model";  // because the default is for top-level equation set to be anonymous
-
-        String jobDir = new File (job.get ()).getParent ();  // assumes the MNode "job" is really and MDoc. In any case, the value of the node should point to a file on disk where it is stored in a directory just for it.
+        final String jobDir = new File (job.get ()).getParent ();  // assumes the MNode "job" is really and MDoc. In any case, the value of the node should point to a file on disk where it is stored in a directory just for it.
         Files.createFile (Paths.get (jobDir, "started"));
+        final EquationSet digestedModel = new EquationSet (job);
         digestModel (digestedModel, jobDir);
-
-        // Dump diagnostic information about model assembly. Unlike the collated model in "job", this one includes results of flattening and other transformations.
-        // Not really needed anymore.
-        //String flat = digestedModel.dump (false);
-        //Files.copy (new ByteArrayInputStream (flat.getBytes ("UTF-8")), Paths.get (jobDir, "model.flat"));
 
         // Submit
         Runnable run = new Runnable ()
@@ -80,7 +73,7 @@ public class InternalBackend implements Backend
                 Euler simulator = new Euler (new Wrapper (digestedModel), jobDir);
                 try
                 {
-                    simulator.run ();
+                    simulator.run ();  // Does not return until simulation is finished.
                     Files.copy (new ByteArrayInputStream ("success".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
                 }
                 catch (Exception e)

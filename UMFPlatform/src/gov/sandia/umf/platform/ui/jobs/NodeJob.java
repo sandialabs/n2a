@@ -89,8 +89,10 @@ public class NodeJob extends NodeBase
             NodeBase newNode;
             String fileName = file.getName ();
 
-            if (fileName.startsWith ("n2a_job")) continue;
-            if (fileName.endsWith   ("model"  )) continue;  // This is the file associated with our own "source"
+            if (fileName.startsWith ("n2a_job" )) continue;
+            if (fileName.equals     ("model"   )) continue;  // This is the file associated with our own "source"
+            if (fileName.equals     ("started" )) continue;
+            if (fileName.equals     ("finished")) continue;
 
             if      (fileName.endsWith ("out"    )) newNode = new NodeFile (NodeFile.Type.Output,  file);
             else if (fileName.endsWith ("err"    )) newNode = new NodeFile (NodeFile.Type.Error,   file);

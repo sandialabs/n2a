@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2016 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -31,6 +31,8 @@ import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 
 import java.io.File;
 import java.io.FileWriter;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -145,7 +147,8 @@ class XyceBackend implements Backend
     @Override
     public void execute (MNode job) throws Exception
     {
-        ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("localhost", "$metadata", "host"));
+        final String jobDir = new File (job.get ()).getParent ();
+        Files.createFile (Paths.get (jobDir, "started"));
 
         // Ensure essential metadata is set
         if (job.child ("$metadata", "duration"       ) == null) job.set ("1.0",                       "$metadata", "duration");
@@ -153,13 +156,12 @@ class XyceBackend implements Backend
         if (job.child ("$metadata", "xyce.integrator") == null) job.set ("trapezoid",                 "$metadata", "xyce.integrator");
 
         // set up job info
+        ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("localhost", "$metadata", "host"));
         String xyce    = env.getNamedValue ("xyce.binary");
-        String jobDir  = new File (job.get ()).getParent ();  // TODO: generalize for remote jobs
         String cirFile = env.file (jobDir, "model.cir");
         String prnFile = env.file (jobDir, "result");  // "prn" doesn't work, at least on windows
 
         EquationSet e = new EquationSet (job);
-        if (e.name.length () < 1) e.name = "Model";  // because the default is for top-level equation set to be anonymous
         Euler simulator = InternalBackend.constructStaticNetwork (e, jobDir);
         analyze (e);
 

@@ -687,6 +687,8 @@ public class EquationTreePanel extends JPanel
                     }
                 }
             }.start ();
+
+            panel.addNewRun (job);
         }
     };
 

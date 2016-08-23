@@ -199,6 +199,7 @@ public class MDoc extends MPersistent
         File file = path ();
 	    try
 	    {
+	        file.getParentFile ().mkdirs ();
 	        BufferedWriter writer = new BufferedWriter (new FileWriter (file));
 	        writer.write (String.format ("N2A.schema=1%n"));
 	        for (MNode c : this) c.write (writer, "");  // only write out our children, not ourself (top top-level node)

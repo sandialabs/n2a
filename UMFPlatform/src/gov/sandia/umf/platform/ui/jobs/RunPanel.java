@@ -117,15 +117,27 @@ public class RunPanel extends JPanel
             }
         });
 
-        for (MNode n : AppData.getInstance ().runs) running.add (0, new NodeJob (n));  // This should be efficient on a doubly-linked list.
-        for (NodeJob job : running) root.add (job);
-        model.nodeStructureChanged (root);
         Thread refreshThread = new Thread ()
         {
             public void run ()
             {
                 try
                 {
+                    // Initial load
+                    synchronized (running)
+                    {
+                        for (MNode n : AppData.getInstance ().runs) running.add (0, new NodeJob (n));  // This should be efficient on a doubly-linked list.
+                        for (NodeJob job : running) root.add (job);
+                    }
+                    EventQueue.invokeLater (new Runnable ()
+                    {
+                        public void run ()
+                        {
+                            model.nodeStructureChanged (root);
+                        }
+                    });
+
+                    // Periodic refresh to show status of running jobs
                     while (true)
                     {
                         synchronized (running)
@@ -229,7 +241,7 @@ public class RunPanel extends JPanel
         NodeFile node = (NodeFile) path.getLastPathComponent ();
         displayPath = node.path.getAbsolutePath ();
         MNode job = ((NodeJob) node.getParent ()).source;
-        ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("localhost", "$metadata", "host"));
+        final ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("localhost", "$metadata", "host"));
 
         new Thread ("RunPanel Fetch File")
         {
@@ -263,27 +275,45 @@ public class RunPanel extends JPanel
     {
         TreePath path = tree.getSelectionPath ();
         if (path == null) return;
-        NodeJob  job = (NodeJob) path.getLastPathComponent ();
-        ExecutionEnv env = ExecutionEnv.factory (job.source.getOrDefault ("localhost", "$metadata", "host"));
-        String jobDir = new File (job.source.get ()).getParent ();
-        try
+        final NodeJob job = (NodeJob) path.getLastPathComponent ();
+        model.removeNodeFromParent (job);
+
+        new Thread ("RunPanel Delete Job")
         {
-            env.deleteJob (jobDir);
-            model.removeNodeFromParent (job);
-            job.complete = 2;  // Force the monitor thread to remove it. This is not thread-safe, but should cause no harm.
-        }
-        catch (Exception e)
-        {
-        }
+            public void run ()
+            {
+                ExecutionEnv env = ExecutionEnv.factory (job.source.getOrDefault ("localhost", "$metadata", "host"));
+                String jobDir = new File (job.source.get ()).getParent ();
+                try
+                {
+                    env.deleteJob (jobDir);
+                    job.complete = 2;  // Force the monitor thread to remove it. This is not perfectly thread-safe, but should cause no harm.
+                }
+                catch (Exception e)
+                {
+                }
+            };
+        }.start ();
     }
 
     public void addNewRun (MNode run)
     {
-        NodeJob node = new NodeJob (run);
-        synchronized (running)
-        {
-            running.add (0, node);
-        }
+        final NodeJob node = new NodeJob (run);
         model.insertNodeInto (node, root, 0);
+
+        new Thread ("RunPanel Add New Run")
+        {
+            public void run ()
+            {
+                node.monitorProgress (model);
+                if (node.complete < 1)
+                {
+                    synchronized (running)
+                    {
+                        running.add (0, node);
+                    }
+                }
+            };
+        }.start ();
     }
 }

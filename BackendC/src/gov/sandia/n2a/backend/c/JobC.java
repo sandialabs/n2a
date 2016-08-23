@@ -33,7 +33,10 @@ import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
+
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -53,9 +56,12 @@ public class JobC
 
     public void execute (MNode job) throws Exception
     {
-        ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("localhost", "$metadata", "host"));
+        String jobDir = new File (job.get ()).getParent ();
+        Files.createFile (Paths.get (jobDir, "started"));
 
         // Ensure runtime is built
+        // TODO: Generalize file handling for remote jobs. This present code will only work with a local directory.
+        ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("localhost", "$metadata", "host"));
         String runtimeDir = env.getNamedValue ("c.directory");
         if (runtimeDir.length () == 0)
         {
@@ -96,12 +102,9 @@ public class JobC
         }
 
         // Create model-specific executable
-        String jobDir = new File (job.get ()).getParent ();  // TODO: generalize for remote jobs
         String sourceFileName = env.file (jobDir, "model.cc");
 
         EquationSet e = new EquationSet (job);
-        if (e.name.length () < 1) e.name = "Model";  // because the default is for top-level equation set to be anonymous
-
         e.resolveConnectionBindings ();
         e.flatten ();
         e.addSpecials ();  // $dt, $index, $init, $live, $n, $t, $type

@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2016 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -97,7 +97,15 @@ public class EquationSet implements Comparable<EquationSet>
 
     public EquationSet (EquationSet container, MNode source) throws Exception
     {
-        this.name      = source.key ();
+        if (container == null)  // top-level model, so pay special attention to name
+        {
+            name = source.getOrDefault ("Model", "$inherit").split (",", 2)[0].replace ("\"", "");
+        }
+        else
+        {
+            name = source.key ();
+        }
+
         this.container = container;
         variables      = new TreeSet<Variable> ();
         parts          = new TreeSet<EquationSet> ();
