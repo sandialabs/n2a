@@ -7,7 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.function;
 
-import gov.sandia.n2a.backend.internal.Euler;
+import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Function;
@@ -45,7 +45,7 @@ public class Trace extends Function
     {
         Scalar result = (Scalar) operands[0].eval (context);
 
-        Euler simulator = Euler.getSimulator (context);
+        Simulator simulator = Simulator.getSimulator (context);
         if (simulator != null)
         {
             String column;

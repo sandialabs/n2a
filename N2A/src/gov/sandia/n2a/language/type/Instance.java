@@ -14,7 +14,7 @@ import java.util.TreeSet;
 import gov.sandia.n2a.backend.internal.Connection;
 import gov.sandia.n2a.backend.internal.InternalBackendData;
 import gov.sandia.n2a.backend.internal.Part;
-import gov.sandia.n2a.backend.internal.Euler;
+import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.backend.internal.Population;
 import gov.sandia.n2a.backend.internal.Wrapper;
 import gov.sandia.n2a.eqset.EquationSet;
@@ -129,15 +129,15 @@ public class Instance extends Type
         else                          valuesObject[v.readIndex] = value;
     }
 
-    public void init (Euler simulator)
+    public void init (Simulator simulator)
     {
     }
 
-    public void integrate (Euler simulator)
+    public void integrate (Simulator simulator)
     {
     }
 
-    public void update (Euler simulator)
+    public void update (Simulator simulator)
     {
     }
 
@@ -145,7 +145,7 @@ public class Instance extends Type
         Finalize the values of buffered variables, and complete any other housekeeping for current simulation cycle.
         @return true to remain in simulation queue. false to be removed from simulation.
     **/
-    public boolean finish (Euler simulator)
+    public boolean finish (Simulator simulator)
     {
         return true;
     }

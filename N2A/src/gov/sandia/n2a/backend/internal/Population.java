@@ -27,7 +27,7 @@ public class Population extends Instance
         allocate (bed.countGlobalFloat, bed.countGlobalObject);
     }
 
-    public void init (Euler simulator)
+    public void init (Simulator simulator)
     {
         InstanceTemporaries temp = new InstanceTemporaries (this, simulator, true);
         resolve (temp.bed.globalReference);
@@ -44,7 +44,7 @@ public class Population extends Instance
         for (Variable v : temp.bed.globalBufferedExternalWrite) set (v, v.type);  // v.type should be pre-loaded with zero-equivalent values
     }
 
-    public void integrate (Euler simulator, double dt)
+    public void integrate (Simulator simulator, double dt)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
         for (Variable v : bed.globalIntegrated)
@@ -55,7 +55,7 @@ public class Population extends Instance
         }
     }
 
-    public void update (Euler simulator)
+    public void update (Simulator simulator)
     {
         InstanceTemporaries temp = new InstanceTemporaries (this, simulator, false);
         for (Variable v : temp.bed.globalUpdate)
@@ -100,7 +100,7 @@ public class Population extends Instance
         }
     }
 
-    public boolean finish (Euler simulator)
+    public boolean finish (Simulator simulator)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
         for (Variable v : bed.globalBufferedExternal) setFinal (v, getFinal (v));

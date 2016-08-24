@@ -13,7 +13,7 @@ public class EventStep extends Event
         head.previous = head;
     }
 
-    public void run (Euler simulator)
+    public void run (Simulator simulator)
     {
         Instance i = head.next;
         while (i != head)

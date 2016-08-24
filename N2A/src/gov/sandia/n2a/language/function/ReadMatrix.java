@@ -8,7 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.language.function;
 
 import java.io.File;
-import gov.sandia.n2a.backend.internal.Euler;
+import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
@@ -39,7 +39,7 @@ public class ReadMatrix extends Function
     {
         Matrix A;
         String path = ((Text) operands[0].eval (context)).value;
-        Euler simulator = Euler.getSimulator (context);
+        Simulator simulator = Simulator.getSimulator (context);
         if (simulator == null) return new Scalar (0);  // absence of simulator indicates analysis phase, so opening files is unecessary
         A = simulator.matrices.get (path);
         if (A == null)

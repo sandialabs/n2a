@@ -82,7 +82,7 @@ public class Part extends Instance
         accommodate the connection process, which must probe values in a part (which
         may include references) before calling init().
     **/
-    public void init (Euler simulator)
+    public void init (Simulator simulator)
     {
         InstanceTemporaries temp = new InstanceTemporaries (this, simulator, true);
 
@@ -132,7 +132,7 @@ public class Part extends Instance
         if (populations != null) for (Population p : populations) p.init (simulator);
     }
 
-    public void integrate (Euler simulator)
+    public void integrate (Simulator simulator)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
         if (bed.localIntegrated.isEmpty ()  &&  populations == null) return;  // nothing to do
@@ -153,7 +153,7 @@ public class Part extends Instance
         if (populations != null) for (Population p : populations) p.integrate (simulator, dt);
     }
 
-    public void update (Euler simulator)
+    public void update (Simulator simulator)
     {
         InstanceTemporaries temp = new InstanceTemporaries (this, simulator, false);
         for (Variable v : temp.bed.localUpdate)
@@ -203,7 +203,7 @@ public class Part extends Instance
         if (populations != null) for (Population p : populations) p.update (simulator);
     }
 
-    public boolean finish (Euler simulator)
+    public boolean finish (Simulator simulator)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
 
@@ -433,7 +433,7 @@ public class Part extends Instance
         return true;
     }
 
-    public Matrix getXYZ (Euler simulator)
+    public Matrix getXYZ (Simulator simulator)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
         if (bed.xyz != null)

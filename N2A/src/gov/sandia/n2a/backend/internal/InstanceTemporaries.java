@@ -22,14 +22,14 @@ import gov.sandia.n2a.language.type.Scalar;
 public class InstanceTemporaries extends Instance
 {
     public Instance wrapped;
-    public Euler simulator;
+    public Simulator simulator;
     public Scalar init;
     public InternalBackendData bed;
 
     /**
         For use by Internal simulator, where EquationSet.backendData is guaranteed to be InternalBackendData.
     **/
-    public InstanceTemporaries (Instance wrapped, Euler simulator, boolean init)
+    public InstanceTemporaries (Instance wrapped, Simulator simulator, boolean init)
     {
         this (wrapped, simulator, init, (InternalBackendData) wrapped.equations.backendData);
     }
@@ -37,7 +37,7 @@ public class InstanceTemporaries extends Instance
     /**
         For use by other backends, which may have chained EquationSet.backendData.
     **/
-    public InstanceTemporaries (Instance wrapped, Euler simulator, boolean init, InternalBackendData bed)
+    public InstanceTemporaries (Instance wrapped, Simulator simulator, boolean init, InternalBackendData bed)
     {
         this.wrapped   = wrapped;
         this.simulator = simulator;

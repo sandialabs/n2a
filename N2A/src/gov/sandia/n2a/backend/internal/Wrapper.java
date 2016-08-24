@@ -12,7 +12,7 @@ import gov.sandia.n2a.language.EvaluationException;
 
 public class Wrapper extends Part
 {
-    public Euler simulator;
+    public Simulator simulator;
 
     public Wrapper (EquationSet model)
     {
@@ -21,23 +21,23 @@ public class Wrapper extends Part
         populations[0] = new PopulationCompartment (model, this);
     }
 
-    public void init (Euler simulator)
+    public void init (Simulator simulator)
     {
         populations[0].init (simulator);
         simulator.writeTrace ();
     }
 
-    public void integrate (Euler simulator)
+    public void integrate (Simulator simulator)
     {
         populations[0].integrate (simulator);
     }
 
-    public void update (Euler simulator)
+    public void update (Simulator simulator)
     {
         populations[0].update (simulator);
     }
 
-    public boolean finish (Euler simulator)
+    public boolean finish (Simulator simulator)
     {
         populations[0].finish (simulator);
         boolean result = ((PopulationCompartment) populations[0]).n > 0;

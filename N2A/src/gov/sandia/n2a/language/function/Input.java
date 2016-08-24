@@ -12,7 +12,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import gov.sandia.n2a.backend.internal.Euler;
+import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
@@ -47,7 +47,7 @@ public class Input extends Function
 
     public Holder getRow (Instance context)
     {
-        Euler simulator = Euler.getSimulator (context);
+        Simulator simulator = Simulator.getSimulator (context);
         if (simulator == null) return null;  // If we can't cache a line from the requested stream, then semantics of this function are lost, so give up.
 
         Holder H = null;

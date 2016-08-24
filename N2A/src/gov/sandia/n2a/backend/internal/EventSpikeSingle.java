@@ -6,7 +6,7 @@ public class EventSpikeSingle extends EventSpike
 {
     Instance target;
 
-    public void run (Euler simulator)
+    public void run (Simulator simulator)
     {
         setFlag ();
         simulator.integrate (target);

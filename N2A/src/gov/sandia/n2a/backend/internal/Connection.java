@@ -44,7 +44,7 @@ public class Connection extends Part
         }
     }
 
-    public void init (Euler simulator)
+    public void init (Simulator simulator)
     {
         // update accountable endpoints
         // Note: these do not require resolve(). Instead, they access their target directly through the endpoints array.
@@ -90,7 +90,7 @@ public class Connection extends Part
         return (int) ((Scalar) endpoints[i].get (ae)).value;
     }
 
-    public double getP (Euler simulator)
+    public double getP (Simulator simulator)
     {
         InstancePreLive temp = new InstancePreLive (this, simulator);
         if (temp.bed.p == null) return 1;  // N2A language defines default to be 1 (always create)

@@ -14,7 +14,7 @@ import gov.sandia.n2a.language.type.Scalar;
 
 public class InstancePreLive extends InstanceTemporaries
 {
-    public InstancePreLive (Instance wrapped, Euler simulator)
+    public InstancePreLive (Instance wrapped, Simulator simulator)
     {
         super (wrapped, simulator, true);
     }
