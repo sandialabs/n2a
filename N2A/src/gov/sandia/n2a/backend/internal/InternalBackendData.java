@@ -187,7 +187,7 @@ public class InternalBackendData
             @return -2 if this event did not fire. -1 if it fired with nocare delivery.
             0 or greater if it fired and we specify the delay until delivery.
         **/
-        public double test (Instance targetPart, Euler simulator)
+        public double test (Instance targetPart, Simulator simulator)
         {
             // Evaluate any temporaries needed by operands in $event()
             InstanceTemporaries temp = new InstanceTemporaries (targetPart, simulator, false);

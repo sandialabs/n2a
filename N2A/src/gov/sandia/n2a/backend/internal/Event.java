@@ -6,7 +6,7 @@ public class Event implements Comparable<Event>
 {
     public double t = 0;
 
-    public void run (Euler simulator)
+    public void run (Simulator simulator)
     {
         throw new EvaluationException ("Event is abstract");
     }

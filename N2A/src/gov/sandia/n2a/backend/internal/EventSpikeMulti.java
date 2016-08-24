@@ -8,7 +8,7 @@ public class EventSpikeMulti extends EventSpike
 {
     List<Instance> targets;
 
-    public void run (Euler simulator)
+    public void run (Simulator simulator)
     {
         // Note: targets could be null, but in practice that should never happen. The event should not have been created in that case.
         setFlag ();

@@ -7,7 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.xyce.netlist;
 
-import gov.sandia.n2a.backend.internal.Euler;
+import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.backend.xyce.XyceBackendData;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.AccessVariable;
@@ -23,11 +23,11 @@ import java.util.Collection;
 
 public class XyceRenderer extends Renderer
 {
-    public Euler                         simulator;
+    public Simulator                     simulator;
     public Instance                      pi;
     public Collection<VariableReference> exceptions;
 
-    public XyceRenderer (Euler simulator)
+    public XyceRenderer (Simulator simulator)
     {
         this.simulator = simulator;
     }

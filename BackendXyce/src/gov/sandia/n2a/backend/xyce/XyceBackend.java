@@ -7,7 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.xyce;
 
-import gov.sandia.n2a.backend.internal.Euler;
+import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.backend.internal.InstanceTemporaries;
 import gov.sandia.n2a.backend.internal.InternalBackendData;
 import gov.sandia.n2a.backend.internal.InternalBackend;
@@ -155,7 +155,7 @@ class XyceBackend extends Backend
         String prnFile = env.file (jobDir, "result");  // "prn" doesn't work, at least on windows
 
         EquationSet e = new EquationSet (job);
-        Euler simulator = InternalBackend.constructStaticNetwork (e, jobDir);
+        Simulator simulator = InternalBackend.constructStaticNetwork (e, jobDir);
         analyze (e);
 
         FileWriter writer = new FileWriter (cirFile);
@@ -189,7 +189,7 @@ class XyceBackend extends Backend
         bed.analyze (s);
     }
 
-    public void generateNetlist (MNode job, Euler simulator, FileWriter writer) throws Exception
+    public void generateNetlist (MNode job, Simulator simulator, FileWriter writer) throws Exception
     {
         Population toplevel = simulator.wrapper.populations[0];
         XyceRenderer renderer = new XyceRenderer (simulator);

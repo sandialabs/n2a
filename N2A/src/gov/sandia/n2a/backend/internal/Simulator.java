@@ -33,7 +33,7 @@ import java.util.TreeMap;
     Space-efficiency is the true priority for Internal, since it supports code-generation for other backends,
     and thus makes the size of their models memory-bound.
 **/
-public class Euler implements Iterable<Instance>
+public class Simulator implements Iterable<Instance>
 {
     public Wrapper                     wrapper;  // reference to top-level model, which is also in the simulation queue
     public Queue<Event>                eventQueue   = new PriorityQueue<Event> ();
@@ -65,7 +65,7 @@ public class Euler implements Iterable<Instance>
         }
     }
 
-    public Euler (Wrapper wrapper, String jobDir)
+    public Simulator (Wrapper wrapper, String jobDir)
     {
         if (jobDir.isEmpty ())
         {
@@ -108,9 +108,9 @@ public class Euler implements Iterable<Instance>
         }
     }
 
-    public static Euler getSimulator (Instance context)
+    public static Simulator getSimulator (Instance context)
     {
-        Euler simulator = null;
+        Simulator simulator = null;
         if (context instanceof InstanceTemporaries)
         {
             simulator = ((InstanceTemporaries) context).simulator;

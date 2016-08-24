@@ -24,13 +24,13 @@ public class PopulationConnection extends Population
         return ((Part) container).populations[bed.connectionTargets[i]];
     }
 
-    public void init (Euler simulator)
+    public void init (Simulator simulator)
     {
         super.init (simulator);
         simulator.connect (this);  // queue to evaluate our connections
     }
 
-    public void connect (Euler simulator)
+    public void connect (Simulator simulator)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
 

@@ -75,7 +75,7 @@ public class PopulationCompartment extends Population
         if (p.before != null) p.before.after = p.after;
     }
 
-    public void init (Euler simulator)
+    public void init (Simulator simulator)
     {
         super.init (simulator);
 
@@ -86,13 +86,13 @@ public class PopulationCompartment extends Population
         resize (simulator, requestedN);
     }
 
-    public void update (Euler simulator)
+    public void update (Simulator simulator)
     {
         super.update (simulator);
         old = head;
     }
 
-    public boolean finish (Euler simulator)
+    public boolean finish (Simulator simulator)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
         if (bed.populationCanResize  &&  bed.populationCanGrowOrDie  &&  bed.n.derivative == null)  // $n shares control with other specials, so must coordinate them
@@ -125,7 +125,7 @@ public class PopulationCompartment extends Population
         return result;
     }
 
-    public void resize (Euler simulator, int requestedN)
+    public void resize (Simulator simulator, int requestedN)
     {
         if (requestedN < 0)  // indicated to update $n from actual part count
         {

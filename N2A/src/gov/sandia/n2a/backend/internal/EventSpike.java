@@ -6,7 +6,7 @@ public abstract class EventSpike extends Event
 {
     EventTarget eventType;
 
-    public void run (Euler simulator)
+    public void run (Simulator simulator)
     {
     }
 

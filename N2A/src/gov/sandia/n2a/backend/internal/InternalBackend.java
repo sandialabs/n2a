@@ -58,7 +58,7 @@ public class InternalBackend extends Backend
         {
             public void run ()
             {
-                Euler simulator = new Euler (new Wrapper (digestedModel), jobDir);
+                Simulator simulator = new Simulator (new Wrapper (digestedModel), jobDir);
                 try
                 {
                     simulator.run ();  // Does not return until simulation is finished.
@@ -184,10 +184,10 @@ public class InternalBackend extends Backend
         Utility function to enable other backends to use Internal to prepare static network structures.
         @return An Euler (simulator) object which contains the constructed network.
     **/
-    public static Euler constructStaticNetwork (EquationSet e, String jobDir) throws Exception
+    public static Simulator constructStaticNetwork (EquationSet e, String jobDir) throws Exception
     {
         digestModel (e, jobDir);
-        return new Euler (new Wrapper (e), jobDir);
+        return new Simulator (new Wrapper (e), jobDir);
     }
 
     public static void digestModel (EquationSet e, String jobDir) throws Exception
