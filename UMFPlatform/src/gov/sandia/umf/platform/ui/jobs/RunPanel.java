@@ -349,6 +349,14 @@ public class RunPanel extends JPanel
         {
             final NodeBase node = (NodeBase) path.getLastPathComponent ();
             model.removeNodeFromParent (node);
+            if (displayNode == node)
+            {
+                synchronized (displayText)
+                {
+                    displayText.setText ("");
+                }
+                if (displayPane.getViewport ().getView () != displayText) displayPane.setViewportView (displayText);
+            }
 
             new Thread ("RunPanel Delete")
             {

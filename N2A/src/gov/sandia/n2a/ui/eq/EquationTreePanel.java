@@ -68,8 +68,6 @@ import javax.swing.tree.TreePath;
 import javax.swing.tree.TreeSelectionModel;
 
 import replete.gui.controls.IconButton;
-import replete.plugins.ExtensionPoint;
-import replete.plugins.PluginManager;
 import replete.util.Lay;
 
 public class EquationTreePanel extends JPanel

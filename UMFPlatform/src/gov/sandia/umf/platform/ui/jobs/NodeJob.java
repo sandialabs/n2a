@@ -8,7 +8,10 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui.jobs;
 
+import java.awt.Color;
 import java.awt.EventQueue;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.Date;
 
@@ -24,10 +27,9 @@ import javax.swing.tree.DefaultTreeModel;
 
 public class NodeJob extends NodeBase
 {
-    protected static ImageIcon iconInProgress = ImageUtil.getImage ("run.gif");
-    protected static ImageIcon iconComplete   = ImageUtil.getImage ("complete.gif");
-    protected static ImageIcon iconUnknown    = ImageUtil.getImage ("help.gif");
-    protected static ImageIcon iconFailed     = ImageUtil.getImage ("remove.gif");
+    protected static ImageIcon iconComplete = ImageUtil.getImage ("complete.gif");
+    protected static ImageIcon iconUnknown  = ImageUtil.getImage ("help.gif");
+    protected static ImageIcon iconFailed   = ImageUtil.getImage ("remove.gif");
 
     protected MNode source;
     protected float complete = -1;  // A number between 0 and 1, where 0 means just started, and 1 means done. -1 means unknown. 2 means failed
@@ -53,8 +55,17 @@ public class NodeJob extends NodeBase
         if (complete == -1) return iconUnknown;
         if (complete ==  1) return iconComplete;
         if (complete ==  2) return iconFailed;
-        // TODO: create an icon on the fly which represents percent complete as a pie-chart, similar to inprogress.gif
-        return iconInProgress;
+
+        // Create an icon on the fly which represents percent complete as a pie-chart
+        BufferedImage inProgress = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = inProgress.createGraphics ();
+        g.setBackground (new Color (0, 0, 0, 1));
+        g.clearRect (0, 0, 16, 16);
+        g.setColor (new Color (0.3f, 0.5f, 1));
+        g.drawOval (0, 0, 14, 14);
+        g.setColor (Color.black);
+        g.fillArc (0, 0, 14, 14, 90, - Math.round (complete * 360));
+        return new ImageIcon (inProgress);
     }
 
     public void monitorProgress (final RunPanel panel)
