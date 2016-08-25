@@ -12,7 +12,10 @@ import java.awt.Color;
 import java.awt.EventQueue;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.Date;
 
 import gov.sandia.umf.platform.db.MNode;
@@ -40,7 +43,7 @@ public class NodeJob extends NodeBase
     public NodeJob (MNode source)
     {
         this.source = source;
-        setUserObject (source.getOrDefault (source.key (), "$inherit"));
+        setUserObject (source.getOrDefault (source.key (), "$inherit").split (",", 2)[0].replace ("\"", ""));
     }
 
     @Override
@@ -88,8 +91,15 @@ public class NodeJob extends NodeBase
             File finished = new File (path, "finished");
             if (finished.exists ())
             {
-                complete = 1;
                 dateFinished = new Date (finished.lastModified ());
+                complete = 1;
+                try
+                {
+                    BufferedReader reader = new BufferedReader (new FileReader (finished));
+                    if (! reader.readLine ().equals ("success")) complete = 2;
+                    reader.close ();
+                }
+                catch (IOException e) {}
             }
         }
 

@@ -60,7 +60,7 @@ public class Linux extends LocalMachineEnv
         File err = new File (jobDir, "err");
 
         File script = new File (jobDir, "n2a_job");
-        FileUtil.writeTextContent (script, "#!/bin/bash\n" + command + " > '" + out.getAbsolutePath () + "' 2> '" + err.getAbsolutePath () + "' &\ntouch finished\n");
+        FileUtil.writeTextContent (script, "#!/bin/bash\n" + command + " > '" + out.getAbsolutePath () + "' 2>> '" + err.getAbsolutePath () + "' &\ntouch finished\n");
 
         String [] commandParm = {"chmod", "u+x", script.getAbsolutePath ()};
         Process p = Runtime.getRuntime ().exec (commandParm);

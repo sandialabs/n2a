@@ -33,8 +33,10 @@ import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
+import gov.sandia.umf.platform.plugins.extpoints.Backend;
 
 import java.io.File;
+import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -260,7 +262,14 @@ public class JobC
         s.append ("}\n");
 
         env.setFileContents (sourceFileName, s.toString ());
-        String command = env.quotePath (env.build (sourceFileName, runtime));
+        String command = env.quotePath (env.build (sourceFileName, runtime));  // TODO: route build errors to Backend.err
+
+        PrintStream ps = Backend.err.get ();
+        if (ps != System.err)
+        {
+            ps.close ();
+            Backend.err.remove ();
+        }
         env.submitJob (job, command);
     }
 

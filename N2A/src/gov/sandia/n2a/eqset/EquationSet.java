@@ -21,17 +21,18 @@ import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.umf.platform.db.MNode;
+import gov.sandia.umf.platform.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
@@ -63,7 +64,7 @@ public class EquationSet implements Comparable<EquationSet>
     public boolean                             referenced;             // Some other equation set writes to one of our variables. If we can die, then exercise care not to reuse this part while other parts are still writing to it. Otherwise our reincarnated part might get written with values from our previous life.
     public Object                              backendData;            // holder for extra data associated with each equation set by a given backend
 
-    public class AccountableConnection implements Comparable<AccountableConnection>
+    public static class AccountableConnection implements Comparable<AccountableConnection>
     {
         public EquationSet connection; // the connection, that is, the thing being accounted (the endpoint is the thing doing the accounting)
         public String      alias;      // name within the connection that refers to the endpoint
@@ -420,7 +421,7 @@ public class EquationSet implements Comparable<EquationSet>
                 v.reference.variable.container.referenced = true;
                 if (v.reference.variable.assignment != v.assignment)
                 {
-                    System.out.println ("WARNING: Reference to " + v.nameString () + " has different assignment operator than target variable. Attempting to reconcile.");
+                    Backend.err.get ().println ("WARNING: Reference to " + v.nameString () + " has different assignment operator than target variable. Attempting to reconcile.");
                     v.assignment = v.reference.variable.assignment = Math.max (v.assignment, v.reference.variable.assignment);
                 }
             }
@@ -437,11 +438,10 @@ public class EquationSet implements Comparable<EquationSet>
         resolveRHSrecursive (unresolved);
         if (unresolved.size () > 0)
         {
-            StringBuilder message = new StringBuilder ();
-            message.append ("Unresolved variables:\n");
-            ListIterator<String> it = unresolved.listIterator ();
-            while (it.hasNext ()) message.append ("  " + it.next () + "\n");
-            throw new Exception (message.toString ());
+            PrintStream ps = Backend.err.get ();
+            ps.println ("Unresolved variables:");
+            for (String v : unresolved) ps.println ("  " + v);
+            throw new Backend.AbortRun ();
         }
     }
 
@@ -1047,7 +1047,11 @@ public class EquationSet implements Comparable<EquationSet>
             }
             for (EquationEntry e : v.equations)
             {
-                if (! (e.expression instanceof Split)) throw new Exception ("Unexpected expression for $type");
+                if (! (e.expression instanceof Split))
+                {
+                    Backend.err.get ().println ("Unexpected expression for $type");
+                    throw new Backend.AbortRun ();
+                }
                 ArrayList<EquationSet> split = ((Split) e.expression).parts;
                 if (! container.splits.contains (split))
                 {

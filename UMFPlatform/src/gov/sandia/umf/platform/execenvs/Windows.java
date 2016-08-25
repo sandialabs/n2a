@@ -47,7 +47,7 @@ public class Windows extends LocalMachineEnv
         File err = new File (jobDir, "err");
 
         File script = new File (jobDir, "n2a_job.bat");
-        FileUtil.writeTextContent (script, command + " > " + quotePath (out.getAbsolutePath ()) + " 2> " + quotePath (err.getAbsolutePath ()) + "\r\ntype nul >> finished\r\n");
+        FileUtil.writeTextContent (script, command + " > " + quotePath (out.getAbsolutePath ()) + " 2>> " + quotePath (err.getAbsolutePath ()) + "\r\ntype nul >> finished\r\n");
         String [] commandParm = new String[] {"cmd", "/c", "start", "/b", script.getAbsolutePath ()};
         Process p = Runtime.getRuntime ().exec (commandParm);
         p.waitFor ();

@@ -10,8 +10,6 @@ package gov.sandia.n2a.backend.internal;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
-import gov.sandia.umf.platform.UMF;
-
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.PrintStream;
@@ -48,8 +46,7 @@ public class Simulator implements Iterable<Instance>
     public Map<String,Integer>      columnMap       = new HashMap<String,Integer> ();  ///< For trace(). Maps from column name to column position.
     public List<Float>              columnValues    = new ArrayList<Float> ();         ///< For trace(). Holds current value for each column.
     public int                      columnsPrevious = 0;  ///< Number of columns written in previous cycle (of wrapper).
-    public PrintStream              out             = System.out;
-    public PrintStream              err             = System.err;
+    public PrintStream              out;
     // Note: System.in will get bound into an Input.Holder if used at all.
 
     public Event currentEvent;
@@ -65,29 +62,10 @@ public class Simulator implements Iterable<Instance>
         }
     }
 
-    public Simulator (Wrapper wrapper, String jobDir)
+    public Simulator (Wrapper wrapper)
     {
-        if (jobDir.isEmpty ())
-        {
-            // Fall back: make paths relative to n2a data directory
-            System.setProperty ("user.dir", UMF.getAppResourceDir ().getAbsolutePath ());
-        }
-        else
-        {
-            // Make paths relative to job directory
-            System.setProperty ("user.dir", new File (jobDir).getAbsolutePath ());
-
-            // Setup out and err streams first, so init phase can log output properly.
-            try
-            {
-                out = new PrintStream (new File (jobDir, "out"));
-                err = new PrintStream (new File (jobDir, "err"));
-            }
-            catch (FileNotFoundException e)
-            {
-                // out and err should retain their defaults (System.out and System.err) if an exception occurs
-            }
-        }
+        try {out = new PrintStream (new File ("out").getAbsoluteFile ());}      // put in current working dir, which should be the job directory
+        catch (FileNotFoundException e) {out = System.out;}  // if that fails, just use the default stdout
 
         this.wrapper = wrapper;
         wrapper.simulator = this;

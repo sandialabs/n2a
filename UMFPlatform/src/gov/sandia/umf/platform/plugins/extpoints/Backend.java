@@ -7,6 +7,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.plugins.extpoints;
 
+import java.io.PrintStream;
+
 import gov.sandia.umf.platform.ensemble.params.specs.ParameterSpecification;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
@@ -14,6 +16,31 @@ import replete.plugins.ExtensionPoint;
 
 public abstract class Backend implements ExtensionPoint
 {
+    /**
+        A stream bound to the "err" file in the directory of the job currently
+        being prepared, primarily for use by execute(MNode). Any warnings or
+        errors should be written here. The simulator should be configured to
+        append its stderr to the same file, if possible. This implies the print
+        stream should be closed before launching the external command.
+    **/
+    public static ThreadLocal<PrintStream> err = new ThreadLocal<PrintStream> ()
+    {
+        @Override
+        protected PrintStream initialValue ()
+        {
+            return System.err;
+        }
+    };
+
+    /**
+        This exception indicates to stop the simulation, but don't add any more
+        text to the err PrintStream. Implicitly, the thrower has already printed
+        out a sufficient message, and a java stack trace would simply add clutter.
+    **/
+    public static class AbortRun extends Exception
+    {
+    }
+
     /**
         Returns the display name for this back-end.
     **/
@@ -64,7 +91,7 @@ public abstract class Backend implements ExtensionPoint
         For a local machine, start the process that actually computes the job.
         For a remote system, submit the job to whatever scheduler may exist there.
     **/
-    public void execute (MNode job) throws Exception
+    public void execute (MNode job)
     {
     }
 

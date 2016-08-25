@@ -647,9 +647,10 @@ public class EquationTreePanel extends JPanel
             RunPanel panel = (RunPanel) uiController.selectTab ("Runs");
             MNode runs = AppData.runs;
             String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + jobCount++;
-            runs.set (record.key (), jobKey, "$inherit");
+            runs.set ("", jobKey);  // Create the dir and model doc
             final MNode job = runs.child (jobKey);
             job.merge (root.source);
+            job.set ("\"" + record.key () + "\"", "$inherit");
             ((MDoc) job).save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
 
             new Thread ()

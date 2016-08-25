@@ -29,7 +29,9 @@ import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileWriter;
+import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -138,31 +140,62 @@ class XyceBackend extends Backend
     }
 
     @Override
-    public void execute (MNode job) throws Exception
+    public void execute (final MNode job)
     {
-        final String jobDir = new File (job.get ()).getParent ();
-        Files.createFile (Paths.get (jobDir, "started"));
+        Thread t = new Thread ()
+        {
+            @Override
+            public void run ()
+            {
+                String jobDir = new File (job.get ()).getParent ();
+                try {err.set (new PrintStream (new File (jobDir, "err")));}
+                catch (FileNotFoundException e) {}
 
-        // Ensure essential metadata is set
-        if (job.child ("$metadata", "duration"       ) == null) job.set ("1.0",                       "$metadata", "duration");
-        if (job.child ("$metadata", "seed"           ) == null) job.set (System.currentTimeMillis (), "$metadata", "seed");
-        if (job.child ("$metadata", "xyce.integrator") == null) job.set ("trapezoid",                 "$metadata", "xyce.integrator");
+                try
+                {
+                    Files.createFile (Paths.get (jobDir, "started"));
 
-        // set up job info
-        ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("localhost", "$metadata", "host"));
-        String xyce    = env.getNamedValue ("xyce.binary");
-        String cirFile = env.file (jobDir, "model.cir");
-        String prnFile = env.file (jobDir, "result");  // "prn" doesn't work, at least on windows
+                    // Ensure essential metadata is set
+                    if (job.child ("$metadata", "duration"       ) == null) job.set ("1.0",                       "$metadata", "duration");
+                    if (job.child ("$metadata", "seed"           ) == null) job.set (System.currentTimeMillis (), "$metadata", "seed");
+                    if (job.child ("$metadata", "xyce.integrator") == null) job.set ("trapezoid",                 "$metadata", "xyce.integrator");
 
-        EquationSet e = new EquationSet (job);
-        Simulator simulator = InternalBackend.constructStaticNetwork (e, jobDir);
-        analyze (e);
+                    // set up job info
+                    ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("localhost", "$metadata", "host"));
+                    String xyce    = env.getNamedValue ("xyce.binary");
+                    String cirFile = env.file (jobDir, "model.cir");
+                    String prnFile = env.file (jobDir, "result");  // "prn" doesn't work, at least on windows
 
-        FileWriter writer = new FileWriter (cirFile);
-        generateNetlist (job, simulator, writer);
-        writer.close ();
+                    EquationSet e = new EquationSet (job);
+                    Simulator simulator = InternalBackend.constructStaticNetwork (e, jobDir);
+                    analyze (e);
 
-        env.submitJob (job, xyce + " " + env.quotePath (cirFile) + " -o " + env.quotePath (prnFile));
+                    FileWriter writer = new FileWriter (cirFile);
+                    generateNetlist (job, simulator, writer);
+                    writer.close ();
+
+                    PrintStream ps = Backend.err.get ();
+                    if (ps != System.err)
+                    {
+                        ps.close ();
+                        Backend.err.remove ();
+                    }
+                    env.submitJob (job, xyce + " " + env.quotePath (cirFile) + " -o " + env.quotePath (prnFile));
+                }
+                catch (AbortRun a)
+                {
+                }
+                catch (Exception e)
+                {
+                    e.printStackTrace (Backend.err.get ());
+                }
+
+                PrintStream ps = err.get ();
+                if (ps != System.err) ps.close ();
+            }
+        };
+        t.setDaemon (true);
+        t.start ();
     }
 
     @Override

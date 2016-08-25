@@ -7,6 +7,10 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.c;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.PrintStream;
+
 import gov.sandia.n2a.backend.internal.InternalBackend;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.umf.platform.db.MNode;
@@ -49,9 +53,35 @@ public class BackendC extends Backend
     }
 
     @Override
-    public void execute (MNode job) throws Exception
+    public void execute (final MNode job)
     {
-        new JobC ().execute (job);
+        Thread t = new Thread ("BackendC.execute")
+        {
+            @Override
+            public void run ()
+            {
+                String jobDir = new File (job.get ()).getParent ();  // assumes the MNode "job" is really an MDoc. In any case, the value of the node should point to a file on disk where it is stored in a directory just for it.
+                try {err.set (new PrintStream (new File (jobDir, "err")));}
+                catch (FileNotFoundException e) {}
+
+                try
+                {
+                    new JobC ().execute (job);
+                }
+                catch (AbortRun a)
+                {
+                }
+                catch (Exception e)
+                {
+                    e.printStackTrace (Backend.err.get ());
+                }
+
+                PrintStream ps = err.get ();
+                if (ps != System.err) ps.close ();
+            }
+        };
+        t.setDaemon (true);
+        t.start ();
     }
 
     @Override

@@ -15,7 +15,6 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.operator.LT;
 import gov.sandia.n2a.language.parse.ParseException;
 import gov.sandia.n2a.language.type.Scalar;
-import gov.sandia.umf.platform.UMF;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
@@ -23,6 +22,8 @@ import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.PrintStream;
 import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -45,41 +46,56 @@ public class InternalBackend extends Backend
     }
 
     @Override
-    public void execute (MNode job) throws Exception
+    public void execute (MNode job)
     {
-        // Prepare
-        final String jobDir = new File (job.get ()).getParent ();  // assumes the MNode "job" is really and MDoc. In any case, the value of the node should point to a file on disk where it is stored in a directory just for it.
-        Files.createFile (Paths.get (jobDir, "started"));
-        final EquationSet digestedModel = new EquationSet (job);
-        digestModel (digestedModel, jobDir);
+        Thread simulationThread = new SimulationThread (job);  // ctor starts the thread, if construction is successful
+        simulationThread.setDaemon (true);
+        simulationThread.start ();
+    }
 
-        // Submit
-        Runnable run = new Runnable ()
+    public class SimulationThread extends Thread
+    {
+        MNode job;
+
+        public SimulationThread (MNode job)
         {
-            public void run ()
+            this.job = job;
+        }
+
+        public void run ()
+        {
+            String jobDir = new File (job.get ()).getParent ();  // assumes the MNode "job" is really an MDoc. In any case, the value of the node should point to a file on disk where it is stored in a directory just for it.
+            try {err.set (new PrintStream (new File (jobDir, "err")));}
+            catch (FileNotFoundException e) {}
+
+            try
             {
-                Simulator simulator = new Simulator (new Wrapper (digestedModel), jobDir);
+                Files.createFile (Paths.get (jobDir, "started"));
+                EquationSet digestedModel = new EquationSet (job);
+                digestModel (digestedModel, jobDir);
+                Files.copy (new ByteArrayInputStream (digestedModel.dump (false).getBytes ("UTF-8")), Paths.get (jobDir, "model.flat"));
+                Simulator simulator = new Simulator (new Wrapper (digestedModel));
+                simulator.run ();  // Does not return until simulation is finished.
+                Files.copy (new ByteArrayInputStream ("success".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
+            }
+            catch (Exception e)
+            {
+                if (! (e instanceof AbortRun)) e.printStackTrace (err.get ());
+
                 try
                 {
-                    simulator.run ();  // Does not return until simulation is finished.
-                    Files.copy (new ByteArrayInputStream ("success".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
+                    Files.copy (new ByteArrayInputStream ("failure".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
                 }
-                catch (Exception e)
-                {
-                    simulator.err.println (e);
-                    e.printStackTrace (simulator.err);
-
-                    try
-                    {
-                        Files.copy (new ByteArrayInputStream ("failure".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
-                    }
-                    catch (Exception f)
-                    {
-                    }
-                }
+                catch (Exception f) {}
             }
-        };
-        new Thread (run).start ();
+
+            PrintStream e = err.get ();
+            if (e != System.err)
+            {
+                e.close ();
+                err.remove ();
+            }
+        }
     }
 
     @Override
@@ -187,22 +203,13 @@ public class InternalBackend extends Backend
     public static Simulator constructStaticNetwork (EquationSet e, String jobDir) throws Exception
     {
         digestModel (e, jobDir);
-        return new Simulator (new Wrapper (e), jobDir);
+        return new Simulator (new Wrapper (e));
     }
 
     public static void digestModel (EquationSet e, String jobDir) throws Exception
     {
-        // We need to set this first because certain analyses try to open files.
-        if (jobDir.isEmpty ())
-        {
-            // Fall back: make paths relative to n2a data directory
-            System.setProperty ("user.dir", UMF.getAppResourceDir ().getAbsolutePath ());
-        }
-        else
-        {
-            // Make paths relative to job directory
-            System.setProperty ("user.dir", new File (jobDir).getAbsolutePath ());
-        }
+        // Make paths relative to job directory
+        System.setProperty ("user.dir", new File (jobDir).getAbsolutePath ());
 
         e.resolveConnectionBindings ();
         e.flatten ();
