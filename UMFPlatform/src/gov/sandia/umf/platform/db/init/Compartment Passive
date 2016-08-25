@@ -1,12 +1,11 @@
 N2A.schema=1
-V' = (G_m * (V_rest - V) + I_inj) / C_m
-G_m = 0.3
- $metadata
-  xyce.param="gMem"
-V_rest = 10.613
- $metadata
-  xyce.param="eLeak"
-C_m = 1
+C_m=1uF
  $metadata
   xyce.param="cMem"
-
+G_m=0.3mS
+ $metadata
+  xyce.param="gMem"
+V'=(G_m*(V_rest-V)+I_inj)/C_m
+V_rest=10.613mV
+ $metadata
+  xyce.param="eLeak"
