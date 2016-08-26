@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2016 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -20,10 +20,10 @@ import javax.swing.JPanel;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
-import org.jfree.chart.axis.NumberAxis;
 import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.chart.plot.XYPlot;
 import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
+import org.jfree.chart.title.LegendTitle;
 import org.jfree.data.xy.XYDataset;
 import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
@@ -88,7 +88,7 @@ public class Plot
                 }
                 else
                 {
-                	int p = isXycePRN ? 1 : 0;  // skip paring Index column, since we don't use it
+                	int p = isXycePRN ? 1 : 0;  // skip parsing Index column, since we don't use it
                     for (; p < parts.length; p++)
                     {
                         columns.get (p).values.add (Double.parseDouble (parts[p]));
@@ -153,23 +153,19 @@ public class Plot
 
         chart.setBackgroundPaint (Color.white);
 
-        //final StandardLegend legend = (StandardLegend) chart.getLegend();
-        //legend.setDisplaySeriesShapes(true);
+        LegendTitle legend = chart.getLegend ();
+        legend.setVisible (dataset.getSeriesCount () <= 5);
 
-        // get a reference to the plot for further customisation...
-        final XYPlot plot = chart.getXYPlot();
-        plot.setBackgroundPaint (Color.lightGray);
-        // plot.setAxisOffset(new Spacer(Spacer.ABSOLUTE, 5.0, 5.0, 5.0, 5.0));
+        XYPlot plot = chart.getXYPlot();
+        plot.setBackgroundPaint     (Color.lightGray);
         plot.setDomainGridlinePaint (Color.white);
-        plot.setRangeGridlinePaint (Color.white);
+        plot.setRangeGridlinePaint  (Color.white);
+        plot.setDomainPannable (true);
+        plot.setRangePannable  (true);
 
-        final XYLineAndShapeRenderer renderer = new XYLineAndShapeRenderer();
+        XYLineAndShapeRenderer renderer = new XYLineAndShapeRenderer();
         for (int i = 0; i < dataset.getSeriesCount (); i++) renderer.setSeriesShapesVisible (i, false);
         plot.setRenderer(renderer);
-
-        // change the auto tick unit selection to integer units only...
-        final NumberAxis rangeAxis = (NumberAxis) plot.getRangeAxis();
-        rangeAxis.setStandardTickUnits(NumberAxis.createIntegerTickUnits());
 
         return chart;
     }

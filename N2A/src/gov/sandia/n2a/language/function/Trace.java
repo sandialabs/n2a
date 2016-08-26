@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.language.function;
 
 import gov.sandia.n2a.backend.internal.Simulator;
+import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Function;
@@ -55,7 +56,9 @@ public class Trace extends Function
             }
             else  // auto-generate column name
             {
-                column = context.path () + "." + variableName;
+                String prefix = context.path ();
+                if (prefix.isEmpty ()) column =                variableName;
+                else                   column = prefix + "." + variableName;
             }
             simulator.trace (column, (float) result.value);
         }
@@ -73,6 +76,20 @@ public class Trace extends Function
         else
         {
             variableName = v.name;
+        }
+
+        if (operands.length < 2)  // We need $index to auto-generate names.
+        {
+            EquationSet container = v.container;
+            while (container != null)
+            {
+                Variable index = container.find (new Variable ("$index"));
+                if (index != null  &&  ! container.hasConstantNof1 ())
+                {
+                    v.addDependency (index);
+                }
+                container = container.container;
+            }
         }
     }
 

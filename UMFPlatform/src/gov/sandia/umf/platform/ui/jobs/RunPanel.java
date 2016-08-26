@@ -55,6 +55,8 @@ public class RunPanel extends JPanel
     public JTextArea        displayText;
     public JScrollPane      displayPane = new JScrollPane ();
     public JButton          buttonGraph;
+    public JButton          buttonRaster;
+    public String           displayGraph = "";
     public DisplayThread    displayThread = null;
     public NodeBase         displayNode = null;
     public MDir             runs;  // Copied from AppData for convenience
@@ -205,29 +207,48 @@ public class RunPanel extends JPanel
         });
 
         displayPane.setViewportView (displayText);
-        buttonGraph = new JButton ("Graph", ImageUtil.getImage ("analysis.gif"));
-        buttonGraph.addActionListener (new ActionListener ()
+
+        ActionListener graphListener = new ActionListener ()
         {
             public void actionPerformed (ActionEvent e)
             {
                 if (displayNode instanceof NodeFile)
                 {
                     NodeFile nf = (NodeFile) displayNode;
-                    if (nf.type == NodeFile.Type.Output)
+                    if (nf.type == NodeFile.Type.Output  ||  nf.type == NodeFile.Type.Result)
                     {
-                    	if (displayPane.getViewport ().getView () instanceof ChartPanel)
-                    	{
-                    		viewFile ();
-                    	}
-                    	else
-                    	{
-                            Plot plot = new Plot (nf.path.getAbsolutePath ());
-                            if (! plot.columns.isEmpty ()) displayPane.setViewportView (plot.createGraphPanel ());
-                    	}
+                        String graphType = e.getActionCommand ();
+                        if (displayPane.getViewport ().getView () instanceof ChartPanel  &&  displayGraph.equals (graphType))
+                        {
+                            viewFile ();
+                            displayGraph = "";
+                        }
+                        else
+                        {
+                            if (graphType.equals ("Graph"))
+                            {
+                                Plot plot = new Plot (nf.path.getAbsolutePath ());
+                                if (! plot.columns.isEmpty ()) displayPane.setViewportView (plot.createGraphPanel ());
+                            }
+                            else  // Raster
+                            {
+                                Raster raster = new Raster (nf.path.getAbsolutePath (), displayPane.getHeight ());
+                                displayPane.setViewportView (raster.createGraphPanel ());
+                            }
+                            displayGraph = graphType;
+                        }
                     }
                 }
             }
-        });
+        };
+
+        buttonGraph = new JButton ("Graph", ImageUtil.getImage ("analysis.gif"));
+        buttonGraph.addActionListener (graphListener);
+        buttonGraph.setActionCommand ("Graph");
+
+        buttonRaster = new JButton ("Raster", ImageUtil.getImage ("prnplot.gif"));
+        buttonRaster.addActionListener (graphListener);
+        buttonRaster.setActionCommand ("Raster");
 
         Lay.BLtg
         (
@@ -241,7 +262,12 @@ public class RunPanel extends JPanel
                 ),
                 Lay.BL
                 (
-                    "N", Lay.FL (chkFixedWidth, buttonGraph, "hgap=50"),
+                    "N", Lay.FL
+                    (
+                        chkFixedWidth,
+                        Lay.FL (buttonGraph, buttonRaster),
+                        "hgap=50"
+                    ),
                     "C", displayPane
                 ),
                 "divpixel=250"

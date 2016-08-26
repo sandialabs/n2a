@@ -640,6 +640,39 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
+        Determines if this equation set has a fixed size of 1.
+    **/
+    public boolean hasConstantNof1 ()
+    {
+        Variable n = find (new Variable ("$n", 0));
+        if (n == null) return true;  // We only do more work if $n exists. Non-existent $n is the same as $n==1
+
+        // make sure no other orders of $n exist
+        Variable n2 = variables.higher (n);
+        if (n2.name.equals ("$n")) return false;  // higher orders means $n is dynamic
+
+        // check contents of $n
+        if (n.assignment != Variable.REPLACE) return false;
+        if (n.equations.size () != 1) return false;
+
+        EquationEntry ne = n.equations.first ();
+        if (ne.expression == null) return true;  // If we can't evaluate $n as a number, then we treat it as 1
+
+        Instance bypass = new Instance ()
+        {
+            public Type get (VariableReference r) throws EvaluationException
+            {
+                if (r.variable.name.equals ("$init")) return new Scalar (1);  // we evaluate $n in init cycle
+                return new Scalar (0);  // During init all other vars are 0, even if they have an initialization conditioned on $init. IE: those values won't be seen until after the init cycle.
+            }
+        };
+        Type value = n.eval (bypass);
+        if (value instanceof Scalar  &&  ((Scalar) value).value != 1) return false;
+        // Notice that we could fall through if $n is not a Scalar. That is an error, but since $n can't be evaluated properly, we treat is as 1.
+        return true;
+    }
+
+    /**
         Convert this equation list into an equivalent object where every included
         part with $n==1 is merged into its containing part.  Append (+=) equations
         are joined together into one long equation.
@@ -669,44 +702,15 @@ public class EquationSet implements Comparable<EquationSet>
             if (hasBackendMetadata) continue;
 
             // Check if $n==1
+            if (! s.hasConstantNof1 ()) continue;
             Variable n = s.find (new Variable ("$n", 0));
-            if (n != null)  // We only do more work if $n exists. Non-existent $n is the same as $n==1
-            {
-                // make sure no other orders of $n exist
-                Variable n2 = s.variables.higher (n);
-                if (n2.name.equals ("$n")) continue;
-
-                // check contents of $n
-                if (n.assignment != Variable.REPLACE) continue;
-                if (n.equations.size () != 1) continue;
-                EquationEntry ne = n.equations.first ();
-
-                // If we can't evaluate $n as a number, then we treat it as 1
-                // Otherwise, we check the actual value.
-                if (ne.expression != null)
-                {
-                    Instance bypass = new Instance ()
-                    {
-                        public Type get (VariableReference r) throws EvaluationException
-                        {
-                            if (r.variable.name.equals ("$init")) return new Scalar (1);  // we evaluate $n in init cycle
-                            return new Scalar (0);  // During init all other vars are 0, even if they have an initialization conditioned on $init. IE: those values won't be seen until after the init cycle.
-                        }
-                    };
-                    Type value = n.eval (bypass);
-                    if (value instanceof Scalar  &&  ((Scalar) value).value != 1) continue;
-                }
-                s.variables.remove (n);  // We don't want $n in the merged set.
-            }
+            if (n != null) s.variables.remove (n);  // We don't want $n in the merged set.
 
             // Don't merge if there are any conflicting $variables.
             boolean conflict = false;
             for (Variable v : s.variables)
             {
-                if (! v.name.startsWith ("$")  ||  v.name.startsWith ("$up"))
-                {
-                    continue;
-                }
+                if (! v.name.startsWith ("$")  ||  v.name.startsWith ("$up")) continue;
                 Variable d = find (v);
                 if (d != null  &&  d.name.equals (v.name))  // for this match we don't care about order; that is, any differential order on either side causes a conflict
                 {
@@ -714,10 +718,7 @@ public class EquationSet implements Comparable<EquationSet>
                     break;
                 }
             }
-            if (conflict)
-            {
-                continue;
-            }
+            if (conflict) continue;
 
             // Merge
 
@@ -911,6 +912,7 @@ public class EquationSet implements Comparable<EquationSet>
         Depends on results of:
             resolveLHS(), resolveRHS(), fillIntegratedVariables()
             addSpecials() -- so we can remove any $variables added unnecessarily
+            deteremineTraceVariableName() -- in case it establishes a dependency on $index
     **/
     public void removeUnused ()
     {
