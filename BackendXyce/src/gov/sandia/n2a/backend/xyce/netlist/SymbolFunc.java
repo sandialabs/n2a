@@ -15,7 +15,9 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Visitor;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 public class SymbolFunc extends Symbol
 {
@@ -26,6 +28,7 @@ public class SymbolFunc extends Symbol
         super (eq);
 
         // Determine what variables this function depends on.
+        // TODO make this code create a collection without duplicates, instead of removing them in functions below
         eq.visit (new Visitor ()
         {
             public boolean visit (Operator op)
@@ -56,9 +59,14 @@ public class SymbolFunc extends Symbol
     @Override
     public String getDefinition (XyceRenderer renderer) 
     {
-        List<String> formalArguments = new ArrayList<String> ();
-        for (VariableReference r : args) formalArguments.add (r.variable.name);  // TODO: will this produce a list of unique formal arguments? Do the var names need to be fully qualified?
-        return Xyceisms.defineFunction (eq.variable.name, renderer.pi.hashCode (), formalArguments, renderer.change (eq.expression));
+        // use a set to avoid duplicate entries for variables that appear multiple times
+        Set<String> formalArguments = new LinkedHashSet<String> ();
+        for (VariableReference r : args) formalArguments.add (r.variable.name);
+        // don't render the equation; defineFunction needs original version using formal parameters, not instance-based arguments
+        // but Xyce doesn't understand 'trace', and XyceSimulation code handles the .print statement for any use of 'trace',
+        // so just remove use of 'trace' while keeping any expression involved
+        String RHS = eq.toString ().replaceAll ("trace", "");
+        return Xyceisms.defineFunction (eq.variable.name, renderer.pi.hashCode (), formalArguments, RHS);
     }
 
     @Override
@@ -67,7 +75,8 @@ public class SymbolFunc extends Symbol
         // need to know what argument(s) this function
         // takes, and translate those as well -
         // unless they're in the exception list, as for defining the function
-        List<String> newArgs = new ArrayList<String> ();
+        // use a set to avoid duplicate entrires for variables that appear multiple times
+        Set<String> newArgs = new LinkedHashSet<String> ();
         for (VariableReference r : args)
         {
             newArgs.add (renderer.change (r));

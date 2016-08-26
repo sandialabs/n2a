@@ -30,7 +30,7 @@ public class Xyceisms {
 
     public static String referenceFunction(
             String funcname,
-            List<String> args,
+            Collection<String> args,
             int firstSN)
     {
         return funcname + "_" + firstSN + getArgList(args);

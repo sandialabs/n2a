@@ -109,7 +109,7 @@ public class XyceBackendData
 
             for (EquationEntry eq : v.equations)
             {
-                if (Device.ignoreEquation (eq)) continue;  // don't need to write out equations defining dynamics already defined by a device
+                if (Device.isXyceDevice (s) && Device.ignoreEquation (eq)) continue;  // don't need to write out equations defining dynamics already defined by a device
 
                 Symbol handler = null;
                 if (eq.variable.order > 1)
