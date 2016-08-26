@@ -252,15 +252,16 @@ public class Operator implements Cloneable, Comparable<Operator>
         }
         else if (node instanceof ASTIdentifier)
         {
-            if (node.jjtGetNumChildren () == 0)
+            String value = node.jjtGetValue ().toString ();
+            if (value.endsWith ("()"))
             {
-                result = new AccessVariable ();
+                Factory f = operators.get (value.substring (0, value.length () - 2));
+                if (f == null) result = new AccessElement ();  // It's either this or an undefined function. In the second case, variable access will fail.
+                else           result = f.createInstance ();
             }
             else
             {
-                Factory f = operators.get (node.jjtGetValue ().toString ());
-                if (f == null) result = new AccessElement ();  // It's either this or an undefined function. In the second case, variable access will fail.
-                else           result = f.createInstance ();
+                result = new AccessVariable ();
             }
         }
         else if (node instanceof ASTConstant) result = new Constant ();

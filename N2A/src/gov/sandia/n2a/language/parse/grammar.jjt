@@ -313,11 +313,12 @@ void MatrixExpression() #Matrix : {}
     <LSQ> CommaExpression() (<SEMI> CommaExpression())* <RSQ>
 }
 
-void Identifier() #Identifier : {Token t;}
+void Identifier() #Identifier : {Token t; Token p = null;}
 {
-    t = <IDENTIFIER> [<LRND> [CommaExpression()] <RRND>]
+    t = <IDENTIFIER> [p = <LRND> [CommaExpression()] <RRND>]
     {
-        jjtThis.jjtSetValue(t.image);
+        if (p == null) jjtThis.jjtSetValue(t.image);
+        else           jjtThis.jjtSetValue(t.image + "()");
     }
 }
 

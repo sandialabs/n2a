@@ -18,6 +18,11 @@ public class Function extends Operator
 
     public void getOperandsFrom (SimpleNode node) throws ParseException
     {
+        if (node.jjtGetNumChildren () == 0)
+        {
+            operands = new Operator[0];
+            return;
+        }
         if (node.jjtGetNumChildren () != 1) throw new ParseException ("AST for function has unexpected form");
         Object o = node.jjtGetChild (0);
         if (! (o instanceof ASTList)) throw new ParseException ("AST for function has unexpected form");
