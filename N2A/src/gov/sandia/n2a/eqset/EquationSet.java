@@ -16,7 +16,9 @@ import gov.sandia.n2a.language.Split;
 import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
+import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Trace;
+import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
@@ -642,7 +644,7 @@ public class EquationSet implements Comparable<EquationSet>
     /**
         Determines if this equation set has a fixed size of 1.
     **/
-    public boolean hasConstantNof1 ()
+    public boolean isSingleton ()
     {
         Variable n = find (new Variable ("$n", 0));
         if (n == null) return true;  // We only do more work if $n exists. Non-existent $n is the same as $n==1
@@ -702,7 +704,7 @@ public class EquationSet implements Comparable<EquationSet>
             if (hasBackendMetadata) continue;
 
             // Check if $n==1
-            if (! s.hasConstantNof1 ()) continue;
+            if (! s.isSingleton ()) continue;
             Variable n = s.find (new Variable ("$n", 0));
             if (n != null) s.variables.remove (n);  // We don't want $n in the merged set.
 
@@ -1799,6 +1801,8 @@ public class EquationSet implements Comparable<EquationSet>
                                     }
                                 }
                             }
+                            else if (op instanceof Gaussian) isInitOnly = false;  // Of all functions and operators, a random number generator cannot be classified constant or a function of its parameters.
+                            else if (op instanceof Uniform ) isInitOnly = false;
                         }
                         return isInitOnly;
                     }

@@ -84,7 +84,7 @@ public class Trace extends Function
             while (container != null)
             {
                 Variable index = container.find (new Variable ("$index"));
-                if (index != null  &&  ! container.hasConstantNof1 ())
+                if (index != null  &&  ! container.isSingleton ())
                 {
                     v.addDependency (index);
                 }

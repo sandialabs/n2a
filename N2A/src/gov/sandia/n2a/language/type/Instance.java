@@ -281,14 +281,20 @@ public class Instance extends Type
     **/
     public String path ()
     {
+        Instance nextLevel = container.container;
+        boolean atTop = nextLevel instanceof Wrapper  ||  nextLevel == null;
+
         // The name by itself adds no information; only parts with indices are useful in the path
         // Alternately, we could always include singleton part names, for clarity.
         String result = "";
         InternalBackendData bed = (InternalBackendData) equations.backendData;
-        if (bed.index != null) result = equations.name + get (bed.index);
+        if (bed.index != null)
+        {
+            if (! atTop) result = equations.name;
+            result += get (bed.index);
+        }
 
-        Instance nextLevel = container.container;
-        if (nextLevel == null  ||  nextLevel instanceof Wrapper) return result;
+        if (atTop) return result;
         String prefix = nextLevel.path ();
         if (prefix.isEmpty ()) return result;
         return prefix + "." + result;
