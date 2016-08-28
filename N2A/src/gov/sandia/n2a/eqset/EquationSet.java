@@ -1801,7 +1801,7 @@ public class EquationSet implements Comparable<EquationSet>
                                     }
                                 }
                             }
-                            else if (op instanceof Gaussian) isInitOnly = false;  // Of all functions and operators, a random number generator cannot be classified constant or a function of its parameters.
+                            else if (op instanceof Gaussian) isInitOnly = false;  // A random number generator cannot be classified constant, even if its parameters are constant.
                             else if (op instanceof Uniform ) isInitOnly = false;
                         }
                         return isInitOnly;
