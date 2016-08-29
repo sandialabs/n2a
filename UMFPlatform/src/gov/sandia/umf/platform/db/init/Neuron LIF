@@ -1,23 +1,20 @@
 N2A.schema=1
 $metadata
- stpu.component=stpu.lif
-v = v_reset @ v >= v_thresh
-v' = -leakage * (v - v_reset)
-v_reset = 0.0
+ backend.stpu.component=lif
+leakage=0.1
  $metadata
-  stpu.param = "pot_qct"
-v_thresh = 10.0
+  backend.stpu.param=lkg_val
+v=v_reset@v>v_thresh
+v'=-leakage*(v-v_reset)
+v_max=127.0
  $metadata
-  stpu.param = "pot_thr"
-v = v_reset @ $init
-leakage = 0.1
+  backend.stpu.param=pot_max
+v_min=-128.0
  $metadata
-  stpu.param = "lkg_val"
-v = v_max @ v > v_max
-v = v_min @ v < v_min
-v_max = 127.0
+  backend.stpu.param=pot_min
+v_reset=0.0
  $metadata
-  stpu.param = "pot_max"
-v_min = -128.0
+  backend.stpu.param=pot_qct
+v_thresh=10.0
  $metadata
-  stpu.param = "pot_min"
+  backend.stpu.param=pot_thr

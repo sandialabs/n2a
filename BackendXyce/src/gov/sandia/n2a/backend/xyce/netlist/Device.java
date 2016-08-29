@@ -48,12 +48,12 @@ import java.util.Map.Entry;
 
 public class Device
 {
-    public static final String DEVICE_TAG = "xyce.device";
-    public static final String PARAM_TAG  = "xyce.param";
-    public static final String NODE_TAG   = "xyce.nodeIndex";
-    public static final String INPUT_TAG  = "xyce.inputIndex";
-    public static final String IVAR_TAG   = "xyce.internalVar";
-    public static final String IGNORE_TAG = "xyce.ignore";
+    public static final String DEVICE_TAG = "backend.xyce.device";
+    public static final String PARAM_TAG  = "backend.xyce.param";
+    public static final String NODE_TAG   = "backend.xyce.nodeIndex";
+    public static final String INPUT_TAG  = "backend.xyce.inputIndex";
+    public static final String IVAR_TAG   = "backend.xyce.internalVar";
+    public static final String IGNORE_TAG = "backend.xyce.ignore";
 
     public static Variable ground = new Variable ("0");
     public static Variable empty  = new Variable ("");

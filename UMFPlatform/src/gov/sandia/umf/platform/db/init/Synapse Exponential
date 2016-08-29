@@ -1,66 +1,66 @@
 N2A.schema=1
 $metadata
- xyce.device=synapse3
  notes=|
    Exponential synapse using Xyce level 3 synapse device.  This template doesn't currently define the equations for the synapse dynamics.  
    Translation depends on the metadata specifying information to create a xyce device that corresponds to this synapse.
+ backend.xyce.device=synapse3
+$p=0.2
 A=$connect("")
+A.v'
+ $metadata
+  backend.xyce.nodeIndex=1
+A_LTD=0.05
+ $metadata
+  backend.xyce.param=altd
+A_LTP=8.5
+ $metadata
+  backend.xyce.param=altp
 B=$connect("")
-A.v'=
+B.v'
  $metadata
-  xyce.nodeIndex=1
-B.v'=
+  backend.xyce.nodeIndex=2
+E_rev=0.0
  $metadata
-  xyce.nodeIndex=2
-strength = 1.318E-12
+  backend.xyce.param=eRev
+L3tau=20.0
  $metadata
-  xyce.param = "gmax"
-E_rev = 0.0
+  backend.xyce.param=l3tau
+R=-75.0
  $metadata
-  xyce.param = "eRev"
-Vthresh = -35.0
+  backend.xyce.param=R
+S=-35.0
  $metadata
-  xyce.param = "Vthresh"
-riseTau = 0.1
+  backend.xyce.param=S
+Vthresh=-35.0
  $metadata
-  xyce.param = "tau1"
-tau = 0.005
+  backend.xyce.param=Vthresh
+distance_abs=1.0E-4
  $metadata
-  xyce.param = "tau2"
-distance_abs = 1.0E-4
+  backend.xyce.param=delay
+p_release=1.0
  $metadata
-  xyce.param = "delay"
-A_LTD = 0.05
+  backend.xyce.param=p
+riseTau=0.1
  $metadata
-  xyce.param  = "altd"
-A_LTP = 8.5
+  backend.xyce.param=tau1
+strength=1.318E-12
  $metadata
-  xyce.param  = "altp"
-tau_pre = 0.023
+  backend.xyce.param=gmax
+tau=0.005
  $metadata
-  xyce.param  = "l1tau"
-tau2 = 0.007
+  backend.xyce.param=tau2
+tau2=0.007
  $metadata
-  xyce.param  = "l2tau"
-L3tau = 20.0
+  backend.xyce.param=l2tau
+tau_pre=0.023
  $metadata
-  xyce.param  = "l3tau"
-R = -75.0
+  backend.xyce.param=l1tau
+wInit=1.0
  $metadata
-  xyce.param  = "R"
-S = -35.0
+  backend.xyce.param=winit
+wMax=2.0
  $metadata
-  xyce.param  = "S"
-wMin = 0.01
+  backend.xyce.param=wmax
+wMin=0.01
  $metadata
-  xyce.param  = "wmin"
-wMax = 2.0
- $metadata
-  xyce.param  = "wmax"
-wInit = 1.0
- $metadata
-  xyce.param  = "winit"
-p_release = 1.0
- $metadata
-  xyce.param  = "p"
-$p = 0.2
+  backend.xyce.param=wmin

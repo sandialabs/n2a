@@ -1,13 +1,13 @@
 N2A.schema=1
-$p=$t < 100ms
+$p=$t<100ms
 $t'=0.01ms
 C
  $inherit="Hodgkin-Huxley Coupling"
- $p=A.$index == B.$index - 1
+ $p=A.$index==B.$index-1
  A=HH
  B=HH
 HH
  $inherit="Neuron Hodgkin-Huxley"
  $n=3
- I_inj=10uA @ $index == 0
+ I_inj=10uA@$index==0
  output=trace(V)

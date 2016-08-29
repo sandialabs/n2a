@@ -1,13 +1,12 @@
 N2A.schema=1
 $metadata
- stpu.component=stpu.lif2lif
+ backend.stpu.component=lif2lif
 A=$connect("Neuron LIF")
 B=$connect("Neuron LIF")
-delay = 5.0
+B.v=B.v+w@$event(A.v>A.v_thresh,delay,"rise")
+delay=5.0
  $metadata
-  stpu.param = "TmpOff"
-w = 1.0
+  backend.stpu.param=TmpOff
+w=1.0
  $metadata
-  stpu.param = "SynStr"
-B.v = B.v + w @ $event(A.v >= A.v_thresh, delay, "rise")
-
+  backend.stpu.param=SynStr

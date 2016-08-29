@@ -1,41 +1,41 @@
 N2A.schema=1
 $metadata
- xyce.device=neuron7
-v' = 1.0 / Cm * (k * (v - vr) * (v - vt) - u + I)
+ backend.xyce.device=neuron7
+Cm=5.0E-11
  $metadata
-  xyce.nodeIndex=1
-u' = a * (b * (v - vr) - u)
+  backend.xyce.param="memC"
+I=0.0
+a=100.0
  $metadata
-  xyce.internalVar="u"
-vt = -0.04
+  backend.xyce.param="a"
+b=-1.0E-10
  $metadata
-  xyce.param="Vt"
-Cm = 5.0E-11
+  backend.xyce.param="b"
+c=-0.045
  $metadata
-  xyce.param="memC"
-vr = -0.07
+  backend.xyce.param="c"
+d=1.0E-10
  $metadata
-  xyce.param="Vr"
-k = 1.0E-7
+  backend.xyce.param="d"
+k=1.0E-7
  $metadata
-  xyce.param="k"
-I = 0.0
-a = 100.0
+  backend.xyce.param="k"
+u=u+d@v>v_reset
  $metadata
-  xyce.param="a"
-b = -1.0E-10
+  backend.xyce.ignore
+u'=a*(b*(v-vr)-u)
  $metadata
-  xyce.param="b"
-c = -0.045
+  backend.xyce.internalVar="u"
+v=c@v>v_reset
  $metadata
-  xyce.param="c"
-d = 1.0E-10
+  backend.xyce.ignore
+v'=(k*(v-vr)*(v-vt)-u+I)/Cm
  $metadata
-  xyce.param="d"
-v = c @ v > v_reset
+  backend.xyce.nodeIndex=1
+v_reset=0.035
+vr=-0.07
  $metadata
-  xyce.ignore
-u = u + d @ v > v_reset
+  backend.xyce.param="Vr"
+vt=-0.04
  $metadata
-  xyce.ignore
-v_reset = 0.035
+  backend.xyce.param="Vt"

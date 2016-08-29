@@ -1,12 +1,12 @@
 N2A.schema=1
 $metadata
- stpu.component=stpu.input
-I = matrixRaw("../../stpu/stpuinput.input", 0.0, $index)
+ backend.stpu.component=input
+I=matrixRaw("../../stpu/stpuinput.input",0.0,$index)
  $metadata
-  stpu.param = "InpVal"
-stream = 0.0
+  backend.stpu.param=InpVal
+I_init=matrixRaw("../../stpu/stpuinput.init",0.0,$index)
  $metadata
-  stpu.param = "input_stream"
-I_init = matrixRaw("../../stpu/stpuinput.init", 0.0, $index)
+  backend.stpu.param=InitVal
+stream=0.0
  $metadata
-  stpu.param = "InitVal"
+  backend.stpu.param=input_stream

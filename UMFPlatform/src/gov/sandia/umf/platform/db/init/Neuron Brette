@@ -1,6 +1,7 @@
 N2A.schema=1
+$inherit="Neuron Hodgkin-Huxley"
 $metadata
- xyce.device=neuron9
+ backend.xyce.device=neuron9
  notes=|
    Based on equations from Brette et al 2007, which in turn are based on a model by Traub
    
@@ -8,13 +9,14 @@ $metadata
    
    This part does not specify sizes, which means V and I really represent voltage/current DENSITIES.
    Alternatively, one can imagine this represents a 1 cm^2 compartment.
-$inherit="Neuron Hodgkin-Huxley"
-alpha_m =: 1000.0 * 0.32 * (13.0 - 1000.0 * V + VT) / (exp((13.0 - 1000.0 * V + VT) / 4.0) - 1.0)
-beta_m =: 1000.0 * 0.28 * (1000.0 * V - VT - 40.0) / (exp((1000.0 * V - VT - 40.0) / 5.0) - 1.0)
-alpha_h =: 1000.0 * 0.128 * exp((17.0 - 1000.0 * V + VT) / 18.0)
-beta_h =: 1000.0 * 4.0 / (exp((40.0 - 1000.0 * V + VT) / 5.0) + 1.0)
-alpha_n =: 1000.0 * 0.32 * (15.0 - 1000.0 * V + VT) / (exp((15.0 - 1000.0 * V + VT) / 5.0) - 1.0)
-beta_n =: 1000.0 * 0.5 * exp((10.0 - 1000.0 * V + VT) / 80.0)
-VT = -63.0
+K
+ alpha_n=:0.32*(15.0-mV+VT)/(exp((15.0-mV+VT)/5.0)-1.0)
+ beta_n=:0.5*exp((10.0-mV+VT)/80.0)
+Na
+ alpha_h=:0.128*exp((17.0-mV+VT)/18.0)
+ alpha_m=:0.32*(13.0-mV+VT)/(exp((13.0-mV+VT)/4.0)-1.0)
+ beta_h=:4.0/(exp((40.0-mV+VT)/5.0)+1.0)
+ beta_m=:0.28*(mV-VT-40.0)/(exp((mV-VT-40.0)/5.0)-1.0)
+VT=-63.0
  $metadata
-  xyce.ignore
+  backend.xyce.ignore

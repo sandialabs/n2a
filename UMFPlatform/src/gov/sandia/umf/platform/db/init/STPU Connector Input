@@ -1,10 +1,10 @@
 N2A.schema=1
 $metadata
- stpu.component=stpu.inp2lif
+ backend.stpu.component=inp2lif
 A=$connect("STPU Input")
 B=$connect("Neuron LIF")
-w=1.0
+B.v
+ @$event($init,0.0,"fall")=B.v+A.I_init*w
+ @$event(A.stream,delay,"rise")=B.v+A.I*w
 delay=5.0
-B.v = B.v + A.I * w @ $event(A.stream, delay, "rise")
-B.v = B.v + A.I_init * w @ $event($init, 0.0, "fall")
-
+w=1.0

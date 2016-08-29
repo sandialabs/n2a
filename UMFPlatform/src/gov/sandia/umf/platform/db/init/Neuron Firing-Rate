@@ -9,8 +9,8 @@ $metadata
    dfdV = slope of firing rate at midpoint voltage
    V_rest = voltage at which neuron returns to in absence of input
    tau = time constant of neuron re-polarization
-f = f_max * ((1.0 + tanh((V - V_mean) * dfdV)) / 2.0) ^ 2.0 / 1000.0
-V' = -1.0 / tau * (V - V_rest) + I_inj
-V_mean = V_thresh + 1.0 / dfdV
-V = V_rest @ init
-I_inj = 0.0
+I_inj=0.0
+V=V_rest@init
+V'=-1.0/tau*(V-V_rest)+I_inj
+V_mean=V_thresh+1.0/dfdV
+f=f_max*((1.0+tanh((V-V_mean)*dfdV))/2.0)^2.0/1000.0

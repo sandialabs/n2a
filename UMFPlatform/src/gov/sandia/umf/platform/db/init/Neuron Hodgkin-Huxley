@@ -1,6 +1,7 @@
 N2A.schema=1
+$inherit="Compartment Passive"
 $metadata
- xyce.device=neuron1
+ backend.xyce.device=neuron1
  notes=|
    From Koch, chapter 6
    Models the potential across the membrane over time by specifying changes in each of several ion currents:  Na, K, and a ‘leak’ current (generally used to make the resting potential come out right)
@@ -15,8 +16,7 @@ $metadata
    For full usability as a Xyce device, we need to specify the units of all the constants, so they can be scaled correctly. Xyce expects SI units: Volts, amps, Farads, etc.
    
    Models a Hodgkin-Huxley compartment fully as well as a Hodgkin-Huxley point neuron.
-$inherit="Compartment Passive"
-Na
- $inherit="Channel Na"
 K
  $inherit="Channel K"
+Na
+ $inherit="Channel Na"
