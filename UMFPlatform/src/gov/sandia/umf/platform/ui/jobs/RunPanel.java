@@ -150,6 +150,7 @@ public class RunPanel extends JPanel
                         public void run ()
                         {
                             model.nodeStructureChanged (root);
+                            if (model.getChildCount (root) > 0) tree.setSelectionRow (0);
                         }
                     });
 
@@ -190,6 +191,7 @@ public class RunPanel extends JPanel
         displayText.setEditable(false);
 
         final JCheckBox chkFixedWidth = new JCheckBox ("Fixed-Width Font");
+        chkFixedWidth.setFocusable (false);
         chkFixedWidth.addActionListener (new ActionListener()
         {
             public void actionPerformed (ActionEvent e)
@@ -243,10 +245,12 @@ public class RunPanel extends JPanel
         };
 
         buttonGraph = new JButton ("Graph", ImageUtil.getImage ("analysis.gif"));
+        buttonGraph.setFocusable (false);
         buttonGraph.addActionListener (graphListener);
         buttonGraph.setActionCommand ("Graph");
 
         buttonRaster = new JButton ("Raster", ImageUtil.getImage ("prnplot.gif"));
+        buttonRaster.setFocusable (false);
         buttonRaster.addActionListener (graphListener);
         buttonRaster.setActionCommand ("Raster");
 
@@ -273,6 +277,7 @@ public class RunPanel extends JPanel
                 "divpixel=250"
             )
         );
+        setFocusCycleRoot (true);
     }
 
     public class DisplayThread extends Thread
@@ -423,9 +428,10 @@ public class RunPanel extends JPanel
     public void addNewRun (MNode run)
     {
         final NodeJob node = new NodeJob (run);
-        model.insertNodeInto (node, root, 0);
+        model.insertNodeInto (node, root, 0);  // TODO: race condition on model, between this code and initial load in monitor thread
         if (root.getChildCount () == 1) model.nodeStructureChanged (root);  // If the list was empty, wee need to give the JTree a little extra kick to get started.
         tree.setSelectionRow (0);
+        tree.requestFocusInWindow ();
 
         new Thread ("RunPanel Add New Run")
         {

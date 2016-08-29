@@ -15,7 +15,6 @@ import javax.swing.JPanel;
 import javax.swing.JSplitPane;
 
 import gov.sandia.umf.platform.AppState;
-import gov.sandia.umf.platform.ui.UIController;
 
 public class ModelEditPanel extends JPanel
 {
@@ -23,10 +22,12 @@ public class ModelEditPanel extends JPanel
     public SearchPanel       panelSearch;
     public EquationTreePanel panelEquations;
 
-    public ModelEditPanel(UIController uic)
+    public ModelEditPanel ()
     {
-        panelEquations = new EquationTreePanel (uic);
-        panelSearch    = new SearchPanel (panelEquations);
+        panelEquations = new EquationTreePanel ();
+        panelSearch    = new SearchPanel ();
+        panelEquations.panelSearch    = panelSearch;
+        panelSearch   .panelEquations = panelEquations;
 
         split = new JSplitPane (JSplitPane.HORIZONTAL_SPLIT, panelSearch, panelEquations);
         split.setOneTouchExpandable(true);
@@ -38,8 +39,10 @@ public class ModelEditPanel extends JPanel
         // Determine the split position.
         int divider = AppState.getInstance ().getOrDefault (0, "ModelEditPanel", "divider");
         if (divider > 0) split.setDividerLocation (divider);
+        else             split.setDividerLocation (0.25);
         split.setResizeWeight (0.25);  // always favor equation tree over search
 
+        // TODO: Something seems to add 2px to the divider location each time the app is run. Probably during layout.
         split.addPropertyChangeListener (split.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
             public void propertyChange (PropertyChangeEvent e)

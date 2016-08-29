@@ -5,15 +5,13 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.umf.platform;
+package gov.sandia.umf.platform.ui.ensemble;
 
 import java.awt.Component;
 
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
 import gov.sandia.umf.platform.plugins.extpoints.RecordHandler;
-import gov.sandia.umf.platform.ui.UIController;
-import gov.sandia.umf.platform.ui.ensemble.ParameterSpecGroupsPanel;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import javax.swing.ImageIcon;
@@ -36,14 +34,20 @@ public class RunEnsembleRecordHandler implements RecordHandler
     }
 
     @Override
-    public Component getComponent (UIController uiController)
+    public Component getPanel ()
     {
-        return new TestRecordPanel (uiController);
+        return new TestRecordPanel ();
+    }
+
+    @Override
+    public Component getInitialFocus (Component panel)
+    {
+        return null;
     }
 
     private class TestRecordPanel extends JTabbedPane
     {
-        public TestRecordPanel (UIController uic)
+        public TestRecordPanel ()
         {
             MNode doc = null;  // TODO: Obtain currently selected document from Model tab. This should probably be a system-wide property held in UIController, or perhaps AppData
             System.out.println ("RunEnsembleRecordHandler.TestRecordPanel doc = " + doc);

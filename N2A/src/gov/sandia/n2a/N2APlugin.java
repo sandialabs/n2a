@@ -9,6 +9,7 @@ package gov.sandia.n2a;
 
 import gov.sandia.n2a.exporters.LEMSExporter;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.ui.eq.ModelRecordHandler;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import javax.swing.ImageIcon;

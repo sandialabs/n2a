@@ -5,13 +5,11 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.umf.platform.ui.run;
+package gov.sandia.umf.platform.ui.ensemble.run;
 
 import gov.sandia.umf.platform.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.ui.HelpLabels;
 import gov.sandia.umf.platform.ui.MainFrame;
-import gov.sandia.umf.platform.ui.UIController;
-
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
@@ -24,31 +22,14 @@ import replete.event.ChangeNotifier;
 import replete.gui.controls.WComboBox;
 import replete.util.Lay;
 
-public class SimulatorSelectionPanel extends JPanel {
-
-
-    ////////////
-    // FIELDS //
-    ////////////
-
-    // Core
-
-    private UIController uiController;
-
-    // UI
-
+public class SimulatorSelectionPanel extends JPanel
+{
     private JPanel pnlCenter;
     private JComboBox cboSimulators;
     private DefaultComboBoxModel mdlSimulators;
 
-
-    /////////////////
-    // CONSTRUCTOR //
-    /////////////////
-
-    public SimulatorSelectionPanel(CreateRunEnsembleDialog parentRef, UIController uic, Backend[] simulators, Backend defaultSimulator) {
-        uiController = uic;
-
+    public SimulatorSelectionPanel(CreateRunEnsembleDialog parentRef, Backend[] simulators, Backend defaultSimulator)
+    {
         // Populate simulator combo box model.
         mdlSimulators = new DefaultComboBoxModel();
         for(Backend simulator : simulators) {
@@ -72,7 +53,7 @@ public class SimulatorSelectionPanel extends JPanel {
 
             "N", Lay.BL(
                 "W", Lay.FL("L",
-                    Lay.hn(HelpLabels.createLabelPanel(uiController, parentRef, "Simulator", "part-name")),
+                    Lay.hn(HelpLabels.createLabelPanel(parentRef, "Simulator", "part-name")),
                     cboSimulators),
                 "C", Lay.lb(" ")
             )
@@ -80,7 +61,7 @@ public class SimulatorSelectionPanel extends JPanel {
     }
 
     protected JPanel createLabelPanel(String text, String helpKey) {
-        return HelpLabels.createLabelPanel(uiController, MainFrame.getInstance(), text, helpKey);
+        return HelpLabels.createLabelPanel(MainFrame.getInstance(), text, helpKey);
     }
 
     public Backend getSimulator() {

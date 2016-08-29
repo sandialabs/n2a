@@ -18,7 +18,12 @@ import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.db.MPersistent;
 import gov.sandia.umf.platform.plugins.UMFPluginManager;
 import gov.sandia.umf.platform.plugins.extpoints.Backend;
-import gov.sandia.umf.platform.ui.UIController;
+import gov.sandia.umf.platform.plugins.extpoints.Exporter;
+import gov.sandia.umf.platform.ui.MainFrame;
+import gov.sandia.umf.platform.ui.MainTabbedPane;
+import gov.sandia.umf.platform.ui.export.ExportDialog;
+import gov.sandia.umf.platform.ui.export.ExportParameters;
+import gov.sandia.umf.platform.ui.export.ExportParametersDialog;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 import gov.sandia.umf.platform.ui.jobs.RunPanel;
 
@@ -35,6 +40,7 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Enumeration;
@@ -72,7 +78,6 @@ import replete.util.Lay;
 
 public class EquationTreePanel extends JPanel
 {
-    protected UIController uiController;
     protected MNode record;
     protected int jobCount = 0;  // for launching jobs
 
@@ -80,6 +85,8 @@ public class EquationTreePanel extends JPanel
     public JTree            tree;
     public DefaultTreeModel model;
     public NodePart         root;
+    public int              lastSelectedRow = -1;
+    protected SearchPanel   panelSearch;  // reference to other side of our panel pair, so we can send updates (alternative to a listener arrangement)
 
     // Controls
     protected JButton buttonAddModel;
@@ -249,10 +256,8 @@ public class EquationTreePanel extends JPanel
     }
 
     // The main constructor. Most of the real work of setting up the UI is here, including some fairly elaborate listeners.
-    public EquationTreePanel (UIController uic)
+    public EquationTreePanel ()
     {
-        uiController = uic;
-
         model = new DefaultTreeModel (null);
         tree  = new JTree (model)
         {
@@ -290,6 +295,8 @@ public class EquationTreePanel extends JPanel
                 if (parent != null) index = parent.getIndex (editor.editingNode) - 1;
 
                 editor.editingNode.applyEdit (tree);
+
+                if (editor.editingNode == root) panelSearch.list.repaint ();  // possible name change on model
 
                 TreePath path = tree.getSelectionPath ();
                 if (path == null)  // If we lose the selection, most likely applyEdit() deleted the node, and that function assumes the caller handles selection.
@@ -373,7 +380,7 @@ public class EquationTreePanel extends JPanel
                 int keycode = e.getKeyCode ();
                 if (keycode == KeyEvent.VK_DELETE)
                 {
-                    deleteSelected (e.isControlDown ());
+                    deleteSelected ();
                 }
                 else if (keycode == KeyEvent.VK_INSERT)
                 {
@@ -439,7 +446,21 @@ public class EquationTreePanel extends JPanel
                 // Import the part
                 if (path == null)
                 {
-                    if (root == null) return false;  // Generally, this shouldn't happen. Instead, some default working model should always be active (even on first start).
+                    if (root == null)
+                    {
+                        boolean recycled = createNewModel ();
+                        int index;
+                        if (recycled)
+                        {
+                            index = panelSearch.model.indexOf (record);
+                        }
+                        else
+                        {
+                            index = panelSearch.list.getSelectedIndex () + 1;
+                            panelSearch.model.insertElementAt (record, index);
+                        }
+                        if (index >= 0) panelSearch.list.setSelectedIndex (index);
+                    }
                     tree.setSelectionRow (0);
                     path = tree.getSelectionPath ();
                 }
@@ -463,6 +484,27 @@ public class EquationTreePanel extends JPanel
             }  
         });
 
+        tree.addFocusListener (new FocusListener ()
+        {
+            public void focusGained (FocusEvent e)
+            {
+                if (tree.getSelectionCount () < 1)
+                {
+                    if (lastSelectedRow < 0  ||  lastSelectedRow >= tree.getRowCount ()) tree.setSelectionRow (0);
+                    else                                                                 tree.setSelectionRow (lastSelectedRow);
+                }
+            }
+
+            public void focusLost (FocusEvent e)
+            {
+                if (! tree.isEditing ())  // The shift to the editing component appears as a loss of focus.
+                {
+                    int[] rows = tree.getSelectionRows ();
+                    if (rows != null  &&  rows.length > 0) lastSelectedRow = rows[0];
+                    tree.clearSelection ();
+                }
+            }
+        });
 
         // Side Buttons
 
@@ -614,15 +656,6 @@ public class EquationTreePanel extends JPanel
         }
     };
 
-    ActionListener deleteListener = new ActionListener ()
-    {
-        public void actionPerformed (ActionEvent e)
-        {
-            boolean shift = (e.getModifiers () & ActionEvent.CTRL_MASK) != 0;
-            deleteSelected (shift);
-        }
-    };
-
     ActionListener moveListener = new ActionListener ()
     {
         public void actionPerformed (ActionEvent e)
@@ -644,7 +677,6 @@ public class EquationTreePanel extends JPanel
 
             String simulatorName = record.get ("$metadata", "backend");
             final Backend simulator = UMFPluginManager.getBackend (simulatorName);
-            RunPanel panel = (RunPanel) uiController.selectTab ("Runs");
             MNode runs = AppData.runs;
             String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + jobCount++;
             runs.set ("", jobKey);  // Create the dir and model doc
@@ -669,7 +701,10 @@ public class EquationTreePanel extends JPanel
                 }
             }.start ();
 
-            panel.addNewRun (job);
+            MainTabbedPane mtp = (MainTabbedPane) MainFrame.getInstance ().tabs;
+            RunPanel panelRun = (RunPanel) mtp.selectTab ("Runs");
+            mtp.setPreferredFocus (panelRun, panelRun.tree);
+            panelRun.addNewRun (job);
         }
     };
 
@@ -677,7 +712,26 @@ public class EquationTreePanel extends JPanel
     {
         public void actionPerformed (ActionEvent e)
         {
-            uiController.openExportDialog (record);
+            ExportDialog dlg = new ExportDialog (MainFrame.getInstance ());
+            dlg.setVisible (true);
+            if (dlg.getState () == ExportDialog.OK)
+            {
+                Exporter exporter = dlg.getExporter ();
+                ExportParametersDialog dlg2 = new ExportParametersDialog (MainFrame.getInstance (), exporter);
+                dlg2.setVisible (true);
+                if (dlg2.getState () == ExportParametersDialog.OK)
+                {
+                    ExportParameters params = dlg2.getParameters ();
+                    try
+                    {
+                        exporter.export (record, params);
+                    }
+                    catch (IOException error)
+                    {
+                        error.printStackTrace ();
+                    }
+                }
+            }
         }
     };
 
@@ -710,8 +764,9 @@ public class EquationTreePanel extends JPanel
         }
     }
 
-    public void createNewModel ()
+    public boolean createNewModel ()
     {
+        boolean recycled = false;
         MNode models = AppData.models;
         String newModelName = "New Model";
         MNode newModel = models.child (newModelName);
@@ -725,7 +780,11 @@ public class EquationTreePanel extends JPanel
             int suffix = 2;
             while (true)
             {
-                if (newModel.length () == 0) break;  // no children, so still a virgin
+                if (newModel.length () == 0)  // no children, so still a virgin
+                {
+                    recycled = true;
+                    break;
+                }
                 newModel = models.child (newModelName + suffix);
                 if (newModel == null)
                 {
@@ -736,6 +795,7 @@ public class EquationTreePanel extends JPanel
             }
         }
         loadRootFromDB (newModel);
+        return recycled;
     }
 
     public void editSelected ()
@@ -747,31 +807,24 @@ public class EquationTreePanel extends JPanel
         if (path != null) updateOverrides (path);
     }
 
-    public void deleteSelected (boolean controlKeyDown)
+    public void deleteSelected ()
     {
         NodeBase selected = getSelected ();
-        if (selected != null)
+        if (selected != null  &&  ! selected.isRoot ())
         {
-            if (selected.isRoot ())
-            {
-                if (controlKeyDown) selected.delete (tree);  // Only delete the root (entire document) if the user does something extra to say they really mean it.
-            }
-            else
-            {
-                NodeBase parent = (NodeBase) selected.getParent ();
-                int index = parent.getIndex (selected);
+            NodeBase parent = (NodeBase) selected.getParent ();
+            int index = parent.getIndex (selected);
 
-                selected.delete (tree);
+            selected.delete (tree);
 
-                index = Math.min (index, parent.getChildCount () - 1);
-                TreePath path;
-                if (index < 0) path = new TreePath (                          parent.getPath ());
-                else           path = new TreePath (((DefaultMutableTreeNode) parent.getChildAt (index)).getPath ());
-                tree.setSelectionPath (path);
+            index = Math.min (index, parent.getChildCount () - 1);
+            TreePath path;
+            if (index < 0) path = new TreePath (                          parent.getPath ());
+            else           path = new TreePath (((DefaultMutableTreeNode) parent.getChildAt (index)).getPath ());
+            tree.setSelectionPath (path);
 
-                updateOrder ();
-                updateOverrides (path);
-            }
+            updateOrder ();
+            updateOverrides (path);
         }
     }
 

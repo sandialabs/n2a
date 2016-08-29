@@ -5,12 +5,11 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.umf.platform.ui.run;
+package gov.sandia.umf.platform.ui.ensemble.run;
 
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
 import gov.sandia.umf.platform.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.ui.HelpLabels;
-import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.ensemble.images.ImageUtil;
 
 import java.awt.event.ActionEvent;
@@ -28,19 +27,8 @@ import replete.gui.controls.WComboBox;
 import replete.util.DateUtil;
 import replete.util.Lay;
 
-public class SetupPanel extends JPanel {
-
-
-    ////////////
-    // FIELDS //
-    ////////////
-
-    // Core
-
-    private UIController uiController;
-
-    // UI
-
+public class SetupPanel extends JPanel
+{
     private JTextField txtLabel;
     private JComboBox cboSimulators;
     private DefaultComboBoxModel mdlSimulators;
@@ -52,12 +40,10 @@ public class SetupPanel extends JPanel {
     // CONSTRUCTOR //
     /////////////////
 
-    public SetupPanel(CreateRunEnsembleDialog parentRef, UIController uic,
+    public SetupPanel(CreateRunEnsembleDialog parentRef,
             /*TEMP*/String modName, String modOwner, long modLm,/*TEMP*/
             Backend[] simulators, Backend defaultSimulator,
             ExecutionEnv[] envs, ExecutionEnv defaultEnv) {
-        uiController = uic;
-
         // Populate simulator combo box model.
         mdlSimulators = new DefaultComboBoxModel();
         for(Backend simulator : simulators) {
@@ -121,7 +107,7 @@ public class SetupPanel extends JPanel {
                 Lay.BxL("Y",
                     Lay.FL("L",
                         Lay.hn(
-                            HelpLabels.createLabelPanel(uiController, parentRef,
+                            HelpLabels.createLabelPanel(parentRef,
                                 "<html>Run Label <i>(optional)</i>:</html>", "part-name", ImageUtil.getImage("rename2.gif")),
                             "prefw=155"
                         ),
@@ -136,7 +122,7 @@ public class SetupPanel extends JPanel {
                 Lay.BxL("Y",
                     Lay.FL("L",
                         Lay.hn(
-                            HelpLabels.createLabelPanel(uiController, parentRef,
+                            HelpLabels.createLabelPanel(parentRef,
                                 "Environment", "part-name", ImageUtil.getImage("world.gif")),
                             "prefw=155"),
                         Lay.hn(cboEnvironments, "prefw=250"),
@@ -155,7 +141,7 @@ public class SetupPanel extends JPanel {
                 Lay.BxL("Y",
                     Lay.FL("L",
                         Lay.hn(
-                            HelpLabels.createLabelPanel(uiController, parentRef,
+                            HelpLabels.createLabelPanel(parentRef,
                                 "Simulator", "part-name", ImageUtil.getImage("job.gif")),
                             "prefw=155"),
                         Lay.hn(cboSimulators, "prefw=250"),

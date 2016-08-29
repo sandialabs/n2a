@@ -9,13 +9,9 @@ package gov.sandia.n2a.ui.ref;
 
 import javax.swing.JPanel;
 
-import gov.sandia.umf.platform.db.MNode;
-import gov.sandia.umf.platform.ui.UIController;
-import replete.util.Lay;
-
 public class ReferenceEditPanel extends JPanel
 {
-    public ReferenceEditPanel (UIController uic)
+    public ReferenceEditPanel ()
     {
     }
 }

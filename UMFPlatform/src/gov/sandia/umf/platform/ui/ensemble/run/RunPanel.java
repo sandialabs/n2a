@@ -5,13 +5,12 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.umf.platform.ui.run;
+package gov.sandia.umf.platform.ui.ensemble.run;
 
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
 import gov.sandia.umf.platform.plugins.Parameterizable;
 import gov.sandia.umf.platform.plugins.extpoints.Backend;
-import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.ensemble.FixedParameterSpacePanel;
 import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 import gov.sandia.umf.platform.ui.ensemble.images.ImageUtil;
@@ -44,14 +43,14 @@ public class RunPanel extends JPanel {
     // CONSTRUCTOR //
     /////////////////
 
-    public RunPanel(CreateRunEnsembleDialog parentRef, UIController uic, long estDur,
+    public RunPanel(CreateRunEnsembleDialog parentRef, long estDur,
             /*TEMP*/String modName, String modOwner, long modLm,/*TEMP*/
             final Object model, Backend[] simulators, Backend defaultSimulator,
             ExecutionEnv[] envs, ExecutionEnv defaultEnv) {
 
         ParameterDomain domains = ((Parameterizable) model).getAllParameters();
 
-        pnlSetup = new SetupPanel(parentRef, uic, modName, modOwner, modLm, simulators, defaultSimulator, envs, defaultEnv);
+        pnlSetup = new SetupPanel(parentRef, modName, modOwner, modLm, simulators, defaultSimulator, envs, defaultEnv);
         pnlParams = new FixedParameterSpacePanel(domains, estDur);
         pnlOutputs = new OutputParameterPanel();
 

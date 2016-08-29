@@ -36,10 +36,6 @@ public class HelpNotesPanel extends JPanel {
     public static final int INIT_WIDTH = 250;
     public static final int INIT_HEIGHT = 200;
 
-    // Core
-
-    private UIController uiController;
-
     // UI
 
     private JLabel lblHeader;
@@ -63,9 +59,8 @@ public class HelpNotesPanel extends JPanel {
     // CONSTRUCTOR //
     /////////////////
 
-    public HelpNotesPanel(UIController uic) {
-        uiController = uic;
-
+    public HelpNotesPanel ()
+    {
         IconButton btnClose = new IconButton(ImageUtil.getImage("close.gif"));
         btnClose.toImageOnly();
         btnClose.setRolloverIcon(ImageUtil.getImage("closehover.gif"));
@@ -76,24 +71,16 @@ public class HelpNotesPanel extends JPanel {
             }
         });
 
-        IconButton btnMore = new IconButton(ImageUtil.getImage("forward.gif"));
-        btnMore.toImageOnly();
-        btnMore.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.notImpl();
-            }
-        });
-
-        Lay.BLtg(this,
-            "N", Lay.BL(
-                "C", lblHeader = new JLabel(""),
+        Lay.BLtg
+        (
+            this,
+            "N", Lay.BL
+            (
+                "C", lblHeader = new JLabel (""),
                 "E", btnClose,
                 "eb=5,augb=mb(1b,[255,149,28]),augb=mb(1b,[188,110,20]),opaque=false"
             ),
-            "C", Lay.BL("N", lblContent = new JLabel(""), "opaque=false,eb=5"),
-            "S", Lay.BL("E",
-                Lay.BL("C", Lay.lb("More "), "E", btnMore, "opaque=false"),
-                    "eb=5,augb=mb(1t,[255,149,28]),augb=mb(1t,[188,110,20]),opaque=false"),
+            "C", Lay.BL ("N", lblContent = new JLabel(""), "opaque=false,eb=5"),
             "bg=[255,255,180],size=[" + INIT_WIDTH + "," + INIT_HEIGHT + "],augb=mb(2,[255,149,28]),augb=mb(2,[188,110,20]),augb=mb(2,[127,74,14])"
         );
 

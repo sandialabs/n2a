@@ -13,15 +13,11 @@ import gov.sandia.umf.platform.plugins.UMFPluginManager;
 import gov.sandia.umf.platform.plugins.extpoints.ProductCustomization;
 import gov.sandia.umf.platform.ui.AboutDialog;
 import gov.sandia.umf.platform.ui.MainFrame;
-import gov.sandia.umf.platform.ui.UIController;
-
 import java.io.File;
 import java.lang.Thread.UncaughtExceptionHandler;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-
 import javax.swing.JFrame;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -58,30 +54,11 @@ public class UMF
         return new File (getAppResourceDir (), "log");
     }
 
-
-    ////////////
-    // FIELDS //
-    ////////////
-
-    // Const
-
     private static Logger logger = Logger.getLogger(UMF.class);
     private static final String DEFAULT_INTERNAL_LOG4J_CONFIG = "/gov/sandia/umf/platform/log4j.properties";
 
-    // UI
-
     private static MainFrame mainFrame;
-    private static UIController uiController;
     private static LoadingWindow loadingFrame;
-
-    // Misc
-
-    private static Map<String, String[]> popupHelp;
-
-
-    // ////////
-    // MAIN //
-    // ////////
 
     public static void main (String[] args)
     {
@@ -262,11 +239,7 @@ public class UMF
 
     private static void createAndShowMainFrame ()
     {
-        uiController = new UIController ();
-        mainFrame    = new MainFrame (uiController);
-        MainFrame.setInstance (mainFrame);
-        uiController.setParentReference (mainFrame);
-        uiController.setPopupHelp (popupHelp);
+        mainFrame = MainFrame.getInstance ();
         mainFrame.addAttemptToCloseListener (new CommonWindowClosingListener ()
         {
             public void stateChanged (CommonWindowClosingEvent e)

@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.ui.eq;
 
 import gov.sandia.umf.platform.db.AppData;
+import gov.sandia.umf.platform.db.MDoc;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
@@ -20,7 +21,6 @@ import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
-import java.awt.event.KeyListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.LinkedList;
@@ -86,22 +86,26 @@ public class SearchPanel extends JPanel
     public void fireRecordSelected ()
     {
         panelEquations.setEquations (model.get (list.getSelectedIndex ()));
+        panelEquations.tree.requestFocusInWindow ();
     }
 
-    public SearchPanel (EquationTreePanel panelEquations)
+    public SearchPanel ()
     {
-        this.panelEquations = panelEquations;
-
         list = new JList<MNode> (model = new DefaultListModel<MNode> ());
         list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
         list.setDragEnabled (true);
         list.setCellRenderer (new MNodeRenderer ());
         list.addMouseListener (new MouseAdapter ()
         {
-            @Override
-            public void mousePressed (MouseEvent e)
+            public void mouseClicked (MouseEvent e)
+            {
+                if (e.getClickCount () > 1) e.consume ();
+            }
+
+            public void mouseReleased (MouseEvent e)
             {
                 if (e.getClickCount () > 1) fireRecordSelected ();
+                e.consume ();
             }
         });
         list.addKeyListener (new KeyAdapter ()
@@ -109,10 +113,45 @@ public class SearchPanel extends JPanel
             @Override
             public void keyPressed (KeyEvent e)
             {
-                if (e.getKeyCode () == KeyEvent.VK_ENTER)
+                int keycode = e.getKeyCode ();
+                if (keycode == KeyEvent.VK_ENTER)
                 {
                     fireRecordSelected ();
                     e.consume ();
+                }
+                else if (keycode == KeyEvent.VK_DELETE)
+                {
+                    if (e.isControlDown ())
+                    {
+                        int   index    = list.getSelectedIndex ();
+                        MNode deleteMe = list.getSelectedValue ();
+                        if (deleteMe == null) return;
+                        if (panelEquations.record == deleteMe)
+                        {
+                            panelEquations.root = null;
+                            panelEquations.model.setRoot (null);
+                        }
+                        model.remove (index);
+                        index = Math.min (model.size () - 1, index);
+                        list.setSelectedIndex (index);
+                        ((MDoc) deleteMe).delete ();
+                    }
+                }
+                else if (keycode == KeyEvent.VK_INSERT)
+                {
+                    boolean recycled = panelEquations.createNewModel ();
+                    int index;
+                    if (recycled)
+                    {
+                        index = model.indexOf (panelEquations.record);
+                    }
+                    else
+                    {
+                        index = list.getSelectedIndex () + 1;
+                        model.insertElementAt (panelEquations.record, index);
+                    }
+                    if (index >= 0) list.setSelectedIndex (index);
+                    panelEquations.tree.requestFocusInWindow ();
                 }
             }
         });
@@ -120,34 +159,25 @@ public class SearchPanel extends JPanel
         {
             int lastSelection = -1;
 
-            @Override
             public void focusGained (FocusEvent e)
             {
-                if (lastSelection < 0  ||  lastSelection >= model.getSize ()) list.setSelectedIndex (0);
-                else                                                          list.setSelectedIndex (lastSelection);
+                if (list.getSelectedIndex () < 0)
+                {
+                    if (lastSelection < 0  ||  lastSelection >= model.getSize ()) list.setSelectedIndex (0);
+                    else                                                          list.setSelectedIndex (lastSelection);
+                }
             }
 
-            @Override
             public void focusLost (FocusEvent e)
             {
                 lastSelection = list.getSelectedIndex ();
+                list.clearSelection ();
             }
         });
 
         textQuery = new JTextField ();
-        textQuery.addKeyListener (new KeyListener ()
+        textQuery.addKeyListener (new KeyAdapter ()
         {
-            @Override
-            public void keyTyped (KeyEvent e)
-            {
-            }
-
-            @Override
-            public void keyPressed (KeyEvent e)
-            {
-            }
-
-            @Override
             public void keyReleased (KeyEvent e)
             {
                 search ();

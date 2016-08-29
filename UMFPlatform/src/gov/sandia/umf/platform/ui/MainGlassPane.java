@@ -27,8 +27,9 @@ public class MainGlassPane extends JPanel {
     // CONSTRUCTOR //
     /////////////////
 
-    public MainGlassPane(UIController uiController) {
-        pnlHelpNotes = new HelpNotesPanel(uiController);
+    public MainGlassPane ()
+    {
+        pnlHelpNotes = new HelpNotesPanel ();
         pnlHelpNotes.addHideHelpListener(new ChangeListener() {
             public void stateChanged(ChangeEvent e) {
                 hideHelp();

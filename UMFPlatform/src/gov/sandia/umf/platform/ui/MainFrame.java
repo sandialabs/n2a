@@ -12,80 +12,62 @@ import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.plugins.extpoints.ProductCustomization;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
-import replete.gui.CommonStatusBar;
 import replete.gui.uiaction.UIActionMap;
 import replete.gui.uiaction.UIActionMenuBar;
-import replete.gui.uiaction.UIActionToolBar;
 import replete.gui.windows.EscapeFrame;
 import replete.gui.windows.common.CommonWindow;
 import replete.util.Lay;
 
 // TODO: Restore to maximized state not working.
 
-public class MainFrame extends EscapeFrame implements HelpCapableWindow {
+public class MainFrame extends EscapeFrame implements HelpCapableWindow
+{
+    protected static MainFrame instance;
 
+    public static MainFrame getInstance ()
+    {
+        if (instance == null) instance = new MainFrame ();
+        return instance;
+    }
 
-    ////////////
-    // FIELDS //
-    ////////////
+    public MainTabbedPane tabs;
+    public MainGlassPane glassPane;
 
-    // Static
-
-    private static MainFrame instance;
-
-    // Core
-
-    private UIController uiController;
-
-    // UI
-
-    private MainTabbedPane tabN2A;
-    private CommonStatusBar sbar;
-    private MainGlassPane glassPane;
-
-
-    /////////////////
-    // CONSTRUCTOR //
-    /////////////////
-
-    public MainFrame(UIController uic)
+    public MainFrame ()
     {
         ProductCustomization pc = AppState.getInstance().prodCustomization;
         setTitle(pc.getProductLongName() + " v" + pc.getProductVersion());
         setIconImage(pc.getWindowIcon().getImage());
 
-        uiController = uic;  // Not fully populated yet, as it needs tab & parent reference.
+        tabs = new MainTabbedPane ();
 
-        tabN2A = new MainTabbedPane(uic);
-        sbar = new CommonStatusBar();
-        Lay.hn(sbar, "dim=[20, 30]");
-
-        UIActionMap actions = new MainFrameActionMap(uiController);
+        UIActionMap actions = new MainFrameActionMap ();
         actions.setState("ALL");
+        // TODO: ensure that the buttons in tb do not receive keyboard focus. They should only be mouse operated.
         //UIActionToolBar tb = new UIActionToolBar(actions);
         setJMenuBar(new UIActionMenuBar(actions));
 
         Lay.BLtg(this,
             //"N", tb,
-            "C", tabN2A,
-            "S", sbar
+            "C", tabs
         );
 
         setSize(600, 600);
         setLocationRelativeTo(null);
 
-        tabN2A.addComponentListener(new ComponentAdapter() {
+        tabs.addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent e) {
                 int border = 8;
                 HelpNotesPanel pnlHelpNotes = glassPane.getHelpNotesPanel();
                 pnlHelpNotes.setLocation(
                     border,
-                    tabN2A.getLocation().y +
-                        tabN2A.getSize().height +
+                    tabs.getLocation().y +
+                        tabs.getSize().height +
                         getContentPane().getY() -
                         pnlHelpNotes.getHeight() +
                         getJMenuBar().getHeight() -
@@ -95,7 +77,7 @@ public class MainFrame extends EscapeFrame implements HelpCapableWindow {
             }
         });
 
-        glassPane = new MainGlassPane(uiController);
+        glassPane = new MainGlassPane ();
         glassPane.setVisible(false);
         setGlassPane(glassPane);
 
@@ -112,27 +94,14 @@ public class MainFrame extends EscapeFrame implements HelpCapableWindow {
         });
     }
 
-    public CommonStatusBar getStatusBar() {
-        return sbar;
-    }
-    public MainTabbedPane getTabbedPane() {
-        return tabN2A;
-    }
-
-    public void showHelp(String topic, String content) {
-        glassPane.showHelp(topic, content);
+    public void showHelp (String topic, String content)
+    {
+        glassPane.showHelp (topic, content);
     }
 
     @Override
     protected void escapePressed ()
     {
         if (glassPane.isHelpShowing ()) glassPane.hideHelp ();
-    }
-
-    public static MainFrame getInstance() {
-        return instance;
-    }
-    public static void setInstance(MainFrame f) {
-        instance = f;
     }
 }

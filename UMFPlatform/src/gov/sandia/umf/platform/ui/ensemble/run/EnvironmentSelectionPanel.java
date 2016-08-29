@@ -5,12 +5,12 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.umf.platform.ui.run;
+package gov.sandia.umf.platform.ui.ensemble.run;
 
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
 import gov.sandia.umf.platform.ui.HelpLabels;
 import gov.sandia.umf.platform.ui.MainFrame;
-import gov.sandia.umf.platform.ui.UIController;
+import gov.sandia.umf.platform.ui.ensemble.UIController;
 
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.JComboBox;
@@ -63,7 +63,7 @@ public class EnvironmentSelectionPanel extends JPanel {
         Lay.BLtg(this,
             "N", Lay.BL(
                 "W", Lay.FL("L",
-                    Lay.hn(HelpLabels.createLabelPanel(uiController, parentRef, "Environment", "part-name")),
+                    Lay.hn(HelpLabels.createLabelPanel(parentRef, "Environment", "part-name")),
                     cboEnvironments),
                 "C", Lay.lb(" ")
             ),
@@ -82,7 +82,7 @@ public class EnvironmentSelectionPanel extends JPanel {
     }
 
     protected JPanel createLabelPanel(String text, String helpKey) {
-        return HelpLabels.createLabelPanel(uiController, MainFrame.getInstance(), text, helpKey);
+        return HelpLabels.createLabelPanel(MainFrame.getInstance(), text, helpKey);
     }
 
     public ExecutionEnv getEnvironment() {

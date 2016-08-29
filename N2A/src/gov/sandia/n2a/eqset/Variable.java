@@ -163,13 +163,14 @@ public class Variable implements Comparable<Variable>
             }
 
             // Extract the combiner string, if any
+            value = value.trim ();
             combiner = value.substring (0, 1);
             if ("+*/<>:".contains (combiner)) value = value.substring (1).trim ();
             else combiner = "";
 
             // Extract the conditional expression, if any
             String[] pieces = value.split ("@", 2);
-            expression = pieces[0];
+            expression = pieces[0].trim ();
             if (pieces.length < 2) conditional = "";
             else                   conditional = pieces[1].trim ();
         }

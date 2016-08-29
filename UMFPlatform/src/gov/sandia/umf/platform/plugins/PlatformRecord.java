@@ -15,6 +15,9 @@ import gov.sandia.umf.platform.runs.RunEnsemble;
 
 import java.util.List;
 
+/**
+    @deprecated
+**/
 public interface PlatformRecord {
     PlatformRecord copy();
     void save();

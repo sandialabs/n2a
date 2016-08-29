@@ -7,13 +7,13 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui;
 
+import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.plugins.extpoints.MenuItems;
 import gov.sandia.umf.platform.plugins.extpoints.UMFMenuBarActionDescriptor;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.KeyEvent;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,34 +25,17 @@ import replete.gui.uiaction.MenuBarActionDescriptor;
 import replete.gui.uiaction.ToolBarActionDescriptor;
 import replete.gui.uiaction.UIAction;
 import replete.gui.uiaction.UIActionMap;
+import replete.logging.LogViewer;
 import replete.plugins.ExtensionPoint;
 import replete.plugins.PluginManager;
+import replete.plugins.ui.PluginDialog;
 import replete.util.ReflectionUtil;
 
 
-public class MainFrameActionMap extends UIActionMap {
-
-
-    ////////////
-    // FIELDS //
-    ////////////
-
-    // Core
-
-    private UIController uiController;
-
-
-    /////////////////
-    // CONSTRUCTOR //
-    /////////////////
-
-    public MainFrameActionMap(UIController uic) {
-        uiController = uic;
-        init();
-    }
-
-    public void init() {
-
+public class MainFrameActionMap extends UIActionMap
+{
+    public MainFrameActionMap ()
+    {
         Map<String, Boolean> allEnabledStateMap = new HashMap<String, Boolean>();
         allEnabledStateMap.put("ALL", true);
 
@@ -67,7 +50,7 @@ public class MainFrameActionMap extends UIActionMap {
         {
             public void actionPerformed(ActionEvent e)
             {
-                uiController.save ();
+                AppData.save ();
             }
         };
         action.addDescriptor (new MenuBarActionDescriptor ("fileMenu", "Save", 'S', i("save.gif"), allEnabledStateMap, false, 'S', true, listener));
@@ -79,15 +62,17 @@ public class MainFrameActionMap extends UIActionMap {
         {
             public void actionPerformed (ActionEvent e)
             {
-                uiController.backup ();
+                new BackupDialog (MainFrame.getInstance ()).setVisible (true);
             }
         };
         action.addDescriptor (new MenuBarActionDescriptor ("fileMenu", "Backup...", 0, i ("saveall.gif"), allEnabledStateMap, listener));
         addAction (action);
 
-        ActionListener exitListener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.closeMainFrame();
+        ActionListener exitListener = new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                MainFrame.getInstance ().closeWindow ();
             }
         };
         action = new UIAction("exitProgram");
@@ -113,9 +98,11 @@ public class MainFrameActionMap extends UIActionMap {
             allEnabledStateMap, false, 0, false, null));
         addAction(action);
 
-        ActionListener logListener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.showLogViewer();
+        ActionListener logListener = new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                new LogViewer (MainFrame.getInstance ()).setVisible (true);
             }
         };
         action = new UIAction("logViewer");
@@ -123,9 +110,11 @@ public class MainFrameActionMap extends UIActionMap {
             allEnabledStateMap, false, 0, false, logListener));
         addAction(action);
 
-        ActionListener pluginsListener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.showPluginDialog();
+        ActionListener pluginsListener = new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                new PluginDialog (MainFrame.getInstance ()).setVisible (true);
             }
         };
         action = new UIAction("plugins");
@@ -133,9 +122,11 @@ public class MainFrameActionMap extends UIActionMap {
             allEnabledStateMap, false, 0, false, pluginsListener));
         addAction(action);
 
-        ActionListener aboutListener = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                uiController.showAbout();
+        ActionListener aboutListener = new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                new AboutDialog (MainFrame.getInstance ()).setVisible (true);
             }
         };
 
@@ -153,7 +144,7 @@ public class MainFrameActionMap extends UIActionMap {
                 ReflectionUtil.set("listener", d, new ActionListener() {
                     @Override
                     public void actionPerformed(ActionEvent e) {
-                        d.getUmfListener().actionPerformed(uiController, e);
+                        d.getUmfListener().actionPerformed (e);
                     }
                 });
                 action = new UIAction(actionName);

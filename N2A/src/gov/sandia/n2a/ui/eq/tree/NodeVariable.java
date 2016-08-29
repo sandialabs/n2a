@@ -187,11 +187,11 @@ public class NodeVariable extends NodeBase
         String oldKey = source.key ();
 
         String[] parts = input.split ("=", 2);
-        String name = parts[0];
+        String name = parts[0].trim ();
         String value;
         if (parts.length > 1)
         {
-            value = parts[1];
+            value = parts[1].trim ();
         }
         else
         {

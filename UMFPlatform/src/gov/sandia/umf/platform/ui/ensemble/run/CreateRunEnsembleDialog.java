@@ -5,7 +5,7 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.umf.platform.ui.run;
+package gov.sandia.umf.platform.ui.ensemble.run;
 
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
@@ -14,7 +14,6 @@ import gov.sandia.umf.platform.ui.HelpCapableWindow;
 import gov.sandia.umf.platform.ui.HelpLabels;
 import gov.sandia.umf.platform.ui.HelpNotesPanel;
 import gov.sandia.umf.platform.ui.MainGlassPane;
-import gov.sandia.umf.platform.ui.UIController;
 import gov.sandia.umf.platform.ui.ensemble.ParameterDetailsPanel;
 import gov.sandia.umf.platform.ui.ensemble.images.ImageUtil;
 
@@ -57,7 +56,6 @@ public class CreateRunEnsembleDialog extends EscapeDialog implements HelpCapable
 
     // Core
 
-    private UIController uiController;
     private Object model;
 
     // UI
@@ -73,14 +71,13 @@ public class CreateRunEnsembleDialog extends EscapeDialog implements HelpCapable
     // CONSTRUCTOR //
     /////////////////
 
-    public CreateRunEnsembleDialog(JFrame parent, UIController uic, final long estDur,
+    public CreateRunEnsembleDialog(JFrame parent, final long estDur,
             /*TEMP*/String modName, String modOwner, long modLm,/*TEMP*/
             final Object model, Backend[] simulators, Backend defaultSimulator,
             ExecutionEnv[] envs, ExecutionEnv defaultEnv, final boolean askNoOutputs) {
 
         super(parent, "Create New Run Ensemble", true);
 
-        uiController = uic;
         this.model = model;
         setIconImage(ImageUtil.getImage("runensadd.gif").getImage());
 
@@ -125,13 +122,13 @@ public class CreateRunEnsembleDialog extends EscapeDialog implements HelpCapable
             }
         });
 
-        glassPane = new MainGlassPane(uiController);
+        glassPane = new MainGlassPane ();
         glassPane.setVisible(false);
         setGlassPane(glassPane);
 
         final JLabel lblError;
         Lay.BLtg(this,
-            "C", pnlRun = new RunPanel(this, uiController, estDur, modName, modOwner, modLm,
+            "C", pnlRun = new RunPanel(this, estDur, modName, modOwner, modLm,
                 model, simulators, defaultSimulator, envs, defaultEnv),
             "S", Lay.BL(
                 "C", lblError = Lay.lb(" "),
@@ -224,7 +221,7 @@ public class CreateRunEnsembleDialog extends EscapeDialog implements HelpCapable
     //////////
 
     protected JPanel createLabelPanel(String text, String helpKey) {
-        return HelpLabels.createLabelPanel(uiController, this, text, helpKey);
+        return HelpLabels.createLabelPanel(this, text, helpKey);
     }
     public void showHelp(String topic, String content) {
         glassPane.showHelp(topic, content);

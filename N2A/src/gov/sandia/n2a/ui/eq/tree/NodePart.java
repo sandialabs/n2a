@@ -291,7 +291,7 @@ public class NodePart extends NodeBase
 
         String input = (String) getUserObject ();
         String[] pieces = input.split ("=", 2);
-        String name = pieces[0];
+        String name = pieces[0].trim ();
         String oldKey = source.key ();
         if (name.equals (oldKey))
         {

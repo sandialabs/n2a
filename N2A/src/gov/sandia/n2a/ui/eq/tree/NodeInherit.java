@@ -44,7 +44,7 @@ public class NodeInherit extends NodeBase
 
         String[] parts = input.split ("=", 2);
         String value;
-        if (parts.length > 1) value = parts[1];
+        if (parts.length > 1) value = parts[1].trim ();
         else                  value = "";
 
         String oldValue = source.get ();
