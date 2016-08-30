@@ -20,6 +20,8 @@ import javax.swing.JPanel;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
+import org.jfree.chart.axis.NumberAxis;
+import org.jfree.chart.axis.ValueAxis;
 import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.chart.plot.XYPlot;
 import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
@@ -162,6 +164,8 @@ public class Plot
         plot.setRangeGridlinePaint  (Color.white);
         plot.setDomainPannable (true);
         plot.setRangePannable  (true);
+        ValueAxis axis = plot.getRangeAxis ();
+        if (axis instanceof NumberAxis) ((NumberAxis) axis).setAutoRangeIncludesZero (false);
 
         XYLineAndShapeRenderer renderer = new XYLineAndShapeRenderer();
         for (int i = 0; i < dataset.getSeriesCount (); i++) renderer.setSeriesShapesVisible (i, false);
