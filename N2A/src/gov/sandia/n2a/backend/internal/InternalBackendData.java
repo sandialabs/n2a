@@ -601,7 +601,7 @@ public class InternalBackendData
                         return true;
                     }
                 });
-                if (! v.hasAny (new String[] {"constant", "accessor", "readOnly"}))
+                if (! v.hasAny (new String[] {"constant", "accessor", "readOnly"})  ||  v.hasAll (new String[] {"constant", "reference"}))  // eliminate non-computed values, unless they refer to a variable outside the immediate equation set
                 {
                     boolean initOnly = v.hasAttribute ("initOnly");
                     boolean hasEquations = v.equations.size () > 0;

@@ -36,13 +36,21 @@ public class EquationEntry implements Comparable<EquationEntry>
         Note that the formatting of a multiconditional statement is different from
         a single line, in that the condition itself serves as the index. The @
         symbol is included in the stored index (to allow commingling with $metadata
-        and $reference), but should be stripped off before calling this constructor.
+        and $reference).
     **/
     public EquationEntry (MNode source) throws Exception
     {
         expression  = Operator.parse (source.get ());
-        conditional = Operator.parse (source.key ().substring (1));
-        ifString = conditional.render ();
+        String key = source.key ().substring (1);  // The key should always begin with @
+        if (key.isEmpty ())
+        {
+            ifString = "";
+        }
+        else
+        {
+            conditional = Operator.parse (key);
+            ifString = conditional.render ();
+        }
     }
 
     /**
