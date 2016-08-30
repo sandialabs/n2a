@@ -7,16 +7,16 @@ G=120mS
  $metadata
   backend.xyce.param="gNa"
 I=G*m^3*h*(E-V)
-alpha_h=:0.07*exp(-mV/20)
+alpha_h=:0.07*exp(-50*V)
  $metadata
   backend.xyce.ignore
-alpha_m=:(25-mV)/(10*(exp((25-mV)/10)-1))
+alpha_m=:(2.5-100*V)/(exp(2.5-100*V)-1)
  $metadata
   backend.xyce.ignore
-beta_h=:1/(exp((30-mV)/10)+1)
+beta_h=:1/(exp(3-100*V)+1)
  $metadata
   backend.xyce.ignore
-beta_m=:4*exp(-mV/18)
+beta_m=:4*exp(-1000*V/18)
  $metadata
   backend.xyce.ignore
 h=0.31@$init
@@ -27,4 +27,3 @@ m=0.05@ $init
 m'=(alpha_m*(1-m)-beta_m*m)/1ms
  $metadata
   backend.xyce.internalVar="m"
-mV=:V/1mV

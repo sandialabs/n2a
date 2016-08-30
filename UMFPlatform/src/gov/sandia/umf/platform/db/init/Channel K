@@ -7,13 +7,12 @@ G=36mS
  $metadata
   backend.xyce.param="gK"
 I=G*n^4*(E-V)
-alpha_n=:(10-mV)/(100*(exp((10-mV)/10)-1))
+alpha_n=:(0.1-10*V)/(exp(1-100*V)-1)
  $metadata
   backend.xyce.ignore
-beta_n=:0.125*exp(-mV/80)
+beta_n=:0.125*exp(-12.5*V)
  $metadata
   backend.xyce.ignore
-mV=:V/1mV
 n=0.6@$init
 n'=(alpha_n*(1-n)-beta_n*n)/1ms
  $metadata
