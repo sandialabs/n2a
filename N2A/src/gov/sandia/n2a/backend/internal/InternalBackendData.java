@@ -525,11 +525,11 @@ public class InternalBackendData
                         return true;
                     }
                 });
-                if (! v.hasAny (new String[] {"constant", "accessor", "readOnly"}))
+                if (! v.hasAny (new String[] {"constant", "accessor", "readOnly"})  ||  v.hasAll (new String[] {"constant", "reference"}))  // eliminate non-computed values, unless they refer to a variable outside the immediate equation set
                 {
                     boolean initOnly = v.hasAttribute ("initOnly");
-                    boolean hasEquations = v.equations.size () > 0;
-                    if (! initOnly  &&  hasEquations) globalUpdate.add (v);
+                    boolean updates = ! initOnly  &&  v.equations.size () > 0  &&  (v.derivative == null  ||  v.hasAttribute ("updates"));
+                    if (updates) globalUpdate.add (v);
                     if (v.hasAttribute ("reference"))
                     {
                         if (globalReference.add (v.reference))
@@ -557,7 +557,7 @@ public class InternalBackendData
                                 external = true;
                                 globalBufferedExternalWrite.add (v);
                             }
-                            if (external  ||  (v.hasAttribute ("externalRead")  &&  hasEquations  &&  ! initOnly))
+                            if (external  ||  (v.hasAttribute ("externalRead")  &&  updates))
                             {
                                 external = true;
                                 globalBufferedExternal.add (v);
@@ -601,18 +601,11 @@ public class InternalBackendData
                         return true;
                     }
                 });
-                if (! v.hasAny (new String[] {"constant", "accessor", "readOnly"})  ||  v.hasAll (new String[] {"constant", "reference"}))  // eliminate non-computed values, unless they refer to a variable outside the immediate equation set
+                if (! v.hasAny (new String[] {"constant", "accessor", "readOnly"})  ||  v.hasAll (new String[] {"constant", "reference"}))
                 {
                     boolean initOnly = v.hasAttribute ("initOnly");
-                    boolean hasEquations = v.equations.size () > 0;
-                    if (v.derivative == null)
-                    {
-                        if (! initOnly  &&  hasEquations) localUpdate.add (v);
-                    }
-                    else  // has a derivative, so different rules apply
-                    {
-                        if (v.hasAttribute ("updates")) localUpdate.add (v);
-                    }
+                    boolean updates = ! initOnly  &&  v.equations.size () > 0  &&  (v.derivative == null  ||  v.hasAttribute ("updates"));
+                    if (updates) localUpdate.add (v);
                     if (v.hasAttribute ("reference"))
                     {
                         if (localReference.add (v.reference))
@@ -650,7 +643,7 @@ public class InternalBackendData
                                 external = true;
                                 localBufferedExternalWrite.add (v);
                             }
-                            if (external  ||  (v.hasAttribute ("externalRead")  &&  hasEquations  &&  ! initOnly))
+                            if (external  ||  (v.hasAttribute ("externalRead")  &&  updates))
                             {
                                 external = true;
                                 localBufferedExternal.add (v);
@@ -659,7 +652,7 @@ public class InternalBackendData
                             {
                                 if (v.name.startsWith ("$")) localBufferedSpecial.add (v);
                                 else                         localBufferedRegular.add (v);
-                                if (! external)
+                                if (! external)  // v got here only by being a "cycle", not "externalRead" or "externalWrite"
                                 {
                                     localBufferedInternal.add (v);
                                     if (! initOnly) localBufferedInternalUpdate.add (v);
@@ -1031,5 +1024,46 @@ public class InternalBackendData
             }
             r.resolution = newResolution;
         }
+    }
+
+    public void dump ()
+    {
+        dumpVariableList ("localUpdate                 ", localUpdate);
+        dumpVariableList ("localInitRegular            ", localInitRegular);
+        dumpVariableList ("localInitSpecial            ", localInitSpecial);
+        dumpVariableList ("localMembers                ", localMembers);
+        dumpVariableList ("localBufferedRegular        ", localBufferedRegular);
+        dumpVariableList ("localBufferedSpecial        ", localBufferedSpecial);
+        dumpVariableList ("localBufferedInternal       ", localBufferedInternal);
+        dumpVariableList ("localBufferedInternalUpdate ", localBufferedInternalUpdate);
+        dumpVariableList ("localBufferedExternal       ", localBufferedExternal);
+        dumpVariableList ("localBufferedExternalWrite  ", localBufferedExternalWrite);
+        dumpVariableList ("localIntegrated             ", localIntegrated);
+
+        dumpVariableList ("globalUpdate                ", globalUpdate);
+        dumpVariableList ("globalInit                  ", globalInit);
+        dumpVariableList ("globalMembers               ", globalMembers);
+        dumpVariableList ("globalBuffered              ", globalBuffered);
+        dumpVariableList ("globalBufferedInternal      ", globalBufferedInternal);
+        dumpVariableList ("globalBufferedInternalUpdate", globalBufferedInternalUpdate);
+        dumpVariableList ("globalBufferedExternal      ", globalBufferedExternal);
+        dumpVariableList ("globalBufferedExternalWrite ", globalBufferedExternalWrite);
+        dumpVariableList ("globalIntegrated            ", globalIntegrated);
+
+        dumpReferenceSet ("localReference", localReference);
+        dumpReferenceSet ("globalReference", globalReference);
+    }
+
+    public void dumpVariableList (String name, List<Variable> list)
+    {
+        System.out.print ("  " + name + ":");
+        for (Variable v : list) System.out.print (" " + v.nameString ());
+        System.out.println ();
+    }
+
+    public void dumpReferenceSet (String name, TreeSet<VariableReference> set)
+    {
+        System.out.println ("  " + name);
+        for (VariableReference r : set) System.out.println ("    " + r.variable.nameString () + " in " + r.variable.container.name);
     }
 }

@@ -1672,8 +1672,11 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
-        Identify variables that only change during init.
-        Also mark variables that change by both integration and update equations, so they will be processed in both ways.
+        Identifies variables that only change during init.
+        Also marks variables that change by both integration and update equations, so they will be processed in both ways.
+        The additional attribute "updates" is necessary in this case, because an integrated value can never be "initOnly",
+        so we can't use "initOnly" to distinguish whether or not update equations fire.
+
         The criteria for "initOnly" are:
         <ul>
         <li>not "constant"

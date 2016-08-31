@@ -1,6 +1,6 @@
 N2A.schema=1
 A=$connect("Hodgkin-Huxley Compartment")
-A.V'=+(B.V-A.V)/(A.C_m*R)
+A.V'=+(B.V-A.V)/(A.Cm*R)
 B=$connect("Hodgkin-Huxley Compartment")
-B.V'=+(A.V-B.V)/(B.C_m*R)
+B.V'=+(A.V-B.V)/(B.Cm*R)
 R=10kOhm

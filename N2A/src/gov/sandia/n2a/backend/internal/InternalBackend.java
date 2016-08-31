@@ -74,6 +74,7 @@ public class InternalBackend extends Backend
                 EquationSet digestedModel = new EquationSet (job);
                 digestModel (digestedModel, jobDir);
                 Files.copy (new ByteArrayInputStream (digestedModel.dump (false).getBytes ("UTF-8")), Paths.get (jobDir, "model.flat"));
+                //dumpBackendData (digestedModel);
                 Simulator simulator = new Simulator (new Wrapper (digestedModel));
                 simulator.run ();  // Does not return until simulation is finished.
                 Files.copy (new ByteArrayInputStream ("success".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
@@ -271,5 +272,12 @@ public class InternalBackend extends Backend
         {
             if (! v.hasAttribute ("constant")) v.type = v.type.clear ();  // So we can use these as backup when stored value is null.
         }
+    }
+
+    public void dumpBackendData (EquationSet s)
+    {
+        System.out.println ("Backend data for: " + s.name);
+        ((InternalBackendData) s.backendData).dump ();
+        for (EquationSet p : s.parts) dumpBackendData (p);
     }
 }

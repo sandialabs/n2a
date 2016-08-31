@@ -1,11 +1,13 @@
 N2A.schema=1
-C_m=1uF
+Cm=1uF
  $metadata
   backend.xyce.param="cMem"
-G_m=0.3mS
+Gm=0.3mS
  $metadata
   backend.xyce.param="gMem"
-V'=(G_m*(V_rest-V)+I_inj)/C_m
-V_rest=10.613mV
+V=Vrest@$init
+V'=(Gm*(Vrest-V)+I)/Cm
+Voffset=-65mV
+Vrest=10.613mV +Voffset
  $metadata
   backend.xyce.param="eLeak"

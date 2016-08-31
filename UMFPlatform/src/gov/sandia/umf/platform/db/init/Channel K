@@ -1,19 +1,20 @@
 N2A.schema=1
 $inherit="Channel"
-E=-12mV
+E=-12mV +Voffset
  $metadata
   backend.xyce.param="eK"
 G=36mS
  $metadata
   backend.xyce.param="gK"
 I=G*n^4*(E-V)
-alpha_n=:(0.1-10*V)/(exp(1-100*V)-1)
+alpha_n=:(0.1-10*u)/(exp(1-100*u)-1)
  $metadata
   backend.xyce.ignore
-beta_n=:0.125*exp(-12.5*V)
+beta_n=:0.125*exp(-12.5*u)
  $metadata
   backend.xyce.ignore
 n=0.6@$init
 n'=(alpha_n*(1-n)-beta_n*n)/1ms
  $metadata
   backend.xyce.internalVar="n"
+u=:V-Voffset
