@@ -356,7 +356,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
             // At this point, reader.whitespaces == whitespaces
             String line = reader.line.trim ();
             String[] pieces = line.split ("=", 2);
-            String index = pieces[0].trim ();
+            String index = pieces[0].trim ().replace ("≡", "=");  // Using special character to stand-in for "=" in serialized keys.
             String value;
             if (pieces.length > 1) value = pieces[1].trim ();
             else                   value = "";
@@ -451,7 +451,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     **/
     public synchronized void write (Writer writer, String space) throws IOException
     {
-        String index = key ();
+        String index = key ().replace ("=", "≡");  // Since "=" has special meaning, substitute an unlikely character code for it.
         String value = get ();
         if (value.isEmpty ())
         {
