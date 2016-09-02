@@ -127,8 +127,8 @@ public class Raster
         final JFreeChart chart = ChartFactory.createScatterPlot
         (
             null,                     // chart title
-            "Time",                   // x axis label
-            "Unit",                   // y axis label
+            null,                     // x axis label
+            null,                     // y axis label
             dataset,                  // data
             PlotOrientation.VERTICAL,
             false,                    // include legend

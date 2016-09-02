@@ -144,8 +144,8 @@ public class Plot
         final JFreeChart chart = ChartFactory.createXYLineChart
         (
             null,                     // chart title
-            "Time",                   // x axis label
-            "Value",                  // y axis label
+            null,                     // x axis label
+            null,                     // y axis label
             dataset,                  // data
             PlotOrientation.VERTICAL,
             true,                     // include legend

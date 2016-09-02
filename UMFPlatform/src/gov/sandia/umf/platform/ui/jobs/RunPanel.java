@@ -17,6 +17,7 @@ import gov.sandia.umf.platform.ui.images.ImageUtil;
 import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.Font;
+import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyAdapter;
@@ -33,6 +34,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTree;
 import javax.swing.event.TreeExpansionEvent;
+import javax.swing.event.TreeExpansionListener;
 import javax.swing.event.TreeSelectionEvent;
 import javax.swing.event.TreeSelectionListener;
 import javax.swing.event.TreeWillExpandListener;
@@ -51,6 +53,7 @@ public class RunPanel extends JPanel
     public NodeBase         root;
     public DefaultTreeModel model;
     public JTree            tree;
+    public JScrollPane      treePane;
 
     public JTextArea        displayText;
     public JScrollPane      displayPane = new JScrollPane ();
@@ -130,6 +133,27 @@ public class RunPanel extends JPanel
 
             public void treeWillCollapse (TreeExpansionEvent event) throws ExpandVetoException
             {
+            }
+        });
+
+        tree.addTreeExpansionListener (new TreeExpansionListener ()
+        {
+            public void treeExpanded (TreeExpansionEvent event)
+            {
+                Rectangle node    = tree.getPathBounds (event.getPath ());
+                Rectangle visible = treePane.getViewport ().getViewRect ();
+                visible.height -= node.y - visible.y;
+                visible.y       = node.y;
+                tree.repaint (visible);
+            }
+
+            public void treeCollapsed (TreeExpansionEvent event)
+            {
+                Rectangle node    = tree.getPathBounds (event.getPath ());
+                Rectangle visible = treePane.getViewport ().getViewRect ();
+                visible.height -= node.y - visible.y;
+                visible.y       = node.y;
+                tree.repaint (visible);
             }
         });
 
@@ -261,8 +285,7 @@ public class RunPanel extends JPanel
             (
                 Lay.BL
                 (
-                    "C", Lay.sp(tree),
-                    "vgap=5"
+                    "C", treePane = Lay.sp (tree)
                 ),
                 Lay.BL
                 (

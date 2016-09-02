@@ -420,6 +420,27 @@ public class EquationTreePanel extends JPanel
             }
         });
 
+        tree.addTreeExpansionListener (new TreeExpansionListener ()
+        {
+            public void treeExpanded (TreeExpansionEvent event)
+            {
+                Rectangle node    = tree.getPathBounds (event.getPath ());
+                Rectangle visible = scrollPane.getViewport ().getViewRect ();
+                visible.height -= node.y - visible.y;
+                visible.y       = node.y;
+                tree.repaint (visible);
+            }
+
+            public void treeCollapsed (TreeExpansionEvent event)
+            {
+                Rectangle node    = tree.getPathBounds (event.getPath ());
+                Rectangle visible = scrollPane.getViewport ().getViewRect ();
+                visible.height -= node.y - visible.y;
+                visible.y       = node.y;
+                tree.repaint (visible);
+            }
+        });
+
         tree.setTransferHandler (new TransferHandler ()
         {
             public boolean canImport (TransferHandler.TransferSupport support)
