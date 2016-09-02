@@ -377,17 +377,10 @@ public class NodePart extends NodeBase
     public void delete (JTree tree)
     {
         if (! source.isFromTopDocument ()) return;  // This should be true of root, as well as any other node we might try to delete.
+        if (isRoot ()) return;
 
         String key = source.key ();
         DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
-        if (isRoot ())
-        {
-            MNode dir = source.getSource ().getParent ();
-            dir.clear (key);
-            model.setRoot (null);
-            return;
-        }
-
         MPart mparent = source.getParent ();
         mparent.clear (key);
         if (mparent.child (key) == null) model.removeNodeFromParent (this);

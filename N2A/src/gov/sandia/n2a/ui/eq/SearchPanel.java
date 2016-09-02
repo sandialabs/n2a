@@ -48,6 +48,7 @@ public class SearchPanel extends JPanel
     protected JList<MNode>            list;
     protected DefaultListModel<MNode> model;
     protected EquationTreePanel       panelEquations;  // reference to other side of our panel pair, so we can send updates (alternative to a listener arrangement)
+    protected int                     lastSelection = -1;
 
     // Retrieve records matching the filter text, and deliver them to the model.
     public class SearchThread extends Thread
@@ -89,6 +90,32 @@ public class SearchPanel extends JPanel
         panelEquations.tree.requestFocusInWindow ();
     }
 
+    public void hideSelection ()
+    {
+        lastSelection = list.getSelectedIndex ();
+        list.clearSelection ();
+    }
+
+    public void removeDoc (MNode doc)
+    {
+        int index = model.indexOf (doc);
+        if (index >= 0)
+        {
+            model.remove (index);
+            if (index == lastSelection) lastSelection = Math.min (model.size () - 1, index);
+        }
+    }
+
+    public void insertDoc (MNode doc)
+    {
+        int index = model.indexOf (doc);
+        if (index < 0)
+        {
+            model.insertElementAt (doc, 0);
+            lastSelection = 0;
+        }
+    }
+
     public SearchPanel ()
     {
         list = new JList<MNode> (model = new DefaultListModel<MNode> ());
@@ -99,12 +126,12 @@ public class SearchPanel extends JPanel
         {
             public void mouseClicked (MouseEvent e)
             {
-                if (e.getClickCount () > 1) e.consume ();
+                fireRecordSelected ();
+                e.consume ();
             }
 
             public void mouseReleased (MouseEvent e)
             {
-                if (e.getClickCount () > 1) fireRecordSelected ();
                 e.consume ();
             }
         });
@@ -119,7 +146,7 @@ public class SearchPanel extends JPanel
                     fireRecordSelected ();
                     e.consume ();
                 }
-                else if (keycode == KeyEvent.VK_DELETE)
+                else if (keycode == KeyEvent.VK_DELETE  ||  keycode == KeyEvent.VK_BACK_SPACE)
                 {
                     if (e.isControlDown ())
                     {
@@ -139,26 +166,13 @@ public class SearchPanel extends JPanel
                 }
                 else if (keycode == KeyEvent.VK_INSERT)
                 {
-                    boolean recycled = panelEquations.createNewModel ();
-                    int index;
-                    if (recycled)
-                    {
-                        index = model.indexOf (panelEquations.record);
-                    }
-                    else
-                    {
-                        index = list.getSelectedIndex () + 1;
-                        model.insertElementAt (panelEquations.record, index);
-                    }
-                    if (index >= 0) list.setSelectedIndex (index);
+                    panelEquations.createNewModel ();
                     panelEquations.tree.requestFocusInWindow ();
                 }
             }
         });
         list.addFocusListener (new FocusListener ()
         {
-            int lastSelection = -1;
-
             public void focusGained (FocusEvent e)
             {
                 if (list.getSelectedIndex () < 0)
@@ -170,8 +184,7 @@ public class SearchPanel extends JPanel
 
             public void focusLost (FocusEvent e)
             {
-                lastSelection = list.getSelectedIndex ();
-                list.clearSelection ();
+                hideSelection ();
             }
         });
 

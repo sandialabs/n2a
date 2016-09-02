@@ -112,7 +112,7 @@ public class RunPanel extends JPanel
             public void keyPressed (KeyEvent e)
             {
                 int keycode = e.getKeyCode ();
-                if (keycode == KeyEvent.VK_DELETE)
+                if (keycode == KeyEvent.VK_DELETE  ||  keycode == KeyEvent.VK_BACK_SPACE)
                 {
                     delete ();
                 }

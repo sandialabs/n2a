@@ -284,15 +284,15 @@ public class NodeVariable extends NodeBase
             {
                 source.set (pieces.combiner);
 
-                NodeEquation e = equations.get (pieces.conditional);
-                if (e == null)  // no matching equation
+                if (! pieces.expression.isEmpty ())
                 {
-                    MPart equation = (MPart) source.set (pieces.expression, "@" + pieces.conditional);
-                    model.insertNodeInto (new NodeEquation (equation), this, 0);
-                }
-                else  // conditional matched an existing equation, so just replace the expression
-                {
-                    if (! pieces.expression.isEmpty ())  // but only if the expression actually contains something
+                    NodeEquation e = equations.get (pieces.conditional);
+                    if (e == null)  // no matching equation
+                    {
+                        MPart equation = (MPart) source.set (pieces.expression, "@" + pieces.conditional);
+                        model.insertNodeInto (new NodeEquation (equation), this, 0);
+                    }
+                    else  // conditional matched an existing equation, so just replace the expression
                     {
                         e.source.set (pieces.expression);
                         e.setUserObject (pieces.expression + e.source.key ());  // key starts with "@"
@@ -335,9 +335,12 @@ public class NodeVariable extends NodeBase
                 {
                     source.set (pieces.combiner);
 
-                    NodeEquation e = equations.get (pieces.conditional);
-                    if (e == null)                             source.set (pieces.expression, "@" + pieces.conditional);  // create a new equation
-                    else if (! pieces.expression.isEmpty ()) e.source.set (pieces.expression);  // blow away the existing expression in the matching equation
+                    if (! pieces.expression.isEmpty ())
+                    {
+                        NodeEquation e = equations.get (pieces.conditional);
+                        if (e == null)   source.set (pieces.expression, "@" + pieces.conditional);  // create a new equation
+                        else           e.source.set (pieces.expression);  // blow away the existing expression in the matching equation
+                    }
                 }
 
                 mparent.move (oldKey, name);  // This copies the whole tree, not just overridden nodes, but leaves behind only the newly-exposed underrides.

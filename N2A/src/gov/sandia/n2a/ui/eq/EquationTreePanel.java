@@ -31,6 +31,7 @@ import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.Font;
+import java.awt.Rectangle;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -55,6 +56,7 @@ import javax.swing.JButton;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
+import javax.swing.JScrollPane;
 import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
@@ -63,6 +65,7 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.event.CellEditorListener;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.TreeExpansionEvent;
+import javax.swing.event.TreeExpansionListener;
 import javax.swing.event.TreeWillExpandListener;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellEditor;
@@ -82,11 +85,12 @@ public class EquationTreePanel extends JPanel
     protected int jobCount = 0;  // for launching jobs
 
     // Tree & Its Model
-    public JTree            tree;
-    public DefaultTreeModel model;
-    public NodePart         root;
-    public int              lastSelectedRow = -1;
-    protected SearchPanel   panelSearch;  // reference to other side of our panel pair, so we can send updates (alternative to a listener arrangement)
+    protected JTree            tree;
+    protected DefaultTreeModel model;
+    protected NodePart         root;
+    protected JScrollPane      scrollPane;
+    protected int              lastSelectedRow = -1;
+    protected SearchPanel      panelSearch;  // reference to other side of our panel pair, so we can send updates (alternative to a listener arrangement)
 
     // Controls
     protected JButton buttonAddModel;
@@ -95,6 +99,7 @@ public class EquationTreePanel extends JPanel
     protected JButton buttonAddEquation;
     protected JButton buttonAddAnnotation;
     protected JButton buttonAddReference;
+    protected JButton buttonDelete;
     protected JButton buttonMoveUp;
     protected JButton buttonMoveDown;
     protected JButton buttonRun;
@@ -349,9 +354,14 @@ public class EquationTreePanel extends JPanel
 
         tree.addMouseListener (new MouseAdapter ()
         {
-            public void mouseReleased (MouseEvent e)
+            public void mouseClicked (MouseEvent e)
             {
-                if (SwingUtilities.isRightMouseButton (e)  &&   e.getClickCount () == 1)
+                if (SwingUtilities.isLeftMouseButton (e)  &&  e.getClickCount () == 2)
+                {
+                    TreePath path = tree.getClosestPathForLocation (e.getX (), e.getY ());
+                    if (path != null) tree.startEditingAtPath (path);
+                }
+                else if (SwingUtilities.isRightMouseButton (e)  &&   e.getClickCount () == 1)
                 {
                     TreePath path = tree.getPathForLocation (e.getX (), e.getY ());
                     if (path != null)
@@ -359,15 +369,6 @@ public class EquationTreePanel extends JPanel
                         tree.setSelectionPath (path);
                         menuPopup.show (tree, e.getX (), e.getY ());
                     }
-                }
-            }
-
-            public void mouseClicked (MouseEvent e)
-            {
-                if (SwingUtilities.isLeftMouseButton (e)  &&  e.getClickCount () == 2)
-                {
-                    TreePath path = tree.getClosestPathForLocation (e.getX (), e.getY ());
-                    if (path != null) tree.startEditingAtPath (path);
                 }
             }
         });
@@ -378,9 +379,9 @@ public class EquationTreePanel extends JPanel
             public void keyPressed (KeyEvent e)
             {
                 int keycode = e.getKeyCode ();
-                if (keycode == KeyEvent.VK_DELETE)
+                if (keycode == KeyEvent.VK_DELETE  ||  keycode == KeyEvent.VK_BACK_SPACE)
                 {
-                    deleteSelected ();
+                    deleteSelected (e.isControlDown ());
                 }
                 else if (keycode == KeyEvent.VK_INSERT)
                 {
@@ -430,8 +431,7 @@ public class EquationTreePanel extends JPanel
 
             public boolean importData (TransferHandler.TransferSupport support)
             {
-                // Collect data
-                TreePath path = ((JTree.DropLocation) support.getDropLocation ()).getPath ();
+                // Get key for dropped part
                 String key;
                 try
                 {
@@ -443,24 +443,11 @@ public class EquationTreePanel extends JPanel
                 }
                 key = key.split ("=", 2)[0];  // data actually contains name=path; rather than hack the search list, simply extract the key
 
-                // Import the part
+                // Determine container part
+                TreePath path = ((JTree.DropLocation) support.getDropLocation ()).getPath ();
                 if (path == null)
                 {
-                    if (root == null)
-                    {
-                        boolean recycled = createNewModel ();
-                        int index;
-                        if (recycled)
-                        {
-                            index = panelSearch.model.indexOf (record);
-                        }
-                        else
-                        {
-                            index = panelSearch.list.getSelectedIndex () + 1;
-                            panelSearch.model.insertElementAt (record, index);
-                        }
-                        if (index >= 0) panelSearch.list.setSelectedIndex (index);
-                    }
+                    if (root == null) createNewModel ();
                     tree.setSelectionRow (0);
                     path = tree.getSelectionPath ();
                 }
@@ -480,6 +467,8 @@ public class EquationTreePanel extends JPanel
 
                 updateOrder ();
 
+                panelSearch.hideSelection ();  // because DnD highlights a selection without triggering focus notifications
+
                 return true;
             }  
         });
@@ -497,7 +486,7 @@ public class EquationTreePanel extends JPanel
 
             public void focusLost (FocusEvent e)
             {
-                if (! tree.isEditing ())  // The shift to the editing component appears as a loss of focus.
+                if (! e.isTemporary ()  &&  ! tree.isEditing ())  // The shift to the editing component appears as a loss of focus.
                 {
                     int[] rows = tree.getSelectionRows ();
                     if (rows != null  &&  rows.length > 0) lastSelectedRow = rows[0];
@@ -550,6 +539,11 @@ public class EquationTreePanel extends JPanel
         buttonAddReference.setActionCommand ("Reference");
         buttonAddReference.addActionListener (addListener);
 
+        buttonDelete = new IconButton (ImageUtil.getImage ("remove.gif"), 2);
+        buttonDelete.setFocusable (false);
+        buttonDelete.setToolTipText ("Delete");
+        buttonDelete.addActionListener (deleteListener);
+
         buttonMoveUp = new IconButton (ImageUtil.getImage ("up.gif"), 2);
         buttonMoveUp.setFocusable (false);
         buttonMoveUp.setToolTipText ("Move Up");
@@ -593,15 +587,20 @@ public class EquationTreePanel extends JPanel
         menuAddReference.setActionCommand ("Reference");
         menuAddReference.addActionListener (addListener);
 
+        JMenuItem menuDelete = new JMenuItem ("Delete", ImageUtil.getImage ("remove.gif"));
+        menuDelete.addActionListener (deleteListener);
+
         menuPopup = new JPopupMenu ();
         menuPopup.add (menuAddPart);
         menuPopup.add (menuAddVariable);
         menuPopup.add (menuAddEquation);
         menuPopup.add (menuAddAnnotation);
         menuPopup.add (menuAddReference);
+        menuPopup.addSeparator ();
+        menuPopup.add (menuDelete);
 
         Lay.BLtg (this,
-            "C", Lay.p (Lay.sp (tree)),
+            "C", Lay.p (scrollPane = Lay.sp (tree)),
             "E", Lay.BxL ("Y",
                 Lay.BL (buttonAddModel,      "eb=20b,alignx=0.5,maxH=20"),
                 Lay.BL (buttonAddPart,       "eb=5b,alignx=0.5,maxH=20"),
@@ -609,6 +608,7 @@ public class EquationTreePanel extends JPanel
                 Lay.BL (buttonAddEquation,   "eb=5b,alignx=0.5,maxH=20"),
                 Lay.BL (buttonAddAnnotation, "eb=5b,alignx=0.5,maxH=20"),
                 Lay.BL (buttonAddReference,  "eb=20b,alignx=0.5,maxH=20"),
+                Lay.BL (buttonDelete,        "eb=20b,alignx=0.5,maxH=20"),
                 Lay.BL (buttonMoveUp,        "eb=5b,alignx=0.5,maxH=20"),
                 Lay.BL (buttonMoveDown,      "eb=20b,alignx=0.5,maxH=20"),
                 Lay.BL (buttonRun,           "eb=5b,alignx=0.5,maxH=20"),
@@ -653,6 +653,15 @@ public class EquationTreePanel extends JPanel
         public void actionPerformed (ActionEvent e)
         {
             addAtSelected (e.getActionCommand ());
+        }
+    };
+
+    ActionListener deleteListener = new ActionListener ()
+    {
+        public void actionPerformed (ActionEvent e)
+        {
+            boolean shift = (e.getModifiers () & ActionEvent.CTRL_MASK) != 0;
+            deleteSelected (shift);
         }
     };
 
@@ -764,9 +773,8 @@ public class EquationTreePanel extends JPanel
         }
     }
 
-    public boolean createNewModel ()
+    public void createNewModel ()
     {
-        boolean recycled = false;
         MNode models = AppData.models;
         String newModelName = "New Model";
         MNode newModel = models.child (newModelName);
@@ -780,11 +788,7 @@ public class EquationTreePanel extends JPanel
             int suffix = 2;
             while (true)
             {
-                if (newModel.length () == 0)  // no children, so still a virgin
-                {
-                    recycled = true;
-                    break;
-                }
+                if (newModel.length () == 0) break;  // no children, so still a virgin
                 newModel = models.child (newModelName + suffix);
                 if (newModel == null)
                 {
@@ -795,7 +799,7 @@ public class EquationTreePanel extends JPanel
             }
         }
         loadRootFromDB (newModel);
-        return recycled;
+        panelSearch.insertDoc (newModel);
     }
 
     public void editSelected ()
@@ -807,24 +811,38 @@ public class EquationTreePanel extends JPanel
         if (path != null) updateOverrides (path);
     }
 
-    public void deleteSelected ()
+    public void deleteSelected (boolean controlKeyDown)
     {
         NodeBase selected = getSelected ();
-        if (selected != null  &&  ! selected.isRoot ())
+        if (selected != null)
         {
-            NodeBase parent = (NodeBase) selected.getParent ();
-            int index = parent.getIndex (selected);
+            if (selected.isRoot ())
+            {
+                if (controlKeyDown)  // Only delete the root (entire document) if the user does something extra to say they really mean it.
+                {
+                    panelSearch.removeDoc (record);
+                    ((MDoc) record).delete ();
+                    record = null;
+                    root = null;
+                    model.setRoot (null);
+                }
+            }
+            else
+            {
+                NodeBase parent = (NodeBase) selected.getParent ();
+                int index = parent.getIndex (selected);
 
-            selected.delete (tree);
+                selected.delete (tree);
 
-            index = Math.min (index, parent.getChildCount () - 1);
-            TreePath path;
-            if (index < 0) path = new TreePath (                          parent.getPath ());
-            else           path = new TreePath (((DefaultMutableTreeNode) parent.getChildAt (index)).getPath ());
-            tree.setSelectionPath (path);
+                index = Math.min (index, parent.getChildCount () - 1);
+                TreePath path;
+                if (index < 0) path = new TreePath (                          parent.getPath ());
+                else           path = new TreePath (((DefaultMutableTreeNode) parent.getChildAt (index)).getPath ());
+                tree.setSelectionPath (path);
 
-            updateOrder ();
-            updateOverrides (path);
+                updateOrder ();
+                updateOverrides (path);
+            }
         }
     }
 
