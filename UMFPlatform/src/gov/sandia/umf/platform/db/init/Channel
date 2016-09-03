@@ -1,2 +1,8 @@
 N2A.schema=1
-$up.V'=+I/Cm
+$up.V'=+I/C
+Voffset=-65mV
+ $metadata
+  notes=This adjusts voltage ranges from traditional Hodgkin-Huxley values to modern values which treat the extracellular medium as ground.
+u=:(V-Voffset)/1mV
+ $metadata
+  notes=This enables the direct use of expressions for Hodgkin-Huxley dynamics.

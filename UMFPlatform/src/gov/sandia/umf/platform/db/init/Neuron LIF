@@ -1,20 +1,12 @@
 N2A.schema=1
+$inherit="Neuron"
 $metadata
  backend.stpu.component=lif
-leakage=0.1
- $metadata
-  backend.stpu.param=lkg_val
-v=v_reset@v>v_thresh
-v'=-leakage*(v-v_reset)
-v_max=127.0
- $metadata
-  backend.stpu.param=pot_max
-v_min=-128.0
- $metadata
-  backend.stpu.param=pot_min
-v_reset=0.0
- $metadata
-  backend.stpu.param=pot_qct
-v_thresh=10.0
+G=0.1mS
+V=Vrest@$init||V>=Vpeak
+Vpeak=35mV
  $metadata
   backend.stpu.param=pot_thr
+leakage=G/C
+ $metadata
+  backend.stpu.param=lkg_val

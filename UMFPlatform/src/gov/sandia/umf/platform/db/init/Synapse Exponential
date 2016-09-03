@@ -1,9 +1,9 @@
 N2A.schema=1
 $metadata
+ backend.xyce.device=synapse3
  notes=|
    Exponential synapse using Xyce level 3 synapse device.  This template doesn't currently define the equations for the synapse dynamics.  
    Translation depends on the metadata specifying information to create a xyce device that corresponds to this synapse.
- backend.xyce.device=synapse3
 $p=0.2
 A=$connect("")
 A.v'

@@ -5,7 +5,7 @@ $p=$t<100ms
 $t'=0.01ms
  $metadata
 C
- $inherit="Hodgkin-Huxley Coupling"
+ $inherit="Coupling Voltage"
  $p=A.$index==B.$index-1
  A=HH
  B=HH

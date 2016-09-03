@@ -75,17 +75,18 @@ public class AppData
             "Channel",
             "Channel K",
             "Channel Na",
-            "Compartment Passive",
-            "Hodgkin-Huxley Cable",
-            "Hodgkin-Huxley Coupling",
+            "Coupling Voltage",
+            "Example Hodgkin-Huxley Cable",
+            "Neuron",
             "Neuron Brette",
-            "Neuron Firing-Rate",
             "Neuron Hodgkin-Huxley",
             "Neuron Izhikevich",
+            "Neuron Izhikevich 2007",
             "Neuron LIF",
             "STPU Connector",
             "STPU Connector Input",
             "STPU Input",
+            "Synapse Delta",
             "Synapse Exponential"
         };
         try

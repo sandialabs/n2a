@@ -1,0 +1,9 @@
+N2A.schema=1
+$metadata
+ notes=This synapse delivers a burst of current that lasts only one simulation cycle, attempting to raise the postsynaptic voltage by a specific increment. It is primarily for use in less biologically-realistic spiking networks.
+A=$connect("Neuron")
+B=$connect("Neuron")
+B.I=+(Vdelta*B.C)/$t'@$event(A.V>=A.Vthresh)
+Vdelta=10mV
+ $metadata
+  notes=The desired change in postsynaptic voltage. This does not account for leakage current or voltage resets due to spiking.

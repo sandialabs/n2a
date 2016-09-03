@@ -1,0 +1,15 @@
+N2A.schema=1
+$metadata
+ notes=This is essentially a Hodgkin-Huxley passive compartment. Ion channels may be added as subcomponents to create more complex dynamics. Subclasses may override the dynamics directly, without the use of ion channels.
+C=1uF
+ $metadata
+  backend.xyce.param="cMem"
+G=0.3mS
+ $metadata
+  backend.xyce.param="gMem"
+V=Vrest@$init
+V'=(G*(Vrest-V)+I)/C
+Vrest=-54.4mV
+ $metadata
+  backend.stpu.param=pot_qct
+  backend.xyce.param="eLeak"

@@ -1,5 +1,5 @@
 N2A.schema=1
-$inherit="Compartment Passive"
+$inherit="Neuron"
 $metadata
  backend.xyce.device=neuron1
  notes=|
