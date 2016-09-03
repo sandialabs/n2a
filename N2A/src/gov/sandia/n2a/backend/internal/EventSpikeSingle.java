@@ -16,6 +16,6 @@ public class EventSpikeSingle extends EventSpike
 
     public void setFlag ()
     {
-        target.valuesFloat[eventType.valueIndex] = (float) ((int) target.valuesFloat[eventType.valueIndex] | eventType.mask);
+        target.valuesFloat[eventType.valueIndex] = Float.intBitsToFloat (Float.floatToRawIntBits (target.valuesFloat[eventType.valueIndex]) | eventType.mask);
     }
 }

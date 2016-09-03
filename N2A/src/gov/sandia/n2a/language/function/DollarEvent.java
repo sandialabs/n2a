@@ -40,7 +40,7 @@ public class DollarEvent extends Function
         if (eventType != null)  // This check is necessary because eval() can be called outside of Internal simulator.
         {
             if (context instanceof InstanceTemporaries) context = ((InstanceTemporaries) context).wrapped;  // event latches are always stored in main instance, never in a temporary variable
-            if (((int) context.valuesFloat[eventType.valueIndex] & eventType.mask) != 0) return new Scalar (1);
+            if ((Float.floatToRawIntBits (context.valuesFloat[eventType.valueIndex]) & eventType.mask) != 0) return new Scalar (1);
         }
         return new Scalar (0);
     }

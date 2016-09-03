@@ -178,21 +178,21 @@ public class Part extends Instance
                 {
                     // the rest of these require knowing the current value of the working result, which is most likely external buffered
                     Type current = temp.getFinal (v.reference);
-                    if      (v.assignment == Variable.ADD)
+                    switch (v.assignment)
                     {
-                        temp.set (v, current.add (result));
-                    }
-                    else if (v.assignment == Variable.MULTIPLY)
-                    {
-                        temp.set (v, current.multiply (result));
-                    }
-                    else if (v.assignment == Variable.MAX)
-                    {
-                        if (((Scalar) result.GT (current)).value != 0) temp.set (v, result);
-                    }
-                    else if (v.assignment == Variable.MIN)
-                    {
-                        if (((Scalar) result.LT (current)).value != 0) temp.set (v, result);
+                        case Variable.ADD:      temp.set (v, current.add      (result)); break;
+                        case Variable.MULTIPLY: temp.set (v, current.multiply (result)); break;
+                        case Variable.DIVIDE:   temp.set (v, current.divide   (result)); break;
+                        case Variable.MIN:
+                        {
+                            if (((Scalar) result.LT (current)).value != 0) temp.set (v, result);
+                            break;
+                        }
+                        case Variable.MAX:
+                        {
+                            if (((Scalar) result.GT (current)).value != 0) temp.set (v, result);
+                            break;
+                        }
                     }
                 }
             }
@@ -286,6 +286,7 @@ public class Part extends Instance
                     break;
                 // TODO: make the following cases type-sensitive
                 case Variable.MULTIPLY:
+                case Variable.DIVIDE:
                     set (v, new Scalar (1));  // multiplicative identity
                     break;
                 case Variable.MIN:

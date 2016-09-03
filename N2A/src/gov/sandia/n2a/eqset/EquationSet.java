@@ -423,7 +423,7 @@ public class EquationSet implements Comparable<EquationSet>
                 v.reference.variable.container.referenced = true;
                 if (v.reference.variable.assignment != v.assignment)
                 {
-                    Backend.err.get ().println ("WARNING: Reference to " + v.nameString () + " has different assignment operator than target variable. Attempting to reconcile.");
+                    Backend.err.get ().println ("WARNING: Reference to " + v.nameString () + " has different combining operator than target variable. Resolving in favor of higher-precedence operator.");
                     v.assignment = v.reference.variable.assignment = Math.max (v.assignment, v.reference.variable.assignment);
                 }
             }
@@ -1350,11 +1350,11 @@ public class EquationSet implements Comparable<EquationSet>
         boolean changed = false;
         for (final Variable v : variables)
         {
-            if (v.hasAny (new String[] {"constant"})) continue;
+            if (v.hasAttribute ("constant")) continue;
             if ((v.name.startsWith ("$")  ||  v.name.contains (".$"))  &&  ! v.name.startsWith ("$up.")) continue;
 
             Type value;
-            if (v.derivative != null  &&  ! v.hasAttribute ("constant"))
+            if (v.derivative != null)  // and v is not "constant", but that is covered above
             {
                 value = find (new Variable (v.name, v.order + 1)).type;  // this should exist, so no need to verify result
             }
@@ -1488,7 +1488,8 @@ public class EquationSet implements Comparable<EquationSet>
             v.simplify ();
 
             // Check if we have a constant
-            v.removeAttribute ("constant");
+            v.removeAttribute ("constant");  // This should not be necessary.
+            if (v.hasAttribute ("externalWrite")) continue;  // Regardless of the local math, a variable that gets written is not constant.
             if (v.equations.size () != 1) continue;
             EquationEntry e = v.equations.first ();
             if (e.conditional != null) continue;

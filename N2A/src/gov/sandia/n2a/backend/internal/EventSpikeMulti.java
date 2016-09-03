@@ -19,6 +19,6 @@ public class EventSpikeMulti extends EventSpike
 
     public void setFlag ()
     {
-        for (Instance i : targets) i.valuesFloat[eventType.valueIndex] = (float) ((int) i.valuesFloat[eventType.valueIndex] | eventType.mask);
+        for (Instance i : targets) i.valuesFloat[eventType.valueIndex] = Float.intBitsToFloat (Float.floatToRawIntBits (i.valuesFloat[eventType.valueIndex]) | eventType.mask);
     }
 }

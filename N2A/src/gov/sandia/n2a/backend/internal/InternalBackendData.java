@@ -158,7 +158,7 @@ public class InternalBackendData
 
         /**
             Every $event() function has a trigger expression as its first parameter.
-            This expression is tested during the update phase of any monitored parts,
+            This expression is tested during the finish phase of any monitored parts,
             which are generally different from $event()'s home part. The home part
             will keep an auxiliary variable which $event() updates each time it is
             tested. However, if the expression is a simple variable, then we compare the
@@ -181,7 +181,7 @@ public class InternalBackendData
 
         /**
             Determine if this event should be triggered.
-            Must be called during the update phase.
+            Must be called during the finish phase, before buffered values are written to their primary storage.
             @param targetPart Must be an instance of the part where the $event() function appears,
             even if it is called during update of another part.
             @return -2 if this event did not fire. -1 if it fired with nocare delivery.
