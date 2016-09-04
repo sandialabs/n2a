@@ -279,6 +279,7 @@ public class NodePart extends NodeBase
         NodePart result = (NodePart) add ("Part", tree);
         result.source.set ("\"" + key + "\"", "$inherit");  // This brings in all the equations for the new sub-part.
         result.build ();
+        result.findConnections ();
         ((DefaultTreeModel) tree.getModel ()).nodeStructureChanged (result);
 
         return result;

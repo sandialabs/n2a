@@ -48,6 +48,7 @@ import java.util.Enumeration;
 import java.util.EventObject;
 import java.util.Locale;
 
+import javax.swing.AbstractAction;
 import javax.swing.Box;
 import javax.swing.DefaultCellEditor;
 import javax.swing.Icon;
@@ -75,6 +76,9 @@ import javax.swing.tree.ExpandVetoException;
 import javax.swing.tree.TreeCellEditor;
 import javax.swing.tree.TreePath;
 import javax.swing.tree.TreeSelectionModel;
+import javax.swing.undo.CannotRedoException;
+import javax.swing.undo.CannotUndoException;
+import javax.swing.undo.UndoManager;
 
 import replete.gui.controls.IconButton;
 import replete.util.Lay;
@@ -211,6 +215,28 @@ public class EquationTreePanel extends JPanel
                 }
             };
 
+            final UndoManager undo = new UndoManager ();
+            textField.getDocument ().addUndoableEditListener (undo);
+            textField.getActionMap ().put ("Undo", new AbstractAction ("Undo")
+            {
+                public void actionPerformed (ActionEvent evt)
+                {
+                    try {undo.undo ();}
+                    catch (CannotUndoException e) {}
+                }
+            });
+            textField.getActionMap ().put ("Redo", new AbstractAction ("Redo")
+            {
+                public void actionPerformed (ActionEvent evt)
+                {
+                    try {undo.redo();}
+                    catch (CannotRedoException e) {}
+                }
+            });
+            textField.getInputMap ().put (KeyStroke.getKeyStroke ("control Z"), "Undo");
+            textField.getInputMap ().put (KeyStroke.getKeyStroke ("control Y"), "Redo");
+            textField.getInputMap ().put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
+
             textField.addFocusListener (new FocusListener ()
             {
                 @Override
@@ -224,16 +250,24 @@ public class EquationTreePanel extends JPanel
                     {
                         if (":+*/<>".indexOf (text.charAt (equals + 1)) >= 0) equals++;
                     }
-                    if (at < 0)
+                    if (at < 0)  // no condition
                     {
-                        if (equals >= 0)
+                        if (equals >= 0)  // a single-line equation
                         {
                             textField.setCaretPosition (text.length ());
                             textField.moveCaretPosition (equals + 1);
                         }
-                        // Otherwise use the default, which selects all and places caret at the end.
+                        else  // A part name
+                        {
+                            textField.setCaretPosition (text.length ());
+                        }
                     }
-                    else
+                    else if (equals > at)  // a multi-conditional line that has "=" in the condition
+                    {
+                        textField.setCaretPosition (0);
+                        textField.moveCaretPosition (at);
+                    }
+                    else  // a single-line equation with a condition
                     {
                         textField.setCaretPosition (equals + 1);
                         textField.moveCaretPosition (at);
@@ -424,20 +458,12 @@ public class EquationTreePanel extends JPanel
         {
             public void treeExpanded (TreeExpansionEvent event)
             {
-                Rectangle node    = tree.getPathBounds (event.getPath ());
-                Rectangle visible = scrollPane.getViewport ().getViewRect ();
-                visible.height -= node.y - visible.y;
-                visible.y       = node.y;
-                tree.repaint (visible);
+                repaintSouth (event.getPath ());
             }
 
             public void treeCollapsed (TreeExpansionEvent event)
             {
-                Rectangle node    = tree.getPathBounds (event.getPath ());
-                Rectangle visible = scrollPane.getViewport ().getViewRect ();
-                visible.height -= node.y - visible.y;
-                visible.y       = node.y;
-                tree.repaint (visible);
+                repaintSouth (event.getPath ());
             }
         });
 
@@ -863,6 +889,7 @@ public class EquationTreePanel extends JPanel
 
                 updateOrder ();
                 updateOverrides (path);
+                repaintSouth (path);
             }
         }
     }
@@ -989,5 +1016,16 @@ public class EquationTreePanel extends JPanel
             NodeBase n = (NodeBase) path.getPathComponent (i);
             if (! n.source.isFromTopDocument ()) model.nodeChanged (n);
         }
+    }
+
+    public void repaintSouth (TreePath path)
+    {
+        System.out.println ("repaintSouth");
+        Rectangle node    = tree.getPathBounds (path);
+        Rectangle visible = scrollPane.getViewport ().getViewRect ();
+        visible.height -= node.y - visible.y;
+        visible.y       = node.y;
+        tree.repaint (visible);
+        System.out.println ("  called");
     }
 }
