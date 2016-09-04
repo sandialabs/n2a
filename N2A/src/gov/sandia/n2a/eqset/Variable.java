@@ -111,24 +111,6 @@ public class Variable implements Comparable<Variable>
         }
     }
 
-    /**
-        Convert a full line (variable=expression@condition) into a Variable/EquationEntry structure.
-        Technically, this is a constructor, but Variable(String) is already used for making queries,
-        and that is probably best.
-    **/
-    public static Variable parse (String line) throws Exception
-    {
-        Variable result = new Variable ();
-        String[] parts = line.split ("=", 2);
-        result.parseLHS (parts[0]);
-        if (parts.length > 1)
-        {
-            String rhs = result.parseAssignment (parts[1]);
-            result.add (new EquationEntry (rhs));
-        }
-        return result;
-    }
-
     public void parseLHS (String lhs)
     {
         name = lhs.trim ();
@@ -193,8 +175,8 @@ public class Variable implements Comparable<Variable>
             case '+': assignment = ADD;           return rhs.substring (1);
             case '*': assignment = MULTIPLY;      return rhs.substring (1);
             case '/': assignment = DIVIDE;        return rhs.substring (1);
-            case '>': assignment = MAX;           return rhs.substring (1);
             case '<': assignment = MIN;           return rhs.substring (1);
+            case '>': assignment = MAX;           return rhs.substring (1);
             case ':': addAttribute ("temporary"); return rhs.substring (1);  // We are already set to REPLACE
         }
 
@@ -622,8 +604,8 @@ public class Variable implements Comparable<Variable>
             case ADD:      return "+";
             case MULTIPLY: return "*";
             case DIVIDE:   return "/";
-            case MAX:      return ">";
             case MIN:      return "<";
+            case MAX:      return ">";
         }
         return "";
     }

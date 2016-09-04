@@ -20,6 +20,7 @@ import gov.sandia.n2a.language.function.DollarEvent;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
+import gov.sandia.umf.platform.plugins.extpoints.Backend;
 
 import java.util.Comparator;
 import java.util.Map;
@@ -163,10 +164,11 @@ public class InternalBackendData
             will keep an auxiliary variable which $event() updates each time it is
             tested. However, if the expression is a simple variable, then we compare the
             variable's buffered value instead. The variable is likely to be a reference
-            to another part. In either case, we need the identity of the variable.
+            to the monitored part (in which case the buffered value is stored there).
+            In either case, we need the identity of the variable.
         **/
         public Variable track;
-        public boolean  trackOne;  // we are following a single first-class variable
+        public boolean  trackOne;  // we are following a single first-class variable, so track is only a holder for its reference
 
         // edge types
         public static final int EVALUATE = -1;  // Always recompute the edge type, because the parameter is not constant.
@@ -184,7 +186,7 @@ public class InternalBackendData
             Must be called during the finish phase, before buffered values are written to their primary storage.
             @param targetPart Must be an instance of the part where the $event() function appears,
             even if it is called during update of another part.
-            @return -2 if this event did not fire. -1 if it fired with nocare delivery.
+            @return -2 if this event did not fire. -1 if it fired with no-care delivery.
             0 or greater if it fired and we specify the delay until delivery.
         **/
         public double test (Instance targetPart, Simulator simulator)
@@ -290,12 +292,13 @@ public class InternalBackendData
         This must be done before the variables are sorted into sets according to attributes, because we
         may need to add the "externalRead" attribute to some of them.
     **/
-    public void analyzeEvents (final EquationSet s)
+    public void analyzeEvents (final EquationSet s) throws Backend.AbortRun
     {
         class EventVisitor extends Visitor
         {
             public int valueIndex = -1;
             public int mask;
+            public boolean exception = false;
 
             public boolean visit (Operator op)
             {
@@ -374,12 +377,27 @@ public class InternalBackendData
                             //   auxiliary variable
                             if (de.operands[0] instanceof AccessVariable)
                             {
-                                Variable v = ((AccessVariable) de.operands[0]).reference.variable;
-                                if (! v.hasAttribute ("temporary"))
+                                AccessVariable av = (AccessVariable) de.operands[0];
+                                VariableReference reference = av.reference;
+                                Variable v = reference.variable;
+                                if (v.hasAttribute ("temporary"))
                                 {
-                                    et.trackOne = true;
-                                    et.track = v;
+                                    // Treat temporaries like expressions (ie: create an auxiliary variable to track changes in its value),
+                                    // so fall through to the !trackOne case below.
+                                    // However, if this is a temporary in the monitored part, and the monitored part is not the home part,
+                                    // then the user has broken the rule that we can't see temporaries in other parts.
+                                    if (v.container != s)
+                                    {
+                                        Backend.err.get ().println ("ERROR: Attempt to reference a temporary in an external part: " + v.container.name + "." + v.nameString () + " from " + s.name);
+                                        exception = true;
+                                    }
+                                }
+                                else
+                                {
                                     v.addAttribute ("externalRead");  // ensure it's buffered, so we can detect change
+                                    et.trackOne = true;
+                                    et.track = new Variable ();  // just a holder for the reference
+                                    et.track.reference = reference;
                                 }
                             }
                             if (! et.trackOne)  // expression, so create auxiliary variable
@@ -463,6 +481,7 @@ public class InternalBackendData
         {
             v.visit (eventVisitor);
         }
+        if (eventVisitor.exception) throw new Backend.AbortRun ();
     }
 
     public void analyze (EquationSet s)

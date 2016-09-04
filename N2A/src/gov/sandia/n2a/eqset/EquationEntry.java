@@ -40,7 +40,7 @@ public class EquationEntry implements Comparable<EquationEntry>
     **/
     public EquationEntry (MNode source) throws Exception
     {
-        expression  = Operator.parse (source.get ());
+        expression = Operator.parse (source.get ());
         String key = source.key ().substring (1);  // The key should always begin with @
         if (key.isEmpty ())
         {
@@ -103,7 +103,9 @@ public class EquationEntry implements Comparable<EquationEntry>
         if (that.ifString.isEmpty ())        return -1;
         if (     ifString.equals ("$init"))  return  1;
         if (that.ifString.equals ("$init"))  return -1;
-        return that.ifString.length () - ifString.length ();  // as a heuristic, sort longer ifStrings first
+        int diff = that.ifString.length () - ifString.length ();  // as a heuristic, sort longer ifStrings first
+        if (diff == 0) return ifString.compareTo (that.ifString);  // If they are the same length, use lexical order instead.
+        return diff;
     }
 
     @Override

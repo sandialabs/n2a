@@ -1,6 +1,4 @@
 N2A.schema=1
-$metadata
- backend
 $p=$t<100ms
 $t'=0.01ms
  $metadata

@@ -250,7 +250,7 @@ public class InternalBackend extends Backend
         for (EquationSet p : s.parts) createBackendData (p);
     }
 
-    public static void analyzeEvents (EquationSet s)
+    public static void analyzeEvents (EquationSet s) throws Backend.AbortRun
     {
         InternalBackendData bed = (InternalBackendData) s.backendData;
         bed.analyzeEvents (s);

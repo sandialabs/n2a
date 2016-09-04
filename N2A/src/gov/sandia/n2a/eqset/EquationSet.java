@@ -421,7 +421,9 @@ public class EquationSet implements Comparable<EquationSet>
                 v.reference.variable.addAttribute ("externalWrite");
                 v.reference.variable.addDependency (v);  // v.reference.variable receives an external write from v, and therefore its value depends on v
                 v.reference.variable.container.referenced = true;
-                if (v.reference.variable.assignment != v.assignment)
+                if (   v.reference.variable.assignment != v.assignment
+                    && ! (   (v.reference.variable.assignment == Variable.MULTIPLY  &&  v.assignment == Variable.DIVIDE)  // This line and the next say that * and / are compatible with each other, so ignore that case.
+                          || (v.reference.variable.assignment == Variable.DIVIDE    &&  v.assignment == Variable.MULTIPLY)))
                 {
                     Backend.err.get ().println ("WARNING: Reference to " + v.nameString () + " has different combining operator than target variable. Resolving in favor of higher-precedence operator.");
                     v.assignment = v.reference.variable.assignment = Math.max (v.assignment, v.reference.variable.assignment);

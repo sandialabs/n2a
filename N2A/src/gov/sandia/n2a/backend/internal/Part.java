@@ -161,38 +161,38 @@ public class Part extends Instance
         for (Variable v : temp.bed.localUpdate)
         {
             Type result = v.eval (temp);
+            if (v.reference.variable.writeIndex < 0) continue;  // this is not a "dummy" variable, so calling eval() was all we needed to do
+
             if (result == null)  // no condition matched
             {
-                // Note: $type is explicitly evaluated to 0 in Variable.eval(), so it never returns null, even when no conditions match.
-
                 // If variable is buffered, then we must copy its value to ensure it gets copied back
-                if (v.reference.variable == v  &&  v.equations.size () > 0  &&  v.readIndex != v.writeIndex) temp.set (v, temp.get (v));
+                if (v.reference.variable != v  ||  v.equations.size () == 0  ||  v.readIndex == v.writeIndex) continue;
+                result = temp.get (v);  // and fall through ...
             }
-            else if (v.reference.variable.writeIndex >= 0)  // ensure this is not a "dummy" variable
+            // Note: $type is explicitly evaluated to 0 in Variable.eval(), so it never returns null, even when no conditions match.
+
+            if (v.assignment == Variable.REPLACE)
             {
-                if (v.assignment == Variable.REPLACE)
+                temp.set (v, result);
+            }
+            else
+            {
+                // the rest of these require knowing the current value of the working result, which is most likely external buffered
+                Type current = temp.getFinal (v.reference);
+                switch (v.assignment)
                 {
-                    temp.set (v, result);
-                }
-                else
-                {
-                    // the rest of these require knowing the current value of the working result, which is most likely external buffered
-                    Type current = temp.getFinal (v.reference);
-                    switch (v.assignment)
+                    case Variable.ADD:      temp.set (v, current.add      (result)); break;
+                    case Variable.MULTIPLY: temp.set (v, current.multiply (result)); break;
+                    case Variable.DIVIDE:   temp.set (v, current.divide   (result)); break;
+                    case Variable.MIN:
                     {
-                        case Variable.ADD:      temp.set (v, current.add      (result)); break;
-                        case Variable.MULTIPLY: temp.set (v, current.multiply (result)); break;
-                        case Variable.DIVIDE:   temp.set (v, current.divide   (result)); break;
-                        case Variable.MIN:
-                        {
-                            if (((Scalar) result.LT (current)).value != 0) temp.set (v, result);
-                            break;
-                        }
-                        case Variable.MAX:
-                        {
-                            if (((Scalar) result.GT (current)).value != 0) temp.set (v, result);
-                            break;
-                        }
+                        if (((Scalar) result.LT (current)).value != 0) temp.set (v, result);
+                        break;
+                    }
+                    case Variable.MAX:
+                    {
+                        if (((Scalar) result.GT (current)).value != 0) temp.set (v, result);
+                        break;
                     }
                 }
             }

@@ -83,13 +83,17 @@ public class Population extends Instance
                     {
                         temp.set (v, current.multiply (result));
                     }
-                    else if (v.assignment == Variable.MAX)
+                    else if (v.assignment == Variable.DIVIDE)
                     {
-                        if (((Scalar) result.GT (current)).value != 0) temp.set (v, result);
+                        temp.set (v, current.divide (result));
                     }
                     else if (v.assignment == Variable.MIN)
                     {
                         if (((Scalar) result.LT (current)).value != 0) temp.set (v, result);
+                    }
+                    else if (v.assignment == Variable.MAX)
+                    {
+                        if (((Scalar) result.GT (current)).value != 0) temp.set (v, result);
                     }
                 }
             }
@@ -113,6 +117,7 @@ public class Population extends Instance
                     break;
                 // TODO: make the following cases type-sensitive
                 case Variable.MULTIPLY:
+                case Variable.DIVIDE:
                     set (v, new Scalar (1));  // multiplicative identity
                     break;
                 case Variable.MIN:
