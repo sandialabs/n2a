@@ -4,8 +4,8 @@ $metadata
 I
  $metadata
   backend.stpu.param=InpVal
- @$init=inputRaw("../../stpu/input.init",0,$index)*1uA
- @$t>0=inputRaw("../../stpu/input.txt",0,$index)*1uA
+ @$init=matrixRaw("../../stpu/input.init",0,$index)*1uA
+ @$t>0=matrixRaw("../../stpu/input.txt",0,$index)*1uA
 streaming=0
  $metadata
   backend.stpu.param=streaming
