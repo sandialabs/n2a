@@ -75,19 +75,20 @@ public class AppData
             "Channel",
             "Channel K",
             "Channel Na",
+            "Coupling Delayed Current",
             "Coupling Voltage",
             "Example Hodgkin-Huxley Cable",
+            "Example LIF Spike Sort",
+            "Input Current",
             "Neuron",
             "Neuron Brette",
             "Neuron Hodgkin-Huxley",
             "Neuron Izhikevich",
             "Neuron Izhikevich 2007",
             "Neuron LIF",
-            "STPU Connector",
-            "STPU Connector Input",
-            "STPU Input",
             "Synapse Delta",
-            "Synapse Exponential"
+            "Synapse Exponential",
+            "Synapse LIF"
         };
         try
         {
