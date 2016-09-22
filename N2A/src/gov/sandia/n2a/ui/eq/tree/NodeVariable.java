@@ -189,23 +189,14 @@ public class NodeVariable extends NodeBase
         String[] parts = input.split ("=", 2);
         String name = parts[0].trim ();
         String value;
-        if (parts.length > 1)
+        if (parts.length > 1) value = parts[1].trim ();
+        else                  value = "";
+        if (! name.matches ("[a-zA-Z_$][a-zA-Z0-9_$.]*[']*"))  // Not a proper variable name. The user actually passed a naked expression, so resurrect the old (probably auto-assigned) variable name.
         {
-            value = parts[1].trim ();
-        }
-        else
-        {
-            if (name.matches ("[a-zA-Z_$][a-zA-Z0-9_$.]*[']*"))  // It's truly a variable name
-            {
-                value = "";
-            }
-            else  // The user actually passed a naked expression, so resurrect the old (probably auto-assigned) variable name.
-            {
-                value = name;
-                name = oldKey;
-                setUserObject (name + "=" + value);
-                model.nodeChanged (this);
-            }
+            value = input.trim ();
+            name = oldKey;
+            setUserObject (name + "=" + value);
+            model.nodeChanged (this);
         }
         Variable.ParsedValue pieces = new Variable.ParsedValue (value);
 
