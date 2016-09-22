@@ -12,6 +12,8 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.OperatorBinary;
+import gov.sandia.n2a.language.operator.LE;
 import gov.sandia.n2a.language.operator.LT;
 import gov.sandia.n2a.language.parse.ParseException;
 import gov.sandia.n2a.language.type.Scalar;
@@ -114,14 +116,14 @@ public class InternalBackend extends Backend
     public static double getDurationFromP (MNode job)
     {
         String p = job.get ("$p");
-        if (p.isEmpty ()) return 0;
+        if (p.isEmpty ()) return 1;  // We assume that job got augmented with a default setting of "$p=$t<1"
         Operator expression = null;
         try
         {
             expression = Operator.parse (p);
-            if (expression instanceof LT)
+            if (expression instanceof LT  ||  expression instanceof LE)
             {
-                LT comparison = (LT) expression;
+                OperatorBinary comparison = (OperatorBinary) expression;
                 if (comparison.operand0 instanceof AccessVariable)
                 {
                     AccessVariable av = (AccessVariable) comparison.operand0;
