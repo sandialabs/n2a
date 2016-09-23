@@ -564,8 +564,7 @@ public class InternalBackendData
                     else
                     {
                         boolean temporary = v.hasAttribute ("temporary");
-                        boolean unusedTemporary = temporary  &&  ! v.hasUsers ();
-                        if (! unusedTemporary) globalInit.add (v);
+                        if (! temporary  ||  v.hasUsers ()) globalInit.add (v);
                         if (! temporary  &&  ! v.hasAttribute ("dummy"))
                         {
                             if (! v.hasAttribute ("preexistent")) globalMembers.add (v);
@@ -640,8 +639,7 @@ public class InternalBackendData
                     else
                     {
                         boolean temporary = v.hasAttribute ("temporary");
-                        boolean unusedTemporary = temporary  &&  ! v.hasUsers ();
-                        if (! unusedTemporary)
+                        if (! temporary  ||  v.hasUsers ())
                         {
                             if (v.name.startsWith ("$"))
                             {

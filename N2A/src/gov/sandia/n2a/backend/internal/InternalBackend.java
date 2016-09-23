@@ -267,12 +267,19 @@ public class InternalBackend extends Backend
         bed.analyzeLastT (s);
     }
 
+    /**
+        Set initial value in Variable.type, so we can use it as backup when stored value is null.
+     **/
     public static void clearVariables (EquationSet s)
     {
         for (EquationSet p : s.parts) clearVariables (p);
         for (Variable v : s.variables)
         {
-            if (! v.hasAttribute ("constant")) v.type = v.type.clear ();  // So we can use these as backup when stored value is null.
+            if (! v.hasAttribute ("constant"))
+            {
+                if (v.name.equals ("$p")) v.type = new Scalar (1);  // Probably some other $variables should be set to their defaults as well, but currently only $p causes any issue.
+                else                      v.type = v.type.clear ();
+            }
         }
     }
 

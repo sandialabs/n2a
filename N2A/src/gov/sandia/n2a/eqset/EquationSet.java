@@ -1710,12 +1710,14 @@ public class EquationSet implements Comparable<EquationSet>
         class ReplaceInit extends Transformer
         {
             float init;
+            float live;
             public Operator transform (Operator op)
             {
                 if (op instanceof AccessVariable)
                 {
                     AccessVariable av = (AccessVariable) op;
                     if (av.name.equals ("$init")) return new Constant (new Scalar (init));
+                    if (av.name.equals ("$live")) return new Constant (new Scalar (live));
                 }
                 return null;
             }
@@ -1742,6 +1744,7 @@ public class EquationSet implements Comparable<EquationSet>
                 {
                     // init
                     replaceInit.init = 1;
+                    replaceInit.live = 1;
                     Operator test = e.conditional.deepCopy ().transform (replaceInit).simplify (v);
                     boolean fires = true;
                     if (test instanceof Constant)
@@ -1749,10 +1752,22 @@ public class EquationSet implements Comparable<EquationSet>
                         Constant c = (Constant) test;
                         if (c.value instanceof Scalar  &&  ((Scalar) c.value).value == 0) fires = false;
                     }
+                    if (! fires  &&  connectionBindings != null)  // check pre-live phase as well
+                    {
+                        replaceInit.live = 0;
+                        test = e.conditional.deepCopy ().transform (replaceInit).simplify (v);
+                        fires = true;
+                        if (test instanceof Constant)
+                        {
+                            Constant c = (Constant) test;
+                            if (c.value instanceof Scalar  &&  ((Scalar) c.value).value == 0) fires = false;
+                        }
+                    }
                     if (fires) firesDuringInit++;
 
                     // update
                     replaceInit.init = 0;
+                    replaceInit.live = 1;
                     test = e.conditional.deepCopy ().transform (replaceInit).simplify (v);
                     fires = true;
                     if (test instanceof Constant)

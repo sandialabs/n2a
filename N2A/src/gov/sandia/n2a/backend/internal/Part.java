@@ -161,13 +161,19 @@ public class Part extends Instance
         for (Variable v : temp.bed.localUpdate)
         {
             Type result = v.eval (temp);
-            if (v.reference.variable.writeIndex < 0) continue;  // this is not a "dummy" variable, so calling eval() was all we needed to do
+            if (v.reference.variable.writeIndex < 0) continue;  // this is a "dummy" variable, so calling eval() was all we needed to do
 
             if (result == null)  // no condition matched
             {
-                // If variable is buffered, then we must copy its value to ensure it gets copied back
-                if (v.reference.variable != v  ||  v.equations.size () == 0  ||  v.readIndex == v.writeIndex) continue;
-                result = temp.get (v);  // and fall through ...
+                if (v.reference.variable != v  ||  v.equations.size () == 0) continue;
+                if (v.readIndex == v.writeIndex)  // not buffered
+                {
+                    if (v.readTemp) temp.set (v, v.type);  // This is a pure temporary for which no equation fired, so set value to default for use by later equations. Note that readTemp==writeTemp==true.
+                    continue;
+                }
+
+                // Variable is buffered, so we must copy its value to ensure it gets copied back
+                result = temp.get (v);  // and fall through to store value ...
             }
             // Note: $type is explicitly evaluated to 0 in Variable.eval(), so it never returns null, even when no conditions match.
 
