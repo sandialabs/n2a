@@ -356,7 +356,9 @@ public class Part extends Instance
             if (bed.p.hasAttribute ("temporary"))
             {
                 InstanceTemporaries temp = new InstanceTemporaries (this, simulator, false);
-                p = ((Scalar) bed.p.eval (temp)).value;
+                Type result = bed.p.eval (temp);
+                if (result == null) p = 1;
+                else                p = ((Scalar) result).value;
             }
             else
             {

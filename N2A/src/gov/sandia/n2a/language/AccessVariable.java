@@ -45,7 +45,7 @@ public class AccessVariable extends Operator
     {
         if (reference == null  ||  reference.variable == null) return this;  // unresolved!
         Variable v = reference.variable;
-        if (v.name.equals ("$init")) return this;  // specifically prevent $init from being replaced by a Constant
+        if (v.name.equals ("$init")  ||  v.name.equals ("$live")) return this;  // specifically prevent $init and $live from being replaced by a Constant
         if (v.hasAttribute ("externalWrite")) return this;  // A variable may locally evaluate to a constant, yet be subject to change from outside equations.
         if (v.equations.size () != 1) return this;
         EquationEntry e = v.equations.first ();

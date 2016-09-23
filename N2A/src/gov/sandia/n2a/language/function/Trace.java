@@ -7,6 +7,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.language.function;
 
+import java.util.Map.Entry;
+
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
@@ -81,15 +83,31 @@ public class Trace extends Function
         if (operands.length < 2)  // We need $index to auto-generate names.
         {
             EquationSet container = v.container;
-            while (container != null)
+            if (container.connectionBindings == null)  // regular part
             {
-                Variable index = container.find (new Variable ("$index"));
-                if (index != null  &&  ! container.isSingleton ())
-                {
-                    v.addDependency (index);
-                }
-                container = container.container;
+                dependOnIndex (v, container);
             }
+            else  // connection
+            {
+                // depend on all endpoints
+                for (Entry<String,EquationSet> e : container.connectionBindings.entrySet ())
+                {
+                    dependOnIndex (v, e.getValue ());
+                }
+            }
+        }
+    }
+
+    public void dependOnIndex (Variable v, EquationSet container)
+    {
+        while (container != null)
+        {
+            Variable index = container.find (new Variable ("$index"));
+            if (index != null  &&  ! container.isSingleton ())
+            {
+                v.addDependency (index);
+            }
+            container = container.container;
         }
     }
 

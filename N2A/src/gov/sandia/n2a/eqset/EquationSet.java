@@ -1261,7 +1261,7 @@ public class EquationSet implements Comparable<EquationSet>
 
     /**
         Determines the attributes of $live, based on whether other parts depend on it.
-        $live is either constant, transient, or stored.
+        $live is either constant, accessor, or stored.
         constant (the default) if we can't die or no part depends on us.
         accessor               if we only die in response to the death of our container or a referenced part.
         stored                 if we can die from $n, $p or $type, that is, if the fact that we died is local knowledge.
@@ -1327,7 +1327,7 @@ public class EquationSet implements Comparable<EquationSet>
                 {
                     v.type = new Matrix (3, 1);
                 }
-                else if (v.name.equals ("$init")  ||  v.name.equals ("$live"))
+                else if (v.name.equals ("$init")  ||  v.name.equals ("$live")  ||  v.name.equals ("$p")  ||  v.name.equals ("$n")  ||  (v.name.equals ("$t")  &&  v.order == 1))
                 {
                     v.type = new Scalar (1);
                 }
@@ -1490,7 +1490,7 @@ public class EquationSet implements Comparable<EquationSet>
             v.simplify ();
 
             // Check if we have a constant
-            v.removeAttribute ("constant");  // This should not be necessary.
+            v.removeAttribute ("constant");  // It should not be necessary to remove this (anything already "constant" should be correctly tagged), but we do so to be thorough.
             if (v.hasAttribute ("externalWrite")) continue;  // Regardless of the local math, a variable that gets written is not constant.
             if (v.equations.size () != 1) continue;
             EquationEntry e = v.equations.first ();
