@@ -356,6 +356,7 @@ public class NodePart extends NodeBase
             NodePart p = new NodePart (oldPart);
             model.insertNodeInto (p, parent, parent.getIndex (this));
             p.build ();
+            p.findConnections ();
             model.nodeStructureChanged (p);
         }
 
@@ -370,6 +371,7 @@ public class NodePart extends NodeBase
             MPart newPart = mparent.update (newDocNode);  // re-collate this node to weave in any included part
             source = newPart;
             build ();
+            findConnections ();
             model.nodeStructureChanged (this);
         }
     }
