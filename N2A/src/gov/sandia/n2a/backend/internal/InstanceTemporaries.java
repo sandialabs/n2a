@@ -15,7 +15,7 @@ import gov.sandia.n2a.language.type.Scalar;
 
 /**
     Provides a set of temporary values for use within a single function.
-    This handles formal temporaries (those with := as an assignment), as well as buffering for cyclic dependencies.
+    This handles formal temporaries (those with =: as an assignment), as well as buffering for cyclic dependencies.
     Note: buffered variables that are accessed by external equation sets ("externalRead" and "externalWrite") have two entries in the
     main table of values, since many different function invocations may access them before they are finalized.
 **/

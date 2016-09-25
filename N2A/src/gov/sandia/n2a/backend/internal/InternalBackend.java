@@ -277,8 +277,14 @@ public class InternalBackend extends Backend
         {
             if (! v.hasAttribute ("constant"))
             {
-                if (v.name.equals ("$p")) v.type = new Scalar (1);  // Probably some other $variables should be set to their defaults as well, but currently only $p causes any issue.
-                else                      v.type = v.type.clear ();
+                if (v.name.equals ("$p")  ||  v.name.equals ("$live"))
+                {
+                    v.type = new Scalar (1);
+                }
+                else
+                {
+                    v.type = v.type.clear ();
+                }
             }
         }
     }

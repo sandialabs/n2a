@@ -497,9 +497,9 @@ public class InternalBackendData
             else if (v.name.equals ("$init" )                  ) init  = v;
             else if (v.name.equals ("$live" )                  ) live  = v;
             else if (v.name.equals ("$n"    )  &&  v.order == 0) n     = v;
-            else if (v.name.equals ("$p"    )                  ) p     = v;
+            else if (v.name.equals ("$p"    )  &&  v.order == 0) p     = v;
             else if (v.name.equals ("$type" )                  ) type  = v;
-            else if (v.name.equals ("$xyz"  )                  ) xyz   = v;
+            else if (v.name.equals ("$xyz"  )  &&  v.order == 0) xyz   = v;
             else if (v.name.equals ("$t"    ))
             {
                 if (v.order == 0)

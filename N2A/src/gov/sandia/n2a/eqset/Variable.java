@@ -347,10 +347,9 @@ public class Variable implements Comparable<Variable>
         else
         {
             // This is crude and costs O(n^2), but using something better like a TreeSet would
-            // force us to use the Comparable interface, which won't handle Variable identity
-            // quite right.
+            // force us to use the Comparable interface. However, we need exact object identity.
             // FWIW, when the number of dependencies is low, this is probably more efficient.
-            if (uses.contains (whatWeNeed)) return;  // already recorded this dependency, so don't do it again
+            for (Variable u : uses) if (u == whatWeNeed) return;  // already recorded this dependency, so don't do it again
         }
         uses.add (whatWeNeed);
         whatWeNeed.addUser (this);

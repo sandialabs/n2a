@@ -1165,9 +1165,10 @@ public class EquationSet implements Comparable<EquationSet>
 
         // Determine if $p has an assignment less than 1
         Variable p = find (new Variable ("$p"));
-        if (p != null  &&  ! p.hasAttribute ("initOnly"))
+        if (p != null)
         {
             // Determine if any equation is capable of setting $p to something besides 1
+            ReplaceInit replaceInit = new ReplaceInit ();
             for (EquationEntry e : p.equations)
             {
                 if (e.expression instanceof Constant)
@@ -1176,6 +1177,32 @@ public class EquationSet implements Comparable<EquationSet>
                     if (value instanceof Scalar)
                     {
                         if (((Scalar) value).value == 1.0) continue;
+                    }
+                }
+
+                // Now we have an equation that evaluates to something other than 1.
+                // If this occurs anywhere but pre-init, then $p is lethal.
+
+                // Check if condition fires during init phase
+                if (e.conditional != null)
+                {
+                    replaceInit.init = 1;
+                    replaceInit.live = 1;
+                    Operator test = e.conditional.deepCopy ().transform (replaceInit).simplify (p);
+                    if (test instanceof Constant)
+                    {
+                        Constant c = (Constant) test;
+                        if (c.value instanceof Scalar  &&  ((Scalar) c.value).value == 0)  // Does not fire during init phase
+                        {
+                            // Check if condition fires during update phase
+                            replaceInit.init = 0;
+                            test = e.conditional.deepCopy ().transform (replaceInit).simplify (p);
+                            if (test instanceof Constant)
+                            {
+                                c = (Constant) test;
+                                if (c.value instanceof Scalar  &&  ((Scalar) c.value).value == 0) continue;  // Does not fire during update phase
+                            }
+                        }
                     }
                 }
                 lethalP = true;
@@ -1698,6 +1725,22 @@ public class EquationSet implements Comparable<EquationSet>
         while (findInitOnlyRecursive ()) {}
     }
 
+    public static class ReplaceInit extends Transformer
+    {
+        public float init;
+        public float live;
+        public Operator transform (Operator op)
+        {
+            if (op instanceof AccessVariable)
+            {
+                AccessVariable av = (AccessVariable) op;
+                if (av.name.equals ("$init")) return new Constant (new Scalar (init));
+                if (av.name.equals ("$live")) return new Constant (new Scalar (live));
+            }
+            return null;
+        }
+    };
+
     public boolean findInitOnlyRecursive ()
     {
         boolean changed = false;
@@ -1707,21 +1750,6 @@ public class EquationSet implements Comparable<EquationSet>
             if (s.findInitOnlyRecursive ()) changed = true;
         }
 
-        class ReplaceInit extends Transformer
-        {
-            float init;
-            float live;
-            public Operator transform (Operator op)
-            {
-                if (op instanceof AccessVariable)
-                {
-                    AccessVariable av = (AccessVariable) op;
-                    if (av.name.equals ("$init")) return new Constant (new Scalar (init));
-                    if (av.name.equals ("$live")) return new Constant (new Scalar (live));
-                }
-                return null;
-            }
-        };
         ReplaceInit replaceInit = new ReplaceInit ();
 
         for (final Variable v : variables)
@@ -1751,17 +1779,6 @@ public class EquationSet implements Comparable<EquationSet>
                     {
                         Constant c = (Constant) test;
                         if (c.value instanceof Scalar  &&  ((Scalar) c.value).value == 0) fires = false;
-                    }
-                    if (! fires  &&  connectionBindings != null)  // check pre-live phase as well
-                    {
-                        replaceInit.live = 0;
-                        test = e.conditional.deepCopy ().transform (replaceInit).simplify (v);
-                        fires = true;
-                        if (test instanceof Constant)
-                        {
-                            Constant c = (Constant) test;
-                            if (c.value instanceof Scalar  &&  ((Scalar) c.value).value == 0) fires = false;
-                        }
                     }
                     if (fires) firesDuringInit++;
 
