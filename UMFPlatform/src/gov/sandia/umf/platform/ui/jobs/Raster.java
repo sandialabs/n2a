@@ -26,7 +26,6 @@ import org.jfree.chart.plot.PlotRenderingInfo;
 import org.jfree.chart.plot.XYPlot;
 import org.jfree.chart.renderer.xy.XYDotRenderer;
 import org.jfree.chart.renderer.xy.XYItemRendererState;
-import org.jfree.data.Range;
 import org.jfree.data.xy.XYDataset;
 import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
@@ -65,7 +64,6 @@ public class Raster
         {
             int row = 0;
             int timeColumn = -1;  // It's possible that there might not be a time column. In that case, we use raw row index;
-            boolean gotColumnHeader = false;
 
             BufferedReader br = new BufferedReader (new FileReader (f));
             while (true)
@@ -83,8 +81,7 @@ public class Raster
                 char firstCharacter = parts[0].charAt (0);
                 if (firstCharacter < '0'  ||  firstCharacter > '9')  // column header
                 {
-                    if (gotColumnHeader) continue;
-                    gotColumnHeader = true;
+                    if (timeColumn >= 0) continue;
 
                     int timeMatch = 0;  // goodness of match
                     for (int p = 0; p < parts.length; p++)
@@ -108,7 +105,7 @@ public class Raster
                     p++;
                     for (; p < parts.length; p++)
                     {
-                        if (Double.parseDouble (parts[p]) != 0) series.add (time, p);
+                        if (! parts[p].isEmpty ()  &&  Double.parseDouble (parts[p]) != 0) series.add (time, p);
                     }
                     row++;
                 }
