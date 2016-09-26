@@ -39,7 +39,7 @@ public class Simulator implements Iterable<Instance>
     public List<ResizeRequest>         resizeQueue  = new LinkedList<ResizeRequest> ();
     public List<PopulationConnection>  connectQueue = new LinkedList<PopulationConnection> ();
     public TreeMap<Double,EventStep>   periods      = new TreeMap<Double,EventStep> ();
-    public Random                      uniform      = new Random ();
+    public Random                      random;
 
     // Global shared data
     public Map<String,Input.Holder> inputs          = new HashMap<String,Input.Holder> ();
@@ -47,6 +47,7 @@ public class Simulator implements Iterable<Instance>
     public Map<String,Integer>      columnMap       = new HashMap<String,Integer> ();  ///< For trace(). Maps from column name to column position.
     public List<Float>              columnValues    = new ArrayList<Float> ();         ///< For trace(). Holds current value for each column.
     public int                      columnsPrevious = 0;  ///< Number of columns written in previous cycle (of wrapper).
+    public boolean                  traceReceived   = false;  ///< Indicates that at least one column was touched during the current cycle.
     public PrintStream              out;
     // Note: System.in will get bound into an Input.Holder if used at all.
 
@@ -63,10 +64,12 @@ public class Simulator implements Iterable<Instance>
         }
     }
 
-    public Simulator (Wrapper wrapper)
+    public Simulator (Wrapper wrapper, long seed)
     {
         try {out = new PrintStream (new File ("out").getAbsoluteFile ());}      // put in current working dir, which should be the job directory
         catch (FileNotFoundException e) {out = System.out;}  // if that fails, just use the default stdout
+
+        random = new Random (seed);
 
         this.wrapper = wrapper;
         wrapper.simulator = this;
@@ -195,10 +198,14 @@ public class Simulator implements Iterable<Instance>
         {
             columnValues.set (index, value);
         }
+
+        traceReceived = true;
     }
 
     public void writeTrace ()
     {
+        if (! traceReceived) return;  // Don't output anything unless at least one value was set.
+
         int count = columnValues.size ();
         int last  = count - 1;
 
@@ -235,6 +242,8 @@ public class Simulator implements Iterable<Instance>
             }
             out.println ();
         }
+
+        traceReceived = false;
     }
 
     public class InstanceIterator implements Iterator<Instance>

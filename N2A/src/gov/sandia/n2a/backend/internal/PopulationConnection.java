@@ -87,7 +87,7 @@ public class PopulationConnection extends Population
                     if (Bmax != 0  &&  c.getCount (1) >= Bmax) continue;  // no room in this B
                     c.resolve ();
                     double create = c.getP (simulator);
-                    if (create <= 0  ||  create < 1  &&  create < simulator.uniform.nextDouble ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
+                    if (create <= 0  ||  create < 1  &&  create < simulator.random.nextDouble ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
                     container.enqueue (c);
                     c.init (simulator);
                     c = new Connection (equations, this);
@@ -137,7 +137,7 @@ public class PopulationConnection extends Population
                         if (Amax != 0  &&  c.getCount (0) >= Amax) continue;
                         c.resolve ();
                         double create = c.getP (simulator);
-                        if (create <= 0  ||  create < 1  &&  create < simulator.uniform.nextDouble ()) continue;
+                        if (create <= 0  ||  create < 1  &&  create < simulator.random.nextDouble ()) continue;
                         container.enqueue (c);
                         c.init (simulator);
                         c = new Connection (equations, this);

@@ -163,9 +163,14 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         return Boolean.parseBoolean (get ());
     }
 
-    public double getInt ()
+    public int getInt ()
     {
         return Integer.parseInt (get ());
+    }
+
+    public long getLong ()
+    {
+        return Long.parseLong (get ());
     }
 
     public double getDouble ()
@@ -185,6 +190,13 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         String result = getOrDefault ("", indices);
         if (result.isEmpty ()) return defaultValue;
         return Integer.parseInt (result);
+    }
+
+    public long getOrDefault (long defaultValue, String... indices)
+    {
+        String result = getOrDefault ("", indices);
+        if (result.isEmpty ()) return defaultValue;
+        return Long.parseLong (result);
     }
 
     public Double getOrDefault (double defaultValue, String... indices)

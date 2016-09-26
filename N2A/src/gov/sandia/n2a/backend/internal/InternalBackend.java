@@ -77,7 +77,8 @@ public class InternalBackend extends Backend
                 digestModel (digestedModel, jobDir);
                 Files.copy (new ByteArrayInputStream (digestedModel.dump (false).getBytes ("UTF-8")), Paths.get (jobDir, "model.flat"));
                 //dumpBackendData (digestedModel);
-                Simulator simulator = new Simulator (new Wrapper (digestedModel));
+                long seed = job.getOrDefault (0l, "$metadata", "seed");
+                Simulator simulator = new Simulator (new Wrapper (digestedModel), seed);
                 simulator.run ();  // Does not return until simulation is finished.
                 Files.copy (new ByteArrayInputStream ("success".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
             }
@@ -85,10 +86,7 @@ public class InternalBackend extends Backend
             {
                 if (! (e instanceof AbortRun)) e.printStackTrace (err.get ());
 
-                try
-                {
-                    Files.copy (new ByteArrayInputStream ("failure".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
-                }
+                try {Files.copy (new ByteArrayInputStream ("failure".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));}
                 catch (Exception f) {}
             }
 
@@ -201,12 +199,13 @@ public class InternalBackend extends Backend
 
     /**
         Utility function to enable other backends to use Internal to prepare static network structures.
-        @return An Euler (simulator) object which contains the constructed network.
+        @return A Simulator object which contains the constructed network.
     **/
     public static Simulator constructStaticNetwork (EquationSet e, String jobDir) throws Exception
     {
         digestModel (e, jobDir);
-        return new Simulator (new Wrapper (e));
+        long seed = Long.parseLong (e.getNamedValue ("seed", "0"));
+        return new Simulator (new Wrapper (e), seed);
     }
 
     public static void digestModel (EquationSet e, String jobDir) throws Exception

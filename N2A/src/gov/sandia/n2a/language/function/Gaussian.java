@@ -9,6 +9,7 @@ package gov.sandia.n2a.language.function;
 
 import java.util.Random;
 
+import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -19,8 +20,6 @@ import gov.sandia.n2a.language.type.Scalar;;
 
 public class Gaussian extends Function
 {
-    Random random = new Random ();  // TODO: should there be a single shared random number generator across an entire N2A runtime?
-
     public static Factory factory ()
     {
         return new Factory ()
@@ -40,6 +39,12 @@ public class Gaussian extends Function
     public Type eval (Instance context) throws EvaluationException
     {
         if (operands.length > 1) throw new EvaluationException ("too many arguments to gaussian()");
+
+        Random random;
+        Simulator simulator = Simulator.getSimulator (context);
+        if (simulator == null) random = new Random ();
+        else                   random = simulator.random;
+
         if (operands.length == 1)
         {
             int dimension = (int) Math.round (((Scalar) operands[0].eval (context)).value);

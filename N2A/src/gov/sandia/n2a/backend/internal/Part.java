@@ -370,7 +370,7 @@ public class Part extends Instance
             {
                 p = ((Scalar) get (bed.p)).value;
             }
-            if (p == 0  ||  p < 1  &&  p < simulator.uniform.nextDouble ())
+            if (p == 0  ||  p < 1  &&  p < simulator.random.nextDouble ())
             {
                 die ();
                 return false;
