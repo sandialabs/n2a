@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.language.function;
 
 import java.io.File;
+
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -52,41 +53,64 @@ public class ReadMatrix extends Function
         int columns = A.columns ();
         int lastRow    = rows    - 1;
         int lastColumn = columns - 1;
-        double row    = ((Scalar) operands[1].eval (context)).value * lastRow;
-        double column = ((Scalar) operands[2].eval (context)).value * lastColumn;
-        int r = (int) Math.floor (row);
-        int c = (int) Math.floor (column);
-        if (r < 0)
+        double row    = ((Scalar) operands[1].eval (context)).value;
+        double column = ((Scalar) operands[2].eval (context)).value;
+
+        boolean raw = false;
+        if (operands.length > 3)
         {
-            if      (c <  0         ) return A.getScalar (0, 0         );
-            else if (c >= lastColumn) return A.getScalar (0, lastColumn);
-            else
-            {
-                double b = column - c;
-                return new Scalar ((1 - b) * A.getDouble (0, c) + b * A.getDouble (0, c+1));
-            }
+            String method = ((Text) operands[3].eval (context)).value;
+            if (method.equals ("raw")) raw = true;
         }
-        else if (r >= lastRow)
+
+        if (raw)
         {
-            if      (c <  0         ) return A.getScalar (lastRow, 0         );
-            else if (c >= lastColumn) return A.getScalar (lastRow, lastColumn);
-            else
-            {
-                double b = column - c;
-                return new Scalar ((1 - b) * A.getDouble (lastRow, c) + b * A.getDouble (lastRow, c+1));
-            }
+            int r = (int) Math.floor (row);
+            int c = (int) Math.floor (column);
+            if      (r < 0    ) r = 0;
+            else if (r >= rows) r = lastRow;
+            if      (c < 0       ) c = 0;
+            else if (c >= columns) c = lastColumn;
+            return A.getScalar (r, c);
         }
         else
         {
-            double a = row - r;
-            double a1 = 1 - a;
-            if      (c <  0         ) return new Scalar (a1 * A.getDouble (r, 0         ) + a * A.getDouble (r+1, 0         ));
-            else if (c >= lastColumn) return new Scalar (a1 * A.getDouble (r, lastColumn) + a * A.getDouble (r+1, lastColumn));
+            row    *= lastRow;
+            column *= lastColumn;
+            int r = (int) Math.floor (row);
+            int c = (int) Math.floor (column);
+            if (r < 0)
+            {
+                if      (c <  0         ) return A.getScalar (0, 0         );
+                else if (c >= lastColumn) return A.getScalar (0, lastColumn);
+                else
+                {
+                    double b = column - c;
+                    return new Scalar ((1 - b) * A.getDouble (0, c) + b * A.getDouble (0, c+1));
+                }
+            }
+            else if (r >= lastRow)
+            {
+                if      (c <  0         ) return A.getScalar (lastRow, 0         );
+                else if (c >= lastColumn) return A.getScalar (lastRow, lastColumn);
+                else
+                {
+                    double b = column - c;
+                    return new Scalar ((1 - b) * A.getDouble (lastRow, c) + b * A.getDouble (lastRow, c+1));
+                }
+            }
             else
             {
-                double b = column - c;
-                return new Scalar (  (1 - b) * (a1 * A.getDouble (r, c  ) + a * A.getDouble (r+1, c  ))
-                                   +      b  * (a1 * A.getDouble (r, c+1) + a * A.getDouble (r+1, c+1)));
+                double a = row - r;
+                double a1 = 1 - a;
+                if      (c <  0         ) return new Scalar (a1 * A.getDouble (r, 0         ) + a * A.getDouble (r+1, 0         ));
+                else if (c >= lastColumn) return new Scalar (a1 * A.getDouble (r, lastColumn) + a * A.getDouble (r+1, lastColumn));
+                else
+                {
+                    double b = column - c;
+                    return new Scalar (  (1 - b) * (a1 * A.getDouble (r, c  ) + a * A.getDouble (r+1, c  ))
+                                       +      b  * (a1 * A.getDouble (r, c+1) + a * A.getDouble (r+1, c+1)));
+                }
             }
         }
     }

@@ -25,7 +25,6 @@ import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.ReadMatrix;
-import gov.sandia.n2a.language.function.ReadMatrixRaw;
 import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.Power;
 import gov.sandia.n2a.language.type.Matrix;
@@ -901,9 +900,9 @@ public class JobC
                 {
                     // Handle all functions that need static handles
                     Function f = (Function) op;
-                    if (f instanceof ReadMatrix  ||  f instanceof ReadMatrixRaw)
+                    if (f instanceof ReadMatrix)
                     {
-                        if (f.operands.length == 3)
+                        if (f.operands.length > 0)
                         {
                             Operator c = f.operands[0];
                             if (c instanceof Constant)
@@ -3012,17 +3011,21 @@ public class JobC
             if (op instanceof ReadMatrix)
             {
                 ReadMatrix r = (ReadMatrix) op;
-                result.append ("matrix (" + matrixNames.get (r.operands[0]) + ", ");
-                r.operands[1].render (this);
-                result.append (", ");
-                r.operands[2].render (this);
-                result.append (")");
-                return true;
-            }
-            if (op instanceof ReadMatrixRaw)
-            {
-                ReadMatrixRaw r = (ReadMatrixRaw) op;
-                result.append ("matrixRaw (" + matrixNames.get (r.operands[0]) + ", ");
+                boolean raw = false;
+                if (r.operands.length > 3)
+                {
+                    if (r.operands[3] instanceof Constant)
+                    {
+                        Constant c = (Constant) r.operands[3];
+                        if (c.value instanceof Text)
+                        {
+                            String method = ((Text) c.value).value;
+                            if (method.equals ("raw")) raw = true;
+                        }
+                    }
+                }
+                if (raw) result.append ("matrixRaw (" + matrixNames.get (r.operands[0]) + ", ");
+                else     result.append ("matrix ("    + matrixNames.get (r.operands[0]) + ", ");
                 r.operands[1].render (this);
                 result.append (", ");
                 r.operands[2].render (this);

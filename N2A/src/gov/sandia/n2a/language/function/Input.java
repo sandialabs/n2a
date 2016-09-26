@@ -12,6 +12,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -92,14 +93,33 @@ public class Input extends Function
         Holder H = getRow (context);
         if (H == null) return new Scalar (0);
 
-        int    columns    = H.values.length;
-        int    lastColumn = columns - 1;
-        double column     = ((Scalar) operands[2].eval (context)).value * lastColumn;
-        int    c          = (int) Math.floor (column);
-        if (c <  0         ) return new Scalar (H.values[0         ]);
-        if (c >= lastColumn) return new Scalar (H.values[lastColumn]);
-        double b = column - c;
-        return new Scalar ((1 - b) * H.values[c] + b * H.values[c+1]);
+        int columns    = H.values.length;
+        int lastColumn = columns - 1;
+        double column  = ((Scalar) operands[2].eval (context)).value;
+
+        boolean raw = false;
+        if (operands.length > 3)
+        {
+            String method = ((Text) operands[3].eval (context)).value;
+            if (method.equals ("raw")) raw = true;
+        }
+
+        if (raw)
+        {
+            int c = (int) Math.floor (column);
+            if      (c < 0       ) c = 0;
+            else if (c >= columns) c = lastColumn;
+            return new Scalar (H.values[c]);
+        }
+        else
+        {
+            column *= lastColumn;
+            int c = (int) Math.floor (column);
+            if (c <  0         ) return new Scalar (H.values[0         ]);
+            if (c >= lastColumn) return new Scalar (H.values[lastColumn]);
+            double b = column - c;
+            return new Scalar ((1 - b) * H.values[c] + b * H.values[c+1]);
+        }
     }
 
     public String toString ()
