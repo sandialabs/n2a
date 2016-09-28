@@ -20,7 +20,7 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Visitor;
-import gov.sandia.n2a.language.function.Trace;
+import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.execenvs.ExecutionEnv;
@@ -271,9 +271,9 @@ class XyceBackend extends Backend
                     List<Operator> traces = new ArrayList<Operator> ();
                     public boolean visit (Operator op)
                     {
-                        if (op instanceof Trace)
+                        if (op instanceof Output)
                         {
-                            traces.add (((Trace) op).operands[0]);
+                            traces.add (((Output) op).operands[0]);
                             return false;
                         }
                         return true;
@@ -291,7 +291,7 @@ class XyceBackend extends Backend
                     }
                     else  // trace is an expression
                     {
-                        if (e.expression instanceof Trace  &&  ((Trace) e.expression).operands[0] == trace)  // this trace wraps the entire equation
+                        if (e.expression instanceof Output  &&  ((Output) e.expression).operands[0] == trace)  // this trace wraps the entire equation
                         {
                             // simply print the LHS variable, similar to the AccessVariable case above
                             writer.append (renderer.change (v.reference));

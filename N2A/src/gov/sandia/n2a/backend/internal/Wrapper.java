@@ -7,8 +7,11 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.internal;
 
+import java.util.Map.Entry;
+
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.function.Output;
 
 public class Wrapper extends Part
 {
@@ -24,7 +27,7 @@ public class Wrapper extends Part
     public void init (Simulator simulator)
     {
         populations[0].init (simulator);
-        simulator.writeTrace ();
+        for (Entry<String,Output.Holder> h : simulator.outputs.entrySet ()) h.getValue ().writeTrace ();
     }
 
     public void integrate (Simulator simulator)
@@ -41,7 +44,10 @@ public class Wrapper extends Part
     {
         populations[0].finish (simulator);
         boolean result = ((PopulationCompartment) populations[0]).n > 0;
-        if (result) simulator.writeTrace ();  // only trace if sim is still running
+        if (result)  // only trace if sim is still running
+        {
+            for (Entry<String,Output.Holder> h : simulator.outputs.entrySet ()) h.getValue ().writeTrace ();
+        }
         return result;
     }
 }

@@ -18,9 +18,10 @@ import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.Pulse;
 import gov.sandia.n2a.language.function.ReadMatrix;
+import gov.sandia.n2a.language.function.Round;
 import gov.sandia.n2a.language.function.Sine;
 import gov.sandia.n2a.language.function.Tangent;
-import gov.sandia.n2a.language.function.Trace;
+import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.AND;
 import gov.sandia.n2a.language.operator.Add;
@@ -201,9 +202,10 @@ public class Operator implements Cloneable, Comparable<Operator>
         register (Norm         .factory ());
         register (Pulse        .factory ());
         register (ReadMatrix   .factory ());
+        register (Round        .factory ());
         register (Sine         .factory ());
         register (Tangent      .factory ());
-        register (Trace        .factory ());
+        register (Output       .factory ());
         register (Uniform      .factory ());
 
         // Operators

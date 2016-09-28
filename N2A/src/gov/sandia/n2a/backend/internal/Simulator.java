@@ -8,13 +8,14 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.backend.internal;
 
 import gov.sandia.n2a.language.function.Input;
+import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.PrintStream;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -42,13 +43,10 @@ public class Simulator implements Iterable<Instance>
     public Random                      random;
 
     // Global shared data
-    public Map<String,Input.Holder> inputs          = new HashMap<String,Input.Holder> ();
-    public Map<String,Matrix>       matrices        = new HashMap<String,Matrix> ();
-    public Map<String,Integer>      columnMap       = new HashMap<String,Integer> ();  ///< For trace(). Maps from column name to column position.
-    public List<Float>              columnValues    = new ArrayList<Float> ();         ///< For trace(). Holds current value for each column.
-    public int                      columnsPrevious = 0;  ///< Number of columns written in previous cycle (of wrapper).
-    public boolean                  traceReceived   = false;  ///< Indicates that at least one column was touched during the current cycle.
-    public PrintStream              out;
+    public Map<String,Matrix>        matrices = new HashMap<String,Matrix> ();
+    public Map<String,Input .Holder> inputs   = new HashMap<String,Input .Holder> ();
+    public Map<String,Output.Holder> outputs  = new HashMap<String,Output.Holder> ();
+    public PrintStream               out;
     // Note: System.in will get bound into an Input.Holder if used at all.
 
     public Event currentEvent;
@@ -114,6 +112,18 @@ public class Simulator implements Iterable<Instance>
             currentEvent = eventQueue.remove ();
             currentEvent.run (this);
         }
+        // Simulation is done.
+
+        // Close streams
+        for (Entry<String,Input.Holder> h : inputs.entrySet ())
+        {
+            try {h.getValue ().stream.close ();}
+            catch (IOException e) {}
+        }
+        for (Entry<String,Output.Holder> h : outputs.entrySet ())
+        {
+            h.getValue ().out.close ();
+        }
     }
 
     public void integrate (Instance i)
@@ -178,72 +188,6 @@ public class Simulator implements Iterable<Instance>
     public void connect (PopulationConnection p)
     {
         connectQueue.add (p);
-    }
-
-    public void trace (String column, float value)
-    {
-        if (columnValues.isEmpty ())  // slip $t into first column 
-        {
-            columnMap.put ("$t", 0);
-            columnValues.add ((float) currentEvent.t);
-        }
-
-        Integer index = columnMap.get (column);
-        if (index == null)
-        {
-            columnMap.put (column, columnValues.size ());
-            columnValues.add (value);
-        }
-        else
-        {
-            columnValues.set (index, value);
-        }
-
-        traceReceived = true;
-    }
-
-    public void writeTrace ()
-    {
-        if (! traceReceived) return;  // Don't output anything unless at least one value was set.
-
-        int count = columnValues.size ();
-        int last  = count - 1;
-
-        // Write headers if new columns have been added
-        if (count > columnsPrevious)
-        {
-            columnsPrevious = count;
-            String headers[] = new String[count];
-            for (Entry<String,Integer> i : columnMap.entrySet ())
-            {
-                headers[i.getValue ()] = i.getKey ();
-            }
-            out.print (headers[0]);
-            for (int i = 1; i < count; i++)
-            {
-                out.print ("\t");
-                out.print (headers[i]);
-            }
-            out.println ();
-        }
-
-        // Write values
-        if (count > 0)
-        {
-            // $t is guaranteed to be column 0, and furthermore, we are still within the current event that generated these column values
-            columnValues.set (0, (float) currentEvent.t);
-
-            for (int i = 0; i <= last; i++)
-            {
-                Float c = columnValues.get (i);
-                if (! c.isNaN ()) out.print (c);
-                if (i < last) out.print ("\t");
-                columnValues.set (i, Float.NaN);
-            }
-            out.println ();
-        }
-
-        traceReceived = false;
     }
 
     public class InstanceIterator implements Iterator<Instance>

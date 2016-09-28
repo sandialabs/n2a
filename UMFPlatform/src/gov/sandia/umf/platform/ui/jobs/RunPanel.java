@@ -22,16 +22,20 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
+import javax.swing.ButtonGroup;
 import javax.swing.Icon;
-import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
+import javax.swing.JToggleButton;
 import javax.swing.JTree;
 import javax.swing.event.TreeExpansionEvent;
 import javax.swing.event.TreeExpansionListener;
@@ -44,8 +48,6 @@ import javax.swing.tree.ExpandVetoException;
 import javax.swing.tree.TreePath;
 import javax.swing.tree.TreeSelectionModel;
 
-import org.jfree.chart.ChartPanel;
-
 import replete.util.Lay;
 
 public class RunPanel extends JPanel
@@ -55,11 +57,9 @@ public class RunPanel extends JPanel
     public JTree            tree;
     public JScrollPane      treePane;
 
+    public ButtonGroup      buttons;
     public JTextArea        displayText;
     public JScrollPane      displayPane = new JScrollPane ();
-    public JButton          buttonGraph;
-    public JButton          buttonRaster;
-    public String           displayGraph = "";
     public DisplayThread    displayThread = null;
     public NodeBase         displayNode = null;
     public MDir             runs;  // Copied from AppData for convenience
@@ -103,7 +103,6 @@ public class RunPanel extends JPanel
                 if (newNode == null) return;
                 if (newNode == displayNode) return;
 
-                if (displayThread != null) synchronized (displayText) {displayThread.stop = true;}
                 displayNode = newNode;
                 if      (displayNode instanceof NodeFile) viewFile ();
                 else if (displayNode instanceof NodeJob)  viewJob ();
@@ -214,14 +213,15 @@ public class RunPanel extends JPanel
         displayText = new JTextArea ();
         displayText.setEditable(false);
 
-        final JCheckBox chkFixedWidth = new JCheckBox ("Fixed-Width Font");
-        chkFixedWidth.setFocusable (false);
-        chkFixedWidth.addActionListener (new ActionListener()
+        JToggleButton buttonMonospace = new JToggleButton ("Monospace");
+        buttonMonospace.setFont (new Font (Font.MONOSPACED, Font.PLAIN, buttonMonospace.getFont ().getSize ()));
+        buttonMonospace.setFocusable (false);
+        buttonMonospace.addActionListener (new ActionListener()
         {
             public void actionPerformed (ActionEvent e)
             {
-                int size  = displayText.getFont ().getSize ();
-                if (chkFixedWidth.isSelected ())
+                int size = displayText.getFont ().getSize ();
+                if (buttonMonospace.isSelected ())
                 {
                     displayText.setFont (new Font (Font.MONOSPACED, Font.PLAIN, size));
                 }
@@ -238,45 +238,30 @@ public class RunPanel extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                if (displayNode instanceof NodeFile)
-                {
-                    NodeFile nf = (NodeFile) displayNode;
-                    if (nf.type == NodeFile.Type.Output  ||  nf.type == NodeFile.Type.Result)
-                    {
-                        String graphType = e.getActionCommand ();
-                        if (displayPane.getViewport ().getView () instanceof ChartPanel  &&  displayGraph.equals (graphType))
-                        {
-                            viewFile ();
-                            displayGraph = "";
-                        }
-                        else
-                        {
-                            if (graphType.equals ("Graph"))
-                            {
-                                Plot plot = new Plot (nf.path.getAbsolutePath ());
-                                if (! plot.columns.isEmpty ()) displayPane.setViewportView (plot.createGraphPanel ());
-                            }
-                            else  // Raster
-                            {
-                                Raster raster = new Raster (nf.path.getAbsolutePath (), displayPane.getHeight ());
-                                displayPane.setViewportView (raster.createGraphPanel ());
-                            }
-                            displayGraph = graphType;
-                        }
-                    }
-                }
+                if (displayNode instanceof NodeFile) viewFile ();
             }
         };
 
-        buttonGraph = new JButton ("Graph", ImageUtil.getImage ("analysis.gif"));
+        JToggleButton buttonText = new JToggleButton (ImageUtil.getImage ("document.png"));
+        buttonText.setFocusable (false);
+        buttonText.addActionListener (graphListener);
+        buttonText.setActionCommand ("Text");
+
+        JToggleButton buttonGraph = new JToggleButton (ImageUtil.getImage ("analysis.gif"));
         buttonGraph.setFocusable (false);
         buttonGraph.addActionListener (graphListener);
         buttonGraph.setActionCommand ("Graph");
 
-        buttonRaster = new JButton ("Raster", ImageUtil.getImage ("prnplot.gif"));
+        JToggleButton buttonRaster = new JToggleButton (ImageUtil.getImage ("raster.png"));
         buttonRaster.setFocusable (false);
         buttonRaster.addActionListener (graphListener);
         buttonRaster.setActionCommand ("Raster");
+
+        buttons = new ButtonGroup ();
+        buttons.add (buttonText);
+        buttons.add (buttonGraph);
+        buttons.add (buttonRaster);
+        buttonText.setSelected (true);
 
         Lay.BLtg
         (
@@ -291,9 +276,11 @@ public class RunPanel extends JPanel
                 (
                     "N", Lay.FL
                     (
-                        chkFixedWidth,
-                        Lay.FL (buttonGraph, buttonRaster),
-                        "hgap=50"
+                        "L",
+                        Lay.BL (buttonText),
+                        Lay.BL (buttonGraph),
+                        Lay.BL (buttonRaster),
+                        Lay.BL (buttonMonospace, "eb=20l,20r")
                     ),
                     "C", displayPane
                 ),
@@ -306,25 +293,82 @@ public class RunPanel extends JPanel
     public class DisplayThread extends Thread
     {
         public NodeFile node;
+        public String   viz;  ///< The type of visualization to show, such as table, graph or raster
         public boolean stop = false;
 
-        public DisplayThread (NodeFile node)
+        public DisplayThread (NodeFile node, String viz)
         {
             super ("RunPanel Fetch File");
             this.node = node;
+            this.viz  = viz;
         }
 
         public void run ()
         {
             try
             {
+                // Step 1 -- Get data into local directory
+                // TODO: manage and display files that are too big for memory, or even too big to store on local system
+                // There are three sizes of data:
+                //   small -- can load entirely into memory
+                //   big   -- too big for memory; must load/display in segments
+                //   huge  -- too big to store on local system, for example a supercomputer job; must be downloaded/displayed in segments
+                // The current code only handles small files. In particular, we don't actually do Step 1, but instead assume data is local.
                 MNode job = ((NodeJob) node.getParent ()).source;
                 ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("localhost", "$metadata", "host"));
 
-                // This is the potentially long operation.
-                // TODO: What if the file is too big to load & show? Need a viewer that can work with partial segments of a file.
-                // TODO: handling of paths for remote files needs work. There are actually two paths: our local dir and the remote dir, and in general they are different.
-                final String contents = env.getFileContents (node.path.getAbsolutePath ());
+                // Step 2 -- Load data
+                // The exact method depends on the current display mode, selected by pushbuttons and stored in viz
+                String path = node.path.getAbsolutePath ();
+                if (! viz.equals ("Text"))
+                {
+                    // Determine if the file is actually a table that can be graphed
+                    boolean graphable = node.type == NodeFile.Type.Output  ||  node.type == NodeFile.Type.Result;
+                    if (node.type == NodeFile.Type.Other)  
+                    {
+                        // Probe the file itself
+                        BufferedReader reader = new BufferedReader (new FileReader (new File (path)));
+                        String line = reader.readLine ();
+                        graphable = line.startsWith ("$t")  ||  line.startsWith ("Index");
+                        reader.close ();
+                    }
+
+                    if (graphable)
+                    {
+                        Component panel = null;
+                        if (viz.equals ("Graph"))
+                        {
+                            Plot plot = new Plot (path);
+                            if (! plot.columns.isEmpty ()) panel = plot.createGraphPanel ();
+                        }
+                        else if (viz.equals ("Raster"))
+                        {
+                            Raster raster = new Raster (path);
+                            panel = raster.createGraphPanel ();
+                        }
+
+                        if (stop) return;
+                        if (panel != null)
+                        {
+                            final Component c = panel;
+                            EventQueue.invokeLater (new Runnable ()
+                            {
+                                @Override
+                                public void run ()
+                                {
+                                    if (stop) return;
+                                    displayPane.setViewportView (c);
+                                }
+                            });
+
+                            return;
+                        }
+                        // Otherwise, fall through ...
+                    }
+                }
+
+                // Default is plain text
+                final String contents = env.getFileContents (path);
                 if (stop) return;
 
                 EventQueue.invokeLater (new Runnable ()
@@ -349,16 +393,33 @@ public class RunPanel extends JPanel
 
     public void viewFile ()
     {
-        synchronized (displayText) {displayText.setText ("loading...");}
+        synchronized (displayText)
+        {
+            if (displayThread != null)
+            {
+                displayThread.stop = true;
+                displayThread = null;
+            }
+            displayText.setText ("loading...");
+        }
         if (displayPane.getViewport ().getView () != displayText) displayPane.setViewportView (displayText);
 
-        // Any previous displayThread has already been signaled by our caller
-        displayThread = new DisplayThread ((NodeFile) displayNode);
+        String viz = buttons.getSelection ().getActionCommand ();
+        displayThread = new DisplayThread ((NodeFile) displayNode, viz);
         displayThread.start ();
     }
 
     public void viewJob ()
     {
+        if (displayThread != null)
+        {
+            synchronized (displayText)
+            {
+                displayThread.stop = true;
+                displayThread = null;
+            }
+        }
+
         NodeJob job = (NodeJob) displayNode;
         MNode doc = job.source;
 

@@ -17,7 +17,7 @@ import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Gaussian;
-import gov.sandia.n2a.language.function.Trace;
+import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
@@ -539,9 +539,9 @@ public class EquationSet implements Comparable<EquationSet>
             public Variable v;
             public boolean visit (Operator op)
             {
-                if (op instanceof Trace)
+                if (op instanceof Output)
                 {
-                    ((Trace) op).determineVariableName (v);
+                    ((Output) op).determineVariableName (v);
                     return false;
                 }
                 return true;

@@ -39,11 +39,9 @@ import org.jfree.ui.RectangleEdge;
 public class Raster
 {
     public XYSeriesCollection dataset;
-    public int availableHeight;
 
-    public Raster (String path, int height)
+    public Raster (String path)
     {
-        availableHeight = height - 50;  // Allow for estimated size of stuff around the plot.
     	parsePrnFile (new File (path));
     }
 
@@ -115,8 +113,6 @@ public class Raster
         catch (IOException e)
         {
 		}
-
-        availableHeight = Math.min (20, Math.max (1, Math.round ((float) availableHeight / columns)));
     }
 
     public JFreeChart createChart (final XYDataset dataset)

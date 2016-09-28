@@ -71,7 +71,8 @@ public class Plot
             	if (line.length () == 0) continue;
             	if (line.startsWith ("End of")) continue;
 
-                String[] parts = line.split ("\\s+");
+                String[] parts = line.split ("\\s");
+                int lastSize = columns.size ();
                 while (columns.size () < parts.length)
                 {
                 	Column c = new Column ();
@@ -83,7 +84,7 @@ public class Plot
                 if (firstCharacter < '0'  ||  firstCharacter > '9')  // column header
                 {
             		isXycePRN = parts[0].equals ("Index");
-                    for (int p = 0; p < parts.length; p++)
+                    for (int p = lastSize; p < parts.length; p++)
                     {
                     	columns.get (p).header = parts[p];
                     }
@@ -93,7 +94,9 @@ public class Plot
                 	int p = isXycePRN ? 1 : 0;  // skip parsing Index column, since we don't use it
                     for (; p < parts.length; p++)
                     {
-                        columns.get (p).values.add (Double.parseDouble (parts[p]));
+                        double value = 0;
+                        if (! parts[p].isEmpty ()) value = Double.parseDouble (parts[p]);
+                        columns.get (p).values.add (value);
                     }
                     row++;
                 }
