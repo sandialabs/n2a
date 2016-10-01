@@ -9,13 +9,6 @@ package gov.sandia.n2a.backend.internal;
 
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.language.AccessVariable;
-import gov.sandia.n2a.language.Constant;
-import gov.sandia.n2a.language.Operator;
-import gov.sandia.n2a.language.OperatorBinary;
-import gov.sandia.n2a.language.operator.LE;
-import gov.sandia.n2a.language.operator.LT;
-import gov.sandia.n2a.language.parse.ParseException;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.plugins.extpoints.Backend;
@@ -58,9 +51,11 @@ public class InternalBackend extends Backend
     public class SimulationThread extends Thread
     {
         MNode job;
+        Simulator simulator;
 
         public SimulationThread (MNode job)
         {
+            super ("Internal Simulation");
             this.job = job;
         }
 
@@ -77,8 +72,13 @@ public class InternalBackend extends Backend
                 digestModel (digestedModel, jobDir);
                 Files.copy (new ByteArrayInputStream (digestedModel.dump (false).getBytes ("UTF-8")), Paths.get (jobDir, "model.flat"));
                 //dumpBackendData (digestedModel);
+
+                // Any new metadata generated after MPart is collated must be injected back into job
+                String duration = digestedModel.getNamedValue ("duration");
+                if (! duration.isEmpty ()) job.set (duration, "$metadata", "duration");
+
                 long seed = job.getOrDefault (0l, "$metadata", "seed");
-                Simulator simulator = new Simulator (new Wrapper (digestedModel), seed);
+                simulator = new Simulator (new Wrapper (digestedModel), seed);
                 simulator.run ();  // Does not return until simulation is finished.
                 Files.copy (new ByteArrayInputStream ("success".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
             }
@@ -100,44 +100,18 @@ public class InternalBackend extends Backend
     }
 
     @Override
-    public double expectedDuration (MNode job)
-    {
-        return getDurationFromP (job);
-    }
-
-    @Override
     public double currentSimTime (MNode job)
     {
-        return getSimTimeFromOutput (job);
-    }
-
-    public static double getDurationFromP (MNode job)
-    {
-        String p = job.get ("$p");
-        if (p.isEmpty ()) return 1;  // We assume that job got augmented with a default setting of "$p=$t<1"
-        Operator expression = null;
-        try
+        Thread[] threads = new Thread[Thread.activeCount ()];
+        int count = Thread.enumerate (threads);
+        for (int i = 0; i < count; i++)
         {
-            expression = Operator.parse (p);
-            if (expression instanceof LT  ||  expression instanceof LE)
+            Thread t = threads[i];
+            if (t instanceof SimulationThread)
             {
-                OperatorBinary comparison = (OperatorBinary) expression;
-                if (comparison.operand0 instanceof AccessVariable)
-                {
-                    AccessVariable av = (AccessVariable) comparison.operand0;
-                    if (av.name.equals ("$t"))
-                    {
-                        if (comparison.operand1 instanceof Constant)
-                        {
-                            Constant c = (Constant) comparison.operand1;
-                            if (c.value instanceof Scalar) return ((Scalar) c.value).value;
-                        }
-                    }
-                }
+                SimulationThread s = (SimulationThread) t;
+                if (s.job == job  &&  s.simulator != null) return s.simulator.currentEvent.t;
             }
-        }
-        catch (ParseException e)
-        {
         }
         return 0;
     }
@@ -238,6 +212,7 @@ public class InternalBackend extends Backend
         e.setAttributesLive ();
         e.forceTemporaryStorageForSpecials ();
         e.determineTypes ();
+        e.determineDuration ();
 
         createBackendData (e);
         analyzeEvents (e);

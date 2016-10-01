@@ -11,6 +11,7 @@ import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Split;
 import gov.sandia.n2a.language.Transformer;
@@ -19,6 +20,10 @@ import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.Uniform;
+import gov.sandia.n2a.language.operator.GE;
+import gov.sandia.n2a.language.operator.GT;
+import gov.sandia.n2a.language.operator.LE;
+import gov.sandia.n2a.language.operator.LT;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
@@ -865,11 +870,13 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 try
                 {
-                    v.add (new EquationEntry ("$t<1"));  // Limit sim time to 1 second
+                    String duration = getNamedValue ("duration", "1");  // limit sim time to 1 second, if not otherwise specified
+                    v.add (new EquationEntry ("$t<" + duration));
                 }
                 catch (Exception parseError)
                 {
-                    // This exception should never happen, because we are good are writing equations.
+                    try {v.add (new EquationEntry ("$t<1"));}
+                    catch (Exception parseError2) {} // This exception should never happen. We simply want to silence Java about it.
                 }
             }
         }
@@ -1411,6 +1418,48 @@ public class EquationSet implements Comparable<EquationSet>
             if (s.determineTypesEval ()) changed = true;
         }
         return changed;
+    }
+
+    /**
+        Infers length of simulation based on contents of equation set, particularly
+        an expression for top-level $p that involves $t.
+        Depends on results of: determineTypes() -- to set up Variable.type member with usable values
+    **/
+    public void determineDuration ()
+    {
+        Variable p = find (new Variable ("$p", 0));
+        if (p != null  &&  p.equations.size () == 1)
+        {
+            Operator expression = p.equations.first ().expression;
+            Operator variable = null;
+            Operator value    = null;
+            if (expression instanceof LT  ||  expression instanceof LE)  // only true if expression is not null
+            {
+                OperatorBinary comparison = (OperatorBinary) expression;
+                variable = comparison.operand0;
+                value    = comparison.operand1;
+            }
+            else if (expression instanceof GT  ||  expression instanceof GE)
+            {
+                OperatorBinary comparison = (OperatorBinary) expression;
+                variable = comparison.operand1;
+                value    = comparison.operand0;
+            }
+
+            if (variable instanceof AccessVariable  &&  ((AccessVariable) variable).name.equals ("$t"))
+            {
+                Instance instance = new Instance ()
+                {
+                    // all AccessVariable objects will reach here first, and get back the Variable.type field
+                    public Type get (VariableReference r) throws EvaluationException
+                    {
+                        return r.variable.type;
+                    }
+                };
+                Type result = value.eval (instance);
+                if (result instanceof Scalar) setNamedValue ("duration", new Double (((Scalar) result).value).toString ());
+            }
+        }
     }
 
     public void addAttribute (String attribute, int connection, boolean withOrder, String[] names)

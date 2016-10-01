@@ -16,6 +16,8 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Date;
 
 import gov.sandia.umf.platform.db.MNode;
@@ -92,27 +94,34 @@ public class NodeJob extends NodeBase
             if (finished.exists ())
             {
                 dateFinished = new Date (finished.lastModified ());
-                complete = 1;
+                String line = "";
                 try
                 {
                     BufferedReader reader = new BufferedReader (new FileReader (finished));
-                    if (! reader.readLine ().equals ("success")) complete = 2;
+                    line = reader.readLine ();
                     reader.close ();
                 }
                 catch (IOException e) {}
+
+                if (line.length () >= 7)
+                {
+                    if (line.equals ("success")) complete = 1;
+                    else                         complete = 2;
+                }
+                else if (Duration.between (dateFinished.toInstant (), Instant.now ()).abs ().getSeconds () > 10)
+                {
+                    if (line.length () == 0) complete = 1;
+                    else                     complete = 2;
+                }
             }
         }
 
-        if (expectedSimTime >= 0  &&  complete >= 0  &&  complete < 1)
+        if (complete >= 0  &&  complete < 1)
         {
-            Backend simulator = UMFPluginManager.getBackend (source.get ("$metadata", "backend"));
-            if (expectedSimTime == 0) expectedSimTime = simulator.expectedDuration (source);
-            if (expectedSimTime == 0)
+            if (expectedSimTime == 0) expectedSimTime = source.getOrDefault (0.0, "$metadata", "duration");
+            if (expectedSimTime > 0)
             {
-                expectedSimTime = -1;
-            }
-            else
-            {
+                Backend simulator = UMFPluginManager.getBackend (source.get ("$metadata", "backend"));
                 double t = simulator.currentSimTime (source);
                 if (t != 0) complete = (float) (t / expectedSimTime);
             }

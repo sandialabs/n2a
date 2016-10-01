@@ -85,12 +85,6 @@ public class BackendC extends Backend
     }
 
     @Override
-    public double expectedDuration (MNode job)
-    {
-        return InternalBackend.getDurationFromP (job);
-    }
-
-    @Override
     public double currentSimTime (MNode job)
     {
         return InternalBackend.getSimTimeFromOutput (job);

@@ -96,16 +96,6 @@ public abstract class Backend implements ExtensionPoint
     }
 
     /**
-        Determine how much sim time the simulation will take.
-        @return Expected sim time in seconds, or zero if unable to estimate.
-        Note: Infinity is a possible answer, if the model is intended for continuous operation.
-    **/
-    public double expectedDuration (MNode job)
-    {
-        return 0;
-    }
-
-    /**
         Return an estimate of the current $t in the active simulation.
     **/
     public double currentSimTime (MNode job)

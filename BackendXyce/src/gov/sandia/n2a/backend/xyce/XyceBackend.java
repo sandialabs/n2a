@@ -170,6 +170,10 @@ class XyceBackend extends Backend
                     Simulator simulator = InternalBackend.constructStaticNetwork (e, jobDir);
                     analyze (e);
 
+                    // Just in case a $p expression says something different than $metadata.duration
+                    String duration = e.getNamedValue ("duration");
+                    if (! duration.isEmpty ()) job.set (duration, "$metadata", "duration");
+
                     FileWriter writer = new FileWriter (cirFile);
                     generateNetlist (job, simulator, writer);
                     writer.close ();
@@ -196,12 +200,6 @@ class XyceBackend extends Backend
         };
         t.setDaemon (true);
         t.start ();
-    }
-
-    @Override
-    public double expectedDuration (MNode job)
-    {
-        return InternalBackend.getDurationFromP (job);
     }
 
     @Override

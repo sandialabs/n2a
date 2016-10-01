@@ -133,6 +133,10 @@ public class JobC
         findLiveReferences (e);
         e.determineTypes ();
 
+        e.determineDuration ();
+        String duration = e.getNamedValue ("duration");
+        if (! duration.isEmpty ()) job.set (duration, "$metadata", "duration");
+
         e.setInit (0);
         System.out.println (e.dump (false));
 
