@@ -110,7 +110,8 @@ public class InternalBackend extends Backend
             if (t instanceof SimulationThread)
             {
                 SimulationThread s = (SimulationThread) t;
-                if (s.job == job  &&  s.simulator != null) return s.simulator.currentEvent.t;
+                if (s.job != job) continue;
+                if (s.simulator != null  &&  s.simulator.currentEvent != null) return s.simulator.currentEvent.t;
             }
         }
         return 0;

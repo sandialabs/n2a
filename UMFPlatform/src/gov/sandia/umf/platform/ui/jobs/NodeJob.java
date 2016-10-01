@@ -103,15 +103,10 @@ public class NodeJob extends NodeBase
                 }
                 catch (IOException e) {}
 
-                if (line.length () >= 7)
+                if (line.length () >= 7  ||  Duration.between (dateFinished.toInstant (), Instant.now ()).abs ().getSeconds () > 10)
                 {
                     if (line.equals ("success")) complete = 1;
                     else                         complete = 2;
-                }
-                else if (Duration.between (dateFinished.toInstant (), Instant.now ()).abs ().getSeconds () > 10)
-                {
-                    if (line.length () == 0) complete = 1;
-                    else                     complete = 2;
                 }
             }
         }
@@ -123,7 +118,7 @@ public class NodeJob extends NodeBase
             {
                 Backend simulator = UMFPluginManager.getBackend (source.get ("$metadata", "backend"));
                 double t = simulator.currentSimTime (source);
-                if (t != 0) complete = (float) (t / expectedSimTime);
+                if (t != 0) complete = Math.min (0.99999f, (float) (t / expectedSimTime));
             }
         }
 
