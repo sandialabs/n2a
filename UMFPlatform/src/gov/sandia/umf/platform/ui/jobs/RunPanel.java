@@ -15,6 +15,7 @@ import gov.sandia.umf.platform.execenvs.ExecutionEnv;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.Rectangle;
@@ -25,12 +26,14 @@ import java.awt.event.KeyEvent;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
+import java.io.IOException;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-
+import java.util.regex.Matcher;
 import javax.swing.ButtonGroup;
 import javax.swing.Icon;
+import javax.swing.JComboBox;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
@@ -56,13 +59,14 @@ public class RunPanel extends JPanel
     public JTree            tree;
     public JScrollPane      treePane;
 
-    public ButtonGroup      buttons;
-    public JTextArea        displayText;
-    public JScrollPane      displayPane = new JScrollPane ();
-    public DisplayThread    displayThread = null;
-    public NodeBase         displayNode = null;
-    public MDir             runs;  // Copied from AppData for convenience
-    public List<NodeJob>    running = new LinkedList<NodeJob> ();  // Jobs that we are actively monitoring because they may still be running.
+    public ButtonGroup       buttons;
+    public JComboBox<String> comboScript;
+    public JTextArea         displayText;
+    public JScrollPane       displayPane = new JScrollPane ();
+    public DisplayThread     displayThread = null;
+    public NodeBase          displayNode = null;
+    public MDir              runs;  // Copied from AppData for convenience
+    public List<NodeJob>     running = new LinkedList<NodeJob> ();  // Jobs that we are actively monitoring because they may still be running.
 
     public RunPanel ()
     {
@@ -245,16 +249,19 @@ public class RunPanel extends JPanel
         buttonText.setFocusable (false);
         buttonText.addActionListener (graphListener);
         buttonText.setActionCommand ("Text");
+        buttonText.setPreferredSize (new Dimension (28, 26));
 
         JToggleButton buttonGraph = new JToggleButton (ImageUtil.getImage ("analysis.gif"));
         buttonGraph.setFocusable (false);
         buttonGraph.addActionListener (graphListener);
         buttonGraph.setActionCommand ("Graph");
+        buttonGraph.setPreferredSize (new Dimension (28, 26));
 
         JToggleButton buttonRaster = new JToggleButton (ImageUtil.getImage ("raster.png"));
         buttonRaster.setFocusable (false);
         buttonRaster.addActionListener (graphListener);
         buttonRaster.setActionCommand ("Raster");
+        buttonRaster.setPreferredSize (new Dimension (28, 26));
 
         buttons = new ButtonGroup ();
         buttons.add (buttonText);
@@ -262,24 +269,74 @@ public class RunPanel extends JPanel
         buttons.add (buttonRaster);
         buttonText.setSelected (true);
 
+        comboScript = new JComboBox<String> ();
+        comboScript.setEditable (true);
+        comboScript.addActionListener (new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                if (e.getActionCommand ().equals ("comboBoxEdited"))
+                {
+                    String script = (String) comboScript.getSelectedItem ();
+                    script = script.trim ();
+                    comboScript.removeItem (script);
+                    comboScript.insertItemAt (script, 0);
+                    comboScript.setSelectedItem (script);
+                    saveScripts ();
+
+                    // Execute script
+                    String path = "";
+                    if      (displayNode instanceof NodeJob ) path = ((NodeJob ) displayNode).source.get ();
+                    else if (displayNode instanceof NodeFile) path = ((NodeFile) displayNode).path.getAbsolutePath ();
+                    if (! path.isEmpty ())
+                    {
+                        String directory = new File (path).getParent ();
+                        System.out.println ("script=" + script);
+                        System.out.println ("path=" + path);
+                        System.out.println ("dir=" + directory);
+                        script = script.replaceAll ("\\%d", Matcher.quoteReplacement (directory));
+                        script = script.replaceAll ("\\%f", Matcher.quoteReplacement (path));
+                        try {Runtime.getRuntime ().exec (script);}
+                        catch (IOException error) {error.printStackTrace ();}
+                    }
+                }
+            }
+        });
+        comboScript.getEditor ().getEditorComponent ().addKeyListener (new KeyAdapter ()
+        {
+            public void keyPressed (KeyEvent e)
+            {
+                if (e.getKeyCode () == KeyEvent.VK_DELETE  &&  e.isControlDown ())
+                {
+                    String script = (String) comboScript.getSelectedItem ();
+                    comboScript.removeItem (script);
+                    saveScripts ();
+                    e.consume ();
+                }
+            }
+        });
+        for (MNode n : AppData.state.childOrCreate ("RunPanel", "scripts")) comboScript.addItem (n.get ());
+
         Lay.BLtg
         (
             this,
-            "C", Lay.SPL
+            Lay.SPL
             (
+                Lay.BL (treePane = Lay.sp (tree)),
                 Lay.BL
                 (
-                    "C", treePane = Lay.sp (tree)
-                ),
-                Lay.BL
-                (
-                    "N", Lay.FL
+                    "N", Lay.BL
                     (
-                        "L",
-                        Lay.BL (buttonText),
-                        Lay.BL (buttonGraph),
-                        Lay.BL (buttonRaster),
-                        Lay.BL (buttonMonospace, "eb=20l,20r")
+                        "W", Lay.FL
+                        (
+                            "L",
+                            buttonText,
+                            buttonGraph,
+                            buttonRaster,
+                            Lay.BL (buttonMonospace, "eb=20l20r"),
+                            "hgap=5,vgap=1"
+                        ),
+                        "C", comboScript
                     ),
                     "C", displayPane
                 ),
@@ -287,6 +344,16 @@ public class RunPanel extends JPanel
             )
         );
         setFocusCycleRoot (true);
+    }
+
+    public void saveScripts ()
+    {
+        MNode scripts = AppData.state.childOrCreate ("RunPanel", "scripts");
+        scripts.clear ();
+        for (int i = 0; i < comboScript.getItemCount (); i++)
+        {
+            scripts.set (comboScript.getItemAt (i), String.valueOf (i));
+        }
     }
 
     public class DisplayThread extends Thread
