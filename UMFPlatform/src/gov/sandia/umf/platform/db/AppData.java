@@ -30,6 +30,7 @@ public class AppData
     public static MDir models;
     public static MDir references;
     public static MDir runs;
+    public static MDoc state;
 
     protected static boolean stop;
     protected static Thread saveThread;
@@ -40,6 +41,7 @@ public class AppData
         models     = new MDir (new File (root, "models"));
         references = new MDir (new File (root, "references"));
         runs       = new MDir (new File (root, "jobs"), "model");  // "model" is our internal housekeeping data, in MNode serialization form. Backend output generally goes into a simulator-specific file.
+        state      = new MDoc (new File (root, "client.state").getAbsolutePath ());
 
         stop = false;
         saveThread = new Thread ("Save AppData")
@@ -112,6 +114,7 @@ public class AppData
         models.save ();
         references.save ();
         runs.save ();  // The reason to save runs is if we record data in them about process status. If no data is changed, could get rid of this save.
+        state.save ();
     }
 
     public static void backup (File destination)

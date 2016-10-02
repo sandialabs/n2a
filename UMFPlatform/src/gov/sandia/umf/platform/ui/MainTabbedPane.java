@@ -8,7 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui;
 
-import gov.sandia.umf.platform.AppState;
+import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.plugins.UMFPluginManager;
 import gov.sandia.umf.platform.plugins.extpoints.RecordHandler;
 
@@ -49,7 +49,7 @@ public class MainTabbedPane extends JTabbedPane
     {
         // Load all panels provided by plugins.
         // Create tabs in the order the user has specified.
-        String order = AppState.getInstance ().getOrDefault ("Model", "MainTabbedPane", "order");
+        String order = AppData.state.getOrDefault ("Model", "MainTabbedPane", "order");
         Set<String> sorted = new HashSet<String> ();
         String[] titles = order.split (",");  // comma-separated list
         Map<String,RecordHandler> handlers = UMFPluginManager.getRecordHandlers ();
@@ -108,7 +108,7 @@ public class MainTabbedPane extends JTabbedPane
 
                     String order = getTitleAt (0);
                     for (int i = 1; i < getTabCount (); i++) order += "," + getTitleAt (i);
-                    AppState.getInstance ().set (order, "MainTabbedPane", "order");
+                    AppData.state.set (order, "MainTabbedPane", "order");
                 }
             }
 

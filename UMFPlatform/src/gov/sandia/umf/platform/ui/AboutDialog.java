@@ -7,7 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui;
 
-import gov.sandia.umf.platform.AppState;
+import gov.sandia.umf.platform.UMF;
 import gov.sandia.umf.platform.plugins.extpoints.ProductCustomization;
 
 import java.awt.Color;
@@ -40,7 +40,7 @@ public class AboutDialog extends EscapeDialog {
         Font f1 = new Font("Helvetica", Font.PLAIN, 16);
         Font f2 = new Font("Helvetica", Font.PLAIN, 12);
 
-        ProductCustomization pc = AppState.getInstance ().prodCustomization;
+        ProductCustomization pc = UMF.prodCustomization;
         String shortName;
         if(pc != null) {
             shortName = pc.getProductShortName();
@@ -88,7 +88,7 @@ public class AboutDialog extends EscapeDialog {
     }
 
     public AboutDialog(JFrame parent) {
-        super(parent, "About " + AppState.getInstance().prodCustomization.getProductLongName(), true);
+        super(parent, "About " + UMF.prodCustomization.getProductLongName(), true);
 
         // Technically possible for this to execute before the thread
         // invoking initializeLabels finishes.  However, that is such
@@ -126,7 +126,7 @@ public class AboutDialog extends EscapeDialog {
         Lay.BLtg(gp, "C", pnlText, "eb=10");
 
         Lay.BLtg(this,
-            "N", Lay.lb(AppState.getInstance().prodCustomization.getAboutImage()),
+            "N", Lay.lb(UMF.prodCustomization.getAboutImage()),
             "C", gp,
             "resizable=false,size=[520,380],center"
         );

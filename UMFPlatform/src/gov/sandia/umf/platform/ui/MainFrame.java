@@ -7,7 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui;
 
-import gov.sandia.umf.platform.AppState;
+import gov.sandia.umf.platform.UMF;
 import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.plugins.extpoints.ProductCustomization;
 import java.awt.event.ComponentAdapter;
@@ -39,7 +39,7 @@ public class MainFrame extends EscapeFrame implements HelpCapableWindow
 
     public MainFrame ()
     {
-        ProductCustomization pc = AppState.getInstance().prodCustomization;
+        ProductCustomization pc = UMF.prodCustomization;
         setTitle(pc.getProductLongName() + " v" + pc.getProductVersion());
         setIconImage(pc.getWindowIcon().getImage());
 

@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.umf.platform;
 
 import gov.sandia.umf.platform.db.AppData;
+import gov.sandia.umf.platform.db.MDoc;
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.plugins.UMFPluginManager;
 import gov.sandia.umf.platform.plugins.extpoints.ProductCustomization;
@@ -60,6 +61,8 @@ public class UMF
     private static MainFrame mainFrame;
     private static LoadingWindow loadingFrame;
 
+    public static ProductCustomization prodCustomization;
+
     public static void main (String[] args)
     {
         // TODO: Add help to these options.
@@ -108,11 +111,11 @@ public class UMF
 
         setUncaughtExceptionHandler (null);
 
-        AppState.getInstance ().prodCustomization = chooseProductCustomization (prodCust);
+        prodCustomization = chooseProductCustomization (prodCust);
 
         // Read L&F from properties.
-        String lafClassName = AppState.getInstance ().get ("LookAndFeel");
-        String lafTheme = AppState.getInstance ().get ("Theme");
+        String lafClassName = AppData.state.get ("LookAndFeel");
+        String lafTheme = AppData.state.get ("Theme");
         LafManager.initialize (lafClassName, lafTheme);
 
         LogManager.setLogFile (new File (getAppLogDir (), "n2a.log"));
@@ -191,7 +194,7 @@ public class UMF
 
     private static void getWindowLayoutProps ()
     {
-        MNode winProps = AppState.getInstance ().childOrCreate ("WinLayout");
+        MNode winProps = AppData.state.childOrCreate ("WinLayout");
         winProps.clear ();
 
         winProps.set (mainFrame.getX             (), "MainFrame", "x");
@@ -244,7 +247,7 @@ public class UMF
         {
             public void stateChanged (CommonWindowClosingEvent e)
             {
-                AppState appState = AppState.getInstance ();
+                MDoc appState = AppData.state;
                 appState.set (LafManager.getCurrentLaf ().getCls (),      "LookAndFeel");
                 appState.set (LafManager.getCurrentLaf ().getCurTheme (), "Theme");
                 getWindowLayoutProps ();
@@ -260,7 +263,7 @@ public class UMF
         });
 
 
-        MNode winProps = AppState.getInstance ().childOrCreate ("WinLayout");
+        MNode winProps = AppData.state.childOrCreate ("WinLayout");
 
         MNode m = winProps.child ("MainFrame");
         if (m != null)
