@@ -1,48 +1,40 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2016 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.exporters;
+package gov.sandia.n2a.transfer;
 
 import gov.sandia.umf.platform.db.MNode;
 import gov.sandia.umf.platform.plugins.extpoints.Exporter;
-import gov.sandia.umf.platform.ui.export.ExportParameters;
-import gov.sandia.umf.platform.ui.export.ExportParametersPanel;
+import java.io.File;
 
-import java.io.IOException;
+import javax.swing.JComponent;
+import javax.swing.JFileChooser;
 
-import javax.swing.ImageIcon;
-
-public class LEMSExporter implements Exporter
+public class ExportNeuroML implements Exporter
 {
-
     @Override
-    public String getName() {
-        return null;
-    }
-
-    @Override
-    public String getDescription() {
-        return null;
-    }
-
-    @Override
-    public ImageIcon getIcon() {
-        return null;
-    }
-
-    @Override
-    public void export (MNode source, ExportParameters params) throws IOException
+    public String getName ()
     {
+        return "NeuroML";
     }
 
     @Override
-    public ExportParametersPanel getParametersPanel() {
+    public JComponent getAccessory (JFileChooser fc)
+    {
         return null;
-    }/*
+    }
+
+    @Override
+    public void export (MNode source, File destination, JComponent accessory)
+    {
+        System.out.println ("imagine a NeuroML export to: " + destination);
+    }
+
+    /*
     StringBuilder sb;
     XMLWriter writer;
 

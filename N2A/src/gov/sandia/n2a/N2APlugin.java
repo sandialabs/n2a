@@ -7,8 +7,10 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a;
 
-import gov.sandia.n2a.exporters.LEMSExporter;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.transfer.ExportNative;
+import gov.sandia.n2a.transfer.ExportNeuroML;
+import gov.sandia.n2a.transfer.ImportNative;
 import gov.sandia.n2a.ui.eq.ModelRecordHandler;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
@@ -57,10 +59,12 @@ public class N2APlugin extends DefaultPlugin {
     {
         return new ExtensionPoint[]
         {
-            new N2AProductCustomization(),
-            new LEMSExporter(),
-            //new ReferenceRecordHandler(),
-            new ModelRecordHandler()
+            new N2AProductCustomization (),
+            new ExportNeuroML (),
+            new ExportNative (),
+            new ImportNative (),
+            //new ReferenceRecordHandler (),
+            new ModelRecordHandler ()
         };
     }
 

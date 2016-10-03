@@ -12,6 +12,7 @@ import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
+import gov.sandia.umf.platform.UMF;
 import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.db.MDoc;
 import gov.sandia.umf.platform.db.MNode;
@@ -19,11 +20,9 @@ import gov.sandia.umf.platform.db.MPersistent;
 import gov.sandia.umf.platform.plugins.UMFPluginManager;
 import gov.sandia.umf.platform.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.plugins.extpoints.Exporter;
+import gov.sandia.umf.platform.plugins.extpoints.Importer;
 import gov.sandia.umf.platform.ui.MainFrame;
 import gov.sandia.umf.platform.ui.MainTabbedPane;
-import gov.sandia.umf.platform.ui.export.ExportDialog;
-import gov.sandia.umf.platform.ui.export.ExportParameters;
-import gov.sandia.umf.platform.ui.export.ExportParametersDialog;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 import gov.sandia.umf.platform.ui.jobs.RunPanel;
 
@@ -41,11 +40,14 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.io.IOException;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Enumeration;
 import java.util.EventObject;
+import java.util.List;
 import java.util.Locale;
 
 import javax.swing.AbstractAction;
@@ -54,6 +56,8 @@ import javax.swing.DefaultCellEditor;
 import javax.swing.Icon;
 import javax.swing.InputMap;
 import javax.swing.JButton;
+import javax.swing.JComponent;
+import javax.swing.JFileChooser;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
@@ -68,6 +72,7 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.TreeExpansionEvent;
 import javax.swing.event.TreeExpansionListener;
 import javax.swing.event.TreeWillExpandListener;
+import javax.swing.filechooser.FileFilter;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellEditor;
 import javax.swing.tree.DefaultTreeCellRenderer;
@@ -81,6 +86,8 @@ import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoManager;
 
 import replete.gui.controls.IconButton;
+import replete.plugins.ExtensionPoint;
+import replete.plugins.PluginManager;
 import replete.util.Lay;
 
 public class EquationTreePanel extends JPanel
@@ -108,6 +115,7 @@ public class EquationTreePanel extends JPanel
     protected JButton buttonMoveDown;
     protected JButton buttonRun;
     protected JButton buttonExport;
+    protected JButton buttonImport;
     protected JPopupMenu menuPopup;
 
     /**
@@ -613,6 +621,11 @@ public class EquationTreePanel extends JPanel
         buttonExport.setToolTipText ("Export");
         buttonExport.addActionListener (exportListener);
 
+        buttonImport = new IconButton (ImageUtil.getImage ("import.gif"), 2);
+        buttonImport.setFocusable (false);
+        buttonImport.setToolTipText ("Import");
+        buttonImport.addActionListener (importListener);
+
         // Context Menus
         JMenuItem menuAddPart = new JMenuItem ("Add Part", ImageUtil.getImage ("comp.gif"));
         menuAddPart.setActionCommand ("Part");
@@ -658,8 +671,9 @@ public class EquationTreePanel extends JPanel
                 Lay.BL (buttonDelete,        "eb=20b,alignx=0.5,maxH=20"),
                 Lay.BL (buttonMoveUp,        "eb=5b,alignx=0.5,maxH=20"),
                 Lay.BL (buttonMoveDown,      "eb=20b,alignx=0.5,maxH=20"),
-                Lay.BL (buttonRun,           "eb=5b,alignx=0.5,maxH=20"),
+                Lay.BL (buttonRun,           "eb=20b,alignx=0.5,maxH=20"),
                 Lay.BL (buttonExport,        "eb=5b,alignx=0.5,maxH=20"),
+                Lay.BL (buttonImport,        "eb=5b,alignx=0.5,maxH=20"),
                 Box.createVerticalGlue ()
             )
         );
@@ -766,27 +780,142 @@ public class EquationTreePanel extends JPanel
 
     ActionListener exportListener = new ActionListener ()
     {
+        // We create and customize a file chooser on the fly, display it modally, then use its result to initiate export.
+
+        class ExporterFilter extends FileFilter
+        {
+            public Exporter exporter;
+            public JComponent accessory;  ///< Store the accessory so it can retain state between changes in file filter.
+
+            ExporterFilter (Exporter exporter)
+            {
+                this.exporter = exporter;
+            }
+
+            @Override
+            public boolean accept (File f)
+            {
+                return true;
+            }
+
+            @Override
+            public String getDescription ()
+            {
+                return exporter.getName ();
+            }
+
+            public JComponent getAccessory (JFileChooser fc)
+            {
+                if (accessory == null) accessory = exporter.getAccessory (fc);
+                return accessory;
+            }
+        }
+
         public void actionPerformed (ActionEvent e)
         {
-            ExportDialog dlg = new ExportDialog (MainFrame.getInstance ());
-            dlg.setVisible (true);
-            if (dlg.getState () == ExportDialog.OK)
+            if (record == null) return;
+
+            // Construct and customize a file chooser
+            final JFileChooser fc = new JFileChooser (UMF.getAppResourceDir ());
+            fc.setDialogTitle ("Export \"" + record.key () + "\"");
+            ExporterFilter n2a = null;
+            List<ExtensionPoint> exps = PluginManager.getExtensionsForPoint (Exporter.class);
+            for (ExtensionPoint exp : exps)
             {
-                Exporter exporter = dlg.getExporter ();
-                ExportParametersDialog dlg2 = new ExportParametersDialog (MainFrame.getInstance (), exporter);
-                dlg2.setVisible (true);
-                if (dlg2.getState () == ExportParametersDialog.OK)
+                ExporterFilter ef = new ExporterFilter ((Exporter) exp);
+                fc.addChoosableFileFilter (ef);
+                if (ef.exporter.getName ().contains ("N2A")) n2a = ef;
+            }
+            fc.addPropertyChangeListener (JFileChooser.FILE_FILTER_CHANGED_PROPERTY, new PropertyChangeListener ()
+            {
+                public void propertyChange (PropertyChangeEvent arg0)
                 {
-                    ExportParameters params = dlg2.getParameters ();
-                    try
-                    {
-                        exporter.export (record, params);
-                    }
-                    catch (IOException error)
-                    {
-                        error.printStackTrace ();
-                    }
+                    fc.setAccessory (((ExporterFilter) fc.getFileFilter ()).getAccessory (fc));
+                    fc.revalidate ();
                 }
+            });
+            fc.setAcceptAllFileFilterUsed (false);
+            if (n2a != null) fc.setFileFilter (n2a);
+
+            // Display chooser and collect result
+            int result = fc.showSaveDialog (MainFrame.getInstance ());
+
+            // Do export
+            if (result == JFileChooser.APPROVE_OPTION)
+            {
+                File path = fc.getSelectedFile ();
+                ExporterFilter filter = (ExporterFilter) fc.getFileFilter ();
+                filter.exporter.export (record, path, filter.accessory);
+            }
+        }
+    };
+
+    ActionListener importListener = new ActionListener ()
+    {
+        // We create and customize a file chooser on the fly, display it modally, then use its result to initiate export.
+
+        class ImporterFilter extends FileFilter
+        {
+            public Importer importer;
+            public JComponent accessory;  ///< Store the accessory so it can retain state between changes in file filter.
+
+            ImporterFilter (Importer importer)
+            {
+                this.importer = importer;
+            }
+
+            @Override
+            public boolean accept (File f)
+            {
+                return true;
+            }
+
+            @Override
+            public String getDescription ()
+            {
+                return importer.getName ();
+            }
+
+            public JComponent getAccessory (JFileChooser fc)
+            {
+                if (accessory == null) accessory = importer.getAccessory (fc);
+                return accessory;
+            }
+        }
+
+        public void actionPerformed (ActionEvent e)
+        {
+            // Construct and customize a file chooser
+            final JFileChooser fc = new JFileChooser (UMF.getAppResourceDir ());
+            fc.setDialogTitle ("Import");
+            ImporterFilter n2a = null;
+            List<ExtensionPoint> exps = PluginManager.getExtensionsForPoint (Importer.class);
+            for (ExtensionPoint exp : exps)
+            {
+                ImporterFilter f = new ImporterFilter ((Importer) exp);
+                fc.addChoosableFileFilter (f);
+                if (f.importer.getName ().contains ("N2A")) n2a = f;
+            }
+            fc.addPropertyChangeListener (JFileChooser.FILE_FILTER_CHANGED_PROPERTY, new PropertyChangeListener ()
+            {
+                public void propertyChange (PropertyChangeEvent arg0)
+                {
+                    fc.setAccessory (((ImporterFilter) fc.getFileFilter ()).getAccessory (fc));
+                    fc.revalidate ();
+                }
+            });
+            fc.setAcceptAllFileFilterUsed (false);
+            if (n2a != null) fc.setFileFilter (n2a);
+
+            // Display chooser and collect result
+            int result = fc.showOpenDialog (MainFrame.getInstance ());
+
+            // Do import
+            if (result == JFileChooser.APPROVE_OPTION)
+            {
+                File path = fc.getSelectedFile ();
+                ImporterFilter filter = (ImporterFilter) fc.getFileFilter ();
+                filter.importer.process (path, filter.accessory);
             }
         }
     };
@@ -822,31 +951,37 @@ public class EquationTreePanel extends JPanel
 
     public void createNewModel ()
     {
+        MNode newModel = createNewModel ("New Model");
+        loadRootFromDB (newModel);
+    }
+
+    public MNode createNewModel (String name)
+    {
         MNode models = AppData.models;
-        String newModelName = "New Model";
-        MNode newModel = models.child (newModelName);
-        if (newModel == null)
+        MNode result = models.child (name);
+        if (result == null)
         {
-            newModel = models.set ("", newModelName);
+            result = models.set ("", name);
         }
         else
         {
-            newModelName += " ";
+            name += " ";
             int suffix = 2;
             while (true)
             {
-                if (newModel.length () == 0) break;  // no children, so still a virgin
-                newModel = models.child (newModelName + suffix);
-                if (newModel == null)
+                if (result.length () == 0) break;  // no children, so still a virgin
+                result = models.child (name + suffix);
+                if (result == null)
                 {
-                    newModel = models.set ("", newModelName + suffix);
+                    result = models.set ("", name + suffix);
                     break;
                 }
                 suffix++;
             }
         }
-        loadRootFromDB (newModel);
-        panelSearch.insertDoc (newModel);
+
+        panelSearch.insertDoc (result);
+        return result;
     }
 
     public void editSelected ()

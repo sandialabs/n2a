@@ -175,12 +175,13 @@ public class MDoc extends MPersistent
         try
         {
             BufferedReader reader = new BufferedReader (new FileReader (file));
+            reader.mark (64);  // enough to read schema line comfortably
             String line = reader.readLine ().trim ();
             String[] pieces = line.split ("=", 2);
             if (pieces.length < 2  ||  ! pieces[0].equals ("N2A.schema")  ||  ! pieces[1].equals ("1"))
             {
                 System.err.println ("WARNING: schema version not recognized. Proceeding as if it were.");
-                // Note that we may have just destroyed an important line of input in the process.
+                reader.reset ();  // This may have been an important line of input.
             }
             needsWrite = true;  // lie to ourselves, to prevent being put onto the MDir write queue
             read (reader);
@@ -202,7 +203,7 @@ public class MDoc extends MPersistent
 	        file.getParentFile ().mkdirs ();
 	        BufferedWriter writer = new BufferedWriter (new FileWriter (file));
 	        writer.write (String.format ("N2A.schema=1%n"));
-	        for (MNode c : this) c.write (writer, "");  // only write out our children, not ourself (top top-level node)
+	        for (MNode c : this) c.write (writer, "");  // only write out our children, not ourself (top-level node)
 	        writer.close ();
 	        clearChanged ();
 	    }

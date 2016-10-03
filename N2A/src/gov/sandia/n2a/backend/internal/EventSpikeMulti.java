@@ -10,7 +10,6 @@ public class EventSpikeMulti extends EventSpike
 
     public void run (Simulator simulator)
     {
-        // Note: targets could be null, but in practice that should never happen. The event should not have been created in that case.
         setFlag ();
         for (Instance i : targets) simulator.integrate (i);
         for (Instance i : targets) i.update (simulator);

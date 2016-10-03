@@ -18,12 +18,16 @@ import gov.sandia.umf.platform.db.AppData;
 
 public class ModelEditPanel extends JPanel
 {
+    public static ModelEditPanel instance;  ///< Technically, this class is a singleton, because only one would normally be created.
+
     public JSplitPane        split;
     public SearchPanel       panelSearch;
     public EquationTreePanel panelEquations;
 
     public ModelEditPanel ()
     {
+        instance = this;
+
         panelEquations = new EquationTreePanel ();
         panelSearch    = new SearchPanel ();
         panelEquations.panelSearch    = panelSearch;

@@ -9,6 +9,7 @@ package gov.sandia.umf.platform;
 
 import gov.sandia.umf.platform.plugins.extpoints.Analyzer;
 import gov.sandia.umf.platform.plugins.extpoints.Exporter;
+import gov.sandia.umf.platform.plugins.extpoints.Importer;
 import gov.sandia.umf.platform.plugins.extpoints.MenuItems;
 import gov.sandia.umf.platform.plugins.extpoints.ProductCustomization;
 import gov.sandia.umf.platform.plugins.extpoints.RecordHandler;
@@ -62,12 +63,13 @@ public class PlatformPlugin extends DefaultPlugin {
     {
         return new Class[]
         {
-           ProductCustomization.class,
-           Backend.class,
-           Analyzer.class,
-           MenuItems.class,
-           RecordHandler.class,
-           Exporter.class
+            ProductCustomization.class,
+            Backend.class,
+            Analyzer.class,
+            MenuItems.class,
+            RecordHandler.class,
+            Exporter.class,
+            Importer.class
         };
     }
 

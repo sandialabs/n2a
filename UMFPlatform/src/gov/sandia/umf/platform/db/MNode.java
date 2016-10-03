@@ -9,6 +9,7 @@ package gov.sandia.umf.platform.db;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.Reader;
 import java.io.StringWriter;
 import java.io.Writer;
 import java.util.Arrays;
@@ -342,7 +343,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         This method only processes children. It assumes that our value was processed
         at the caller's level, as its child.
     **/
-    public synchronized void read (BufferedReader reader)
+    public synchronized void read (Reader reader)
     {
         clear ();
         try
@@ -405,9 +406,10 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         public String         line;
         public int            whitespaces;
 
-        public LineReader (BufferedReader reader) throws IOException
+        public LineReader (Reader reader) throws IOException
         {
-            this.reader = reader;
+            if (reader instanceof BufferedReader) this.reader = (BufferedReader) reader;
+            else                                  this.reader = new BufferedReader (reader);
             getNextLine ();
         }
 
