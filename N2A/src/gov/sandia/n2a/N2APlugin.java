@@ -19,17 +19,22 @@ import javax.swing.ImageIcon;
 import replete.plugins.DefaultPlugin;
 import replete.plugins.ExtensionPoint;
 
-public class N2APlugin extends DefaultPlugin {
-
+public class N2APlugin extends DefaultPlugin
+{
     private static N2APlugin plugin;
-    public static N2APlugin getInstance() {
+    public static N2APlugin getInstance ()
+    {
         return plugin;
     }
-    public N2APlugin() {
+
+    public N2APlugin ()
+    {
         plugin = this;
     }
 
-    public String getName() {
+    @Override
+    public String getName ()
+    {
         return "N2A Modeling Tools";
     }
 
@@ -40,17 +45,20 @@ public class N2APlugin extends DefaultPlugin {
     }
 
     @Override
-    public String getProvider() {
+    public String getProvider ()
+    {
         return "Sandia National Laboratories";
     }
 
     @Override
-    public ImageIcon getIcon() {
-        return ImageUtil.getImage("n2a.gif");
+    public ImageIcon getIcon ()
+    {
+        return ImageUtil.getImage ("n2a.png");
     }
 
     @Override
-    public String getDescription() {
+    public String getDescription ()
+    {
         return "<html>This plug-in provides support N2A modeling concepts.<br><br>More information: <u><font color='blue'>http://n2a.sandia.gov</font></u></html>";
     }
 
@@ -72,7 +80,8 @@ public class N2APlugin extends DefaultPlugin {
     @SuppressWarnings("unchecked")
     public Class<? extends ExtensionPoint>[] getExtensionPoints ()
     {
-        return new Class[] {
+        return new Class[]
+        {
            Operator.Factory.class
         };
     }

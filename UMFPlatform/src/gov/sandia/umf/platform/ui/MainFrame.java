@@ -41,7 +41,7 @@ public class MainFrame extends EscapeFrame implements HelpCapableWindow
     {
         ProductCustomization pc = UMF.prodCustomization;
         setTitle(pc.getProductLongName() + " v" + pc.getProductVersion());
-        setIconImage(pc.getWindowIcon().getImage());
+        setIconImages (pc.getWindowIcons ());
 
         tabs = new MainTabbedPane ();
 

@@ -8,6 +8,9 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.umf.platform.plugins.extpoints;
 
 
+import java.awt.Image;
+import java.util.List;
+
 import javax.swing.ImageIcon;
 
 import replete.plugins.ExtensionPoint;
@@ -20,6 +23,6 @@ public interface ProductCustomization extends ExtensionPoint {
     public String getCopyright();
     public String getSupportEmail();
     public String getLicense();
-    public ImageIcon getWindowIcon();
+    public List<Image> getWindowIcons();
     public ImageIcon getAboutImage();
 }
