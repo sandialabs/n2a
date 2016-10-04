@@ -15,7 +15,7 @@ Neuron
    backend.stpu.param=dfn_out
  Vpeak=64mV
  Vrest=0mV
- output=trace(V>=Vpeak,"dfn"+$index)
+ x0=output(V>=Vpeak,"dfn"+$index)
 Wave
  $inherit="Coupling Delayed Current"
  $p=A.$index==B.$index

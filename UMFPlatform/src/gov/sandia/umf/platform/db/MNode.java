@@ -365,14 +365,31 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         while (true)
         {
             if (reader.line == null) return;  // stop at end of file
-
             // At this point, reader.whitespaces == whitespaces
+
+            // Parse the line into key=value. Must pay special attention when multiple "=" are present
             String line = reader.line.trim ();
-            String[] pieces = line.split ("=", 2);
-            String index = pieces[0].trim ().replace ("≡", "=");  // Using special character to stand-in for "=" in serialized keys.
-            String value;
-            if (pieces.length > 1) value = pieces[1].trim ();
-            else                   value = "";
+            String[] pieces = line.split ("=", -1);
+            String index = pieces[0];
+            int i = 1;
+            for (; i < pieces.length; i++)
+            {
+                if (pieces[i].isEmpty ()  ||  index.endsWith ("=")  ||  index.endsWith ("<")  ||  index.endsWith (">")  ||  index.endsWith ("!"))
+                {
+                    index = index + "=" + pieces[i];
+                    continue;
+                }
+                break;
+            }
+            String value = "";
+            if (i < pieces.length)
+            {
+                value = pieces[i++];
+                while (i < pieces.length) value = value + "=" + pieces[i++];
+            }
+            index = index.trim ();
+            value = value.trim ();
+
             if (value.startsWith ("|"))  // go into string reading mode
             {
                 StringBuilder block = new StringBuilder ();
@@ -465,7 +482,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     **/
     public synchronized void write (Writer writer, String space) throws IOException
     {
-        String index = key ().replace ("=", "≡");  // Since "=" has special meaning, substitute an unlikely character code for it.
+        String index = key ();
         String value = get ();
         if (value.isEmpty ())
         {

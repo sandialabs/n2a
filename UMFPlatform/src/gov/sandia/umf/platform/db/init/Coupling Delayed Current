@@ -12,5 +12,5 @@ B=$connect("Neuron LIF")
 B.I=A.I*ABweight@$event(clocked,Adelay,"change")
 clocked
  @$init=0
- @clocked≡≡0=1
- @clocked≡≡1=0
+ @clocked==0=1
+ @clocked==1=0

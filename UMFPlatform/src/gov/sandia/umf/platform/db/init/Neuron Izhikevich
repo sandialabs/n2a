@@ -9,5 +9,5 @@ c=-65mV
 d=2mV
 u
  @$init=b*c
- @V>≡Vpeak=u+d
+ @V>=Vpeak=u+d
 u'=a*(b*V-u)/1mV

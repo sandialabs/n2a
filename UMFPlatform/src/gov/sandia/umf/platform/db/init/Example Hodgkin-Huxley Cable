@@ -11,4 +11,4 @@ HH
  $inherit="Neuron Hodgkin-Huxley"
  $n=3
  I=10uA@$index==0
- output=trace(V)
+ x0=output(V)
