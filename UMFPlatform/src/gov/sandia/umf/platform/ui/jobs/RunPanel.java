@@ -216,7 +216,7 @@ public class RunPanel extends JPanel
         displayText = new JTextArea ();
         displayText.setEditable(false);
 
-        JToggleButton buttonMonospace = new JToggleButton ("Monospace");
+        final JToggleButton buttonMonospace = new JToggleButton ("Monospace");
         buttonMonospace.setFont (new Font (Font.MONOSPACED, Font.PLAIN, buttonMonospace.getFont ().getSize ()));
         buttonMonospace.setFocusable (false);
         buttonMonospace.addActionListener (new ActionListener()
