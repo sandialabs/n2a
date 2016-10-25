@@ -654,8 +654,7 @@ public class Variable implements Comparable<Variable>
     public boolean equals (Object that)
     {
         if (this == that) return true;
-        Variable e = (Variable) that;
-        if (e == null) return false;
-        return compareTo (e) == 0;
+        if (that instanceof Variable) return compareTo ((Variable) that) == 0;
+        return false;
     }
 }
