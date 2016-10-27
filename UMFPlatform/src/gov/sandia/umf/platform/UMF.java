@@ -14,17 +14,20 @@ import gov.sandia.umf.platform.plugins.UMFPluginManager;
 import gov.sandia.umf.platform.plugins.extpoints.ProductCustomization;
 import gov.sandia.umf.platform.ui.AboutDialog;
 import gov.sandia.umf.platform.ui.MainFrame;
+
 import java.io.File;
 import java.lang.Thread.UncaughtExceptionHandler;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+
 import javax.swing.JFrame;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
+
 import replete.cli.CommandLineParser;
 import replete.cli.errors.CommandLineParseException;
 import replete.cli.options.Option;
@@ -261,7 +264,6 @@ public class UMF
                 AppData.save ();
             }
         });
-
 
         MNode winProps = AppData.state.childOrCreate ("WinLayout");
 
