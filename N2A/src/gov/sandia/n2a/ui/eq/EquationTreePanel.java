@@ -338,29 +338,20 @@ public class EquationTreePanel extends JPanel
             public void editingStopped (ChangeEvent e)
             {
                 NodeBase parent = (NodeBase) editor.editingNode.getParent ();  // Could be null if we edit the root node.
+                TreePath parentPath = null;
                 int index = 0;
-                if (parent != null) index = parent.getIndex (editor.editingNode) - 1;
+                if (parent != null)
+                {
+                    parentPath = new TreePath (parent.getPath ());
+                    index = parent.getIndex (editor.editingNode) - 1;
+                }
 
                 editor.editingNode.applyEdit (tree);
 
                 if (editor.editingNode == root) panelSearch.list.repaint ();  // possible name change on model
 
                 TreePath path = tree.getSelectionPath ();
-                if (path == null)  // If we lose the selection, most likely applyEdit() deleted the node, and that function assumes the caller handles selection.
-                {
-                    if (parent == null)
-                    {
-                        tree.setSelectionRow (0);
-                    }
-                    else
-                    {
-                        index = Math.min (index, parent.getChildCount () - 1);
-                        if (index < 0) path = new TreePath (                          parent.getPath ());
-                        else           path = new TreePath (((DefaultMutableTreeNode) parent.getChildAt (index)).getPath ());
-                        tree.setSelectionPath (path);
-                    }
-                }
-
+                if (path == null) path = updateSelection (parentPath, index);  // If we lose the selection, most likely applyEdit() deleted the node, and that function assumes the caller handles selection.
                 updateOrder ();
                 if (parent != null) updateOverrides (path);
             }
@@ -381,14 +372,10 @@ public class EquationTreePanel extends JPanel
 
                     editor.editingNode.delete (tree);
 
-                    index = Math.min (index, parent.getChildCount () - 1);
-                    TreePath path;
-                    if (index < 0) path = new TreePath (                          parent.getPath ());
-                    else           path = new TreePath (((DefaultMutableTreeNode) parent.getChildAt (index)).getPath ());
-                    tree.setSelectionPath (path);
-
+                    TreePath path = updateSelection (new TreePath (parent.getPath ()), index);
                     updateOrder ();
                     updateOverrides (path);
+                    repaintSouth (path);
                 }
             }
         });
@@ -989,6 +976,7 @@ public class EquationTreePanel extends JPanel
         TreePath path = tree.getSelectionPath ();
         if (path != null) tree.startEditingAtPath (path);
 
+        // TODO: is the following redundant with the CellEditorListener
         path = tree.getSelectionPath ();  // This can change quite a bit in the NodeBase.applyEdit() function.
         if (path != null) updateOverrides (path);
     }
@@ -1012,16 +1000,12 @@ public class EquationTreePanel extends JPanel
             else
             {
                 NodeBase parent = (NodeBase) selected.getParent ();
+                TreePath path = new TreePath (parent.getPath ());
                 int index = parent.getIndex (selected);
 
                 selected.delete (tree);
 
-                index = Math.min (index, parent.getChildCount () - 1);
-                TreePath path;
-                if (index < 0) path = new TreePath (                          parent.getPath ());
-                else           path = new TreePath (((DefaultMutableTreeNode) parent.getChildAt (index)).getPath ());
-                tree.setSelectionPath (path);
-
+                path = updateSelection (path, index);
                 updateOrder ();
                 updateOverrides (path);
                 repaintSouth (path);
@@ -1097,6 +1081,31 @@ public class EquationTreePanel extends JPanel
     }
 
     /**
+        Re-establish a reasonable selection after a node is deleted.
+    **/
+    public TreePath updateSelection (TreePath path, int index)
+    {
+        if (path == null  ||  path.getPathCount () == 0)
+        {
+            tree.setSelectionRow (0);
+            return tree.getSelectionPath ();
+        }
+
+        // Verify that parent node is still in tree.
+        // In some cases (such as metadata), deleting the only remaining node can also cause the deletion of the parent.
+        NodeBase parent = (NodeBase) path.getLastPathComponent ();
+        if (parent != root  &&  parent.getParent () == null)  // When a node gets removed from the tree, it's parent reference is set to null.
+        {
+            return updateSelection (path.getParentPath (), -1);
+        }
+
+        index = Math.min (index, parent.getChildCount () - 1);
+        if (index >= 0) path = new TreePath (((NodeBase) parent.getChildAt (index)).getPath ());
+        tree.setSelectionPath (path);
+        return path;
+    }
+
+    /**
         Records the current order of nodes in "gui.order", provided that metadata field exists.
         Otherwise, we assume the user doesn't care.
     **/
@@ -1155,12 +1164,10 @@ public class EquationTreePanel extends JPanel
 
     public void repaintSouth (TreePath path)
     {
-        System.out.println ("repaintSouth");
         Rectangle node    = tree.getPathBounds (path);
         Rectangle visible = scrollPane.getViewport ().getViewRect ();
         visible.height -= node.y - visible.y;
         visible.y       = node.y;
-        tree.repaint (visible);
-        System.out.println ("  called");
+        tree.paintImmediately (visible);
     }
 }
