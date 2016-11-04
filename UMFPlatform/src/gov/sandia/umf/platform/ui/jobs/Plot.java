@@ -156,15 +156,13 @@ public class Plot
             false                     // urls
         );
 
-        chart.setBackgroundPaint (Color.white);
-
         LegendTitle legend = chart.getLegend ();
         legend.setVisible (dataset.getSeriesCount () <= 5);
 
         XYPlot plot = chart.getXYPlot();
-        plot.setBackgroundPaint     (Color.lightGray);
-        plot.setDomainGridlinePaint (Color.white);
-        plot.setRangeGridlinePaint  (Color.white);
+        plot.setBackgroundPaint     (Color.white);
+        plot.setDomainGridlinePaint (Color.lightGray);
+        plot.setRangeGridlinePaint  (Color.lightGray);
         plot.setDomainPannable (true);
         plot.setRangePannable  (true);
         ValueAxis axis = plot.getRangeAxis ();

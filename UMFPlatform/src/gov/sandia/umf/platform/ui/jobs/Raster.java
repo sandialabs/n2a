@@ -73,8 +73,8 @@ public class Raster
                 if (line == null) break;  // indicates end of stream
 
                 line = line.trim ();
-            	if (line.length () == 0) continue;
-            	if (line.startsWith ("End of")) continue;
+                if (line.length () == 0) continue;
+                if (line.startsWith ("End of")) continue;
 
                 String[] parts = line.split ("\t");  // TODO: does Xyce output tabs or spaces? May have to switch regexp here, depending on source.
 
@@ -113,25 +113,29 @@ public class Raster
                             columns.add (p, nextColumn--);
                         }
                     }
+
+                    continue;
                 }
-                else
+
+                // If for some reason we don't have column headers, then auto-assign them.
+                // It is unlikely that column headers will show up later if they don't come first.
+                for (int p = columns.size (); p < parts.length; p++) columns.add (p, nextColumn--);
+
+                int p = timeColumn;
+                double time = row;
+                if (p >= 0) time = Double.parseDouble (parts[timeColumn]);
+                p++;
+                for (; p < parts.length; p++)
                 {
-                    int p = timeColumn;
-                    double time = row;
-                    if (p >= 0) time = Double.parseDouble (parts[timeColumn]);
-                    p++;
-                    for (; p < parts.length; p++)
-                    {
-                        if (! parts[p].isEmpty ()  &&  Double.parseDouble (parts[p]) != 0) series.add (time, columns.get (p));
-                    }
-                    row++;
+                    if (! parts[p].isEmpty ()  &&  Double.parseDouble (parts[p]) != 0) series.add (time, columns.get (p));
                 }
+                row++;
             }
             br.close ();
         }
         catch (IOException e)
         {
-		}
+        }
     }
 
     public JFreeChart createChart (final XYDataset dataset)
@@ -147,8 +151,6 @@ public class Raster
             true,                     // tooltips
             false                     // urls
         );
-
-        chart.setBackgroundPaint (Color.white);
 
         XYPlot plot = chart.getXYPlot();
         plot.setBackgroundPaint    (Color.white);
