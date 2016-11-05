@@ -6,5 +6,6 @@
 	<classpathentry combineaccessrules="false" exported="true" kind="src" path="/BackendC"/>
 	<classpathentry combineaccessrules="false" exported="true" kind="src" path="/N2A"/>
 	<classpathentry combineaccessrules="false" exported="true" kind="src" path="/BackendSTPU"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/BackendNeuroML"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

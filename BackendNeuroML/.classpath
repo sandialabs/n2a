@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="src"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/N2A"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/UMFPlatform"/>
+	<classpathentry kind="lib" path="/UMFPlatform/lib/replete.jar"/>
+	<classpathentry kind="lib" path="lib/org.neuroml.model-1.4.6.jar"/>
+	<classpathentry kind="lib" path="lib/jaxb2-basics-runtime-0.6.4.jar"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>
