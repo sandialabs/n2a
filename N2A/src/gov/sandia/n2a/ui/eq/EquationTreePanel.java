@@ -30,6 +30,7 @@ import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Rectangle;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.event.ActionEvent;
@@ -139,9 +140,17 @@ public class EquationTreePanel extends JPanel
             }
 
             NodeBase n = (NodeBase) value;
-            setFont (getFontFor (n));
             setForeground (n.getForegroundColor ());
             setIcon (getIconFor (n, expanded, leaf));
+            Font f = getFontFor (n);
+            setFont (f);
+            if (n.needsInitTabs ())
+            {
+                n.initTabs (tree.getGraphics ().getFontMetrics (f));
+                // convertValueToText() is called first thing in super.getTreeCellRendererComponent(),
+                // but text very likely has changed, so we need to call it again here.
+                setText (tree.convertValueToText (value, selected, expanded, leaf, row, hasFocus));
+            }
 
             return this;
         }

@@ -8,7 +8,10 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.eq.tree;
 
+import java.awt.FontMetrics;
+import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.List;
 import java.util.TreeMap;
 
 import gov.sandia.n2a.eqset.MPart;
@@ -28,6 +31,7 @@ public class NodeVariable extends NodeBase
     protected static ImageIcon iconBinding  = ImageUtil.getImage ("connect.gif");
 
     protected boolean isBinding;
+    protected List<Integer> columnWidths;
 
     public NodeVariable (MPart source)
     {
@@ -94,7 +98,34 @@ public class NodeVariable extends NodeBase
         if (isBinding) return iconBinding;
         else           return iconVariable;
     }
-    
+
+    @Override
+    public boolean needsInitTabs ()
+    {
+        return columnWidths == null;
+    }
+
+    @Override
+    public void updateColumnWidths (FontMetrics fm)
+    {
+        if (columnWidths == null) columnWidths = new ArrayList<Integer> (1);
+        columnWidths.add (fm.stringWidth (source.key ()));
+    }
+
+    @Override
+    public List<Integer> getColumnWidths ()
+    {
+        return columnWidths;
+    }
+
+    @Override
+    public void applyTabStops (List<Integer> tabs, FontMetrics fm)
+    {
+        String key = source.key ();
+        int offset = tabs.get (0).intValue () - fm.stringWidth (key);
+        setUserObject (key + pad (offset, fm) + "=" + source.get ());
+    }
+
     @Override
     public NodeBase add (String type, JTree tree)
     {
@@ -174,6 +205,13 @@ public class NodeVariable extends NodeBase
     }
 
     @Override
+    public boolean allowEdit ()
+    {
+        setUserObject (source.key () + "=" + source.get ());  // We're about to go into edit, so remove tabs.
+        return true;
+    }
+
+    @Override
     public void applyEdit (JTree tree)
     {
         String input = (String) getUserObject ();
@@ -185,6 +223,8 @@ public class NodeVariable extends NodeBase
 
         DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
         String oldKey = source.key ();
+        NodeBase parent = (NodeBase) getParent ();
+        FontMetrics fm = getFontMetrics (tree);
 
         String[] parts = input.split ("=", 2);
         String name = parts[0].trim ();
@@ -195,13 +235,13 @@ public class NodeVariable extends NodeBase
         {
             value = input.trim ();
             name = oldKey;
-            setUserObject (name + "=" + value);
+            updateColumnWidths (fm);
+            parent.updateTabStops (fm);
             model.nodeChanged (this);
         }
         Variable.ParsedValue pieces = new Variable.ParsedValue (value);
 
         NodeBase existing = null;
-        NodeBase parent = (NodeBase) getParent ();
         if (! name.equals (oldKey)) existing = parent.child (name);
 
         // See if the other node is a variable, and if we can merge into it with an acceptably low level of damage
@@ -236,7 +276,8 @@ public class NodeVariable extends NodeBase
                     model.insertNodeInto (new NodeEquation (equation), existingVariable, 0);
                 }
                 existingVariable.source.set (pieces.combiner);  // override the combiner, just as if we had entered an equation directly on the existing variable
-                existingVariable.setUserObject (name + "=" + pieces.combiner);
+                existingVariable.updateColumnWidths (fm);
+                parent.updateTabStops (fm);
                 model.nodeChanged (existingVariable);
 
                 MPart equation = (MPart) existingVariable.source.set (pieces.expression, "@" + pieces.conditional);
@@ -292,11 +333,9 @@ public class NodeVariable extends NodeBase
                 }
             }
 
-            if (equations.size () > 0  ||  existing != null)  // Necessary to change displayed value
-            {
-                setUserObject (oldKey + "=" + source.get ());
-                model.nodeChanged (this);
-            }
+            updateColumnWidths (fm);
+            parent.updateTabStops (fm);
+            model.nodeChanged (this);
         }
         else  // The name was changed. Move the whole sub-tree to a new location. This may also expose an overridden variable.
         {
@@ -345,6 +384,8 @@ public class NodeVariable extends NodeBase
                 {
                     source = newPart;
                     build ();
+                    updateColumnWidths (fm);
+                    parent.updateTabStops (fm);
                     model.nodeStructureChanged (this);
                 }
             }
@@ -355,12 +396,15 @@ public class NodeVariable extends NodeBase
                     NodeVariable v = new NodeVariable (newPart);
                     model.insertNodeInto (v, parent, parent.getIndex (this));
                     v.build ();
+                    v.updateColumnWidths (fm);
                     model.nodeStructureChanged (v);
                     v.findConnections ();
                 }
 
                 // The current node's source is still set to the old part.
                 build ();
+                updateColumnWidths (fm);
+                parent.updateTabStops (fm);
                 model.nodeStructureChanged (this);
             }
         }
@@ -374,16 +418,21 @@ public class NodeVariable extends NodeBase
         if (! source.isFromTopDocument ()) return;
 
         DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+        FontMetrics fm = getFontMetrics (tree);
+        NodeBase parent = (NodeBase) getParent ();
         MPart mparent = source.getParent ();
         String key = source.key ();
         mparent.clear (key);  // If this merely clears an override, then our source object retains its identity.
         if (mparent.child (key) == null)  // but we do need to test if it is still in the tree
         {
             model.removeNodeFromParent (this);
+            parent.updateTabStops (fm);
         }
         else
         {
             build ();
+            updateColumnWidths (fm);
+            parent.updateTabStops (fm);
             model.nodeStructureChanged (this);
         }
     }
