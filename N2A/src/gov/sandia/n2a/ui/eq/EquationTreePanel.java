@@ -70,7 +70,6 @@ import javax.swing.event.TreeExpansionEvent;
 import javax.swing.event.TreeExpansionListener;
 import javax.swing.event.TreeWillExpandListener;
 import javax.swing.filechooser.FileFilter;
-import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellEditor;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
@@ -246,8 +245,8 @@ public class EquationTreePanel extends JPanel
                     catch (CannotRedoException e) {}
                 }
             });
-            textField.getInputMap ().put (KeyStroke.getKeyStroke ("control Z"), "Undo");
-            textField.getInputMap ().put (KeyStroke.getKeyStroke ("control Y"), "Redo");
+            textField.getInputMap ().put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+            textField.getInputMap ().put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
             textField.getInputMap ().put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
 
             textField.addFocusListener (new FocusListener ()
@@ -369,18 +368,28 @@ public class EquationTreePanel extends JPanel
                 // We desire in this case that escape cause the new node to evaporate.
                 Object o = editor.editingNode.getUserObject ();
                 if (! (o instanceof String)) return;
+
+                NodeBase node   = editor.editingNode;
+                NodeBase parent = (NodeBase) node.getParent ();
                 if (((String) o).isEmpty ())
                 {
                     // Similar behavior to deleteSelected(), but set selection to previous node, since it is likely that this node was added from there.
-                    NodeBase parent = (NodeBase) editor.editingNode.getParent ();
-                    int index = parent.getIndex (editor.editingNode) - 1;
+                    int index = parent.getIndex (node) - 1;
 
-                    editor.editingNode.delete (tree);
+                    node.delete (tree);
 
                     TreePath path = updateSelection (new TreePath (parent.getPath ()), index);
                     updateOrder ();
                     updateOverrides (path);
                     repaintSouth (path);
+                }
+                else  // The text has been restored to the original value set in node's user object just before edit. However, that has column alignment removed, so re-establish it.
+                {
+                    if (parent != null)
+                    {
+                        parent.updateTabStops (node.getFontMetrics (tree));
+                        parent.nodesChanged (model);
+                    }
                 }
             }
         });
@@ -1023,8 +1032,8 @@ public class EquationTreePanel extends JPanel
         TreePath path = tree.getSelectionPath ();
         if (path != null)
         {
-            DefaultMutableTreeNode node   = (DefaultMutableTreeNode) path.getLastPathComponent ();
-            DefaultMutableTreeNode parent = (DefaultMutableTreeNode) node.getParent ();
+            NodeBase node   = (NodeBase) path.getLastPathComponent ();
+            NodeBase parent = (NodeBase) node.getParent ();
             if (parent instanceof NodePart)  // Only parts support $metadata.gui.order
             {
                 int index = parent.getIndex (node) + direction;
@@ -1045,13 +1054,12 @@ public class EquationTreePanel extends JPanel
                         if (key.equals ("$metadata")) metadataNode = (NodeAnnotations) c;
                     }
 
-                    NodePart p = (NodePart) parent;
                     MPart metadataPart = null;
                     if (metadataNode == null)
                     {
-                        metadataPart = (MPart) p.source.set ("", "$metadata");
+                        metadataPart = (MPart) parent.source.set ("", "$metadata");
                         metadataNode = new NodeAnnotations (metadataPart);
-                        model.insertNodeInto (metadataNode, p, 0);
+                        model.insertNodeInto (metadataNode, parent, 0);
                         if (order.isEmpty ()) order = "$metadata";
                         else                  order = "$metadata" + "," + order;
                     }
@@ -1074,7 +1082,9 @@ public class EquationTreePanel extends JPanel
                     else
                     {
                         orderNode.source.set (order);
-                        orderNode.setUserObject ("gui.order=" + order);
+                        FontMetrics fm = orderNode.getFontMetrics (tree);
+                        // Don't need to call updateColumnWidths(), because size of string "gui.order" is constant.
+                        metadataNode.updateTabStops (fm);  // necessary to get tab stops, since we don't store them
                         model.nodeChanged (orderNode);
                     }
 
@@ -1122,8 +1132,8 @@ public class EquationTreePanel extends JPanel
         TreePath path = tree.getSelectionPath ();
         if (path != null)
         {
-            DefaultMutableTreeNode node   = (DefaultMutableTreeNode) path.getLastPathComponent ();
-            DefaultMutableTreeNode parent = (DefaultMutableTreeNode) node.getParent ();
+            NodeBase node   = (NodeBase) path.getLastPathComponent ();
+            NodeBase parent = (NodeBase) node.getParent ();
             if (parent instanceof NodePart)  // Only parts support $metadata.gui.order
             {
                 NodeAnnotations metadataNode = null;
@@ -1146,7 +1156,8 @@ public class EquationTreePanel extends JPanel
                     if (a.source.key ().equals ("gui.order"))
                     {
                         a.source.set (order);
-                        a.setUserObject ("gui.order=" + order);
+                        FontMetrics fm = a.getFontMetrics (tree);
+                        metadataNode.updateTabStops (fm);
                         model.nodeChanged (a);
                         return;
                     }
