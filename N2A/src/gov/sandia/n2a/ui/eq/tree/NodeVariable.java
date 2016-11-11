@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2016 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -10,7 +10,6 @@ package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.FontMetrics;
 import java.util.ArrayList;
-import java.util.Enumeration;
 import java.util.List;
 import java.util.TreeMap;
 
@@ -100,6 +99,24 @@ public class NodeVariable extends NodeBase
     }
 
     @Override
+    public String getText (boolean expanded)
+    {
+        String result = toString ();
+        if (result.isEmpty ()) return result;  // Allow user object to be "" for new nodes.
+        if (! expanded  &&  children != null)  // show "..." when multi-line equation is collapsed
+        {
+            for (Object o : children)
+            {
+                if (o instanceof NodeEquation)
+                {
+                    return result + " ...";
+                }
+            }
+        }
+        return result;
+    }
+
+    @Override
     public boolean needsInitTabs ()
     {
         return columnWidths == null;
@@ -112,8 +129,11 @@ public class NodeVariable extends NodeBase
         {
             columnWidths = new ArrayList<Integer> (1);
             columnWidths.add (0);
+            columnWidths.add (0);
         }
         columnWidths.set (0, fm.stringWidth (source.key () + " "));
+        Variable.ParsedValue pieces = new Variable.ParsedValue (source.get ());
+        columnWidths.set (1, fm.stringWidth ("=" + pieces.combiner + " "));
     }
 
     @Override
@@ -125,9 +145,17 @@ public class NodeVariable extends NodeBase
     @Override
     public void applyTabStops (List<Integer> tabs, FontMetrics fm)
     {
-        String key = source.key ();
-        int offset = tabs.get (0).intValue () - fm.stringWidth (key);
-        setUserObject (key + pad (offset, fm) + "=" + source.get ());
+        String result = source.key ();
+        Variable.ParsedValue pieces = new Variable.ParsedValue (source.get ());
+
+        int offset = tabs.get (0).intValue () - fm.stringWidth (result);
+        result = result + pad (offset, fm) + "=" + pieces.combiner;
+        
+        offset = tabs.get (1).intValue () - fm.stringWidth (result);
+        result = result + pad (offset, fm) + pieces.expression;
+        if (! pieces.conditional.isEmpty ()) result = result + " @ " + pieces.conditional;
+
+        setUserObject (result);
     }
 
     @Override
@@ -143,6 +171,7 @@ public class NodeVariable extends NodeBase
 
         NodeBase result;
         DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+        FontMetrics fm = getFontMetrics (tree);
         if (type.equals ("Equation"))
         {
             TreeMap<String,MNode> equations = new TreeMap<String,MNode> ();
@@ -174,6 +203,7 @@ public class NodeVariable extends NodeBase
             MPart equation = (MPart) source.set (conditional, "@" + conditional);
             result = new NodeEquation (equation);
             result.setUserObject ("");
+            result.updateColumnWidths (fm);  // preempt initialization
             model.insertNodeInto (result, this, 0);
         }
         else if (type.equals ("Annotation"))
@@ -189,6 +219,7 @@ public class NodeVariable extends NodeBase
 
             result = new NodeAnnotation ((MPart) metadata.set ("", "a" + suffix));
             result.setUserObject ("");
+            result.updateColumnWidths (fm);
             model.insertNodeInto (result, this, firstReference);
         }
         else if (type.equals ("Reference"))
@@ -199,19 +230,24 @@ public class NodeVariable extends NodeBase
 
             result = new NodeReference ((MPart) references.set ("", "r" + suffix));
             result.setUserObject ("");
+            result.updateColumnWidths (fm);
             model.insertNodeInto (result, this, getChildCount ());
         }
         else
         {
             return ((NodeBase) getParent ()).add (type, tree);  // refer all other requests up the tree
         }
+
         return result;
     }
 
     @Override
     public boolean allowEdit ()
     {
-        setUserObject (source.key () + "=" + source.get ());  // We're about to go into edit, so remove tabs.
+        if (! getUserObject ().toString ().isEmpty ())  // An empty user object indicates a newly created node, which we want to edit as a blank.
+        {
+            setUserObject (source.key () + "=" + source.get ());  // We're about to go into edit, so remove tabs.
+        }
         return true;
     }
 
@@ -226,9 +262,9 @@ public class NodeVariable extends NodeBase
         }
 
         DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+        FontMetrics fm = getFontMetrics (tree);
         String oldKey = source.key ();
         NodeBase parent = (NodeBase) getParent ();
-        FontMetrics fm = getFontMetrics (tree);
 
         String[] parts = input.split ("=", 2);
         String name = parts[0].trim ();
@@ -255,15 +291,15 @@ public class NodeVariable extends NodeBase
         {
             boolean existingEquationMatch = false;
             int     existingEquationCount = 0;
-            Enumeration i = existingVariable.children ();
-            while (i.hasMoreElements ())
+            if (existingVariable.children != null)
             {
-                Object o = i.nextElement ();
-                if (o instanceof NodeEquation)
+                for (Object o : existingVariable.children)
                 {
-                    existingEquationCount++;
-                    NodeEquation e = (NodeEquation) o;
-                    if (e.source.key ().substring (1).equals (pieces.conditional)) existingEquationMatch = true;
+                    if (o instanceof NodeEquation)
+                    {
+                        existingEquationCount++;
+                        if (((NodeEquation) o).source.key ().substring (1).equals (pieces.conditional)) existingEquationMatch = true;
+                    }
                 }
             }
 
@@ -274,23 +310,30 @@ public class NodeVariable extends NodeBase
             {
                 // Merge into existing variable and remove ourselves from tree.
 
-                if (! existingPieces.expression.isEmpty ()  ||  ! existingPieces.conditional.isEmpty ())
+                if (! existingPieces.expression.isEmpty ()  ||  ! existingPieces.conditional.isEmpty ())  // The existing variable has an expression, so convert it into a subordinate equation.
                 {
-                    MPart equation = (MPart) existingVariable.source.set (existingPieces.expression, "@" + existingPieces.conditional);
-                    model.insertNodeInto (new NodeEquation (equation), existingVariable, 0);
+                    MPart convertedEquation = (MPart) existingVariable.source.set (existingPieces.expression, "@" + existingPieces.conditional);
+                    NodeEquation convertedEquationNode = new NodeEquation (convertedEquation);
+                    model.insertNodeInto (convertedEquationNode, existingVariable, 0);
+                    convertedEquationNode.updateColumnWidths (fm);
                 }
                 existingVariable.source.set (pieces.combiner);  // override the combiner, just as if we had entered an equation directly on the existing variable
-                existingVariable.updateColumnWidths (fm);
 
-                MPart equation = (MPart) existingVariable.source.set (pieces.expression, "@" + pieces.conditional);
-                NodeEquation e = new NodeEquation (equation);
-                model.insertNodeInto (e, existingVariable, 0);
+                MPart newEquation = (MPart) existingVariable.source.set (pieces.expression, "@" + pieces.conditional);
+                NodeEquation newEquationNode = new NodeEquation (newEquation);
+                model.insertNodeInto (newEquationNode, existingVariable, 0);
                 model.removeNodeFromParent (this);
+                parent.source.clear (oldKey);
 
+                newEquationNode.updateColumnWidths (fm);
+                existingVariable.updateTabStops (fm);
+                existingVariable.nodesChanged (model);
+
+                existingVariable.updateColumnWidths (fm);
                 parent.updateTabStops (fm);
                 parent.nodesChanged (model);
-                parent.source.clear (oldKey);
-                tree.setSelectionPath (new TreePath (e.getPath ()));
+
+                tree.setSelectionPath (new TreePath (newEquationNode.getPath ()));
                 existingVariable.findConnections ();
 
                 return;
@@ -298,14 +341,15 @@ public class NodeVariable extends NodeBase
         }
 
         TreeMap<String,NodeEquation> equations = new TreeMap<String,NodeEquation> ();
-        Enumeration i = children ();
-        while (i.hasMoreElements ())
+        if (children != null)
         {
-            Object o = i.nextElement ();
-            if (o instanceof NodeEquation)
+            for (Object o : children)
             {
-                NodeEquation e = (NodeEquation) o;
-                equations.put (e.source.key ().substring (1), e);
+                if (o instanceof NodeEquation)
+                {
+                    NodeEquation e = (NodeEquation) o;
+                    equations.put (e.source.key ().substring (1), e);
+                }
             }
         }
 

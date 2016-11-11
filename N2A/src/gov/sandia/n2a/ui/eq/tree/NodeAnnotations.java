@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2016 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -65,14 +65,12 @@ public class NodeAnnotations extends NodeBase
                 if (isNodeChild (selected)) selectedIndex = getIndex (selected);
             }
 
-            ((DefaultTreeModel) tree.getModel ()).insertNodeInto (result, this, selectedIndex + 1);
             result.setUserObject ("");
+            result.updateColumnWidths (getFontMetrics (tree));  // preempt initialization
+            ((DefaultTreeModel) tree.getModel ()).insertNodeInto (result, this, selectedIndex + 1);
             return result;
         }
-        else
-        {
-            return ((NodeBase) getParent ()).add (type, tree);
-        }
+        return ((NodeBase) getParent ()).add (type, tree);
     }
 
     @Override

@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2016 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -7,6 +7,10 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 
 package gov.sandia.n2a.ui.eq.tree;
+
+import java.awt.FontMetrics;
+import java.util.ArrayList;
+import java.util.List;
 
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
@@ -19,16 +23,11 @@ import javax.swing.tree.DefaultTreeModel;
 public class NodeReference extends NodeBase
 {
     protected static ImageIcon icon = ImageUtil.getImage ("book.gif");
+    protected List<Integer> columnWidths;
 
     public NodeReference (MPart source)
     {
         this.source = source;
-        setUserObject ();
-    }
-
-    public void setUserObject ()
-    {
-        setUserObject (source.key () + "=" + source.get ());
     }
 
     @Override
@@ -38,11 +37,72 @@ public class NodeReference extends NodeBase
     }
 
     @Override
+    public boolean needsInitTabs ()
+    {
+        return columnWidths == null;
+    }
+
+    @Override
+    public void updateColumnWidths (FontMetrics fm)
+    {
+        boolean pure = getParent () instanceof NodeReferences;
+        if (columnWidths == null)
+        {
+            columnWidths = new ArrayList<Integer> (1);
+            columnWidths.add (0);
+            if (! pure)
+            {
+                columnWidths.add (0);
+                columnWidths.add (0);
+            }
+        }
+        int width = fm.stringWidth (source.key () + " ");
+        if (pure) columnWidths.set (0, width);  // We are in a $reference block, so only need the first tab stop.
+        else      columnWidths.set (2, width);  // Stash column width in higher position, so it doesn't interfere with multi-line equations or annotations under a variable.
+    }
+
+    @Override
+    public List<Integer> getColumnWidths ()
+    {
+        return columnWidths;
+    }
+
+    @Override
+    public void applyTabStops (List<Integer> tabs, FontMetrics fm)
+    {
+        String result = source.key ();
+        String value  = source.get ();
+        if (! value.isEmpty ())
+        {
+            int offset = tabs.get (0).intValue ();
+            if (! (getParent () instanceof NodeReferences))  // not in a $reference block, so may share tab stops with equations and annotations
+            {
+                offset = tabs.get (2).intValue () - tabs.get (1).intValue () - offset;
+            }
+            offset -= fm.stringWidth (result);
+            result = result + pad (offset, fm) + "= " + value;
+        }
+        setUserObject (result);
+    }
+
+    @Override
     public NodeBase add (String type, JTree tree)
     {
-        NodeBase parent = (NodeBase) getParent ();
-        if (type.isEmpty ()) return parent.add ("Reference", tree);  // By context, we assume the user wants to add another reference.
-        else                 return parent.add (type, tree);
+        if (type.isEmpty ()) type = "Reference";  // By context, we assume the user wants to add another reference.
+        return ((NodeBase) getParent ()).add (type, tree);
+    }
+
+    @Override
+    public boolean allowEdit ()
+    {
+        if (! getUserObject ().toString ().isEmpty ())  // An empty user object indicates a newly created node, which we want to edit as a blank.
+        {
+            String name  = source.key ();
+            String value = source.get ();
+            if (value.isEmpty ()) setUserObject (name);
+            else                  setUserObject (name + "=" + value);
+        }
+        return true;
     }
 
     @Override
@@ -67,24 +127,31 @@ public class NodeReference extends NodeBase
         if (! name.equals (oldKey)) existingReference = parent.child (name);
 
         DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
-        if (name.equals (oldKey))  // Name is the same
+        FontMetrics fm = getFontMetrics (tree);
+        if (name.equals (oldKey)  ||  name.isEmpty ()  ||  existingReference != null)  // Name is the same, or name change is forbidden
         {
             source.set (value);
-        }
-        else if (name.isEmpty ()  ||  existingReference != null)  // Name change is forbidden 
-        {
-            source.set (value);
-            setUserObject ();
-            model.nodeChanged (this);
         }
         else  // Name is changed
         {
             MPart p = source.getParent ();
             MPart newPart = (MPart) p.set (value, name);
             p.clear (oldKey);
-            if (p.child (oldKey) == null) source = newPart;  // We were not associated with an override, so we can re-use this tree node.
-            else model.insertNodeInto (new NodeReference (newPart), parent, parent.getChildCount ());  // Make a new tree node, and leave this one to present the non-overridden value.
+            if (p.child (oldKey) == null)  // Make a new tree node, and leave this one to present the non-overridden value.
+            {
+                source = newPart;
+            }
+            else  // Make a new tree node, and leave this one to present the non-overridden value.
+            {
+                NodeReference newReference = new NodeReference (newPart);
+                model.insertNodeInto (newReference, parent, parent.getChildCount ());
+                newReference.updateColumnWidths (fm);
+            }
         }
+
+        updateColumnWidths (fm);
+        parent.updateTabStops (fm);
+        parent.nodesChanged (model);
     }
 
     @Override
@@ -92,18 +159,29 @@ public class NodeReference extends NodeBase
     {
         if (! source.isFromTopDocument ()) return;
 
+        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+        FontMetrics fm = getFontMetrics (tree);
+
+        NodeBase parent = (NodeBase) getParent ();
         MPart mparent = source.getParent ();
         String key = source.key ();
         mparent.clear (key);  // If this merely clears an override, then our source object retains its identity.
-        if (mparent.child (key) == null)  // but we do need to test if it is still in the tree
+        if (mparent.child (key) == null)  // There is no overridden value, so this node goes away completely.
         {
-            NodeBase parent = (NodeBase) getParent ();
-            ((DefaultTreeModel) tree.getModel ()).removeNodeFromParent (this);
-            if (parent instanceof NodeReferences  &&  parent.getChildCount () == 0) parent.delete (tree);
+            model.removeNodeFromParent (this);
+            if (parent instanceof NodeReferences  &&  parent.getChildCount () == 0)
+            {
+                parent.delete (tree);  // Delete the $reference node, because it is now empty.
+                // No need to update tabs in grandparent, because $reference node doesn't participate.
+                return;  // parent no longer exists, so don't fall through to update below
+            }
         }
-        else
+        else  // Just exposed an overridden value, so update display.
         {
-            setUserObject ();
+            updateColumnWidths (fm);
         }
+
+        parent.updateTabStops (fm);
+        parent.nodesChanged (model);
     }
 }

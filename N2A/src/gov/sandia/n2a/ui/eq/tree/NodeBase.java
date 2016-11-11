@@ -77,15 +77,11 @@ public class NodeBase extends DefaultMutableTreeNode
             for (; i < overlap; i++) tabs.set (i, Math.max (columnWidths.get (i), tabs.get (i)));
             for (; i < columns; i++) tabs.add (columnWidths.get (i));
         }
-        if (tabs.size () == 0) return;
+        int count = tabs.size ();
+        if (count == 0) return;
 
         int sum = 0;
-        Iterator<Integer> i = tabs.iterator ();
-        while (i.hasNext ())
-        {
-            Integer c = i.next ();
-            c = sum += c.intValue ();
-        }
+        for (int i = 0; i < count; i++) tabs.set (i, sum += tabs.get (i).intValue ());
 
         for (Object c : children) ((NodeBase) c).applyTabStops (tabs, fm);
     }

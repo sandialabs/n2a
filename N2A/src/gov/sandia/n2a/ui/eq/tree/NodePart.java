@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2016 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -129,7 +129,7 @@ public class NodePart extends NodeBase
     @Override
     public String getText (boolean expanded)
     {
-        String key = getUserObject ().toString ();  // This allows us to set editing text to "" for new objects, while showing key for old objects.
+        String key = toString ();  // This allows us to set editing text to "" for new objects, while showing key for old objects.
         if (expanded  ||  parentName.isEmpty ()) return key;
         return key + "  (" + parentName + ")";
     }
@@ -234,6 +234,7 @@ public class NodePart extends NodeBase
             }
         }
 
+        NodeBase result;
         DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
         if (type.equals ("Annotation"))
         {
@@ -257,20 +258,21 @@ public class NodePart extends NodeBase
         {
             int suffix = 0;
             while (source.child ("p" + suffix) != null) suffix++;
-            NodePart child = new NodePart ((MPart) source.set ("", "p" + suffix));
-            child.setUserObject ("");
-            model.insertNodeInto (child, this, lastSubpart + 1);
-            return child;
+            result = new NodePart ((MPart) source.set ("", "p" + suffix));
+            result.setUserObject ("");
+            model.insertNodeInto (result, this, lastSubpart + 1);
         }
         else  // treat all other requests as "Variable"
         {
             int suffix = 0;
             while (source.child ("x" + suffix) != null) suffix++;
-            NodeVariable child = new NodeVariable ((MPart) source.set ("0", "x" + suffix));
-            child.setUserObject ("");
-            model.insertNodeInto (child, this, lastVariable + 1);
-            return child;
+            result = new NodeVariable ((MPart) source.set ("0", "x" + suffix));
+            result.setUserObject ("");
+            result.updateColumnWidths (getFontMetrics (tree));  // preempt initialization
+            model.insertNodeInto (result, this, lastVariable + 1);
         }
+
+        return result;
     }
 
     @Override
