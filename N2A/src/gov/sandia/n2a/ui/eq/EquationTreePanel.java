@@ -8,10 +8,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.ui.eq;
 
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
-import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
-import gov.sandia.n2a.ui.eq.tree.NodeBase;
-import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.umf.platform.UMF;
 import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.db.MDoc;

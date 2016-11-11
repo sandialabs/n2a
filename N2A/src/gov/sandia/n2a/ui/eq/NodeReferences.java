@@ -5,7 +5,7 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.ui.eq.tree;
+package gov.sandia.n2a.ui.eq;
 
 import java.awt.Font;
 
@@ -19,26 +19,26 @@ import javax.swing.JTree;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 
-public class NodeAnnotations extends NodeBase
+public class NodeReferences extends NodeBase
 {
     protected static ImageIcon icon = ImageUtil.getImage ("properties.gif");
 
-    public NodeAnnotations (MPart source)
+    public NodeReferences (MPart source)
     {
         this.source = source;
-        setUserObject ("$metadata");
+        setUserObject ("$reference");
     }
 
     public void build ()
     {
-        for (MNode c : source) add (new NodeAnnotation ((MPart) c));
+        for (MNode c : source) add (new NodeReference ((MPart) c));
     }
 
     @Override
     public Icon getIcon (boolean expanded)
     {
         if (expanded) return icon;
-        return NodeAnnotation.icon;
+        return NodeReference.icon;
     }
 
     @Override
@@ -46,16 +46,16 @@ public class NodeAnnotations extends NodeBase
     {
         return Font.ITALIC;
     }
-    
+
     @Override
     public NodeBase add (String type, JTree tree)
     {
-        if (type.isEmpty ()  ||  type.equals ("Annotation"))
+        if (type.isEmpty ()  ||  type.equals ("Reference"))
         {
-            // Add a new annotation to our children
+            // Add a new reference to our children
             int suffix = 1;
-            while (source.child ("a" + suffix) != null) suffix++;
-            NodeBase result = new NodeAnnotation ((MPart) source.set ("", "a" + suffix));
+            while (source.child ("r" + suffix) != null) suffix++;
+            NodeBase result = new NodeReference ((MPart) source.set ("", "r" + suffix));
 
             int selectedIndex = getChildCount () - 1;
             TreePath path = tree.getSelectionPath ();
@@ -85,7 +85,7 @@ public class NodeAnnotations extends NodeBase
         if (! source.isFromTopDocument ()) return;
 
         MPart mparent = source.getParent ();
-        String key = source.key ();  // "$metadata"
+        String key = source.key ();  // "$reference"
         mparent.clear (key);
         if (mparent.child (key) == null) ((DefaultTreeModel) tree.getModel ()).removeNodeFromParent (this);
     }
