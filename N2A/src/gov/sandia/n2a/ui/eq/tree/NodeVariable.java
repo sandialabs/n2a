@@ -108,8 +108,12 @@ public class NodeVariable extends NodeBase
     @Override
     public void updateColumnWidths (FontMetrics fm)
     {
-        if (columnWidths == null) columnWidths = new ArrayList<Integer> (1);
-        columnWidths.add (fm.stringWidth (source.key ()));
+        if (columnWidths == null)
+        {
+            columnWidths = new ArrayList<Integer> (1);
+            columnWidths.add (0);
+        }
+        columnWidths.set (0, fm.stringWidth (source.key () + " "));
     }
 
     @Override
@@ -237,7 +241,7 @@ public class NodeVariable extends NodeBase
             name = oldKey;
             updateColumnWidths (fm);
             parent.updateTabStops (fm);
-            model.nodeChanged (this);
+            parent.nodesChanged (model);
         }
         Variable.ParsedValue pieces = new Variable.ParsedValue (value);
 
@@ -277,16 +281,16 @@ public class NodeVariable extends NodeBase
                 }
                 existingVariable.source.set (pieces.combiner);  // override the combiner, just as if we had entered an equation directly on the existing variable
                 existingVariable.updateColumnWidths (fm);
-                parent.updateTabStops (fm);
-                model.nodeChanged (existingVariable);
 
                 MPart equation = (MPart) existingVariable.source.set (pieces.expression, "@" + pieces.conditional);
                 NodeEquation e = new NodeEquation (equation);
                 model.insertNodeInto (e, existingVariable, 0);
                 model.removeNodeFromParent (this);
+
+                parent.updateTabStops (fm);
+                parent.nodesChanged (model);
                 parent.source.clear (oldKey);
                 tree.setSelectionPath (new TreePath (e.getPath ()));
-
                 existingVariable.findConnections ();
 
                 return;
@@ -335,7 +339,7 @@ public class NodeVariable extends NodeBase
 
             updateColumnWidths (fm);
             parent.updateTabStops (fm);
-            model.nodeChanged (this);
+            parent.nodesChanged (model);
         }
         else  // The name was changed. Move the whole sub-tree to a new location. This may also expose an overridden variable.
         {
@@ -386,7 +390,7 @@ public class NodeVariable extends NodeBase
                     build ();
                     updateColumnWidths (fm);
                     parent.updateTabStops (fm);
-                    model.nodeStructureChanged (this);
+                    parent.nodesChanged (model);
                 }
             }
             else  // We exposed an overridden part, which will retain its claim on this tree node.
@@ -397,7 +401,6 @@ public class NodeVariable extends NodeBase
                     model.insertNodeInto (v, parent, parent.getIndex (this));
                     v.build ();
                     v.updateColumnWidths (fm);
-                    model.nodeStructureChanged (v);
                     v.findConnections ();
                 }
 
@@ -405,7 +408,7 @@ public class NodeVariable extends NodeBase
                 build ();
                 updateColumnWidths (fm);
                 parent.updateTabStops (fm);
-                model.nodeStructureChanged (this);
+                parent.nodesChanged (model);
             }
         }
 
@@ -426,14 +429,14 @@ public class NodeVariable extends NodeBase
         if (mparent.child (key) == null)  // but we do need to test if it is still in the tree
         {
             model.removeNodeFromParent (this);
-            parent.updateTabStops (fm);
         }
         else
         {
             build ();
             updateColumnWidths (fm);
-            parent.updateTabStops (fm);
             model.nodeStructureChanged (this);
         }
+        parent.updateTabStops (fm);
+        parent.nodesChanged (model);
     }
 }

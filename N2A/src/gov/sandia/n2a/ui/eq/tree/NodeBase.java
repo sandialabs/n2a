@@ -91,6 +91,19 @@ public class NodeBase extends DefaultMutableTreeNode
     }
 
     /**
+        Call DefaultModel.nodesChanged for all children of the current node.
+        Normally done right after a call to updateTabStops(). However, this
+        function can't be combined with that one, because it breaks initialization.
+    **/
+    public void nodesChanged (DefaultTreeModel model)
+    {
+        int count = children.size ();
+        int[] childIndices = new int[count];
+        for (int i = 0; i < count; i++) childIndices[i] = i;
+        model.nodesChanged (this, childIndices);
+    }
+
+    /**
         Check if this node uses tab stops, and if so, whether they need to be initialized.
         This is called every time the node is about to be rendered, and ideally should answer true only once.
         If the answer is true, then updateSiblingColumnWidths() is called with a properly contextualized FontMetrics.
