@@ -9,6 +9,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.ui.eq;
 
 import java.awt.Font;
+import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Set;
@@ -73,11 +74,19 @@ public class NodePart extends NodeBase
                 sorted.add (k);
             }
         }
-        for (MNode c : source)  // output everything else
+        // Build everything else. Sort all subparts to the end.
+        ArrayList<MNode> subparts = new ArrayList<MNode> ();
+        for (MNode c : source)
         {
             if (sorted.contains (c.key ())) continue;
+            if (MPart.isPart (c))
+            {
+                subparts.add (c);
+                continue;
+            }
             buildTriage ((MPart) c);
         }
+        for (MNode c : subparts) buildTriage ((MPart) c);
     }
 
     public void buildTriage (MPart line)
@@ -208,29 +217,34 @@ public class NodePart extends NodeBase
 
         NodeAnnotations a = null;
         NodeReferences  r = null;
-        int lastSubpart  = -1;
-        int lastVariable = -1;
+        int variableIndex = -1;
+        int subpartIndex  = -1;
+        boolean found = false;
         for (int i = 0; i < getChildCount (); i++)
         {
             TreeNode t = getChildAt (i);
             if      (t instanceof NodeReferences)  r = (NodeReferences)  t;
             else if (t instanceof NodeAnnotations) a = (NodeAnnotations) t;
-            else if (t instanceof NodePart)        lastSubpart  = i;
-            else                                   lastVariable = i;
+            else if (t instanceof NodePart)
+            {
+                if (! found) variableIndex = i;
+                found = true;
+                subpartIndex = i + 1;
+            }
         }
-        if (lastSubpart  < 0) lastSubpart  = getChildCount () - 1;
-        if (lastVariable < 0) lastVariable = getChildCount () - 1;
+        if (variableIndex < 0) variableIndex = getChildCount ();
+        if (subpartIndex  < 0) subpartIndex  = getChildCount ();
 
         TreePath path = tree.getSelectionPath ();
         if (path != null)
         {
             NodeBase selected = (NodeBase) path.getLastPathComponent ();
-            if (isNodeChild (selected))
+            if (selected.getParent () == this)
             {
                 // When we have a specific item selected, the user expects the new item to appear directly below it.
                 int selectedIndex = getIndex (selected);
-                lastSubpart  = selectedIndex;
-                lastVariable = selectedIndex;
+                variableIndex = selectedIndex + 1;
+                subpartIndex  = selectedIndex + 1;
             }
         }
 
@@ -260,7 +274,7 @@ public class NodePart extends NodeBase
             while (source.child ("p" + suffix) != null) suffix++;
             result = new NodePart ((MPart) source.set ("", "p" + suffix));
             result.setUserObject ("");
-            model.insertNodeInto (result, this, lastSubpart + 1);
+            model.insertNodeInto (result, this, subpartIndex);
         }
         else  // treat all other requests as "Variable"
         {
@@ -269,7 +283,7 @@ public class NodePart extends NodeBase
             result = new NodeVariable ((MPart) source.set ("0", "x" + suffix));
             result.setUserObject ("");
             result.updateColumnWidths (getFontMetrics (tree));  // preempt initialization
-            model.insertNodeInto (result, this, lastVariable + 1);
+            model.insertNodeInto (result, this, variableIndex);
         }
 
         return result;

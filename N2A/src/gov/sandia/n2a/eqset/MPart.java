@@ -219,7 +219,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
 
     /**
         Indicates if the given node has the form of a sub-part.
-        Since node of the tests depend on actually being an MPart, this test is static so it can be applied to any MNode without casting.
+        Since none of the tests depend on actually being an MPart, this test is static so it can be applied to any MNode without casting.
     **/
     public static boolean isPart (MNode node)
     {
