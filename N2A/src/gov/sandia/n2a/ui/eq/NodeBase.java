@@ -8,27 +8,22 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.ui.eq;
 
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.umf.platform.db.MPersistent;
-
 import java.awt.Color;
-import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.util.ArrayList;
 import java.util.Enumeration;
-import java.util.Iterator;
 import java.util.List;
-
 import javax.swing.Icon;
 import javax.swing.JTree;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
-import javax.swing.tree.TreeNode;
-import javax.swing.tree.TreePath;
 
 public class NodeBase extends DefaultMutableTreeNode
 {
     public MPart source;
+
+    // Appearance in tree ----------------------------------------------------
 
     public Icon getIcon (boolean expanded)
     {
@@ -58,6 +53,8 @@ public class NodeBase extends DefaultMutableTreeNode
     {
         return Font.PLAIN;
     }
+
+    // Column alignment ------------------------------------------------------
 
     /**
         Combines column width information from children to generate a set of tab stops that all children should use when displaying text.
@@ -175,6 +172,8 @@ public class NodeBase extends DefaultMutableTreeNode
         return tree.getGraphics ().getFontMetrics (f);
     }
 
+    // Structure maintenance -------------------------------------------------
+
     public NodeBase child (String key)
     {
         Enumeration i = children ();
@@ -209,56 +208,5 @@ public class NodeBase extends DefaultMutableTreeNode
     public void delete (JTree tree)
     {
         // Default action is to ignore request. Only nodes that can actually be deleted need to override this.
-    }
-
-    /**
-        General utility to completely rebuild node tree and re-display.
-    **/
-    public void reloadTree (final JTree tree)
-    {
-        final NodePart root = (NodePart) getRoot ();
-        MPersistent doc = root.source.getSource ();
-
-        final ArrayList<String> keyPath = new ArrayList<String> ();
-        for (TreeNode t : getPath ()) keyPath.add (((NodeBase) t).source.key ());
-
-        try
-        {
-            root.source = new MPart (doc);
-            root.build ();
-            root.findConnections ();
-            ((DefaultTreeModel) tree.getModel ()).reload ();
-
-            // Re-select the current node, or as close as possible.
-            EventQueue.invokeLater (new Runnable ()
-            {
-                public void run ()
-                {
-                    NodeBase n = root;
-                    for (int i = 1; i < keyPath.size (); i++)
-                    {
-                        String key = keyPath.get (i);
-                        Enumeration e = n.children ();
-                        boolean found = false;
-                        while (e.hasMoreElements ())
-                        {
-                            NodeBase c = (NodeBase) e.nextElement ();
-                            if (c.source.key ().equals (key))
-                            {
-                                found = true;
-                                n = c;
-                                break;
-                            }
-                        }
-                        if (! found) break;
-                    }
-                    tree.setSelectionPath (new TreePath (n.getPath ()));
-                }
-            });
-        }
-        catch (Exception e)
-        {
-            System.err.println ("Exception while parsing model: " + e);
-        }
     }
 }

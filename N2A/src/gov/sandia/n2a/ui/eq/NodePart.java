@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.eq;
 
+import java.awt.EventQueue;
 import java.awt.Font;
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -378,14 +379,13 @@ public class NodePart extends NodeBase
 
         //   Update the current node
         MPersistent newDocNode = (MPersistent) docParent.child (name);
-        if (newDocNode == null)  // It could be null if we try to rename a non-overridden node. TODO: better support for renames. Should revoke old subtree and make full copy at new location.
+        if (newDocNode == null)  // It could be null if we try to rename a purely inherited node (no overrides anywhere). TODO: better support for renames. Should revoke old subtree and make full copy at new location.
         {
-            model.removeNodeFromParent (this);
+            model.removeNodeFromParent (this);  // Because we just created a new node above for the supposedly exposed overridden part.
         }
         else
         {
-            MPart newPart = mparent.update (newDocNode);  // re-collate this node to weave in any included part
-            source = newPart;
+            source = mparent.update (newDocNode);  // re-collate this node to weave in any included part
             build ();
             findConnections ();
             model.nodeStructureChanged (this);
@@ -402,7 +402,65 @@ public class NodePart extends NodeBase
         DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
         MPart mparent = source.getParent ();
         mparent.clear (key);
-        if (mparent.child (key) == null) model.removeNodeFromParent (this);
-        else reloadTree (tree);  // See comments about clearing an include in applyEdit()
+        if (mparent.child (key) == null)  // Node is fully deleted
+        {
+            model.removeNodeFromParent (this);
+        }
+        else  // Just exposed an overridden node
+        {
+            // TODO: releasing override on $inherit does not update MPart tree correctly. If that were fixed, then no need to reload whole tree, just refresh this subtree.
+            reloadTree (tree);
+        }
+    }
+
+    /**
+        Completely rebuild tree.
+    **/
+    public void reloadTree (final JTree tree)
+    {
+        final NodePart root = (NodePart) getRoot ();
+        MPersistent doc = root.source.getSource ();
+
+        final ArrayList<String> keyPath = new ArrayList<String> ();
+        for (TreeNode t : getPath ()) keyPath.add (((NodeBase) t).source.key ());
+
+        try
+        {
+            root.source = new MPart (doc);
+            root.build ();
+            root.findConnections ();
+            ((DefaultTreeModel) tree.getModel ()).reload ();
+
+            // Re-select the current node, or as close as possible.
+            EventQueue.invokeLater (new Runnable ()
+            {
+                public void run ()
+                {
+                    NodeBase n = root;
+                    for (int i = 1; i < keyPath.size (); i++)
+                    {
+                        String key = keyPath.get (i);
+                        Enumeration e = n.children ();
+                        boolean found = false;
+                        while (e.hasMoreElements ())
+                        {
+                            NodeBase c = (NodeBase) e.nextElement ();
+                            if (c.source.key ().equals (key))
+                            {
+                                found = true;
+                                n = c;
+                                break;
+                            }
+                        }
+                        if (! found) break;
+                    }
+                    tree.setSelectionPath (new TreePath (n.getPath ()));
+                }
+            });
+        }
+        catch (Exception e)
+        {
+            System.err.println ("Exception while parsing model: " + e);
+        }
     }
 }
