@@ -95,13 +95,12 @@ public class NodeReference extends NodeBase
     @Override
     public boolean allowEdit ()
     {
-        if (! getUserObject ().toString ().isEmpty ())  // An empty user object indicates a newly created node, which we want to edit as a blank.
-        {
-            String name  = source.key ();
-            String value = source.get ();
-            if (value.isEmpty ()) setUserObject (name);
-            else                  setUserObject (name + "=" + value);
-        }
+        if (toString ().isEmpty ()) return true;  // An empty user object indicates a newly created node, which we want to edit as a blank.
+
+        String name  = source.key ();
+        String value = source.get ();
+        if (value.isEmpty ()) setUserObject (name);
+        else                  setUserObject (name + "=" + value);
         return true;
     }
 

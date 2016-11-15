@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.ui.eq;
 
 import java.awt.Font;
+import java.awt.FontMetrics;
 
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.umf.platform.db.MNode;
@@ -65,9 +66,18 @@ public class NodeReferences extends NodeBase
                 if (isNodeChild (selected)) selectedIndex = getIndex (selected);
             }
 
+            DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+            FontMetrics fm = getFontMetrics (tree);
+            if (children != null  &&  children.size () > 0)
+            {
+                NodeBase firstChild = (NodeBase) children.get (0);
+                if (firstChild.needsInitTabs ()) firstChild.initTabs (fm);
+            }
+
             result.setUserObject ("");
-            result.updateColumnWidths (getFontMetrics (tree));  // preempt initialization
-            ((DefaultTreeModel) tree.getModel ()).insertNodeInto (result, this, selectedIndex + 1);
+            result.updateColumnWidths (fm);  // preempt initialization
+            model.insertNodeInto (result, this, selectedIndex + 1);
+
             return result;
         }
         return ((NodeBase) getParent ()).add (type, tree);

@@ -169,9 +169,9 @@ public class NodeVariable extends NodeBase
             type = "Equation";
         }
 
-        NodeBase result;
         DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
-        FontMetrics fm = getFontMetrics (tree);
+        NodeBase result = null;
+        int index = 0;
         if (type.equals ("Equation"))
         {
             TreeMap<String,MNode> equations = new TreeMap<String,MNode> ();
@@ -202,15 +202,12 @@ public class NodeVariable extends NodeBase
             }
             MPart equation = (MPart) source.set (conditional, "@" + conditional);
             result = new NodeEquation (equation);
-            result.setUserObject ("");
-            result.updateColumnWidths (fm);  // preempt initialization
-            model.insertNodeInto (result, this, 0);
         }
         else if (type.equals ("Annotation"))
         {
             // Determine index at which to insert new annotation
-            int firstReference = 0;
-            while (firstReference < getChildCount ()  &&  ! (getChildAt (firstReference) instanceof NodeReference)) firstReference++;
+            index = 0;
+            while (index < getChildCount ()  &&  ! (getChildAt (index) instanceof NodeReference)) index++;
 
             // Determine a unique key for the annotation
             MPart metadata = (MPart) source.childOrCreate ("$metadata");
@@ -218,9 +215,6 @@ public class NodeVariable extends NodeBase
             while (metadata.child ("a" + suffix) != null) suffix++;
 
             result = new NodeAnnotation ((MPart) metadata.set ("", "a" + suffix));
-            result.setUserObject ("");
-            result.updateColumnWidths (fm);
-            model.insertNodeInto (result, this, firstReference);
         }
         else if (type.equals ("Reference"))
         {
@@ -229,14 +223,20 @@ public class NodeVariable extends NodeBase
             while (references.child ("r" + suffix) != null) suffix++;
 
             result = new NodeReference ((MPart) references.set ("", "r" + suffix));
-            result.setUserObject ("");
-            result.updateColumnWidths (fm);
-            model.insertNodeInto (result, this, getChildCount ());
+            index = getChildCount ();
         }
-        else
+        if (result == null) return ((NodeBase) getParent ()).add (type, tree);  // refer all other requests up the tree
+
+        FontMetrics fm = getFontMetrics (tree);
+        if (children != null  &&  children.size () > 0)
         {
-            return ((NodeBase) getParent ()).add (type, tree);  // refer all other requests up the tree
+            NodeBase firstChild = (NodeBase) children.get (0);
+            if (firstChild.needsInitTabs ()) firstChild.initTabs (fm);
         }
+
+        result.setUserObject ("");
+        result.updateColumnWidths (fm);  // preempt initialization
+        model.insertNodeInto (result, this, index);
 
         return result;
     }
