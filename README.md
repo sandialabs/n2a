@@ -12,7 +12,7 @@ You can tell an instance to change into another kind of part, or you can split a
 
 ## Development Status ##
 
-The N2A tool is almost ready for a 1.0 release. See [Issues "Release 1.0"](../../issues?q=is%3Aopen+is%3Aissue+milestone%3A"Release+1.0") for work remaining.
+The N2A tool is almost ready for full release. See [Issues "Release 1.0"](../../issues?q=is%3Aopen+is%3Aissue+milestone%3A"Release+1.0") for work remaining.
 
 ## Download ##
 
