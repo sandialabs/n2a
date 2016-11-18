@@ -11,7 +11,7 @@ A model may contain other models. For example, a cerebellum model may contain po
 Some things N2A is NOT:
 
   * A simulator. Rather, the tool compiles the language for a given target, which is generally a common simulation platform.
-  * Deep learning, or machine learning in general. The goal of N2A is to build an integrated understanding of the brain, to such a degree that we can compute it and produce meaningful results. In that sense, it is a hard AI tool.
+  * Deep learning, or machine learning in general. The goal of N2A is to build an integrated understanding of the brain, to such a degree that we can compute it and produce meaningful results. In that sense, it is a Hard-AI tool.
 
 ## Development Status ##
 
