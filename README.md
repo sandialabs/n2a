@@ -4,7 +4,7 @@
 
 N2A conceives of each neural component ("part" or "model") as a bundle of attributes, which include constants and equations. All attributes and dynamics are name-value pairs. In case of equations, the name is a variable and the value tells how that variable relates to other variables and how it changes through time.
 
-Because models are specified as data rather than code (declarative rather than imperative), it is easy for one model to inherit from another, extend and change it. In particular, there is no distinction between part definitions (such as an Izhikevitch Neuron) and parameters settings used in a specific configuration. You simply inherit the model and make any necessary changes.
+Because models are specified as data rather than code (declarative rather than imperative), it is easy for one model to inherit from another, extend and change it. In particular, there is no distinction between part definitions (such as an Izhikevitch Neuron) and parameters used in a specific configuration. You simply inherit the model and make any necessary changes.
 
 A model may contain other models. For example, a cerebellum model may contain population models for Purkinje cells, inferior-olive cells, and so on. The cerebellum model could be further incorporated into a model of smooth pursuit involving multiple brain regions. The goal of N2A, of course, is to eventually model the entire brain.
 
