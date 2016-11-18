@@ -12,7 +12,13 @@ You can tell an instance to change into another kind of part, or you can split a
 
 ## Development Status ##
 
-The N2A tool is almost ready for full release. See [Issues "Release 1.0"](../../issues?q=is%3Aopen+is%3Aissue+milestone%3A"Release+1.0") for work remaining.
+N2A is a work in progress, almost ready for [Release 1.0](https://github.com/frothga/n2a/milestones). At a minimum it will support:
+
+  * Editing models following the object-oriented concepts described in the paper.
+  * NeuroML import/export.
+  * At least one commonly-used simulator.
+
+In the meantime, you can try the program in its current state following the instructions below. Alternately, you can build from source. Even better, join the project and help us complete it more quickly!
 
 ## Download ##
 
