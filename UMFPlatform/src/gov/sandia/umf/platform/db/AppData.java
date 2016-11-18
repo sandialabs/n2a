@@ -77,11 +77,8 @@ public class AppData
             "Channel",
             "Channel K",
             "Channel Na",
-            "Coupling Delayed Current",
             "Coupling Voltage",
             "Example Hodgkin-Huxley Cable",
-            "Example LIF Spike Sort",
-            "Input Current",
             "Neuron",
             "Neuron Brette",
             "Neuron Hodgkin-Huxley",
@@ -90,7 +87,6 @@ public class AppData
             "Neuron LIF",
             "Synapse Delta",
             "Synapse Exponential",
-            "Synapse LIF"
         };
         try
         {
