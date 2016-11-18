@@ -2,13 +2,16 @@
 
 "Neurons to Algorithms" (N2A) is a language for modeling neural systems, along with a software tool for editing models and simulating them. For an introduction to the concepts behind N2A, see the paper [N2A: a computational tool for modeling from neurons to algorithms](http://www.frontiersin.org/Neural_Circuits/10.3389/fncir.2014.00001/abstract). For the current definition of the language, see the [Language Reference](../../wiki/LanguageOverview.md) page on our wiki.
 
-The N2A language represents systems in a parts-relations framework combined with dynamics. Each part has as set of equations that define its state variables and how they evolve over time. Parts are connected to other parts, like vertices are connected by edges in a graph. Connections also have equations that couple the variables in the parts.
+N2A conceives of each neural component ("part" or "model") as a bundle of attributes, which include constants and equations. All attributes and dynamics are name-value pairs. In case of equations, the name is a variable and the value tells how that variable relates to other variables and how it changes through time.
 
-Each part is really a pattern for a population of instances. Each instance has its own unique copy of the state variables, and evolves independently of the other instances of that part. For example, a part that defines a pyramidal cell in the cortex may be duplicated millions or billions of times. Connections between parts turn into connections between specific pairs of instances, following whatever association rules you define.
+Because models are specified as data rather than code (declarative rather than imperative), it is easy for one model to inherit from another, extend and change it. In particular, there is no distinction between part definitions (such as an Izhikevitch Neuron) and parameters settings used in a specific configuration. You simply inherit the model and make any necessary changes.
 
-In addition to the fairly typical concepts described above, N2A gives you the ability to change crucial attributes of the part itself. For example, you can change the duration of simulation time-steps on an individual instance, and thus have different parts of your simulation running a different frequencies. (Provided, of course, that your simulator supports this.)
+A model may contain other models. For example, a cerebellum model may contain population models for Purkinje cells, inferior-olive cells, and so on. The cerebellum model could be further incorporated into a model of smooth pursuit involving multiple brain regions. The goal of N2A, of course, is to eventually model the entire brain.
 
-You can tell an instance to change into another kind of part, or you can split an instance into several new instances of arbitrary type. This enables simulations of development, neurogenesis, and dendritic growth.
+Some things N2A is NOT:
+
+  * A simulator. Rather, the tool compiles the language for a given target, which is generally a common simulation platform.
+  * Deep learning, or machine learning in general. The goal of N2A is to build an integrated understanding of the brain, to such a degree that we can compute it and produce meaningful results. In that sense, it is a hard AI tool.
 
 ## Development Status ##
 
