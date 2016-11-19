@@ -17,7 +17,6 @@ import gov.sandia.umf.platform.ui.images.ImageUtil;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
-import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 
 public class NodeAnnotations extends NodeBase
@@ -33,6 +32,15 @@ public class NodeAnnotations extends NodeBase
     public void build ()
     {
         for (MNode c : source) add (new NodeAnnotation ((MPart) c));
+    }
+
+    @Override
+    public boolean visible (int filterLevel)
+    {
+        if (filterLevel == FilteredTreeModel.ALL)    return true;
+        if (filterLevel == FilteredTreeModel.PUBLIC) return true;
+        // FilteredTreeModel.LOCAL ...
+        return source.isFromTopDocument ();
     }
 
     @Override
@@ -63,10 +71,10 @@ public class NodeAnnotations extends NodeBase
             if (path != null)
             {
                 NodeBase selected = (NodeBase) path.getLastPathComponent ();
-                if (isNodeChild (selected)) selectedIndex = getIndex (selected);
+                if (isNodeChild (selected)) selectedIndex = getIndex (selected);  // unfiltered index
             }
 
-            DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+            FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
             FontMetrics fm = getFontMetrics (tree);
             if (children != null  &&  children.size () > 0)
             {
@@ -76,7 +84,7 @@ public class NodeAnnotations extends NodeBase
 
             result.setUserObject ("");
             result.updateColumnWidths (fm);  // preempt initialization
-            model.insertNodeInto (result, this, selectedIndex + 1);
+            model.insertNodeIntoUnfiltered (result, this, selectedIndex + 1);
 
             return result;
         }
@@ -94,9 +102,18 @@ public class NodeAnnotations extends NodeBase
     {
         if (! source.isFromTopDocument ()) return;
 
+        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         MPart mparent = source.getParent ();
         String key = source.key ();  // "$metadata"
         mparent.clear (key);
-        if (mparent.child (key) == null) ((DefaultTreeModel) tree.getModel ()).removeNodeFromParent (this);
+        if (mparent.child (key) == null)
+        {
+            model.removeNodeFromParent (this);
+        }
+        else  // Just exposed an overridden node
+        {
+            if (! visible (model.filterLevel)) ((NodeBase) getParent ()).hide (this, model);
+            // If we are visible, we need to change color, but not necessary to do it here, because it is handled by EquationTreePanel.updateOverrides().
+        }
     }
 }

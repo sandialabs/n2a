@@ -14,7 +14,6 @@ import gov.sandia.umf.platform.ui.images.ImageUtil;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
-import javax.swing.tree.DefaultTreeModel;
 
 public class NodeInherit extends NodeBase
 {
@@ -53,7 +52,7 @@ public class NodeInherit extends NodeBase
         source.set (value);  // Complex restructuring happens here.
         NodePart parent = (NodePart) getParent ();
         parent.build ();
-        ((DefaultTreeModel) tree.getModel ()).nodeStructureChanged (parent);
+        ((FilteredTreeModel) tree.getModel ()).nodeStructureChanged (parent);
     }
 
     @Override
@@ -65,7 +64,9 @@ public class NodeInherit extends NodeBase
         mparent.clear ("$inherit");  // Complex restructuring happens here.
 
         NodePart parent = (NodePart) getParent ();
+        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         parent.build ();
-        ((DefaultTreeModel) tree.getModel ()).nodeStructureChanged (parent);
+        parent.filter (model.filterLevel);
+        model.nodeStructureChanged (parent);
     }
 }

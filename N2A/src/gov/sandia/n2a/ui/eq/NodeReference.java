@@ -18,7 +18,6 @@ import gov.sandia.umf.platform.ui.images.ImageUtil;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
-import javax.swing.tree.DefaultTreeModel;
 
 public class NodeReference extends NodeBase
 {
@@ -34,6 +33,12 @@ public class NodeReference extends NodeBase
     public Icon getIcon (boolean expanded)
     {
         return icon;
+    }
+
+    @Override
+    public void invalidateTabs ()
+    {
+        columnWidths = null;
     }
 
     @Override
@@ -125,7 +130,7 @@ public class NodeReference extends NodeBase
         NodeBase parent = (NodeBase) getParent ();
         if (! name.equals (oldKey)) existingReference = parent.child (name);
 
-        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         FontMetrics fm = getFontMetrics (tree);
         if (name.equals (oldKey)  ||  name.isEmpty ()  ||  existingReference != null)  // Name is the same, or name change is forbidden
         {
@@ -143,14 +148,14 @@ public class NodeReference extends NodeBase
             else  // Make a new tree node, and leave this one to present the non-overridden value.
             {
                 NodeReference newReference = new NodeReference (newPart);
-                model.insertNodeInto (newReference, parent, parent.getChildCount ());
+                model.insertNodeIntoUnfiltered (newReference, parent, parent.getChildCount ());
                 newReference.updateColumnWidths (fm);
             }
         }
 
         updateColumnWidths (fm);
         parent.updateTabStops (fm);
-        parent.nodesChanged (model);
+        parent.allNodesChanged (model);
     }
 
     @Override
@@ -158,7 +163,7 @@ public class NodeReference extends NodeBase
     {
         if (! source.isFromTopDocument ()) return;
 
-        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         FontMetrics fm = getFontMetrics (tree);
 
         NodeBase parent = (NodeBase) getParent ();
@@ -177,10 +182,17 @@ public class NodeReference extends NodeBase
         }
         else  // Just exposed an overridden value, so update display.
         {
-            updateColumnWidths (fm);
+            if (parent.visible (model.filterLevel))  // We are always visible, but our parent could disappear.
+            {
+                updateColumnWidths (fm);
+            }
+            else
+            {
+                ((NodeBase) parent.getParent ()).hide (parent, model);
+            }
         }
 
         parent.updateTabStops (fm);
-        parent.nodesChanged (model);
+        parent.allNodesChanged (model);
     }
 }

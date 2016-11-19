@@ -13,7 +13,9 @@ import java.awt.Font;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.Vector;
 
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.umf.platform.db.AppData;
@@ -24,7 +26,6 @@ import gov.sandia.umf.platform.ui.images.ImageUtil;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
-import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 
@@ -35,6 +36,7 @@ public class NodePart extends NodeBase
 
     protected boolean isConnection;
     protected String parentName = "";
+    protected List<Integer> filtered;
 
     public NodePart ()
     {
@@ -80,12 +82,8 @@ public class NodePart extends NodeBase
         for (MNode c : source)
         {
             if (sorted.contains (c.key ())) continue;
-            if (MPart.isPart (c))
-            {
-                subparts.add (c);
-                continue;
-            }
-            buildTriage ((MPart) c);
+            if (MPart.isPart (c)) subparts.add (c);
+            else                  buildTriage ((MPart) c);
         }
         for (MNode c : subparts) buildTriage ((MPart) c);
     }
@@ -127,6 +125,84 @@ public class NodePart extends NodeBase
         v.build ();
         // Note: connection bindings will be marked later, after full tree is assembled.
         // This allows us to take advantage of the work done to identify sub-parts.
+    }
+
+    @Override
+    public boolean visible (int filterLevel)
+    {
+        if (filterLevel == FilteredTreeModel.ALL) return true;
+        if (source.isFromTopDocument ()) return true;
+        if (filterLevel >= FilteredTreeModel.LOCAL) return false;  // Since we already fail the "local" requirement
+        // FilteredTreeModel.PUBLIC ...
+        if (children != null  &&  children.size () > 0  &&  (filtered == null  ||  filtered.size () > 0)) return true;  // We have subnodes, and at least some of them are visible.
+        return source.child ("$metadata", "public") != null;
+    }
+
+    @Override
+    public void filter (int filterLevel)
+    {
+        if (children == null)
+        {
+            filtered = null;
+            return;
+        }
+
+        int count = children.size ();
+        filtered = new Vector<Integer> (count);
+        int childIndex = 0;
+        for (Object o : children)
+        {
+            NodeBase c = (NodeBase) o;
+            c.filter (filterLevel);
+            c.invalidateTabs ();  // force columns to be updated for new subset of children
+            if (c.visible (filterLevel)) filtered.add (childIndex);
+            childIndex++;  // always increment
+        }
+        if (filtered.size () == count) filtered = null;  // all children are visible, so don't bother
+    }
+
+    @Override
+    public List<Integer> getFiltered ()
+    {
+        return filtered;
+    }
+
+    @Override
+    public void insertFiltered (int filteredIndex, int childrenIndex)
+    {
+        if (filtered == null)
+        {
+            if (filteredIndex == childrenIndex) return;  // the new entry does does not require instantiating "filtered", because the list continues to be exactly 1-to-1
+            filtered = new ArrayList<Integer> ();
+            int count = children.size () - 1;
+            for (int i = 0; i < count; i++) filtered.add (i);
+        }
+
+        if (filteredIndex >= 0)
+        {
+            filtered.add (filteredIndex, childrenIndex);  // effectively duplicates the entry at filteredIndex
+            int count = filtered.size ();
+            for (int i = filteredIndex + 1; i < count; i++) filtered.set (i, filtered.get (i).intValue () + 1);  // Shift child indices up by one, to account for the new entry added ahead of them.
+        }
+        else  // filteredIndex == -1
+        {
+            // Don't add an element, since it is invisible, but still ripple up the child indices, since they have changed at that level.
+            int count = filtered.size ();
+            for (int i = 0; i < count; i++)
+            {
+                int index = filtered.get (i).intValue ();
+                if (index >= childrenIndex) filtered.set (i, index + 1);
+            }
+        }
+     }
+
+    @Override
+    public void removeFiltered (int filteredIndex)
+    {
+        if (filtered == null) return;
+        filtered.remove (filteredIndex);
+        int count = filtered.size ();
+        for (int i = filteredIndex; i < count; i++)  filtered.set (i, filtered.get (i).intValue () - 1);  // Shift child indices down by 1 to account from entry removed ahead of them.
     }
 
     @Override
@@ -210,7 +286,8 @@ public class NodePart extends NodeBase
     @Override
     public NodeBase add (String type, JTree tree)
     {
-        if (tree.isCollapsed (new TreePath (getPath ()))  &&  getChildCount () > 0  &&  ! isRoot ())  // The node is deliberately closed to indicate user intent.
+        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+        if (tree.isCollapsed (new TreePath (getPath ()))  &&  model.getChildCount (this) > 0  &&  ! isRoot ())  // The node is deliberately closed to indicate user intent.
         {
             if (type.isEmpty ()) return ((NodeBase) getParent ()).add ("Part", tree);
             return ((NodeBase) getParent ()).add (type, tree);
@@ -221,7 +298,8 @@ public class NodePart extends NodeBase
         int variableIndex = -1;
         int subpartIndex  = -1;
         boolean found = false;
-        for (int i = 0; i < getChildCount (); i++)
+        int count = getChildCount ();  // unfiltered, so we can insert at the correct place in the underlying collection
+        for (int i = 0; i < count; i++)
         {
             TreeNode t = getChildAt (i);
             if      (t instanceof NodeReferences)  r = (NodeReferences)  t;
@@ -233,8 +311,8 @@ public class NodePart extends NodeBase
                 subpartIndex = i + 1;
             }
         }
-        if (variableIndex < 0) variableIndex = getChildCount ();
-        if (subpartIndex  < 0) subpartIndex  = getChildCount ();
+        if (variableIndex < 0) variableIndex = count;
+        if (subpartIndex  < 0) subpartIndex  = count;
 
         TreePath path = tree.getSelectionPath ();
         if (path != null)
@@ -243,20 +321,19 @@ public class NodePart extends NodeBase
             if (selected.getParent () == this)
             {
                 // When we have a specific item selected, the user expects the new item to appear directly below it.
-                int selectedIndex = getIndex (selected);
+                int selectedIndex = getIndex (selected);  // unfiltered
                 variableIndex = selectedIndex + 1;
                 subpartIndex  = selectedIndex + 1;
             }
         }
 
         NodeBase result;
-        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
         if (type.equals ("Annotation"))
         {
             if (a == null)
             {
                 a = new NodeAnnotations ((MPart) source.set ("", "$metadata"));
-                model.insertNodeInto (a, this, 0);
+                model.insertNodeIntoUnfiltered (a, this, 0);
             }
             return a.add (type, tree);
         }
@@ -265,7 +342,7 @@ public class NodePart extends NodeBase
             if (r == null)
             {
                 r = new NodeReferences ((MPart) source.set ("", "$reference"));
-                model.insertNodeInto (r, this, 0);
+                model.insertNodeIntoUnfiltered (r, this, 0);
             }
             return r.add (type, tree);
         }
@@ -275,7 +352,7 @@ public class NodePart extends NodeBase
             while (source.child ("p" + suffix) != null) suffix++;
             result = new NodePart ((MPart) source.set ("", "p" + suffix));
             result.setUserObject ("");
-            model.insertNodeInto (result, this, subpartIndex);
+            model.insertNodeIntoUnfiltered (result, this, subpartIndex);
         }
         else  // treat all other requests as "Variable"
         {
@@ -284,7 +361,7 @@ public class NodePart extends NodeBase
             result = new NodeVariable ((MPart) source.set ("0", "x" + suffix));
             result.setUserObject ("");
             result.updateColumnWidths (getFontMetrics (tree));  // preempt initialization
-            model.insertNodeInto (result, this, variableIndex);
+            model.insertNodeIntoUnfiltered (result, this, variableIndex);
         }
 
         return result;
@@ -297,7 +374,7 @@ public class NodePart extends NodeBase
         result.source.set ("\"" + key + "\"", "$inherit");  // This brings in all the equations for the new sub-part.
         result.build ();
         result.findConnections ();
-        ((DefaultTreeModel) tree.getModel ()).nodeStructureChanged (result);
+        ((FilteredTreeModel) tree.getModel ()).nodeStructureChanged (result);
 
         return result;
     }
@@ -305,7 +382,7 @@ public class NodePart extends NodeBase
     @Override
     public void applyEdit (JTree tree)
     {
-        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
         String input = (String) getUserObject ();
         String[] pieces = input.split ("=", 2);
@@ -371,7 +448,7 @@ public class NodePart extends NodeBase
         {
             oldPart.expand ();
             NodePart p = new NodePart (oldPart);
-            model.insertNodeInto (p, parent, parent.getIndex (this));
+            model.insertNodeIntoUnfiltered (p, parent, parent.getIndex (this));
             p.build ();
             p.findConnections ();
             model.nodeStructureChanged (p);
@@ -399,7 +476,7 @@ public class NodePart extends NodeBase
         if (isRoot ()) return;
 
         String key = source.key ();
-        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         MPart mparent = source.getParent ();
         mparent.clear (key);
         if (mparent.child (key) == null)  // Node is fully deleted
@@ -429,7 +506,8 @@ public class NodePart extends NodeBase
             root.source = new MPart (doc);
             root.build ();
             root.findConnections ();
-            ((DefaultTreeModel) tree.getModel ()).reload ();
+            FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+            model.reload ();
 
             // Re-select the current node, or as close as possible.
             EventQueue.invokeLater (new Runnable ()
@@ -440,11 +518,11 @@ public class NodePart extends NodeBase
                     for (int i = 1; i < keyPath.size (); i++)
                     {
                         String key = keyPath.get (i);
-                        Enumeration e = n.children ();
                         boolean found = false;
-                        while (e.hasMoreElements ())
+                        int count = model.getChildCount (n);
+                        for (int j = 0; j < count; j++)
                         {
-                            NodeBase c = (NodeBase) e.nextElement ();
+                            NodeBase c = (NodeBase) model.getChild (n, j);
                             if (c.source.key ().equals (key))
                             {
                                 found = true;

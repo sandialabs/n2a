@@ -12,6 +12,7 @@ import java.awt.FontMetrics;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
+
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
@@ -19,7 +20,6 @@ import gov.sandia.umf.platform.ui.images.ImageUtil;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
-import javax.swing.tree.DefaultTreeModel;
 
 public class NodeEquation extends NodeBase
 {
@@ -35,6 +35,12 @@ public class NodeEquation extends NodeBase
     public Icon getIcon (boolean expanded)
     {
         return icon;
+    }
+
+    @Override
+    public void invalidateTabs ()
+    {
+        columnWidths = null;
     }
 
     @Override
@@ -111,7 +117,7 @@ public class NodeEquation extends NodeBase
         NodeVariable parent = (NodeVariable) getParent ();
         if (! conditional.equals (oldKey)) existingEquation = parent.child (conditional);
 
-        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         FontMetrics fm = getFontMetrics (tree);
         if (conditional.equals (oldKey)  ||  existingEquation != null)  // Condition is the same, or not allowed to change
         {
@@ -129,7 +135,7 @@ public class NodeEquation extends NodeBase
             else  // Make a new tree node, and leave this one to present the newly-exposed non-overridden value.
             {
                 NodeEquation newEquation = new NodeEquation (newPart);
-                model.insertNodeInto (newEquation, parent, parent.getChildCount ());
+                model.insertNodeIntoUnfiltered (newEquation, parent, parent.getChildCount ());
                 newEquation.updateColumnWidths (fm);
             }
         }
@@ -144,13 +150,13 @@ public class NodeEquation extends NodeBase
                 parent.updateColumnWidths (fm);
                 NodeBase grandparent = (NodeBase) parent.getParent ();
                 grandparent.updateTabStops (fm);
-                grandparent.nodesChanged (model);
+                grandparent.allNodesChanged (model);
             }
         }
 
         updateColumnWidths (fm);
         parent.updateTabStops (fm);
-        parent.nodesChanged (model);
+        parent.allNodesChanged (model);
     }
 
     @Override
@@ -158,7 +164,7 @@ public class NodeEquation extends NodeBase
     {
         if (! source.isFromTopDocument ()) return;
 
-        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         FontMetrics fm = getFontMetrics (tree);
 
         NodeVariable parent = (NodeVariable) getParent ();
@@ -193,7 +199,7 @@ public class NodeEquation extends NodeBase
                 parent.updateColumnWidths (fm);
                 NodeBase grandparent = (NodeBase) parent.getParent ();
                 grandparent.updateTabStops (fm);
-                grandparent.nodesChanged (model);
+                grandparent.allNodesChanged (model);
             }
             else if (equationCount == 0)
             {
@@ -206,6 +212,6 @@ public class NodeEquation extends NodeBase
         }
 
         parent.updateTabStops (fm);
-        parent.nodesChanged (model);
+        parent.allNodesChanged (model);
     }
 }

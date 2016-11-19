@@ -21,7 +21,6 @@ import gov.sandia.umf.platform.ui.images.ImageUtil;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
-import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 
 public class NodeVariable extends NodeBase
@@ -92,6 +91,16 @@ public class NodeVariable extends NodeBase
     }
 
     @Override
+    public boolean visible (int filterLevel)
+    {
+        if (filterLevel == FilteredTreeModel.ALL) return true;
+        if (source.isFromTopDocument ()) return true;
+        if (filterLevel >= FilteredTreeModel.LOCAL) return false;  // Since we already fail the "local" requirement
+        // FilteredTreeModel.PUBLIC ...
+        return source.child ("$metadata", "public") != null;
+    }
+
+    @Override
     public Icon getIcon (boolean expanded)
     {
         if (isBinding) return iconBinding;
@@ -114,6 +123,12 @@ public class NodeVariable extends NodeBase
             }
         }
         return result;
+    }
+
+    @Override
+    public void invalidateTabs ()
+    {
+        columnWidths = null;
     }
 
     @Override
@@ -163,13 +178,13 @@ public class NodeVariable extends NodeBase
     {
         if (isBinding) return ((NodeBase) getParent ()).add ("Variable", tree);
 
+        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         if (type.isEmpty ())
         {
-            if (getChildCount () == 0  ||  tree.isCollapsed (new TreePath (getPath ()))) return ((NodeBase) getParent ()).add ("Variable", tree);
+            if (model.getChildCount (this) == 0  ||  tree.isCollapsed (new TreePath (getPath ()))) return ((NodeBase) getParent ()).add ("Variable", tree);
             type = "Equation";
         }
 
-        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
         NodeBase result = null;
         int index = 0;
         if (type.equals ("Equation"))
@@ -189,7 +204,7 @@ public class NodeVariable extends NodeBase
                 setUserObject (source.key () + "=" + pieces.combiner);
                 MPart equation = (MPart) source.set (pieces.expression, "@" + pieces.conditional);
                 equations.put (pieces.conditional, equation);
-                model.insertNodeInto (new NodeEquation (equation), this, 0);
+                model.insertNodeIntoUnfiltered (new NodeEquation (equation), this, 0);
             }
 
             int suffix = equations.size ();
@@ -207,7 +222,8 @@ public class NodeVariable extends NodeBase
         {
             // Determine index at which to insert new annotation
             index = 0;
-            while (index < getChildCount ()  &&  ! (getChildAt (index) instanceof NodeReference)) index++;
+            int count = getChildCount ();
+            while (index < count  &&  ! (children.get (index) instanceof NodeReference)) index++;
 
             // Determine a unique key for the annotation
             MPart metadata = (MPart) source.childOrCreate ("$metadata");
@@ -236,7 +252,7 @@ public class NodeVariable extends NodeBase
 
         result.setUserObject ("");
         result.updateColumnWidths (fm);  // preempt initialization
-        model.insertNodeInto (result, this, index);
+        model.insertNodeIntoUnfiltered (result, this, index);
 
         return result;
     }
@@ -261,7 +277,7 @@ public class NodeVariable extends NodeBase
             return;
         }
 
-        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         FontMetrics fm = getFontMetrics (tree);
         String oldKey = source.key ();
         NodeBase parent = (NodeBase) getParent ();
@@ -277,7 +293,7 @@ public class NodeVariable extends NodeBase
             name = oldKey;
             updateColumnWidths (fm);
             parent.updateTabStops (fm);
-            parent.nodesChanged (model);
+            parent.allNodesChanged (model);
         }
         Variable.ParsedValue pieces = new Variable.ParsedValue (value);
 
@@ -314,24 +330,24 @@ public class NodeVariable extends NodeBase
                 {
                     MPart convertedEquation = (MPart) existingVariable.source.set (existingPieces.expression, "@" + existingPieces.conditional);
                     NodeEquation convertedEquationNode = new NodeEquation (convertedEquation);
-                    model.insertNodeInto (convertedEquationNode, existingVariable, 0);
+                    model.insertNodeIntoUnfiltered (convertedEquationNode, existingVariable, 0);
                     convertedEquationNode.updateColumnWidths (fm);
                 }
                 existingVariable.source.set (pieces.combiner);  // override the combiner, just as if we had entered an equation directly on the existing variable
 
                 MPart newEquation = (MPart) existingVariable.source.set (pieces.expression, "@" + pieces.conditional);
                 NodeEquation newEquationNode = new NodeEquation (newEquation);
-                model.insertNodeInto (newEquationNode, existingVariable, 0);
+                model.insertNodeIntoUnfiltered (newEquationNode, existingVariable, 0);
                 model.removeNodeFromParent (this);
                 parent.source.clear (oldKey);
 
                 newEquationNode.updateColumnWidths (fm);
                 existingVariable.updateTabStops (fm);
-                existingVariable.nodesChanged (model);
+                existingVariable.allNodesChanged (model);
 
                 existingVariable.updateColumnWidths (fm);
                 parent.updateTabStops (fm);
-                parent.nodesChanged (model);
+                parent.allNodesChanged (model);
 
                 tree.setSelectionPath (new TreePath (newEquationNode.getPath ()));
                 existingVariable.findConnections ();
@@ -370,7 +386,7 @@ public class NodeVariable extends NodeBase
                     if (e == null)  // no matching equation
                     {
                         MPart equation = (MPart) source.set (pieces.expression, "@" + pieces.conditional);
-                        model.insertNodeInto (new NodeEquation (equation), this, 0);
+                        model.insertNodeIntoUnfiltered (new NodeEquation (equation), this, 0);
                     }
                     else  // conditional matched an existing equation, so just replace the expression
                     {
@@ -383,7 +399,7 @@ public class NodeVariable extends NodeBase
 
             updateColumnWidths (fm);
             parent.updateTabStops (fm);
-            parent.nodesChanged (model);
+            parent.allNodesChanged (model);
         }
         else  // The name was changed. Move the whole sub-tree to a new location. This may also expose an overridden variable.
         {
@@ -395,7 +411,7 @@ public class NodeVariable extends NodeBase
                 mparent.clear (oldKey);  // We abandon everything under this node, because $inherit does not have a subtree. (It might in the future, to store UIDs of referenced parts.)
                 newPart = (MPart) mparent.set (value, name);
                 inherit = new NodeInherit (newPart);
-                model.insertNodeInto (inherit, parent, 0);
+                model.insertNodeIntoUnfiltered (inherit, parent, 0);
                 if (parent instanceof NodePart)  // It had better be! There is no other legal configuration.
                 {
                     ((NodePart) parent).build ();
@@ -434,7 +450,7 @@ public class NodeVariable extends NodeBase
                     build ();
                     updateColumnWidths (fm);
                     parent.updateTabStops (fm);
-                    parent.nodesChanged (model);
+                    parent.allNodesChanged (model);
                 }
             }
             else  // We exposed an overridden part, which will retain its claim on this tree node.
@@ -442,7 +458,7 @@ public class NodeVariable extends NodeBase
                 if (inherit == null)  // Create a new tree node for the newly-named variable, if needed.
                 {
                     NodeVariable v = new NodeVariable (newPart);
-                    model.insertNodeInto (v, parent, parent.getIndex (this));
+                    model.insertNodeIntoUnfiltered (v, parent, parent.getIndex (this));
                     v.build ();
                     v.updateColumnWidths (fm);
                     v.findConnections ();
@@ -452,7 +468,7 @@ public class NodeVariable extends NodeBase
                 build ();
                 updateColumnWidths (fm);
                 parent.updateTabStops (fm);
-                parent.nodesChanged (model);
+                parent.allNodesChanged (model);
             }
         }
 
@@ -464,23 +480,24 @@ public class NodeVariable extends NodeBase
     {
         if (! source.isFromTopDocument ()) return;
 
-        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         FontMetrics fm = getFontMetrics (tree);
-        NodeBase parent = (NodeBase) getParent ();
+        NodePart parent = (NodePart) getParent ();
         MPart mparent = source.getParent ();
         String key = source.key ();
         mparent.clear (key);  // If this merely clears an override, then our source object retains its identity.
-        if (mparent.child (key) == null)  // but we do need to test if it is still in the tree
+        if (mparent.child (key) == null)  // Node is fully deleted
         {
             model.removeNodeFromParent (this);
         }
-        else
+        else  // Just exposed an overridden node
         {
             build ();
             updateColumnWidths (fm);
-            model.nodeStructureChanged (this);
+            if (visible (model.filterLevel)) model.nodeStructureChanged (this);
+            else                             parent.hide (this, model);
         }
         parent.updateTabStops (fm);
-        parent.nodesChanged (model);
+        parent.allNodesChanged (model);
     }
 }

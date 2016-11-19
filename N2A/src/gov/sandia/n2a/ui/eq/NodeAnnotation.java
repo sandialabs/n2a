@@ -18,7 +18,6 @@ import gov.sandia.umf.platform.ui.images.ImageUtil;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
-import javax.swing.tree.DefaultTreeModel;
 
 public class NodeAnnotation extends NodeBase
 {
@@ -34,6 +33,12 @@ public class NodeAnnotation extends NodeBase
     public Icon getIcon (boolean expanded)
     {
         return icon;
+    }
+
+    @Override
+    public void invalidateTabs ()
+    {
+        columnWidths = null;
     }
 
     @Override
@@ -121,7 +126,7 @@ public class NodeAnnotation extends NodeBase
         NodeBase parent = (NodeBase) getParent ();
         if (! name.equals (oldKey)) existingAnnotation = parent.child (name);
 
-        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         FontMetrics fm = getFontMetrics (tree);
         if (name.equals (oldKey)  ||  name.isEmpty ()  ||  existingAnnotation != null)  // Name is the same, or name change is forbidden
         {
@@ -139,14 +144,14 @@ public class NodeAnnotation extends NodeBase
             else  // Make a new tree node, and leave this one to present the non-overridden value.
             {
                 NodeAnnotation newAnnotation = new NodeAnnotation (newPart);
-                model.insertNodeInto (newAnnotation, parent, parent.getChildCount ());
+                model.insertNodeIntoUnfiltered (newAnnotation, parent, parent.getChildCount ());
                 newAnnotation.updateColumnWidths (fm);
             }
         }
 
         updateColumnWidths (fm);
         parent.updateTabStops (fm);
-        parent.nodesChanged (model);
+        parent.allNodesChanged (model);
     }
 
     @Override
@@ -154,7 +159,7 @@ public class NodeAnnotation extends NodeBase
     {
         if (! source.isFromTopDocument ()) return;
 
-        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         FontMetrics fm = getFontMetrics (tree);
 
         NodeBase parent = (NodeBase) getParent ();
@@ -173,10 +178,17 @@ public class NodeAnnotation extends NodeBase
         }
         else  // Just exposed an overridden value, so update display.
         {
-            updateColumnWidths (fm);
+            if (parent.visible (model.filterLevel))  // We are always visible, but our parent could disappear.
+            {
+                updateColumnWidths (fm);
+            }
+            else
+            {
+                ((NodeBase) parent.getParent ()).hide (parent, model);
+            }
         }
 
         parent.updateTabStops (fm);
-        parent.nodesChanged (model);
+        parent.allNodesChanged (model);
     }
 }

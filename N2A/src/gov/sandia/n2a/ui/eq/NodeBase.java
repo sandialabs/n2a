@@ -8,20 +8,92 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.ui.eq;
 
 import gov.sandia.n2a.eqset.MPart;
+
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
+
 import javax.swing.Icon;
 import javax.swing.JTree;
 import javax.swing.tree.DefaultMutableTreeNode;
-import javax.swing.tree.DefaultTreeModel;
+import javax.swing.tree.TreeNode;
 
 public class NodeBase extends DefaultMutableTreeNode
 {
     public MPart source;
+
+    // Filtering -------------------------------------------------------------
+
+    /**
+        Indicates whether this node is visible under the given criteria.
+    **/
+    public boolean visible (int filterLevel)
+    {
+        return true;
+    }
+
+    /**
+        Prepares this node and all its descendants to answer the getFiltered() call
+        for a given filter level.
+    **/
+    public void filter (int filterLevel)
+    {
+    }
+
+    public void hide (NodeBase child, FilteredTreeModel model)
+    {
+        int[]    removedIndices = new int   [1];
+        Object[] removedNodes   = new Object[1];
+        removedIndices[0] = getIndexFiltered (child);
+        removedNodes  [0] = child;
+
+        filter (model.filterLevel);  // Not the most efficient way to remove child, but simple. Also resets column spacing.
+        model.nodesWereRemoved (this, removedIndices, removedNodes);
+    }
+
+    /**
+        @return List of child indices, in order, that are currently visible in tree.
+        null indicates no filtering, and thus all nodes are visible.
+    **/
+    public List<Integer> getFiltered ()
+    {
+        return null;
+    }
+
+    /**
+        Update "filtered" list with newly inserted child node.
+        @param filteredIndex The index in "filtered" of the newly inserted node. -1 if not visible
+        @param childrenIndex The index in "children" of the newly inserted node.
+    **/
+    public void insertFiltered (int filteredIndex, int childrenIndex)
+    {
+    }
+
+    /**
+        Update "filtered" list for removed child node.
+        @param filteredIndex The index in "filtered" of the node before it was removed.
+    **/
+    public void removeFiltered (int filteredIndex)
+    {
+    }
+
+    public int getIndexFiltered (TreeNode child)
+    {
+        int result = children.indexOf (child);
+        List<Integer> filtered = getFiltered ();
+        if (filtered != null) result = filtered.indexOf (result);
+        return result;
+    }
+
+    public TreeNode getChildAtFiltered (int index)
+    {
+        List<Integer> filtered = getFiltered ();
+        if (filtered != null) index = filtered.get (index).intValue ();
+        return (TreeNode) children.get (index);
+    }
 
     // Appearance in tree ----------------------------------------------------
 
@@ -61,10 +133,19 @@ public class NodeBase extends DefaultMutableTreeNode
     **/
     public void updateTabStops (FontMetrics fm)
     {
-        ArrayList<Integer> tabs = new ArrayList<Integer> ();
-        for (Object c : children)
+        if (children == null) return;
+        List<Integer> filtered = getFiltered ();
+        if (filtered == null)
         {
-            List<Integer> columnWidths = ((NodeBase) c).getColumnWidths ();
+            int count = children.size ();
+            filtered = new ArrayList<Integer> (count);
+            for (int i = 0; i < count; i++) filtered.add (i);
+        }
+
+        ArrayList<Integer> tabs = new ArrayList<Integer> ();
+        for (int index : filtered)
+        {
+            List<Integer> columnWidths = ((NodeBase) children.get (index)).getColumnWidths ();
             if (columnWidths == null) continue;
 
             int i = 0;
@@ -79,7 +160,7 @@ public class NodeBase extends DefaultMutableTreeNode
         int sum = 0;
         for (int i = 0; i < count; i++) tabs.set (i, sum += tabs.get (i).intValue ());
 
-        for (Object c : children) ((NodeBase) c).applyTabStops (tabs, fm);
+        for (int index : filtered) ((NodeBase) children.get (index)).applyTabStops (tabs, fm);
     }
 
     /**
@@ -87,12 +168,25 @@ public class NodeBase extends DefaultMutableTreeNode
         Normally done right after a call to updateTabStops(). However, this
         function can't be combined with that one, because it breaks initialization.
     **/
-    public void nodesChanged (DefaultTreeModel model)
+    public void allNodesChanged (FilteredTreeModel model)
     {
-        int count = children.size ();
+        int count;
+        List<Integer> filtered = getFiltered ();
+        if (filtered == null) count = children.size ();
+        else                  count = filtered.size ();
         int[] childIndices = new int[count];
         for (int i = 0; i < count; i++) childIndices[i] = i;
         model.nodesChanged (this, childIndices);
+    }
+
+    /**
+        Set this node that it will return true on a call to needsInitTabs().
+        This only affects nodes which actually do tab initialization.
+        Called by filter() on child nodes so that they will recompute column
+        alignment in the context of a filtered set of siblings.
+    **/
+    public void invalidateTabs ()
+    {
     }
 
     /**
