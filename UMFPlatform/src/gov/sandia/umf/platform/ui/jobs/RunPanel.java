@@ -18,6 +18,7 @@ import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.Font;
+import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -31,6 +32,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.regex.Matcher;
+
 import javax.swing.ButtonGroup;
 import javax.swing.Icon;
 import javax.swing.JComboBox;
@@ -246,22 +248,22 @@ public class RunPanel extends JPanel
         };
 
         JToggleButton buttonText = new JToggleButton (ImageUtil.getImage ("document.png"));
+        buttonText.setMargin (new Insets (2, 2, 2, 2));
         buttonText.setFocusable (false);
         buttonText.addActionListener (graphListener);
         buttonText.setActionCommand ("Text");
-        buttonText.setPreferredSize (new Dimension (28, 26));
 
         JToggleButton buttonGraph = new JToggleButton (ImageUtil.getImage ("analysis.gif"));
+        buttonGraph.setMargin (new Insets (2, 2, 2, 2));
         buttonGraph.setFocusable (false);
         buttonGraph.addActionListener (graphListener);
         buttonGraph.setActionCommand ("Graph");
-        buttonGraph.setPreferredSize (new Dimension (28, 26));
 
         JToggleButton buttonRaster = new JToggleButton (ImageUtil.getImage ("raster.png"));
+        buttonRaster.setMargin (new Insets (2, 2, 2, 2));
         buttonRaster.setFocusable (false);
         buttonRaster.addActionListener (graphListener);
         buttonRaster.setActionCommand ("Raster");
-        buttonRaster.setPreferredSize (new Dimension (28, 26));
 
         buttons = new ButtonGroup ();
         buttons.add (buttonText);

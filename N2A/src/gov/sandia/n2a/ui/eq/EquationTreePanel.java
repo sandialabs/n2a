@@ -24,9 +24,9 @@ import gov.sandia.umf.platform.ui.jobs.RunPanel;
 
 import java.awt.Component;
 import java.awt.Dimension;
-import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.FontMetrics;
+import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.event.ActionEvent;
@@ -37,7 +37,6 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.event.MouseListener;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
@@ -45,9 +44,10 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Enumeration;
 import java.util.EventObject;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-
+import java.util.Map;
 import javax.swing.AbstractAction;
 import javax.swing.Box;
 import javax.swing.ButtonGroup;
@@ -85,23 +85,22 @@ import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoManager;
 
-import replete.gui.controls.IconButton;
 import replete.plugins.ExtensionPoint;
 import replete.plugins.PluginManager;
 import replete.util.Lay;
 
 public class EquationTreePanel extends JPanel
 {
+    protected ModelEditPanel container;
     protected MNode record;
     protected int jobCount = 0;  // for launching jobs
 
-    // Tree & Its Model
-    protected JTree             tree;
-    protected FilteredTreeModel model;
-    protected NodePart          root;
-    protected JScrollPane       scrollPane;
-    protected int               lastSelectedRow = -1;
-    protected SearchPanel       panelSearch;  // reference to other side of our panel pair, so we can send updates (alternative to a listener arrangement)
+    // Tree
+    protected JTree                 tree;
+    protected FilteredTreeModel     model;
+    protected NodePart              root;
+    protected JScrollPane           scrollPane;
+    protected Map<MNode,StoredPath> focusCache = new HashMap<MNode,StoredPath> ();
 
     // Controls
     protected JButton buttonAddModel;
@@ -314,8 +313,10 @@ public class EquationTreePanel extends JPanel
     }
 
     // The main constructor. Most of the real work of setting up the UI is here, including some fairly elaborate listeners.
-    public EquationTreePanel ()
+    public EquationTreePanel (ModelEditPanel container)
     {
+        this.container = container;
+
         model = new FilteredTreeModel (null);
         tree  = new JTree (model)
         {
@@ -359,7 +360,7 @@ public class EquationTreePanel extends JPanel
 
                 editor.editingNode.applyEdit (tree);
 
-                if (editor.editingNode == root) panelSearch.list.repaint ();  // possible name change on model
+                if (editor.editingNode == root) container.recordRenamed ();  // The only real reason to edit root is to change the name. However, it may also have stayed the same. We don't check for that.
 
                 TreePath path = tree.getSelectionPath ();
                 if (path == null) path = updateSelection (parentPath, index);  // If we lose the selection, most likely applyEdit() deleted the node, and that function assumes the caller handles selection.
@@ -530,7 +531,7 @@ public class EquationTreePanel extends JPanel
 
                 updateOrder ();
 
-                panelSearch.hideSelection ();  // because DnD highlights a selection without triggering focus notifications
+                container.searchHideSelection ();  // because DnD highlights a selection without triggering focus notifications
 
                 return true;
             }  
@@ -542,8 +543,9 @@ public class EquationTreePanel extends JPanel
             {
                 if (tree.getSelectionCount () < 1)
                 {
-                    if (lastSelectedRow < 0  ||  lastSelectedRow >= tree.getRowCount ()) tree.setSelectionRow (0);
-                    else                                                                 tree.setSelectionRow (lastSelectedRow);
+                    StoredPath sp = focusCache.get (record);
+                    if (sp == null) tree.setSelectionRow (0);
+                    else            sp.restore (tree);
                 }
             }
 
@@ -551,16 +553,14 @@ public class EquationTreePanel extends JPanel
             {
                 if (! e.isTemporary ()  &&  ! tree.isEditing ())  // The shift to the editing component appears as a loss of focus.
                 {
-                    int[] rows = tree.getSelectionRows ();
-                    if (rows != null  &&  rows.length > 0) lastSelectedRow = rows[0];
+                    if (record != null) focusCache.put (record, new StoredPath (tree));
                     tree.clearSelection ();
                 }
             }
         });
 
-        // Side Buttons
-
-        buttonAddModel = new IconButton (ImageUtil.getImage ("explore.gif"), 2);
+        buttonAddModel = new JButton (ImageUtil.getImage ("explore.gif"));
+        buttonAddModel.setMargin (new Insets (2, 2, 2, 2));
         buttonAddModel.setFocusable (false);
         buttonAddModel.setToolTipText ("New Model");
         buttonAddModel.addActionListener (new ActionListener ()
@@ -572,69 +572,81 @@ public class EquationTreePanel extends JPanel
             }
         });
 
-        buttonAddPart = new IconButton (ImageUtil.getImage ("comp.gif"), 2);
+        buttonAddPart = new JButton (ImageUtil.getImage ("comp.gif"));
+        buttonAddPart.setMargin (new Insets (2, 2, 2, 2));
         buttonAddPart.setFocusable (false);
         buttonAddPart.setToolTipText ("Add Part");
         buttonAddPart.setActionCommand ("Part");
         buttonAddPart.addActionListener (listenerAdd);
 
-        buttonAddVariable = new IconButton (ImageUtil.getImage ("delta.png"), 2);
+        buttonAddVariable = new JButton (ImageUtil.getImage ("delta.png"));
+        buttonAddVariable.setMargin (new Insets (2, 2, 2, 2));
         buttonAddVariable.setFocusable (false);
         buttonAddVariable.setToolTipText ("Add Variable");
         buttonAddVariable.setActionCommand ("Variable");
         buttonAddVariable.addActionListener (listenerAdd);
 
-        buttonAddEquation = new IconButton (ImageUtil.getImage ("equation.png"), 2);
+        buttonAddEquation = new JButton (ImageUtil.getImage ("equation.png"));
+        buttonAddEquation.setMargin (new Insets (2, 2, 2, 2));
         buttonAddEquation.setFocusable (false);
         buttonAddEquation.setToolTipText ("Add Equation");
         buttonAddEquation.setActionCommand ("Equation");
         buttonAddEquation.addActionListener (listenerAdd);
 
-        buttonAddAnnotation = new IconButton (ImageUtil.getImage ("edit.gif"), 2);
+        buttonAddAnnotation = new JButton (ImageUtil.getImage ("edit.gif"));
+        buttonAddAnnotation.setMargin (new Insets (2, 2, 2, 2));
         buttonAddAnnotation.setFocusable (false);
         buttonAddAnnotation.setToolTipText ("Add Annotation");
         buttonAddAnnotation.setActionCommand ("Annotation");
         buttonAddAnnotation.addActionListener (listenerAdd);
 
-        buttonAddReference = new IconButton (ImageUtil.getImage ("book.gif"), 2);
+        buttonAddReference = new JButton (ImageUtil.getImage ("book.gif"));
+        buttonAddReference.setMargin (new Insets (2, 2, 2, 2));
         buttonAddReference.setFocusable (false);
         buttonAddReference.setToolTipText ("Add Reference");
         buttonAddReference.setActionCommand ("Reference");
         buttonAddReference.addActionListener (listenerAdd);
 
-        buttonDelete = new IconButton (ImageUtil.getImage ("remove.gif"), 2);
+        buttonDelete = new JButton (ImageUtil.getImage ("remove.gif"));
+        buttonDelete.setMargin (new Insets (2, 2, 2, 2));
         buttonDelete.setFocusable (false);
         buttonDelete.setToolTipText ("Delete");
         buttonDelete.addActionListener (listenerDelete);
 
-        buttonMoveUp = new IconButton (ImageUtil.getImage ("up.gif"), 2);
+        buttonMoveUp = new JButton (ImageUtil.getImage ("up.gif"));
+        buttonMoveUp.setMargin (new Insets (2, 2, 2, 2));
         buttonMoveUp.setFocusable (false);
         buttonMoveUp.setToolTipText ("Move Up");
         buttonMoveUp.setActionCommand ("-1");
         buttonMoveUp.addActionListener (listenerMove);
 
-        buttonMoveDown = new IconButton (ImageUtil.getImage ("down.gif"), 2);
+        buttonMoveDown = new JButton (ImageUtil.getImage ("down.gif"));
+        buttonMoveDown.setMargin (new Insets (2, 2, 2, 2));
         buttonMoveDown.setFocusable (false);
         buttonMoveDown.setToolTipText ("Move Down");
         buttonMoveDown.setActionCommand ("1");
         buttonMoveDown.addActionListener (listenerMove);
 
-        buttonRun = new IconButton (ImageUtil.getImage ("run.gif"), 2);
+        buttonRun = new JButton (ImageUtil.getImage ("run.gif"));
+        buttonRun.setMargin (new Insets (2, 2, 2, 2));
         buttonRun.setFocusable (false);
         buttonRun.setToolTipText ("Run");
         buttonRun.addActionListener (listenerRun);
 
-        buttonExport = new IconButton (ImageUtil.getImage ("export.gif"), 2);
+        buttonExport = new JButton (ImageUtil.getImage ("export.gif"));
+        buttonExport.setMargin (new Insets (2, 2, 2, 2));
         buttonExport.setFocusable (false);
         buttonExport.setToolTipText ("Export");
         buttonExport.addActionListener (listenerExport);
 
-        buttonImport = new IconButton (ImageUtil.getImage ("import.gif"), 2);
+        buttonImport = new JButton (ImageUtil.getImage ("import.gif"));
+        buttonImport.setMargin (new Insets (2, 2, 2, 2));
         buttonImport.setFocusable (false);
         buttonImport.setToolTipText ("Import");
         buttonImport.addActionListener (listenerImport);
 
-        buttonFilter = new IconButton (ImageUtil.getImage ("filter.png"), 2);
+        buttonFilter = new JButton (ImageUtil.getImage ("filter.png"));
+        buttonFilter.setMargin (new Insets (2, 2, 2, 2));
         buttonFilter.setFocusable (false);
         buttonFilter.setToolTipText ("Filter");
         buttonFilter.addActionListener (new ActionListener ()
@@ -744,17 +756,6 @@ public class EquationTreePanel extends JPanel
         groupFilter.add (itemFilterLocal);
     }
 
-    public void setEquations (final MNode eqs)
-    {
-        EventQueue.invokeLater (new Runnable ()
-        {
-            public void run ()
-            {
-                loadRootFromDB (eqs);
-            }
-        });
-    }
-
     public void loadRootFromDB (MNode doc)
     {
         record = doc;
@@ -764,8 +765,17 @@ public class EquationTreePanel extends JPanel
             root.build ();
             root.findConnections ();
             model.setRoot (root);
-            tree.expandRow (0);
-            tree.setSelectionRow (0);
+
+            StoredPath sp = focusCache.get (record);
+            if (sp == null)
+            {
+                tree.expandRow (0);
+                tree.setSelectionRow (0);
+            }
+            else
+            {
+                sp.restore (tree);
+            }
         }
         catch (Exception e)
         {
@@ -1056,7 +1066,7 @@ public class EquationTreePanel extends JPanel
             }
         }
 
-        panelSearch.insertDoc (result);
+        container.searchInsertDoc (result);
         return result;
     }
 
@@ -1079,10 +1089,11 @@ public class EquationTreePanel extends JPanel
             {
                 if (controlKeyDown)  // Only delete the root (entire document) if the user does something extra to say they really mean it.
                 {
-                    panelSearch.removeDoc (record);
+                    focusCache.remove (record);
+                    container.searchRemoveDoc (record);
                     ((MDoc) record).delete ();
-                    record = null;
-                    root = null;
+                    record       = null;
+                    root         = null;
                     model.setRoot (null);
                 }
             }

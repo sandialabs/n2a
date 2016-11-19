@@ -47,7 +47,7 @@ public class SearchPanel extends JPanel
     protected JButton                 buttonClear;
     protected JList<MNode>            list;
     protected DefaultListModel<MNode> model;
-    protected EquationTreePanel       panelEquations;  // reference to other side of our panel pair, so we can send updates (alternative to a listener arrangement)
+    protected ModelEditPanel          container;
     protected int                     lastSelection = -1;
 
     // Retrieve records matching the filter text, and deliver them to the model.
@@ -84,12 +84,6 @@ public class SearchPanel extends JPanel
     }
     protected SearchThread thread;
 
-    public void fireRecordSelected ()
-    {
-        panelEquations.setEquations (model.get (list.getSelectedIndex ()));
-        panelEquations.tree.requestFocusInWindow ();
-    }
-
     public void hideSelection ()
     {
         lastSelection = list.getSelectedIndex ();
@@ -116,8 +110,10 @@ public class SearchPanel extends JPanel
         }
     }
 
-    public SearchPanel ()
+    public SearchPanel (ModelEditPanel container)
     {
+        this.container = container;
+
         list = new JList<MNode> (model = new DefaultListModel<MNode> ());
         list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
         list.setDragEnabled (true);
@@ -126,7 +122,7 @@ public class SearchPanel extends JPanel
         {
             public void mouseClicked (MouseEvent e)
             {
-                fireRecordSelected ();
+                container.recordSelected ();
                 e.consume ();
             }
 
@@ -143,7 +139,7 @@ public class SearchPanel extends JPanel
                 int keycode = e.getKeyCode ();
                 if (keycode == KeyEvent.VK_ENTER)
                 {
-                    fireRecordSelected ();
+                    container.recordSelected ();
                     e.consume ();
                 }
                 else if (keycode == KeyEvent.VK_DELETE  ||  keycode == KeyEvent.VK_BACK_SPACE)
@@ -153,11 +149,7 @@ public class SearchPanel extends JPanel
                         int   index    = list.getSelectedIndex ();
                         MNode deleteMe = list.getSelectedValue ();
                         if (deleteMe == null) return;
-                        if (panelEquations.record == deleteMe)
-                        {
-                            panelEquations.root = null;
-                            panelEquations.model.setRoot (null);
-                        }
+                        container.recordDeleted (deleteMe);
                         model.remove (index);
                         index = Math.min (model.size () - 1, index);
                         list.setSelectedIndex (index);
@@ -166,8 +158,7 @@ public class SearchPanel extends JPanel
                 }
                 else if (keycode == KeyEvent.VK_INSERT)
                 {
-                    panelEquations.createNewModel ();
-                    panelEquations.tree.requestFocusInWindow ();
+                    container.createRecord ();
                 }
             }
         });

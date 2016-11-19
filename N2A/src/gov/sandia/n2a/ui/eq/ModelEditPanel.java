@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.ui.eq;
 
 import java.awt.BorderLayout;
+import java.awt.EventQueue;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 
@@ -15,6 +16,7 @@ import javax.swing.JPanel;
 import javax.swing.JSplitPane;
 
 import gov.sandia.umf.platform.db.AppData;
+import gov.sandia.umf.platform.db.MNode;
 
 public class ModelEditPanel extends JPanel
 {
@@ -28,10 +30,8 @@ public class ModelEditPanel extends JPanel
     {
         instance = this;
 
-        panelEquations = new EquationTreePanel ();
-        panelSearch    = new SearchPanel ();
-        panelEquations.panelSearch    = panelSearch;
-        panelSearch   .panelEquations = panelEquations;
+        panelEquations = new EquationTreePanel (this);
+        panelSearch    = new SearchPanel       (this);
 
         split = new JSplitPane (JSplitPane.HORIZONTAL_SPLIT, panelSearch, panelEquations);
         split.setOneTouchExpandable(true);
@@ -55,5 +55,53 @@ public class ModelEditPanel extends JPanel
                 if (o != null) AppData.state.set (o.toString (), "ModelEditPanel", "divider");
             }
         });
+    }
+
+    public void recordSelected ()
+    {
+        EventQueue.invokeLater (new Runnable ()
+        {
+            public void run ()
+            {
+                panelEquations.loadRootFromDB (panelSearch.model.get (panelSearch.list.getSelectedIndex ()));
+                panelEquations.tree.requestFocusInWindow ();
+            }
+        });
+    }
+
+    public void recordDeleted (MNode record)
+    {
+        if (panelEquations.record == record)
+        {
+            panelEquations.record       = null;
+            panelEquations.root         = null;
+            panelEquations.model.setRoot (null);
+        }
+    }
+
+    public void recordRenamed ()
+    {
+        panelSearch.list.repaint ();
+    }
+
+    public void createRecord ()
+    {
+        panelEquations.createNewModel ();
+        panelEquations.tree.requestFocusInWindow ();
+    }
+
+    public void searchHideSelection ()
+    {
+        panelSearch.hideSelection ();
+    }
+
+    public void searchInsertDoc (MNode doc)
+    {
+        panelSearch.insertDoc (doc);
+    }
+
+    public void searchRemoveDoc (MNode doc)
+    {
+        panelSearch.removeDoc (doc);
     }
 }

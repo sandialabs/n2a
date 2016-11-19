@@ -21,6 +21,7 @@ public class StoredPath
     public StoredPath (JTree tree)
     {
         TreePath path = tree.getSelectionPath ();
+        if (path == null) return;
         for (Object o : path.getPath ()) keys.add (((NodeBase) o).source.key ());
         keys.remove (0);  // don't need to store root
         expanded = tree.isExpanded (path);
@@ -86,5 +87,10 @@ public class StoredPath
         TreePath path = new TreePath (n.getPath ());
         tree.setSelectionPath (path);
         if (expanded) tree.expandPath (path);
+    }
+
+    public String toString ()
+    {
+        return keys.toString ();
     }
 }
