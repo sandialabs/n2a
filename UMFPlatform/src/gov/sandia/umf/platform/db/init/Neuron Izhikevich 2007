@@ -21,15 +21,19 @@ Vthresh=-40mV
 a=0.03
  $metadata
   backend.xyce.param="a"
+  public
 b=-2
  $metadata
   backend.xyce.param="b"
+  public
 c=-50mV
  $metadata
   backend.xyce.param="c"
+  public
 d=100mV
  $metadata
   backend.xyce.param="d"
+  public
 k=0.7
  $metadata
   backend.xyce.param="k"

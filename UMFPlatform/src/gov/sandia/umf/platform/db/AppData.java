@@ -80,13 +80,13 @@ public class AppData
             "Coupling Voltage",
             "Example Hodgkin-Huxley Cable",
             "Neuron",
-            "Neuron Brette",
+            //"Neuron Brette",
             "Neuron Hodgkin-Huxley",
             "Neuron Izhikevich",
             "Neuron Izhikevich 2007",
             "Neuron LIF",
-            "Synapse Delta",
-            "Synapse Exponential",
+            //"Synapse Exponential",
+            "Synapse Voltage Step"
         };
         try
         {

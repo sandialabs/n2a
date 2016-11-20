@@ -4,9 +4,14 @@ $metadata
 C=1uF
  $metadata
   backend.xyce.param="cMem"
+  public
 G=0.3mS
  $metadata
   backend.xyce.param="gMem"
+  public
+I=0
+ $metadata
+  public
 V=Vrest@$init
 V'=(G*(Vrest-V)+I)/C
 Vrest=-54.4mV

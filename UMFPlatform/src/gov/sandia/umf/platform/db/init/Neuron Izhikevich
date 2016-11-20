@@ -4,9 +4,17 @@ V=c@$init||V>=Vpeak
 V'=0.04e6*V^2+5e3*V+140-u/1mV +I/C
 Vpeak=30mV
 a=0.02
+ $metadata
+  public
 b=0.2
+ $metadata
+  public
 c=-65mV
+ $metadata
+  public
 d=2mV
+ $metadata
+  public
 u
  @$init=b*c
  @V>=Vpeak=u+d

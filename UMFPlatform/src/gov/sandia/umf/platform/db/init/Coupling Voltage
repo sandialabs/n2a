@@ -4,3 +4,5 @@ A.V'=+(B.V-A.V)/(A.C*R)
 B=$connect("Hodgkin-Huxley Compartment")
 B.V'=+(A.V-B.V)/(B.C*R)
 R=10kOhm
+ $metadata
+  public
