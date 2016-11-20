@@ -48,6 +48,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+
 import javax.swing.AbstractAction;
 import javax.swing.Box;
 import javax.swing.ButtonGroup;
@@ -1074,10 +1075,6 @@ public class EquationTreePanel extends JPanel
     {
         TreePath path = tree.getSelectionPath ();
         if (path != null) tree.startEditingAtPath (path);
-
-        // TODO: is the following redundant with the CellEditorListener
-        path = tree.getSelectionPath ();  // This can change quite a bit in the NodeBase.applyEdit() function.
-        if (path != null) updateOverrides (path);
     }
 
     public void deleteSelected (boolean controlKeyDown)
