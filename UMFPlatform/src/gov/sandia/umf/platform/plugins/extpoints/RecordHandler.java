@@ -29,5 +29,5 @@ public interface RecordHandler extends ExtensionPoint
         keep track of the last-focused component and select it when the panel is
         re-exposed. Can return null.
     **/
-    public Component getInitialFocus (Component panel); 
+    public Component getInitialFocus (Component panel);
 }

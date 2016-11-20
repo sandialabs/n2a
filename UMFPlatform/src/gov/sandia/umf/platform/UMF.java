@@ -15,6 +15,7 @@ import gov.sandia.umf.platform.plugins.extpoints.ProductCustomization;
 import gov.sandia.umf.platform.ui.AboutDialog;
 import gov.sandia.umf.platform.ui.MainFrame;
 
+import java.awt.EventQueue;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.PrintStream;
@@ -31,7 +32,6 @@ import replete.cli.CommandLineParser;
 import replete.cli.errors.CommandLineParseException;
 import replete.cli.options.Option;
 import replete.gui.lafbasic.LafManager;
-import replete.gui.lafbasic.RebootFramesListener;
 import replete.gui.windows.Dialogs;
 import replete.gui.windows.LoadingWindow;
 import replete.gui.windows.common.CommonWindow;
@@ -113,32 +113,16 @@ public class UMF
         AppData.checkInitialDB ();
 
         // Create the main frame.
-        createAndShowMainFrame ();
-
-        // Hear about when the L&F manager needs the main frame to reboot
-        // itself.
-        LafManager.setNeedToRebootListener (new RebootFramesListener ()
+        EventQueue.invokeLater (new Runnable ()
         {
-            public void reboot ()
+            public void run ()
             {
-                reloadAppFrame ();
-            }
-
-            public boolean allowReboot ()
-            {
-                return true;
+                createAndShowMainFrame ();
             }
         });
 
-        // Needed because HTML labels are slow to construct!
-        new Thread ("Load HTML Labels")
-        {
-            @Override
-            public void run ()
-            {
-                AboutDialog.initializeLabels ();
-            };
-        }.start ();
+        // Build the About dialog as the last thing this thread does, effectively in the background.
+        AboutDialog.initializeLabels ();
     }
 
     private static ProductCustomization chooseProductCustomization(String prodCust) {
@@ -179,55 +163,7 @@ public class UMF
         return pc;
     }
 
-    private static void getWindowLayoutProps ()
-    {
-        MNode winProps = AppData.state.childOrCreate ("WinLayout");
-        winProps.clear ();
-
-        winProps.set (mainFrame.getX             (), "MainFrame", "x");
-        winProps.set (mainFrame.getY             (), "MainFrame", "y");
-        winProps.set (mainFrame.getWidth         (), "MainFrame", "width");
-        winProps.set (mainFrame.getHeight        (), "MainFrame", "height");
-        winProps.set (mainFrame.getExtendedState (), "MainFrame", "state");
-
-        List<CommonWindow> childWins = mainFrame.getVisibleChildWindows ();
-        for (CommonWindow win : childWins)
-        {
-            String typeId = mainFrame.getTypeIdOfWindow (win);
-            winProps.set (win.getX      (), "ChildFrame", typeId, "x");
-            winProps.set (win.getY      (), "ChildFrame", typeId, "y");
-            winProps.set (win.getWidth  (), "ChildFrame", typeId, "width");
-            winProps.set (win.getHeight (), "ChildFrame", typeId, "height");
-        }
-    }
-
-    private static void reloadAppFrame ()
-    {
-        loadingFrame = new LoadingWindow();
-        loadingFrame.setVisible(true);
-
-        getWindowLayoutProps ();
-
-        List<CommonWindow> childWins = mainFrame.getAllChildWindows();
-        for(CommonWindow win : childWins) {
-            mainFrame.destroyChildWindow(win);
-        }
-
-        mainFrame.dispose();
-        new Thread() {
-            @Override
-            public void run() {
-                try {
-                    Thread.sleep(1000);
-                } catch(InterruptedException e) {
-                    e.printStackTrace();
-                }
-                createAndShowMainFrame();
-            }
-        }.start();
-    }
-
-    private static void createAndShowMainFrame ()
+    public static void createAndShowMainFrame ()
     {
         mainFrame = MainFrame.getInstance ();
         mainFrame.addAttemptToCloseListener (new CommonWindowClosingListener ()
@@ -237,7 +173,15 @@ public class UMF
                 MDoc appState = AppData.state;
                 appState.set (LafManager.getCurrentLaf ().getCls (),      "LookAndFeel");
                 appState.set (LafManager.getCurrentLaf ().getCurTheme (), "Theme");
-                getWindowLayoutProps ();
+
+                MNode winProps = AppData.state.childOrCreate ("WinLayout");
+                winProps.clear ();
+                winProps.set (mainFrame.getX             (), "MainFrame", "x");
+                winProps.set (mainFrame.getY             (), "MainFrame", "y");
+                winProps.set (mainFrame.getWidth         (), "MainFrame", "width");
+                winProps.set (mainFrame.getHeight        (), "MainFrame", "height");
+                winProps.set (mainFrame.getExtendedState (), "MainFrame", "state");
+
                 appState.save ();
             }
         });
@@ -254,20 +198,15 @@ public class UMF
         MNode m = winProps.child ("MainFrame");
         if (m != null)
         {
-            ensureSizeLoc (mainFrame, m);
+            int w = m.getOrDefault (-1, "width");
+            int h = m.getOrDefault (-1, "height");
+            int x = m.getOrDefault (-1, "x");
+            int y = m.getOrDefault (-1, "y");
+            if (w >= 0  &&  h >= 0) mainFrame.setSize (w, h);
+            if (x >= 0  &&  y >= 0) mainFrame.setLocation (x, y);
+            else                    mainFrame.setLocationRelativeTo (mainFrame.getParent ());
+            mainFrame.ensureOnScreen (true);
             mainFrame.setVisible (true);
-
-            String[] childTypeIds = mainFrame.getRegisteredTypeIds ();
-            for (String id : childTypeIds)
-            {
-                MNode c = winProps.child ("ChildFrame", id);
-                if (c != null)
-                {
-                    CommonWindow childWin = mainFrame.createChildWindow (id, null);
-                    ensureSizeLoc (childWin, c);
-                    mainFrame.openChildWindow (id, null);
-                }
-            }
         }
         else
         {
@@ -278,18 +217,6 @@ public class UMF
         setUncaughtExceptionHandler (mainFrame);
         Dialogs.registerApplicationWindow(mainFrame, Application.getName());
         if (loadingFrame != null) loadingFrame.dispose ();
-    }
-
-    private static void ensureSizeLoc (CommonWindow win, MNode winProps)
-    {
-        int w = winProps.getOrDefault (-1, "width");
-        int h = winProps.getOrDefault (-1, "height");
-        int x = winProps.getOrDefault (-1, "x");
-        int y = winProps.getOrDefault (-1, "y");
-        if (w >= 0  &&  h >= 0) win.setSize (w, h);
-        if (x >= 0  &&  y >= 0) win.setLocation (x, y);
-        else                    win.setLocationRelativeTo (win.getParent ());
-        win.ensureOnScreen (true);
     }
 
     public static void setUncaughtExceptionHandler (final JFrame parent)
