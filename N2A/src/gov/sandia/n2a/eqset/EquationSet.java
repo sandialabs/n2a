@@ -7,6 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.eqset;
 
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
@@ -27,11 +28,10 @@ import gov.sandia.n2a.language.operator.LT;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
-import gov.sandia.umf.platform.db.MNode;
-import gov.sandia.umf.platform.plugins.extpoints.Backend;
-import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
-import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
-import gov.sandia.umf.platform.ui.images.ImageUtil;
+import gov.sandia.n2a.plugins.extpoints.Backend;
+import gov.sandia.n2a.ui.images.ImageUtil;
+import gov.sandia.n2a.parms.Parameter;
+import gov.sandia.n2a.parms.ParameterDomain;
 
 import java.io.PrintStream;
 import java.util.ArrayList;

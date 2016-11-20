@@ -7,8 +7,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.runs;
 
-import gov.sandia.umf.platform.db.MNode;
-import gov.sandia.umf.platform.plugins.extpoints.Backend;
+import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 
 public interface Run {
 

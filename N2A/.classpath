@@ -2,8 +2,10 @@
 <classpath>
 	<classpathentry kind="src" path="src"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
-	<classpathentry combineaccessrules="false" kind="src" path="/UMFPlatform"/>
 	<classpathentry kind="lib" path="lib/jgraphx/jgraphx.jar"/>
-	<classpathentry kind="lib" path="/UMFPlatform/lib/replete.jar"/>
+	<classpathentry kind="lib" path="lib/replete.jar"/>
+	<classpathentry kind="lib" path="lib/jsch-0.1.48/jsch-0.1.48.jar"/>
+	<classpathentry kind="lib" path="lib/jfreechart-1.0.19/jcommon-1.0.23.jar"/>
+	<classpathentry kind="lib" path="lib/jfreechart-1.0.19/jfreechart-1.0.19.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

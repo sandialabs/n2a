@@ -8,17 +8,16 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a;
 
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.plugins.extpoints.Backend;
+import gov.sandia.n2a.plugins.extpoints.Exporter;
+import gov.sandia.n2a.plugins.extpoints.Importer;
+import gov.sandia.n2a.plugins.extpoints.MenuItems;
+import gov.sandia.n2a.plugins.extpoints.RecordHandler;
 import gov.sandia.n2a.transfer.ExportNative;
 import gov.sandia.n2a.transfer.ImportNative;
 import gov.sandia.n2a.ui.eq.ModelRecordHandler;
-import gov.sandia.umf.platform.plugins.extpoints.Analyzer;
-import gov.sandia.umf.platform.plugins.extpoints.Backend;
-import gov.sandia.umf.platform.plugins.extpoints.Exporter;
-import gov.sandia.umf.platform.plugins.extpoints.Importer;
-import gov.sandia.umf.platform.plugins.extpoints.MenuItems;
-import gov.sandia.umf.platform.plugins.extpoints.RecordHandler;
-import gov.sandia.umf.platform.ui.images.ImageUtil;
-import gov.sandia.umf.platform.ui.jobs.RunHandler;
+import gov.sandia.n2a.ui.images.ImageUtil;
+import gov.sandia.n2a.ui.jobs.RunHandler;
 
 import javax.swing.ImageIcon;
 
@@ -89,7 +88,6 @@ public class N2APlugin extends DefaultPlugin
         return new Class[]
         {
             Backend.class,
-            Analyzer.class,
             MenuItems.class,
             RecordHandler.class,
             Exporter.class,

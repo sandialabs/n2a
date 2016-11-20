@@ -7,8 +7,9 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.transfer;
 
-import gov.sandia.umf.platform.db.MNode;
-import gov.sandia.umf.platform.plugins.extpoints.Exporter;
+import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.plugins.extpoints.Exporter;
+
 import java.awt.GridBagLayout;
 import java.awt.Toolkit;
 import java.awt.datatransfer.Clipboard;

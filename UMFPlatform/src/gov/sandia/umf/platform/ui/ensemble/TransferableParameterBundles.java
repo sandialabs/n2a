@@ -8,7 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui.ensemble;
 
-import gov.sandia.umf.platform.ui.ensemble.domains.ParameterBundle;
+import gov.sandia.n2a.parms.ParameterBundle;
 
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;

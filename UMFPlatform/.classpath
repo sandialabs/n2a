@@ -1,10 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <classpath>
 	<classpathentry kind="src" path="src"/>
-	<classpathentry kind="lib" path="lib/jsch-0.1.48/jsch-0.1.48.jar"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
-	<classpathentry kind="lib" path="lib/replete.jar" sourcepath="/Replete"/>
-	<classpathentry kind="lib" path="lib/jfreechart-1.0.19/jcommon-1.0.23.jar"/>
-	<classpathentry kind="lib" path="lib/jfreechart-1.0.19/jfreechart-1.0.19.jar"/>
+	<classpathentry kind="lib" path="/home/fred/software/work/n2a/N2A/lib/replete.jar" sourcepath="/Replete"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/N2A"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

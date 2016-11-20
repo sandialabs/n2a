@@ -7,12 +7,12 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui.ensemble.run;
 
+import gov.sandia.n2a.execenvs.ExecutionEnv;
+import gov.sandia.n2a.parms.ParameterDomain;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
-import gov.sandia.umf.platform.execenvs.ExecutionEnv;
 import gov.sandia.umf.platform.plugins.Parameterizable;
-import gov.sandia.umf.platform.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.ui.ensemble.FixedParameterSpacePanel;
-import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 import gov.sandia.umf.platform.ui.ensemble.images.ImageUtil;
 
 import java.util.List;

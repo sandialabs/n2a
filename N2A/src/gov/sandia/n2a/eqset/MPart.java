@@ -11,10 +11,10 @@ import java.util.Iterator;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
-import gov.sandia.umf.platform.db.AppData;
-import gov.sandia.umf.platform.db.MNode;
-import gov.sandia.umf.platform.db.MPersistent;
-import gov.sandia.umf.platform.db.MVolatile;
+import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MPersistent;
+import gov.sandia.n2a.db.MVolatile;
 
 /**
     Collates models following all the N2A language rules, and provides an interface

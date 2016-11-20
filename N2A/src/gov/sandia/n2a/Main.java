@@ -7,11 +7,11 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a;
 
-import gov.sandia.umf.platform.db.AppData;
-import gov.sandia.umf.platform.db.MDoc;
-import gov.sandia.umf.platform.db.MNode;
-import gov.sandia.umf.platform.ui.AboutDialog;
-import gov.sandia.umf.platform.ui.MainFrame;
+import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MDoc;
+import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.ui.AboutDialog;
+import gov.sandia.n2a.ui.MainFrame;
 
 import java.awt.EventQueue;
 import java.io.File;

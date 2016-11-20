@@ -9,10 +9,10 @@ package gov.sandia.umf.platform.ui.ensemble;
 
 import java.awt.Component;
 
-import gov.sandia.umf.platform.db.MNode;
+import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.plugins.extpoints.RecordHandler;
+import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
-import gov.sandia.umf.platform.plugins.extpoints.RecordHandler;
-import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import javax.swing.ImageIcon;
 import javax.swing.JTabbedPane;

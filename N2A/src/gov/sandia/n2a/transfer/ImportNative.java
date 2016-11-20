@@ -7,11 +7,11 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.transfer;
 
+import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MVolatile;
+import gov.sandia.n2a.plugins.extpoints.Importer;
 import gov.sandia.n2a.ui.eq.EquationTreePanel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
-import gov.sandia.umf.platform.db.MNode;
-import gov.sandia.umf.platform.db.MVolatile;
-import gov.sandia.umf.platform.plugins.extpoints.Importer;
 
 import java.awt.GridBagLayout;
 import java.awt.Toolkit;
@@ -26,6 +26,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.StringReader;
+
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;

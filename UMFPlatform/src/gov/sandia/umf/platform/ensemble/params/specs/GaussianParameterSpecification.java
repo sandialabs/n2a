@@ -7,6 +7,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ensemble.params.specs;
 
+import gov.sandia.n2a.parms.ParameterSpecification;
+
 
 // This should probably get the same base class as
 // UniformParameterSpecification some day

@@ -7,7 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.neuroml;
 
-import gov.sandia.umf.platform.plugins.extpoints.Importer;
+import gov.sandia.n2a.plugins.extpoints.Importer;
 
 import java.io.File;
 import java.io.IOException;

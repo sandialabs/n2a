@@ -7,11 +7,11 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui.ensemble.run;
 
-import gov.sandia.umf.platform.ui.ensemble.ParameterKeyPath;
+import gov.sandia.n2a.parms.Parameter;
+import gov.sandia.n2a.parms.ParameterBundle;
+import gov.sandia.n2a.parms.ParameterDomain;
+import gov.sandia.n2a.parms.ParameterKeyPath;
 import gov.sandia.umf.platform.ui.ensemble.TransferableParameterBundles;
-import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
-import gov.sandia.umf.platform.ui.ensemble.domains.ParameterBundle;
-import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 import gov.sandia.umf.platform.ui.ensemble.images.ImageUtil;
 import gov.sandia.umf.platform.ui.ensemble.tree.FilterableParameterTreePanel;
 import gov.sandia.umf.platform.ui.ensemble.tree.NodeParameter;

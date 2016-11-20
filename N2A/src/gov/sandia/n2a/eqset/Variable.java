@@ -7,6 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.eqset;
 
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.OperatorBinary;
@@ -20,7 +21,6 @@ import gov.sandia.n2a.language.operator.Divide;
 import gov.sandia.n2a.language.operator.Multiply;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
-import gov.sandia.umf.platform.db.MNode;
 
 import java.util.ArrayList;
 import java.util.List;

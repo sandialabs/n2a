@@ -15,8 +15,8 @@ import java.beans.PropertyChangeListener;
 import javax.swing.JPanel;
 import javax.swing.JSplitPane;
 
-import gov.sandia.umf.platform.db.AppData;
-import gov.sandia.umf.platform.db.MNode;
+import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MNode;
 
 public class ModelEditPanel extends JPanel
 {

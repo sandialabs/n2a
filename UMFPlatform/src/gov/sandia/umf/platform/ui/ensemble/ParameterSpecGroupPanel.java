@@ -7,14 +7,15 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui.ensemble;
 
+import gov.sandia.n2a.parms.Parameter;
+import gov.sandia.n2a.parms.ParameterBundle;
+import gov.sandia.n2a.parms.ParameterDomain;
+import gov.sandia.n2a.parms.ParameterKeyPath;
+import gov.sandia.n2a.parms.ParameterSpecification;
 import gov.sandia.umf.platform.ensemble.params.groups.ParameterSpecGroup;
 import gov.sandia.umf.platform.ensemble.params.specs.ConstantParameterSpecification;
 import gov.sandia.umf.platform.ensemble.params.specs.EvenSpacingParameterSpecification;
-import gov.sandia.umf.platform.ensemble.params.specs.ParameterSpecification;
 import gov.sandia.umf.platform.ensemble.params.specs.UniformParameterSpecification;
-import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
-import gov.sandia.umf.platform.ui.ensemble.domains.ParameterBundle;
-import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
 import gov.sandia.umf.platform.ui.ensemble.images.ImageUtil;
 import gov.sandia.umf.platform.ui.ensemble.util.FadedBottomBorder;
 

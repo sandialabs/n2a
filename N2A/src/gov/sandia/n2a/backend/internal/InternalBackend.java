@@ -7,13 +7,13 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.internal;
 
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.type.Scalar;
-import gov.sandia.umf.platform.db.MNode;
-import gov.sandia.umf.platform.plugins.extpoints.Backend;
-import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
-import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
+import gov.sandia.n2a.plugins.extpoints.Backend;
+import gov.sandia.n2a.parms.Parameter;
+import gov.sandia.n2a.parms.ParameterDomain;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;

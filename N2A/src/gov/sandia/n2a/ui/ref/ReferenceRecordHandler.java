@@ -9,8 +9,8 @@ package gov.sandia.n2a.ui.ref;
 
 import java.awt.Component;
 
-import gov.sandia.umf.platform.plugins.extpoints.RecordHandler;
-import gov.sandia.umf.platform.ui.images.ImageUtil;
+import gov.sandia.n2a.plugins.extpoints.RecordHandler;
+import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.ImageIcon;
 

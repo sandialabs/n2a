@@ -7,6 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui.ensemble;
 
+import gov.sandia.n2a.parms.ParameterKeyPath;
 import gov.sandia.umf.platform.ensemble.params.ParameterSetList;
 import gov.sandia.umf.platform.ensemble.params.ParameterSetMap;
 import replete.gui.table.MinimalAbstractTableModel;

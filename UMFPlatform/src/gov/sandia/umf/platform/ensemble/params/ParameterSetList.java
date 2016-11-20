@@ -7,6 +7,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ensemble.params;
 
+import gov.sandia.n2a.parms.ParameterSet;
+
 import java.util.ArrayList;
 import java.util.List;
 

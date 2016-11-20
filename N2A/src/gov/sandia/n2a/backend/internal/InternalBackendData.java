@@ -20,7 +20,7 @@ import gov.sandia.n2a.language.function.DollarEvent;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
-import gov.sandia.umf.platform.plugins.extpoints.Backend;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 
 import java.util.Comparator;
 import java.util.Map;

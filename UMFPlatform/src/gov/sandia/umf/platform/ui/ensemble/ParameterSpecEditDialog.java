@@ -7,12 +7,12 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui.ensemble;
 
+import gov.sandia.n2a.parms.ParameterSpecification;
 import gov.sandia.umf.platform.ensemble.params.specs.ArbitraryTransformParameterSpecification;
 import gov.sandia.umf.platform.ensemble.params.specs.ConstantParameterSpecification;
 import gov.sandia.umf.platform.ensemble.params.specs.EvenSpacingParameterSpecification;
 import gov.sandia.umf.platform.ensemble.params.specs.GaussianParameterSpecification;
 import gov.sandia.umf.platform.ensemble.params.specs.ListParameterSpecification;
-import gov.sandia.umf.platform.ensemble.params.specs.ParameterSpecification;
 import gov.sandia.umf.platform.ensemble.params.specs.StepParameterSpecification;
 import gov.sandia.umf.platform.ensemble.params.specs.UniformParameterSpecification;
 import gov.sandia.umf.platform.ui.ensemble.images.ImageUtil;

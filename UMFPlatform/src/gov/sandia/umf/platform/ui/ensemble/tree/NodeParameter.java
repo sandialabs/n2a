@@ -7,7 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui.ensemble.tree;
 
-import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
+import gov.sandia.n2a.parms.Parameter;
 import gov.sandia.umf.platform.ui.ensemble.images.ImageUtil;
 
 import javax.swing.Icon;

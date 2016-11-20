@@ -15,7 +15,7 @@ import java.util.List;
 
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.umf.platform.ui.images.ImageUtil;
+import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;
 import javax.swing.ImageIcon;

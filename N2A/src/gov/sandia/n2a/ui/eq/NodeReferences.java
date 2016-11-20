@@ -10,9 +10,9 @@ package gov.sandia.n2a.ui.eq;
 import java.awt.Font;
 import java.awt.FontMetrics;
 
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.umf.platform.db.MNode;
-import gov.sandia.umf.platform.ui.images.ImageUtil;
+import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;
 import javax.swing.ImageIcon;

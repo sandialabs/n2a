@@ -17,11 +17,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.Vector;
 
+import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.umf.platform.db.AppData;
-import gov.sandia.umf.platform.db.MNode;
-import gov.sandia.umf.platform.db.MPersistent;
-import gov.sandia.umf.platform.ui.images.ImageUtil;
+import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;
 import javax.swing.ImageIcon;

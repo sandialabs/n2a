@@ -7,10 +7,10 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.eq;
 
-import gov.sandia.umf.platform.db.AppData;
-import gov.sandia.umf.platform.db.MDoc;
-import gov.sandia.umf.platform.db.MNode;
-import gov.sandia.umf.platform.ui.images.ImageUtil;
+import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MDoc;
+import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.ui.images.ImageUtil;
 
 import java.awt.Component;
 import java.awt.Dimension;

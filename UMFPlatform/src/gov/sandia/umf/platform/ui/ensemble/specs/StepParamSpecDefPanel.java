@@ -7,7 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui.ensemble.specs;
 
-import gov.sandia.umf.platform.ensemble.params.specs.ParameterSpecification;
+import gov.sandia.n2a.parms.ParameterSpecification;
 import gov.sandia.umf.platform.ensemble.params.specs.StepParameterSpecification;
 import gov.sandia.umf.platform.ui.ensemble.images.ImageUtil;
 

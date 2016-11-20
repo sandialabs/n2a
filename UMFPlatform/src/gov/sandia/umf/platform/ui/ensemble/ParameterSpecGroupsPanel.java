@@ -7,9 +7,9 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui.ensemble;
 
+import gov.sandia.n2a.parms.ParameterBundle;
 import gov.sandia.umf.platform.ensemble.params.groups.ParameterSpecGroup;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
-import gov.sandia.umf.platform.ui.ensemble.domains.ParameterBundle;
 
 import java.awt.Component;
 import java.util.LinkedHashMap;

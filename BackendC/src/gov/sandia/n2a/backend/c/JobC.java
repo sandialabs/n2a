@@ -7,11 +7,13 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.backend.c;
 
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.EquationSet.Conversion;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
+import gov.sandia.n2a.execenvs.ExecutionEnv;
 import gov.sandia.n2a.language.AccessElement;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.BuildMatrix;
@@ -30,9 +32,7 @@ import gov.sandia.n2a.language.operator.Power;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
-import gov.sandia.umf.platform.db.MNode;
-import gov.sandia.umf.platform.execenvs.ExecutionEnv;
-import gov.sandia.umf.platform.plugins.extpoints.Backend;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 
 import java.io.File;
 import java.io.PrintStream;

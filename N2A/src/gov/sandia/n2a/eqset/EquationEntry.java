@@ -7,10 +7,10 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.eqset;
 
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Visitor;
-import gov.sandia.umf.platform.db.MNode;
 
 public class EquationEntry implements Comparable<EquationEntry>
 {

@@ -7,19 +7,19 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.eq;
 
+import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MDoc;
+import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.umf.platform.db.AppData;
-import gov.sandia.umf.platform.db.MDoc;
-import gov.sandia.umf.platform.db.MNode;
-import gov.sandia.umf.platform.db.MPersistent;
-import gov.sandia.umf.platform.plugins.UMFPluginManager;
-import gov.sandia.umf.platform.plugins.extpoints.Backend;
-import gov.sandia.umf.platform.plugins.extpoints.Exporter;
-import gov.sandia.umf.platform.plugins.extpoints.Importer;
-import gov.sandia.umf.platform.ui.MainFrame;
-import gov.sandia.umf.platform.ui.MainTabbedPane;
-import gov.sandia.umf.platform.ui.images.ImageUtil;
-import gov.sandia.umf.platform.ui.jobs.RunPanel;
+import gov.sandia.n2a.plugins.UMFPluginManager;
+import gov.sandia.n2a.plugins.extpoints.Backend;
+import gov.sandia.n2a.plugins.extpoints.Exporter;
+import gov.sandia.n2a.plugins.extpoints.Importer;
+import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.MainTabbedPane;
+import gov.sandia.n2a.ui.images.ImageUtil;
+import gov.sandia.n2a.ui.jobs.RunPanel;
 
 import java.awt.Component;
 import java.awt.Dimension;

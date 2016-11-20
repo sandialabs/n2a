@@ -7,13 +7,13 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui.ensemble;
 
-import gov.sandia.umf.platform.db.MNode;
+import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.execenvs.ExecutionEnv;
+import gov.sandia.n2a.parms.ParameterSpecification;
+import gov.sandia.n2a.plugins.extpoints.Backend;
+import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.umf.platform.ensemble.params.groups.ParameterSpecGroup;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
-import gov.sandia.umf.platform.ensemble.params.specs.ParameterSpecification;
-import gov.sandia.umf.platform.execenvs.ExecutionEnv;
-import gov.sandia.umf.platform.plugins.extpoints.Backend;
-import gov.sandia.umf.platform.ui.MainFrame;
 import gov.sandia.umf.platform.ui.ensemble.run.CreateRunEnsembleDialog;
 
 import java.awt.Component;

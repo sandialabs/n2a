@@ -7,6 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ensemble.params.specs;
 
+import gov.sandia.n2a.parms.ParameterSpecification;
 import gov.sandia.umf.platform.ensemble.random.RandomManager;
 
 import java.util.Random;

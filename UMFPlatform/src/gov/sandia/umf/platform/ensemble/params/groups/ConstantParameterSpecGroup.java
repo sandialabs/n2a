@@ -7,8 +7,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ensemble.params.groups;
 
+import gov.sandia.n2a.parms.ParameterSpecification;
 import gov.sandia.umf.platform.ensemble.params.specs.ConstantParameterSpecification;
-import gov.sandia.umf.platform.ensemble.params.specs.ParameterSpecification;
 
 
 // Convenience class - nothing is done here that can't

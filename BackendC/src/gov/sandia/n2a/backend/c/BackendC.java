@@ -12,11 +12,11 @@ import java.io.FileNotFoundException;
 import java.io.PrintStream;
 
 import gov.sandia.n2a.backend.internal.InternalBackend;
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.EquationSet;
-import gov.sandia.umf.platform.db.MNode;
-import gov.sandia.umf.platform.plugins.extpoints.Backend;
-import gov.sandia.umf.platform.ui.ensemble.domains.Parameter;
-import gov.sandia.umf.platform.ui.ensemble.domains.ParameterDomain;
+import gov.sandia.n2a.parms.Parameter;
+import gov.sandia.n2a.parms.ParameterDomain;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 
 public class BackendC extends Backend
 {
