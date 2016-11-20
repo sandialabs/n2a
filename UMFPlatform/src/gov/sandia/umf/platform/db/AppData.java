@@ -16,8 +16,6 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
-import gov.sandia.umf.platform.UMF;
-
 /**
     Manages all user data associated with the application.
     This singleton contains several MDir objects which wrap various categories
@@ -27,17 +25,22 @@ import gov.sandia.umf.platform.UMF;
 **/
 public class AppData
 {
-    public static MDir models;
-    public static MDir references;
-    public static MDir runs;
-    public static MDoc state;
+    // TODO: combine these as children of a proper root MNode
+    public static MDir  models;
+    public static MDir  references;
+    public static MDir  runs;
+    public static MDoc  state;
+    public static MNode properties;
 
     protected static boolean stop;
     protected static Thread saveThread;
 
     static
     {
-        File root = UMF.getAppResourceDir ();
+        File root = new File (System.getProperty ("user.home"), "n2a").getAbsoluteFile ();
+        properties = new MVolatile ();
+        properties.set (root.getAbsolutePath (), "resourceDir");
+
         models     = new MDir (new File (root, "models"));
         references = new MDir (new File (root, "references"));
         runs       = new MDir (new File (root, "jobs"), "model");  // "model" is our internal housekeeping data, in MNode serialization form. Backend output generally goes into a simulator-specific file.
@@ -118,7 +121,7 @@ public class AppData
         save ();
 
         // Assemble file list
-        String stem = UMF.getAppResourceDir ().getAbsolutePath ();
+        String stem = properties.get ("resourceDir");
         List<String> paths = new LinkedList<String> ();
         for (String f : models    .root.list ()) paths.add (new File ("models",     f).getPath ());
         for (String f : references.root.list ()) paths.add (new File ("references", f).getPath ());
@@ -161,7 +164,7 @@ public class AppData
         // Read the zip file
         try
         {
-            String stem = UMF.getAppResourceDir ().getAbsolutePath ();
+            String stem = properties.get ("resourceDir");
             ZipFile zipFile = new ZipFile (source);
             Enumeration<? extends ZipEntry> entries = zipFile.entries ();
             while (entries.hasMoreElements ())

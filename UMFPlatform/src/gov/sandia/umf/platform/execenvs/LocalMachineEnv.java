@@ -7,7 +7,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.execenvs;
 
-import gov.sandia.umf.platform.UMF;
 import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.execenvs.beans.AllJobInfo;
 import gov.sandia.umf.platform.execenvs.beans.DateGroup;
@@ -174,15 +173,7 @@ public abstract class LocalMachineEnv extends ExecutionEnv
         }
         if (name.equalsIgnoreCase ("c.directory"))
         {
-            try
-            {
-                File n2a = UMF.getAppResourceDir ();
-                return new File (n2a, "cruntime").getAbsolutePath ();
-            }
-            catch (Exception e)
-            {
-                return defaultValue;
-            }
+            return new File (AppData.properties.get ("resourceDir"), "cruntime").getAbsolutePath ();
         }
         if (name.equalsIgnoreCase ("c.compiler"))
         {
@@ -194,15 +185,7 @@ public abstract class LocalMachineEnv extends ExecutionEnv
         }
         if (name.equalsIgnoreCase ("stpu.directory"))
         {
-            try
-            {
-                File n2a = UMF.getAppResourceDir ();
-                return new File (n2a, "STPUruntime").getAbsolutePath ();
-            }
-            catch (Exception e)
-            {
-                return defaultValue;
-            }
+            return new File (AppData.properties.get ("resourceDir"), "STPUruntime").getAbsolutePath ();
         }
         return super.getNamedValue (name, defaultValue);
     }

@@ -7,7 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.plugins;
 
-import gov.sandia.umf.platform.UMF;
+import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.plugins.extpoints.RecordHandler;
 
@@ -57,7 +57,7 @@ public class UMFPluginManager
 
     public static File getPluginsDir ()
     {
-        return new File (UMF.getAppResourceDir (), "plugins");
+        return new File (AppData.properties.get ("resourceDir"), "plugins");
     }
 
     public static File getStorageDir (Class<?> pClass)

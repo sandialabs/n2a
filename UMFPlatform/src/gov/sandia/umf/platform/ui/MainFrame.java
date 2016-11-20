@@ -7,11 +7,14 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui;
 
-import gov.sandia.umf.platform.UMF;
 import gov.sandia.umf.platform.db.AppData;
-import gov.sandia.umf.platform.plugins.extpoints.ProductCustomization;
+import gov.sandia.umf.platform.db.MNode;
+import gov.sandia.umf.platform.ui.images.ImageUtil;
+
+import java.awt.Image;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.util.ArrayList;
 
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -39,9 +42,13 @@ public class MainFrame extends EscapeFrame implements HelpCapableWindow
 
     public MainFrame ()
     {
-        ProductCustomization pc = UMF.prodCustomization;
-        setTitle(pc.getProductLongName() + " v" + pc.getProductVersion());
-        setIconImages (pc.getWindowIcons ());
+        MNode pc = AppData.properties;
+        setTitle(pc.get ("name") + " v" + pc.get ("version"));
+
+        ArrayList<Image> icons = new ArrayList<Image> ();
+        icons.add (ImageUtil.getImage ("n2a-16.png").getImage ());
+        icons.add (ImageUtil.getImage ("n2a-32.png").getImage ());
+        setIconImages (icons);
 
         tabs = new MainTabbedPane ();
 

@@ -7,8 +7,9 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui;
 
-import gov.sandia.umf.platform.UMF;
-import gov.sandia.umf.platform.plugins.extpoints.ProductCustomization;
+import gov.sandia.umf.platform.db.AppData;
+import gov.sandia.umf.platform.db.MNode;
+import gov.sandia.umf.platform.ui.images.ImageUtil;
 
 import java.awt.Color;
 import java.awt.Dimension;
@@ -25,70 +26,49 @@ import replete.gui.windows.EscapeDialog;
 import replete.util.GUIUtil;
 import replete.util.Lay;
 
-public class AboutDialog extends EscapeDialog {
-
-    private static JLabel lblTitle;
-    private static JLabel lblCopy;
-    private static JLabel lblLicense;
-    private static JLabel lblContrib;
-    private static JLabel lblVersion;
-    private static JLabel lblSupport;
+public class AboutDialog extends EscapeDialog
+{
+    static JLabel lblTitle;
+    static JLabel lblCopy;
+    static JLabel lblLicense;
+    static JLabel lblContrib;
+    static JLabel lblVersion;
+    static JLabel lblSupport;
 
     // Needed because HTML labels are slow to construct!
-    // So this is called in Main.main(String[] args).
-    public static void initializeLabels() {
+    // So this is called in main
+    public static void initializeLabels ()
+    {
         Font f1 = new Font("Helvetica", Font.PLAIN, 16);
         Font f2 = new Font("Helvetica", Font.PLAIN, 12);
 
-        ProductCustomization pc = UMF.prodCustomization;
-        String shortName;
-        if(pc != null) {
-            shortName = pc.getProductShortName();
-        } else {
-            shortName = "UMF";
-        }
+        MNode pc = AppData.properties;
 
-        lblTitle = new JLabel("<html>" + markUp(pc.getProductLongName()) + "</html>");
+        lblTitle = new JLabel("<html>" + pc.get ("name") + "</html>");
         lblTitle.setFont(f1);
         lblTitle.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(200, 200, 200)));
         Dimension d = GUIUtil.getHTMLJLabelPreferredSize(lblTitle, 300, true);
         lblTitle.setPreferredSize(d);
 
-        String copy = pc.getCopyright();
-        if(copy != null) {
-            lblCopy = new JLabel("<html>" + copy + "</html>");
-            lblCopy.setFont(f2);
-        }
+        lblCopy = new JLabel("<html>" + pc.get ("copyright") + "</html>");
+        lblCopy.setFont(f2);
 
-        String lic = pc.getLicense();
-        if(lic != null) {
-            lblLicense = new JLabel("<html>" + lic + "</html>");
-            lblLicense.setFont(f2);
-        }
+        lblLicense = new JLabel("<html>" + pc.get ("license") + "</html>");
+        lblLicense.setFont(f2);
 
-        String contrib = pc.getProductDevelopedBy();
-        if(contrib != null) {
-            lblContrib = new JLabel("<html><B>" + shortName + "</B> was developed by " + contrib + ".</html>");
-            lblContrib.setFont(f2);
-        }
+        lblContrib = new JLabel("<html><B>" + pc.get ("abbreviation") + "</B> was developed by " + pc.get ("developers") + ".</html>");
+        lblContrib.setFont(f2);
 
-        lblVersion = new JLabel("Version: " + pc.getProductVersion());
+        lblVersion = new JLabel("Version: " + pc.get ("version"));
         lblVersion.setFont(f2);
 
-        String email = pc.getSupportEmail();
-        if(email != null) {
-            lblSupport = new JLabel("<html>For technical support send e-mail to: <font color='blue'><u>" + email + "</u></font></html>");
-            lblSupport.setFont(f2);
-        }
+        lblSupport = new JLabel("<html>For technical support send e-mail to: <font color='blue'><u>" + pc.get ("support") + "</u></font></html>");
+        lblSupport.setFont(f2);
     }
 
-    public static String markUp(String s) {
-        // <b>N</b>eurons <b>T</b>o <b>A</b>lgorithms
-        return s.replaceAll("([A-Z])", "<b>$1</b>");
-    }
-
-    public AboutDialog(JFrame parent) {
-        super(parent, "About " + UMF.prodCustomization.getProductLongName(), true);
+    public AboutDialog (JFrame parent)
+    {
+        super(parent, "About " + AppData.properties.get ("name"), true);
 
         // Technically possible for this to execute before the thread
         // invoking initializeLabels finishes.  However, that is such
@@ -126,7 +106,7 @@ public class AboutDialog extends EscapeDialog {
         Lay.BLtg(gp, "C", pnlText, "eb=10");
 
         Lay.BLtg(this,
-            "N", Lay.lb(UMF.prodCustomization.getAboutImage()),
+            "N", Lay.lb (ImageUtil.getImage ("n2a-splash.png")),
             "C", gp,
             "resizable=false,size=[520,380],center"
         );

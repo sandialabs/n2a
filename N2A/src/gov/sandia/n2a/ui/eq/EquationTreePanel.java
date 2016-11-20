@@ -8,7 +8,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.ui.eq;
 
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.umf.platform.UMF;
 import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.db.MDoc;
 import gov.sandia.umf.platform.db.MNode;
@@ -892,7 +891,7 @@ public class EquationTreePanel extends JPanel
             if (record == null) return;
 
             // Construct and customize a file chooser
-            final JFileChooser fc = new JFileChooser (UMF.getAppResourceDir ());
+            final JFileChooser fc = new JFileChooser (AppData.properties.get ("resourceDir"));
             fc.setDialogTitle ("Export \"" + record.key () + "\"");
             ExporterFilter n2a = null;
             List<ExtensionPoint> exps = PluginManager.getExtensionsForPoint (Exporter.class);
@@ -962,7 +961,7 @@ public class EquationTreePanel extends JPanel
         public void actionPerformed (ActionEvent e)
         {
             // Construct and customize a file chooser
-            final JFileChooser fc = new JFileChooser (UMF.getAppResourceDir ());
+            final JFileChooser fc = new JFileChooser (AppData.properties.get ("resourceDir"));
             fc.setDialogTitle ("Import");
             ImporterFilter n2a = null;
             List<ExtensionPoint> exps = PluginManager.getExtensionsForPoint (Importer.class);

@@ -7,7 +7,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.ui;
 
-import gov.sandia.umf.platform.UMF;
 import gov.sandia.umf.platform.db.AppData;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
 
@@ -134,7 +133,7 @@ public class BackupDialog extends EscapeDialog
     public void populateList ()
     {
         TreeSet<BackupEntry> entries = new TreeSet<BackupEntry> ();
-        File dir = new File (UMF.getAppResourceDir (), "backups");
+        File dir = new File (AppData.properties.get ("resourceDir"), "backups");
         File[] backupFiles = dir.listFiles ();
         if (backupFiles != null)
         {
@@ -160,7 +159,7 @@ public class BackupDialog extends EscapeDialog
 
     public void backup ()
     {
-        File dir = new File (UMF.getAppResourceDir (), "backups");
+        File dir = new File (AppData.properties.get ("resourceDir"), "backups");
         dir.mkdirs ();
         String fileName = new SimpleDateFormat ("yyyyMMddHHmmss", Locale.ROOT).format (new Date ()) + ".zip";
         File destination = new File (dir, fileName);

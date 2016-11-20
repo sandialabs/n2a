@@ -11,7 +11,14 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.transfer.ExportNative;
 import gov.sandia.n2a.transfer.ImportNative;
 import gov.sandia.n2a.ui.eq.ModelRecordHandler;
+import gov.sandia.umf.platform.plugins.extpoints.Analyzer;
+import gov.sandia.umf.platform.plugins.extpoints.Backend;
+import gov.sandia.umf.platform.plugins.extpoints.Exporter;
+import gov.sandia.umf.platform.plugins.extpoints.Importer;
+import gov.sandia.umf.platform.plugins.extpoints.MenuItems;
+import gov.sandia.umf.platform.plugins.extpoints.RecordHandler;
 import gov.sandia.umf.platform.ui.images.ImageUtil;
+import gov.sandia.umf.platform.ui.jobs.RunHandler;
 
 import javax.swing.ImageIcon;
 
@@ -66,11 +73,12 @@ public class N2APlugin extends DefaultPlugin
     {
         return new ExtensionPoint[]
         {
-            new N2AProductCustomization (),
             new ExportNative (),
             new ImportNative (),
+            new ModelRecordHandler (),
+            new RunHandler (),
             //new ReferenceRecordHandler (),
-            new ModelRecordHandler ()
+            //new RunEnsembleRecordHandler (),
         };
     }
 
@@ -80,7 +88,13 @@ public class N2APlugin extends DefaultPlugin
     {
         return new Class[]
         {
-           Operator.Factory.class
+            Backend.class,
+            Analyzer.class,
+            MenuItems.class,
+            RecordHandler.class,
+            Exporter.class,
+            Importer.class,
+            Operator.Factory.class
         };
     }
 
