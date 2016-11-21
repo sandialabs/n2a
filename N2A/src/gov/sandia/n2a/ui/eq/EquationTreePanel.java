@@ -73,6 +73,8 @@ import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 import javax.swing.event.TreeExpansionEvent;
 import javax.swing.event.TreeExpansionListener;
+import javax.swing.event.TreeSelectionEvent;
+import javax.swing.event.TreeSelectionListener;
 import javax.swing.event.TreeWillExpandListener;
 import javax.swing.filechooser.FileFilter;
 import javax.swing.tree.DefaultTreeCellEditor;
@@ -420,6 +422,28 @@ public class EquationTreePanel extends JPanel
                         tree.setSelectionPath (path);
                         menuPopup.show (tree, e.getX (), e.getY ());
                     }
+                }
+            }
+        });
+
+        // Hack for slow Swing repaint when clicking to select new node
+        tree.addTreeSelectionListener (new TreeSelectionListener ()
+        {
+            NodeBase oldSelection;
+            Rectangle oldBounds;
+
+            public void valueChanged (TreeSelectionEvent e)
+            {
+                if (! e.isAddedPath ()) return;
+                TreePath path = e.getPath ();
+                NodeBase newSelection = (NodeBase) path.getLastPathComponent ();
+                if (newSelection != oldSelection)
+                {
+                    if (oldSelection != null) tree.paintImmediately (oldBounds);
+                    Rectangle newBounds = tree.getPathBounds (path);
+                    tree.paintImmediately (newBounds);
+                    oldSelection = newSelection;
+                    oldBounds    = newBounds;
                 }
             }
         });
