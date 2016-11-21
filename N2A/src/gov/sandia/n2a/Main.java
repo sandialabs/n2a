@@ -8,9 +8,9 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a;
 
 import gov.sandia.n2a.db.AppData;
-import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.ui.AboutDialog;
+import gov.sandia.n2a.ui.LafManager;
 import gov.sandia.n2a.ui.MainFrame;
 
 import java.awt.EventQueue;
@@ -25,7 +25,6 @@ import javax.swing.JOptionPane;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
-import replete.gui.lafbasic.LafManager;
 import replete.gui.windows.Dialogs;
 import replete.gui.windows.common.CommonWindowClosingEvent;
 import replete.gui.windows.common.CommonWindowClosingListener;
@@ -48,11 +47,6 @@ public class Main
         AppData.properties.set ("frothga@sandia.gov", "support");
         AppData.checkInitialDB ();
 
-        // Read L&F from properties.
-        String lafClassName = AppData.state.get ("LookAndFeel");
-        String lafTheme     = AppData.state.get ("Theme");
-        LafManager.initialize (lafClassName, lafTheme);
-
         // Load plugins
         ArrayList<String> pluginClassNames = new ArrayList<String> ();
         pluginClassNames.add ("gov.sandia.n2a.backend.internal.InternalPlugin");
@@ -74,14 +68,14 @@ public class Main
         {
             public void run ()
             {
+                LafManager.load ();
+
                 MainFrame mainFrame = MainFrame.getInstance ();
                 mainFrame.addAttemptToCloseListener (new CommonWindowClosingListener ()
                 {
                     public void stateChanged (CommonWindowClosingEvent e)
                     {
-                        MDoc appState = AppData.state;
-                        appState.set (LafManager.getCurrentLaf ().getCls (),      "LookAndFeel");
-                        appState.set (LafManager.getCurrentLaf ().getCurTheme (), "Theme");
+                        LafManager.save ();
 
                         MNode winProps = AppData.state.childOrCreate ("WinLayout");
                         winProps.clear ();
@@ -91,7 +85,7 @@ public class Main
                         winProps.set (mainFrame.getHeight        (), "height");
                         winProps.set (mainFrame.getExtendedState (), "state");
 
-                        appState.save ();
+                        AppData.state.save ();
                     }
                 });
                 mainFrame.addClosingListener (new ChangeListener ()

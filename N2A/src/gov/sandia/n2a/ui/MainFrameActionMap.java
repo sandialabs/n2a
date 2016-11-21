@@ -20,7 +20,6 @@ import java.util.Map;
 
 import javax.swing.ImageIcon;
 
-import replete.gui.lafbasic.LafManager;
 import replete.gui.uiaction.MenuBarActionDescriptor;
 import replete.gui.uiaction.ToolBarActionDescriptor;
 import replete.gui.uiaction.UIAction;
@@ -88,7 +87,7 @@ public class MainFrameActionMap extends UIActionMap
 
         // TODO: Move to window menu.
         action = new UIAction("lafMenu");
-        action.addDescriptor(new MenuBarActionDescriptor("", LafManager.createLafMenu(), allEnabledStateMap));
+        action.addDescriptor(new MenuBarActionDescriptor("", LafManager.getMenu (), allEnabledStateMap));
         addAction(action);
 
         // HELP //
