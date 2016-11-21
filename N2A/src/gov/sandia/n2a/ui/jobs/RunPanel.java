@@ -101,11 +101,18 @@ public class RunPanel extends JPanel
 
         tree.addTreeSelectionListener (new TreeSelectionListener ()
         {
+            Rectangle oldBounds;
+
             public void valueChanged (TreeSelectionEvent e)
             {
                 NodeBase newNode = (NodeBase) tree.getLastSelectedPathComponent ();
                 if (newNode == null) return;
                 if (newNode == displayNode) return;
+
+                if (oldBounds != null) tree.paintImmediately (oldBounds);
+                Rectangle newBounds = tree.getPathBounds (e.getPath ());
+                if (newBounds != null) tree.paintImmediately (newBounds);
+                oldBounds = newBounds;
 
                 displayNode = newNode;
                 if      (displayNode instanceof NodeFile) viewFile ();
@@ -143,20 +150,12 @@ public class RunPanel extends JPanel
         {
             public void treeExpanded (TreeExpansionEvent event)
             {
-                Rectangle node    = tree.getPathBounds (event.getPath ());
-                Rectangle visible = treePane.getViewport ().getViewRect ();
-                visible.height -= node.y - visible.y;
-                visible.y       = node.y;
-                tree.repaint (visible);
+                repaintSouth (event.getPath ());
             }
 
             public void treeCollapsed (TreeExpansionEvent event)
             {
-                Rectangle node    = tree.getPathBounds (event.getPath ());
-                Rectangle visible = treePane.getViewport ().getViewRect ();
-                visible.height -= node.y - visible.y;
-                visible.y       = node.y;
-                tree.repaint (visible);
+                repaintSouth (event.getPath ());
             }
         });
 
@@ -402,7 +401,7 @@ public class RunPanel extends JPanel
 
                     if (graphable)
                     {
-                        Component panel = null;
+                        JPanel panel = null;
                         if (viz.equals ("Graph"))
                         {
                             Plot plot = new Plot (path);
@@ -417,14 +416,15 @@ public class RunPanel extends JPanel
                         if (stop) return;
                         if (panel != null)
                         {
-                            final Component c = panel;
+                            final JPanel p = panel;
                             EventQueue.invokeLater (new Runnable ()
                             {
                                 @Override
                                 public void run ()
                                 {
                                     if (stop) return;
-                                    displayPane.setViewportView (c);
+                                    displayPane.setViewportView (p);
+                                    displayPane.paintImmediately (displayPane.getBounds ());
                                 }
                             });
 
@@ -449,6 +449,7 @@ public class RunPanel extends JPanel
                             displayText.setText (contents);
                             displayText.setCaretPosition (0);
                         }
+                        displayPane.paintImmediately (displayPane.getBounds ());
                     }
                 });
             }
@@ -509,6 +510,7 @@ public class RunPanel extends JPanel
             displayText.setCaretPosition (0);
         }
         if (displayPane.getViewport ().getView () != displayText) displayPane.setViewportView (displayText);
+        displayPane.paintImmediately (displayPane.getBounds ());
     }
 
     public void delete ()
@@ -574,6 +576,8 @@ public class RunPanel extends JPanel
         {
             tree.setSelectionPath (new TreePath (nextSelection.getPath ()));
         }
+
+        tree.paintImmediately (treePane.getViewport ().getViewRect ());
     }
 
     public void addNewRun (MNode run)
@@ -603,5 +607,14 @@ public class RunPanel extends JPanel
                 if (node.complete < 1) synchronized (running) {running.add (0, node);}
             };
         }.start ();
+    }
+
+    public void repaintSouth (TreePath path)
+    {
+        Rectangle node    = tree.getPathBounds (path);
+        Rectangle visible = treePane.getViewport ().getViewRect ();
+        visible.height -= node.y - visible.y;
+        visible.y       = node.y;
+        tree.paintImmediately (visible);
     }
 }

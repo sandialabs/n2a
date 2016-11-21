@@ -437,14 +437,13 @@ public class EquationTreePanel extends JPanel
                 if (! e.isAddedPath ()) return;
                 TreePath path = e.getPath ();
                 NodeBase newSelection = (NodeBase) path.getLastPathComponent ();
-                if (newSelection != oldSelection)
-                {
-                    if (oldSelection != null) tree.paintImmediately (oldBounds);
-                    Rectangle newBounds = tree.getPathBounds (path);
-                    tree.paintImmediately (newBounds);
-                    oldSelection = newSelection;
-                    oldBounds    = newBounds;
-                }
+                if (newSelection == oldSelection) return;
+
+                if (oldBounds != null) tree.paintImmediately (oldBounds);
+                Rectangle newBounds = tree.getPathBounds (path);
+                if (newBounds != null) tree.paintImmediately (newBounds);
+                oldSelection = newSelection;
+                oldBounds    = newBounds;
             }
         });
 
@@ -672,7 +671,7 @@ public class EquationTreePanel extends JPanel
         buttonFilter = new JButton (ImageUtil.getImage ("filter.png"));
         buttonFilter.setMargin (new Insets (2, 2, 2, 2));
         buttonFilter.setFocusable (false);
-        buttonFilter.setToolTipText ("Filter");
+        buttonFilter.setToolTipText ("Filter Equations");
         buttonFilter.addActionListener (new ActionListener ()
         {
             public void actionPerformed (ActionEvent e)
