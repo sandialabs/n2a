@@ -29,6 +29,7 @@ import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
 import javax.swing.tree.DefaultTreeModel;
+import javax.swing.tree.TreePath;
 
 public class NodeJob extends NodeBase
 {
@@ -128,8 +129,9 @@ public class NodeJob extends NodeBase
             {
                 public void run ()
                 {
-                    panel.model.nodeChanged (NodeJob.this);
                     if (panel.displayNode == NodeJob.this) panel.viewJob ();
+                    panel.model.nodeChanged (NodeJob.this);
+                    panel.tree.paintImmediately (panel.tree.getPathBounds (new TreePath (NodeJob.this.getPath ())));
                 }
             });
         }

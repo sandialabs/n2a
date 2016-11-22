@@ -181,7 +181,7 @@ public class RunPanel extends JPanel
                     });
 
                     // Periodic refresh to show status of running jobs
-                    int shortCycles = 100;  // Force full scan on first cycle.
+                    int shortCycles = 100;  // Use a number larger than our actual cycle limit, to force full scan on first cycle.
                     while (true)
                     {
                         NodeBase d = displayNode;  // Make local copy (atomic action) to prevent it changing from under us
