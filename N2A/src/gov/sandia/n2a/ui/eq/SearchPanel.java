@@ -47,7 +47,7 @@ public class SearchPanel extends JPanel
     protected JButton                 buttonClear;
     protected JList<MNode>            list;
     protected DefaultListModel<MNode> model;
-    protected ModelEditPanel          container;
+    protected ModelEditPanel          modelPanel;
     protected int                     lastSelection = -1;
 
     // Retrieve records matching the filter text, and deliver them to the model.
@@ -112,7 +112,7 @@ public class SearchPanel extends JPanel
 
     public SearchPanel (ModelEditPanel container)
     {
-        this.container = container;
+        modelPanel = container;
 
         list = new JList<MNode> (model = new DefaultListModel<MNode> ());
         list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
@@ -122,7 +122,7 @@ public class SearchPanel extends JPanel
         {
             public void mouseClicked (MouseEvent e)
             {
-                container.recordSelected ();
+                modelPanel.recordSelected ();
                 e.consume ();
             }
 
@@ -139,7 +139,7 @@ public class SearchPanel extends JPanel
                 int keycode = e.getKeyCode ();
                 if (keycode == KeyEvent.VK_ENTER)
                 {
-                    container.recordSelected ();
+                    modelPanel.recordSelected ();
                     e.consume ();
                 }
                 else if (keycode == KeyEvent.VK_DELETE  ||  keycode == KeyEvent.VK_BACK_SPACE)
@@ -149,7 +149,7 @@ public class SearchPanel extends JPanel
                         int   index    = list.getSelectedIndex ();
                         MNode deleteMe = list.getSelectedValue ();
                         if (deleteMe == null) return;
-                        container.recordDeleted (deleteMe);
+                        modelPanel.recordDeleted (deleteMe);
                         model.remove (index);
                         index = Math.min (model.size () - 1, index);
                         list.setSelectedIndex (index);
@@ -158,7 +158,7 @@ public class SearchPanel extends JPanel
                 }
                 else if (keycode == KeyEvent.VK_INSERT)
                 {
-                    container.createRecord ();
+                    modelPanel.createRecord ();
                 }
             }
         });

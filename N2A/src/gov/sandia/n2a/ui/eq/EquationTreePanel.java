@@ -93,7 +93,7 @@ import replete.util.Lay;
 
 public class EquationTreePanel extends JPanel
 {
-    protected ModelEditPanel container;
+    protected ModelEditPanel modelPanel;
     protected MNode record;
     protected int jobCount = 0;  // for launching jobs
 
@@ -317,7 +317,7 @@ public class EquationTreePanel extends JPanel
     // The main constructor. Most of the real work of setting up the UI is here, including some fairly elaborate listeners.
     public EquationTreePanel (ModelEditPanel container)
     {
-        this.container = container;
+        modelPanel = container;
 
         model = new FilteredTreeModel (null);
         tree  = new JTree (model)
@@ -362,7 +362,7 @@ public class EquationTreePanel extends JPanel
 
                 editor.editingNode.applyEdit (tree);
 
-                if (editor.editingNode == root) container.recordRenamed ();  // The only real reason to edit root is to change the name. However, it may also have stayed the same. We don't check for that.
+                if (editor.editingNode == root) modelPanel.recordRenamed ();  // The only real reason to edit root is to change the name. However, it may also have stayed the same. We don't check for that.
 
                 TreePath path = tree.getSelectionPath ();
                 if (path == null) path = updateSelection (parentPath, index);  // If we lose the selection, most likely applyEdit() deleted the node, and that function assumes the caller handles selection.
@@ -554,7 +554,7 @@ public class EquationTreePanel extends JPanel
 
                 updateOrder ();
 
-                container.searchHideSelection ();  // because DnD highlights a selection without triggering focus notifications
+                modelPanel.searchHideSelection ();  // because DnD highlights a selection without triggering focus notifications
 
                 return true;
             }  
@@ -1089,7 +1089,7 @@ public class EquationTreePanel extends JPanel
             }
         }
 
-        container.searchInsertDoc (result);
+        modelPanel.searchInsertDoc (result);
         return result;
     }
 
@@ -1109,7 +1109,7 @@ public class EquationTreePanel extends JPanel
                 if (controlKeyDown)  // Only delete the root (entire document) if the user does something extra to say they really mean it.
                 {
                     focusCache.remove (record);
-                    container.searchRemoveDoc (record);
+                    modelPanel.searchRemoveDoc (record);
                     ((MDoc) record).delete ();
                     record       = null;
                     root         = null;

@@ -70,7 +70,7 @@ public class Main
             {
                 LafManager.load ();
 
-                MainFrame mainFrame = MainFrame.getInstance ();
+                final MainFrame mainFrame = MainFrame.getInstance ();
                 mainFrame.addAttemptToCloseListener (new CommonWindowClosingListener ()
                 {
                     public void stateChanged (CommonWindowClosingEvent e)

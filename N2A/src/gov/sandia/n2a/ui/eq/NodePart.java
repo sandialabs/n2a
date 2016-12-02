@@ -506,7 +506,7 @@ public class NodePart extends NodeBase
             root.source = new MPart (doc);
             root.build ();
             root.findConnections ();
-            FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+            final FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
             model.reload ();
 
             // Re-select the current node, or as close as possible.
