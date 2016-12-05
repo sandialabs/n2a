@@ -261,7 +261,7 @@ public class NodeBase extends DefaultMutableTreeNode
 
     public FontMetrics getFontMetrics (JTree tree)
     {
-        EquationTreePanel.NodeRenderer renderer = (EquationTreePanel.NodeRenderer) tree.getCellRenderer ();
+        EquationTreeCellRenderer renderer = (EquationTreeCellRenderer) tree.getCellRenderer ();
         Font f = renderer.getFontFor (this);
         return tree.getGraphics ().getFontMetrics (f);
     }

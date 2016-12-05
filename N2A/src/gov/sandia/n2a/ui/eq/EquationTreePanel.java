@@ -21,9 +21,6 @@ import gov.sandia.n2a.ui.MainTabbedPane;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.RunPanel;
 
-import java.awt.Component;
-import java.awt.Dimension;
-import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Insets;
 import java.awt.Rectangle;
@@ -42,17 +39,13 @@ import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Enumeration;
-import java.util.EventObject;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-import javax.swing.AbstractAction;
 import javax.swing.Box;
 import javax.swing.ButtonGroup;
-import javax.swing.DefaultCellEditor;
-import javax.swing.Icon;
 import javax.swing.InputMap;
 import javax.swing.JButton;
 import javax.swing.JComponent;
@@ -66,7 +59,6 @@ import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
-import javax.swing.border.EmptyBorder;
 import javax.swing.event.CellEditorListener;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.PopupMenuEvent;
@@ -77,15 +69,9 @@ import javax.swing.event.TreeSelectionEvent;
 import javax.swing.event.TreeSelectionListener;
 import javax.swing.event.TreeWillExpandListener;
 import javax.swing.filechooser.FileFilter;
-import javax.swing.tree.DefaultTreeCellEditor;
-import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.ExpandVetoException;
-import javax.swing.tree.TreeCellEditor;
 import javax.swing.tree.TreePath;
 import javax.swing.tree.TreeSelectionModel;
-import javax.swing.undo.CannotRedoException;
-import javax.swing.undo.CannotUndoException;
-import javax.swing.undo.UndoManager;
 
 import replete.plugins.ExtensionPoint;
 import replete.plugins.PluginManager;
@@ -122,198 +108,6 @@ public class EquationTreePanel extends JPanel
     protected JPopupMenu menuFilter;
     protected long       menuFilterCanceledAt = 0;
 
-    /**
-        Extends the standard tree cell renderer to get icon and text style from NodeBase.
-        This is the core code that makes NodeBase work as a tree node representation.
-    **/
-    public class NodeRenderer extends DefaultTreeCellRenderer
-    {
-        protected Font  baseFont;
-        protected float baseFontSize;
-
-        @Override
-        public Component getTreeCellRendererComponent (JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
-        {
-            super.getTreeCellRendererComponent (tree, value, selected, expanded, leaf, row, hasFocus);
-
-            if (baseFont == null)
-            {
-                baseFont = getFont ().deriveFont (Font.PLAIN);
-                baseFontSize = baseFont.getSize2D ();
-            }
-
-            NodeBase n = (NodeBase) value;
-            setForeground (n.getForegroundColor ());
-            setIcon (getIconFor (n, expanded, leaf));
-            Font f = getFontFor (n);
-            setFont (f);
-            if (n.needsInitTabs ())
-            {
-                n.initTabs (tree.getGraphics ().getFontMetrics (f));
-                // convertValueToText() is called first thing in super.getTreeCellRendererComponent(),
-                // but text very likely has changed, so we need to call it again here.
-                setText (tree.convertValueToText (value, selected, expanded, leaf, row, hasFocus));
-            }
-
-            return this;
-        }
-
-        public Icon getIconFor (NodeBase node, boolean expanded, boolean leaf)
-        {
-            Icon result = node.getIcon (expanded);  // A node knows whether it should hold other nodes or not, so don't pass leaf to it.
-            if (result != null) return result;
-            if (leaf)     return getDefaultLeafIcon ();
-            if (expanded) return getDefaultOpenIcon ();
-            return               getDefaultClosedIcon ();
-        }
-
-        public Font getFontFor (NodeBase node)
-        {
-            int   style = node.getFontStyle ();
-            float scale = node.getFontScale ();
-            if (style != Font.PLAIN  ||  scale != 1) return baseFont.deriveFont (style, baseFontSize * scale);
-            return baseFont;
-        }
-    }
-
-    /**
-        Extends the standard tree cell editor to cooperate with NodeBase icon and text styles.
-        Adds a few other nice behaviors:
-        * Makes cell editing act more like a text document.
-          - No visible border
-          - Extends full width of tree panel
-        * Selects the value portion of an equation, facilitating the user to make simple changes.
-    **/
-    public class NodeEditor extends DefaultTreeCellEditor
-    {
-        public NodeBase         editingNode;
-        public DefaultTextField textField;
-
-        public NodeEditor (JTree tree, DefaultTreeCellRenderer renderer)
-        {
-            super (tree, renderer);
-        }
-
-        @Override
-        public Font getFont ()
-        {
-            return ((NodeRenderer) renderer).getFontFor (editingNode);
-        }
-
-        @Override
-        public boolean isCellEditable (EventObject e)
-        {
-            if (! super.isCellEditable (e)) return false;
-            if (lastPath == null) return false;
-            Object o = lastPath.getLastPathComponent ();
-            if (! (o instanceof NodeBase)) return false;
-            editingNode = (NodeBase) o;
-            return editingNode.allowEdit ();
-        }
-
-        /**
-            Set editingIcon and offset.
-        **/
-        @Override
-        protected void determineOffset (JTree tree, Object value, boolean isSelected, boolean expanded, boolean leaf, int row)
-        {
-            editingIcon = ((NodeRenderer) renderer).getIconFor ((NodeBase) value, expanded, leaf);
-            offset = renderer.getIconTextGap () + editingIcon.getIconWidth ();
-        }
-
-        @Override
-        protected TreeCellEditor createTreeCellEditor ()
-        {
-            textField = new DefaultTextField (new EmptyBorder (0, 0, 0, 0))
-            {
-                @Override
-                public Dimension getPreferredSize ()
-                {
-                    Dimension result = super.getPreferredSize ();
-                    result.width = Math.max (result.width, tree.getWidth () - (editingNode.getLevel () + 1) * offset - 5);  // The extra 5 pixels come from DefaultTreeCellEditor.EditorContainer.getPreferredSize()
-                    return result;
-                }
-            };
-
-            final UndoManager undo = new UndoManager ();
-            textField.getDocument ().addUndoableEditListener (undo);
-            textField.getActionMap ().put ("Undo", new AbstractAction ("Undo")
-            {
-                public void actionPerformed (ActionEvent evt)
-                {
-                    try {undo.undo ();}
-                    catch (CannotUndoException e) {}
-                }
-            });
-            textField.getActionMap ().put ("Redo", new AbstractAction ("Redo")
-            {
-                public void actionPerformed (ActionEvent evt)
-                {
-                    try {undo.redo();}
-                    catch (CannotRedoException e) {}
-                }
-            });
-            textField.getInputMap ().put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
-            textField.getInputMap ().put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
-            textField.getInputMap ().put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
-
-            textField.addFocusListener (new FocusListener ()
-            {
-                @Override
-                public void focusGained (FocusEvent e)
-                {
-                    // Analyze text of control and set an appropriate selection
-                    String text = textField.getText ();
-                    int equals = text.indexOf ('=');
-                    int at     = text.indexOf ('@');
-                    if (equals >= 0  &&  equals < text.length () - 1)  // also check for combiner character
-                    {
-                        if (":+*/<>".indexOf (text.charAt (equals + 1)) >= 0) equals++;
-                    }
-                    if (at < 0)  // no condition
-                    {
-                        if (equals >= 0)  // a single-line equation
-                        {
-                            textField.setCaretPosition (text.length ());
-                            textField.moveCaretPosition (equals + 1);
-                        }
-                        else  // A part name
-                        {
-                            textField.setCaretPosition (text.length ());
-                        }
-                    }
-                    else if (equals > at)  // a multi-conditional line that has "=" in the condition
-                    {
-                        textField.setCaretPosition (0);
-                        textField.moveCaretPosition (at);
-                    }
-                    else  // a single-line equation with a condition
-                    {
-                        textField.setCaretPosition (equals + 1);
-                        textField.moveCaretPosition (at);
-                    }
-                }
-
-                @Override
-                public void focusLost (FocusEvent e)
-                {
-                }
-            });
-
-            DefaultCellEditor result = new DefaultCellEditor (textField)
-            {
-                @Override
-                public Component getTreeCellEditorComponent (JTree tree, Object value, boolean isSelected, boolean expanded, boolean leaf, int row)
-                {
-                    // Lie about the expansion state, to force NodePart to return the true name of the part, without parenthetical info about type.
-                    return super.getTreeCellEditorComponent (tree, value, isSelected, true, leaf, row);
-                }
-            };
-            result.setClickCountToStart (1);
-            return result;
-        }
-    }
-
     // The main constructor. Most of the real work of setting up the UI is here, including some fairly elaborate listeners.
     public EquationTreePanel (ModelEditPanel container)
     {
@@ -342,10 +136,10 @@ public class EquationTreePanel extends JPanel
         inputMap             .remove (KeyStroke.getKeyStroke ("shift pressed DOWN"));
         inputMap.getParent ().remove (KeyStroke.getKeyStroke ("shift pressed DOWN"));
 
-        NodeRenderer renderer = new NodeRenderer ();
+        EquationTreeCellRenderer renderer = new EquationTreeCellRenderer ();
         tree.setCellRenderer (renderer);
 
-        final NodeEditor editor = new NodeEditor (tree, renderer);
+        final EquationTreeCellEditor editor = new EquationTreeCellEditor (tree, renderer);
         editor.addCellEditorListener (new CellEditorListener ()
         {
             @Override
