@@ -128,6 +128,7 @@ public class EquationTreePanel extends JPanel
         tree.setScrollsOnExpand (true);
         tree.getSelectionModel ().setSelectionMode (TreeSelectionModel.SINGLE_TREE_SELECTION);  // No multiple selection. It only makes deletes and moves more complicated.
         tree.setEditable (true);
+        tree.setToggleClickCount (0);  // Disable expand/collapse on double-click
 
         // Remove key bindings that we wish to use for changing order of nodes
         InputMap inputMap = tree.getInputMap ();
