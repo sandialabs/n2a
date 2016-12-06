@@ -38,12 +38,13 @@ import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoManager;
 
 /**
-    Extends the standard tree cell editor to cooperate with NodeBase icon and text styles.
+    Custom tree cell editor that cooperates with NodeBase icon and text styles.
     Adds a few other nice behaviors:
     * Makes cell editing act more like a text document.
       - No visible border
       - Extends full width of tree panel
     * Selects the value portion of an equation, facilitating the user to make simple changes.
+    * Instant one-click edit mode, rather than 1.2s delay.
 **/
 public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCellEditor, TreeSelectionListener
 {
@@ -291,10 +292,6 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
 
         public void paint (Graphics g)
         {
-            int x;
-            if (getComponentOrientation ().isLeftToRight ()) x = 0;
-            else                                             x = getWidth () - editingIcon.getIconWidth ();
-
             // This complex formula to center the icon vertically was copied from DefaultTreeCellEditor.EditorContainer.
             int iconHeight = editingIcon.getIconHeight ();
             int textHeight = editingComponent.getFontMetrics (editingComponent.getFont ()).getHeight ();  // TODO: this only works for oneLineEditor
@@ -303,8 +300,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             int totalHeight = Math.max (iconHeight, textY + textHeight) - totalY;
             int y = getHeight () / 2 - (totalY + (totalHeight / 2));
 
-            editingIcon.paintIcon (this, g, x, y);
-
+            editingIcon.paintIcon (this, g, 0, y);
             super.paint (g);
         }
 
@@ -314,14 +310,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         public void doLayout ()
         {
             if (editingComponent == null) return;
-
-            int width  = getWidth  ();
-            int height = getHeight ();
-            int x;
-            if (getComponentOrientation ().isLeftToRight ()) x = offset;
-            else                                             x = 0;
-
-            editingComponent.setBounds (x, 0, width - offset, height);
+            editingComponent.setBounds (offset, 0, getWidth () - offset, getHeight ());
         }
 
         public Dimension getPreferredSize ()
