@@ -36,6 +36,19 @@ public class NodeReference extends NodeBase
     }
 
     @Override
+    public String getText (boolean expanded, boolean editing)
+    {
+        String result = toString ();
+        if (editing  &&  ! result.isEmpty ())  // An empty user object indicates a newly created node, which we want to edit as a blank.
+        {
+            result       = source.key ();
+            String value = source.get ();
+            if (! value.isEmpty ()) result = result + "=" + value;
+        }
+        return result;
+    }
+
+    @Override
     public void invalidateTabs ()
     {
         columnWidths = null;
@@ -79,6 +92,9 @@ public class NodeReference extends NodeBase
         String value  = source.get ();
         if (! value.isEmpty ())
         {
+            String[] pieces = value.split ("\n", 2);
+            if (pieces.length > 1) value = pieces[0] + " ...";
+
             int offset = tabs.get (0).intValue ();
             if (! (getParent () instanceof NodeReferences))  // not in a $reference block, so may share tab stops with equations and annotations
             {
@@ -98,18 +114,6 @@ public class NodeReference extends NodeBase
     }
 
     @Override
-    public boolean allowEdit ()
-    {
-        if (toString ().isEmpty ()) return true;  // An empty user object indicates a newly created node, which we want to edit as a blank.
-
-        String name  = source.key ();
-        String value = source.get ();
-        if (value.isEmpty ()) setUserObject (name);
-        else                  setUserObject (name + "=" + value);
-        return true;
-    }
-
-    @Override
     public void applyEdit (JTree tree)
     {
         String input = (String) getUserObject ();
@@ -120,7 +124,7 @@ public class NodeReference extends NodeBase
         }
 
         String[] parts = input.split ("=", 2);
-        String name = parts[0].trim ();
+        String name = parts[0].trim ().replaceAll ("[ \\n\\t]", "");
         String value;
         if (parts.length > 1) value = parts[1].trim ();
         else                  value = "";

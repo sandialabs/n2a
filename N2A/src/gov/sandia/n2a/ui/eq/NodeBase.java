@@ -102,7 +102,7 @@ public class NodeBase extends DefaultMutableTreeNode
         return null;
     }
 
-    public String getText (boolean expanded)
+    public String getText (boolean expanded, boolean editing)
     {
         return toString ();  // parent class uses the "user object", which is the string we set elsewhere
     }

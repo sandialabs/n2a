@@ -213,10 +213,10 @@ public class NodePart extends NodeBase
     }
 
     @Override
-    public String getText (boolean expanded)
+    public String getText (boolean expanded, boolean editing)
     {
         String key = toString ();  // This allows us to set editing text to "" for new objects, while showing key for old objects.
-        if (expanded  ||  parentName.isEmpty ()) return key;
+        if (expanded  ||  editing  ||  parentName.isEmpty ()) return key;
         return key + "  (" + parentName + ")";
     }
 

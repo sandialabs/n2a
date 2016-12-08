@@ -135,8 +135,9 @@ public class Main
                 JOptionPane.showMessageDialog
                 (
                     parent,
-                    "<html><body><p style='width:300px'>Our apologies, but an exception was raised. Details have been saved in " + crashdump.getAbsolutePath ()
-                    + ". Please consider filing a bug report on github, including the crashdump file and a description of what you were doing at the time.</p></body></html>",
+                    "<html><body><p style='width:300px'>Our apologies, but an exception was raised.<br>"
+                    + "<br>Details have been saved in " + crashdump.getAbsolutePath () + "<br>"
+                    + "<br>Please consider filing a bug report on github, including the crashdump file and a description of what you were doing at the time.</p></body></html>",
                     "Internal Error",
                     JOptionPane.ERROR_MESSAGE
                 );

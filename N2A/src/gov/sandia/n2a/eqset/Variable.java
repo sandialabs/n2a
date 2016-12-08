@@ -154,7 +154,13 @@ public class Variable implements Comparable<Variable>
             String[] pieces = value.split ("@", 2);
             expression = pieces[0].trim ();
             if (pieces.length < 2) conditional = "";
-            else                   conditional = pieces[1].trim ();
+            else                   conditional = pieces[1].trim ().replaceAll ("[\\n\\t]", "");
+        }
+
+        public String toString ()
+        {
+            if (conditional.isEmpty ()) return combiner + expression;
+            return combiner + expression + "@" + conditional;
         }
     }
 

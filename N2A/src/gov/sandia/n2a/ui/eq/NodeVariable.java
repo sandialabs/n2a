@@ -108,10 +108,11 @@ public class NodeVariable extends NodeBase
     }
 
     @Override
-    public String getText (boolean expanded)
+    public String getText (boolean expanded, boolean editing)
     {
         String result = toString ();
         if (result.isEmpty ()) return result;  // Allow user object to be "" for new nodes.
+        if (editing) return source.key () + "=" + source.get ();  // We're about to go into edit, so remove tabs.
         if (! expanded  &&  children != null)  // show "..." when multi-line equation is collapsed
         {
             for (Object o : children)
@@ -258,16 +259,6 @@ public class NodeVariable extends NodeBase
     }
 
     @Override
-    public boolean allowEdit ()
-    {
-        if (! getUserObject ().toString ().isEmpty ())  // An empty user object indicates a newly created node, which we want to edit as a blank.
-        {
-            setUserObject (source.key () + "=" + source.get ());  // We're about to go into edit, so remove tabs.
-        }
-        return true;
-    }
-
-    @Override
     public void applyEdit (JTree tree)
     {
         String input = (String) getUserObject ();
@@ -283,7 +274,7 @@ public class NodeVariable extends NodeBase
         NodeBase parent = (NodeBase) getParent ();
 
         String[] parts = input.split ("=", 2);
-        String name = parts[0].trim ();
+        String name = parts[0].trim ().replaceAll ("[ \\n\\t]", "");
         String value;
         if (parts.length > 1) value = parts[1].trim ();
         else                  value = "";
@@ -374,7 +365,7 @@ public class NodeVariable extends NodeBase
             // Update ourselves. Exact action depends on whether we are single-line or multi-conditional.
             if (equations.size () == 0)
             {
-                source.set (value);
+                source.set (pieces.toString ());
             }
             else
             {
@@ -409,7 +400,7 @@ public class NodeVariable extends NodeBase
             if (name.equals ("$inherit"))
             {
                 mparent.clear (oldKey);  // We abandon everything under this node, because $inherit does not have a subtree. (It might in the future, to store UIDs of referenced parts.)
-                newPart = (MPart) mparent.set (value, name);
+                newPart = (MPart) mparent.set (pieces.toString (), name);
                 inherit = new NodeInherit (newPart);
                 model.insertNodeIntoUnfiltered (inherit, parent, 0);
                 if (parent instanceof NodePart)  // It had better be! There is no other legal configuration.
@@ -423,7 +414,7 @@ public class NodeVariable extends NodeBase
                 // Inject the changed equation into the underlying data before renaming.
                 if (equations.size () == 0)
                 {
-                    source.set (value);
+                    source.set (pieces.toString ());
                 }
                 else
                 {

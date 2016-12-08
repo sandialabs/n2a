@@ -17,20 +17,25 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.util.EventObject;
 
 import javax.swing.AbstractAction;
 import javax.swing.AbstractCellEditor;
 import javax.swing.Icon;
+import javax.swing.InputMap;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JTree;
+import javax.swing.JViewport;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.TreeSelectionEvent;
 import javax.swing.event.TreeSelectionListener;
-import javax.swing.plaf.FontUIResource;
 import javax.swing.tree.TreeCellEditor;
 import javax.swing.tree.TreePath;
 import javax.swing.undo.CannotRedoException;
@@ -52,8 +57,11 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
     protected EquationTreeCellRenderer renderer;
     protected UndoManager              undoManager;
     protected JTextField               oneLineEditor;
+    protected JTextArea                multiLineEditor;
+    protected JScrollPane              multiLinePane;  // provides scrolling for multiLineEditor, and acts as the editingComponent
 
     protected TreePath                 lastPath;
+    public    boolean                  multiLineRequested;  ///< Indicates that the next getTreeCellEditorComponent() call should return multi-line, even the node is normally single line.
     protected NodeBase                 editingNode;
     protected Container                editingContainer;
     protected Component                editingComponent;
@@ -67,32 +75,8 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         undoManager = new UndoManager ();
         editingContainer = new EditorContainer ();
 
-        oneLineEditor = new JTextField ()
-        {
-            public Font getFont ()
-            {
-                Font font = super.getFont ();
 
-                // Prefer the parent containers font if our font is a FontUIResource
-                if (font instanceof FontUIResource)
-                {
-                    Container parent = getParent ();
-                    if (parent != null)
-                    {
-                        Font parentFont = parent.getFont ();
-                        if (parentFont != null) font = parentFont;
-                    }
-                }
-                return font;
-            }
-
-            public Dimension getPreferredSize ()
-            {
-                Dimension result = super.getPreferredSize ();
-                result.width = Math.max (result.width, tree.getWidth () - (editingNode.getLevel () + 1) * offset);
-                return result;
-            }
-        };
+        oneLineEditor = new JTextField ();
         oneLineEditor.setBorder (new EmptyBorder (0, 0, 0, 0));
 
         oneLineEditor.getDocument ().addUndoableEditListener (undoManager);
@@ -112,9 +96,10 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
                 catch (CannotRedoException e) {}
             }
         });
-        oneLineEditor.getInputMap ().put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
-        oneLineEditor.getInputMap ().put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
-        oneLineEditor.getInputMap ().put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
+        InputMap map = oneLineEditor.getInputMap ();
+        map.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+        map.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+        map.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
 
         oneLineEditor.addFocusListener (new FocusListener ()
         {
@@ -150,8 +135,6 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
                     oneLineEditor.setCaretPosition (equals + 1);
                     oneLineEditor.moveCaretPosition (at);
                 }
-
-                undoManager.discardAllEdits ();
             }
 
             public void focusLost (FocusEvent e)
@@ -166,29 +149,82 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
                 stopCellEditing ();
             }
         });
+
+
+        multiLineEditor = new JTextArea ();
+        multiLinePane = new JScrollPane (multiLineEditor);
+        multiLineEditor.setLineWrap (true);
+        multiLineEditor.setWrapStyleWord (true);
+        multiLineEditor.setRows (6);
+        multiLineEditor.setTabSize (4);
+
+        multiLineEditor.getDocument ().addUndoableEditListener (undoManager);
+        multiLineEditor.getActionMap ().put ("Undo", new AbstractAction ("Undo")
+        {
+            public void actionPerformed (ActionEvent evt)
+            {
+                try {undoManager.undo ();}
+                catch (CannotUndoException e) {}
+            }
+        });
+        multiLineEditor.getActionMap ().put ("Redo", new AbstractAction ("Redo")
+        {
+            public void actionPerformed (ActionEvent evt)
+            {
+                try {undoManager.redo();}
+                catch (CannotRedoException e) {}
+            }
+        });
+        map = multiLineEditor.getInputMap ();
+        map.put (KeyStroke.getKeyStroke ("ENTER"),           "none");
+        map.put (KeyStroke.getKeyStroke ("control ENTER"),   "insert-break");
+        map.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+        map.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+        map.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
+
+        multiLineEditor.addKeyListener (new KeyAdapter ()
+        {
+            public void keyPressed (KeyEvent e)
+            {
+                if (e.getKeyCode () == KeyEvent.VK_ENTER  &&  ! e.isControlDown ()) stopCellEditing ();
+            }
+        });
     }
 
     @Override
     public Component getTreeCellEditorComponent (JTree tree, Object value, boolean isSelected, boolean expanded, boolean leaf, int row)
     {
-        setTree (tree);
         editingIcon = renderer.getIconFor ((NodeBase) value, expanded, leaf);
-        offset = renderer.getIconTextGap () + editingIcon.getIconWidth ();
+        offset      = renderer.getIconTextGap () + editingIcon.getIconWidth ();
+        Font font   = renderer.getFontFor (editingNode);
+        String text = editingNode.getText (expanded, true);
 
         if (editingComponent != null) editingContainer.remove (editingComponent);
-        editingComponent = oneLineEditor;  // TODO: Decide which editing component to use
-        String text = tree.convertValueToText (value, isSelected, true, leaf, row, false);  // Lie about the expansion state, to force NodePart to return the true name of the part, without parenthetical info about type.
-        oneLineEditor.setText (text);
-        editingContainer.setFont (renderer.getFontFor (editingNode));  // Should cause the contained text editor to use that font.
+        if (text.contains ("\n")  ||  multiLineRequested)
+        {
+            editingComponent = multiLinePane;
+            multiLineEditor.setText (text);
+            multiLineEditor.setFont (font);
+            int equals = text.indexOf ('=');
+            if (equals >= 0) multiLineEditor.setCaretPosition (equals);
+            multiLineRequested = false;
+        }
+        else
+        {
+            editingComponent = oneLineEditor;
+            oneLineEditor.setText (text);
+            oneLineEditor.setFont (font);
+        }
         editingContainer.add (editingComponent);
+        undoManager.discardAllEdits ();
         return editingContainer;
     }
 
     @Override
     public Object getCellEditorValue ()
     {
-        // TODO: handle editor switching
-        return oneLineEditor.getText ();
+        if (editingComponent == oneLineEditor) return oneLineEditor.getText ();
+        return multiLineEditor.getText ();  // TODO: post-process the text to remove added \n after =
     }
 
     /**
@@ -238,25 +274,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         if (! (o instanceof NodeBase)) return false;
         editingNode = (NodeBase) o;
         if (! editingNode.allowEdit ()) return false;
-
-        // We will permit the edit, so prepare the container.
-        if (editingComponent != null) editingContainer.add (editingComponent);
         return true;
-    }
-
-    @Override
-    public boolean stopCellEditing ()
-    {
-        fireEditingStopped ();
-        cleanupAfterEditing ();
-        return true;
-    }
-
-    @Override
-    public void cancelCellEditing ()
-    {
-        fireEditingCanceled ();
-        cleanupAfterEditing ();
     }
 
     @Override
@@ -274,12 +292,6 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         if (tree != null) tree.addTreeSelectionListener (this);
     }
 
-    protected void cleanupAfterEditing ()
-    {
-        if (editingComponent != null) editingContainer.remove (editingComponent);
-        editingComponent = null;
-    }
-
     /**
         Draws the node icon.
     **/
@@ -293,8 +305,9 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         public void paint (Graphics g)
         {
             // This complex formula to center the icon vertically was copied from DefaultTreeCellEditor.EditorContainer.
+            // It works for both single and multiline editors.
             int iconHeight = editingIcon.getIconHeight ();
-            int textHeight = editingComponent.getFontMetrics (editingComponent.getFont ()).getHeight ();  // TODO: this only works for oneLineEditor
+            int textHeight = editingComponent.getFontMetrics (editingComponent.getFont ()).getHeight ();
             int textY = iconHeight / 2 - textHeight / 2;  // Vertical offset where text starts w.r.t. top of icon. Can be negative if text is taller.
             int totalY = Math.min (0, textY);
             int totalHeight = Math.max (iconHeight, textY + textHeight) - totalY;
@@ -316,13 +329,11 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         public Dimension getPreferredSize ()
         {
             Dimension pSize = editingComponent.getPreferredSize ();
-            pSize.width += offset;
+            pSize.width = ((JViewport) tree.getParent ()).getViewRect ().width - editingNode.getLevel () * offset;  // getLevel() will return 1 less than needed value, which exactly compensates for the icon space.
+            pSize.width = Math.max (100, pSize.width);
 
             Dimension rSize = renderer.getPreferredSize ();
             pSize.height = Math.max (pSize.height, rSize.height);
-
-            pSize.height = Math.max (pSize.height, editingIcon.getIconHeight ());
-            pSize.width  = Math.max (pSize.width, 100);
 
             return pSize;
         }

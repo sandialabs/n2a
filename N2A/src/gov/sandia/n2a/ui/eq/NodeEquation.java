@@ -38,6 +38,19 @@ public class NodeEquation extends NodeBase
     }
 
     @Override
+    public String getText (boolean expanded, boolean editing)
+    {
+        String result = toString ();
+        if (editing  &&  ! result.isEmpty ())  // An empty user object indicates a newly created node, which we want to edit as a blank.
+        {
+            result           = source.get ();
+            String condition = source.key ();
+            if (! condition.equals ("@")) result = result + condition;
+        }
+        return result;
+    }
+
+    @Override
     public void invalidateTabs ()
     {
         columnWidths = null;
@@ -84,19 +97,6 @@ public class NodeEquation extends NodeBase
     {
         if (type.isEmpty ()) type = "Equation";
         return ((NodeBase) getParent ()).add (type, tree);
-    }
-
-    @Override
-    public boolean allowEdit ()
-    {
-        if (! getUserObject ().toString ().isEmpty ())  // An empty user object indicates a newly created node, which we want to edit as a blank.
-        {
-            String condition  = source.key ();
-            String expression = source.get ();
-            if (condition.equals ("@")) setUserObject (expression);
-            else                        setUserObject (expression + condition);
-        }
-        return true;
     }
 
     @Override

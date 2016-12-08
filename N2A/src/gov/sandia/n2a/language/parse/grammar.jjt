@@ -47,7 +47,7 @@ PARSER_END(ExpressionParser)
 
 <*> SKIP:
 {
-    " " | "\t"
+    " " | "\t" | "\n"
 }
 
 TOKEN:

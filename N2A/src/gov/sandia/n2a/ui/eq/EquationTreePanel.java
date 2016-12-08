@@ -120,7 +120,7 @@ public class EquationTreePanel extends JPanel
             public String convertValueToText (Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
             {
                 if (value == null) return "";
-                return ((NodeBase) value).getText (expanded);
+                return ((NodeBase) value).getText (expanded, false);
             }
         };
 
@@ -258,7 +258,12 @@ public class EquationTreePanel extends JPanel
                 }
                 else if (keycode == KeyEvent.VK_ENTER)
                 {
-                    editSelected ();
+                    TreePath path = tree.getSelectionPath ();
+                    if (path != null)
+                    {
+                        if (e.isControlDown ()  &&  ! (path.getLastPathComponent () instanceof NodePart)) editor.multiLineRequested = true;
+                        tree.startEditingAtPath (path);
+                    }
                 }
                 else if (e.isShiftDown ())
                 {
@@ -886,12 +891,6 @@ public class EquationTreePanel extends JPanel
 
         modelPanel.searchInsertDoc (result);
         return result;
-    }
-
-    public void editSelected ()
-    {
-        TreePath path = tree.getSelectionPath ();
-        if (path != null) tree.startEditingAtPath (path);
     }
 
     public void deleteSelected (boolean controlKeyDown)
