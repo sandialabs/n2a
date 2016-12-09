@@ -24,6 +24,7 @@ import java.util.EventObject;
 
 import javax.swing.AbstractAction;
 import javax.swing.AbstractCellEditor;
+import javax.swing.ActionMap;
 import javax.swing.Icon;
 import javax.swing.InputMap;
 import javax.swing.JScrollPane;
@@ -80,7 +81,8 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         oneLineEditor.setBorder (new EmptyBorder (0, 0, 0, 0));
 
         oneLineEditor.getDocument ().addUndoableEditListener (undoManager);
-        oneLineEditor.getActionMap ().put ("Undo", new AbstractAction ("Undo")
+        ActionMap actionMap = oneLineEditor.getActionMap ();
+        actionMap.put ("Undo", new AbstractAction ("Undo")
         {
             public void actionPerformed (ActionEvent evt)
             {
@@ -88,7 +90,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
                 catch (CannotUndoException e) {}
             }
         });
-        oneLineEditor.getActionMap ().put ("Redo", new AbstractAction ("Redo")
+        actionMap.put ("Redo", new AbstractAction ("Redo")
         {
             public void actionPerformed (ActionEvent evt)
             {
@@ -96,10 +98,10 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
                 catch (CannotRedoException e) {}
             }
         });
-        InputMap map = oneLineEditor.getInputMap ();
-        map.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
-        map.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
-        map.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
+        InputMap inputMap = oneLineEditor.getInputMap ();
+        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+        inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
 
         oneLineEditor.addFocusListener (new FocusListener ()
         {
@@ -159,7 +161,8 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         multiLineEditor.setTabSize (4);
 
         multiLineEditor.getDocument ().addUndoableEditListener (undoManager);
-        multiLineEditor.getActionMap ().put ("Undo", new AbstractAction ("Undo")
+        actionMap = multiLineEditor.getActionMap ();
+        actionMap.put ("Undo", new AbstractAction ("Undo")
         {
             public void actionPerformed (ActionEvent evt)
             {
@@ -167,7 +170,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
                 catch (CannotUndoException e) {}
             }
         });
-        multiLineEditor.getActionMap ().put ("Redo", new AbstractAction ("Redo")
+        actionMap.put ("Redo", new AbstractAction ("Redo")
         {
             public void actionPerformed (ActionEvent evt)
             {
@@ -175,12 +178,12 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
                 catch (CannotRedoException e) {}
             }
         });
-        map = multiLineEditor.getInputMap ();
-        map.put (KeyStroke.getKeyStroke ("ENTER"),           "none");
-        map.put (KeyStroke.getKeyStroke ("control ENTER"),   "insert-break");
-        map.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
-        map.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
-        map.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
+        inputMap = multiLineEditor.getInputMap ();
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),           "none");
+        inputMap.put (KeyStroke.getKeyStroke ("control ENTER"),   "insert-break");
+        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+        inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
 
         multiLineEditor.addKeyListener (new KeyAdapter ()
         {
