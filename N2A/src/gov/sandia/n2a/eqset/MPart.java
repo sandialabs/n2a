@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.eqset;
 
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
@@ -47,7 +48,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         inheritedFrom   = null;
 
         underrideChildren (null, source);
-        expand (source);
+        expand ();
     }
 
     protected MPart (MPart container, MPart inheritedFrom, MPersistent source)
@@ -59,65 +60,72 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     }
 
     /**
+        Convenience method for expand(LinkedList<MPersistent>).
+    **/
+    public synchronized void expand ()
+    {
+        LinkedList<MPersistent> visited = new LinkedList<MPersistent> ();
+        visited.push (getRoot ().source);
+        expand (visited);
+    }
+
+    /**
         Loads all inherited structure into the sub-tree rooted at this node,
         using existing structure placed here by higher nodes as a starting point.
         The remainder of the tree is filled in by "underride". Assumes this sub-tree
         is a clean structure with only entries placed by higher levels, and no
         lingering structure that we might otherwise build now.
+        @param visited Used to guard against a document loading itself.
     **/
-    public synchronized void expand ()
+    public synchronized void expand (LinkedList<MPersistent> visited)
     {
-        expand (getRoot ().source);
-    }
-
-    /**
-        Loads all our inherited equations, then recurses down to each contained part.
-        @param topDocument Used to guard against a document loading itself.
-    **/
-    public synchronized void expand (MPersistent topDocument)
-    {
-        inherit (topDocument);
+        inherit (visited);
         for (MNode n : this)
         {
             MPart p = (MPart) n;
-            if (p.isPart ()) p.expand (topDocument);
+            if (p.isPart ()) p.expand (visited);
         }
     }
 
     /**
         Initiates an underride load of all equations inherited by this node,
         using the current value of $inherit in our collated children.
-        @param topDocument Used to guard against a document loading itself.
+        @param visited Used to guard against a document loading itself.
     **/
-    public synchronized void inherit (MPersistent topDocument)
+    public synchronized void inherit (LinkedList<MPersistent> visited)
     {
         if (children == null) return;
         MPart from = (MPart) children.get ("$inherit");
-        if (from != null) inherit (topDocument, from, from.get ());
+        if (from != null) inherit (visited, from, from.get ());
     }
 
     /**
         Injects inherited equations as children of this node.
         Handles recursion up the hierarchy of parents.
-        @param topDocument Used to guard against a document loading itself.
+        @param visited Used to guard against a document loading itself.
         @param from The node in the collated tree (named "$inherit") which triggered the current
         round of inheritance. May be a child of a higher node, or a child of this node, but never a child
         of a lower node.
         @param value The RHS of the $inherit statement. We parse this into a set of part names
         which we retrieve from the database.
     **/
-    public synchronized void inherit (MPersistent topDocument, MPart from, String value)
+    public synchronized void inherit (LinkedList<MPersistent> visited, MPart from, String value)
     {
-        String[] parenttNames = value.split (",");
-        for (String parentName : parenttNames)
+        String[] parentNames = value.split (",");
+        for (String parentName : parentNames)
         {
             parentName = parentName.trim ().replace ("\"", "");
             MPersistent parentSource = (MPersistent) AppData.models.child (parentName);
-            if (parentSource != null  &&  parentSource != topDocument)
+            if (parentSource != null  &&  ! visited.contains (parentSource))
             {
                 underrideChildren (from, parentSource);
                 MPersistent parentFrom = (MPersistent) parentSource.child ("$inherit");
-                if (parentFrom != null) inherit (topDocument, from, parentFrom.get ());  // yes, we continue to treat the root "from" as the initiator for all the inherited equations
+                if (parentFrom != null)
+                {
+                    visited.push (parentSource);
+                    inherit (visited, from, parentFrom.get ());  // yes, we continue to treat the root "from" as the initiator for all the inherited equations
+                    visited.pop ();
+                }
             }
         }
     }
