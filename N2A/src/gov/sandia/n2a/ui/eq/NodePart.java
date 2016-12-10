@@ -446,7 +446,6 @@ public class NodePart extends NodeBase
         MPart oldPart = (MPart) mparent.child (oldKey);
         if (oldPart != null)  // This node overrode some inherited values.
         {
-            oldPart.expand ();
             NodePart p = new NodePart (oldPart);
             model.insertNodeIntoUnfiltered (p, parent, parent.getIndex (this));
             p.build ();
@@ -485,60 +484,11 @@ public class NodePart extends NodeBase
         }
         else  // Just exposed an overridden node
         {
-            // TODO: releasing override on $inherit does not update MPart tree correctly. If that were fixed, then no need to reload whole tree, just refresh this subtree.
-            reloadTree (tree);
-        }
-    }
-
-    /**
-        Completely rebuild tree.
-    **/
-    public void reloadTree (final JTree tree)
-    {
-        final NodePart root = (NodePart) getRoot ();
-        MPersistent doc = root.source.getSource ();
-
-        final ArrayList<String> keyPath = new ArrayList<String> ();
-        for (TreeNode t : getPath ()) keyPath.add (((NodeBase) t).source.key ());
-
-        try
-        {
-            root.source = new MPart (doc);
-            root.build ();
-            root.findConnections ();
-            final FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-            model.reload ();
-
-            // Re-select the current node, or as close as possible.
-            EventQueue.invokeLater (new Runnable ()
-            {
-                public void run ()
-                {
-                    NodeBase n = root;
-                    for (int i = 1; i < keyPath.size (); i++)
-                    {
-                        String key = keyPath.get (i);
-                        boolean found = false;
-                        int count = model.getChildCount (n);
-                        for (int j = 0; j < count; j++)
-                        {
-                            NodeBase c = (NodeBase) model.getChild (n, j);
-                            if (c.source.key ().equals (key))
-                            {
-                                found = true;
-                                n = c;
-                                break;
-                            }
-                        }
-                        if (! found) break;
-                    }
-                    tree.setSelectionPath (new TreePath (n.getPath ()));
-                }
-            });
-        }
-        catch (Exception e)
-        {
-            System.err.println ("Exception while parsing model: " + e);
+            build ();
+            findConnections ();
+            filter (model.filterLevel);
+            if (visible (model.filterLevel)) model.nodeStructureChanged (this);
+            else                             ((NodePart) getParent ()).hide (this, model);
         }
     }
 }

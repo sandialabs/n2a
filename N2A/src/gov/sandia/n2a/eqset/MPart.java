@@ -133,6 +133,8 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     /**
         Injects inherited equations at this node.
         Handles recursion down our containment hierarchy.
+        This method only changes the node if it has no existing inheritedFrom value,
+        so it is safe to run more than once for a given $inherit statement.
         @param newSource The current node in the source document which corresponds to this node in the MPart tree.
     **/
     public synchronized void underride (MPart from, MPersistent newSource)
@@ -148,6 +150,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     /**
         Injects inherited equations as children of this node.
         Handles recursion down our containment hierarchy.
+        See note on underride(MPart,MPersistent). This is safe to run more than once for a given $inherit statement.
         @param newSource The current node in the source document which matches this node in the MPart tree.
     **/
     public synchronized void underrideChildren (MPart from, MPersistent newSource)
@@ -197,7 +200,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
 
         if (children == null) return;
         MPart inherit = (MPart) children.get ("$inherit");
-        if (inherit != null  &&  inherit.inheritedFrom == from) purge (inherit, null);  // Note that in all cases, inherit.inheritedFrom != inherit
+        if (inherit != null  &&  inherit.inheritedFrom == from) purge (inherit, null);  // If our local $inherit is contingent on "from", then remove all its effects as well. Note that a $inherit line never comes from itself (inherit.inheritedFrom != inherit).
 
         Iterator<MNode> childIterator = iterator ();
         while (childIterator.hasNext ()) ((MPart) childIterator.next ()).purge (from, childIterator);
@@ -300,6 +303,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         if (! isFromTopDocument ()) return; // Nothing to do.
         releaseOverrideChildren (true);
         clearPath ();
+        expand ();
     }
 
     /**
@@ -323,6 +327,13 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         ((MPart) children.get (index)).releaseOverride (removeFromTopDocument);
         if (removeFromTopDocument) source.clear (index);
         clearPath ();
+
+        MPart c = (MPart) children.get (index);  // If child still exists, then it was overridden but exposed by the delete.
+        if (c != null)
+        {
+            if (index.equals ("$inherit")) expand ();  // We changed our $inherit expression, so rebuild our subtree.
+            else                         c.expand ();  // Otherwise, rebuild the subtree under the child.
+        }
     }
 
     /**

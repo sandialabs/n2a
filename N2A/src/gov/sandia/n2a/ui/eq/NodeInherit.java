@@ -26,6 +26,15 @@ public class NodeInherit extends NodeBase
     }
 
     @Override
+    public boolean visible (int filterLevel)
+    {
+        if (filterLevel == FilteredTreeModel.ALL)    return true;
+        if (filterLevel == FilteredTreeModel.PUBLIC) return true;
+        // FilteredTreeModel.LOCAL ...
+        return source.isFromTopDocument ();
+    }
+
+    @Override
     public Icon getIcon (boolean expanded)
     {
         return icon;
@@ -67,6 +76,7 @@ public class NodeInherit extends NodeBase
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         parent.build ();
         parent.filter (model.filterLevel);
-        model.nodeStructureChanged (parent);
+        if (parent.visible (model.filterLevel)) model.nodeStructureChanged (parent);
+        else                                    ((NodeBase) parent.getParent ()).hide (parent, model);
     }
 }

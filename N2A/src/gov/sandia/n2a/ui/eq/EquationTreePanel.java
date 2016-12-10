@@ -1073,7 +1073,12 @@ public class EquationTreePanel extends JPanel
         for (int i = path.getPathCount () - 1; i >= 0; i--)
         {
             NodeBase n = (NodeBase) path.getPathComponent (i);
-            if (! n.source.isFromTopDocument ()) model.nodeChanged (n);
+            if (! n.source.isFromTopDocument ())
+            {
+                model.nodeChanged (n);
+                Rectangle bounds = tree.getPathBounds (new TreePath (n.getPath ()));
+                tree.paintImmediately (bounds);
+            }
         }
     }
 
