@@ -8,7 +8,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.eq;
 
-import java.awt.EventQueue;
 import java.awt.Font;
 import java.util.ArrayList;
 import java.util.Enumeration;
