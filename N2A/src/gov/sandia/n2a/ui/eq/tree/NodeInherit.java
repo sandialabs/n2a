@@ -6,9 +6,11 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
 
-package gov.sandia.n2a.ui.eq;
+package gov.sandia.n2a.ui.eq.tree;
 
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.NodeBase;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;

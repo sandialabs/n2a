@@ -18,6 +18,11 @@ import gov.sandia.n2a.plugins.extpoints.Exporter;
 import gov.sandia.n2a.plugins.extpoints.Importer;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.MainTabbedPane;
+import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
+import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
+import gov.sandia.n2a.ui.eq.tree.NodePart;
+import gov.sandia.n2a.ui.eq.undo.AddDoc;
+import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.RunPanel;
 
@@ -80,13 +85,13 @@ import replete.util.Lay;
 public class EquationTreePanel extends JPanel
 {
     protected ModelEditPanel modelPanel;
-    protected MNode record;
     protected int jobCount = 0;  // for launching jobs
 
     // Tree
-    protected JTree                 tree;
-    protected FilteredTreeModel     model;
-    protected NodePart              root;
+    public    JTree                 tree;
+    public    FilteredTreeModel     model;
+    public    NodePart              root;
+    public    MNode                 record;
     protected JScrollPane           scrollPane;
     protected Map<MNode,StoredPath> focusCache = new HashMap<MNode,StoredPath> ();
 
@@ -388,7 +393,7 @@ public class EquationTreePanel extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                modelPanel.doManager.add (new DoAddDoc ());
+                modelPanel.doManager.add (new AddDoc ());
             }
         });
 
@@ -913,7 +918,7 @@ public class EquationTreePanel extends JPanel
             {
                 if (controlKeyDown)  // Only delete the root (entire document) if the user does something extra to say they really mean it.
                 {
-                    modelPanel.doManager.add (new DoDeleteDoc ((MDoc) record, false, true));
+                    modelPanel.doManager.add (new DeleteDoc ((MDoc) record, false, true));
                 }
             }
             else

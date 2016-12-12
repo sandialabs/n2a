@@ -5,7 +5,7 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.ui.eq;
+package gov.sandia.n2a.ui.eq.undo;
 
 import javax.swing.undo.UndoableEdit;
 
@@ -13,8 +13,10 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
+import gov.sandia.n2a.ui.eq.Do;
+import gov.sandia.n2a.ui.eq.ModelEditPanel;
 
-public class DoDeleteDoc extends Do
+public class DeleteDoc extends Do
 {
     protected MVolatile saved;
     protected boolean   neutralized;
@@ -22,7 +24,7 @@ public class DoDeleteDoc extends Do
     protected boolean   fromSearchPanel;
     protected boolean   wasShowing;
 
-    public DoDeleteDoc (MDoc doc, boolean fromSearchPanel, boolean wasShowing)
+    public DeleteDoc (MDoc doc, boolean fromSearchPanel, boolean wasShowing)
     {
         saved = new MVolatile (doc.key (), "");
         saved.merge (doc);  // in-memory copy of the entire document
@@ -67,7 +69,7 @@ public class DoDeleteDoc extends Do
 
     public boolean replaceEdit (UndoableEdit edit)
     {
-        if (edit instanceof DoAddDoc  &&  saved.key ().equals (((DoAddDoc) edit).name))
+        if (edit instanceof AddDoc  &&  saved.key ().equals (((AddDoc) edit).name))
         {
             neutralized = true;
             return true;

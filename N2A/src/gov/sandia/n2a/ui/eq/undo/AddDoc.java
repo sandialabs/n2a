@@ -5,13 +5,15 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.ui.eq;
+package gov.sandia.n2a.ui.eq.undo;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.ui.eq.Do;
+import gov.sandia.n2a.ui.eq.ModelEditPanel;
 
-public class DoAddDoc extends Do
+public class AddDoc extends Do
 {
     protected String name;
 

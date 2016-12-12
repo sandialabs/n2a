@@ -10,6 +10,8 @@ package gov.sandia.n2a.ui.eq;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.ui.eq.undo.AddDoc;
+import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import java.awt.Component;
@@ -43,12 +45,12 @@ import replete.util.Lay;
 
 public class SearchPanel extends JPanel
 {
-    protected JTextField              textQuery;
-    protected JButton                 buttonClear;
-    protected JList<MNode>            list;
-    protected DefaultListModel<MNode> model;
-    protected ModelEditPanel          modelPanel;
-    protected int                     lastSelection = -1;
+    public JTextField              textQuery;
+    public JButton                 buttonClear;
+    public JList<MNode>            list;
+    public DefaultListModel<MNode> model;
+    public ModelEditPanel          modelPanel;
+    public int                     lastSelection = -1;
 
     // Retrieve records matching the filter text, and deliver them to the model.
     public class SearchThread extends Thread
@@ -151,13 +153,13 @@ public class SearchPanel extends JPanel
                         int   index    = list.getSelectedIndex ();
                         MNode deleteMe = list.getSelectedValue ();
                         if (deleteMe == null) return;
-                        modelPanel.doManager.add (new DoDeleteDoc ((MDoc) deleteMe, true, modelPanel.panelEquations.record == deleteMe));
+                        modelPanel.doManager.add (new DeleteDoc ((MDoc) deleteMe, true, modelPanel.panelEquations.record == deleteMe));
                         list.setSelectedIndex (Math.min (model.size () - 1, index));
                     }
                 }
                 else if (keycode == KeyEvent.VK_INSERT)
                 {
-                    modelPanel.doManager.add (new DoAddDoc ());
+                    modelPanel.doManager.add (new AddDoc ());
                 }
             }
         });

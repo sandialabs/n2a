@@ -5,16 +5,19 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.ui.eq;
+package gov.sandia.n2a.ui.eq.undo;
 
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.ui.eq.Do;
+import gov.sandia.n2a.ui.eq.ModelEditPanel;
+import gov.sandia.n2a.ui.eq.tree.NodePart;
 
-public class DoRenameDoc extends Do
+public class RenameDoc extends Do
 {
     String before;
     String after;
 
-    public DoRenameDoc (String before, String after)
+    public RenameDoc (String before, String after)
     {
         this.before = before;
         this.after  = after;

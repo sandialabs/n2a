@@ -6,7 +6,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
 
-package gov.sandia.n2a.ui.eq;
+package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.FontMetrics;
 import java.util.ArrayList;
@@ -16,6 +16,8 @@ import java.util.TreeMap;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.NodeBase;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;

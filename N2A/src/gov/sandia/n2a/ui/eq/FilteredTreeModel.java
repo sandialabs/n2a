@@ -8,6 +8,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.eq;
 
+import gov.sandia.n2a.ui.eq.tree.NodePart;
+
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
@@ -23,7 +25,7 @@ public class FilteredTreeModel extends DefaultTreeModel
     public static final int ALL    = 0;
     public static final int PUBLIC = 1;
     public static final int LOCAL  = 2;
-    protected int filterLevel = ALL;
+    public int filterLevel = ALL;
 
     public FilteredTreeModel (NodeBase root)
     {

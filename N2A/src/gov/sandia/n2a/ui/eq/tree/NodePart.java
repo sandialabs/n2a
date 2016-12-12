@@ -6,7 +6,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
 
-package gov.sandia.n2a.ui.eq;
+package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.Font;
 import java.util.ArrayList;
@@ -20,6 +20,10 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.ModelEditPanel;
+import gov.sandia.n2a.ui.eq.NodeBase;
+import gov.sandia.n2a.ui.eq.undo.RenameDoc;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;
@@ -414,7 +418,7 @@ public class NodePart extends NodeBase
                 existingDocument = models.child (name);
             }
 
-            ModelEditPanel.instance.doManager.add (new DoRenameDoc (oldKey, name));
+            ModelEditPanel.instance.doManager.add (new RenameDoc (oldKey, name));
             // MDir promises to maintain object identity during the move, so "source" is still valid.
             return;
         }
