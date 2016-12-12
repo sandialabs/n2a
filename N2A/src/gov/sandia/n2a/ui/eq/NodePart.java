@@ -414,8 +414,8 @@ public class NodePart extends NodeBase
                 existingDocument = models.child (name);
             }
 
-            MNode dir = source.getSource ().getParent ();
-            dir.move (oldKey, name);  // MDir promises to maintain object identity during the move, so our source reference is still valid.
+            ModelEditPanel.instance.doManager.add (new DoRenameDoc (oldKey, name));
+            // MDir promises to maintain object identity during the move, so "source" is still valid.
             return;
         }
 

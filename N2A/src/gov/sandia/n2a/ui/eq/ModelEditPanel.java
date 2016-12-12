@@ -9,14 +9,19 @@ package gov.sandia.n2a.ui.eq;
 
 import java.awt.BorderLayout;
 import java.awt.EventQueue;
+import java.awt.event.ActionEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 
+import javax.swing.AbstractAction;
+import javax.swing.ActionMap;
+import javax.swing.InputMap;
 import javax.swing.JPanel;
 import javax.swing.JSplitPane;
-
+import javax.swing.KeyStroke;
+import javax.swing.undo.CannotRedoException;
+import javax.swing.undo.CannotUndoException;
 import gov.sandia.n2a.db.AppData;
-import gov.sandia.n2a.db.MNode;
 
 public class ModelEditPanel extends JPanel
 {
@@ -25,6 +30,7 @@ public class ModelEditPanel extends JPanel
     public JSplitPane        split;
     public SearchPanel       panelSearch;
     public EquationTreePanel panelEquations;
+    public DoManager         doManager = new DoManager ();
 
     public ModelEditPanel ()
     {
@@ -55,6 +61,29 @@ public class ModelEditPanel extends JPanel
                 if (o != null) AppData.state.set (o.toString (), "ModelEditPanel", "divider");
             }
         });
+
+        InputMap inputMap = getInputMap (WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
+        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+        inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
+
+        ActionMap actionMap = getActionMap ();
+        actionMap.put ("Undo", new AbstractAction ("Undo")
+        {
+            public void actionPerformed (ActionEvent evt)
+            {
+                try {doManager.undo ();}
+                catch (CannotUndoException e) {}
+            }
+        });
+        actionMap.put ("Redo", new AbstractAction ("Redo")
+        {
+            public void actionPerformed (ActionEvent evt)
+            {
+                try {doManager.redo();}
+                catch (CannotRedoException e) {}
+            }
+        });
     }
 
     public void recordSelected ()
@@ -67,41 +96,5 @@ public class ModelEditPanel extends JPanel
                 panelEquations.tree.requestFocusInWindow ();
             }
         });
-    }
-
-    public void recordDeleted (MNode record)
-    {
-        if (panelEquations.record == record)
-        {
-            panelEquations.record       = null;
-            panelEquations.root         = null;
-            panelEquations.model.setRoot (null);
-        }
-    }
-
-    public void recordRenamed ()
-    {
-        panelSearch.list.repaint ();
-    }
-
-    public void createRecord ()
-    {
-        panelEquations.createNewModel ();
-        panelEquations.tree.requestFocusInWindow ();
-    }
-
-    public void searchHideSelection ()
-    {
-        panelSearch.hideSelection ();
-    }
-
-    public void searchInsertDoc (MNode doc)
-    {
-        panelSearch.insertDoc (doc);
-    }
-
-    public void searchRemoveDoc (MNode doc)
-    {
-        panelSearch.removeDoc (doc);
     }
 }

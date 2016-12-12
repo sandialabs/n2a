@@ -279,6 +279,18 @@ public class NodeBase extends DefaultMutableTreeNode
         return null;
     }
 
+    public NodeBase childFiltered (String key)
+    {
+        List<Integer> filtered = getFiltered ();
+        if (filtered == null) return child (key);
+        for (int i : filtered)
+        {
+            NodeBase n = (NodeBase) children.get (i);
+            if (n.source.key ().equals (key)) return n;
+        }
+        return null;
+    }
+
     public NodeBase add (String type, JTree tree)
     {
         return ((NodeBase) getParent ()).add (type, tree);  // default action is to refer the add request up the tree

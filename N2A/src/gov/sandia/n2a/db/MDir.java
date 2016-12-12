@@ -225,7 +225,7 @@ public class MDir extends MNode
         }
         catch (IOException e)
         {
-            System.err.println ("Failed to move file: " + fromIndex + " --> " + toIndex);
+            // This can happen if a new doc has not yet been flushed to disk.
         }
 
         MDoc source = null;

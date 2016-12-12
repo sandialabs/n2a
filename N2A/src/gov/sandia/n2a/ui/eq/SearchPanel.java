@@ -90,7 +90,7 @@ public class SearchPanel extends JPanel
         list.clearSelection ();
     }
 
-    public void removeDoc (MNode doc)
+    public int removeDoc (MNode doc)
     {
         int index = model.indexOf (doc);
         if (index >= 0)
@@ -98,15 +98,17 @@ public class SearchPanel extends JPanel
             model.remove (index);
             if (index == lastSelection) lastSelection = Math.min (model.size () - 1, index);
         }
+        return index;
     }
 
-    public void insertDoc (MNode doc)
+    public void insertDoc (MNode doc, int at)
     {
         int index = model.indexOf (doc);
         if (index < 0)
         {
-            model.insertElementAt (doc, 0);
-            lastSelection = 0;
+            at = Math.min (model.size (), at);
+            model.insertElementAt (doc, at);
+            lastSelection = at;
         }
     }
 
@@ -149,16 +151,13 @@ public class SearchPanel extends JPanel
                         int   index    = list.getSelectedIndex ();
                         MNode deleteMe = list.getSelectedValue ();
                         if (deleteMe == null) return;
-                        modelPanel.recordDeleted (deleteMe);
-                        model.remove (index);
-                        index = Math.min (model.size () - 1, index);
-                        list.setSelectedIndex (index);
-                        ((MDoc) deleteMe).delete ();
+                        modelPanel.doManager.add (new DoDeleteDoc ((MDoc) deleteMe, true, modelPanel.panelEquations.record == deleteMe));
+                        list.setSelectedIndex (Math.min (model.size () - 1, index));
                     }
                 }
                 else if (keycode == KeyEvent.VK_INSERT)
                 {
-                    modelPanel.createRecord ();
+                    modelPanel.doManager.add (new DoAddDoc ());
                 }
             }
         });

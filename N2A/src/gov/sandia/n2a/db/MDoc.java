@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.Iterator;
 import java.util.TreeMap;
 
 /**
@@ -158,6 +159,12 @@ public class MDoc extends MPersistent
         super.move (fromIndex, toIndex);
     }
 
+    public synchronized Iterator<MNode> iterator ()
+    {
+        if (children == null) load ();
+        return super.iterator ();
+    }
+
     public synchronized File path ()
     {
         if (parent == null) return new File (value);
@@ -189,7 +196,7 @@ public class MDoc extends MPersistent
         }
         catch (IOException e)
         {
-            System.err.println ("Failed to read file: " + file);
+            // This exception is common for a newly created doc that has not yet been flushed to disk.
         }
         clearChanged ();  // After load(), clear the slate so we can detect any changes and save the document.
 	}
