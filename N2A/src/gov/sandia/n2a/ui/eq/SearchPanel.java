@@ -148,14 +148,11 @@ public class SearchPanel extends JPanel
                 }
                 else if (keycode == KeyEvent.VK_DELETE  ||  keycode == KeyEvent.VK_BACK_SPACE)
                 {
-                    if (e.isControlDown ())
-                    {
-                        int   index    = list.getSelectedIndex ();
-                        MNode deleteMe = list.getSelectedValue ();
-                        if (deleteMe == null) return;
-                        modelPanel.doManager.add (new DeleteDoc ((MDoc) deleteMe, true, modelPanel.panelEquations.record == deleteMe));
-                        list.setSelectedIndex (Math.min (model.size () - 1, index));
-                    }
+                    int   index    = list.getSelectedIndex ();
+                    MNode deleteMe = list.getSelectedValue ();
+                    if (deleteMe == null) return;
+                    modelPanel.doManager.add (new DeleteDoc ((MDoc) deleteMe, true, modelPanel.panelEquations.record == deleteMe));
+                    list.setSelectedIndex (Math.min (model.size () - 1, index));
                 }
                 else if (keycode == KeyEvent.VK_INSERT)
                 {

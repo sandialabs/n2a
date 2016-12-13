@@ -253,7 +253,7 @@ public class EquationTreePanel extends JPanel
                 int keycode = e.getKeyCode ();
                 if (keycode == KeyEvent.VK_DELETE  ||  keycode == KeyEvent.VK_BACK_SPACE)
                 {
-                    deleteSelected (e.isControlDown ());
+                    deleteSelected ();
                 }
                 else if (keycode == KeyEvent.VK_INSERT)
                 {
@@ -635,8 +635,7 @@ public class EquationTreePanel extends JPanel
     {
         public void actionPerformed (ActionEvent e)
         {
-            boolean shift = (e.getModifiers () & ActionEvent.CTRL_MASK) != 0;
-            deleteSelected (shift);
+            deleteSelected ();
         }
     };
 
@@ -909,17 +908,14 @@ public class EquationTreePanel extends JPanel
         return result;
     }
 
-    public void deleteSelected (boolean controlKeyDown)
+    public void deleteSelected ()
     {
         NodeBase selected = getSelected ();
         if (selected != null)
         {
             if (selected.isRoot ())
             {
-                if (controlKeyDown)  // Only delete the root (entire document) if the user does something extra to say they really mean it.
-                {
-                    modelPanel.doManager.add (new DeleteDoc ((MDoc) record, false, true));
-                }
+                modelPanel.doManager.add (new DeleteDoc ((MDoc) record, false, true));
             }
             else
             {
