@@ -17,13 +17,16 @@ import java.util.Set;
 import java.util.Vector;
 
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.NodeBase;
-import gov.sandia.n2a.ui.eq.undo.RenameDoc;
+import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
+import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
+import gov.sandia.n2a.ui.eq.undo.ChangeDoc;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;
@@ -333,12 +336,9 @@ public class NodePart extends NodeBase
         NodeBase result;
         if (type.equals ("Annotation"))
         {
-            if (a == null)
-            {
-                a = new NodeAnnotations ((MPart) source.set ("", "$metadata"));
-                model.insertNodeIntoUnfiltered (a, this, 0);
-            }
-            return a.add (type, tree);
+            AddAnnotation aa = new AddAnnotation (this, 0);
+            ModelEditPanel.instance.doManager.add (aa);  // aa will automagically insert a $metadata block if needed
+            return aa.createdNode;
         }
         else if (type.equals ("Reference"))
         {
@@ -418,7 +418,7 @@ public class NodePart extends NodeBase
                 existingDocument = models.child (name);
             }
 
-            ModelEditPanel.instance.doManager.add (new RenameDoc (oldKey, name));
+            ModelEditPanel.instance.doManager.add (new ChangeDoc (oldKey, name));
             // MDir promises to maintain object identity during the move, so "source" is still valid.
             return;
         }
@@ -475,23 +475,29 @@ public class NodePart extends NodeBase
     public void delete (JTree tree)
     {
         if (! source.isFromTopDocument ()) return;  // This should be true of root, as well as any other node we might try to delete.
-        if (isRoot ()) return;
-
-        String key = source.key ();
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        MPart mparent = source.getParent ();
-        mparent.clear (key);
-        if (mparent.child (key) == null)  // Node is fully deleted
+        ModelEditPanel mep = ModelEditPanel.instance;
+        if (isRoot ())
         {
-            model.removeNodeFromParent (this);
+            mep.doManager.add (new DeleteDoc ((MDoc) source.getSource ()));
         }
-        else  // Just exposed an overridden node
+        else
         {
-            build ();
-            findConnections ();
-            filter (model.filterLevel);
-            if (visible (model.filterLevel)) model.nodeStructureChanged (this);
-            else                             ((NodePart) getParent ()).hide (this, model);
+            String key = source.key ();
+            FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+            MPart mparent = source.getParent ();
+            mparent.clear (key);
+            if (mparent.child (key) == null)  // Node is fully deleted
+            {
+                model.removeNodeFromParent (this);
+            }
+            else  // Just exposed an overridden node
+            {
+                build ();
+                findConnections ();
+                filter (model.filterLevel);
+                if (visible (model.filterLevel)) model.nodeStructureChanged (this);
+                else                             ((NodePart) getParent ()).hide (this, model);
+            }
         }
     }
 }

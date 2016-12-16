@@ -86,6 +86,19 @@ public class SearchPanel extends JPanel
     }
     protected SearchThread thread;
 
+    public void recordSelected ()
+    {
+        EventQueue.invokeLater (new Runnable ()
+        {
+            public void run ()
+            {
+                ModelEditPanel mep = ModelEditPanel.instance;
+                mep.panelEquations.loadRootFromDB (model.get (list.getSelectedIndex ()));
+                mep.panelEquations.tree.requestFocusInWindow ();
+            }
+        });
+    }
+
     public void hideSelection ()
     {
         lastSelection = list.getSelectedIndex ();
@@ -98,20 +111,23 @@ public class SearchPanel extends JPanel
         if (index >= 0)
         {
             model.remove (index);
-            if (index == lastSelection) lastSelection = Math.min (model.size () - 1, index);
+            if (lastSelection > index) lastSelection--;
+            lastSelection = Math.min (model.size () - 1, lastSelection);
         }
         return index;
     }
 
-    public void insertDoc (MNode doc, int at)
+    public int insertDoc (MNode doc, int at)
     {
         int index = model.indexOf (doc);
         if (index < 0)
         {
-            at = Math.min (model.size (), at);
+            if (at > model.size ()) at = 0;  // The list has changed, and our position is no longer valid, so simply insert at top.
             model.insertElementAt (doc, at);
             lastSelection = at;
+            return at;
         }
+        return index;
     }
 
     public SearchPanel (ModelEditPanel container)
@@ -126,7 +142,7 @@ public class SearchPanel extends JPanel
         {
             public void mouseClicked (MouseEvent e)
             {
-                modelPanel.recordSelected ();
+                recordSelected ();
                 e.consume ();
             }
 
@@ -143,16 +159,14 @@ public class SearchPanel extends JPanel
                 int keycode = e.getKeyCode ();
                 if (keycode == KeyEvent.VK_ENTER)
                 {
-                    modelPanel.recordSelected ();
+                    recordSelected ();
                     e.consume ();
                 }
                 else if (keycode == KeyEvent.VK_DELETE  ||  keycode == KeyEvent.VK_BACK_SPACE)
                 {
-                    int   index    = list.getSelectedIndex ();
                     MNode deleteMe = list.getSelectedValue ();
                     if (deleteMe == null) return;
-                    modelPanel.doManager.add (new DeleteDoc ((MDoc) deleteMe, true, modelPanel.panelEquations.record == deleteMe));
-                    list.setSelectedIndex (Math.min (model.size () - 1, index));
+                    modelPanel.doManager.add (new DeleteDoc ((MDoc) deleteMe));
                 }
                 else if (keycode == KeyEvent.VK_INSERT)
                 {

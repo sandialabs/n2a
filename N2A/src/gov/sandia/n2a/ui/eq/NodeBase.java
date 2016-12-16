@@ -268,6 +268,14 @@ public class NodeBase extends DefaultMutableTreeNode
 
     // Structure maintenance -------------------------------------------------
 
+    public List<String> getKeyPath ()
+    {
+        TreeNode[] path = getPath ();
+        List<String> result = new ArrayList<String> (path.length);
+        for (TreeNode n : path) result.add (((NodeBase) n).source.key ());
+        return result;
+    }
+
     public NodeBase child (String key)
     {
         Enumeration i = children ();

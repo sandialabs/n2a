@@ -5,7 +5,6 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-
 package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.FontMetrics;
@@ -14,7 +13,10 @@ import java.util.List;
 
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.NodeBase;
+import gov.sandia.n2a.ui.eq.undo.ChangeAnnotation;
+import gov.sandia.n2a.ui.eq.undo.DeleteAnnotation;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;
@@ -128,73 +130,28 @@ public class NodeAnnotation extends NodeBase
         else                  value = "";
 
         NodeBase existingAnnotation = null;
-        String oldKey = source.key ();
+        String oldName  = source.key ();
+        String oldValue = source.get ();
         NodeBase parent = (NodeBase) getParent ();
-        if (! name.equals (oldKey)) existingAnnotation = parent.child (name);
-
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        FontMetrics fm = getFontMetrics (tree);
-        if (name.equals (oldKey)  ||  name.isEmpty ()  ||  existingAnnotation != null)  // Name is the same, or name change is forbidden
+        if (! name.equals (oldName)) existingAnnotation = parent.child (name);
+        if (name.isEmpty ()  ||  existingAnnotation != null) name = oldName; // name change is forbidden
+        if (name.equals (oldName)  &&  value.equals (oldValue))
         {
-            source.set (value);
+            FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+            FontMetrics fm = getFontMetrics (tree);
+            parent.updateTabStops (fm);
+            model.nodeChanged (this);  // Our siblings should not change, because we did not really change. Just repaint in non-edit mode.
         }
-        else  // Name is changed
+        else
         {
-            MPart p = source.getParent ();
-            MPart newPart = (MPart) p.set (value, name);
-            p.clear (oldKey);
-            if (p.child (oldKey) == null)  // We were not associated with an override, so we can re-use this tree node.
-            {
-                source = newPart;
-            }
-            else  // Make a new tree node, and leave this one to present the non-overridden value.
-            {
-                NodeAnnotation newAnnotation = new NodeAnnotation (newPart);
-                model.insertNodeIntoUnfiltered (newAnnotation, parent, parent.getChildCount ());
-                newAnnotation.updateColumnWidths (fm);
-            }
+            ModelEditPanel.instance.doManager.add (new ChangeAnnotation (parent, oldName, oldValue, name, value));
         }
-
-        updateColumnWidths (fm);
-        parent.updateTabStops (fm);
-        parent.allNodesChanged (model);
     }
 
     @Override
     public void delete (JTree tree)
     {
         if (! source.isFromTopDocument ()) return;
-
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        FontMetrics fm = getFontMetrics (tree);
-
-        NodeBase parent = (NodeBase) getParent ();
-        MPart mparent = source.getParent ();
-        String key = source.key ();
-        mparent.clear (key);  // If this merely clears an override, then our source object retains its identity.
-        if (mparent.child (key) == null)  // There is no overridden value, so this node goes away completely.
-        {
-            model.removeNodeFromParent (this);
-            if (parent instanceof NodeAnnotations  &&  parent.getChildCount () == 0)
-            {
-                parent.delete (tree);  // Delete the $metadata node, because it is now empty.
-                // No need to update tabs in grandparent, because $metadata node doesn't participate.
-                return;  // parent no longer exists, so don't fall through to update below
-            }
-        }
-        else  // Just exposed an overridden value, so update display.
-        {
-            if (parent.visible (model.filterLevel))  // We are always visible, but our parent could disappear.
-            {
-                updateColumnWidths (fm);
-            }
-            else
-            {
-                ((NodeBase) parent.getParent ()).hide (parent, model);
-            }
-        }
-
-        parent.updateTabStops (fm);
-        parent.allNodesChanged (model);
+        ModelEditPanel.instance.doManager.add (new DeleteAnnotation (this));
     }
 }

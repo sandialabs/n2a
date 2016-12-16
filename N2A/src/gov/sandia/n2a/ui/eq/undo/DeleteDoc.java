@@ -24,15 +24,16 @@ public class DeleteDoc extends Do
     protected boolean   fromSearchPanel;
     protected boolean   wasShowing;
 
-    public DeleteDoc (MDoc doc, boolean fromSearchPanel, boolean wasShowing)
+    public DeleteDoc (MDoc doc)
     {
         saved = new MVolatile (doc.key (), "");
         saved.merge (doc);  // in-memory copy of the entire document
-        this.fromSearchPanel = fromSearchPanel;
-        this.wasShowing      = wasShowing;
+
+        ModelEditPanel mep = ModelEditPanel.instance;
+        fromSearchPanel = mep.panelSearch.list.getSelectedIndex () >= 0;
+        wasShowing      = mep.panelEquations.record == doc;
     }
 
-    @Override
     public void undo ()
     {
         super.undo ();
@@ -40,13 +41,13 @@ public class DeleteDoc extends Do
         MNode doc = AppData.models.set ("", saved.key ());
         doc.merge (saved);
         ModelEditPanel mep = ModelEditPanel.instance;
-        mep.panelSearch.insertDoc (doc, searchIndex);
+        searchIndex = mep.panelSearch.insertDoc (doc, searchIndex);
         if (wasShowing) mep.panelEquations.loadRootFromDB (doc);
         mep.panelSearch.lastSelection = searchIndex;
         if (fromSearchPanel)
         {
-            mep.panelSearch.list.setSelectedIndex (searchIndex);
             if (wasShowing) mep.panelEquations.tree.clearSelection ();
+            mep.panelSearch.list.setSelectedIndex (searchIndex);
             mep.panelSearch.list.requestFocusInWindow ();
         }
         else
@@ -55,7 +56,6 @@ public class DeleteDoc extends Do
         }
     }
 
-    @Override
     public void redo ()
     {
         super.redo ();
@@ -65,6 +65,16 @@ public class DeleteDoc extends Do
         mep.panelEquations.recordDeleted (doc);
         searchIndex = mep.panelSearch.removeDoc (doc);
         ((MDoc) doc).delete ();
+        mep.panelSearch.lastSelection = Math.min (mep.panelSearch.model.size () - 1, searchIndex);
+        if (fromSearchPanel)
+        {
+            mep.panelSearch.list.setSelectedIndex (mep.panelSearch.lastSelection);
+            mep.panelSearch.list.requestFocusInWindow ();
+        }
+        else
+        {
+            mep.panelEquations.tree.requestFocusInWindow ();
+        }
     }
 
     public boolean replaceEdit (UndoableEdit edit)

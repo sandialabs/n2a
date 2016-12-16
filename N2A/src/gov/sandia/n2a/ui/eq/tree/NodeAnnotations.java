@@ -8,12 +8,12 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.Font;
-import java.awt.FontMetrics;
-
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.NodeBase;
+import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;
@@ -64,31 +64,17 @@ public class NodeAnnotations extends NodeBase
         if (type.isEmpty ()  ||  type.equals ("Annotation"))
         {
             // Add a new annotation to our children
-            int suffix = 1;
-            while (source.child ("a" + suffix) != null) suffix++;
-            NodeBase result = new NodeAnnotation ((MPart) source.set ("", "a" + suffix));
-
-            int selectedIndex = getChildCount () - 1;
+            int index = getChildCount () - 1;
             TreePath path = tree.getSelectionPath ();
             if (path != null)
             {
                 NodeBase selected = (NodeBase) path.getLastPathComponent ();
-                if (isNodeChild (selected)) selectedIndex = getIndex (selected);  // unfiltered index
+                if (isNodeChild (selected)) index = getIndex (selected);  // unfiltered index
             }
-
-            FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-            FontMetrics fm = getFontMetrics (tree);
-            if (children != null  &&  children.size () > 0)
-            {
-                NodeBase firstChild = (NodeBase) children.get (0);
-                if (firstChild.needsInitTabs ()) firstChild.initTabs (fm);
-            }
-
-            result.setUserObject ("");
-            result.updateColumnWidths (fm);  // preempt initialization
-            model.insertNodeIntoUnfiltered (result, this, selectedIndex + 1);
-
-            return result;
+            index++;
+            AddAnnotation aa = new AddAnnotation ((NodeBase) getParent (), index);
+            ModelEditPanel.instance.doManager.add (aa);
+            return aa.createdNode;
         }
         return ((NodeBase) getParent ()).add (type, tree);
     }

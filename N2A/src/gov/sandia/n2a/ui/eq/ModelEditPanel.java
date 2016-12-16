@@ -85,16 +85,4 @@ public class ModelEditPanel extends JPanel
             }
         });
     }
-
-    public void recordSelected ()
-    {
-        EventQueue.invokeLater (new Runnable ()
-        {
-            public void run ()
-            {
-                panelEquations.loadRootFromDB (panelSearch.model.get (panelSearch.list.getSelectedIndex ()));
-                panelEquations.tree.requestFocusInWindow ();
-            }
-        });
-    }
 }

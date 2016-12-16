@@ -17,7 +17,9 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.NodeBase;
+import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;
@@ -227,13 +229,9 @@ public class NodeVariable extends NodeBase
             index = 0;
             int count = getChildCount ();
             while (index < count  &&  ! (children.get (index) instanceof NodeReference)) index++;
-
-            // Determine a unique key for the annotation
-            MPart metadata = (MPart) source.childOrCreate ("$metadata");
-            int suffix = 1;
-            while (metadata.child ("a" + suffix) != null) suffix++;
-
-            result = new NodeAnnotation ((MPart) metadata.set ("", "a" + suffix));
+            AddAnnotation aa = new AddAnnotation (this, index);
+            ModelEditPanel.instance.doManager.add (aa);
+            return aa.createdNode;
         }
         else if (type.equals ("Reference"))
         {

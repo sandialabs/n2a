@@ -22,7 +22,6 @@ import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
-import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.RunPanel;
 
@@ -94,6 +93,7 @@ public class EquationTreePanel extends JPanel
     public    MNode                 record;
     protected JScrollPane           scrollPane;
     protected Map<MNode,StoredPath> focusCache = new HashMap<MNode,StoredPath> ();
+    protected boolean               needsFullRepaint;
 
     // Controls
     protected JButton buttonAddModel;
@@ -590,7 +590,8 @@ public class EquationTreePanel extends JPanel
             root = new NodePart (new MPart ((MPersistent) record));
             root.build ();
             root.findConnections ();
-            model.setRoot (root);
+            model.setRoot (root);  // triggers repaint, but may be too slow
+            needsFullRepaint = true;  // next call to repaintSouth() will repaint everything
 
             StoredPath sp = focusCache.get (record);
             if (sp == null)
@@ -620,7 +621,8 @@ public class EquationTreePanel extends JPanel
         focusCache.remove (record);
         record       = null;
         root         = null;
-        model.setRoot (null);
+        model.setRoot (null);  // calls tree.repaint(), but may be too slow
+        tree.paintImmediately (scrollPane.getViewport ().getViewRect ());
     }
 
     ActionListener listenerAdd = new ActionListener ()
@@ -913,9 +915,9 @@ public class EquationTreePanel extends JPanel
         NodeBase selected = getSelected ();
         if (selected != null)
         {
-            if (selected.isRoot ())
+            if (selected.isRoot ()  ||  selected instanceof NodeAnnotation)
             {
-                modelPanel.doManager.add (new DeleteDoc ((MDoc) record, false, true));
+                selected.delete (tree);
             }
             else
             {
@@ -925,10 +927,7 @@ public class EquationTreePanel extends JPanel
 
                 selected.delete (tree);
 
-                path = updateSelection (path, index);
-                updateOrder ();
-                updateOverrides (path);
-                repaintSouth (path);
+                updateAfterDelete (path, index);
             }
         }
     }
@@ -1002,7 +1001,21 @@ public class EquationTreePanel extends JPanel
     }
 
     /**
+        Convenience function to all all the relevant update steps when a node is deleted from the tree.
+    **/
+    public void updateAfterDelete (TreePath path, int index)
+    {
+        path = updateSelection (path, index);
+        updateOrder ();
+        updateOverrides (path);
+        repaintSouth (path);
+    }
+
+    /**
         Re-establish a reasonable selection after a node is deleted.
+        @param path Tree path to the node that should contain the selection.
+        @param index Position within the children under the node. -1 means to select the container node itself.
+        Value is the filtered index rather than the raw index. 
     **/
     public TreePath updateSelection (TreePath path, int index)
     {
@@ -1093,8 +1106,12 @@ public class EquationTreePanel extends JPanel
     {
         Rectangle node    = tree.getPathBounds (path);
         Rectangle visible = scrollPane.getViewport ().getViewRect ();
-        visible.height -= node.y - visible.y;
-        visible.y       = node.y;
+        if (! needsFullRepaint)
+        {
+            visible.height -= node.y - visible.y;
+            visible.y       = node.y;
+        }
+        needsFullRepaint = false;
         tree.paintImmediately (visible);
     }
 }
