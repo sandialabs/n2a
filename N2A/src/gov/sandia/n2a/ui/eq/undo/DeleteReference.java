@@ -15,25 +15,25 @@ import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.Do;
 import gov.sandia.n2a.ui.eq.NodeBase;
 import gov.sandia.n2a.ui.eq.NodeFactory;
-import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
-import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
+import gov.sandia.n2a.ui.eq.tree.NodeReference;
+import gov.sandia.n2a.ui.eq.tree.NodeReferences;
 
-public class DeleteAnnotation extends Do
+public class DeleteReference extends Do
 {
-    protected List<String> path;  // to parent of $metadata node
+    protected List<String> path;  // to parent of $reference node
     protected int          index; // where to insert among siblings
     protected String       name;
     protected String       value;
     protected boolean      neutralized;
 
-    public DeleteAnnotation (NodeBase node)
+    public DeleteReference (NodeBase node)
     {
         name  = node.source.key ();
         value = node.source.get ();
 
         NodeBase container = (NodeBase) node.getParent ();
         index = container.getIndex (node);
-        if (container.source.key ().equals ("$metadata")) container = (NodeBase) container.getParent ();
+        if (container.source.key ().equals ("$reference")) container = (NodeBase) container.getParent ();
         path = container.getKeyPath ();
     }
 
@@ -44,31 +44,31 @@ public class DeleteAnnotation extends Do
         {
             public NodeBase create (MPart part)
             {
-                return new NodeAnnotation (part);
+                return new NodeReference (part);
             }
         };
         NodeFactory factoryBlock = new NodeFactory ()
         {
             public NodeBase create (MPart part)
             {
-                return new NodeAnnotations (part);
+                return new NodeReferences (part);
             }
         };
-        AddAnnotation.create (path, index, name, value, "$metadata", factory, factoryBlock);
+        AddAnnotation.create (path, index, name, value, "$reference", factory, factoryBlock);
     }
 
     public void redo ()
     {
         super.redo ();
-        AddAnnotation.destroy (path, name, "$metadata");
+        AddAnnotation.destroy (path, name, "$reference");
     }
 
     public boolean replaceEdit (UndoableEdit edit)
     {
-        if (edit instanceof AddAnnotation)
+        if (edit instanceof AddReference)
         {
-            AddAnnotation aa = (AddAnnotation) edit;
-            if (name.equals (aa.name)  &&  aa.value == null)  // null value means the edit has not merged a change node
+            AddReference ar = (AddReference) edit;
+            if (name.equals (ar.name)  &&  ar.value == null)  // null value means the edit has not merged a change node
             {
                 neutralized = true;
                 return true;

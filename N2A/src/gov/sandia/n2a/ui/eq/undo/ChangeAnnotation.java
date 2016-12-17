@@ -19,6 +19,7 @@ import gov.sandia.n2a.ui.eq.Do;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.NodeBase;
+import gov.sandia.n2a.ui.eq.NodeFactory;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 
 public class ChangeAnnotation extends Do
@@ -45,7 +46,11 @@ public class ChangeAnnotation extends Do
     public void undo ()
     {
         super.undo ();
+        reverse (path, nameBefore, valueBefore, nameAfter, valueAfter);
+    }
 
+    public static void reverse (List<String> path, String nameBefore, String valueBefore, String nameAfter, String valueAfter)
+    {
         NodeBase container = locateParent (path);
         if (container == null) throw new CannotRedoException ();
         NodeBase changedNode = container.child (nameAfter);
@@ -82,7 +87,17 @@ public class ChangeAnnotation extends Do
     public void redo ()
     {
         super.redo ();
+        forward (path, nameBefore, valueBefore, nameAfter, valueAfter, new NodeFactory ()
+        {
+            public NodeBase create (MPart part)
+            {
+                return new NodeAnnotation (part);
+            }
+        });
+    }
 
+    public static void forward (List<String> path, String nameBefore, String valueBefore, String nameAfter, String valueAfter, NodeFactory factory)
+    {
         NodeBase container = locateParent (path);
         if (container == null) throw new CannotRedoException ();
         NodeBase changedNode = container.child (nameBefore);
@@ -106,9 +121,9 @@ public class ChangeAnnotation extends Do
             }
             else  // Make a new tree node, and leave this one to present the non-overridden value.
             {
-                NodeAnnotation newAnnotation = new NodeAnnotation (newPart);
-                model.insertNodeIntoUnfiltered (newAnnotation, container, container.getChildCount ());
-                newAnnotation.updateColumnWidths (fm);
+                NodeBase newNode = factory.create (newPart);
+                model.insertNodeIntoUnfiltered (newNode, container, container.getChildCount ());
+                newNode.updateColumnWidths (fm);
             }
         }
 

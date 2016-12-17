@@ -25,6 +25,7 @@ import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.NodeBase;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
+import gov.sandia.n2a.ui.eq.undo.AddReference;
 import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
 import gov.sandia.n2a.ui.eq.undo.ChangeDoc;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -342,12 +343,9 @@ public class NodePart extends NodeBase
         }
         else if (type.equals ("Reference"))
         {
-            if (r == null)
-            {
-                r = new NodeReferences ((MPart) source.set ("", "$reference"));
-                model.insertNodeIntoUnfiltered (r, this, 0);
-            }
-            return r.add (type, tree);
+            AddReference ar = new AddReference (this, 0);
+            ModelEditPanel.instance.doManager.add (ar);
+            return ar.createdNode;
         }
         else if (type.equals ("Part"))
         {

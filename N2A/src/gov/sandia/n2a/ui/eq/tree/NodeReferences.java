@@ -13,7 +13,10 @@ import java.awt.FontMetrics;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.NodeBase;
+import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
+import gov.sandia.n2a.ui.eq.undo.AddReference;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;
@@ -63,32 +66,18 @@ public class NodeReferences extends NodeBase
     {
         if (type.isEmpty ()  ||  type.equals ("Reference"))
         {
-            // Add a new reference to our children
-            int suffix = 1;
-            while (source.child ("r" + suffix) != null) suffix++;
-            NodeBase result = new NodeReference ((MPart) source.set ("", "r" + suffix));
-
-            int selectedIndex = getChildCount () - 1;
+            // Add a new annotation to our children
+            int index = getChildCount () - 1;
             TreePath path = tree.getSelectionPath ();
             if (path != null)
             {
                 NodeBase selected = (NodeBase) path.getLastPathComponent ();
-                if (isNodeChild (selected)) selectedIndex = getIndex (selected);  // unfiltered index
+                if (isNodeChild (selected)) index = getIndex (selected);  // unfiltered index
             }
-
-            FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-            FontMetrics fm = getFontMetrics (tree);
-            if (children != null  &&  children.size () > 0)
-            {
-                NodeBase firstChild = (NodeBase) children.get (0);
-                if (firstChild.needsInitTabs ()) firstChild.initTabs (fm);
-            }
-
-            result.setUserObject ("");
-            result.updateColumnWidths (fm);  // preempt initialization
-            model.insertNodeIntoUnfiltered (result, this, selectedIndex + 1);
-
-            return result;
+            index++;
+            AddReference ar = new AddReference ((NodeBase) getParent (), index);
+            ModelEditPanel.instance.doManager.add (ar);
+            return ar.createdNode;
         }
         return ((NodeBase) getParent ()).add (type, tree);
     }

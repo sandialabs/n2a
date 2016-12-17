@@ -14,7 +14,10 @@ import java.util.List;
 
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.NodeBase;
+import gov.sandia.n2a.ui.eq.undo.ChangeReference;
+import gov.sandia.n2a.ui.eq.undo.DeleteReference;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;
@@ -132,73 +135,28 @@ public class NodeReference extends NodeBase
         else                  value = "";
 
         NodeBase existingReference = null;
-        String oldKey = source.key ();
+        String oldName  = source.key ();
+        String oldValue = source.get ();
         NodeBase parent = (NodeBase) getParent ();
-        if (! name.equals (oldKey)) existingReference = parent.child (name);
-
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        FontMetrics fm = getFontMetrics (tree);
-        if (name.equals (oldKey)  ||  name.isEmpty ()  ||  existingReference != null)  // Name is the same, or name change is forbidden
+        if (! name.equals (oldName)) existingReference = parent.child (name);
+        if (name.isEmpty ()  ||  existingReference != null) name = oldName; // name change is forbidden
+        if (name.equals (oldName)  &&  value.equals (oldValue))
         {
-            source.set (value);
+            FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+            FontMetrics fm = getFontMetrics (tree);
+            parent.updateTabStops (fm);
+            model.nodeChanged (this);  // Our siblings should not change, because we did not really change. Just repaint in non-edit mode.
         }
-        else  // Name is changed
+        else
         {
-            MPart p = source.getParent ();
-            MPart newPart = (MPart) p.set (value, name);
-            p.clear (oldKey);
-            if (p.child (oldKey) == null)  // Make a new tree node, and leave this one to present the non-overridden value.
-            {
-                source = newPart;
-            }
-            else  // Make a new tree node, and leave this one to present the non-overridden value.
-            {
-                NodeReference newReference = new NodeReference (newPart);
-                model.insertNodeIntoUnfiltered (newReference, parent, parent.getChildCount ());
-                newReference.updateColumnWidths (fm);
-            }
+            ModelEditPanel.instance.doManager.add (new ChangeReference (parent, oldName, oldValue, name, value));
         }
-
-        updateColumnWidths (fm);
-        parent.updateTabStops (fm);
-        parent.allNodesChanged (model);
     }
 
     @Override
     public void delete (JTree tree)
     {
         if (! source.isFromTopDocument ()) return;
-
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        FontMetrics fm = getFontMetrics (tree);
-
-        NodeBase parent = (NodeBase) getParent ();
-        MPart mparent = source.getParent ();
-        String key = source.key ();
-        mparent.clear (key);  // If this merely clears an override, then our source object retains its identity.
-        if (mparent.child (key) == null)  // There is no overridden value, so this node goes away completely.
-        {
-            model.removeNodeFromParent (this);
-            if (parent instanceof NodeReferences  &&  parent.getChildCount () == 0)
-            {
-                parent.delete (tree);  // Delete the $reference node, because it is now empty.
-                // No need to update tabs in grandparent, because $reference node doesn't participate.
-                return;  // parent no longer exists, so don't fall through to update below
-            }
-        }
-        else  // Just exposed an overridden value, so update display.
-        {
-            if (parent.visible (model.filterLevel))  // We are always visible, but our parent could disappear.
-            {
-                updateColumnWidths (fm);
-            }
-            else
-            {
-                ((NodeBase) parent.getParent ()).hide (parent, model);
-            }
-        }
-
-        parent.updateTabStops (fm);
-        parent.allNodesChanged (model);
+        ModelEditPanel.instance.doManager.add (new DeleteReference (this));
     }
 }

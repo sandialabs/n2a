@@ -21,6 +21,7 @@ import gov.sandia.n2a.ui.eq.Do;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.NodeBase;
+import gov.sandia.n2a.ui.eq.NodeFactory;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
@@ -41,30 +42,33 @@ public class AddAnnotation extends Do
     {
         path = parent.getKeyPath ();
         this.index = index;
+        name = uniqueName (parent, "$metadata", "a");
+    }
 
-        // Determine unique name
-        MPart metadata = (MPart) parent.source.child ("$metadata");
+    public static String uniqueName (NodeBase parent, String blockName, String prefix)
+    {
+        MPart metadata = (MPart) parent.source.child (blockName);
         int suffix = 1;
         if (metadata != null)
         {
-            while (metadata.child ("a" + suffix) != null) suffix++;
+            while (metadata.child (prefix + suffix) != null) suffix++;
         }
-        name = "a" + suffix;
+        return prefix + suffix;
     }
 
     public void undo ()
     {
         super.undo ();
-        destroy (path, name);
+        destroy (path, name, "$metadata");
     }
 
-    public static void destroy (List<String> path, String name)
+    public static void destroy (List<String> path, String name, String blockName)
     {
         // Retrieve created node
         NodeBase parent = locateParent (path);
         if (parent == null) throw new CannotUndoException ();
         NodeBase container = parent;
-        if (parent instanceof NodePart) container = parent.child ("$metadata");
+        if (parent instanceof NodePart) container = parent.child (blockName);
         NodeBase createdNode = container.child (name);
 
         ModelEditPanel mep = ModelEditPanel.instance;
@@ -76,16 +80,16 @@ public class AddAnnotation extends Do
         TreePath containerPath = new TreePath (container.getPath ());
         int filteredIndex = container.getIndexFiltered (createdNode);
 
-        MPart metadata = (MPart) parent.source.child ("$metadata");
+        MPart metadata = (MPart) parent.source.child (blockName);
         metadata.clear (name);
         if (metadata.child (name) == null)  // There is no overridden value, so this node goes away completely.
         {
             model.removeNodeFromParent (createdNode);
-            if (container.getChildCount () == 0  &&  container != parent)  // $metadata block is now empty
+            if (container.getChildCount () == 0  &&  container != parent)  // block is now empty
             {
-                parent.source.clear ("$metadata");
+                parent.source.clear (blockName);
                 model.removeNodeFromParent (container);
-                // No need to update tabs in grandparent, because $metadata node doesn't participate.
+                // No need to update tabs in grandparent, because block node doesn't participate.
                 containerIsVisible = false;
             }
         }
@@ -113,33 +117,47 @@ public class AddAnnotation extends Do
     public void redo ()
     {
         super.redo ();
-        createdNode = create (path, index, name, value);
+        NodeFactory factory = new NodeFactory ()
+        {
+            public NodeBase create (MPart part)
+            {
+                return new NodeAnnotation (part);
+            }
+        };
+        NodeFactory factoryBlock = new NodeFactory ()
+        {
+            public NodeBase create (MPart part)
+            {
+                return new NodeAnnotations (part);
+            }
+        };
+        createdNode = create (path, index, name, value, "$metadata", factory, factoryBlock);
     }
 
-    public static NodeBase create (List<String> path, int index, String name, String value)
+    public static NodeBase create (List<String> path, int index, String name, String value, String blockName, NodeFactory factory, NodeFactory factoryBlock)
     {
         NodeBase parent = locateParent (path);
         if (parent == null) throw new CannotRedoException ();
-        MPart metadata = (MPart) parent.source.childOrCreate ("$metadata");
+        MPart block = (MPart) parent.source.childOrCreate (blockName);
 
         ModelEditPanel mep = ModelEditPanel.instance;
         JTree tree = mep.panelEquations.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         NodeBase container = parent;  // If this is a variable, then mix metadata with equations and references
-        if (parent instanceof NodePart)  // If this is a part, then display metadata in a special sub-node 
+        if (parent instanceof NodePart)  // If this is a part, then display special block
         {
-            if (metadata.length () == 0)  // empty implies the node is absent
+            if (block.length () == 0)  // empty implies the node is absent
             {
-                container = new NodeAnnotations (metadata);
+                container = factoryBlock.create (block);
                 model.insertNodeIntoUnfiltered (container, parent, 0);
             }
             else  // the node is present, so retrieve it
             {
-                container = parent.child ("$metadata");
+                container = parent.child (blockName);
             }
         }
 
-        NodeBase createdNode = new NodeAnnotation ((MPart) metadata.set (value, name));
+        NodeBase createdNode = factory.create ((MPart) block.set (value, name));
         FontMetrics fm = createdNode.getFontMetrics (tree);
         if (container.getChildCount () > 0)
         {

@@ -20,6 +20,7 @@ import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.NodeBase;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
+import gov.sandia.n2a.ui.eq.undo.AddReference;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;
@@ -229,18 +230,16 @@ public class NodeVariable extends NodeBase
             index = 0;
             int count = getChildCount ();
             while (index < count  &&  ! (children.get (index) instanceof NodeReference)) index++;
+
             AddAnnotation aa = new AddAnnotation (this, index);
             ModelEditPanel.instance.doManager.add (aa);
             return aa.createdNode;
         }
         else if (type.equals ("Reference"))
         {
-            MPart references = (MPart) source.childOrCreate ("$reference");
-            int suffix = 1;
-            while (references.child ("r" + suffix) != null) suffix++;
-
-            result = new NodeReference ((MPart) references.set ("", "r" + suffix));
-            index = getChildCount ();
+            AddReference ar = new AddReference (this, getChildCount ());
+            ModelEditPanel.instance.doManager.add (ar);
+            return ar.createdNode;
         }
         if (result == null) return ((NodeBase) getParent ()).add (type, tree);  // refer all other requests up the tree
 

@@ -21,6 +21,7 @@ import gov.sandia.n2a.ui.MainTabbedPane;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
+import gov.sandia.n2a.ui.eq.tree.NodeReference;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.RunPanel;
@@ -915,7 +916,7 @@ public class EquationTreePanel extends JPanel
         NodeBase selected = getSelected ();
         if (selected != null)
         {
-            if (selected.isRoot ()  ||  selected instanceof NodeAnnotation)
+            if (selected.isRoot ()  ||  selected instanceof NodeAnnotation  ||  selected instanceof NodeReference)
             {
                 selected.delete (tree);
             }
