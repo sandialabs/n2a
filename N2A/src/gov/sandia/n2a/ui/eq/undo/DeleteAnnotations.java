@@ -1,0 +1,103 @@
+/*
+Copyright 2016 Sandia Corporation.
+Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+the U.S. Government retains certain rights in this software.
+Distributed under the BSD-3 license. See the file LICENSE for details.
+*/
+
+package gov.sandia.n2a.ui.eq.undo;
+
+import java.util.List;
+
+import javax.swing.JTree;
+import javax.swing.tree.TreePath;
+import javax.swing.undo.CannotRedoException;
+import javax.swing.undo.CannotUndoException;
+
+import gov.sandia.n2a.db.MVolatile;
+import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.ui.eq.Do;
+import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.ModelEditPanel;
+import gov.sandia.n2a.ui.eq.NodeBase;
+import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
+
+public class DeleteAnnotations extends Do
+{
+    protected List<String> path;  ///< to parent of $metadata node
+    protected int          index; ///< Position within parent node
+    protected MVolatile    saved; ///< subtree under $metadata
+
+    public DeleteAnnotations (NodeBase node)
+    {
+        NodeBase container = (NodeBase) node.getParent ();
+        path  = container.getKeyPath ();
+        index = container.getIndex (node);
+
+        saved = new MVolatile ();
+        saved.merge (node.source.getSource ());  // We only save top-document data. $metadata node is guaranteed to be from top doc, due to guard in NodeAnnotations.delete().
+    }
+
+    public void undo ()
+    {
+        super.undo ();
+
+        NodeBase parent = locateParent (path);
+        if (parent == null) throw new CannotUndoException ();
+        MPart block = (MPart) parent.source.childOrCreate ("$metadata");
+        block.merge (saved);
+
+        ModelEditPanel mep = ModelEditPanel.instance;
+        JTree tree = mep.panelEquations.tree;
+        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+
+        NodeAnnotations node = (NodeAnnotations) parent.child ("$metadata");
+        if (node == null)
+        {
+            node = new NodeAnnotations (block);
+            model.insertNodeIntoUnfiltered (node, parent, index);
+        }
+        node.build ();  // Replaces all nodes, so they are set to require tab initialization.
+        if (node.visible (model.filterLevel))
+        {
+            model.nodeStructureChanged (node);
+            tree.setSelectionPath (new TreePath (node.getPath ()));
+        }
+    }
+
+    public void redo ()
+    {
+        super.redo ();
+
+        NodeBase parent = locateParent (path);
+        if (parent == null) throw new CannotRedoException ();
+
+        ModelEditPanel mep = ModelEditPanel.instance;
+        JTree tree = mep.panelEquations.tree;
+        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+
+        NodeAnnotations node = (NodeAnnotations) parent.child ("$metadata");
+        TreePath parentPath = new TreePath (parent.getPath ());
+        int filteredIndex = parent.getIndexFiltered (node);
+
+        MPart mparent = parent.source;
+        mparent.clear ("$metadata");
+        if (mparent.child ("$metadata") == null)
+        {
+            model.removeNodeFromParent (node);
+        }
+        else  // Just exposed an overridden node
+        {
+            node.build ();  // Necessary to remove all overridden nodes
+            if (node.visible (model.filterLevel))
+            {
+                model.nodeStructureChanged (node);
+            }
+            else
+            {
+                parent.hide (node, model);
+            }
+        }
+        mep.panelEquations.updateAfterDelete (parentPath, filteredIndex);
+    }
+}

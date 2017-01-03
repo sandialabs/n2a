@@ -36,6 +36,7 @@ public class NodeReferences extends NodeBase
 
     public void build ()
     {
+        removeAllChildren ();
         for (MNode c : source) add (new NodeReference ((MPart) c));
     }
 

@@ -8,12 +8,14 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.Font;
+
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.NodeBase;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
+import gov.sandia.n2a.ui.eq.undo.DeleteAnnotations;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;
@@ -33,6 +35,7 @@ public class NodeAnnotations extends NodeBase
 
     public void build ()
     {
+        removeAllChildren ();
         for (MNode c : source) add (new NodeAnnotation ((MPart) c));
     }
 
@@ -89,19 +92,6 @@ public class NodeAnnotations extends NodeBase
     public void delete (JTree tree)
     {
         if (! source.isFromTopDocument ()) return;
-
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        MPart mparent = source.getParent ();
-        String key = source.key ();  // "$metadata"
-        mparent.clear (key);
-        if (mparent.child (key) == null)
-        {
-            model.removeNodeFromParent (this);
-        }
-        else  // Just exposed an overridden node
-        {
-            if (! visible (model.filterLevel)) ((NodeBase) getParent ()).hide (this, model);
-            // If we are visible, we need to change color, but not necessary to do it here, because it is handled by EquationTreePanel.updateOverrides().
-        }
+        ModelEditPanel.instance.doManager.add (new DeleteAnnotations (this));
     }
 }

@@ -192,7 +192,7 @@ public class NodeBase extends DefaultMutableTreeNode
     /**
         Check if this node uses tab stops, and if so, whether they need to be initialized.
         This is called every time the node is about to be rendered, and ideally should answer true only once.
-        If the answer is true, then updateSiblingColumnWidths() is called with a properly contextualized FontMetrics.
+        If the answer is true, then initTabs() is called with a properly contextualized FontMetrics.
     **/
     public boolean needsInitTabs ()
     {
