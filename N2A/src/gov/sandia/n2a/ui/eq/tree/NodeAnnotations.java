@@ -14,6 +14,7 @@ import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.NodeBase;
+import gov.sandia.n2a.ui.eq.NodeContainer;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.DeleteAnnotations;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -23,7 +24,7 @@ import javax.swing.ImageIcon;
 import javax.swing.JTree;
 import javax.swing.tree.TreePath;
 
-public class NodeAnnotations extends NodeBase
+public class NodeAnnotations extends NodeContainer
 {
     protected static ImageIcon icon = ImageUtil.getImage ("properties.gif");
 
@@ -33,6 +34,7 @@ public class NodeAnnotations extends NodeBase
         setUserObject ("$metadata");
     }
 
+    @Override
     public void build ()
     {
         removeAllChildren ();

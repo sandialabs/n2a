@@ -8,14 +8,12 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.Font;
-import java.awt.FontMetrics;
-
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.NodeBase;
-import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
+import gov.sandia.n2a.ui.eq.NodeContainer;
 import gov.sandia.n2a.ui.eq.undo.AddReference;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
@@ -24,7 +22,7 @@ import javax.swing.ImageIcon;
 import javax.swing.JTree;
 import javax.swing.tree.TreePath;
 
-public class NodeReferences extends NodeBase
+public class NodeReferences extends NodeContainer
 {
     protected static ImageIcon icon = ImageUtil.getImage ("properties.gif");
 
@@ -34,6 +32,7 @@ public class NodeReferences extends NodeBase
         setUserObject ("$reference");
     }
 
+    @Override
     public void build ()
     {
         removeAllChildren ();

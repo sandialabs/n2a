@@ -19,6 +19,7 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.NodeBase;
+import gov.sandia.n2a.ui.eq.NodeContainer;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddReference;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -28,7 +29,7 @@ import javax.swing.ImageIcon;
 import javax.swing.JTree;
 import javax.swing.tree.TreePath;
 
-public class NodeVariable extends NodeBase
+public class NodeVariable extends NodeContainer
 {
     protected static ImageIcon iconVariable = ImageUtil.getImage ("delta.png");
     protected static ImageIcon iconBinding  = ImageUtil.getImage ("connect.gif");
@@ -41,6 +42,7 @@ public class NodeVariable extends NodeBase
         this.source = source;
     }
 
+    @Override
     public void build ()
     {
         setUserObject (source.key () + "=" + source.get ());
