@@ -10,7 +10,10 @@ package gov.sandia.n2a.ui.eq.tree;
 
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.NodeBase;
+import gov.sandia.n2a.ui.eq.undo.ChangeInherit;
+import gov.sandia.n2a.ui.eq.undo.DeleteInherit;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;
@@ -60,25 +63,13 @@ public class NodeInherit extends NodeBase
         String oldValue = source.get ();
         if (value.equals (oldValue)) return;
 
-        source.set (value);  // Complex restructuring happens here.
-        NodePart parent = (NodePart) getParent ();
-        parent.build ();
-        ((FilteredTreeModel) tree.getModel ()).nodeStructureChanged (parent);
+        ModelEditPanel.instance.doManager.add (new ChangeInherit (this, oldValue, value));
     }
 
     @Override
     public void delete (JTree tree)
     {
         if (! source.isFromTopDocument ()) return;
-
-        MPart mparent = source.getParent ();
-        mparent.clear ("$inherit");  // Complex restructuring happens here.
-
-        NodePart parent = (NodePart) getParent ();
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        parent.build ();
-        parent.filter (model.filterLevel);
-        if (parent.visible (model.filterLevel)) model.nodeStructureChanged (parent);
-        else                                    ((NodeBase) parent.getParent ()).hide (parent, model);
+        ModelEditPanel.instance.doManager.add (new DeleteInherit (this));
     }
 }

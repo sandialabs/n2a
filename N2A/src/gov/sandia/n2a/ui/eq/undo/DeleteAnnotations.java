@@ -56,7 +56,7 @@ public class DeleteAnnotations extends Do
 
     public static void create (List<String> path, int index, MNode saved, NodeFactory factory)
     {
-        NodeBase parent = locateParent (path);
+        NodeBase parent = locateNode (path);
         if (parent == null) throw new CannotUndoException ();
         String blockName = saved.key ();
         MPart block = (MPart) parent.source.childOrCreate (blockName);
@@ -88,7 +88,7 @@ public class DeleteAnnotations extends Do
 
     public static void destroy (List<String> path, MNode saved)
     {
-        NodeBase parent = locateParent (path);
+        NodeBase parent = locateNode (path);
         if (parent == null) throw new CannotRedoException ();
 
         ModelEditPanel mep = ModelEditPanel.instance;

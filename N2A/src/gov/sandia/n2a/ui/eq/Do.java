@@ -87,7 +87,7 @@ public class Do implements UndoableEdit
         return "Redo " + getPresentationName ();
     }
 
-    public static NodeBase locateParent (List<String> path)
+    public static NodeBase locateNode (List<String> path)
     {
         MNode doc = AppData.models.child (path.get (0));
         ModelEditPanel mep = ModelEditPanel.instance;

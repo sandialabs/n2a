@@ -65,7 +65,7 @@ public class AddAnnotation extends Do
     public static void destroy (List<String> path, String name, String blockName)
     {
         // Retrieve created node
-        NodeBase parent = locateParent (path);
+        NodeBase parent = locateNode (path);
         if (parent == null) throw new CannotUndoException ();
         NodeBase container = parent;
         if (parent instanceof NodePart) container = parent.child (blockName);
@@ -136,7 +136,7 @@ public class AddAnnotation extends Do
 
     public static NodeBase create (List<String> path, int index, String name, String value, String blockName, NodeFactory factory, NodeFactory factoryBlock)
     {
-        NodeBase parent = locateParent (path);
+        NodeBase parent = locateNode (path);
         if (parent == null) throw new CannotRedoException ();
         MPart block = (MPart) parent.source.childOrCreate (blockName);
 

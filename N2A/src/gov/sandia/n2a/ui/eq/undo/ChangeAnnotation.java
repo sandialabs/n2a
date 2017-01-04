@@ -13,6 +13,7 @@ import java.util.List;
 import javax.swing.JTree;
 import javax.swing.tree.TreePath;
 import javax.swing.undo.CannotRedoException;
+import javax.swing.undo.CannotUndoException;
 
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.Do;
@@ -51,7 +52,7 @@ public class ChangeAnnotation extends Do
 
     public static void reverse (List<String> path, String nameBefore, String valueBefore, String nameAfter, String valueAfter)
     {
-        NodeBase container = locateParent (path);
+        NodeBase container = locateNode (path);
         if (container == null) throw new CannotRedoException ();
         NodeBase changedNode = container.child (nameAfter);
 
@@ -98,7 +99,7 @@ public class ChangeAnnotation extends Do
 
     public static void forward (List<String> path, String nameBefore, String valueBefore, String nameAfter, String valueAfter, NodeFactory factory)
     {
-        NodeBase container = locateParent (path);
+        NodeBase container = locateNode (path);
         if (container == null) throw new CannotRedoException ();
         NodeBase changedNode = container.child (nameBefore);
 
