@@ -254,7 +254,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             if (event instanceof MouseEvent)
             {
                 MouseEvent me = (MouseEvent) event;
-                TreePath path = tree.getPathForLocation (me.getX (), me.getY ());
+                final TreePath path = tree.getPathForLocation (me.getX (), me.getY ());
                 if (path != null)
                 {
                     if (me.getClickCount () == 1  &&  SwingUtilities.isLeftMouseButton (me)  &&  path.equals (lastPath))
