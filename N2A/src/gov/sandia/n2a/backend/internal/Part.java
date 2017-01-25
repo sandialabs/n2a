@@ -30,8 +30,8 @@ public class Part extends Instance
 {
     public Population[] populations;
     public EventStep    event;     ///< Every Part lives on some simulation queue, held by an EventStep object.
-    public Part         next;      // for event string
-    public Part         previous;  // for event string
+    public Part         next;      // simulation queue
+    public Part         previous;  // simulation queue
 
     /**
         Empty constructor, specifically for use by Wrapper and EventStep.
@@ -99,7 +99,6 @@ public class Part extends Instance
 
         // $variables
         if (temp.bed.liveStorage == InternalBackendData.LIVE_STORED) set (temp.bed.live, new Scalar (1));  // force $live to be set before anything else
-        if (temp.bed.storeDt) temp.set (temp.bed.dt, new Scalar (((EventStep) simulator.currentEvent).dt));  // For $t' we could do a direct set, without going through temp.
         for (Variable v : temp.bed.localInitSpecial)
         {
             Type result = v.eval (temp);

@@ -57,8 +57,11 @@ public class InstanceTemporaries extends Instance
     {
         if (v == bed.init) return init;
         if (v == bed.t   ) return new Scalar (simulator.currentEvent.t);
-        // By construction, there should never bet a get() request for $t' unless bed.storeDt is true.
-        // In this case the following code will satisfy the request.
+        if (v == bed.dt)
+        {
+            if      (wrapped instanceof Part      ) return new Scalar (((Part) wrapped          ).event.dt);
+            else if (wrapped instanceof Population) return new Scalar (((Part) wrapped.container).event.dt);
+        }
 
         if (v.readTemp) return super.get (v);
         return               wrapped.get (v);
@@ -86,13 +89,14 @@ public class InstanceTemporaries extends Instance
     {
         if (v == bed.dt)
         {
-            // We assume that this case only occurs for Parts, not Populations.
+            // $t' is a local variable, so this case only occurs for Parts, not Populations.
             simulator.move ((Part) wrapped, ((Scalar) value).value);
-            if (! bed.storeDt) return;  // don't try to store $t' (below) unless necessary
         }
-
-        if (v.readTemp) super.setFinal (v, value);
-        else          wrapped.setFinal (v, value);
+        else
+        {
+            if (v.readTemp) super.setFinal (v, value);
+            else          wrapped.setFinal (v, value);
+        }
     }
 
     public String toString ()

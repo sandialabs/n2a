@@ -89,15 +89,6 @@ public class InternalBackendData
     **/
     public Variable lastT;
 
-    /**
-        If there are equations that read $t' and/or try to change it, then we need to
-        store it because it is not readily available in the simulator object structure.
-        Alternately, we could include an upward link to the containing event. That
-        might cost a little more space, and would only provide benefit if there were
-        several attributes of the event that we need at runtime.
-    **/
-    public boolean storeDt;
-
     // Event structures
     public List<Integer>     eventLatches = new ArrayList<Integer> ();  // Indices within Instance.valuesFloat of each latch block. Generally, there will only be one, if any. Used to reset latches during finalize phase.
     public List<EventTarget> eventTargets = new ArrayList<EventTarget> ();
@@ -502,19 +493,8 @@ public class InternalBackendData
             else if (v.name.equals ("$xyz"  )  &&  v.order == 0) xyz   = v;
             else if (v.name.equals ("$t"    ))
             {
-                if (v.order == 0)
-                {
-                    t = v;
-                }
-                else if (v.order == 1)
-                {
-                    dt = v;
-                    if (dt.hasUsers ()  &&  ! dt.hasAttribute ("initOnly"))
-                    {
-                        dt.removeAttribute ("preexistent");
-                        storeDt = true;
-                    }
-                }
+                if      (v.order == 0) t  = v;
+                else if (v.order == 1) dt = v;
             }
 
             if (v.hasAttribute ("global"))
