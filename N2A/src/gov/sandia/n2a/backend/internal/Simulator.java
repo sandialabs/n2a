@@ -73,7 +73,7 @@ public class Simulator implements Iterable<Part>
         wrapper.simulator = this;
 
         EventStep e = new EventStep ();
-        e.head.enqueue (wrapper);
+        e.enqueue (wrapper);
         periods.put (e.dt, e);
 
         currentEvent = e;
@@ -161,13 +161,13 @@ public class Simulator implements Iterable<Part>
         }
 
         // transfer to new event's queue
-        i.dequeue ();
-        e.head.enqueue (i);
+        i.event.dequeue (i);
+        e.enqueue (i);
         //   keep top-level model and wrapper together in same event
         if (i.container.container == wrapper)  // This should always be safe, since only wrapper itself lacks a container.
         {
-            wrapper.dequeue ();
-            e.head.enqueue (wrapper);
+            wrapper.event.dequeue (wrapper);
+            e.enqueue (wrapper);
         }
     }
 

@@ -30,8 +30,8 @@ public class EventStep extends Event
         i = head.next;
         while (i != head)
         {
-            if (! i.finish (simulator)) i.dequeue ();  // finish() returns false if the instance should be removed from simulation
-            i = i.next;
+            if (! i.finish (simulator)) dequeue (i);  // finish() returns false if the instance should be removed from simulation
+            i = i.next;  // dequeue() does not change i's own pointers, so this is safe
         }
 
         simulator.updatePopulations ();
@@ -55,5 +55,20 @@ public class EventStep extends Event
             System.out.println (i.getClass ().getSimpleName ());
             i = i.next;
         }
+    }
+
+    public void enqueue (Part p)
+    {
+        p.event         = this;
+        p.next          = head.next;
+        p.previous      = head;
+        p.next.previous = p;
+        p.previous.next = p;
+    }
+
+    public void dequeue (Part p)
+    {
+        p.previous.next = p.next;
+        p.next.previous = p.previous;
     }
 }

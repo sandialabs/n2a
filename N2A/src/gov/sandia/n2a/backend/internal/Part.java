@@ -29,6 +29,7 @@ import gov.sandia.n2a.language.type.Scalar;
 public class Part extends Instance
 {
     public Population[] populations;
+    public EventStep    event;     ///< Every Part lives on some simulation queue, held by an EventStep object.
     public Part         next;      // for event string
     public Part         previous;  // for event string
 
@@ -333,7 +334,7 @@ public class Part extends Instance
                         {
                             Part p = convert (other);
 
-                            enqueue (p);
+                            event.enqueue (p);
                             p.resolve ();
                             p.init (simulator);  // accountable connections are updated here
 
@@ -405,20 +406,6 @@ public class Part extends Instance
         }
 
         return true;
-    }
-
-    public void enqueue (Part i)
-    {
-        i.next          = next;
-        i.previous      = this;
-        i.next.previous = i;
-        i.previous.next = i;
-    }
-
-    public void dequeue ()
-    {
-        previous.next = next;
-        next.previous = previous;
     }
 
     /**

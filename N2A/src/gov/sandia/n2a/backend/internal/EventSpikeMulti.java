@@ -13,7 +13,15 @@ public class EventSpikeMulti extends EventSpike
         setFlag ();
         for (Instance i : targets) simulator.integrate (i);
         for (Instance i : targets) i.update (simulator);
-        for (Instance i : targets) if (! i.finish (simulator)  &&  i instanceof Part) ((Part) i).dequeue ();
+        for (Instance i : targets)
+        {
+            if (i.finish (simulator)) continue;
+            if (i instanceof Part)
+            {
+                Part p = (Part) i;
+                p.event.dequeue (p);  // p.event is not the same as this spike event
+            }
+        }
     }
 
     public void setFlag ()

@@ -142,7 +142,7 @@ public class PopulationCompartment extends Population
         {
             Compartment p = new Compartment (equations, this);
             insert (p);  // sets $index; increments n
-            ((Part) container).enqueue (p);  // inserts p into same execution queue as our container
+            ((Part) container).event.enqueue (p);
             p.resolve ();
             p.init (simulator);
         }
