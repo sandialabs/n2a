@@ -36,6 +36,7 @@ import java.util.TreeMap;
 public class Simulator implements Iterable<Part>
 {
     public Wrapper                     wrapper;  // reference to top-level model, which is also in the simulation queue
+    public EventFactory                eventFactory;
     public Queue<Event>                eventQueue   = new PriorityQueue<Event> ();
     public List<ResizeRequest>         resizeQueue  = new LinkedList<ResizeRequest> ();
     public List<PopulationConnection>  connectQueue = new LinkedList<PopulationConnection> ();
@@ -64,6 +65,11 @@ public class Simulator implements Iterable<Part>
 
     public Simulator (Wrapper wrapper, long seed)
     {
+        this (wrapper, seed, new EventFactory ());
+    }
+
+    public Simulator (Wrapper wrapper, long seed, EventFactory factory)
+    {
         try {out = new PrintStream (new File ("out").getAbsoluteFile ());}      // put in current working dir, which should be the job directory
         catch (FileNotFoundException e) {out = System.out;}  // if that fails, just use the default stdout
 
@@ -72,7 +78,8 @@ public class Simulator implements Iterable<Part>
         this.wrapper = wrapper;
         wrapper.simulator = this;
 
-        EventStep e = new EventStep ();
+        eventFactory = factory;
+        EventStep e = eventFactory.create ();
         e.enqueue (wrapper);
         periods.put (e.dt, e);
 
@@ -153,7 +160,7 @@ public class Simulator implements Iterable<Part>
         if (result != null) e = result.getValue ();
         if (e == null  ||  e.dt != dt)
         {
-            e = new EventStep ();
+            e = eventFactory.create ();
             e.dt = dt;
             e.t = currentEvent.t + dt;
             periods.put (dt, e);
