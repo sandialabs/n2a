@@ -1,11 +1,9 @@
 package gov.sandia.n2a.backend.internal;
 
-import gov.sandia.n2a.language.type.Instance;
-
 public class EventStep extends Event
 {
     public double dt = 1e-4;  // Duration of one simulation step.
-    public Instance head = new Instance ();  // doubly-linked list
+    public Part head = new Part ();  // doubly-linked list
 
     public EventStep ()
     {
@@ -15,7 +13,7 @@ public class EventStep extends Event
 
     public void run (Simulator simulator)
     {
-        Instance i = head.next;
+        Part i = head.next;
         while (i != head)
         {
             simulator.integrate (i);
@@ -51,7 +49,7 @@ public class EventStep extends Event
 
     public void debugQueue ()
     {
-        Instance i = head.next;
+        Part i = head.next;
         while (i != head)
         {
             System.out.println (i.getClass ().getSimpleName ());

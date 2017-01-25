@@ -33,7 +33,7 @@ import java.util.TreeMap;
     Space-efficiency is the true priority for Internal, since it supports code-generation for other backends,
     and thus makes the size of their models memory-bound.
 **/
-public class Simulator implements Iterable<Instance>
+public class Simulator implements Iterable<Part>
 {
     public Wrapper                     wrapper;  // reference to top-level model, which is also in the simulation queue
     public Queue<Event>                eventQueue   = new PriorityQueue<Event> ();
@@ -145,7 +145,7 @@ public class Simulator implements Iterable<Instance>
         connectQueue.clear ();
     }
 
-    public void move (Instance i, double dt)
+    public void move (Part i, double dt)
     {
         // find a matching event, or create one
         EventStep e = null;
@@ -190,13 +190,13 @@ public class Simulator implements Iterable<Instance>
         connectQueue.add (p);
     }
 
-    public class InstanceIterator implements Iterator<Instance>
+    public class PartIterator implements Iterator<Part>
     {
         Iterator<Event> eventIterator;
         EventStep       event;
-        Instance        instance;
+        Part            part;
 
-        public InstanceIterator ()
+        public PartIterator ()
         {
             eventIterator = eventQueue.iterator ();
             nextEvent ();
@@ -204,15 +204,15 @@ public class Simulator implements Iterable<Instance>
 
         public boolean hasNext ()
         {
-            if (instance == null) return false;
-            return instance != event.head;
+            if (part == null) return false;
+            return part != event.head;
         }
 
-        public Instance next ()
+        public Part next ()
         {
-            Instance result = instance;
-            instance = instance.next;
-            if (instance == event.head) nextEvent ();
+            Part result = part;
+            part = part.next;
+            if (part == event.head) nextEvent ();
             return result;
         }
 
@@ -228,8 +228,8 @@ public class Simulator implements Iterable<Instance>
                     break;
                 }
             }
-            if (event == null) instance = null;
-            else               instance = event.head.next;
+            if (event == null) part = null;
+            else               part = event.head.next;
         }
 
         public void remove ()
@@ -238,8 +238,8 @@ public class Simulator implements Iterable<Instance>
         }
     }
 
-    public Iterator<Instance> iterator ()
+    public Iterator<Part> iterator ()
     {
-        return new InstanceIterator ();
+        return new PartIterator ();
     }
 }

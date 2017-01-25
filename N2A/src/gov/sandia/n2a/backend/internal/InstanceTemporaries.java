@@ -86,7 +86,8 @@ public class InstanceTemporaries extends Instance
     {
         if (v == bed.dt)
         {
-            simulator.move (wrapped, ((Scalar) value).value);
+            // We assume that this case only occurs for Parts, not Populations.
+            simulator.move ((Part) wrapped, ((Scalar) value).value);
             if (! bed.storeDt) return;  // don't try to store $t' (below) unless necessary
         }
 

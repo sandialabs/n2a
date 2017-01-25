@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.backend.internal;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map.Entry;
 
 import gov.sandia.n2a.backend.internal.InternalBackendData.Conversion;
@@ -28,8 +29,12 @@ import gov.sandia.n2a.language.type.Scalar;
 public class Part extends Instance
 {
     public Population[] populations;
+    public Part         next;      // for event string
+    public Part         previous;  // for event string
 
-    /// An empty constructor, specifically for use by Wrapper. If you're not Wrapper, don't use this!
+    /**
+        Empty constructor, specifically for use by Wrapper and EventStep.
+    **/
     protected Part ()
     {
     }
@@ -124,7 +129,7 @@ public class Part extends Instance
             for (Entry<EquationSet,EventSource> i : et.sources.entrySet ())
             {
                 EventSource es = i.getValue ();
-                Instance source = ((Instance) valuesObject[es.reference.index]);
+                Part source = ((Part) valuesObject[es.reference.index]);
                 @SuppressWarnings("unchecked")
                 ArrayList<Instance> monitors = (ArrayList<Instance>) source.valuesObject[es.monitorIndex];
                 monitors.add (this);
@@ -219,7 +224,7 @@ public class Part extends Instance
         for (EventSource es : bed.eventSources)
         {
             @SuppressWarnings("unchecked")
-            ArrayList<Instance> monitors = (ArrayList<Instance>) valuesObject[es.monitorIndex];
+            List<Instance> monitors = (ArrayList<Instance>) valuesObject[es.monitorIndex];
             EventTarget eventType = es.target;
             if (eventType.testAll)
             {
@@ -400,6 +405,20 @@ public class Part extends Instance
         }
 
         return true;
+    }
+
+    public void enqueue (Part i)
+    {
+        i.next          = next;
+        i.previous      = this;
+        i.next.previous = i;
+        i.previous.next = i;
+    }
+
+    public void dequeue ()
+    {
+        previous.next = next;
+        next.previous = previous;
     }
 
     /**

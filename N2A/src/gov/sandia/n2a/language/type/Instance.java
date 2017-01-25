@@ -32,8 +32,6 @@ public class Instance extends Type
     public Instance    container;
     public float[]     valuesFloat;  // memory is the premium resource, not accuracy, so use float rather than double
     public Object[]    valuesObject;
-    public Instance    next;      // for doubly-linked list
-    public Instance    previous;  // for doubly-linked list
 
     public void allocate (int countFloat, int countObject)
     {
@@ -148,20 +146,6 @@ public class Instance extends Type
     public boolean finish (Simulator simulator)
     {
         return true;
-    }
-
-    public void enqueue (Instance i)
-    {
-        i.next          = next;
-        i.previous      = this;
-        i.next.previous = i;
-        i.previous.next = i;
-    }
-
-    public void dequeue ()
-    {
-        previous.next = next;
-        next.previous = previous;
     }
 
     public Type EQ (Type that) throws EvaluationException
