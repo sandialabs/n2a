@@ -11,11 +11,7 @@ public class EventSpikeSingle extends EventSpike
         setFlag ();
         simulator.integrate (target);
         target.update (simulator);
-        if (! target.finish (simulator)  &&  target instanceof Part)
-        {
-            Part p = (Part) target;
-            p.event.dequeue (p);
-        }
+        if (! target.finish (simulator)) target.dequeue ();
     }
 
     public void setFlag ()

@@ -127,6 +127,14 @@ public class Instance extends Type
         else                          valuesObject[v.readIndex] = value;
     }
 
+    /**
+        If this instance is on a simulation queue, then remove it.
+        Note that only backend.internal.Part objects may be enqueued.
+    **/
+    public void dequeue ()
+    {
+    }
+
     public void init (Simulator simulator)
     {
     }

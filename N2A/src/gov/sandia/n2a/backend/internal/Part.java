@@ -83,6 +83,11 @@ public class Part extends Instance
         resolve (((InternalBackendData) equations.backendData).localReference);
     }
 
+    public void dequeue ()
+    {
+        if (event != null) event.dequeue (this);
+    }
+
     /**
         Note: specifically for Parts, call resolve() before calling init(). This is to
         accommodate the connection process, which must probe values in a part (which

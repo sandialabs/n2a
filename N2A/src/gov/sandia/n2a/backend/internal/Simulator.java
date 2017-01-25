@@ -161,12 +161,12 @@ public class Simulator implements Iterable<Part>
         }
 
         // transfer to new event's queue
-        i.event.dequeue (i);
+        i.dequeue ();
         e.enqueue (i);
         //   keep top-level model and wrapper together in same event
         if (i.container.container == wrapper)  // This should always be safe, since only wrapper itself lacks a container.
         {
-            wrapper.event.dequeue (wrapper);
+            wrapper.dequeue ();
             e.enqueue (wrapper);
         }
     }
