@@ -36,11 +36,11 @@ public class Part extends Instance
     /**
         Empty constructor, specifically for use by Wrapper and EventStep.
     **/
-    protected Part ()
+    public Part ()
     {
     }
 
-    protected Part (EquationSet equations, Population container)
+    public Part (EquationSet equations, Population container)
     {
         this.equations = equations;
         this.container = container;
@@ -413,7 +413,7 @@ public class Part extends Instance
     }
 
     /**
-        Hack to allow testing of lethConnection at this level of the class hierarchy.
+        Hack to allow testing of lethalConnection at this level of the class hierarchy.
     **/
     public Part getPart (int i)
     {

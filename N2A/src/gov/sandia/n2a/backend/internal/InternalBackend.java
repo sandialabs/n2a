@@ -185,8 +185,7 @@ public class InternalBackend extends Backend
 
     public static void digestModel (EquationSet e, String jobDir) throws Exception
     {
-        // Make paths relative to job directory
-        System.setProperty ("user.dir", new File (jobDir).getAbsolutePath ());
+        System.setProperty ("user.dir", new File (jobDir).getAbsolutePath ());  // Make paths relative to job directory
 
         e.resolveConnectionBindings ();
         e.flatten ();

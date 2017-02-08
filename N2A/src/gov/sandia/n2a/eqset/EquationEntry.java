@@ -101,8 +101,20 @@ public class EquationEntry implements Comparable<EquationEntry>
         if (ifString.equals (that.ifString)) return  0;
         if (     ifString.isEmpty ())        return  1;
         if (that.ifString.isEmpty ())        return -1;
-        if (     ifString.equals ("$init"))  return  1;
-        if (that.ifString.equals ("$init"))  return -1;
+
+        boolean thisInit =      ifString.contains ("$init");
+        boolean thatInit = that.ifString.contains ("$init");
+        if (thisInit)
+        {
+            if (! thatInit)              return -1;
+            if (ifString.length () == 5) return  1;  // ifString is exactly "$init"
+        }
+        if (thatInit)
+        {
+            if (! thisInit)                   return  1;
+            if (that.ifString.length () == 5) return -1;
+        }
+
         int diff = that.ifString.length () - ifString.length ();  // as a heuristic, sort longer ifStrings first
         if (diff == 0) return ifString.compareTo (that.ifString);  // If they are the same length, use lexical order instead.
         return diff;

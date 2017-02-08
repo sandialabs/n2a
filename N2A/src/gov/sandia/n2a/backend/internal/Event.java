@@ -4,7 +4,7 @@ import gov.sandia.n2a.language.EvaluationException;
 
 public class Event implements Comparable<Event>
 {
-    public double t = 0;
+    public double t;
 
     public void run (Simulator simulator)
     {

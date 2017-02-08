@@ -79,7 +79,7 @@ public class Simulator implements Iterable<Part>
         wrapper.simulator = this;
 
         eventFactory = factory;
-        EventStep e = eventFactory.create ();
+        EventStep e = eventFactory.create (0.0, 1e-4);
         e.enqueue (wrapper);
         periods.put (e.dt, e);
 
@@ -160,9 +160,7 @@ public class Simulator implements Iterable<Part>
         if (result != null) e = result.getValue ();
         if (e == null  ||  e.dt != dt)
         {
-            e = eventFactory.create ();
-            e.dt = dt;
-            e.t = currentEvent.t + dt;
+            e = eventFactory.create (currentEvent.t + dt, dt);
             periods.put (dt, e);
             eventQueue.add (e);
         }

@@ -1134,7 +1134,7 @@ public class EquationSet implements Comparable<EquationSet>
         <li>It is in a container that can die.
         </ul>
         Each of these may call for different processing in the simulator, so various
-        flags are set on each equation set to indicate the causes.
+        flags are set to indicate the causes.
         Depends on results of: addSpecials(), findConstants(), collectSplits(), findInitOnly()
     **/
     public void findDeath ()

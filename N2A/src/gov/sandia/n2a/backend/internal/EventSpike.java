@@ -4,7 +4,7 @@ import gov.sandia.n2a.backend.internal.InternalBackendData.EventTarget;
 
 public abstract class EventSpike extends Event
 {
-    EventTarget eventType;
+    public EventTarget eventType;
 
     public void run (Simulator simulator)
     {

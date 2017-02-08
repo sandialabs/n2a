@@ -172,6 +172,21 @@ public class InternalBackendData
             this.event = event;
         }
 
+        public void setLatch (Instance i)
+        {
+            i.valuesFloat[valueIndex] = Float.intBitsToFloat (Float.floatToRawIntBits (i.valuesFloat[valueIndex]) | mask);
+        }
+
+        public void clearLatch (Instance i)
+        {
+            i.valuesFloat[valueIndex] = Float.intBitsToFloat (Float.floatToRawIntBits (i.valuesFloat[valueIndex]) & ~mask);
+        }
+
+        public boolean getLatch (Instance i)
+        {
+            return (Float.floatToRawIntBits (i.valuesFloat[valueIndex]) & mask) != 0;
+        }
+
         /**
             Determine if this event should be triggered.
             Must be called during the finish phase, before buffered values are written to their primary storage.
@@ -228,6 +243,20 @@ public class InternalBackendData
             double result = ((Scalar) event.operands[1].eval (temp)).value;
             if (result < 0) result = -1;
             return result;
+        }
+
+        /**
+            Similar to test(), but assumes the event will fire, and simply computes the requested delay.
+        **/
+        public double delay (Instance targetPart, Simulator simulator)
+        {
+            InstanceTemporaries temp = new InstanceTemporaries (targetPart, simulator, false);
+            for (Variable v : dependencies)
+            {
+                Type result = v.eval (temp);
+                if (result != null  &&  v.writeIndex >= 0) temp.set (v, result);
+            }
+            return ((Scalar) event.operands[1].eval (temp)).value;
         }
 
         public boolean equals (Object that)

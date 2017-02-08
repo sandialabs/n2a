@@ -5,8 +5,11 @@ public class EventStep extends Event
     public double dt = 1e-4;  // Duration of one simulation step.
     public Part head = new Part ();  // doubly-linked list
 
-    public EventStep ()
+    public EventStep (double t, double dt)
     {
+        this.t  = t;
+        this.dt = dt;
+
         head.next     = head;
         head.previous = head;
     }

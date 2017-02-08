@@ -6,7 +6,7 @@ import gov.sandia.n2a.language.type.Instance;
 
 public class EventSpikeMulti extends EventSpike
 {
-    List<Instance> targets;
+    public List<Instance> targets;
 
     public void run (Simulator simulator)
     {
@@ -18,6 +18,6 @@ public class EventSpikeMulti extends EventSpike
 
     public void setFlag ()
     {
-        for (Instance i : targets) i.valuesFloat[eventType.valueIndex] = Float.intBitsToFloat (Float.floatToRawIntBits (i.valuesFloat[eventType.valueIndex]) | eventType.mask);
+        for (Instance i : targets) eventType.setLatch (i);
     }
 }
