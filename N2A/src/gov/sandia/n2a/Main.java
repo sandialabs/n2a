@@ -51,9 +51,12 @@ public class Main
         ArrayList<String> pluginClassNames = new ArrayList<String> ();
         pluginClassNames.add ("gov.sandia.n2a.backend.internal.InternalPlugin");
         pluginClassNames.add ("gov.sandia.n2a.backend.xyce.XycePlugin");
-        pluginClassNames.add ("gov.sandia.n2a.backend.stpu.PluginSTPU");
         pluginClassNames.add ("gov.sandia.n2a.backend.c.PluginC");
         pluginClassNames.add ("gov.sandia.n2a.backend.neuroml.PluginNeuroML");
+        for (String arg : args)
+        {
+            if (arg.startsWith ("plugin=")) pluginClassNames.add (arg.substring (7));
+        }
 
         File[] pluginDirs = new File[1];
         pluginDirs[0] = new File (AppData.properties.get ("resourceDir"), "plugins");
