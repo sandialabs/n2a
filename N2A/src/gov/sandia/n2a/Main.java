@@ -42,7 +42,7 @@ public class Main
         AppData.properties.set ("N2A", "abbreviation");
         AppData.properties.set ("0.92", "version");
         AppData.properties.set ("Fred Rothganger (PI), Derek Trumbo, Christy Warrender, Brad Aimone, Corinne Teeter, Brandon Rohrer, Steve Verzi, Ann Speed, Asmeret Bier, Felix Wang", "developers");
-        AppData.properties.set ("Copyright &copy; 2013 Sandia Corporation. Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains certain rights in this software.", "copyright");
+        AppData.properties.set ("Copyright &copy; 2013,2016 Sandia Corporation. Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains certain rights in this software.", "copyright");
         AppData.properties.set ("This software is released under the BSD license.  Please refer to the license information provided in this distribution for the complete text.", "license");
         AppData.properties.set ("frothga@sandia.gov", "support");
         AppData.checkInitialDB ();
