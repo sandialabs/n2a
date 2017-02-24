@@ -681,6 +681,11 @@ public class EquationSet implements Comparable<EquationSet>
         return true;
     }
 
+    public boolean isConnection ()
+    {
+        return connectionBindings != null;
+    }
+
     /**
         Convert this equation list into an equivalent object where every included
         part with $n==1 is merged into its containing part.  Append (+=) equations
@@ -2006,15 +2011,8 @@ public class EquationSet implements Comparable<EquationSet>
     @Override
     public boolean equals (Object that)
     {
-        if (this == that)
-        {
-            return true;
-        }
-        EquationSet s = (EquationSet) that;
-        if (s == null)
-        {
-            return false;
-        }
-        return compareTo (s) == 0;
+        if (this == that) return true;
+        if (that instanceof EquationSet) return compareTo ((EquationSet) that) == 0;
+        return false;
     }
 }

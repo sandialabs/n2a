@@ -18,7 +18,6 @@ import java.util.List;
 import javax.swing.JPanel;
 
 import org.jfree.chart.ChartFactory;
-import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.NumberAxis;
 import org.jfree.chart.axis.ValueAxis;
@@ -52,7 +51,7 @@ public class Raster
     public JPanel createGraphPanel ()
     {
         JFreeChart chart = createChart (dataset);
-        return new ChartPanel (chart);
+        return new ChartPanelDrag (chart);
     }
 
     public void parsePrnFile (File f)
@@ -152,7 +151,7 @@ public class Raster
             false                     // urls
         );
 
-        XYPlot plot = chart.getXYPlot();
+        XYPlot plot = chart.getXYPlot ();
         plot.setBackgroundPaint    (Color.white);
         plot.setRangeGridlinePaint (Color.lightGray);
         plot.setDomainPannable (true);
@@ -193,9 +192,8 @@ public class Raster
                 if (orientation == PlotOrientation.HORIZONTAL) g2.fillRect ((int) transY, (int) transX, dotHeight, dotWidth);
                 else                                           g2.fillRect ((int) transX, (int) transY, dotWidth,  dotHeight);
 
-                int domainAxisIndex = plot.getDomainAxisIndex (domainAxis);
-                int rangeAxisIndex  = plot.getRangeAxisIndex  (rangeAxis);
-                updateCrosshairValues (crosshairState, x, y, domainAxisIndex, rangeAxisIndex, transX, transY, orientation);
+                int datasetIndex = plot.indexOf (dataset);
+                updateCrosshairValues (crosshairState, x, y, datasetIndex, transX, transY, orientation);
             }
         });
 

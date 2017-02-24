@@ -18,7 +18,6 @@ import java.util.List;
 import javax.swing.JPanel;
 
 import org.jfree.chart.ChartFactory;
-import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.NumberAxis;
 import org.jfree.chart.axis.ValueAxis;
@@ -50,7 +49,7 @@ public class Plot
     {
         XYDataset dataset = createDataset ();
         JFreeChart chart = createChart (dataset);
-        return new ChartPanel (chart);
+        return new ChartPanelDrag (chart);
     }
 
     public void parsePrnFile (File f)
