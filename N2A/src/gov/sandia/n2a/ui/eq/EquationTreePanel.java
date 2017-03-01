@@ -75,6 +75,7 @@ import javax.swing.event.TreeSelectionListener;
 import javax.swing.event.TreeWillExpandListener;
 import javax.swing.filechooser.FileFilter;
 import javax.swing.tree.ExpandVetoException;
+import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 import javax.swing.tree.TreeSelectionModel;
 
@@ -1003,6 +1004,7 @@ public class EquationTreePanel extends JPanel
 
     /**
         Convenience function to all all the relevant update steps when a node is deleted from the tree.
+        @deprecated
     **/
     public void updateAfterDelete (TreePath path, int index)
     {
@@ -1013,10 +1015,20 @@ public class EquationTreePanel extends JPanel
     }
 
     /**
+        Convenience function to all all the relevant update steps when a node is deleted from the tree.
+    **/
+    public void updateAfterDelete (TreeNode path[], int index)
+    {
+        updateVisibility (path, index);
+        updateOrder (path);
+    }
+
+    /**
         Re-establish a reasonable selection after a node is deleted.
         @param path Tree path to the node that should contain the selection.
         @param index Position within the children under the node. -1 means to select the container node itself.
-        Value is the filtered index rather than the raw index. 
+        Value is the filtered index rather than the raw index.
+        @deprecated
     **/
     public TreePath updateSelection (TreePath path, int index)
     {
@@ -1041,8 +1053,152 @@ public class EquationTreePanel extends JPanel
     }
 
     /**
+        Redisplay any nodes that might have changed override state.
+        @deprecated
+    **/
+    public void updateOverrides (TreePath path)
+    {
+        for (int i = path.getPathCount () - 1; i > 0; i--)
+        {
+            NodeBase n = (NodeBase) path.getPathComponent (i);
+            model.nodeChanged (n);
+            Rectangle bounds = tree.getPathBounds (new TreePath (n.getPath ()));
+            tree.paintImmediately (bounds);
+        }
+    }
+
+    public void updateVisibility (TreeNode path[])
+    {
+        if (path.length < 2)
+        {
+            updateVisibility (path, -1);
+        }
+        else
+        {
+            NodeBase c = (NodeBase) path[path.length - 1];
+            NodeBase p = (NodeBase) path[path.length - 2];
+            int index = p.getIndexFiltered (c);
+            updateVisibility (path, index);
+        }
+    }
+
+    /**
+        Ensure that the tree down to the changed node is displayed with correct visibility and override coloring.
+        @param path Every node from root to changed node, including changed node itself.
+        The trailing nodes are allowed to be diconnected from root in the filtered view of the model,
+        and they are allowed to be deleted nodes. Note: deleted nodes will have null parents.
+        Deleted nodes should already be removed from tree, with proper notification handled by caller.
+        @param index Position of the ultimate node in the penultimate (parent) node. Only used if the ultimate
+        node has been deleted.
+    **/
+    public void updateVisibility (TreeNode path[], int index)
+    {
+        // Prepare list of indices for final selection
+        int[] selectionIndices = new int[path.length];
+        for (int i = 1; i < path.length; i++)
+        {
+            NodeBase p = (NodeBase) path[i-1];
+            NodeBase c = (NodeBase) path[i];
+            selectionIndices[i] = model.getIndexOfChild (p, c);  // Could be -1, if c has already been deleted.
+        }
+
+        // Adjust visibility
+        int inserted = path.length;
+        int removed  = path.length;
+        int removedIndex = -1;
+        for (int i = path.length - 1; i > 0; i--)
+        {
+            NodeBase p = (NodeBase) path[i-1];
+            NodeBase c = (NodeBase) path[i];
+            if (c.getParent () == null) continue;  // skip deleted nodes
+            int filteredIndex = model.getIndexOfChild (p, c);
+            boolean filteredOut = filteredIndex < 0;
+            if (c.visible (model.filterLevel))
+            {
+                if (filteredOut)
+                {
+                    p.unhide (c, model, false);  // silently adjust the filtering
+                    inserted = i; // promise to notify model
+                }
+            }
+            else
+            {
+                if (! filteredOut)
+                {
+                    p.hide (c, model, false);
+                    removed = i;
+                    removedIndex = filteredIndex;
+                }
+            }
+        }
+
+        // update color to indicate override state
+        int lastChange = Math.min (inserted, removed);
+        for (int i = 1; i < lastChange; i++)
+        {
+            // Since it is hard to measure current color, just assume everything needs updating.
+            NodeBase c = (NodeBase) path[i];
+            if (c.getParent () == null) continue;
+            model.nodeChanged (c);
+            Rectangle bounds = tree.getPathBounds (new TreePath (c.getPath ()));
+            tree.paintImmediately (bounds);
+        }
+
+        if (lastChange < path.length)
+        {
+            NodeBase p = (NodeBase) path[lastChange-1];
+            NodeBase c = (NodeBase) path[lastChange];
+            int[] childIndices = new int[1];
+            if (inserted < removed)
+            {
+                childIndices[0] = p.getIndexFiltered (c);
+                model.nodesWereInserted (p, childIndices);
+            }
+            else
+            {
+                childIndices[0] = removedIndex;
+                Object[] childObjects = new Object[1];
+                childObjects[0] = c;
+                model.nodesWereRemoved (p, childIndices, childObjects);
+            }
+            repaintSouth (new TreePath (p.getPath ()));
+        }
+
+        // select last visible node
+        int i = 1;
+        for (; i < path.length; i++)
+        {
+            NodeBase c = (NodeBase) path[i];
+            if (c.getParent () == null) break;
+            if (! c.visible (model.filterLevel)) break;
+        }
+        i--;  // Choose the last good node
+        NodeBase c = (NodeBase) path[i];
+        if (i == path.length - 2)
+        {
+            index = Math.min (index, model.getChildCount (c) - 1);
+            if (index >= 0) c = (NodeBase) model.getChild (c, index);
+        }
+        else if (i < path.length - 2)
+        {
+            int childIndex = Math.min (selectionIndices[i+1], model.getChildCount (c) - 1);
+            if (childIndex >= 0) c = (NodeBase) model.getChild (c, childIndex);
+        }
+        TreePath selectedPath = new TreePath (c.getPath ());
+        tree.setSelectionPath (selectedPath);
+        if (lastChange >= path.length)
+        {
+            boolean expanded = tree.isExpanded (selectedPath);
+            model.nodeStructureChanged (c);  // Should this be more targeted?
+            if (expanded) tree.expandPath (selectedPath);
+            repaintSouth (selectedPath);
+        }
+    }
+
+    /**
         Records the current order of nodes in "gui.order", provided that metadata field exists.
         Otherwise, we assume the user doesn't care.
+        @deprecated
     **/
     public void updateOrder ()
     {
@@ -1087,18 +1243,49 @@ public class EquationTreePanel extends JPanel
     }
 
     /**
-        Redisplay any nodes that might have been reset to non-overridden state.
+        Records the current order of nodes in "gui.order", provided that metadata field exists.
+        Otherwise, we assume the user doesn't care.
     **/
-    public void updateOverrides (TreePath path)
+    public void updateOrder (TreeNode path[])
     {
-        for (int i = path.getPathCount () - 1; i >= 0; i--)
+        NodePart parent = null;
+        for (int i = path.length - 2; i >= 0; i--)
         {
-            NodeBase n = (NodeBase) path.getPathComponent (i);
-            if (! n.source.isFromTopDocument ())
+            if (path[i] instanceof NodePart)
             {
-                model.nodeChanged (n);
-                Rectangle bounds = tree.getPathBounds (new TreePath (n.getPath ()));
-                tree.paintImmediately (bounds);
+                parent = (NodePart) path[i];
+                break;
+            }
+        }
+        if (parent == null) return;
+
+        // Find $metadata/gui.order for the currently selected node. If it exists, update it.
+        // Note that this is a modified version of moveSelected() which does not actually move
+        // anything, and which only modifies an existing $metadata/gui.order, not create a new one.
+        NodeAnnotations metadataNode = null;
+        String order = null;
+        Enumeration i = parent.children ();
+        while (i.hasMoreElements ())
+        {
+            NodeBase c = (NodeBase) i.nextElement ();
+            String key = c.source.key ();
+            if (order == null) order = key;
+            else               order = order + "," + key;
+            if (key.equals ("$metadata")) metadataNode = (NodeAnnotations) c;
+        }
+        if (metadataNode == null) return;
+
+        i = metadataNode.children ();
+        while (i.hasMoreElements ())
+        {
+            NodeAnnotation a = (NodeAnnotation) i.nextElement ();
+            if (a.source.key ().equals ("gui.order"))
+            {
+                a.source.set (order);
+                FontMetrics fm = a.getFontMetrics (tree);
+                metadataNode.updateTabStops (fm);
+                model.nodeChanged (a);
+                break;
             }
         }
     }

@@ -39,13 +39,19 @@ public class ChangeReference extends Do
     public void undo ()
     {
         super.undo ();
-        ChangeAnnotation.reverse (path, nameBefore, valueBefore, nameAfter, valueAfter);
+        ChangeAnnotation.apply (path, nameAfter, valueAfter, nameBefore, valueBefore, new NodeFactory ()
+        {
+            public NodeBase create (MPart part)
+            {
+                return new NodeReference (part);
+            }
+        });
     }
 
     public void redo ()
     {
         super.redo ();
-        ChangeAnnotation.forward (path, nameBefore, valueBefore, nameAfter, valueAfter, new NodeFactory ()
+        ChangeAnnotation.apply (path, nameBefore, valueBefore, nameAfter, valueAfter, new NodeFactory ()
         {
             public NodeBase create (MPart part)
             {

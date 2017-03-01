@@ -143,7 +143,7 @@ public class NodePart extends NodeContainer
         if (source.isFromTopDocument ()) return true;
         if (filterLevel >= FilteredTreeModel.LOCAL) return false;  // Since we already fail the "local" requirement
         // FilteredTreeModel.PUBLIC ...
-        if (children != null  &&  children.size () > 0  &&  (filtered == null  ||  filtered.size () > 0)) return true;  // We have subnodes, and at least some of them are visible.
+        if (children != null  &&  children.size () > 0  &&  (filtered == null  ||  filtered.size () > 0)) return true;  // We have subnodes, and at least some of them are visible (which can only happen at this point if they are public).
         return source.child ("$metadata", "public") != null;
     }
 
@@ -177,41 +177,55 @@ public class NodePart extends NodeContainer
     }
 
     @Override
-    public void insertFiltered (int filteredIndex, int childrenIndex)
+    public void insertFiltered (int filteredIndex, int childrenIndex, boolean shift)
     {
         if (filtered == null)
         {
             if (filteredIndex == childrenIndex) return;  // the new entry does does not require instantiating "filtered", because the list continues to be exactly 1-to-1
-            filtered = new ArrayList<Integer> ();
             int count = children.size () - 1;
+            filtered = new ArrayList<Integer> (count);
             for (int i = 0; i < count; i++) filtered.add (i);
         }
 
         if (filteredIndex >= 0)
         {
             filtered.add (filteredIndex, childrenIndex);  // effectively duplicates the entry at filteredIndex
-            int count = filtered.size ();
-            for (int i = filteredIndex + 1; i < count; i++) filtered.set (i, filtered.get (i).intValue () + 1);  // Shift child indices up by one, to account for the new entry added ahead of them.
-        }
-        else  // filteredIndex == -1
-        {
-            // Don't add an element, since it is invisible, but still ripple up the child indices, since they have changed at that level.
-            int count = filtered.size ();
-            for (int i = 0; i < count; i++)
+            if (shift)
             {
-                int index = filtered.get (i).intValue ();
-                if (index >= childrenIndex) filtered.set (i, index + 1);
+                int count = filtered.size ();
+                for (int i = filteredIndex + 1; i < count; i++) filtered.set (i, filtered.get (i).intValue () + 1);  // Shift child indices up by one, to account for the new entry added ahead of them.
+            }
+        }
+        else // filteredIndex == -1
+        {
+            // Don't add element to filtered, since it is invisible, but still ripple up the child indices.
+            if (shift)
+            {
+                int count = filtered.size ();
+                for (int i = 0; i < count; i++)
+                {
+                    int index = filtered.get (i).intValue ();
+                    if (index >= childrenIndex) filtered.set (i, index + 1);
+                }
             }
         }
      }
 
     @Override
-    public void removeFiltered (int filteredIndex)
+    public void removeFiltered (int filteredIndex, boolean shift)
     {
-        if (filtered == null) return;
+        if (filtered == null)
+        {
+            int count = children.size ();
+            filtered = new ArrayList<Integer> (count);
+            for (int i = 0; i < count; i++) filtered.add (i);
+        }
         filtered.remove (filteredIndex);
-        int count = filtered.size ();
-        for (int i = filteredIndex; i < count; i++)  filtered.set (i, filtered.get (i).intValue () - 1);  // Shift child indices down by 1 to account from entry removed ahead of them.
+        if (shift)  // Shift child indices down by 1 to account for entry removed ahead of them.
+        {
+            int count = filtered.size ();
+            for (int i = filteredIndex; i < count; i++)  filtered.set (i, filtered.get (i).intValue () - 1);
+        }
     }
 
     @Override
@@ -496,7 +510,7 @@ public class NodePart extends NodeContainer
                 findConnections ();
                 filter (model.filterLevel);
                 if (visible (model.filterLevel)) model.nodeStructureChanged (this);
-                else                             ((NodePart) getParent ()).hide (this, model);
+                else                             ((NodePart) getParent ()).hide (this, model, true);
             }
         }
     }

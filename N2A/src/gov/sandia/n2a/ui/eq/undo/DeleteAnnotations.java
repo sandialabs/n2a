@@ -10,7 +10,7 @@ package gov.sandia.n2a.ui.eq.undo;
 import java.util.List;
 
 import javax.swing.JTree;
-import javax.swing.tree.TreePath;
+import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 
@@ -73,11 +73,8 @@ public class DeleteAnnotations extends Do
             model.insertNodeIntoUnfiltered (node, parent, index);
         }
         node.build ();  // Replaces all nodes, so they are set to require tab initialization.
-        if (node.visible (model.filterLevel))
-        {
-            model.nodeStructureChanged (node);
-            tree.setSelectionPath (new TreePath (node.getPath ()));
-        }
+        node.filter (model.filterLevel);
+        mep.panelEquations.updateVisibility (node.getPath ());
     }
 
     public void redo ()
@@ -97,7 +94,7 @@ public class DeleteAnnotations extends Do
 
         String blockName = saved.key ();
         NodeContainer node = (NodeContainer) parent.child (blockName);
-        TreePath parentPath = new TreePath (parent.getPath ());
+        TreeNode[] nodePath = node.getPath ();
         int filteredIndex = parent.getIndexFiltered (node);
 
         MPart mparent = parent.source;
@@ -109,15 +106,8 @@ public class DeleteAnnotations extends Do
         else  // Just exposed an overridden node
         {
             node.build ();  // Necessary to remove all overridden nodes
-            if (node.visible (model.filterLevel))
-            {
-                model.nodeStructureChanged (node);
-            }
-            else
-            {
-                parent.hide (node, model);
-            }
+            node.filter (model.filterLevel);
         }
-        mep.panelEquations.updateAfterDelete (parentPath, filteredIndex);
+        mep.panelEquations.updateVisibility (nodePath, filteredIndex);
     }
 }

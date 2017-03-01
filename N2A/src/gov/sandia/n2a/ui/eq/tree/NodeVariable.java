@@ -487,7 +487,7 @@ public class NodeVariable extends NodeContainer
             build ();
             updateColumnWidths (fm);
             if (visible (model.filterLevel)) model.nodeStructureChanged (this);
-            else                             parent.hide (this, model);
+            else                             parent.hide (this, model, true);
         }
         parent.updateTabStops (fm);
         parent.allNodesChanged (model);

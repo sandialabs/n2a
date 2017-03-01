@@ -11,6 +11,7 @@ import java.awt.FontMetrics;
 import java.util.List;
 
 import javax.swing.JTree;
+import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
@@ -77,7 +78,7 @@ public class AddAnnotation extends Do
         FontMetrics fm = createdNode.getFontMetrics (tree);
 
         boolean containerIsVisible = true;
-        TreePath containerPath = new TreePath (container.getPath ());
+        TreeNode[] createdPath = createdNode.getPath ();
         int filteredIndex = container.getIndexFiltered (createdNode);
 
         MPart metadata = (MPart) parent.source.child (blockName);
@@ -101,7 +102,6 @@ public class AddAnnotation extends Do
             }
             else
             {
-                ((NodeBase) container.getParent ()).hide (container, model);
                 containerIsVisible = false;
             }
         }
@@ -111,7 +111,7 @@ public class AddAnnotation extends Do
             container.updateTabStops (fm);
             container.allNodesChanged (model);
         }
-        mep.panelEquations.updateAfterDelete (containerPath, filteredIndex);
+        mep.panelEquations.updateAfterDelete (createdPath, filteredIndex);
     }
 
     public void redo ()
@@ -157,7 +157,11 @@ public class AddAnnotation extends Do
             }
         }
 
-        NodeBase createdNode = factory.create ((MPart) block.set (value, name));
+        NodeBase createdNode = container.child (name);
+        boolean alreadyExists = createdNode != null;
+        MPart createdPart = (MPart) block.set (value, name);
+        if (! alreadyExists) createdNode = factory.create (createdPart);
+
         FontMetrics fm = createdNode.getFontMetrics (tree);
         if (container.getChildCount () > 0)
         {
@@ -165,15 +169,14 @@ public class AddAnnotation extends Do
             if (firstChild.needsInitTabs ()) firstChild.initTabs (fm);
         }
 
-        if (value == null) createdNode.setUserObject ("");  // pure create, so about to go into edit mode
+        if (value == null) createdNode.setUserObject ("");  // pure create, so about to go into edit mode. This should only happen on first application of the create action, and should only be possible if visibility is already correct.
         createdNode.updateColumnWidths (fm);  // preempt initialization; uses actual name, not user value
-        model.insertNodeIntoUnfiltered (createdNode, container, index);
-        if (value != null)  // create merged with change name/value
+        if (! alreadyExists) model.insertNodeIntoUnfiltered (createdNode, container, index);
+        if (value != null)  // create was merged with change name/value
         {
             container.updateTabStops (fm);
             container.allNodesChanged (model);
-            tree.setSelectionPath (new TreePath (createdNode.getPath ()));
-            mep.panelEquations.repaintSouth (new TreePath (container.getPath ()));
+            mep.panelEquations.updateVisibility (createdNode.getPath ());
         }
 
         return createdNode;

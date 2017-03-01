@@ -10,15 +10,12 @@ package gov.sandia.n2a.ui.eq;
 
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
-import java.util.ArrayList;
-import java.util.Enumeration;
 import java.util.List;
 
 import javax.swing.JTree;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.MutableTreeNode;
 import javax.swing.tree.TreeNode;
-import javax.swing.tree.TreePath;
 
 public class FilteredTreeModel extends DefaultTreeModel
 {
@@ -88,7 +85,7 @@ public class FilteredTreeModel extends DefaultTreeModel
         c.filter (filterLevel);  // If c brings a new subtree, ensure it is filtered.
         if (! c.visible (filterLevel))  // Don't send any event
         {
-            p.insertFiltered (-1, childrenIndex);
+            p.insertFiltered (-1, childrenIndex, true);
             return;
         }
 
@@ -106,7 +103,7 @@ public class FilteredTreeModel extends DefaultTreeModel
             {
                 if (filtered.get (filteredIndex).intValue () >= childrenIndex) break;
             }
-            p.insertFiltered (filteredIndex, childrenIndex);
+            p.insertFiltered (filteredIndex, childrenIndex, true);
         }
 
         int[] filteredIndices = new int[1];
@@ -129,10 +126,10 @@ public class FilteredTreeModel extends DefaultTreeModel
         c.filter (filterLevel);
         if (! c.visible (filterLevel))
         {
-            p.insertFiltered (-1, childrenIndex);
+            p.insertFiltered (-1, childrenIndex, true);
             return;
         }
-        p.insertFiltered (filteredIndex, childrenIndex);
+        p.insertFiltered (filteredIndex, childrenIndex, true);
 
         int[] filteredIndices = new int[1];
         filteredIndices[0] = filteredIndex;
@@ -147,7 +144,7 @@ public class FilteredTreeModel extends DefaultTreeModel
         int filteredIndex = parent.getIndexFiltered ((NodeBase) child);
         parent.remove (child);
         if (filteredIndex < 0) return;  // No need to send event, because this node was not visible.
-        parent.removeFiltered (filteredIndex);
+        parent.removeFiltered (filteredIndex, true);
 
         int[]    removedIndices = new int   [1];
         Object[] removedObjects = new Object[1];

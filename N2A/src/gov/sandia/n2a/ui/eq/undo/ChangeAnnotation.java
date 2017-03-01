@@ -11,10 +11,7 @@ import java.awt.FontMetrics;
 import java.util.List;
 
 import javax.swing.JTree;
-import javax.swing.tree.TreePath;
 import javax.swing.undo.CannotRedoException;
-import javax.swing.undo.CannotUndoException;
-
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.Do;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
@@ -47,48 +44,7 @@ public class ChangeAnnotation extends Do
     public void undo ()
     {
         super.undo ();
-        reverse (path, nameBefore, valueBefore, nameAfter, valueAfter);
-    }
-
-    public static void reverse (List<String> path, String nameBefore, String valueBefore, String nameAfter, String valueAfter)
-    {
-        NodeBase container = locateNode (path);
-        if (container == null) throw new CannotRedoException ();
-        NodeBase changedNode = container.child (nameAfter);
-
-        ModelEditPanel mep = ModelEditPanel.instance;
-        JTree tree = mep.panelEquations.tree;
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        FontMetrics fm = changedNode.getFontMetrics (tree);
-        if (nameBefore.equals (nameAfter))
-        {
-            changedNode.source.set (valueBefore);
-        }
-        else
-        {
-            MPart metadata = changedNode.source.getParent ();
-            NodeBase exposedNode = container.child (nameBefore);
-            if (exposedNode != null)
-            {
-                model.removeNodeFromParent (changedNode);
-                changedNode = exposedNode;
-            }
-            changedNode.source = (MPart) metadata.set (valueBefore, nameBefore);
-            metadata.clear (nameAfter);
-        }
-
-        changedNode.updateColumnWidths (fm);
-        container.updateTabStops (fm);
-        container.allNodesChanged (model);
-
-        tree.setSelectionPath (new TreePath (changedNode.getPath ()));
-        mep.panelEquations.repaintSouth (new TreePath (container.getPath ()));
-    }
-
-    public void redo ()
-    {
-        super.redo ();
-        forward (path, nameBefore, valueBefore, nameAfter, valueAfter, new NodeFactory ()
+        apply (path, nameAfter, valueAfter, nameBefore, valueBefore, new NodeFactory ()
         {
             public NodeBase create (MPart part)
             {
@@ -97,7 +53,19 @@ public class ChangeAnnotation extends Do
         });
     }
 
-    public static void forward (List<String> path, String nameBefore, String valueBefore, String nameAfter, String valueAfter, NodeFactory factory)
+    public void redo ()
+    {
+        super.redo ();
+        apply (path, nameBefore, valueBefore, nameAfter, valueAfter, new NodeFactory ()
+        {
+            public NodeBase create (MPart part)
+            {
+                return new NodeAnnotation (part);
+            }
+        });
+    }
+
+    public static void apply (List<String> path, String nameBefore, String valueBefore, String nameAfter, String valueAfter, NodeFactory factory)
     {
         NodeBase container = locateNode (path);
         if (container == null) throw new CannotRedoException ();
@@ -113,26 +81,40 @@ public class ChangeAnnotation extends Do
         }
         else
         {
+            // Update database
             MPart metadata = changedNode.source.getParent ();
-            MPart newPart = (MPart) metadata.set (valueAfter, nameAfter);
+            MPart newPart = (MPart) metadata.set (valueAfter, nameAfter);  // should directly change destinationNode if it exists
             metadata.clear (nameBefore);
-            if (metadata.child (nameBefore) == null)  // We were not associated with an override, so we can re-use this tree node.
+            MPart oldPart = (MPart) metadata.child (nameBefore);
+
+            // Update GUI
+            NodeBase destinationNode = container.child (nameAfter);
+            if (oldPart == null)
             {
-                changedNode.source = newPart;
+                if (destinationNode == null)
+                {
+                    changedNode.source = newPart;
+                }
+                else
+                {
+                    model.removeNodeFromParent (changedNode);
+                    changedNode = destinationNode;
+                }
             }
-            else  // Make a new tree node, and leave this one to present the non-overridden value.
+            else
             {
-                NodeBase newNode = factory.create (newPart);
-                model.insertNodeIntoUnfiltered (newNode, container, container.getChildCount ());
-                newNode.updateColumnWidths (fm);
+                if (destinationNode == null)
+                {
+                    destinationNode = factory.create (newPart);
+                    model.insertNodeIntoUnfiltered (destinationNode, container, container.getChildCount ());
+                }
+                changedNode = destinationNode;
             }
         }
 
         changedNode.updateColumnWidths (fm);
         container.updateTabStops (fm);
         container.allNodesChanged (model);
-
-        tree.setSelectionPath (new TreePath (changedNode.getPath ()));
-        mep.panelEquations.repaintSouth (new TreePath (container.getPath ()));
+        mep.panelEquations.updateVisibility (changedNode.getPath ());
     }
 }

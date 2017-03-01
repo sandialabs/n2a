@@ -41,6 +41,7 @@ public class ChangeInherit extends Do
         super.undo ();
         apply (valueBefore);
     }
+
     public void redo ()
     {
         super.redo ();
@@ -62,7 +63,6 @@ public class ChangeInherit extends Do
         parent.filter (model.filterLevel);
         model.nodeStructureChanged (parent);
 
-        tree.setSelectionPath (new TreePath (parent.child ("$inherit").getPath ()));
-        mep.panelEquations.repaintSouth (new TreePath (parent.getPath ()));
+        mep.panelEquations.updateVisibility (parent.child ("$inherit").getPath ());
     }
 }

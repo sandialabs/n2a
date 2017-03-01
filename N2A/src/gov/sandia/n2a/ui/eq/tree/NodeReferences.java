@@ -15,6 +15,8 @@ import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.NodeBase;
 import gov.sandia.n2a.ui.eq.NodeContainer;
 import gov.sandia.n2a.ui.eq.undo.AddReference;
+import gov.sandia.n2a.ui.eq.undo.DeleteAnnotations;
+import gov.sandia.n2a.ui.eq.undo.DeleteReferences;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;
@@ -66,7 +68,7 @@ public class NodeReferences extends NodeContainer
     {
         if (type.isEmpty ()  ||  type.equals ("Reference"))
         {
-            // Add a new annotation to our children
+            // Add a new reference to our children
             int index = getChildCount () - 1;
             TreePath path = tree.getSelectionPath ();
             if (path != null)
@@ -92,19 +94,6 @@ public class NodeReferences extends NodeContainer
     public void delete (JTree tree)
     {
         if (! source.isFromTopDocument ()) return;
-
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        MPart mparent = source.getParent ();
-        String key = source.key ();  // "$reference"
-        mparent.clear (key);
-        if (mparent.child (key) == null)
-        {
-            model.removeNodeFromParent (this);
-        }
-        else  // Just exposed an overridden node
-        {
-            if (! visible (model.filterLevel)) ((NodeBase) getParent ()).hide (this, model);
-            // If we are visible, we need to change color, but not necessary to do it here, because it is handled by EquationTreePanel.updateOverrides().
-        }
+        ModelEditPanel.instance.doManager.add (new DeleteReferences (this));
     }
 }

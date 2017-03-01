@@ -43,15 +43,50 @@ public class NodeBase extends DefaultMutableTreeNode
     {
     }
 
-    public void hide (NodeBase child, FilteredTreeModel model)
+    public void hide (NodeBase child, FilteredTreeModel model, boolean notifyListeners)
     {
-        int[]    removedIndices = new int   [1];
-        Object[] removedNodes   = new Object[1];
+        int[] removedIndices = new int[1];
         removedIndices[0] = getIndexFiltered (child);
-        removedNodes  [0] = child;
+        if (removedIndices[0] == -1) return;  // child is absent or already not visible, so nothing more to do
 
-        filter (model.filterLevel);  // Not the most efficient way to remove child, but simple. Also resets column spacing.
-        model.nodesWereRemoved (this, removedIndices, removedNodes);
+        removeFiltered (removedIndices[0], false);
+        for (Object c : children) ((NodeBase) c).invalidateTabs ();
+
+        if (notifyListeners)
+        {
+            Object[] removedNodes = new Object[1];
+            removedNodes[0] = child;
+            model.nodesWereRemoved (this, removedIndices, removedNodes);
+        }
+    }
+
+    public void unhide (NodeBase child, FilteredTreeModel model, boolean notifyListeners)
+    {
+        int childIndex = getIndex (child);
+        if (childIndex == -1) return;
+
+        // Determine filtered index
+        int filteredIndex;
+        List<Integer> filtered = getFiltered ();
+        if (filtered == null) return;  // all are visible, so nothing to do
+        int count = filtered.size ();
+        for (filteredIndex = 0; filteredIndex < count; filteredIndex++)
+        {
+            int f = filtered.get (filteredIndex).intValue ();
+            if (f == childIndex) return;  // already visible
+            if (f >  childIndex) break;
+        }
+
+        insertFiltered (filteredIndex, childIndex, false);
+        child.filter (model.filterLevel);
+        for (Object c : children) ((NodeBase) c).invalidateTabs ();
+
+        if (notifyListeners)
+        {
+            int[] filteredIndices = new int[1];
+            filteredIndices[0] = filteredIndex;
+            model.nodesWereInserted (this, filteredIndices);
+        }
     }
 
     /**
@@ -64,19 +99,21 @@ public class NodeBase extends DefaultMutableTreeNode
     }
 
     /**
-        Update "filtered" list with newly inserted child node.
+        Update "filtered" list with newly inserted or unhidden child node.
         @param filteredIndex The index in "filtered" of the newly inserted node. -1 if not visible
         @param childrenIndex The index in "children" of the newly inserted node.
+        @param shift Indicates that a new child node was actually added (by caller), so indices should be upshifted.
     **/
-    public void insertFiltered (int filteredIndex, int childrenIndex)
+    public void insertFiltered (int filteredIndex, int childrenIndex, boolean shift)
     {
     }
 
     /**
-        Update "filtered" list for removed child node.
+        Update "filtered" list for removed or hidden child node.
         @param filteredIndex The index in "filtered" of the node before it was removed.
+        @param shift Indicates that the child node was actually removed (by caller), so indices should be downshifted.
     **/
-    public void removeFiltered (int filteredIndex)
+    public void removeFiltered (int filteredIndex, boolean shift)
     {
     }
 
