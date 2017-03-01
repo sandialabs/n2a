@@ -10,7 +10,7 @@ A model may contain other models. For example, a cerebellum model may contain po
 
 Some things N2A is NOT:
 
-  * Not a simulator. Rather, the tool compiles the language for a given target (NEURON, NEST, etc.).
+  * Not a simulator. Rather, the tool compiles the language for a given target (NEURON, NEST, C++, Python, etc.).
   * Not deep learning, or machine learning in general. The goal of N2A is to build an integrated understanding of the whole brain, in a form that can be both analyzed and computed.
 
 ## Development Status ##
