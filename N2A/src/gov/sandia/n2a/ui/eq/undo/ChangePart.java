@@ -20,16 +20,19 @@ import gov.sandia.n2a.ui.eq.tree.NodePart;
 
 public class ChangePart extends Undoable
 {
-    protected List<String> path;  // to the container of the part being renamed
-    protected String nameBefore;
-    protected String nameAfter;
+    protected List<String> path;   // to the container of the part being renamed
+    protected int          index;  // unfiltered
+    protected String       nameBefore;
+    protected String       nameAfter;
 
     /**
         @param node The part being renamed.
     **/
     public ChangePart (NodePart node, String nameBefore, String nameAfter)
     {
-        path = ((NodeBase) node.getParent ()).getKeyPath ();
+        NodeBase parent = (NodeBase) node.getParent ();
+        path = parent.getKeyPath ();
+        index = parent.getIndex (node);
         this.nameBefore = nameBefore;
         this.nameAfter  = nameAfter;
     }
@@ -84,13 +87,14 @@ public class ChangePart extends Undoable
             if (nodeAfter == null)
             {
                 nodeAfter = new NodePart (newPart);
-                model.insertNodeIntoUnfiltered (nodeAfter, parent, parent.getChildCount ());
+                model.insertNodeIntoUnfiltered (nodeAfter, parent, index);
             }
 
             nodeBefore.build ();
             nodeBefore.findConnections ();
             nodeBefore.filter (model.filterLevel);
-            model.nodeStructureChanged (nodeBefore);
+            if (nodeBefore.visible (model.filterLevel)) model.nodeStructureChanged (nodeBefore);
+            else                                        parent.hide (nodeBefore, model, true);
         }
 
         nodeAfter.build ();
