@@ -19,16 +19,18 @@ import java.util.Vector;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.NodeBase;
 import gov.sandia.n2a.ui.eq.NodeContainer;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
+import gov.sandia.n2a.ui.eq.undo.AddPart;
 import gov.sandia.n2a.ui.eq.undo.AddReference;
 import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
+import gov.sandia.n2a.ui.eq.undo.DeletePart;
 import gov.sandia.n2a.ui.eq.undo.ChangeDoc;
+import gov.sandia.n2a.ui.eq.undo.ChangePart;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;
@@ -217,6 +219,7 @@ public class NodePart extends NodeContainer
         if (filtered == null)
         {
             int count = children.size ();
+            if (shift) count++;  // Because a child was removed before this function was called, our count for sizing "filtered" is one short.
             filtered = new ArrayList<Integer> (count);
             for (int i = 0; i < count; i++) filtered.add (i);
         }
@@ -309,28 +312,39 @@ public class NodePart extends NodeContainer
     @Override
     public NodeBase add (String type, JTree tree)
     {
+        return add (type, tree, null);
+    }
+
+    @Override
+    public NodeBase addDnD (String inherit, JTree tree)
+    {
+        return add ("Part", tree, inherit);
+    }
+
+    public NodeBase add (String type, JTree tree, String inherit)
+    {
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         if (tree.isCollapsed (new TreePath (getPath ()))  &&  model.getChildCount (this) > 0  &&  ! isRoot ())  // The node is deliberately closed to indicate user intent.
         {
-            if (type.isEmpty ()) return ((NodeBase) getParent ()).add ("Part", tree);
-            return ((NodeBase) getParent ()).add (type, tree);
+            // The only thing that can contain a NodePart is another NodePart. (If that ever changes, the following code will break.)
+            if (type.isEmpty ()) return ((NodePart) getParent ()).add ("Part", tree, inherit);
+            return ((NodePart) getParent ()).add (type, tree, inherit);
         }
 
-        NodeAnnotations a = null;
-        NodeReferences  r = null;
         int variableIndex = -1;
         int subpartIndex  = -1;
-        boolean found = false;
+        int metadataIndex = 0;
         int count = getChildCount ();  // unfiltered, so we can insert at the correct place in the underlying collection
         for (int i = 0; i < count; i++)
         {
             TreeNode t = getChildAt (i);
-            if      (t instanceof NodeReferences)  r = (NodeReferences)  t;
-            else if (t instanceof NodeAnnotations) a = (NodeAnnotations) t;
-            else if (t instanceof NodePart)
+            if (t instanceof NodeInherit)
             {
-                if (! found) variableIndex = i;
-                found = true;
+                metadataIndex = i + 1;
+            }
+            if (t instanceof NodePart)
+            {
+                if (variableIndex < 0) variableIndex = i;
                 subpartIndex = i + 1;
             }
         }
@@ -350,50 +364,34 @@ public class NodePart extends NodeContainer
             }
         }
 
-        NodeBase result;
         if (type.equals ("Annotation"))
         {
-            AddAnnotation aa = new AddAnnotation (this, 0);
+            AddAnnotation aa = new AddAnnotation (this, metadataIndex);
             ModelEditPanel.instance.doManager.add (aa);  // aa will automagically insert a $metadata block if needed
             return aa.createdNode;
         }
         else if (type.equals ("Reference"))
         {
-            AddReference ar = new AddReference (this, 0);
+            AddReference ar = new AddReference (this, metadataIndex);
             ModelEditPanel.instance.doManager.add (ar);
             return ar.createdNode;
         }
         else if (type.equals ("Part"))
         {
-            int suffix = 0;
-            while (source.child ("p" + suffix) != null) suffix++;
-            result = new NodePart ((MPart) source.set ("", "p" + suffix));
-            result.setUserObject ("");
-            model.insertNodeIntoUnfiltered (result, this, subpartIndex);
+            AddPart ap = new AddPart (this, subpartIndex, inherit);
+            ModelEditPanel.instance.doManager.add (ap);
+            return ap.createdNode;
         }
         else  // treat all other requests as "Variable"
         {
             int suffix = 0;
             while (source.child ("x" + suffix) != null) suffix++;
-            result = new NodeVariable ((MPart) source.set ("0", "x" + suffix));
+            NodeBase result = new NodeVariable ((MPart) source.set ("0", "x" + suffix));
             result.setUserObject ("");
             result.updateColumnWidths (getFontMetrics (tree));  // preempt initialization
             model.insertNodeIntoUnfiltered (result, this, variableIndex);
+            return result;
         }
-
-        return result;
-    }
-
-    @Override
-    public NodeBase addDnD (String key, JTree tree)
-    {
-        NodePart result = (NodePart) add ("Part", tree);
-        result.source.set ("\"" + key + "\"", "$inherit");  // This brings in all the equations for the new sub-part.
-        result.build ();
-        result.findConnections ();
-        ((FilteredTreeModel) tree.getModel ()).nodeStructureChanged (result);
-
-        return result;
     }
 
     @Override
@@ -412,6 +410,7 @@ public class NodePart extends NodeContainer
             return;
         }
 
+        ModelEditPanel mep = ModelEditPanel.instance;
         if (isRoot ())  // Edits to root cause a rename of the document on disk
         {
             if (name.isEmpty ())
@@ -432,7 +431,7 @@ public class NodePart extends NodeContainer
                 existingDocument = models.child (name);
             }
 
-            ModelEditPanel.instance.doManager.add (new ChangeDoc (oldKey, name));
+            mep.doManager.add (new ChangeDoc (oldKey, name));
             // MDir promises to maintain object identity during the move, so "source" is still valid.
             return;
         }
@@ -444,45 +443,15 @@ public class NodePart extends NodeContainer
         }
 
         NodeBase parent = (NodeBase) getParent ();
-        if (parent.child (name) != null)  // the name already exists, so reject rename
+        NodeBase sibling = parent.child (name);
+        if (sibling != null  &&  (sibling.source.isFromTopDocument ()  ||  ! (sibling instanceof NodePart)))  // the name already exists in top document, so reject rename
         {
             setUserObject ();
             model.nodeChanged (this);
             return;
         }
 
-        // Move the subtree
-        MPart       mparent   = source.getParent ();
-        MPersistent docParent = mparent.getSource ();
-        mparent.clear (oldKey, false);  // Undoes the override in the collated tree, but data remains in the top-level document.
-        docParent.move (oldKey, name);
-
-        // Update the displayed tree
-
-        //   Handle any overridden structure
-        MPart oldPart = (MPart) mparent.child (oldKey);
-        if (oldPart != null)  // This node overrode some inherited values.
-        {
-            NodePart p = new NodePart (oldPart);
-            model.insertNodeIntoUnfiltered (p, parent, parent.getIndex (this));
-            p.build ();
-            p.findConnections ();
-            model.nodeStructureChanged (p);
-        }
-
-        //   Update the current node
-        MPersistent newDocNode = (MPersistent) docParent.child (name);
-        if (newDocNode == null)  // It could be null if we try to rename a purely inherited node (no overrides anywhere). TODO: better support for renames. Should revoke old subtree and make full copy at new location.
-        {
-            model.removeNodeFromParent (this);  // Because we just created a new node above for the supposedly exposed overridden part.
-        }
-        else
-        {
-            source = mparent.update (newDocNode);  // re-collate this node to weave in any included part
-            build ();
-            findConnections ();
-            model.nodeStructureChanged (this);
-        }
+        mep.doManager.add (new ChangePart (this, oldKey, name));
     }
 
     @Override
@@ -490,28 +459,7 @@ public class NodePart extends NodeContainer
     {
         if (! source.isFromTopDocument ()) return;  // This should be true of root, as well as any other node we might try to delete.
         ModelEditPanel mep = ModelEditPanel.instance;
-        if (isRoot ())
-        {
-            mep.doManager.add (new DeleteDoc ((MDoc) source.getSource ()));
-        }
-        else
-        {
-            String key = source.key ();
-            FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-            MPart mparent = source.getParent ();
-            mparent.clear (key);
-            if (mparent.child (key) == null)  // Node is fully deleted
-            {
-                model.removeNodeFromParent (this);
-            }
-            else  // Just exposed an overridden node
-            {
-                build ();
-                findConnections ();
-                filter (model.filterLevel);
-                if (visible (model.filterLevel)) model.nodeStructureChanged (this);
-                else                             ((NodePart) getParent ()).hide (this, model, true);
-            }
-        }
+        if (isRoot ()) mep.doManager.add (new DeleteDoc ((MDoc) source.getSource ()));
+        else           mep.doManager.add (new DeletePart (this));
     }
 }

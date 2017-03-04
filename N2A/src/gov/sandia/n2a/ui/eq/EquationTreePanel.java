@@ -350,17 +350,7 @@ public class EquationTreePanel extends JPanel
                 NodeBase dropTarget = (NodeBase) path.getLastPathComponent ();
                 NodeBase added = dropTarget.addDnD (key, tree);
                 if (added == null) return false;
-
-                path = new TreePath (added.getPath ());
-                tree.scrollPathToVisible (path);
-                tree.setSelectionPath (path);
-                tree.requestFocusInWindow ();  // just in case the search panel is still selected
-                // Should we go into edit mode instead?
-
-                updateOrder ();
-
                 modelPanel.panelSearch.hideSelection ();  // because DnD highlights a selection without triggering focus notifications
-
                 return true;
             }  
         });
@@ -924,12 +914,12 @@ public class EquationTreePanel extends JPanel
             else
             {
                 NodeBase parent = (NodeBase) selected.getParent ();
-                TreePath path = new TreePath (parent.getPath ());
                 int index = parent.getIndex (selected);
+                TreeNode[] path = selected.getPath ();
 
                 selected.delete (tree);
 
-                updateAfterDelete (path, index);
+                updateVisibility (path, index);
             }
         }
     }
@@ -1004,18 +994,6 @@ public class EquationTreePanel extends JPanel
 
     /**
         Convenience function to all all the relevant update steps when a node is deleted from the tree.
-        @deprecated
-    **/
-    public void updateAfterDelete (TreePath path, int index)
-    {
-        path = updateSelection (path, index);
-        updateOrder ();
-        updateOverrides (path);
-        repaintSouth (path);
-    }
-
-    /**
-        Convenience function to all all the relevant update steps when a node is deleted from the tree.
     **/
     public void updateAfterDelete (TreeNode path[], int index)
     {
@@ -1085,7 +1063,7 @@ public class EquationTreePanel extends JPanel
     /**
         Ensure that the tree down to the changed node is displayed with correct visibility and override coloring.
         @param path Every node from root to changed node, including changed node itself.
-        The trailing nodes are allowed to be diconnected from root in the filtered view of the model,
+        The trailing nodes are allowed to be disconnected from root in the filtered view of the model,
         and they are allowed to be deleted nodes. Note: deleted nodes will have null parents.
         Deleted nodes should already be removed from tree, with proper notification handled by caller.
         @param index Position of the ultimate node in the penultimate (parent) node. Only used if the ultimate
@@ -1141,7 +1119,7 @@ public class EquationTreePanel extends JPanel
             if (c.getParent () == null) continue;
             model.nodeChanged (c);
             Rectangle bounds = tree.getPathBounds (new TreePath (c.getPath ()));
-            tree.paintImmediately (bounds);
+            if (bounds != null) tree.paintImmediately (bounds);
         }
 
         if (lastChange < path.length)
@@ -1185,6 +1163,7 @@ public class EquationTreePanel extends JPanel
             if (childIndex >= 0) c = (NodeBase) model.getChild (c, childIndex);
         }
         TreePath selectedPath = new TreePath (c.getPath ());
+        tree.scrollPathToVisible (selectedPath);
         tree.setSelectionPath (selectedPath);
         if (lastChange >= path.length)
         {
@@ -1198,7 +1177,7 @@ public class EquationTreePanel extends JPanel
     /**
         Records the current order of nodes in "gui.order", provided that metadata field exists.
         Otherwise, we assume the user doesn't care.
-        @deprecated
+        @deprecated use updateOrder(TreeNode[])
     **/
     public void updateOrder ()
     {
@@ -1257,7 +1236,7 @@ public class EquationTreePanel extends JPanel
                 break;
             }
         }
-        if (parent == null) return;
+        if (parent == null) return;  // This should never happen, because root of tree is a NodePart.
 
         // Find $metadata/gui.order for the currently selected node. If it exists, update it.
         // Note that this is a modified version of moveSelected() which does not actually move
@@ -1294,7 +1273,7 @@ public class EquationTreePanel extends JPanel
     {
         Rectangle node    = tree.getPathBounds (path);
         Rectangle visible = scrollPane.getViewport ().getViewRect ();
-        if (! needsFullRepaint)
+        if (! needsFullRepaint  &&  node != null)
         {
             visible.height -= node.y - visible.y;
             visible.y       = node.y;

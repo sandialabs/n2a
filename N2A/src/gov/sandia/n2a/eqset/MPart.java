@@ -27,6 +27,9 @@ import gov.sandia.n2a.db.MVolatile;
     construction.
 
     A key assumption of this implementation is that only MPersistent nodes are fed into it.
+
+    All MNode functions are fully supported. In particular, merge() is safe to use, even
+    if it involves $inherit lines.
 **/
 public class MPart extends MNode  // Could derive this from MVolatile, but the extra work of implementing from scratch is worth saving an unused member variable.
 {
@@ -207,20 +210,6 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     }
 
     /**
-        Incorporate a newly-created node of the document into the existing collated tree.
-        Assumes this node represents the parent of the given source, and that none of our
-        children represent the source itself.
-    **/
-    public synchronized MPart update (MPersistent source)
-    {
-        MPart c = new MPart (this, null, source);
-        children.put (source.key (), c);
-        c.underrideChildren (null, source);
-        c.expand ();
-        return c;
-    }
-
-    /**
         Indicates if this node has the form of a sub-part.
     **/
     public boolean isPart ()
@@ -301,7 +290,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     {
         if (children == null) return;
         if (! isFromTopDocument ()) return; // Nothing to do.
-        releaseOverrideChildren (true);
+        releaseOverrideChildren ();
         clearPath ();
         expand ();
     }
@@ -313,19 +302,11 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     **/
     public synchronized void clear (String index)
     {
-        clear (index, true);
-    }
-
-    /**
-        Version of clear(String) which allows user to suppress the actual deletion of top document nodes.
-    **/
-    public synchronized void clear (String index, boolean removeFromTopDocument)
-    {
         if (children == null) return;
         if (! isFromTopDocument ()) return;  // This node is not overridden, so none of the children will be.
         if (source.child (index) == null) return;  // The child is not overridden, so nothing to do.
-        ((MPart) children.get (index)).releaseOverride (removeFromTopDocument);
-        if (removeFromTopDocument) source.clear (index);
+        ((MPart) children.get (index)).releaseOverride ();
+        source.clear (index);
         clearPath ();
 
         MPart c = (MPart) children.get (index);  // If child still exists, then it was overridden but exposed by the delete.
@@ -338,11 +319,8 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
 
     /**
         Remove any top document values from this node and its children.
-        @param removeFromTopDocument Indicates that the source node should be deleted from the top-level
-        document, not simply removed from the collated tree. This gets passed to our children, but
-        note that the caller is responsible for deleting this node's source.
     **/
-    public synchronized void releaseOverride (boolean removeFromTopDocument)
+    public synchronized void releaseOverride ()
     {
         if (! isFromTopDocument ()) return;  // This node is not overridden, so nothing to do.
 
@@ -353,7 +331,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         }
         else  // This node is overridden, so release it.
         {
-            releaseOverrideChildren (removeFromTopDocument);
+            releaseOverrideChildren ();
             source = original;
         }
         if (key.equals ("$inherit")) container.purge (this, null);
@@ -362,14 +340,14 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     /**
         Assuming that source in the current node belongs to the top-level document, reset all overridden children back to their original state.
     **/
-    public synchronized void releaseOverrideChildren (boolean removeFromTopDocument)
+    public synchronized void releaseOverrideChildren ()
     {
         Iterator<MNode> i = source.iterator ();  // Implicitly, everything we iterate over will be from the top document.
         while (i.hasNext ())
         {
             String key = i.next ().key ();
-            ((MPart) children.get (key)).releaseOverride (removeFromTopDocument);  // The key is guaranteed to be in our children collection.
-            if (removeFromTopDocument) i.remove ();
+            ((MPart) children.get (key)).releaseOverride ();  // The key is guaranteed to be in our children collection.
+            i.remove ();
         }
     }
 
@@ -440,12 +418,35 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         children.put (index, result);
         if (index.equals ("$inherit"))  // We've created an $inherit line, so load the inherited equations.
         {
-            // Any parts and equations that might already exist in this subtree take precedence over the
-            // newly added $inherit and the structure/equations it brings in. Thus, we can only add
-            // structure/equations, not remove or change them.
+            // Purge is unnecessary because "result" is a new entry. There is no previous $inherit line.
             expand ();
         }
         return result;
+    }
+
+    public synchronized void move (String fromIndex, String toIndex)
+    {
+        clear (toIndex);  // By definition, no top-level document nodes are allowed to remain at the destination. However, underrides may exist.
+        MPart fromPart = (MPart) child (fromIndex);
+        if (fromPart == null) return;
+        if (! fromPart.isFromTopDocument ()) return;  // We only move top-document nodes.
+
+        MNode fromDoc = source.child (fromIndex);
+        MNode toPart = child (toIndex);
+        if (toPart == null)  // No node at the destination, so merge at level of top-document.
+        {
+            MPersistent toDoc = (MPersistent) source.set ("", toIndex);
+            toDoc.merge (fromDoc);
+            MPart c = new MPart (this, null, toDoc);
+            children.put (toIndex, c);
+            c.underrideChildren (null, toDoc);  // The sub-tree is empty, so all injected nodes are new. They don't really underride anything.
+            c.expand ();
+        }
+        else  // Some existing underrides, so merge in collated tree. This is more expensive because it involves multiple calls to set().
+        {
+            toPart.merge (fromDoc);
+        }
+        clear (fromIndex);
     }
 
     /**

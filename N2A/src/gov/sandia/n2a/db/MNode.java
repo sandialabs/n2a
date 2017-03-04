@@ -291,8 +291,8 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         {
             MNode destination = set ("", toIndex);
             destination.merge (source);
+            clear (fromIndex);
         }
-        clear (fromIndex);
     }
 
     public static class IteratorEmpty implements Iterator<MNode>
