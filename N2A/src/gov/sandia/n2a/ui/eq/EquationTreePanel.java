@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2016 Sandia Corporation.
+Copyright 2013,2016,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -20,6 +20,7 @@ import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.MainTabbedPane;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
+import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeReference;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
@@ -385,7 +386,7 @@ public class EquationTreePanel extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                modelPanel.doManager.add (new AddDoc ());
+                modelPanel.undoManager.add (new AddDoc ());
             }
         });
 

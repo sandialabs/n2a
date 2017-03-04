@@ -15,14 +15,13 @@ import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.eq.Do;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
-import gov.sandia.n2a.ui.eq.NodeBase;
+import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeInherit;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
-public class DeleteInherit extends Do
+public class DeleteInherit extends Undoable
 {
     protected List<String> path;  // to parent part
     protected String       value;

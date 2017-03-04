@@ -13,8 +13,6 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
-import gov.sandia.n2a.ui.eq.NodeBase;
-import gov.sandia.n2a.ui.eq.NodeContainer;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.DeleteAnnotations;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -78,7 +76,7 @@ public class NodeAnnotations extends NodeContainer
             }
             index++;
             AddAnnotation aa = new AddAnnotation ((NodeBase) getParent (), index);
-            ModelEditPanel.instance.doManager.add (aa);
+            ModelEditPanel.instance.undoManager.add (aa);
             return aa.createdNode;
         }
         return ((NodeBase) getParent ()).add (type, tree);
@@ -94,6 +92,6 @@ public class NodeAnnotations extends NodeContainer
     public void delete (JTree tree)
     {
         if (! source.isFromTopDocument ()) return;
-        ModelEditPanel.instance.doManager.add (new DeleteAnnotations (this));
+        ModelEditPanel.instance.undoManager.add (new DeleteAnnotations (this));
     }
 }

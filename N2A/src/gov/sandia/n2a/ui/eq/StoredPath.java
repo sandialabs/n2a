@@ -13,6 +13,8 @@ import java.util.List;
 import javax.swing.JTree;
 import javax.swing.tree.TreePath;
 
+import gov.sandia.n2a.ui.eq.tree.NodeBase;
+
 public class StoredPath
 {
     List<String> keys = new ArrayList<String> ();

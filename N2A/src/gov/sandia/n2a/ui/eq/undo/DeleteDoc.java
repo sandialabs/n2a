@@ -13,10 +13,9 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
-import gov.sandia.n2a.ui.eq.Do;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
 
-public class DeleteDoc extends Do
+public class DeleteDoc extends Undoable
 {
     protected MVolatile saved;
     protected boolean   neutralized;

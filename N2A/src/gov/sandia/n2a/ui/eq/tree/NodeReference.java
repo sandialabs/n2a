@@ -15,7 +15,6 @@ import java.util.List;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
-import gov.sandia.n2a.ui.eq.NodeBase;
 import gov.sandia.n2a.ui.eq.undo.ChangeReference;
 import gov.sandia.n2a.ui.eq.undo.DeleteReference;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -149,7 +148,7 @@ public class NodeReference extends NodeBase
         }
         else
         {
-            ModelEditPanel.instance.doManager.add (new ChangeReference (parent, oldName, oldValue, name, value));
+            ModelEditPanel.instance.undoManager.add (new ChangeReference (parent, oldName, oldValue, name, value));
         }
     }
 
@@ -157,6 +156,6 @@ public class NodeReference extends NodeBase
     public void delete (JTree tree)
     {
         if (! source.isFromTopDocument ()) return;
-        ModelEditPanel.instance.doManager.add (new DeleteReference (this));
+        ModelEditPanel.instance.undoManager.add (new DeleteReference (this));
     }
 }

@@ -166,11 +166,11 @@ public class SearchPanel extends JPanel
                 {
                     MNode deleteMe = list.getSelectedValue ();
                     if (deleteMe == null) return;
-                    modelPanel.doManager.add (new DeleteDoc ((MDoc) deleteMe));
+                    modelPanel.undoManager.add (new DeleteDoc ((MDoc) deleteMe));
                 }
                 else if (keycode == KeyEvent.VK_INSERT)
                 {
-                    modelPanel.doManager.add (new AddDoc ());
+                    modelPanel.undoManager.add (new AddDoc ());
                 }
             }
         });

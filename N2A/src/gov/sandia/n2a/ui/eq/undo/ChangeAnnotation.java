@@ -13,14 +13,12 @@ import java.util.List;
 import javax.swing.JTree;
 import javax.swing.undo.CannotRedoException;
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.eq.Do;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
-import gov.sandia.n2a.ui.eq.NodeBase;
-import gov.sandia.n2a.ui.eq.NodeFactory;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
+import gov.sandia.n2a.ui.eq.tree.NodeBase;
 
-public class ChangeAnnotation extends Do
+public class ChangeAnnotation extends Undoable
 {
     protected List<String> path;  // to the direct parent, whether a $metadata block or a variable
     protected String nameBefore;

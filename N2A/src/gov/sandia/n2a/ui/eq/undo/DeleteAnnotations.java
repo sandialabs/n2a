@@ -17,15 +17,13 @@ import javax.swing.undo.CannotUndoException;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.eq.Do;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
-import gov.sandia.n2a.ui.eq.NodeBase;
-import gov.sandia.n2a.ui.eq.NodeContainer;
-import gov.sandia.n2a.ui.eq.NodeFactory;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
+import gov.sandia.n2a.ui.eq.tree.NodeBase;
+import gov.sandia.n2a.ui.eq.tree.NodeContainer;
 
-public class DeleteAnnotations extends Do
+public class DeleteAnnotations extends Undoable
 {
     protected List<String> path;  ///< to parent of $metadata node
     protected int          index; ///< Position within parent node

@@ -13,13 +13,12 @@ import javax.swing.JTree;
 import javax.swing.undo.CannotRedoException;
 
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.eq.Do;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
-import gov.sandia.n2a.ui.eq.NodeBase;
+import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
-public class ChangePart extends Do
+public class ChangePart extends Undoable
 {
     protected List<String> path;  // to the container of the part being renamed
     protected String nameBefore;

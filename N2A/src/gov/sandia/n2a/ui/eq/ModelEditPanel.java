@@ -8,7 +8,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.ui.eq;
 
 import java.awt.BorderLayout;
-import java.awt.EventQueue;
 import java.awt.event.ActionEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
@@ -22,6 +21,7 @@ import javax.swing.KeyStroke;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.ui.eq.undo.UndoManager;
 
 public class ModelEditPanel extends JPanel
 {
@@ -30,7 +30,7 @@ public class ModelEditPanel extends JPanel
     public JSplitPane        split;
     public SearchPanel       panelSearch;
     public EquationTreePanel panelEquations;
-    public DoManager         doManager = new DoManager ();
+    public UndoManager       undoManager = new UndoManager ();
 
     public ModelEditPanel ()
     {
@@ -72,15 +72,17 @@ public class ModelEditPanel extends JPanel
         {
             public void actionPerformed (ActionEvent evt)
             {
-                try {doManager.undo ();}
+                try {undoManager.undo ();}
                 catch (CannotUndoException e) {}
+                catch (CannotRedoException e) {}
             }
         });
         actionMap.put ("Redo", new AbstractAction ("Redo")
         {
             public void actionPerformed (ActionEvent evt)
             {
-                try {doManager.redo();}
+                try {undoManager.redo();}
+                catch (CannotUndoException e) {}
                 catch (CannotRedoException e) {}
             }
         });

@@ -17,16 +17,14 @@ import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoableEdit;
 
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.eq.Do;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
-import gov.sandia.n2a.ui.eq.NodeBase;
-import gov.sandia.n2a.ui.eq.NodeFactory;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
+import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
-public class AddAnnotation extends Do
+public class AddAnnotation extends Undoable
 {
     protected List<String> path;  // to parent of $metadata node
     protected int          index; // where to insert among siblings

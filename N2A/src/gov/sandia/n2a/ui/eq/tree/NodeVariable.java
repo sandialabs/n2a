@@ -18,8 +18,6 @@ import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
-import gov.sandia.n2a.ui.eq.NodeBase;
-import gov.sandia.n2a.ui.eq.NodeContainer;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddReference;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -234,13 +232,13 @@ public class NodeVariable extends NodeContainer
             while (index < count  &&  ! (children.get (index) instanceof NodeReference)) index++;
 
             AddAnnotation aa = new AddAnnotation (this, index);
-            ModelEditPanel.instance.doManager.add (aa);
+            ModelEditPanel.instance.undoManager.add (aa);
             return aa.createdNode;
         }
         else if (type.equals ("Reference"))
         {
             AddReference ar = new AddReference (this, getChildCount ());
-            ModelEditPanel.instance.doManager.add (ar);
+            ModelEditPanel.instance.undoManager.add (ar);
             return ar.createdNode;
         }
         if (result == null) return ((NodeBase) getParent ()).add (type, tree);  // refer all other requests up the tree

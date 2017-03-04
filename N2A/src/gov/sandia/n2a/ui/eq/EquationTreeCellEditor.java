@@ -43,6 +43,8 @@ import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoManager;
 
+import gov.sandia.n2a.ui.eq.tree.NodeBase;
+
 /**
     Custom tree cell editor that cooperates with NodeBase icon and text styles.
     Adds a few other nice behaviors:

@@ -10,12 +10,10 @@ package gov.sandia.n2a.ui.eq.undo;
 import java.util.List;
 
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.eq.Do;
-import gov.sandia.n2a.ui.eq.NodeBase;
-import gov.sandia.n2a.ui.eq.NodeFactory;
+import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeReference;
 
-public class ChangeReference extends Do
+public class ChangeReference extends Undoable
 {
     protected List<String> path;  // to the direct parent, whether a $metadata block or a variable
     protected String nameBefore;

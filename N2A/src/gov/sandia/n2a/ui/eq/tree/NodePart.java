@@ -22,8 +22,6 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
-import gov.sandia.n2a.ui.eq.NodeBase;
-import gov.sandia.n2a.ui.eq.NodeContainer;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddPart;
 import gov.sandia.n2a.ui.eq.undo.AddReference;
@@ -367,19 +365,19 @@ public class NodePart extends NodeContainer
         if (type.equals ("Annotation"))
         {
             AddAnnotation aa = new AddAnnotation (this, metadataIndex);
-            ModelEditPanel.instance.doManager.add (aa);  // aa will automagically insert a $metadata block if needed
+            ModelEditPanel.instance.undoManager.add (aa);  // aa will automagically insert a $metadata block if needed
             return aa.createdNode;
         }
         else if (type.equals ("Reference"))
         {
             AddReference ar = new AddReference (this, metadataIndex);
-            ModelEditPanel.instance.doManager.add (ar);
+            ModelEditPanel.instance.undoManager.add (ar);
             return ar.createdNode;
         }
         else if (type.equals ("Part"))
         {
             AddPart ap = new AddPart (this, subpartIndex, inherit);
-            ModelEditPanel.instance.doManager.add (ap);
+            ModelEditPanel.instance.undoManager.add (ap);
             return ap.createdNode;
         }
         else  // treat all other requests as "Variable"
@@ -431,7 +429,7 @@ public class NodePart extends NodeContainer
                 existingDocument = models.child (name);
             }
 
-            mep.doManager.add (new ChangeDoc (oldKey, name));
+            mep.undoManager.add (new ChangeDoc (oldKey, name));
             // MDir promises to maintain object identity during the move, so "source" is still valid.
             return;
         }
@@ -451,7 +449,7 @@ public class NodePart extends NodeContainer
             return;
         }
 
-        mep.doManager.add (new ChangePart (this, oldKey, name));
+        mep.undoManager.add (new ChangePart (this, oldKey, name));
     }
 
     @Override
@@ -459,7 +457,7 @@ public class NodePart extends NodeContainer
     {
         if (! source.isFromTopDocument ()) return;  // This should be true of root, as well as any other node we might try to delete.
         ModelEditPanel mep = ModelEditPanel.instance;
-        if (isRoot ()) mep.doManager.add (new DeleteDoc ((MDoc) source.getSource ()));
-        else           mep.doManager.add (new DeletePart (this));
+        if (isRoot ()) mep.undoManager.add (new DeleteDoc ((MDoc) source.getSource ()));
+        else           mep.undoManager.add (new DeletePart (this));
     }
 }

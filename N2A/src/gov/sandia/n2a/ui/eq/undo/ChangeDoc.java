@@ -9,11 +9,10 @@ package gov.sandia.n2a.ui.eq.undo;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.ui.eq.Do;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
-public class ChangeDoc extends Do
+public class ChangeDoc extends Undoable
 {
     protected String before;
     protected String after;

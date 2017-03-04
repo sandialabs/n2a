@@ -11,7 +11,6 @@ package gov.sandia.n2a.ui.eq.tree;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
-import gov.sandia.n2a.ui.eq.NodeBase;
 import gov.sandia.n2a.ui.eq.undo.ChangeInherit;
 import gov.sandia.n2a.ui.eq.undo.DeleteInherit;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -63,13 +62,13 @@ public class NodeInherit extends NodeBase
         String oldValue = source.get ();
         if (value.equals (oldValue)) return;
 
-        ModelEditPanel.instance.doManager.add (new ChangeInherit (this, oldValue, value));
+        ModelEditPanel.instance.undoManager.add (new ChangeInherit (this, oldValue, value));
     }
 
     @Override
     public void delete (JTree tree)
     {
         if (! source.isFromTopDocument ()) return;
-        ModelEditPanel.instance.doManager.add (new DeleteInherit (this));
+        ModelEditPanel.instance.undoManager.add (new DeleteInherit (this));
     }
 }

@@ -11,12 +11,10 @@ import java.util.List;
 
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.eq.Do;
-import gov.sandia.n2a.ui.eq.NodeBase;
-import gov.sandia.n2a.ui.eq.NodeFactory;
+import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeReferences;
 
-public class DeleteReferences extends Do
+public class DeleteReferences extends Undoable
 {
     protected List<String> path;  ///< to parent of $metadata node
     protected int          index; ///< Position within parent node

@@ -12,14 +12,13 @@ import java.util.List;
 import javax.swing.JTree;
 import javax.swing.undo.CannotRedoException;
 
-import gov.sandia.n2a.ui.eq.Do;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
-import gov.sandia.n2a.ui.eq.NodeBase;
+import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeInherit;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
-public class ChangeInherit extends Do
+public class ChangeInherit extends Undoable
 {
     protected List<String> path;
     protected String valueBefore;

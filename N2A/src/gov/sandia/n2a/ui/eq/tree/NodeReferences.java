@@ -12,8 +12,6 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
-import gov.sandia.n2a.ui.eq.NodeBase;
-import gov.sandia.n2a.ui.eq.NodeContainer;
 import gov.sandia.n2a.ui.eq.undo.AddReference;
 import gov.sandia.n2a.ui.eq.undo.DeleteAnnotations;
 import gov.sandia.n2a.ui.eq.undo.DeleteReferences;
@@ -78,7 +76,7 @@ public class NodeReferences extends NodeContainer
             }
             index++;
             AddReference ar = new AddReference ((NodeBase) getParent (), index);
-            ModelEditPanel.instance.doManager.add (ar);
+            ModelEditPanel.instance.undoManager.add (ar);
             return ar.createdNode;
         }
         return ((NodeBase) getParent ()).add (type, tree);
@@ -94,6 +92,6 @@ public class NodeReferences extends NodeContainer
     public void delete (JTree tree)
     {
         if (! source.isFromTopDocument ()) return;
-        ModelEditPanel.instance.doManager.add (new DeleteReferences (this));
+        ModelEditPanel.instance.undoManager.add (new DeleteReferences (this));
     }
 }

@@ -5,10 +5,12 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.ui.eq;
+package gov.sandia.n2a.ui.eq.undo;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.ui.eq.ModelEditPanel;
+import gov.sandia.n2a.ui.eq.tree.NodeBase;
 
 import java.util.List;
 
@@ -16,7 +18,7 @@ import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoableEdit;
 
-public class Do implements UndoableEdit
+public class Undoable implements UndoableEdit
 {
     protected boolean hasBeenDone = false;  // In the original AbstractUndoableEdit class, this was initialized true. We set it false and expect the caller to run redo() during creation of this object.
     protected boolean alive       = true;

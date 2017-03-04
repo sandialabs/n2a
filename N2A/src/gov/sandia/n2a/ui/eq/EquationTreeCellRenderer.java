@@ -13,6 +13,8 @@ import javax.swing.Icon;
 import javax.swing.JTree;
 import javax.swing.tree.DefaultTreeCellRenderer;
 
+import gov.sandia.n2a.ui.eq.tree.NodeBase;
+
 /**
     Extends the standard tree cell renderer to get icon and text style from NodeBase.
     This is the core code that makes NodeBase work as a tree node representation.

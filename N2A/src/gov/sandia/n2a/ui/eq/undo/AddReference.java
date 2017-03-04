@@ -12,13 +12,11 @@ import java.util.List;
 import javax.swing.undo.UndoableEdit;
 
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.eq.Do;
-import gov.sandia.n2a.ui.eq.NodeBase;
-import gov.sandia.n2a.ui.eq.NodeFactory;
+import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeReference;
 import gov.sandia.n2a.ui.eq.tree.NodeReferences;
 
-public class AddReference extends Do
+public class AddReference extends Undoable
 {
     protected List<String> path;  // to parent of $reference node
     protected int          index; // where to insert among siblings
