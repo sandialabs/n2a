@@ -114,7 +114,6 @@ public class AddPart extends Undoable
         MPart createdPart = (MPart) parent.source.set ("", name);
         createdPart.merge (newPart);
 
-
         // Update GUI
 
         ModelEditPanel mep = ModelEditPanel.instance;

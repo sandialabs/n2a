@@ -10,12 +10,14 @@ package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.FontMetrics;
 import java.util.ArrayList;
-import java.util.Enumeration;
 import java.util.List;
 
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.ModelEditPanel;
+import gov.sandia.n2a.ui.eq.undo.ChangeEquation;
+import gov.sandia.n2a.ui.eq.undo.DeleteEquation;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;
@@ -110,109 +112,43 @@ public class NodeEquation extends NodeBase
             return;
         }
 
-        Variable.ParsedValue pieces = new Variable.ParsedValue (input);
-        String conditional = "@" + pieces.conditional;  // ParsedValue removes the @
+        // There are three possible outcomes of the edit:
+        // 1) Nothing changed
+        // 2) The name was not allowed to change
+        // 3) Arbitrary change
 
-        NodeBase existingEquation = null;
-        String oldKey = source.key ();
+        Variable.ParsedValue piecesBefore = new Variable.ParsedValue (source.get () + source.key ());
+        Variable.ParsedValue piecesAfter  = new Variable.ParsedValue (input);
+
         NodeVariable parent = (NodeVariable) getParent ();
-        if (! conditional.equals (oldKey)) existingEquation = parent.child (conditional);
-
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         FontMetrics fm = getFontMetrics (tree);
-        if (conditional.equals (oldKey)  ||  existingEquation != null)  // Condition is the same, or not allowed to change
+        if (piecesBefore.equals (piecesAfter))
         {
-            source.set (pieces.expression);
-        }
-        else  // The condition has changed.
-        {
-            MPart p = source.getParent ();
-            MPart newPart = (MPart) p.set (pieces.expression, conditional);
-            p.clear (oldKey);
-            if (p.child (oldKey) == null)  // We were not associated with an override, so we can re-use this tree node.
-            {
-                source = newPart;
-            }
-            else  // Make a new tree node, and leave this one to present the newly-exposed non-overridden value.
-            {
-                NodeEquation newEquation = new NodeEquation (newPart);
-                model.insertNodeIntoUnfiltered (newEquation, parent, parent.getChildCount ());
-                newEquation.updateColumnWidths (fm);
-            }
+            parent.updateTabStops (fm);
+            parent.allNodesChanged (model);
+            return;
         }
 
-        // The fact that we are modifying an equation indicates that the main variable will display only a combiner.
-        // We always override it.
-        if (! pieces.combiner.isEmpty ())
+        String nameBefore = "@" + piecesBefore.conditional;
+        String nameAfter  = "@" + piecesAfter.conditional;
+        NodeBase nodeAfter = parent.child (nameAfter);
+        if (nodeAfter != null  &&  nodeAfter.source.isFromTopDocument ())  // Can't overwrite another top-document node
         {
-            if (! parent.source.get ().equals (pieces.combiner))
-            {
-                parent.source.set (pieces.combiner);
-                parent.updateColumnWidths (fm);
-                NodeBase grandparent = (NodeBase) parent.getParent ();
-                grandparent.updateTabStops (fm);
-                grandparent.allNodesChanged (model);
-            }
+            nameAfter = nameBefore;
         }
 
-        updateColumnWidths (fm);
-        parent.updateTabStops (fm);
-        parent.allNodesChanged (model);
+        String combinerBefore = parent.source.get ();
+        String combinerAfter  = piecesAfter.combiner;
+        if (combinerAfter.isEmpty ()) combinerAfter = combinerBefore;
+
+        ModelEditPanel.instance.undoManager.add (new ChangeEquation (parent, nameBefore, combinerBefore, piecesBefore.expression, nameAfter, combinerAfter, piecesAfter.expression));
     }
 
     @Override
     public void delete (JTree tree)
     {
         if (! source.isFromTopDocument ()) return;
-
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        FontMetrics fm = getFontMetrics (tree);
-
-        NodeVariable parent = (NodeVariable) getParent ();
-        MPart mparent = source.getParent ();
-        String key = source.key ();
-        mparent.clear (key);
-        if (mparent.child (key) == null)  // There is no overridden value, so this node goes away completely.
-        {
-            model.removeNodeFromParent (this);
-
-            // If we are down to only 1 equation, then fold it back into a single-line variable.
-            NodeEquation lastEquation = null;
-            int equationCount = 0;
-            Enumeration i = parent.children ();
-            while (i.hasMoreElements ())
-            {
-                Object o = i.nextElement ();
-                if (o instanceof NodeEquation)
-                {
-                    equationCount++;
-                    lastEquation = (NodeEquation) o;
-                }
-            }
-            if (equationCount == 1)
-            {
-                String lastCondition  = lastEquation.source.key ();
-                String lastExpression = lastEquation.source.get ();
-                parent.source.clear (lastCondition);
-                if (lastCondition.equals ("@")) parent.source.set (parent.source.get () + lastExpression);
-                else                            parent.source.set (parent.source.get () + lastExpression + lastCondition);
-                model.removeNodeFromParent (lastEquation);
-                parent.updateColumnWidths (fm);
-                NodeBase grandparent = (NodeBase) parent.getParent ();
-                grandparent.updateTabStops (fm);
-                grandparent.allNodesChanged (model);
-            }
-            else if (equationCount == 0)
-            {
-                return;  // avoid falling through to parent update below
-            }
-        }
-        else  // Just exposed an overridden value, so update display.
-        {
-            updateColumnWidths (fm);
-        }
-
-        parent.updateTabStops (fm);
-        parent.allNodesChanged (model);
+        ModelEditPanel.instance.undoManager.add (new DeleteEquation (this));
     }
 }

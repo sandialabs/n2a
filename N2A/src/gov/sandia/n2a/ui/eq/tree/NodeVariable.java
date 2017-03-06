@@ -19,6 +19,7 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
+import gov.sandia.n2a.ui.eq.undo.AddEquation;
 import gov.sandia.n2a.ui.eq.undo.AddReference;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
@@ -191,43 +192,24 @@ public class NodeVariable extends NodeContainer
             type = "Equation";
         }
 
-        NodeBase result = null;
-        int index = 0;
         if (type.equals ("Equation"))
         {
-            TreeMap<String,MNode> equations = new TreeMap<String,MNode> ();
-            for (MNode n : source)
-            {
-                String key = n.key ();
-                if (key.startsWith ("@")) equations.put (key.substring (1), n);
-            }
+            // Determine index for new equation
+            int index = 0;
+            NodeBase child = (NodeBase) tree.getLastSelectedPathComponent ();
+            if (child != null  &&  child.getParent () == this) index = getIndex (child);
+            while (index > 0  &&  ! (getChildAt (index) instanceof NodeEquation)) index--;
+            if (index < getChildCount ()  &&  getChildAt (index) instanceof NodeEquation) index++;
 
-            // The minimum number of equations is 2. There should never be exactly 1 equation, because that is single-line form, which should have no child equations at all.
-            if (equations.size () == 0)  // We are about to switch from single-line form to multi-conditional, so make a tree node for the existing equation.
-            {
-                Variable.ParsedValue pieces = new Variable.ParsedValue (source.get ());
-                source.set (pieces.combiner);
-                setUserObject (source.key () + "=" + pieces.combiner);
-                MPart equation = (MPart) source.set (pieces.expression, "@" + pieces.conditional);
-                equations.put (pieces.conditional, equation);
-                model.insertNodeIntoUnfiltered (new NodeEquation (equation), this, 0);
-            }
-
-            int suffix = equations.size ();
-            String conditional;
-            while (true)
-            {
-                conditional = String.valueOf (suffix);
-                if (equations.get (conditional) == null) break;
-                suffix++;
-            }
-            MPart equation = (MPart) source.set (conditional, "@" + conditional);
-            result = new NodeEquation (equation);
+            // Create an AddEquation action
+            AddEquation ae = new AddEquation (this, index);
+            ModelEditPanel.instance.undoManager.add (ae);
+            return ae.createdNode;
         }
         else if (type.equals ("Annotation"))
         {
             // Determine index at which to insert new annotation
-            index = 0;
+            int index = 0;
             int count = getChildCount ();
             while (index < count  &&  ! (children.get (index) instanceof NodeReference)) index++;
 
@@ -241,20 +223,8 @@ public class NodeVariable extends NodeContainer
             ModelEditPanel.instance.undoManager.add (ar);
             return ar.createdNode;
         }
-        if (result == null) return ((NodeBase) getParent ()).add (type, tree);  // refer all other requests up the tree
 
-        FontMetrics fm = getFontMetrics (tree);
-        if (children != null  &&  children.size () > 0)
-        {
-            NodeBase firstChild = (NodeBase) children.get (0);
-            if (firstChild.needsInitTabs ()) firstChild.initTabs (fm);
-        }
-
-        result.setUserObject ("");
-        result.updateColumnWidths (fm);  // preempt initialization
-        model.insertNodeIntoUnfiltered (result, this, index);
-
-        return result;
+        return ((NodeBase) getParent ()).add (type, tree);  // refer all other requests up the tree
     }
 
     @Override
@@ -274,9 +244,9 @@ public class NodeVariable extends NodeContainer
 
         String[] parts = input.split ("=", 2);
         String name = parts[0].trim ().replaceAll ("[ \\n\\t]", "");
-        String value;
+        String value = "0";
         if (parts.length > 1) value = parts[1].trim ();
-        else                  value = "";
+        if (value.isEmpty ()) value = "0";
         if (! name.matches ("[a-zA-Z_$][a-zA-Z0-9_$.]*[']*"))  // Not a proper variable name. The user actually passed a naked expression, so resurrect the old (probably auto-assigned) variable name.
         {
             value = input.trim ();

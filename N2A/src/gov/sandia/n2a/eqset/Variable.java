@@ -157,6 +157,13 @@ public class Variable implements Comparable<Variable>
             else                   conditional = pieces[1].trim ().replaceAll ("[\\n\\t]", "");
         }
 
+        public boolean equals (Object that)
+        {
+            if (! (that instanceof ParsedValue)) return false;
+            ParsedValue p = (ParsedValue) that;
+            return  p.combiner.equals (combiner)  &&  p.expression.equals (expression)  &&  p.conditional.equals (conditional);
+        }
+
         public String toString ()
         {
             if (conditional.isEmpty ()) return combiner + expression;
