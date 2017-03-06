@@ -146,7 +146,8 @@ public class AddAnnotation extends Undoable
             if (block.length () == 0)  // empty implies the node is absent
             {
                 container = factoryBlock.create (block);
-                model.insertNodeIntoUnfiltered (container, parent, 0);
+                model.insertNodeIntoUnfiltered (container, parent, index);
+                index = 0;
             }
             else  // the node is present, so retrieve it
             {

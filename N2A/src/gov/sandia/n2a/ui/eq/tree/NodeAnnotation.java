@@ -128,23 +128,32 @@ public class NodeAnnotation extends NodeBase
         if (parts.length > 1) value = parts[1].trim ();
         else                  value = "";
 
-        NodeBase existingAnnotation = null;
+        NodeBase parent = (NodeBase) getParent ();
         String oldName  = source.key ();
         String oldValue = source.get ();
-        NodeBase parent = (NodeBase) getParent ();
-        if (! name.equals (oldName)) existingAnnotation = parent.child (name);
-        if (name.isEmpty ()  ||  existingAnnotation != null) name = oldName; // name change is forbidden
+        if (! name.equals (oldName))
+        {
+            // Check if name change is forbidden
+            if (name.isEmpty ())
+            {
+                name = oldName;
+            }
+            else
+            {
+                NodeBase nodeAfter = parent.child (name);
+                if (nodeAfter != null  &&  nodeAfter.source.isFromTopDocument ()) name = oldName;
+            }
+        }
         if (name.equals (oldName)  &&  value.equals (oldValue))
         {
             FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
             FontMetrics fm = getFontMetrics (tree);
             parent.updateTabStops (fm);
             model.nodeChanged (this);  // Our siblings should not change, because we did not really change. Just repaint in non-edit mode.
+            return;
         }
-        else
-        {
-            ModelEditPanel.instance.undoManager.add (new ChangeAnnotation (parent, oldName, oldValue, name, value));
-        }
+
+        ModelEditPanel.instance.undoManager.add (new ChangeAnnotation (parent, oldName, oldValue, name, value));
     }
 
     @Override

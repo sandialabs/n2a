@@ -1,5 +1,5 @@
 /*
-Copyright 2016 Sandia Corporation.
+Copyright 2016,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -121,21 +121,22 @@ public class NodeEquation extends NodeBase
         Variable.ParsedValue piecesAfter  = new Variable.ParsedValue (input);
 
         NodeVariable parent = (NodeVariable) getParent ();
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        FontMetrics fm = getFontMetrics (tree);
-        if (piecesBefore.equals (piecesAfter))
-        {
-            parent.updateTabStops (fm);
-            parent.allNodesChanged (model);
-            return;
-        }
-
         String nameBefore = "@" + piecesBefore.conditional;
         String nameAfter  = "@" + piecesAfter.conditional;
         NodeBase nodeAfter = parent.child (nameAfter);
         if (nodeAfter != null  &&  nodeAfter.source.isFromTopDocument ())  // Can't overwrite another top-document node
         {
             nameAfter = nameBefore;
+            piecesAfter.conditional = piecesBefore.conditional;
+        }
+
+        if (piecesBefore.equals (piecesAfter))
+        {
+            FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+            FontMetrics fm = getFontMetrics (tree);
+            parent.updateTabStops (fm);
+            parent.allNodesChanged (model);
+            return;
         }
 
         String combinerBefore = parent.source.get ();

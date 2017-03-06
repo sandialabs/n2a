@@ -1,5 +1,5 @@
 /*
-Copyright 2016 Sandia Corporation.
+Copyright 2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -12,6 +12,7 @@ import java.util.List;
 
 import javax.swing.JTree;
 import javax.swing.undo.CannotRedoException;
+
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
@@ -65,54 +66,57 @@ public class ChangeAnnotation extends Undoable
 
     public static void apply (List<String> path, String nameBefore, String valueBefore, String nameAfter, String valueAfter, NodeFactory factory)
     {
-        NodeBase container = locateNode (path);
-        if (container == null) throw new CannotRedoException ();
-        NodeBase changedNode = container.child (nameBefore);
+        NodeBase parent = locateNode (path);
+        if (parent == null) throw new CannotRedoException ();
+        NodeBase nodeBefore = parent.child (nameBefore);
+        if (nodeBefore == null) throw new CannotRedoException ();
 
         ModelEditPanel mep = ModelEditPanel.instance;
         JTree tree = mep.panelEquations.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        FontMetrics fm = changedNode.getFontMetrics (tree);
+        FontMetrics fm = nodeBefore.getFontMetrics (tree);
+
+        NodeBase nodeAfter;
         if (nameBefore.equals (nameAfter))
         {
-            changedNode.source.set (valueAfter);
+            nodeAfter = nodeBefore;
+            nodeAfter.source.set (valueAfter);
         }
         else
         {
             // Update database
-            MPart metadata = changedNode.source.getParent ();
-            MPart newPart = (MPart) metadata.set (valueAfter, nameAfter);  // should directly change destinationNode if it exists
-            metadata.clear (nameBefore);
-            MPart oldPart = (MPart) metadata.child (nameBefore);
+            MPart mparent = parent.source;
+            MPart newPart = (MPart) mparent.set (valueAfter, nameAfter);  // should directly change destinationNode if it exists
+            mparent.clear (nameBefore);
+            MPart oldPart = (MPart) mparent.child (nameBefore);
 
             // Update GUI
-            NodeBase destinationNode = container.child (nameAfter);
+            nodeAfter = parent.child (nameAfter);
             if (oldPart == null)
             {
-                if (destinationNode == null)
+                if (nodeAfter == null)
                 {
-                    changedNode.source = newPart;
+                    nodeAfter = nodeBefore;
+                    nodeAfter.source = newPart;
                 }
                 else
                 {
-                    model.removeNodeFromParent (changedNode);
-                    changedNode = destinationNode;
+                    model.removeNodeFromParent (nodeBefore);
                 }
             }
             else
             {
-                if (destinationNode == null)
+                if (nodeAfter == null)
                 {
-                    destinationNode = factory.create (newPart);
-                    model.insertNodeIntoUnfiltered (destinationNode, container, container.getChildCount ());
+                    nodeAfter = factory.create (newPart);
+                    model.insertNodeIntoUnfiltered (nodeAfter, parent, parent.getChildCount ());
                 }
-                changedNode = destinationNode;
             }
         }
 
-        changedNode.updateColumnWidths (fm);
-        container.updateTabStops (fm);
-        container.allNodesChanged (model);
-        mep.panelEquations.updateVisibility (changedNode.getPath ());
+        nodeAfter.updateColumnWidths (fm);
+        parent.updateTabStops (fm);
+        parent.allNodesChanged (model);
+        mep.panelEquations.updateVisibility (nodeAfter.getPath ());
     }
 }
