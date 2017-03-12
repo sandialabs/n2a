@@ -1,5 +1,5 @@
 /*
-Copyright 2016 Sandia Corporation.
+Copyright 2016,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -10,8 +10,8 @@ package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.FontMetrics;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.List;
-import java.util.TreeMap;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
@@ -20,7 +20,12 @@ import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddEquation;
+import gov.sandia.n2a.ui.eq.undo.AddInherit;
 import gov.sandia.n2a.ui.eq.undo.AddReference;
+import gov.sandia.n2a.ui.eq.undo.ChangeEquation;
+import gov.sandia.n2a.ui.eq.undo.ChangeVariable;
+import gov.sandia.n2a.ui.eq.undo.ChangeVariableToInherit;
+import gov.sandia.n2a.ui.eq.undo.DeleteVariable;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;
@@ -44,13 +49,18 @@ public class NodeVariable extends NodeContainer
     @Override
     public void build ()
     {
-        setUserObject (source.key () + "=" + source.get ());
         removeAllChildren ();
 
+        // While building the equation list, we also enforce the one-line rule.
+        // This is because build() may be called as the result of a change in inheritance,
+        // which could result in a dangling top-level override of a single equation.
+        // We may actually make small changes to the database here, which is not ideal,
+        // but should do little harm.
+        if (source.isFromTopDocument ()) enforceOneLine (source);
+        setUserObject (source.key () + "=" + source.get ());
         for (MNode n : source)
         {
-            String key = n.key ();
-            if (key.startsWith ("@")) add (new NodeEquation ((MPart) n));
+            if (n.key ().startsWith ("@")) add (new NodeEquation ((MPart) n));
         }
 
         MPart metadata = (MPart) source.child ("$metadata");
@@ -63,6 +73,49 @@ public class NodeVariable extends NodeContainer
         if (references != null)
         {
             for (MNode r : references) add (new NodeReference ((MPart) r));
+        }
+    }
+
+    /**
+        Ensures that a variable either has multiple equations or a one-line expression,
+        but not both.
+        This method is independent of any given NodeVariable so it can be used at
+        various points in processing.
+    **/
+    public static void enforceOneLine (MNode source)
+    {
+        // Collect info
+
+        int equationCount = 0;
+        MNode equation = null;
+        for (MNode n : source)
+        {
+            String key = n.key ();
+            if (key.startsWith ("@"))
+            {
+                equation = n;
+                equationCount++;
+            }
+        }
+
+        Variable.ParsedValue pieces = new Variable.ParsedValue (source.get ());
+        boolean empty =  pieces.expression.isEmpty ()  &&  pieces.conditional.isEmpty ();
+
+        // Collapse or expand
+        if (equationCount > 0)
+        {
+            if (! empty)
+            {
+                // Expand
+                source.set (pieces.combiner);
+                source.set (pieces.expression, "@" + pieces.conditional);  // may override an existing equation
+            }
+            else if (equationCount == 1)
+            {
+                // Collapse
+                source.clear (equation.key ());
+                source.set (pieces.combiner + equation.get () + equation.key ());
+            }
         }
     }
 
@@ -125,7 +178,7 @@ public class NodeVariable extends NodeContainer
             {
                 if (o instanceof NodeEquation)
                 {
-                    return result + " ...";
+                    return result + "...";
                 }
             }
         }
@@ -227,237 +280,173 @@ public class NodeVariable extends NodeContainer
         return ((NodeBase) getParent ()).add (type, tree);  // refer all other requests up the tree
     }
 
+    /**
+        Enforces all the different use cases associated with editing of variables.
+        This is the most complex node class, and does the most work. Some of the use cases include:
+        * Create a new variable.
+        * Move an existing variable tree, perhaps overriding an inherited one, perhaps also with a change of value.
+        * Insert an equation under ourselves.
+        * Insert an equation under another variable.
+    **/
     @Override
     public void applyEdit (JTree tree)
     {
         String input = (String) getUserObject ();
         if (input.isEmpty ())
         {
-            delete (tree);
+            delete (tree, true);
             return;
         }
 
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        FontMetrics fm = getFontMetrics (tree);
-        String oldKey = source.key ();
-        NodeBase parent = (NodeBase) getParent ();
-
         String[] parts = input.split ("=", 2);
-        String name = parts[0].trim ().replaceAll ("[ \\n\\t]", "");
-        String value = "0";
-        if (parts.length > 1) value = parts[1].trim ();
-        if (value.isEmpty ()) value = "0";
-        if (! name.matches ("[a-zA-Z_$][a-zA-Z0-9_$.]*[']*"))  // Not a proper variable name. The user actually passed a naked expression, so resurrect the old (probably auto-assigned) variable name.
+        String nameAfter = parts[0].trim ().replaceAll ("[ \\n\\t]", "");
+        String valueAfter;
+        if (parts.length > 1) valueAfter = parts[1].trim ();
+        else                  valueAfter = "0";  // Assume input was a variable name with no assignment.
+
+        // What follows is a series of analyses, most having to do with enforcing constraints
+        // on name change (which implies moving the variable tree or otherwise modifying another variable).
+
+        // Handle a naked expression.
+        String nameBefore  = source.key ();
+        String valueBefore = source.get ();
+        if (! nameAfter.matches ("[a-zA-Z_$][a-zA-Z0-9_$.]*[']*"))  // Not a proper variable name. The user actually passed a naked expression, so resurrect the old (probably auto-assigned) variable name.
         {
-            value = input.trim ();
-            name = oldKey;
-            updateColumnWidths (fm);
-            parent.updateTabStops (fm);
-            parent.allNodesChanged (model);
-        }
-        Variable.ParsedValue pieces = new Variable.ParsedValue (value);
-
-        NodeBase existing = null;
-        if (! name.equals (oldKey)) existing = parent.child (name);
-
-        // See if the other node is a variable, and if we can merge into it with an acceptably low level of damage
-        NodeVariable existingVariable = null;
-        if (existing instanceof NodeVariable) existingVariable = (NodeVariable) existing;
-        if (existingVariable != null  &&  getChildCount () == 0  &&  ! pieces.expression.isEmpty ())
-        {
-            boolean existingEquationMatch = false;
-            int     existingEquationCount = 0;
-            if (existingVariable.children != null)
-            {
-                for (Object o : existingVariable.children)
-                {
-                    if (o instanceof NodeEquation)
-                    {
-                        existingEquationCount++;
-                        if (((NodeEquation) o).source.key ().substring (1).equals (pieces.conditional)) existingEquationMatch = true;
-                    }
-                }
-            }
-
-            Variable.ParsedValue existingPieces = new Variable.ParsedValue (existingVariable.source.get ());
-
-            if (   (existingEquationCount  > 0  &&  ! existingEquationMatch)
-                || (existingEquationCount == 0  &&  ! existingPieces.conditional.equals (pieces.conditional)))
-            {
-                // Merge into existing variable and remove ourselves from tree.
-
-                if (! existingPieces.expression.isEmpty ()  ||  ! existingPieces.conditional.isEmpty ())  // The existing variable has an expression, so convert it into a subordinate equation.
-                {
-                    MPart convertedEquation = (MPart) existingVariable.source.set (existingPieces.expression, "@" + existingPieces.conditional);
-                    NodeEquation convertedEquationNode = new NodeEquation (convertedEquation);
-                    model.insertNodeIntoUnfiltered (convertedEquationNode, existingVariable, 0);
-                    convertedEquationNode.updateColumnWidths (fm);
-                }
-                existingVariable.source.set (pieces.combiner);  // override the combiner, just as if we had entered an equation directly on the existing variable
-
-                MPart newEquation = (MPart) existingVariable.source.set (pieces.expression, "@" + pieces.conditional);
-                NodeEquation newEquationNode = new NodeEquation (newEquation);
-                model.insertNodeIntoUnfiltered (newEquationNode, existingVariable, 0);
-                model.removeNodeFromParent (this);
-                parent.source.clear (oldKey);
-
-                newEquationNode.updateColumnWidths (fm);
-                existingVariable.updateTabStops (fm);
-                existingVariable.allNodesChanged (model);
-
-                existingVariable.updateColumnWidths (fm);
-                parent.updateTabStops (fm);
-                parent.allNodesChanged (model);
-
-                tree.setSelectionPath (new TreePath (newEquationNode.getPath ()));
-                existingVariable.findConnections ();
-
-                return;
-            }
+            valueAfter = nameAfter;
+            nameAfter  = nameBefore;
         }
 
-        TreeMap<String,NodeEquation> equations = new TreeMap<String,NodeEquation> ();
-        if (children != null)
+        // Handle creation of $inherit node.
+        ModelEditPanel mep = ModelEditPanel.instance;
+        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+        boolean newlyCreated =  getChildCount () == 0  &&  valueBefore.isEmpty ();  // Only a heuristic
+        NodeBase parent = (NodeBase) getParent ();
+        if (nameAfter.equals ("$inherit"))
         {
-            for (Object o : children)
+            if (parent.child (nameAfter) == null)
             {
-                if (o instanceof NodeEquation)
+                if (newlyCreated)
                 {
-                    NodeEquation e = (NodeEquation) o;
-                    equations.put (e.source.key ().substring (1), e);
-                }
-            }
-        }
-
-        if (name.equals (oldKey)  ||  name.isEmpty ()  ||  existing != null)  // No name change, or name change forbidden
-        {
-            // Update ourselves. Exact action depends on whether we are single-line or multi-conditional.
-            if (equations.size () == 0)
-            {
-                source.set (pieces.toString ());
-            }
-            else
-            {
-                source.set (pieces.combiner);
-
-                if (! pieces.expression.isEmpty ())
-                {
-                    NodeEquation e = equations.get (pieces.conditional);
-                    if (e == null)  // no matching equation
-                    {
-                        MPart equation = (MPart) source.set (pieces.expression, "@" + pieces.conditional);
-                        model.insertNodeIntoUnfiltered (new NodeEquation (equation), this, 0);
-                    }
-                    else  // conditional matched an existing equation, so just replace the expression
-                    {
-                        e.source.set (pieces.expression);
-                        e.setUserObject (pieces.expression + e.source.key ());  // key starts with "@"
-                        model.nodeChanged (e);
-                    }
-                }
-            }
-
-            updateColumnWidths (fm);
-            parent.updateTabStops (fm);
-            parent.allNodesChanged (model);
-        }
-        else  // The name was changed. Move the whole sub-tree to a new location. This may also expose an overridden variable.
-        {
-            MPart mparent = source.getParent ();
-            MPart newPart;
-            NodeInherit inherit = null;
-            if (name.equals ("$inherit"))
-            {
-                mparent.clear (oldKey);  // We abandon everything under this node, because $inherit does not have a subtree. (It might in the future, to store UIDs of referenced parts.)
-                newPart = (MPart) mparent.set (pieces.toString (), name);
-                inherit = new NodeInherit (newPart);
-                model.insertNodeIntoUnfiltered (inherit, parent, 0);
-                if (parent instanceof NodePart)  // It had better be! There is no other legal configuration.
-                {
-                    ((NodePart) parent).build ();
-                    model.nodeStructureChanged (parent);
-                }
-            }
-            else
-            {
-                // Inject the changed equation into the underlying data before renaming.
-                if (equations.size () == 0)
-                {
-                    source.set (pieces.toString ());
+                    parent.source.clear (nameBefore);
+                    // No need to update GUI, because AddInherit rebuilds parent.
+                    mep.undoManager.add (new AddInherit ((NodePart) parent, valueAfter));
                 }
                 else
                 {
-                    source.set (pieces.combiner);
-
-                    if (! pieces.expression.isEmpty ())
-                    {
-                        NodeEquation e = equations.get (pieces.conditional);
-                        if (e == null)   source.set (pieces.expression, "@" + pieces.conditional);  // create a new equation
-                        else           e.source.set (pieces.expression);  // blow away the existing expression in the matching equation
-                    }
+                    mep.undoManager.add (new ChangeVariableToInherit (this, valueAfter));
                 }
-
-                mparent.move (oldKey, name);  // This copies the whole tree, not just overridden nodes, but leaves behind only the newly-exposed underrides.
-                newPart = (MPart) mparent.child (name);
+                return;
             }
 
-            // Presumably at this point, newPart is never null. Unless it was a $inherit, it needs somewhere to go in the tree.
-            if (mparent.child (oldKey) == null)  // This tree node can be re-used, if we need it.
-            {
-                if (inherit == null)
-                {
-                    source = newPart;
-                    build ();
-                    updateColumnWidths (fm);
-                    parent.updateTabStops (fm);
-                    parent.allNodesChanged (model);
-                }
-            }
-            else  // We exposed an overridden part, which will retain its claim on this tree node.
-            {
-                if (inherit == null)  // Create a new tree node for the newly-named variable, if needed.
-                {
-                    NodeVariable v = new NodeVariable (newPart);
-                    model.insertNodeIntoUnfiltered (v, parent, parent.getIndex (this));
-                    v.build ();
-                    v.updateColumnWidths (fm);
-                    v.findConnections ();
-                }
+            nameAfter = nameBefore;
+        }
 
-                // The current node's source is still set to the old part.
-                build ();
-                updateColumnWidths (fm);
-                parent.updateTabStops (fm);
-                parent.allNodesChanged (model);
+        // Prevent illegal name change. (Don't override another top-level node. Don't overwrite a non-variable node.)
+        NodeBase nodeAfter = parent.child (nameAfter);
+        if (nodeAfter != null)
+        {
+            if (! (nodeAfter instanceof NodeVariable)  ||  (nodeAfter != this  &&  nodeAfter.source.isFromTopDocument ()  &&  ! newlyCreated))
+            {
+                nameAfter = nameBefore;
+                nodeAfter = this;
             }
         }
 
-        findConnections ();
+        // If there's nothing to do, then repaint the node and quit.
+        FontMetrics fm = getFontMetrics (tree);
+        if (nameBefore.equals (nameAfter)  &&  valueBefore.equals (valueAfter))
+        {
+            parent.updateTabStops (fm);
+            parent.allNodesChanged (model);
+            return;
+        }
+
+        // Detect and handle special cases
+        if (nodeAfter != null)
+        {
+            Variable.ParsedValue piecesDest  = new Variable.ParsedValue (nodeAfter.source.get ());  // In this section, "dest" refers to state of target node before it is overwritten, while "after" refers to newly input values from user.
+            Variable.ParsedValue piecesAfter = new Variable.ParsedValue (valueAfter);
+            boolean expressionAfter = ! piecesAfter.expression.isEmpty ()  ||  ! piecesAfter.conditional.isEmpty ();
+            if (piecesAfter.combiner  .isEmpty ()) piecesAfter.combiner   = piecesDest.combiner;  // If the user doesn't specify a combiner, absorb it from our destination.
+            if (piecesAfter.expression.isEmpty ()) piecesAfter.expression = "0";
+
+            int          equationCount = 0;
+            NodeEquation equationMatch = null; 
+            Enumeration<?> childrenAfter = nodeAfter.children ();
+            while (childrenAfter.hasMoreElements ())
+            {
+                Object c = childrenAfter.nextElement ();
+                if (c instanceof NodeEquation)
+                {
+                    equationCount++;
+                    NodeEquation e = (NodeEquation) c;
+                    if (e.source.key ().substring (1).equals (piecesAfter.conditional)) equationMatch = e;
+                }
+            }
+
+            if (nodeAfter == this)
+            {
+                if (equationCount > 0  &&  expressionAfter)
+                {
+                    if (equationMatch == null)
+                    {
+                        mep.undoManager.add (new AddEquation (this, piecesAfter.conditional, piecesAfter.combiner, piecesAfter.expression));
+                    }
+                    else
+                    {
+                        Variable.ParsedValue piecesMatch = new Variable.ParsedValue (piecesDest.combiner + equationMatch.source.get () + equationMatch.source.key ());
+                        mep.undoManager.add (new ChangeEquation (this, piecesMatch.conditional, piecesMatch.combiner, piecesMatch.expression, piecesAfter.conditional, piecesAfter.combiner, piecesAfter.expression));
+                    }
+                    parent.updateTabStops (fm);
+                    parent.allNodesChanged (model);
+                    return;
+                }
+            }
+            else
+            {
+                if (newlyCreated)
+                {
+                    NodeVariable nva = (NodeVariable) nodeAfter;
+                    if (equationCount == 0)
+                    {
+                        if (piecesAfter.conditional.equals (piecesDest.conditional))
+                        {
+                            mep.undoManager.add (new ChangeVariable (nva, nameAfter, valueAfter, getKeyPath ()));
+                        }
+                        else
+                        {
+                            mep.undoManager.add (new AddEquation (nva, piecesAfter.conditional, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
+                        }
+                    }
+                    else
+                    {
+                        if (equationMatch == null)
+                        {
+                            mep.undoManager.add (new AddEquation (nva, piecesAfter.conditional, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
+                        }
+                        else
+                        {
+                            Variable.ParsedValue piecesMatch = new Variable.ParsedValue (piecesDest.combiner + equationMatch.source.get () + equationMatch.source.key ());
+                            mep.undoManager.add (new ChangeEquation (nva, piecesMatch.conditional, piecesMatch.combiner, piecesMatch.expression, piecesAfter.conditional, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
+                        }
+                    }
+                    // commit suicide
+                    parent.source.clear (nameBefore);
+                    model.removeNodeFromParent (this);
+                    return;
+                }
+            }
+        }
+
+        // The default action
+        if (newlyCreated  &&  valueAfter.isEmpty ()) valueAfter = "0";
+        mep.undoManager.add (new ChangeVariable (this, nameAfter, valueAfter));
     }
 
     @Override
-    public void delete (JTree tree)
+    public void delete (JTree tree, boolean canceled)
     {
         if (! source.isFromTopDocument ()) return;
-
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        FontMetrics fm = getFontMetrics (tree);
-        NodePart parent = (NodePart) getParent ();
-        MPart mparent = source.getParent ();
-        String key = source.key ();
-        mparent.clear (key);  // If this merely clears an override, then our source object retains its identity.
-        if (mparent.child (key) == null)  // Node is fully deleted
-        {
-            model.removeNodeFromParent (this);
-        }
-        else  // Just exposed an overridden node
-        {
-            build ();
-            updateColumnWidths (fm);
-            if (visible (model.filterLevel)) model.nodeStructureChanged (this);
-            else                             parent.hide (this, model, true);
-        }
-        parent.updateTabStops (fm);
-        parent.allNodesChanged (model);
+        ModelEditPanel.instance.undoManager.add (new DeleteVariable (this, canceled));
     }
 }

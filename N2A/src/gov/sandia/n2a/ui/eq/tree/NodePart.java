@@ -25,6 +25,7 @@ import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddPart;
 import gov.sandia.n2a.ui.eq.undo.AddReference;
+import gov.sandia.n2a.ui.eq.undo.AddVariable;
 import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
 import gov.sandia.n2a.ui.eq.undo.DeletePart;
 import gov.sandia.n2a.ui.eq.undo.ChangeDoc;
@@ -263,7 +264,7 @@ public class NodePart extends NodeContainer
     public void findConnections ()
     {
         isConnection = false;
-        Enumeration i = children ();
+        Enumeration<?> i = children ();
         while (i.hasMoreElements ())
         {
             Object o = i.nextElement ();
@@ -288,7 +289,7 @@ public class NodePart extends NodeContainer
             return parent.resolveName (nextName);
         }
 
-        Enumeration i = children ();
+        Enumeration<?> i = children ();
         while (i.hasMoreElements ())
         {
             Object o = i.nextElement ();
@@ -382,13 +383,9 @@ public class NodePart extends NodeContainer
         }
         else  // treat all other requests as "Variable"
         {
-            int suffix = 0;
-            while (source.child ("x" + suffix) != null) suffix++;
-            NodeBase result = new NodeVariable ((MPart) source.set ("0", "x" + suffix));
-            result.setUserObject ("");
-            result.updateColumnWidths (getFontMetrics (tree));  // preempt initialization
-            model.insertNodeIntoUnfiltered (result, this, variableIndex);
-            return result;
+            AddVariable av = new AddVariable (this, variableIndex);
+            ModelEditPanel.instance.undoManager.add (av);
+            return av.createdNode;
         }
     }
 
@@ -436,7 +433,7 @@ public class NodePart extends NodeContainer
 
         if (input.isEmpty ())
         {
-            delete (tree);
+            delete (tree, true);
             return;
         }
 
@@ -453,11 +450,11 @@ public class NodePart extends NodeContainer
     }
 
     @Override
-    public void delete (JTree tree)
+    public void delete (JTree tree, boolean canceled)
     {
         if (! source.isFromTopDocument ()) return;  // This should be true of root, as well as any other node we might try to delete.
         ModelEditPanel mep = ModelEditPanel.instance;
         if (isRoot ()) mep.undoManager.add (new DeleteDoc ((MDoc) source.getSource ()));
-        else           mep.undoManager.add (new DeletePart (this));
+        else           mep.undoManager.add (new DeletePart (this, canceled));
     }
 }

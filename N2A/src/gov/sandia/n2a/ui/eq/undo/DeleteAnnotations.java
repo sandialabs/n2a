@@ -93,7 +93,7 @@ public class DeleteAnnotations extends Undoable
         String blockName = saved.key ();
         NodeContainer node = (NodeContainer) parent.child (blockName);
         TreeNode[] nodePath = node.getPath ();
-        int filteredIndex = parent.getIndexFiltered (node);
+        int index = parent.getIndexFiltered (node);
 
         MPart mparent = parent.source;
         mparent.clear (blockName);
@@ -106,6 +106,6 @@ public class DeleteAnnotations extends Undoable
             node.build ();  // Necessary to remove all overridden nodes
             node.filter (model.filterLevel);
         }
-        mep.panelEquations.updateVisibility (nodePath, filteredIndex);
+        mep.panelEquations.updateVisibility (nodePath, index);
     }
 }

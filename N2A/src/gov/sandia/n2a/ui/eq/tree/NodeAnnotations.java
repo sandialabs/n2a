@@ -89,7 +89,7 @@ public class NodeAnnotations extends NodeContainer
     }
 
     @Override
-    public void delete (JTree tree)
+    public void delete (JTree tree, boolean canceled)
     {
         if (! source.isFromTopDocument ()) return;
         ModelEditPanel.instance.undoManager.add (new DeleteAnnotations (this));

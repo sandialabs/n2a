@@ -108,8 +108,9 @@ public class ChangeAnnotation extends Undoable
             {
                 if (nodeAfter == null)
                 {
+                    int index = parent.getIndex (nodeBefore);
                     nodeAfter = factory.create (newPart);
-                    model.insertNodeIntoUnfiltered (nodeAfter, parent, parent.getChildCount ());
+                    model.insertNodeIntoUnfiltered (nodeAfter, parent, index);
                 }
             }
         }

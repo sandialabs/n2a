@@ -12,6 +12,8 @@ import java.util.List;
 import javax.swing.JTree;
 import javax.swing.undo.CannotRedoException;
 
+import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
@@ -21,9 +23,9 @@ import gov.sandia.n2a.ui.eq.tree.NodePart;
 public class ChangePart extends Undoable
 {
     protected List<String> path;   // to the container of the part being renamed
-    protected int          index;  // unfiltered
     protected String       nameBefore;
     protected String       nameAfter;
+    protected MNode        savedTree;  // The entire subtree from the top document. If not from top document, then at least a single node for the part itself.
 
     /**
         @param node The part being renamed.
@@ -32,9 +34,11 @@ public class ChangePart extends Undoable
     {
         NodeBase parent = (NodeBase) node.getParent ();
         path = parent.getKeyPath ();
-        index = parent.getIndex (node);
         this.nameBefore = nameBefore;
         this.nameAfter  = nameAfter;
+
+        savedTree = new MVolatile ();
+        if (node.source.isFromTopDocument ()) savedTree.merge (node.source.getSource ());
     }
 
     public void undo ()
@@ -59,7 +63,8 @@ public class ChangePart extends Undoable
 
         // Update the database: move the subtree.
         MPart mparent = parent.source;
-        mparent.move (nameBefore, nameAfter);  // TODO: May be better to store subtree, just like AddPart and DeletePart. Otherwise, some top-level nodes could disappear when merged into destination, and undo will not be idempotent.
+        mparent.clear (nameBefore);
+        mparent.set ("", nameAfter).merge (savedTree);;
         MPart oldPart = (MPart) mparent.child (nameBefore);
         MPart newPart = (MPart) mparent.child (nameAfter);
 
@@ -86,6 +91,7 @@ public class ChangePart extends Undoable
         {
             if (nodeAfter == null)
             {
+                int index = parent.getIndex (nodeBefore);
                 nodeAfter = new NodePart (newPart);
                 model.insertNodeIntoUnfiltered (nodeAfter, parent, index);
             }

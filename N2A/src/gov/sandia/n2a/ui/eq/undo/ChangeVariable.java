@@ -14,62 +14,66 @@ import javax.swing.JTree;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.UndoableEdit;
 
+import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
-import gov.sandia.n2a.ui.eq.tree.NodeEquation;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
-public class ChangeEquation extends Undoable
+public class ChangeVariable extends Undoable
 {
     protected List<String> path;
     protected String       nameBefore;
-    protected String       combinerBefore;
-    protected String       valueBefore;
     protected String       nameAfter;
-    protected String       combinerAfter;
+    protected String       valueBefore;
     protected String       valueAfter;
-    protected List<String> replacePath;
+    protected MNode        savedTree;  // The entire subtree from the top document. If not from top document, then at least a single node for the variable itself.
+    protected List<String> replacePath;  // If a newly-created variable turns out to modify another node, this lets us remove the AddVariable from the undo stack.
 
     /**
         @param variable The direct container of the node being changed.
     **/
-    public ChangeEquation (NodeVariable variable, String nameBefore, String combinerBefore, String valueBefore, String nameAfter, String combinerAfter, String valueAfter)
+    public ChangeVariable (NodeVariable node, String nameAfter, String valueAfter)
     {
-        path = variable.getKeyPath ();
+        NodeBase parent = (NodeBase) node.getParent ();
+        path = parent.getKeyPath ();
 
-        this.nameBefore     = "@" + nameBefore;
-        this.valueBefore    = valueBefore;
-        this.combinerBefore = combinerBefore;
-        this.nameAfter      = "@" + nameAfter;
-        this.valueAfter     = valueAfter;
-        this.combinerAfter  = combinerAfter;
+        nameBefore  = node.source.key ();
+        valueBefore = node.source.get ();
+        this.nameAfter  = nameAfter;
+        this.valueAfter = valueAfter;
+
+        savedTree = new MVolatile ();
+        if (node.source.isFromTopDocument ()) savedTree.merge (node.source.getSource ());
     }
 
-    public ChangeEquation (NodeVariable variable, String nameBefore, String combinerBefore, String valueBefore, String nameAfter, String combinerAfter, String valueAfter, List<String> replacePath)
+    public ChangeVariable (NodeVariable node, String nameAfter, String valueAfter, List<String> replacePath)
     {
-        this (variable, nameBefore, combinerBefore, valueBefore, nameAfter, combinerAfter, valueAfter);
+        this (node, nameAfter, valueAfter);
         this.replacePath = replacePath;
     }
 
     public void undo ()
     {
         super.undo ();
-        apply (path, nameAfter, nameBefore, combinerBefore, valueBefore);
+        savedTree.set (valueBefore);
+        apply (path, nameAfter, nameBefore, savedTree);
     }
 
     public void redo ()
     {
         super.redo ();
-        apply (path, nameBefore, nameAfter, combinerAfter, valueAfter);
+        savedTree.set (valueAfter);
+        apply (path, nameBefore, nameAfter, savedTree);
     }
 
-    public static void apply (List<String> path, String nameBefore, String nameAfter, String combinerAfter, String valueAfter)
+    public static void apply (List<String> path, String nameBefore, String nameAfter, MNode savedTree)
     {
         NodeBase parent = locateNode (path);
         if (parent == null) throw new CannotRedoException ();
-        NodeBase nodeBefore = parent.child (nameBefore);
+        NodeVariable nodeBefore = (NodeVariable) parent.child (nameBefore);
         if (nodeBefore == null) throw new CannotRedoException ();
 
         ModelEditPanel mep = ModelEditPanel.instance;
@@ -77,22 +81,23 @@ public class ChangeEquation extends Undoable
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         FontMetrics fm = nodeBefore.getFontMetrics (tree);
 
-        NodeBase nodeAfter;
+        NodeVariable nodeAfter;
         if (nameBefore.equals (nameAfter))
         {
             nodeAfter = nodeBefore;
-            nodeAfter.source.set (valueAfter);
+            nodeAfter.source.set (savedTree.get ());  // Sub-tree is not relevant here.
         }
         else
         {
-            // Update the database
+            // Update database
             MPart mparent = parent.source;
-            MPart newPart = (MPart) mparent.set (valueAfter, nameAfter);
             mparent.clear (nameBefore);
+            mparent.set ("", nameAfter).merge (savedTree);
+            MPart newPart = (MPart) mparent.child (nameAfter);
             MPart oldPart = (MPart) mparent.child (nameBefore);
 
             // Update GUI
-            nodeAfter = parent.child (nameAfter);
+            nodeAfter = (NodeVariable) parent.child (nameAfter);
             if (oldPart == null)
             {
                 if (nodeAfter == null)
@@ -110,21 +115,19 @@ public class ChangeEquation extends Undoable
                 if (nodeAfter == null)
                 {
                     int index = parent.getIndex (nodeBefore);
-                    nodeAfter = new NodeEquation (newPart);
+                    nodeAfter = new NodeVariable (newPart);
                     model.insertNodeIntoUnfiltered (nodeAfter, parent, index);
                 }
+
+                nodeBefore.build ();
+                nodeBefore.findConnections ();
+                if (nodeBefore.visible (model.filterLevel)) model.nodeStructureChanged (nodeBefore);
+                else                                        parent.hide (nodeBefore, model, true);
             }
         }
 
-        if (! parent.source.get ().equals (combinerAfter))
-        {
-            parent.source.set (combinerAfter);
-            parent.updateColumnWidths (fm);
-            NodeBase grandparent = (NodeBase) parent.getParent ();
-            grandparent.updateTabStops (fm);
-            grandparent.allNodesChanged (model);
-        }
-
+        nodeAfter.build ();
+        nodeAfter.findConnections ();
         nodeAfter.updateColumnWidths (fm);
         parent.updateTabStops (fm);
         parent.allNodesChanged (model);

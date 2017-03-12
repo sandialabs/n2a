@@ -369,10 +369,11 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
             // Parse the line into key=value. Must pay special attention when multiple "=" are present
             String line = reader.line.trim ();
-            String[] pieces = line.split ("=", -1);
+            String[] pieces = line.split ("=", -1);  // Negative limit means to create empty string in resulting array for any zero-length pieces (as opposed to ignoring them). The following algorithm depends on this.
             String index = pieces[0];
+            int last = pieces.length - 1;
             int i = 1;
-            for (; i < pieces.length; i++)
+            for (; i < last; i++)  // Note that we never include the last piece in the index, unless there is only one piece (see initial assignment above).
             {
                 if (pieces[i].isEmpty ()  ||  index.endsWith ("=")  ||  index.endsWith ("<")  ||  index.endsWith (">")  ||  index.endsWith ("!"))
                 {
@@ -382,10 +383,10 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
                 break;
             }
             String value = "";
-            if (i < pieces.length)
+            if (i <= last)
             {
                 value = pieces[i++];
-                while (i < pieces.length) value = value + "=" + pieces[i++];
+                while (i <= last) value = value + "=" + pieces[i++];
             }
             index = index.trim ();
             value = value.trim ();

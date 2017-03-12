@@ -50,7 +50,7 @@ public class NodeInherit extends NodeBase
         String input = (String) getUserObject ();
         if (input.isEmpty ())
         {
-            delete (tree);
+            delete (tree, true);
             return;
         }
 
@@ -66,9 +66,9 @@ public class NodeInherit extends NodeBase
     }
 
     @Override
-    public void delete (JTree tree)
+    public void delete (JTree tree, boolean canceled)
     {
         if (! source.isFromTopDocument ()) return;
-        ModelEditPanel.instance.undoManager.add (new DeleteInherit (this));
+        ModelEditPanel.instance.undoManager.add (new DeleteInherit (this, canceled));
     }
 }

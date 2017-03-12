@@ -1,5 +1,5 @@
 /*
-Copyright 2016 Sandia Corporation.
+Copyright 2016,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -20,19 +20,21 @@ public class DeleteAnnotation extends Undoable
 {
     protected List<String> path;  // to parent of $metadata node
     protected int          index; // where to insert among siblings
+    protected boolean      canceled;
     protected String       name;
     protected String       value;
     protected boolean      neutralized;
 
-    public DeleteAnnotation (NodeBase node)
+    public DeleteAnnotation (NodeBase node, boolean canceled)
     {
-        name  = node.source.key ();
-        value = node.source.get ();
-
         NodeBase container = (NodeBase) node.getParent ();
         index = container.getIndex (node);
         if (container.source.key ().equals ("$metadata")) container = (NodeBase) container.getParent ();
         path = container.getKeyPath ();
+        this.canceled = canceled;
+
+        name  = node.source.key ();
+        value = node.source.get ();
     }
 
     public void undo ()
@@ -58,7 +60,7 @@ public class DeleteAnnotation extends Undoable
     public void redo ()
     {
         super.redo ();
-        AddAnnotation.destroy (path, name, "$metadata");
+        AddAnnotation.destroy (path, canceled, name, "$metadata");
     }
 
     public boolean replaceEdit (UndoableEdit edit)

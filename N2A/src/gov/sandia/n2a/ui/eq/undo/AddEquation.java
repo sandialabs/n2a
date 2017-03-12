@@ -29,17 +29,22 @@ import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class AddEquation extends Undoable
 {
-    protected List<String>      path;  // to variable node
-    protected int               equationCount;  // before adding this equation
-    protected int               index; // where to insert among siblings
-    protected String            name;  // includes the leading @
-    protected String            value;
-    public    NodeBase          createdNode;  ///< Used by caller to initiate editing. Only valid immediately after call to redo().
+    protected List<String> path;  // to variable node
+    protected int          equationCount;  // before adding this equation
+    protected int          index; // where to insert among siblings
+    protected String       name;  // includes the leading @
+    protected String       combinerBefore;
+    protected String       combinerAfter;
+    protected String       value;
+    public    NodeBase     createdNode;  ///< Used by caller to initiate editing. Only valid immediately after call to redo().
+    protected List<String> replacePath;  // If non-null, contains path to NodeVariable that created this action.
 
     public AddEquation (NodeVariable parent, int index)
     {
         path = parent.getKeyPath ();
         this.index = index;
+        combinerBefore = new Variable.ParsedValue (parent.source.get ()).combiner;
+        combinerAfter  = combinerBefore;
 
         // Select a unique name
 
@@ -66,13 +71,31 @@ public class AddEquation extends Undoable
         name = "@" + name;
     }
 
+    public AddEquation (NodeVariable parent, String name, String combiner, String value)
+    {
+        path           = parent.getKeyPath ();
+        index          = 0;
+        this.name      = "@" + name;
+        combinerBefore = new Variable.ParsedValue (parent.source.get ()).combiner;
+        combinerAfter  = combiner;
+        this.value     = value;
+
+        for (MNode n : parent.source) if (n.key ().startsWith ("@")) equationCount++;
+    }
+
+    public AddEquation (NodeVariable parent, String name, String combiner, String value, List<String> replacePath)
+    {
+        this (parent, name, combiner, value);
+        this.replacePath = replacePath;
+    }
+
     public void undo ()
     {
         super.undo ();
-        destroy (path, name);
+        destroy (path, equationCount, false, name, combinerBefore);
     }
 
-    public static void destroy (List<String> path, String name)
+    public static void destroy (List<String> path, int equationCount, boolean canceled, String name, String combinerBefore)
     {
         // Retrieve created node
         NodeBase parent = locateNode (path);
@@ -85,41 +108,46 @@ public class AddEquation extends Undoable
         FontMetrics fm = createdNode.getFontMetrics (tree);
 
         TreeNode[] createdPath = createdNode.getPath ();
-        int filteredIndex = parent.getIndexFiltered (createdNode);
+        int index = parent.getIndexFiltered (createdNode);
+        if (canceled) index--;
 
+        // Update database
         MPart mparent = parent.source;
         mparent.clear (name);
+        boolean parentChanged = false;
+        if (! mparent.get ().equals (combinerBefore))
+        {
+            mparent.set (combinerBefore);  // This value may be replaced below if we switch back to single-line.
+            parentChanged = true;
+        }
+
+        // Update GUI
+
         if (mparent.child (name) == null)  // There is no overridden value, so this node goes away completely.
         {
             model.removeNodeFromParent (createdNode);
 
-            // If we are down to only 1 equation, then fold it back into a single-line variable.
-            NodeEquation lastEquation = null;
-            int equationCount = 0;
-            Enumeration i = parent.children ();  // unfiltered
-            while (i.hasMoreElements ())
+            if (equationCount == 0)  // The node used to be single-line, so fold the last equation back into it.
             {
-                Object o = i.nextElement ();
-                if (o instanceof NodeEquation)
+                NodeEquation lastEquation = null;
+                Enumeration<?> i = parent.children ();  // unfiltered
+                while (i.hasMoreElements ())
                 {
-                    equationCount++;
-                    lastEquation = (NodeEquation) o;
+                    Object o = i.nextElement ();
+                    if (o instanceof NodeEquation)
+                    {
+                        lastEquation = (NodeEquation) o;
+                        break;
+                    }
                 }
-            }
-            if (equationCount == 1)
-            {
+
                 String lastCondition  = lastEquation.source.key ();
                 String lastExpression = lastEquation.source.get ();
-                parent.source.clear (lastCondition);
-                if (lastCondition.equals ("@")) parent.source.set (parent.source.get () + lastExpression);
-                else                            parent.source.set (parent.source.get () + lastExpression + lastCondition);
+                mparent.clear (lastCondition);
+                if (lastCondition.equals ("@")) mparent.set (combinerBefore + lastExpression);
+                else                            mparent.set (combinerBefore + lastExpression + lastCondition);
+                parentChanged = true;
                 model.removeNodeFromParent (lastEquation);
-
-                // Update tabs among this variable's siblings
-                parent.updateColumnWidths (fm);
-                NodeBase grandparent = (NodeBase) parent.getParent ();
-                grandparent.updateTabStops (fm);
-                grandparent.allNodesChanged (model);
             }
         }
         else  // Just exposed an overridden value, so update display.
@@ -127,18 +155,26 @@ public class AddEquation extends Undoable
             createdNode.updateColumnWidths (fm);
         }
 
+        if (parentChanged)  // Update tabs among this variable's siblings
+        {
+            parent.updateColumnWidths (fm);
+            NodeBase grandparent = (NodeBase) parent.getParent ();
+            grandparent.updateTabStops (fm);
+            grandparent.allNodesChanged (model);
+        }
         parent.updateTabStops (fm);
         parent.allNodesChanged (model);
-        mep.panelEquations.updateAfterDelete (createdPath, filteredIndex);
+        mep.panelEquations.updateOrder (createdPath);
+        mep.panelEquations.updateVisibility (createdPath, index);
     }
 
     public void redo ()
     {
         super.redo ();
-        createdNode = create (path, equationCount, index, name, value);
+        createdNode = create (path, equationCount, index, name, combinerAfter, value);
     }
 
-    public static NodeBase create (List<String> path, int equationCount, int index, String name, String value)
+    public static NodeBase create (List<String> path, int equationCount, int index, String name, String combinerAfter, String value)
     {
         NodeBase parent = locateNode (path);
         if (parent == null) throw new CannotRedoException ();
@@ -149,16 +185,21 @@ public class AddEquation extends Undoable
 
         // Update the database
 
+        String parentValueBefore = parent.source.get ();
+        Variable.ParsedValue parentPiecesBefore = new Variable.ParsedValue (parentValueBefore);
         // The minimum number of equations is 2. There should never be exactly 1 equation, because that is single-line form, which should have no child equations at all.
         if (equationCount == 0)  // We are about to switch from single-line form to multi-conditional, so make a tree node for the existing equation.
         {
-            Variable.ParsedValue pieces = new Variable.ParsedValue (parent.source.get ());
-            parent.source.set (pieces.combiner);
-            parent.setUserObject (parent.source.key () + "=" + pieces.combiner);
-            MPart equation = (MPart) parent.source.set (pieces.expression, "@" + pieces.conditional);
+            MPart equation = (MPart) parent.source.set (parentPiecesBefore.expression, "@" + parentPiecesBefore.conditional);
             model.insertNodeIntoUnfiltered (new NodeEquation (equation), parent, 0);
         }
-        MPart createdPart = (MPart) parent.source.set (value == null ? name.substring (1) : value, name);
+        MPart createdPart = (MPart) parent.source.set (value == null ? "0" : value, name);
+        boolean parentChanged = false;
+        if (! combinerAfter.equals (parentValueBefore))
+        {
+            parent.source.set (combinerAfter);
+            parentChanged = true;
+        }
 
         // Update the GUI
 
@@ -176,6 +217,13 @@ public class AddEquation extends Undoable
         if (value == null) createdNode.setUserObject ("");
         createdNode.updateColumnWidths (fm);  // preempt initialization
         if (! alreadyExists) model.insertNodeIntoUnfiltered (createdNode, parent, index);
+        if (parentChanged)
+        {
+            parent.updateColumnWidths (fm);
+            NodeBase grandparent = (NodeBase) parent.getParent ();
+            grandparent.updateTabStops (fm);
+            grandparent.allNodesChanged (model);
+        }
         if (value != null)  // create was merged with change name/value
         {
             parent.updateTabStops (fm);
@@ -193,11 +241,25 @@ public class AddEquation extends Undoable
             ChangeEquation change = (ChangeEquation) edit;
             if (name.equals (change.nameBefore))
             {
-                name  = change.nameAfter;
-                value = change.valueAfter;
+                name           = change.nameAfter;
+                combinerBefore = change.combinerBefore;
+                combinerAfter  = change.combinerAfter;
+                value          = change.valueAfter;
                 return true;
             }
         }
+        return false;
+    }
+
+    public boolean replaceEdit (UndoableEdit edit)
+    {
+        if (edit instanceof AddVariable)
+        {
+            AddVariable av = (AddVariable) edit;
+            if (! av.nameIsGenerated) return false;
+            return av.fullPath ().equals (replacePath);
+        }
+
         return false;
     }
 }

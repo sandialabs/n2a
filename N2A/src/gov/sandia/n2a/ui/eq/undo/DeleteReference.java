@@ -20,19 +20,21 @@ public class DeleteReference extends Undoable
 {
     protected List<String> path;  // to parent of $reference node
     protected int          index; // where to insert among siblings
+    protected boolean      canceled;
     protected String       name;
     protected String       value;
     protected boolean      neutralized;
 
-    public DeleteReference (NodeBase node)
+    public DeleteReference (NodeBase node, boolean canceled)
     {
-        name  = node.source.key ();
-        value = node.source.get ();
-
         NodeBase container = (NodeBase) node.getParent ();
         index = container.getIndex (node);
         if (container.source.key ().equals ("$reference")) container = (NodeBase) container.getParent ();
         path = container.getKeyPath ();
+        this.canceled = canceled;
+
+        name  = node.source.key ();
+        value = node.source.get ();
     }
 
     public void undo ()
@@ -58,7 +60,7 @@ public class DeleteReference extends Undoable
     public void redo ()
     {
         super.redo ();
-        AddAnnotation.destroy (path, name, "$reference");
+        AddAnnotation.destroy (path, canceled, name, "$reference");
     }
 
     public boolean replaceEdit (UndoableEdit edit)

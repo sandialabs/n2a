@@ -38,7 +38,7 @@ public class AddReference extends Undoable
     public void undo ()
     {
         super.undo ();
-        AddAnnotation.destroy (path, name, "$reference");
+        AddAnnotation.destroy (path, false, name, "$reference");
     }
 
     public void redo ()

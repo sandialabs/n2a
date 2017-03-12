@@ -108,7 +108,7 @@ public class NodeEquation extends NodeBase
         String input = (String) getUserObject ();
         if (input.isEmpty ())
         {
-            delete (tree);
+            delete (tree, true);
             return;
         }
 
@@ -121,13 +121,13 @@ public class NodeEquation extends NodeBase
         Variable.ParsedValue piecesAfter  = new Variable.ParsedValue (input);
 
         NodeVariable parent = (NodeVariable) getParent ();
-        String nameBefore = "@" + piecesBefore.conditional;
-        String nameAfter  = "@" + piecesAfter.conditional;
-        NodeBase nodeAfter = parent.child (nameAfter);
-        if (nodeAfter != null  &&  nodeAfter.source.isFromTopDocument ())  // Can't overwrite another top-document node
+        if (! piecesBefore.conditional.equals (piecesAfter.conditional))
         {
-            nameAfter = nameBefore;
-            piecesAfter.conditional = piecesBefore.conditional;
+            MPart partAfter = (MPart) parent.source.child ("@" + piecesAfter.conditional);
+            if (partAfter != null  &&  partAfter.isFromTopDocument ())  // Can't overwrite another top-document node
+            {
+                piecesAfter.conditional = piecesBefore.conditional;
+            }
         }
 
         if (piecesBefore.equals (piecesAfter))
@@ -139,17 +139,18 @@ public class NodeEquation extends NodeBase
             return;
         }
 
-        String combinerBefore = parent.source.get ();
-        String combinerAfter  = piecesAfter.combiner;
-        if (combinerAfter.isEmpty ()) combinerAfter = combinerBefore;
+        piecesBefore.combiner = parent.source.get ();  // The fact that we are modifying an existing equation node indicates that the variable (parent) should only contain a combiner.
+        if (piecesAfter.combiner.isEmpty ()) piecesAfter.combiner = piecesBefore.combiner;
 
-        ModelEditPanel.instance.undoManager.add (new ChangeEquation (parent, nameBefore, combinerBefore, piecesBefore.expression, nameAfter, combinerAfter, piecesAfter.expression));
+        if (piecesAfter.expression.isEmpty ()) piecesAfter.expression = "0";
+
+        ModelEditPanel.instance.undoManager.add (new ChangeEquation (parent, piecesBefore.conditional, piecesBefore.combiner, piecesBefore.expression, piecesAfter.conditional, piecesAfter.combiner, piecesAfter.expression));
     }
 
     @Override
-    public void delete (JTree tree)
+    public void delete (JTree tree, boolean canceled)
     {
         if (! source.isFromTopDocument ()) return;
-        ModelEditPanel.instance.undoManager.add (new DeleteEquation (this));
+        ModelEditPanel.instance.undoManager.add (new DeleteEquation (this, canceled));
     }
 }

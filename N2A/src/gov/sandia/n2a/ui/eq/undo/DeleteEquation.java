@@ -11,6 +11,7 @@ import java.util.List;
 import javax.swing.undo.UndoableEdit;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeEquation;
 
@@ -19,18 +20,21 @@ public class DeleteEquation extends Undoable
     protected List<String> path;  // to variable node
     protected int          equationCount;  // after deleting this equation
     protected int          index; // where to insert among siblings
+    protected boolean      canceled;
     protected String       name;  // includes the leading @
+    protected String       combiner;
     protected String       value;
     protected boolean      neutralized;
 
-    public DeleteEquation (NodeEquation node)
+    public DeleteEquation (NodeEquation node, boolean canceled)
     {
-        name  = node.source.key ();
-        value = node.source.get ();
-
         NodeBase variable = (NodeBase) node.getParent ();
-        index = variable.getIndex (node);
-        path  = variable.getKeyPath ();
+        index         = variable.getIndex (node);
+        this.canceled = canceled;
+        path          = variable.getKeyPath ();
+        name          = node.source.key ();
+        combiner      = new Variable.ParsedValue (variable.source.get ()).combiner;
+        value         = node.source.get ();
 
         // Note that equationCount is zero at start of constructor
         for (MNode n : variable.source)
@@ -45,13 +49,13 @@ public class DeleteEquation extends Undoable
     public void undo ()
     {
         super.undo ();
-        AddEquation.create (path, equationCount, index, name, value);
+        AddEquation.create (path, equationCount, index, name, combiner, value);
     }
 
     public void redo ()
     {
         super.redo ();
-        AddEquation.destroy (path, name);
+        AddEquation.destroy (path, equationCount, canceled, name, combiner);
     }
 
     public boolean replaceEdit (UndoableEdit edit)

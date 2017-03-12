@@ -118,7 +118,7 @@ public class NodeAnnotation extends NodeBase
         String input = (String) getUserObject ();
         if (input.isEmpty ())
         {
-            delete (tree);
+            delete (tree, true);
             return;
         }
 
@@ -140,8 +140,10 @@ public class NodeAnnotation extends NodeBase
             }
             else
             {
-                NodeBase nodeAfter = parent.child (name);
-                if (nodeAfter != null  &&  nodeAfter.source.isFromTopDocument ()) name = oldName;
+                MPart mparent = source.getParent ();
+                MPart partAfter = (MPart) mparent.child (name);
+                if (partAfter != null  &&  partAfter.isFromTopDocument ()) name = oldName;
+
             }
         }
         if (name.equals (oldName)  &&  value.equals (oldValue))
@@ -157,9 +159,9 @@ public class NodeAnnotation extends NodeBase
     }
 
     @Override
-    public void delete (JTree tree)
+    public void delete (JTree tree, boolean canceled)
     {
         if (! source.isFromTopDocument ()) return;
-        ModelEditPanel.instance.undoManager.add (new DeleteAnnotation (this));
+        ModelEditPanel.instance.undoManager.add (new DeleteAnnotation (this, canceled));
     }
 }

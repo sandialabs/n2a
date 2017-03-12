@@ -14,17 +14,17 @@ import javax.swing.undo.UndoableEdit;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
-import gov.sandia.n2a.ui.eq.tree.NodePart;
+import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
-public class DeletePart extends Undoable
+public class DeleteVariable extends Undoable
 {
-    protected List<String> path;  // to containing part
+    protected List<String> path;  // to variable node
     protected int          index; // where to insert among siblings
     protected boolean      canceled;
     protected MNode        savedSubtree;
     protected boolean      neutralized;
 
-    public DeletePart (NodePart node, boolean canceled)
+    public DeleteVariable (NodeVariable node, boolean canceled)
     {
         NodeBase container = (NodeBase) node.getParent ();
         path          = container.getKeyPath ();
@@ -32,27 +32,27 @@ public class DeletePart extends Undoable
         this.canceled = canceled;
 
         savedSubtree = new MVolatile (node.source.key (), "");
-        savedSubtree.merge (node.source.getSource ());  // Only take the top-doc data, not the collated tree.
+        savedSubtree.merge (node.source.getSource ());
     }
 
     public void undo ()
     {
         super.undo ();
-        AddPart.create (path, index, savedSubtree, false);
+        AddVariable.create (path, index, savedSubtree, false);
     }
 
     public void redo ()
     {
         super.redo ();
-        AddPart.destroy (path, canceled, savedSubtree.key ());
+        AddVariable.destroy (path, canceled, savedSubtree.key ());
     }
 
     public boolean replaceEdit (UndoableEdit edit)
     {
-        if (edit instanceof AddPart)
+        if (edit instanceof AddVariable)
         {
-            AddPart ap = (AddPart) edit;
-            if (path.equals (ap.path)  &&  savedSubtree.key ().equals (ap.createSubtree.key ())  &&  ap.nameIsGenerated)
+            AddVariable av = (AddVariable) edit;
+            if (path.equals (av.path)  &&  savedSubtree.key ().equals (av.createSubtree.key ())  &&  av.nameIsGenerated)
             {
                 neutralized = true;
                 return true;

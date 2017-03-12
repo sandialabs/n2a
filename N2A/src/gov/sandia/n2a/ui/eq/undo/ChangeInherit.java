@@ -58,9 +58,10 @@ public class ChangeInherit extends Undoable
 
         NodePart parent = (NodePart) node.getParent ();
         parent.build ();
+        parent.findConnections ();
         parent.filter (model.filterLevel);
-        model.nodeStructureChanged (parent);
 
+        if (parent.visible (model.filterLevel)) model.nodeStructureChanged (parent);
         mep.panelEquations.updateVisibility (parent.child ("$inherit").getPath ());
     }
 }

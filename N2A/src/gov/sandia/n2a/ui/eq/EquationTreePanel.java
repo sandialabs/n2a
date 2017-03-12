@@ -154,21 +154,7 @@ public class EquationTreePanel extends JPanel
             @Override
             public void editingStopped (ChangeEvent e)
             {
-                NodeBase parent = (NodeBase) editor.editingNode.getParent ();  // Could be null if we edit the root node.
-                TreePath parentPath = null;
-                int index = 0;
-                if (parent != null)
-                {
-                    parentPath = new TreePath (parent.getPath ());
-                    index = model.getIndexOfChild (parent, editor.editingNode) - 1;
-                }
-
                 editor.editingNode.applyEdit (tree);
-
-                TreePath path = tree.getSelectionPath ();
-                if (path == null) path = updateSelection (parentPath, index);  // If we lose the selection, most likely applyEdit() deleted the node, and that function assumes the caller handles selection.
-                updateOrder ();
-                if (parent != null) updateOverrides (path);
             }
 
             @Override
@@ -184,15 +170,7 @@ public class EquationTreePanel extends JPanel
                 NodeBase parent = (NodeBase) node.getParent ();
                 if (((String) o).isEmpty ())
                 {
-                    // Similar behavior to deleteSelected(), but set selection to previous node, since it is likely that this node was added from there.
-                    int index = model.getIndexOfChild (parent, node) - 1;
-
-                    node.delete (tree);
-
-                    TreePath path = updateSelection (new TreePath (parent.getPath ()), index);
-                    updateOrder ();
-                    updateOverrides (path);
-                    repaintSouth (path);
+                    node.delete (tree, true);
                 }
                 else  // The text has been restored to the original value set in node's user object just before edit. However, that has column alignment removed, so re-establish it.
                 {
@@ -906,23 +884,7 @@ public class EquationTreePanel extends JPanel
     public void deleteSelected ()
     {
         NodeBase selected = getSelected ();
-        if (selected != null)
-        {
-            if (selected.isRoot ()  ||  selected instanceof NodeAnnotation  ||  selected instanceof NodeReference)
-            {
-                selected.delete (tree);
-            }
-            else
-            {
-                NodeBase parent = (NodeBase) selected.getParent ();
-                int index = parent.getIndex (selected);
-                TreeNode[] path = selected.getPath ();
-
-                selected.delete (tree);
-
-                updateVisibility (path, index);
-            }
-        }
+        if (selected != null) selected.delete (tree, false);
     }
 
     public void moveSelected (int direction)
@@ -942,7 +904,7 @@ public class EquationTreePanel extends JPanel
 
                     NodeAnnotations metadataNode = null;
                     String order = null;
-                    Enumeration i = parent.children ();  // unfiltered, since we want to store order of all nodes, not just visible ones
+                    Enumeration<?> i = parent.children ();  // unfiltered, since we want to store order of all nodes, not just visible ones
                     while (i.hasMoreElements ())
                     {
                         NodeBase c = (NodeBase) i.nextElement ();
@@ -993,59 +955,6 @@ public class EquationTreePanel extends JPanel
         }
     }
 
-    /**
-        Convenience function to all all the relevant update steps when a node is deleted from the tree.
-    **/
-    public void updateAfterDelete (TreeNode path[], int index)
-    {
-        updateVisibility (path, index);
-        updateOrder (path);
-    }
-
-    /**
-        Re-establish a reasonable selection after a node is deleted.
-        @param path Tree path to the node that should contain the selection.
-        @param index Position within the children under the node. -1 means to select the container node itself.
-        Value is the filtered index rather than the raw index.
-        @deprecated
-    **/
-    public TreePath updateSelection (TreePath path, int index)
-    {
-        if (path == null  ||  path.getPathCount () == 0)
-        {
-            tree.setSelectionRow (0);
-            return tree.getSelectionPath ();
-        }
-
-        // Verify that parent node is still in tree.
-        // In some cases (such as metadata), deleting the only remaining node can also cause the deletion of the parent.
-        NodeBase parent = (NodeBase) path.getLastPathComponent ();
-        if (parent != root  &&  (parent.getParent () == null  ||  ! parent.visible (model.filterLevel)))  // Parent was removed as well.
-        {
-            return updateSelection (path.getParentPath (), -1);
-        }
-
-        index = Math.min (index, model.getChildCount (parent) - 1);
-        if (index >= 0) path = new TreePath (((NodeBase) model.getChild (parent, index)).getPath ());
-        tree.setSelectionPath (path);
-        return path;
-    }
-
-    /**
-        Redisplay any nodes that might have changed override state.
-        @deprecated
-    **/
-    public void updateOverrides (TreePath path)
-    {
-        for (int i = path.getPathCount () - 1; i > 0; i--)
-        {
-            NodeBase n = (NodeBase) path.getPathComponent (i);
-            model.nodeChanged (n);
-            Rectangle bounds = tree.getPathBounds (new TreePath (n.getPath ()));
-            tree.paintImmediately (bounds);
-        }
-    }
-
     public void updateVisibility (TreeNode path[])
     {
         if (path.length < 2)
@@ -1067,8 +976,8 @@ public class EquationTreePanel extends JPanel
         The trailing nodes are allowed to be disconnected from root in the filtered view of the model,
         and they are allowed to be deleted nodes. Note: deleted nodes will have null parents.
         Deleted nodes should already be removed from tree, with proper notification handled by caller.
-        @param index Position of the ultimate node in the penultimate (parent) node. Only used if the ultimate
-        node has been deleted.
+        @param index Position of the last node in its parent node. Only used if the last node has been deleted.
+        A value less than 0 causes selection to shift up to the parent.
     **/
     public void updateVisibility (TreeNode path[], int index)
     {
@@ -1178,53 +1087,6 @@ public class EquationTreePanel extends JPanel
     /**
         Records the current order of nodes in "gui.order", provided that metadata field exists.
         Otherwise, we assume the user doesn't care.
-        @deprecated use updateOrder(TreeNode[])
-    **/
-    public void updateOrder ()
-    {
-        // Find $metadata/gui.order for the currently selected node. If it exists, update it.
-        // Note that this is a modified version of moveSelected() which does not actually move
-        // anything, and which only modifies an existing $metadata/gui.order, not create a new one.
-        TreePath path = tree.getSelectionPath ();
-        if (path != null)
-        {
-            NodeBase node   = (NodeBase) path.getLastPathComponent ();
-            NodeBase parent = (NodeBase) node.getParent ();
-            if (parent instanceof NodePart)  // Only parts support $metadata.gui.order
-            {
-                NodeAnnotations metadataNode = null;
-                String order = null;
-                Enumeration i = parent.children ();
-                while (i.hasMoreElements ())
-                {
-                    NodeBase c = (NodeBase) i.nextElement ();
-                    String key = c.source.key ();
-                    if (order == null) order = key;
-                    else               order = order + "," + key;
-                    if (key.equals ("$metadata")) metadataNode = (NodeAnnotations) c;
-                }
-                if (metadataNode == null) return;
-
-                i = metadataNode.children ();
-                while (i.hasMoreElements ())
-                {
-                    NodeAnnotation a = (NodeAnnotation) i.nextElement ();
-                    if (a.source.key ().equals ("gui.order"))
-                    {
-                        a.source.set (order);
-                        FontMetrics fm = a.getFontMetrics (tree);
-                        metadataNode.updateTabStops (fm);
-                        model.nodeChanged (a);
-                        return;
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-        Records the current order of nodes in "gui.order", provided that metadata field exists.
-        Otherwise, we assume the user doesn't care.
     **/
     public void updateOrder (TreeNode path[])
     {
@@ -1244,7 +1106,7 @@ public class EquationTreePanel extends JPanel
         // anything, and which only modifies an existing $metadata/gui.order, not create a new one.
         NodeAnnotations metadataNode = null;
         String order = null;
-        Enumeration i = parent.children ();
+        Enumeration<?> i = parent.children ();
         while (i.hasMoreElements ())
         {
             NodeBase c = (NodeBase) i.nextElement ();

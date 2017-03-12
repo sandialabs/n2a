@@ -57,10 +57,10 @@ public class AddAnnotation extends Undoable
     public void undo ()
     {
         super.undo ();
-        destroy (path, name, "$metadata");
+        destroy (path, false, name, "$metadata");
     }
 
-    public static void destroy (List<String> path, String name, String blockName)
+    public static void destroy (List<String> path, boolean canceled, String name, String blockName)
     {
         // Retrieve created node
         NodeBase parent = locateNode (path);
@@ -76,7 +76,8 @@ public class AddAnnotation extends Undoable
 
         boolean containerIsVisible = true;
         TreeNode[] createdPath = createdNode.getPath ();
-        int filteredIndex = container.getIndexFiltered (createdNode);
+        int index = container.getIndexFiltered (createdNode);
+        if (canceled) index--;
 
         MPart metadata = (MPart) parent.source.child (blockName);
         metadata.clear (name);
@@ -108,7 +109,8 @@ public class AddAnnotation extends Undoable
             container.updateTabStops (fm);
             container.allNodesChanged (model);
         }
-        mep.panelEquations.updateAfterDelete (createdPath, filteredIndex);
+        mep.panelEquations.updateOrder (createdPath);
+        mep.panelEquations.updateVisibility (createdPath, index);
     }
 
     public void redo ()

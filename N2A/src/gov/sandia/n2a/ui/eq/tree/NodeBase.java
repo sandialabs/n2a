@@ -358,7 +358,7 @@ public class NodeBase extends DefaultMutableTreeNode
         System.out.println ("NodeBase.applyEdit: " + this);
     }
 
-    public void delete (JTree tree)
+    public void delete (JTree tree, boolean canceled)
     {
         // Default action is to ignore request. Only nodes that can actually be deleted need to override this.
     }
