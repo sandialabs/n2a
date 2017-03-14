@@ -15,9 +15,12 @@ import gov.sandia.n2a.ui.eq.undo.ChangeInherit;
 import gov.sandia.n2a.ui.eq.undo.DeleteInherit;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
+import java.awt.Rectangle;
+
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
+import javax.swing.tree.TreePath;
 
 public class NodeInherit extends NodeBase
 {
@@ -60,7 +63,19 @@ public class NodeInherit extends NodeBase
         else                  value = "";
 
         String oldValue = source.get ();
-        if (value.equals (oldValue)) return;
+        if (value.equals (oldValue))  // Nothing to do
+        {
+            if (! parts[0].equals ("$inherit"))  // name change not allowed
+            {
+                // Repaint the original value
+                setUserObject (source.key () + "=" + source.get ());
+                FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+                model.nodeChanged (this);
+                Rectangle bounds = tree.getPathBounds (new TreePath (getPath ()));
+                if (bounds != null) tree.paintImmediately (bounds);
+            }
+            return;
+        }
 
         ModelEditPanel.instance.undoManager.add (new ChangeInherit (this, oldValue, value));
     }

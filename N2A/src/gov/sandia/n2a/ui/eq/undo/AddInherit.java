@@ -59,6 +59,7 @@ public class AddInherit extends Undoable
         parent.filter (model.filterLevel);
         if (parent.visible (model.filterLevel)) model.nodeStructureChanged (parent);
 
+        mep.panelEquations.updateOrder (nodePath);
         mep.panelEquations.updateVisibility (nodePath, index);
     }
 
@@ -83,7 +84,9 @@ public class AddInherit extends Undoable
         parent.filter (model.filterLevel);
         model.nodeStructureChanged (parent);  // Since $inherit is being added, parent will almost certainly become visible, if it's not already.
 
-        mep.panelEquations.updateVisibility (parent.child ("$inherit").getPath ());
+        TreeNode[] createdPath = parent.child ("$inherit").getPath ();
+        mep.panelEquations.updateOrder (createdPath);
+        mep.panelEquations.updateVisibility (createdPath);
     }
 
     public boolean replaceEdit (UndoableEdit edit)

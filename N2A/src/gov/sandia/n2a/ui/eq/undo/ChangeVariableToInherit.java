@@ -10,6 +10,7 @@ package gov.sandia.n2a.ui.eq.undo;
 import java.util.List;
 
 import javax.swing.JTree;
+import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 
@@ -64,7 +65,9 @@ public class ChangeVariableToInherit extends Undoable
         parent.filter (model.filterLevel);
         if (parent.visible (model.filterLevel)) model.nodeStructureChanged (parent);
 
-        mep.panelEquations.updateVisibility (parent.child (nameBefore).getPath ());
+        TreeNode[] nodePath = parent.child (nameBefore).getPath ();
+        mep.panelEquations.updateOrder (nodePath);
+        mep.panelEquations.updateVisibility (nodePath);
     }
 
     public void redo ()
@@ -90,6 +93,8 @@ public class ChangeVariableToInherit extends Undoable
         parent.filter (model.filterLevel);
         model.nodeStructureChanged (parent);
 
-        mep.panelEquations.updateVisibility (parent.child ("$inherit").getPath ());
+        TreeNode[] nodePath = parent.child ("$inherit").getPath ();
+        mep.panelEquations.updateOrder (nodePath);
+        mep.panelEquations.updateVisibility (nodePath);
     }
 }

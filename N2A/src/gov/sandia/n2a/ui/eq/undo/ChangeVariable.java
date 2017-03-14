@@ -11,6 +11,7 @@ import java.awt.FontMetrics;
 import java.util.List;
 
 import javax.swing.JTree;
+import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.UndoableEdit;
 
@@ -131,7 +132,10 @@ public class ChangeVariable extends Undoable
         nodeAfter.updateColumnWidths (fm);
         parent.updateTabStops (fm);
         parent.allNodesChanged (model);
-        mep.panelEquations.updateVisibility (nodeAfter.getPath ());
+
+        TreeNode[] nodePath = nodeAfter.getPath ();
+        mep.panelEquations.updateOrder (nodePath);
+        mep.panelEquations.updateVisibility (nodePath);
     }
 
     public boolean replaceEdit (UndoableEdit edit)

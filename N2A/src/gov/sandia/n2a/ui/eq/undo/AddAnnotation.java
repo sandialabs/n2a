@@ -88,7 +88,8 @@ public class AddAnnotation extends Undoable
             {
                 parent.source.clear (blockName);
                 model.removeNodeFromParent (container);
-                // No need to update tabs in grandparent, because block node doesn't participate.
+                // No need to update order, because we just destroyed $metadata, where order is stored.
+                // No need to update tab stops in grandparent, because block node doesn't participate.
                 containerIsVisible = false;
             }
         }
@@ -109,7 +110,6 @@ public class AddAnnotation extends Undoable
             container.updateTabStops (fm);
             container.allNodesChanged (model);
         }
-        mep.panelEquations.updateOrder (createdPath);
         mep.panelEquations.updateVisibility (createdPath, index);
     }
 
@@ -176,7 +176,9 @@ public class AddAnnotation extends Undoable
         {
             container.updateTabStops (fm);
             container.allNodesChanged (model);
-            mep.panelEquations.updateVisibility (createdNode.getPath ());
+            TreeNode[] createdPath = createdNode.getPath ();
+            mep.panelEquations.updateOrder (createdPath);
+            mep.panelEquations.updateVisibility (createdPath);
         }
 
         return createdNode;

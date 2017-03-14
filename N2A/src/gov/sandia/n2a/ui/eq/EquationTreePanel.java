@@ -22,8 +22,8 @@ import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
-import gov.sandia.n2a.ui.eq.tree.NodeReference;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
+import gov.sandia.n2a.ui.eq.undo.Move;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.RunPanel;
 
@@ -890,67 +890,22 @@ public class EquationTreePanel extends JPanel
     public void moveSelected (int direction)
     {
         TreePath path = tree.getSelectionPath ();
-        if (path != null)
+        if (path == null) return;
+
+        NodeBase nodeBefore = (NodeBase) path.getLastPathComponent ();
+        NodeBase parent     = (NodeBase) nodeBefore.getParent ();
+        if (parent instanceof NodePart)  // Only parts support $metadata.gui.order
         {
-            NodeBase node   = (NodeBase) path.getLastPathComponent ();
-            NodeBase parent = (NodeBase) node.getParent ();
-            if (parent instanceof NodePart)  // Only parts support $metadata.gui.order
+            // First check if we can move in the filtered (visible) list.
+            int indexBefore = model.getIndexOfChild (parent, nodeBefore);
+            int indexAfter  = indexBefore + direction;
+            if (indexAfter >= 0  &&  indexAfter < model.getChildCount (parent))
             {
-                int index = model.getIndexOfChild (parent, node) + direction;
-                if (index >= 0  &&  index < model.getChildCount (parent))
-                {
-                    model.removeNodeFromParent (node);
-                    model.insertNodeInto (node, parent, index);
-
-                    NodeAnnotations metadataNode = null;
-                    String order = null;
-                    Enumeration<?> i = parent.children ();  // unfiltered, since we want to store order of all nodes, not just visible ones
-                    while (i.hasMoreElements ())
-                    {
-                        NodeBase c = (NodeBase) i.nextElement ();
-                        String key = c.source.key ();
-                        if (order == null) order = key;
-                        else               order = order + "," + key;
-                        if (key.equals ("$metadata")) metadataNode = (NodeAnnotations) c;
-                    }
-
-                    MPart metadataPart = null;
-                    if (metadataNode == null)
-                    {
-                        metadataPart = (MPart) parent.source.set ("", "$metadata");
-                        metadataNode = new NodeAnnotations (metadataPart);
-                        model.insertNodeIntoUnfiltered (metadataNode, parent, 0);
-                        if (order.isEmpty ()) order = "$metadata";
-                        else                  order = "$metadata" + "," + order;
-                    }
-                    NodeAnnotation orderNode = null;
-                    i = metadataNode.children ();
-                    while (i.hasMoreElements ())
-                    {
-                        NodeAnnotation a = (NodeAnnotation) i.nextElement ();
-                        if (a.source.key ().equals ("gui.order"))
-                        {
-                            orderNode = a;
-                            break;
-                        }
-                    }
-                    if (orderNode == null)
-                    {
-                        orderNode = new NodeAnnotation ((MPart) metadataNode.source.set (order, "gui.order"));
-                        model.insertNodeIntoUnfiltered (orderNode, metadataNode, metadataNode.getChildCount ());
-                    }
-                    else
-                    {
-                        orderNode.source.set (order);
-                        FontMetrics fm = orderNode.getFontMetrics (tree);
-                        // Don't need to call updateColumnWidths(), because size of string "gui.order" is constant.
-                        metadataNode.updateTabStops (fm);  // necessary to get tab stops, since we don't store them
-                        model.nodeChanged (orderNode);
-                    }
-
-                    path = new TreePath (model.getPathToRoot (node));
-                    tree.setSelectionPath (path);
-                }
+                // Then convert to unfiltered indices.
+                NodeBase nodeAfter = (NodeBase) model.getChild (parent, indexAfter);
+                indexBefore = parent.getIndex (nodeBefore);
+                indexAfter  = parent.getIndex (nodeAfter);
+                modelPanel.undoManager.add (new Move ((NodePart) parent, indexBefore, indexAfter));
             }
         }
     }
@@ -975,7 +930,7 @@ public class EquationTreePanel extends JPanel
         @param path Every node from root to changed node, including changed node itself.
         The trailing nodes are allowed to be disconnected from root in the filtered view of the model,
         and they are allowed to be deleted nodes. Note: deleted nodes will have null parents.
-        Deleted nodes should already be removed from tree, with proper notification handled by caller.
+        Deleted nodes should already be removed from tree by the caller, with proper notification.
         @param index Position of the last node in its parent node. Only used if the last node has been deleted.
         A value less than 0 causes selection to shift up to the parent.
     **/
@@ -1087,6 +1042,8 @@ public class EquationTreePanel extends JPanel
     /**
         Records the current order of nodes in "gui.order", provided that metadata field exists.
         Otherwise, we assume the user doesn't care.
+        @param path To the node that changed (added, deleted, moved). In general, this node's
+        parent will be the part that is tracking the order of its children.
     **/
     public void updateOrder (TreeNode path[])
     {

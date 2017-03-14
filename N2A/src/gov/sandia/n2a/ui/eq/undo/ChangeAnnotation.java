@@ -11,6 +11,7 @@ import java.awt.FontMetrics;
 import java.util.List;
 
 import javax.swing.JTree;
+import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotRedoException;
 
 import gov.sandia.n2a.eqset.MPart;
@@ -118,6 +119,9 @@ public class ChangeAnnotation extends Undoable
         nodeAfter.updateColumnWidths (fm);
         parent.updateTabStops (fm);
         parent.allNodesChanged (model);
-        mep.panelEquations.updateVisibility (nodeAfter.getPath ());
+
+        TreeNode[] nodePath = nodeAfter.getPath ();
+        mep.panelEquations.updateOrder (nodePath);
+        mep.panelEquations.updateVisibility (nodePath);
     }
 }

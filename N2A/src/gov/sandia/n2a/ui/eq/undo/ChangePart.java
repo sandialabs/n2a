@@ -10,6 +10,7 @@ package gov.sandia.n2a.ui.eq.undo;
 import java.util.List;
 
 import javax.swing.JTree;
+import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotRedoException;
 
 import gov.sandia.n2a.db.MNode;
@@ -106,6 +107,9 @@ public class ChangePart extends Undoable
         nodeAfter.build ();
         nodeBefore.findConnections ();
         nodeAfter.filter (model.filterLevel);
-        mep.panelEquations.updateVisibility (nodeAfter.getPath ());  // Will include nodeStructureChanged(), if necessary.
+
+        TreeNode[] nodePath = nodeAfter.getPath ();
+        mep.panelEquations.updateOrder (nodePath);
+        mep.panelEquations.updateVisibility (nodePath);  // Will include nodeStructureChanged(), if necessary.
     }
 }

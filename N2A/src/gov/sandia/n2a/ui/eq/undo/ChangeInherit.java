@@ -10,6 +10,7 @@ package gov.sandia.n2a.ui.eq.undo;
 import java.util.List;
 
 import javax.swing.JTree;
+import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotRedoException;
 
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
@@ -62,6 +63,9 @@ public class ChangeInherit extends Undoable
         parent.filter (model.filterLevel);
 
         if (parent.visible (model.filterLevel)) model.nodeStructureChanged (parent);
-        mep.panelEquations.updateVisibility (parent.child ("$inherit").getPath ());
+
+        TreeNode[] nodePath = parent.child ("$inherit").getPath ();
+        mep.panelEquations.updateOrder (nodePath);
+        mep.panelEquations.updateVisibility (nodePath);
     }
 }
