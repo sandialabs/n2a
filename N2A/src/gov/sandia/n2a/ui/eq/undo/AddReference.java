@@ -68,9 +68,17 @@ public class AddReference extends Undoable
             ChangeReference change = (ChangeReference) edit;
             if (name.equals (change.nameBefore))
             {
-                name  = change.nameAfter;
-                value = change.valueAfter;
-                return true;
+                int pathSize   =        path.size ();
+                int changeSize = change.path.size ();
+                int difference = changeSize - pathSize;
+                if (difference == 0  ||  difference == 1)
+                {
+                    for (int i = 0; i < pathSize; i++) if (! path.get (i).equals (change.path.get (i))) return false;
+
+                    name  = change.nameAfter;
+                    value = change.valueAfter;
+                    return true;
+                }
             }
         }
         return false;

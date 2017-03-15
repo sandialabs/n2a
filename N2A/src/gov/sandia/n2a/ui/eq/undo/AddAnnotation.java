@@ -26,8 +26,8 @@ import gov.sandia.n2a.ui.eq.tree.NodePart;
 
 public class AddAnnotation extends Undoable
 {
-    protected List<String> path;  // to parent of $metadata node
-    protected int          index; // where to insert among siblings
+    protected List<String> path;  // to the parent of the block. In the case of a variable, the block is not directly displayed.
+    protected int          index; // Where to insert among siblings. Unfiltered.
     protected String       name;
     protected String       value;
     public    NodeBase     createdNode;  ///< Used by caller to initiate editing. Only valid immediately after call to redo().
@@ -79,18 +79,21 @@ public class AddAnnotation extends Undoable
         int index = container.getIndexFiltered (createdNode);
         if (canceled) index--;
 
-        MPart metadata = (MPart) parent.source.child (blockName);
-        metadata.clear (name);
-        if (metadata.child (name) == null)  // There is no overridden value, so this node goes away completely.
+        MPart block = (MPart) parent.source.child (blockName);
+        block.clear (name);
+        if (block.child (name) == null)  // There is no overridden value, so this node goes away completely.
         {
             model.removeNodeFromParent (createdNode);
-            if (container.getChildCount () == 0  &&  container != parent)  // block is now empty
+            if (block.length () == 0)
             {
-                parent.source.clear (blockName);
-                model.removeNodeFromParent (container);
-                // No need to update order, because we just destroyed $metadata, where order is stored.
-                // No need to update tab stops in grandparent, because block node doesn't participate.
-                containerIsVisible = false;
+                parent.source.clear (blockName);  // commit suicide
+                if (parent instanceof NodePart)
+                {
+                    model.removeNodeFromParent (container);
+                    // No need to update order, because we just destroyed $metadata, where order is stored.
+                    // No need to update tab stops in grandparent, because block nodes don't offer any tab stops.
+                    containerIsVisible = false;
+                }
             }
         }
         else  // Just exposed an overridden value, so update display.
@@ -191,9 +194,17 @@ public class AddAnnotation extends Undoable
             ChangeAnnotation change = (ChangeAnnotation) edit;
             if (name.equals (change.nameBefore))
             {
-                name  = change.nameAfter;
-                value = change.valueAfter;
-                return true;
+                int pathSize   =        path.size ();
+                int changeSize = change.path.size ();
+                int difference = changeSize - pathSize;
+                if (difference == 0  ||  difference == 1)
+                {
+                    for (int i = 0; i < pathSize; i++) if (! path.get (i).equals (change.path.get (i))) return false;
+
+                    name  = change.nameAfter;
+                    value = change.valueAfter;
+                    return true;
+                }
             }
         }
         return false;

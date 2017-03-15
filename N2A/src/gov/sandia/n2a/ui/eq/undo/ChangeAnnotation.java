@@ -19,6 +19,7 @@ import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
+import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class ChangeAnnotation extends Undoable
 {
@@ -44,7 +45,7 @@ public class ChangeAnnotation extends Undoable
     public void undo ()
     {
         super.undo ();
-        apply (path, nameAfter, valueAfter, nameBefore, valueBefore, new NodeFactory ()
+        apply (path, nameAfter, valueAfter, nameBefore, valueBefore, "$metadata", new NodeFactory ()
         {
             public NodeBase create (MPart part)
             {
@@ -56,7 +57,7 @@ public class ChangeAnnotation extends Undoable
     public void redo ()
     {
         super.redo ();
-        apply (path, nameBefore, valueBefore, nameAfter, valueAfter, new NodeFactory ()
+        apply (path, nameBefore, valueBefore, nameAfter, valueAfter, "$metadata", new NodeFactory ()
         {
             public NodeBase create (MPart part)
             {
@@ -65,7 +66,7 @@ public class ChangeAnnotation extends Undoable
         });
     }
 
-    public static void apply (List<String> path, String nameBefore, String valueBefore, String nameAfter, String valueAfter, NodeFactory factory)
+    public static void apply (List<String> path, String nameBefore, String valueBefore, String nameAfter, String valueAfter, String blockName, NodeFactory factory)
     {
         NodeBase parent = locateNode (path);
         if (parent == null) throw new CannotRedoException ();
@@ -86,7 +87,9 @@ public class ChangeAnnotation extends Undoable
         else
         {
             // Update database
-            MPart mparent = parent.source;
+            MPart mparent;
+            if (parent instanceof NodeVariable) mparent = (MPart) parent.source.child (blockName);
+            else                                mparent =         parent.source;
             MPart newPart = (MPart) mparent.set (valueAfter, nameAfter);  // should directly change destinationNode if it exists
             mparent.clear (nameBefore);
             MPart oldPart = (MPart) mparent.child (nameBefore);

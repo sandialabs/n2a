@@ -68,7 +68,7 @@ public class DeleteAnnotation extends Undoable
         if (edit instanceof AddAnnotation)
         {
             AddAnnotation aa = (AddAnnotation) edit;
-            if (name.equals (aa.name)  &&  aa.value == null)  // null value means the edit has not merged a change node
+            if (path.equals (aa.path)  &&  name.equals (aa.name)  &&  aa.value == null)  // null value means the edit has not merged a change node
             {
                 neutralized = true;
                 return true;

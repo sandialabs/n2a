@@ -62,8 +62,8 @@ public class DeleteEquation extends Undoable
     {
         if (edit instanceof AddEquation)
         {
-            AddEquation aa = (AddEquation) edit;
-            if (name.equals (aa.name)  &&  aa.value == null)  // null value means the edit has not merged a change node yet
+            AddEquation ae = (AddEquation) edit;
+            if (path.equals (ae.path)  &&  name.equals (ae.name)  &&  ae.value == null)  // null value means the edit has not merged a change node yet
             {
                 neutralized = true;
                 return true;

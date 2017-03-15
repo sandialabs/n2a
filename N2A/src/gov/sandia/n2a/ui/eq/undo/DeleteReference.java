@@ -68,7 +68,7 @@ public class DeleteReference extends Undoable
         if (edit instanceof AddReference)
         {
             AddReference ar = (AddReference) edit;
-            if (name.equals (ar.name)  &&  ar.value == null)  // null value means the edit has not merged a change node
+            if (path.equals (ar.path)  &&  name.equals (ar.name)  &&  ar.value == null)  // null value means the edit has not merged a change node
             {
                 neutralized = true;
                 return true;
