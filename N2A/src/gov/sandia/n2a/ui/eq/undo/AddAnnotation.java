@@ -162,7 +162,7 @@ public class AddAnnotation extends Undoable
 
         NodeBase createdNode = container.child (name);
         boolean alreadyExists = createdNode != null;
-        MPart createdPart = (MPart) block.set (value, name);
+        MPart createdPart = (MPart) block.set (name, value);
         if (! alreadyExists) createdNode = factory.create (createdPart);
 
         FontMetrics fm = createdNode.getFontMetrics (tree);

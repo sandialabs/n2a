@@ -176,10 +176,10 @@ public class MDir extends MNode
         be consistent with the newly-set value. In the case of a new file, the index takes precedence, so the
         value is ignored. It is sufficient to pass value="" to create a new file.
         
-        @param value The destination file name for a move. Ignored if a file named by the given index does not exist.
         @param index The file name for a new document, or the source file name for a move.
+        @param value The destination file name for a move. Ignored if a file named by the given index does not exist.
      */
-    public synchronized MNode set (String value, String index)
+    public synchronized MNode set (String index, String value)
     {
         MDoc result = (MDoc) child (index);
         if (result == null)  // new document

@@ -52,7 +52,7 @@ public class ChangeVariableToInherit extends Undoable
         MPart mparent = parent.source;
         mparent.clear ("$inherit");
         String nameBefore = treeBefore.key ();
-        mparent.set ("", nameBefore).merge (treeBefore);
+        mparent.set (nameBefore, "").merge (treeBefore);
 
         // Update the GUI
 
@@ -80,7 +80,7 @@ public class ChangeVariableToInherit extends Undoable
         // Update database
         MPart mparent = parent.source;
         mparent.clear (treeBefore.key ());
-        mparent.set (valueAfter, "$inherit");
+        mparent.set ("$inherit", valueAfter);
 
         // Update GUI
 

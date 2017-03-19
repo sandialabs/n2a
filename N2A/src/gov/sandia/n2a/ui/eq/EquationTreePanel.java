@@ -635,10 +635,10 @@ public class EquationTreePanel extends JPanel
             final Backend simulator = UMFPluginManager.getBackend (simulatorName);
             MNode runs = AppData.runs;
             String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + jobCount++;
-            runs.set ("", jobKey);  // Create the dir and model doc
+            runs.set (jobKey, "");  // Create the dir and model doc
             final MNode job = runs.child (jobKey);
             job.merge (root.source);
-            job.set ("\"" + record.key () + "\"", "$inherit");
+            job.set ("$inherit", "\"" + record.key () + "\"");
             ((MDoc) job).save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
 
             new Thread ()
@@ -858,7 +858,7 @@ public class EquationTreePanel extends JPanel
         MNode result = models.child (name);
         if (result == null)
         {
-            result = models.set ("", name);
+            result = models.set (name, "");
         }
         else
         {
@@ -870,7 +870,7 @@ public class EquationTreePanel extends JPanel
                 result = models.child (name + suffix);
                 if (result == null)
                 {
-                    result = models.set ("", name + suffix);
+                    result = models.set (name + suffix, "");
                     break;
                 }
                 suffix++;

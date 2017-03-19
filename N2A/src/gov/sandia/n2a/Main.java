@@ -38,13 +38,13 @@ public class Main
         setUncaughtExceptionHandler (null);
 
         // Set global application properties.
-        AppData.properties.set ("Neurons to Algorithms", "name");
-        AppData.properties.set ("N2A", "abbreviation");
-        AppData.properties.set ("0.92", "version");
-        AppData.properties.set ("Fred Rothganger (PI), Derek Trumbo, Christy Warrender, Brad Aimone, Corinne Teeter, Brandon Rohrer, Steve Verzi, Ann Speed, Asmeret Bier, Felix Wang", "developers");
-        AppData.properties.set ("Copyright &copy; 2013,2016 Sandia Corporation. Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains certain rights in this software.", "copyright");
-        AppData.properties.set ("This software is released under the BSD license.  Please refer to the license information provided in this distribution for the complete text.", "license");
-        AppData.properties.set ("frothga@sandia.gov", "support");
+        AppData.properties.set ("name",         "Neurons to Algorithms");
+        AppData.properties.set ("abbreviation", "N2A");
+        AppData.properties.set ("version",      "0.92");
+        AppData.properties.set ("developers",   "Fred Rothganger (PI), Derek Trumbo, Christy Warrender, Brad Aimone, Corinne Teeter, Brandon Rohrer, Steve Verzi, Ann Speed, Asmeret Bier, Felix Wang");
+        AppData.properties.set ("copyright",    "Copyright &copy; 2013,2016 Sandia Corporation. Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains certain rights in this software.");
+        AppData.properties.set ("license",      "This software is released under the BSD license.  Please refer to the license information provided in this distribution for the complete text.");
+        AppData.properties.set ("support",      "frothga@sandia.gov");
         AppData.checkInitialDB ();
 
         // Load plugins
@@ -82,11 +82,11 @@ public class Main
 
                         MNode winProps = AppData.state.childOrCreate ("WinLayout");
                         winProps.clear ();
-                        winProps.set (mainFrame.getX             (), "x");
-                        winProps.set (mainFrame.getY             (), "y");
-                        winProps.set (mainFrame.getWidth         (), "width");
-                        winProps.set (mainFrame.getHeight        (), "height");
-                        winProps.set (mainFrame.getExtendedState (), "state");
+                        winProps.set ("x",      mainFrame.getX ());
+                        winProps.set ("y",      mainFrame.getY ());
+                        winProps.set ("width",  mainFrame.getWidth ());
+                        winProps.set ("height", mainFrame.getHeight ());
+                        winProps.set ("state",  mainFrame.getExtendedState ());
 
                         AppData.state.save ();
                     }
@@ -100,16 +100,16 @@ public class Main
                 });
 
                 MNode winProps = AppData.state.childOrCreate ("WinLayout");
-                int w = winProps.getOrDefault (-1, "width");
-                int h = winProps.getOrDefault (-1, "height");
-                int x = winProps.getOrDefault (-1, "x");
-                int y = winProps.getOrDefault (-1, "y");
+                int w = winProps.getOrDefaultInt ("width",  "-1");
+                int h = winProps.getOrDefaultInt ("height", "-1");
+                int x = winProps.getOrDefaultInt ("x",      "-1");
+                int y = winProps.getOrDefaultInt ("y",      "-1");
                 if (w >= 0  &&  h >= 0) mainFrame.setSize (w, h);
                 if (x >= 0  &&  y >= 0) mainFrame.setLocation (x, y);
                 else                    mainFrame.setLocationRelativeTo (mainFrame.getParent ());
                 mainFrame.ensureOnScreen (true);
                 mainFrame.setVisible (true);
-                mainFrame.setExtendedState (winProps.getOrDefault (0, "state"));
+                mainFrame.setExtendedState (winProps.getOrDefaultInt ("state", "0"));
 
                 setUncaughtExceptionHandler (mainFrame);
                 Dialogs.registerApplicationWindow (mainFrame, AppData.properties.get ("name"));

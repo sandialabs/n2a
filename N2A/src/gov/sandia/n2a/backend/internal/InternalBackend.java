@@ -75,9 +75,9 @@ public class InternalBackend extends Backend
 
                 // Any new metadata generated after MPart is collated must be injected back into job
                 String duration = digestedModel.getNamedValue ("duration");
-                if (! duration.isEmpty ()) job.set (duration, "$metadata", "duration");
+                if (! duration.isEmpty ()) job.set ("$metadata", "duration", duration);
 
-                long seed = job.getOrDefault (0l, "$metadata", "seed");
+                long seed = job.getOrDefaultLong ("$metadata", "seed", "0");
                 simulator = new Simulator (new Wrapper (digestedModel), seed);
                 simulator.run ();  // Does not return until simulation is finished.
                 Files.copy (new ByteArrayInputStream ("success".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));

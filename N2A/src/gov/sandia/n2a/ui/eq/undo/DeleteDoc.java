@@ -37,7 +37,7 @@ public class DeleteDoc extends Undoable
     {
         super.undo ();
 
-        MNode doc = AppData.models.set ("", saved.key ());
+        MNode doc = AppData.models.set (saved.key (), "");
         doc.merge (saved);
         ModelEditPanel mep = ModelEditPanel.instance;
         searchIndex = mep.panelSearch.insertDoc (doc, searchIndex);

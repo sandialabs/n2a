@@ -78,7 +78,7 @@ public class AddInherit extends Undoable
         JTree tree = mep.panelEquations.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
-        parent.source.set (value, "$inherit");
+        parent.source.set ("$inherit", value);
         parent.build ();
         parent.findConnections ();
         parent.filter (model.filterLevel);

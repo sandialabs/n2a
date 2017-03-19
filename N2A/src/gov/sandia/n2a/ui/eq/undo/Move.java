@@ -80,10 +80,10 @@ public class Move extends Undoable
         {
             if (metadataNode == null)
             {
-                metadataNode = new NodeAnnotations ((MPart) parent.source.set ("", "$metadata"));
+                metadataNode = new NodeAnnotations ((MPart) parent.source.set ("$metadata", ""));
                 model.insertNodeIntoUnfiltered (metadataNode, parent, indexMetadata);
             }
-            NodeBase orderNode = new NodeAnnotation ((MPart) metadataNode.source.set ("", "gui.order"));
+            NodeBase orderNode = new NodeAnnotation ((MPart) metadataNode.source.set ("gui.order", ""));
             model.insertNodeIntoUnfiltered (orderNode, metadataNode, metadataNode.getChildCount ());
         }
         if (destroyOrder)

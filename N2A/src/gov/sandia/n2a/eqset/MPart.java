@@ -360,7 +360,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         if (isFromTopDocument ()) return;
         // The only way to get past the above line is if original==source
         container.override ();
-        source = (MPersistent) container.source.set (get (), key ());  // Most intermediate nodes will have a value of "", unless they are a variable.
+        source = (MPersistent) container.source.set (key (), get ());  // Most intermediate nodes will have a value of "", unless they are a variable.
     }
 
     /**
@@ -400,7 +400,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         }
     }
 
-    public synchronized MNode set (String value, String index)
+    public synchronized MNode set (String index, String value)
     {
         MPart result = null;
         if (children != null) result = (MPart) children.get (index);
@@ -412,7 +412,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
 
         // We don't have the child, so by construction it is not in any source document.
         override ();  // ensures that source is a member of the top-level document tree
-        MPersistent s = (MPersistent) source.set (value, index);
+        MPersistent s = (MPersistent) source.set (index, value);
         result = new MPart (this, null, s);
         if (children == null) children = new TreeMap<String,MNode> (comparator);
         children.put (index, result);
@@ -435,7 +435,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         MNode toPart = child (toIndex);
         if (toPart == null)  // No node at the destination, so merge at level of top-document.
         {
-            MPersistent toDoc = (MPersistent) source.set ("", toIndex);
+            MPersistent toDoc = (MPersistent) source.set (toIndex, "");
             toDoc.merge (fromDoc);
             MPart c = new MPart (this, null, toDoc);
             children.put (toIndex, c);

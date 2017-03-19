@@ -62,7 +62,7 @@ public class JobC
 
         // Ensure runtime is built
         // TODO: Generalize file handling for remote jobs. This present code will only work with a local directory.
-        ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("localhost", "$metadata", "host"));
+        ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("$metadata", "host", "localhost"));
         String runtimeDir = env.getNamedValue ("c.directory");
         if (runtimeDir.length () == 0)
         {
@@ -135,7 +135,7 @@ public class JobC
 
         e.determineDuration ();
         String duration = e.getNamedValue ("duration");
-        if (! duration.isEmpty ()) job.set (duration, "$metadata", "duration");
+        if (! duration.isEmpty ()) job.set ("$metadata", "duration", duration);
 
         e.setInit (0);
         System.out.println (e.dump (false));

@@ -352,7 +352,7 @@ public class RunPanel extends JPanel
         scripts.clear ();
         for (int i = 0; i < comboScript.getItemCount (); i++)
         {
-            scripts.set (comboScript.getItemAt (i), String.valueOf (i));
+            scripts.set (String.valueOf (i), comboScript.getItemAt (i));
         }
     }
 
@@ -381,7 +381,7 @@ public class RunPanel extends JPanel
                 //   huge  -- too big to store on local system, for example a supercomputer job; must be downloaded/displayed in segments
                 // The current code only handles small files. In particular, we don't actually do Step 1, but instead assume data is local.
                 MNode job = ((NodeJob) node.getParent ()).source;
-                ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("localhost", "$metadata", "host"));
+                ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("$metadata", "host", "localhost"));
 
                 // Step 2 -- Load data
                 // The exact method depends on the current display mode, selected by pushbuttons and stored in viz
@@ -552,7 +552,7 @@ public class RunPanel extends JPanel
                         synchronized (running) {running.remove (job);}
 
                         MDoc doc = (MDoc) job.source;
-                        ExecutionEnv env = ExecutionEnv.factory (doc.getOrDefault ("localhost", "$metadata", "host"));
+                        ExecutionEnv env = ExecutionEnv.factory (doc.getOrDefault ("$metadata", "host", "localhost"));
                         String jobName = doc.key ();
                         try {env.deleteJob (jobName);}  // TODO: Also terminate execution, if possible.
                         catch (Exception e) {}

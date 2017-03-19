@@ -108,7 +108,7 @@ public class NodeVariable extends NodeContainer
             {
                 // Expand
                 source.set (pieces.combiner);
-                source.set (pieces.expression, "@" + pieces.conditional);  // may override an existing equation
+                source.set ("@" + pieces.conditional, pieces.expression);  // may override an existing equation
             }
             else if (equationCount == 1)
             {

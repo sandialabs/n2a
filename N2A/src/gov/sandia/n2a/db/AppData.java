@@ -39,7 +39,7 @@ public class AppData
     {
         File root = new File (System.getProperty ("user.home"), "n2a").getAbsoluteFile ();
         properties = new MVolatile ();
-        properties.set (root.getAbsolutePath (), "resourceDir");
+        properties.set ("resourceDir", root.getAbsolutePath ());
 
         models     = new MDir (new File (root, "models"));
         references = new MDir (new File (root, "references"));
@@ -95,7 +95,7 @@ public class AppData
         {
             for (String s : sourceFiles)
             {
-                MDoc doc = (MDoc) models.set ("", s);
+                MDoc doc = (MDoc) models.set (s, "");
                 BufferedReader reader = new BufferedReader (new InputStreamReader ((AppData.class.getResource ("init/" + s).openStream ())));
                 reader.readLine ();  // dispose of schema line
                 doc.read (reader);

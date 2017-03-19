@@ -78,7 +78,7 @@ class XyceBackend extends Backend
     @Override
     public boolean canRunNow (MNode job)
     {
-        ExecutionEnv execEnv = ExecutionEnv.factory (job.getOrDefault ("localhost", "$metadata", "host"));
+        ExecutionEnv execEnv = ExecutionEnv.factory (job.getOrDefault ("$metadata", "host", "localhost"));
 
         // TODO - estimate what memory and CPU resources this sim needs
         // getting good estimates could be very difficult...
@@ -156,12 +156,12 @@ class XyceBackend extends Backend
                     Files.createFile (Paths.get (jobDir, "started"));
 
                     // Ensure essential metadata is set
-                    if (job.child ("$metadata", "duration"               ) == null) job.set ("1.0",                       "$metadata", "duration");
-                    if (job.child ("$metadata", "seed"                   ) == null) job.set (System.currentTimeMillis (), "$metadata", "seed");
-                    if (job.child ("$metadata", "backend.xyce.integrator") == null) job.set ("trapezoid",                 "$metadata", "backend.xyce.integrator");
+                    if (job.child ("$metadata", "duration"               ) == null) job.set ("$metadata", "duration",                "1.0");
+                    if (job.child ("$metadata", "seed"                   ) == null) job.set ("$metadata", "seed",                    System.currentTimeMillis ());
+                    if (job.child ("$metadata", "backend.xyce.integrator") == null) job.set ("$metadata", "backend.xyce.integrator", "trapezoid");
 
                     // set up job info
-                    ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("localhost", "$metadata", "host"));
+                    ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("$metadata", "host", "localhost"));
                     String xyce    = env.getNamedValue ("xyce.binary");
                     String cirFile = env.file (jobDir, "model.cir");
                     String prnFile = env.file (jobDir, "result");  // "prn" doesn't work, at least on windows

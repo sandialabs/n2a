@@ -12,7 +12,6 @@ import java.io.IOException;
 import java.io.Reader;
 import java.io.StringWriter;
 import java.io.Writer;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
@@ -78,7 +77,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         for (int i = 0; i < indices.length; i++)
         {
             MNode c = result.child (indices[i]);
-            if (c == null) c = result.set ("", indices[i]);
+            if (c == null) c = result.set (indices[i], "");
             result = c;
         }
         return result;  // If no indices are specified, we actually return this node.
@@ -132,7 +131,12 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     **/
     public String get (String... indices)
     {
-        return getOrDefault ("", indices);
+        int length = indices.length;
+        String[] shiftedIndices = new String[length];
+        String index0 = indices[0];
+        for (int i = 1; i < length; i++) shiftedIndices[i-1] = indices[i];
+        shiftedIndices[length-1] = "";
+        return getOrDefault (index0, shiftedIndices);
     }
 
     /**
@@ -146,14 +150,19 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     }
 
     /**
-        Digs down tree as far as possible to retrieve value; returns first arg if necessary.
+        Digs down tree as far as possible to retrieve value; returns last arg if necessary.
     **/
-    public synchronized String getOrDefault (String defaultValue, String... indices)
+    public synchronized String getOrDefault (String parm0, String... parms)
     {
-        MNode c = this;
-        for (int i = 0; i < indices.length; i++)
+        if (parms.length == 0) return getOrDefault (parm0);  // This could happen indirectly through getOfDefaultType(), where Type is a specific basic type.
+
+        int last = parms.length - 1;
+        String defaultValue = parms[last];
+        MNode c = child (parm0);
+        if (c == null) return defaultValue;
+        for (int i = 0; i < last; i++)
         {
-            c = c.child (indices[i]);
+            c = c.child (parms[i]);
             if (c == null) return defaultValue;
         }
         return c.getOrDefault (defaultValue);
@@ -179,32 +188,24 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         return Double.parseDouble (get ());
     }
 
-    public boolean getOrDefault (boolean defaultValue, String... indices)
+    public boolean getOrDefaultBoolean (String index0, String... parms)
     {
-        String result = getOrDefault ("", indices);
-        if (result.isEmpty ()) return defaultValue;
-        return Boolean.parseBoolean (result);
+        return Boolean.parseBoolean (getOrDefault (index0, parms));
     }
 
-    public int getOrDefault (int defaultValue, String... indices)
+    public int getOrDefaultInt (String index0, String... parms)
     {
-        String result = getOrDefault ("", indices);
-        if (result.isEmpty ()) return defaultValue;
-        return Integer.parseInt (result);
+        return Integer.parseInt (getOrDefault (index0, parms));
     }
 
-    public long getOrDefault (long defaultValue, String... indices)
+    public long getOrDefaultLong (String index0, String... parms)
     {
-        String result = getOrDefault ("", indices);
-        if (result.isEmpty ()) return defaultValue;
-        return Long.parseLong (result);
+        return Long.parseLong (getOrDefault (index0, parms));
     }
 
-    public Double getOrDefault (double defaultValue, String... indices)
+    public double getOrDefaultDouble (String index0, String... parms)
     {
-        String result = getOrDefault ("", indices);
-        if (result.isEmpty ()) return defaultValue;
-        return Double.parseDouble (result);
+        return Double.parseDouble (getOrDefault (index0, parms));
     }
 
     /**
@@ -219,7 +220,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         child.set(String)). Creates child node if it doesn't already exist.
         @return The node on which the value was set, for use by set(String,String,String...)
     **/
-    public MNode set (String value, String index)
+    public MNode set (String index, String value)
     {
         return new MNode ();  // A completely useless object.
     }
@@ -227,33 +228,45 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     /**
         Creates all children necessary to set value
     **/
-    public synchronized void set (String value, String index0, String... deeperIndices)
+    public synchronized void set (String index0, String index1, String... deeperIndices)
     {
         MNode c = child (index0);
-        if (c == null) c = set ("", index0);
+        if (c == null) c = set (index0, "");
+
+        MNode d = c.child (index1);
+        if (d == null) d = c.set (index1, "");
+        c = d;
+
         int last = deeperIndices.length - 1;
         for (int i = 0; i < last; i++)
         {
-            MNode d = c.child (deeperIndices[i]);
-            if (d == null) d = c.set ("", deeperIndices[i]);
+            d = c.child (deeperIndices[i]);
+            if (d == null) d = c.set (deeperIndices[i], "");
             c = d;
         }
-        c.set (value, deeperIndices[last]);
+
+        c.set (deeperIndices[last]);
     }
 
-    public void set (Object value, String... indices)
+    public void set (Object parm0, Object... parms)
     {
-        if (indices.length == 0)
+        String string0 = parm0.toString ();
+        int length = parms.length;
+        if (length == 0)
         {
-            set (value.toString ());
+            set (string0);
+            return;
         }
-        else if (indices.length == 1)
+        String string1 = parms[0].toString ();
+        if (length == 1)
         {
-            set (value.toString (), indices[0]);
+            set (string0, string1);
         }
-        else  // indices.length >= 2
+        else  // length > 1
         {
-            set (value.toString (), indices[0], Arrays.copyOfRange (indices, 1, indices.length));
+            String[] strings = new String[length-1];
+            for (int i = 1; i < length; i++) strings[i-1] = parms[i].toString ();
+            set (string0, string1, strings);
         }
     }
 
@@ -272,7 +285,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         {
             String index = thatChild.key ();
             MNode c = child (index);
-            if (c == null) c = set ("", index);  // ensure a target child node exists
+            if (c == null) c = set (index, "");  // ensure a target child node exists
             c.merge (thatChild);
         }
     }
@@ -289,7 +302,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         MNode source = child (fromIndex);
         if (source != null)
         {
-            MNode destination = set ("", toIndex);
+            MNode destination = set (toIndex, "");
             destination.merge (source);
             clear (fromIndex);
         }
@@ -412,7 +425,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
             {
                 reader.getNextLine ();
             }
-            MNode child = set (value, index);  // Create a child with the given value
+            MNode child = set (index, value);  // Create a child with the given value
             if (reader.whitespaces > whitespaces) child.read (reader, reader.whitespaces);  // Recursively populate child. When this call returns, reader.whitespaces <= whitespaces in this function, because that is what ends the recursion.
             if (reader.whitespaces < whitespaces) return;  // end recursion
         }

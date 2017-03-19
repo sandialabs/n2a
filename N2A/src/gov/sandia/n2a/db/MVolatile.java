@@ -74,7 +74,7 @@ public class MVolatile extends MNode
         else                  this.value = value;
     }
 
-    public synchronized MNode set (String value, String index)
+    public synchronized MNode set (String index, String value)
     {
         if (children == null)
         {

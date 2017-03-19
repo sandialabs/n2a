@@ -152,7 +152,7 @@ public class LafManager
 
     public static void save ()
     {
-        AppData.state.set (currentLaf, "LookAndFeel");
+        AppData.state.set ("LookAndFeel", currentLaf);
     }
 
     public static void load ()

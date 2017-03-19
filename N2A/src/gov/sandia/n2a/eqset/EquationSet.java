@@ -107,7 +107,7 @@ public class EquationSet implements Comparable<EquationSet>
     {
         if (container == null)  // top-level model, so pay special attention to name
         {
-            name = source.getOrDefault ("Model", "$inherit").split (",", 2)[0].replace ("\"", "");
+            name = source.getOrDefault ("$inherit", "Model").split (",", 2)[0].replace ("\"", "");
         }
         else
         {

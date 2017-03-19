@@ -147,10 +147,10 @@ public class MDoc extends MPersistent
         }
     }
 
-    public synchronized MNode set (String value, String index)
+    public synchronized MNode set (String index, String value)
     {
         if (children == null) load ();
-        return super.set (value, index);
+        return super.set (index, value);
     }
 
     public synchronized void move (String fromIndex, String toIndex)

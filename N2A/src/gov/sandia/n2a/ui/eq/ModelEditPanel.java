@@ -47,7 +47,7 @@ public class ModelEditPanel extends JPanel
         setFocusCycleRoot (true);
 
         // Determine the split position.
-        int divider = AppData.state.getOrDefault (0, "ModelEditPanel", "divider");
+        int divider = AppData.state.getOrDefaultInt ("ModelEditPanel", "divider", "0");
         if (divider > 0) split.setDividerLocation (divider);
         else             split.setDividerLocation (0.25);
         split.setResizeWeight (0.25);  // always favor equation tree over search
@@ -58,7 +58,7 @@ public class ModelEditPanel extends JPanel
             public void propertyChange (PropertyChangeEvent e)
             {
                 Object o = e.getNewValue ();
-                if (o != null) AppData.state.set (o.toString (), "ModelEditPanel", "divider");
+                if (o != null) AppData.state.set ("ModelEditPanel", "divider", o.toString ());
             }
         });
 

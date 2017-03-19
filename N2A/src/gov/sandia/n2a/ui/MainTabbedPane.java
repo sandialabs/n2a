@@ -49,7 +49,7 @@ public class MainTabbedPane extends JTabbedPane
     {
         // Load all panels provided by plugins.
         // Create tabs in the order the user has specified.
-        String order = AppData.state.getOrDefault ("Model", "MainTabbedPane", "order");
+        String order = AppData.state.getOrDefault ("MainTabbedPane", "order", "Model");
         Set<String> sorted = new HashSet<String> ();
         String[] titles = order.split (",");  // comma-separated list
         Map<String,RecordHandler> handlers = UMFPluginManager.getRecordHandlers ();
@@ -108,7 +108,7 @@ public class MainTabbedPane extends JTabbedPane
 
                     String order = getTitleAt (0);
                     for (int i = 1; i < getTabCount (); i++) order += "," + getTitleAt (i);
-                    AppData.state.set (order, "MainTabbedPane", "order");
+                    AppData.state.set ("MainTabbedPane", "order", order);
                 }
             }
 

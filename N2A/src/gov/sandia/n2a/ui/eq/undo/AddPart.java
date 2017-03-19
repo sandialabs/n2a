@@ -46,7 +46,7 @@ public class AddPart extends Undoable
         }
         else
         {
-            createSubtree.set ("\"" + inherit + "\"", "$inherit");
+            createSubtree.set ("$inherit", "\"" + inherit + "\"");
             nameIsGenerated = false;  // Because we don't go into edit mode on a drag-n-drop. If that changes, then always set nameIsGenerated to true.
         }
     }
@@ -113,7 +113,7 @@ public class AddPart extends Undoable
 
         // Update database
         String name = newPart.key ();
-        MPart createdPart = (MPart) parent.source.set ("", name);
+        MPart createdPart = (MPart) parent.source.set (name, "");
         createdPart.merge (newPart);
 
         // Update GUI

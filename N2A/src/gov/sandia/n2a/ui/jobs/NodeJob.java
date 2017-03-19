@@ -46,7 +46,7 @@ public class NodeJob extends NodeBase
     public NodeJob (MNode source)
     {
         this.source = source;
-        setUserObject (source.getOrDefault (source.key (), "$inherit").split (",", 2)[0].replace ("\"", ""));
+        setUserObject (source.getOrDefault ("$inherit", source.key ()).split (",", 2)[0].replace ("\"", ""));
     }
 
     @Override
@@ -114,7 +114,7 @@ public class NodeJob extends NodeBase
 
         if (complete >= 0  &&  complete < 1)
         {
-            if (expectedSimTime == 0) expectedSimTime = source.getOrDefault (0.0, "$metadata", "duration");
+            if (expectedSimTime == 0) expectedSimTime = source.getOrDefaultDouble ("$metadata", "duration", "0");
             if (expectedSimTime > 0)
             {
                 Backend simulator = UMFPluginManager.getBackend (source.get ("$metadata", "backend"));

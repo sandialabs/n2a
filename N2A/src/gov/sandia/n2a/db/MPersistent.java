@@ -93,7 +93,7 @@ public class MPersistent extends MVolatile
         }
     }
 
-    public synchronized MNode set (String value, String index)
+    public synchronized MNode set (String index, String value)
     {
         if (children == null)
         {

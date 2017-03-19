@@ -23,14 +23,14 @@ public class RunOrient implements Run
     public RunOrient (Double simDuration, String name, String notes, Backend sim, String owner, String status, String state, MNode modelSource)
     {
         source = new MVolatile ();
-        source.set (name,               "name");
-        source.set (simDuration,        "duration");
-        source.set (notes,              "notes");
-        source.set (sim.getName(),      "simulator");
-        source.set (owner,              "$owner");
-        source.set (status,             "status");
-        source.set (state,              "state");
-        source.set (modelSource.key (), "model");  // Since the model is most likely an MDoc, the value is the file name.
+        source.set ("name",      name);
+        source.set ("duration",  simDuration);
+        source.set ("notes",     notes);
+        source.set ("simulator", sim.getName());
+        source.set ("$owner",    owner);
+        source.set ("status",    status);
+        source.set ("state",     state);
+        source.set ("model",     modelSource.key ());  // Since the model is most likely an MDoc, the value is the file name.
         simulator = sim;
     }
 
@@ -45,7 +45,7 @@ public class RunOrient implements Run
     public RunOrient (PlatformRecord modelRunCopy)
     {
         source = new MVolatile ();
-        source.set (modelRunCopy.getSource ().key (), "model");
+        source.set ("model", modelRunCopy.getSource ().key ());
     }
 
     // TODO - not actually used/necessary
@@ -81,12 +81,12 @@ public class RunOrient implements Run
 
     @Override
     public double getSimDuration() {
-        return source.getOrDefault (0.0, "duration");
+        return source.getOrDefaultDouble ("duration", "0");
     }
 
     @Override
     public void setSimDuration(double dur) {
-        source.set (dur, "duration");
+        source.set ("duration", dur);
     }
 
     @Override

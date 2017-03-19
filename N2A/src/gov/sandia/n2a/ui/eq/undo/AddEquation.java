@@ -190,10 +190,10 @@ public class AddEquation extends Undoable
         // The minimum number of equations is 2. There should never be exactly 1 equation, because that is single-line form, which should have no child equations at all.
         if (equationCount == 0)  // We are about to switch from single-line form to multi-conditional, so make a tree node for the existing equation.
         {
-            MPart equation = (MPart) parent.source.set (parentPiecesBefore.expression, "@" + parentPiecesBefore.conditional);
+            MPart equation = (MPart) parent.source.set ("@" + parentPiecesBefore.conditional, parentPiecesBefore.expression);
             model.insertNodeIntoUnfiltered (new NodeEquation (equation), parent, 0);
         }
-        MPart createdPart = (MPart) parent.source.set (value == null ? "0" : value, name);
+        MPart createdPart = (MPart) parent.source.set (name, value == null ? "0" : value);
         boolean parentChanged = false;
         if (! combinerAfter.equals (parentValueBefore))
         {

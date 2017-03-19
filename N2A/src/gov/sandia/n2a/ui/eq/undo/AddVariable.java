@@ -104,7 +104,7 @@ public class AddVariable extends Undoable
 
         // Update database
         String name = newPart.key ();
-        MPart createdPart = (MPart) parent.source.set ("", name);
+        MPart createdPart = (MPart) parent.source.set (name, "");
         createdPart.merge (newPart);
 
         // Update GUI

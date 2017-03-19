@@ -41,9 +41,9 @@ public class RedSkyParallelEnv extends RedSkyEnv
     @Override
     public void submitJob (MNode job, String command) throws Exception
     {
-        String jobDir = job.get          (     "$metadata", "remote.dir");
-        String cores  = job.getOrDefault ("1", "$metadata", "cores");
-        String nodes  = job.getOrDefault ("1", "$metadata", "remote.nodes");
+        String jobDir = job.get          ("$metadata", "remote.dir");
+        String cores  = job.getOrDefault ("$metadata", "cores",        "1");
+        String nodes  = job.getOrDefault ("$metadata", "remote.nodes", "1");
 
         setFileContents (jobDir + "/n2a_job",
             "#!/bin/bash\n"

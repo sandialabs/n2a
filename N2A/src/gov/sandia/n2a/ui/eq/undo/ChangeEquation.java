@@ -87,7 +87,7 @@ public class ChangeEquation extends Undoable
         {
             // Update the database
             MPart mparent = parent.source;
-            MPart newPart = (MPart) mparent.set (valueAfter, nameAfter);
+            MPart newPart = (MPart) mparent.set (nameAfter, valueAfter);
             mparent.clear (nameBefore);
             MPart oldPart = (MPart) mparent.child (nameBefore);
 
