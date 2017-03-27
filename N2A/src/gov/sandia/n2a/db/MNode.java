@@ -353,8 +353,15 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     /**
         Brings in data from a stream. See write(Writer,String) for format.
-        This method only processes children. It assumes that our value was processed
-        at the caller's level, as its child.
+        This method only processes children. The direct value of this node
+        must be set by the caller.
+
+        Wraps the given Reader in a BufferedReader, unless it is already a
+        BufferedReader (see the inner class LineReader). If you wish to continue
+        using the Reader after this function returns, for example if the
+        stream contains a YAML terminator (---) followed by another serialized
+        object, then you must pass in a BufferedReader to begin with. Otherwise,
+        the position in the original Reader is not well defined.
     **/
     public synchronized void read (Reader reader)
     {
@@ -363,6 +370,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         {
             LineReader lineReader = new LineReader (reader);
             read (lineReader, 0);
+            lineReader.close ();
         }
         catch (IOException e)
         {
@@ -433,12 +441,14 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     public static class LineReader
     {
+        public Reader         originalReader;
         public BufferedReader reader;
         public String         line;
         public int            whitespaces;
 
         public LineReader (Reader reader) throws IOException
         {
+            originalReader = reader;
             if (reader instanceof BufferedReader) this.reader = (BufferedReader) reader;
             else                                  this.reader = new BufferedReader (reader);
             getNextLine ();
@@ -469,6 +479,21 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
                 char c = line.charAt (whitespaces);
                 if (c != ' '  &&  c != '\t') break;
                 whitespaces++;
+            }
+        }
+
+        public void close ()
+        {
+            if (reader != originalReader)
+            {
+                try
+                {
+                    reader.close ();
+                    reader = null;  // Poison it
+                }
+                catch (IOException e)
+                {
+                }
             }
         }
     }

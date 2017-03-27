@@ -12,6 +12,7 @@ import java.awt.FontMetrics;
 import java.util.ArrayList;
 import java.util.List;
 
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
@@ -96,10 +97,10 @@ public class NodeEquation extends NodeBase
     }
 
     @Override
-    public NodeBase add (String type, JTree tree)
+    public NodeBase add (String type, JTree tree, MNode data)
     {
         if (type.isEmpty ()) type = "Equation";
-        return ((NodeBase) getParent ()).add (type, tree);
+        return ((NodeBase) getParent ()).add (type, tree, data);
     }
 
     @Override

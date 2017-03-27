@@ -39,36 +39,44 @@ public class AddEquation extends Undoable
     public    NodeBase     createdNode;  ///< Used by caller to initiate editing. Only valid immediately after call to redo().
     protected List<String> replacePath;  // If non-null, contains path to NodeVariable that created this action.
 
-    public AddEquation (NodeVariable parent, int index)
+    public AddEquation (NodeVariable parent, int index, MNode data)
     {
-        path = parent.getKeyPath ();
-        this.index = index;
+        path           = parent.getKeyPath ();
+        this.index     = index;
         combinerBefore = new Variable.ParsedValue (parent.source.get ()).combiner;
         combinerAfter  = combinerBefore;
 
         // Select a unique name
+        if (data == null)
+        {
+            TreeSet<String> equations = new TreeSet<String> ();
+            for (MNode n : parent.source)
+            {
+                String key = n.key ();
+                if (key.startsWith ("@")) equations.add (key.substring (1));
+            }
+            equationCount = equations.size ();
+            if (equationCount == 0)
+            {
+                Variable.ParsedValue pieces = new Variable.ParsedValue (parent.source.get ());
+                equations.add (pieces.conditional);
+            }
 
-        TreeSet<String> equations = new TreeSet<String> ();
-        for (MNode n : parent.source)
-        {
-            String key = n.key ();
-            if (key.startsWith ("@")) equations.add (key.substring (1));
+            int suffix = equations.size ();
+            while (true)
+            {
+                name = String.valueOf (suffix);
+                if (! equations.contains (name)) break;
+                suffix++;
+            }
+            name = "@" + name;
         }
-        equationCount = equations.size ();
-        if (equationCount == 0)
+        else
         {
-            Variable.ParsedValue pieces = new Variable.ParsedValue (parent.source.get ());
-            equations.add (pieces.conditional);
+            name  = data.key ();  // should include the @
+            value = data.get ();
+            // When data is provided (from a paste operation), it will not carry its own combiner.
         }
-
-        int suffix = equations.size ();
-        while (true)
-        {
-            name = String.valueOf (suffix);
-            if (! equations.contains (name)) break;
-            suffix++;
-        }
-        name = "@" + name;
     }
 
     public AddEquation (NodeVariable parent, String name, String combiner, String value)

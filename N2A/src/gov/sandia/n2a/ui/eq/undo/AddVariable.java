@@ -30,30 +30,44 @@ public class AddVariable extends Undoable
 {
     protected List<String> path;  // to part that contains the variable node
     protected int          index; // where to insert among siblings
+    protected String       name;
     protected MNode        createSubtree;
     protected boolean      nameIsGenerated;
     public    NodeBase     createdNode;  ///< Used by caller to initiate editing. Only valid immediately after call to redo().
 
-    public AddVariable (NodePart parent, int index)
+    public AddVariable (NodePart parent, int index, MNode data)
     {
         path = parent.getKeyPath ();
         this.index = index;
-        createSubtree = new MVolatile (AddPart.uniqueName (parent, "x"), "");
-        nameIsGenerated = true;
+
+        createSubtree = new MVolatile ();
+        if (data == null)
+        {
+            name = AddPart.uniqueName (parent, "x", 0, false);
+            nameIsGenerated = true;
+        }
+        else
+        {
+            createSubtree.merge (data);
+            name = data.key ();
+            if (name.isEmpty ()) name = AddPart.uniqueName (parent, "x", 0, false);  // Even though this is actually generated, we don't plan to go directly into edit mode, so treat as if not generated.
+            else                 name = AddPart.uniqueName (parent, name, 2, true);
+            nameIsGenerated = false;  // Because we don't go into edit mode on a drop or paste. If that changes, then always set nameIsGenerated to true.
+        }
     }
 
     public List<String> fullPath ()
     {
         List<String> result = new ArrayList<String> ();
         result.addAll (path);
-        result.add (createSubtree.key ());
+        result.add (name);
         return result;
     }
 
     public void undo ()
     {
         super.undo ();
-        destroy (path, false, createSubtree.key ());
+        destroy (path, false, name);
     }
 
     public static void destroy (List<String> path, boolean canceled, String name)
@@ -77,6 +91,7 @@ public class AddVariable extends Undoable
         if (mparent.child (name) == null)  // Node is fully deleted
         {
             model.removeNodeFromParent (createdNode);
+            ((NodePart) parent).findConnections ();
         }
         else  // Just exposed an overridden node
         {
@@ -94,16 +109,15 @@ public class AddVariable extends Undoable
     public void redo ()
     {
         super.redo ();
-        createdNode = create (path, index, createSubtree, nameIsGenerated);
+        createdNode = create (path, index, name, createSubtree, nameIsGenerated);
     }
 
-    public static NodeBase create (List<String> path, int index, MNode newPart, boolean nameIsGenerated)
+    public static NodeBase create (List<String> path, int index, String name, MNode newPart, boolean nameIsGenerated)
     {
         NodeBase parent = locateNode (path);
         if (parent == null) throw new CannotRedoException ();
 
         // Update database
-        String name = newPart.key ();
         MPart createdPart = (MPart) parent.source.set (name, "");
         createdPart.merge (newPart);
 
@@ -142,13 +156,9 @@ public class AddVariable extends Undoable
         if (nameIsGenerated  &&  edit instanceof ChangeVariable)
         {
             ChangeVariable change = (ChangeVariable) edit;
-            if (path.equals (change.path)  &&  createSubtree.key ().equals (change.nameBefore))
+            if (path.equals (change.path)  &&  name.equals (change.nameBefore))
             {
-                // There is not direct way to change the key of an MVolatile, so must create a new node and merge into it.
-                MNode nextSubtree = new MVolatile (change.nameAfter, "");
-                nextSubtree.merge (createSubtree);
-                nextSubtree.set (change.valueAfter);
-                createSubtree = nextSubtree;
+                name = change.nameAfter;
                 nameIsGenerated = false;
                 return true;
             }

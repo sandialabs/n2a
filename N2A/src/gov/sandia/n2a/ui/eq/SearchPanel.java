@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2016 Sandia Corporation.
+Copyright 2013,2016,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -10,6 +10,8 @@ package gov.sandia.n2a.ui.eq;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MVolatile;
+import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
 import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -17,6 +19,10 @@ import gov.sandia.n2a.ui.images.ImageUtil;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.EventQueue;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.StringSelection;
+import java.awt.datatransfer.Transferable;
+import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.FocusEvent;
@@ -25,16 +31,21 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.IOException;
+import java.io.StringReader;
+import java.io.StringWriter;
 import java.util.LinkedList;
 import java.util.List;
 
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
+import javax.swing.JComponent;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
+import javax.swing.TransferHandler;
 import javax.swing.border.EmptyBorder;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultHighlighter;
@@ -45,12 +56,36 @@ import replete.util.Lay;
 
 public class SearchPanel extends JPanel
 {
-    public JTextField              textQuery;
-    public JButton                 buttonClear;
-    public JList<MNode>            list;
-    public DefaultListModel<MNode> model;
-    public ModelEditPanel          modelPanel;
-    public int                     lastSelection = -1;
+    public JTextField               textQuery;
+    public JButton                  buttonClear;
+    public JList<Holder>            list;
+    public DefaultListModel<Holder> model;
+    public int                      lastSelection = -1;
+
+    /**
+        Indirect access to MDoc, because something calls toString(), which loads and returns the entire document.
+    **/
+    public class Holder
+    {
+        public MNode doc;
+
+        public Holder (MNode doc)
+        {
+            this.doc = doc;
+        }
+
+        public String toString ()
+        {
+            return doc.key ();
+        }
+
+        public boolean equals (Object that)
+        {
+            // MDocs are unique, so direct object equality is OK here.
+            if (that instanceof Holder) return ((Holder) that).doc == doc;
+            return false;
+        }
+    }
 
     // Retrieve records matching the filter text, and deliver them to the model.
     public class SearchThread extends Thread
@@ -79,7 +114,7 @@ public class SearchPanel extends JPanel
                 public void run ()
                 {
                     model.clear ();
-                    for (MNode record : results) model.addElement (record);
+                    for (MNode record : results) model.addElement (new Holder (record));
                 }
             });
         }
@@ -93,7 +128,7 @@ public class SearchPanel extends JPanel
             public void run ()
             {
                 ModelEditPanel mep = ModelEditPanel.instance;
-                mep.panelEquations.loadRootFromDB (model.get (list.getSelectedIndex ()));
+                mep.panelEquations.loadRootFromDB (model.get (list.getSelectedIndex ()).doc);
                 mep.panelEquations.tree.requestFocusInWindow ();
             }
         });
@@ -105,9 +140,14 @@ public class SearchPanel extends JPanel
         list.clearSelection ();
     }
 
+    public int indexOf (MNode doc)
+    {
+        return model.indexOf (new Holder (doc));
+    }
+
     public int removeDoc (MNode doc)
     {
-        int index = model.indexOf (doc);
+        int index = model.indexOf (new Holder (doc));
         if (index >= 0)
         {
             model.remove (index);
@@ -119,22 +159,21 @@ public class SearchPanel extends JPanel
 
     public int insertDoc (MNode doc, int at)
     {
-        int index = model.indexOf (doc);
+        Holder h = new Holder (doc);
+        int index = model.indexOf (h);
         if (index < 0)
         {
-            if (at > model.size ()) at = 0;  // The list has changed, and our position is no longer valid, so simply insert at top.
-            model.insertElementAt (doc, at);
+            if (at > model.size ()) at = 0;  // The list has changed, perhaps due to filtering, and our position is no longer valid, so simply insert at top.
+            model.add (at, h);
             lastSelection = at;
             return at;
         }
         return index;
     }
 
-    public SearchPanel (ModelEditPanel container)
+    public SearchPanel ()
     {
-        modelPanel = container;
-
-        list = new JList<MNode> (model = new DefaultListModel<MNode> ());
+        list = new JList<Holder> (model = new DefaultListModel<Holder> ());
         list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
         list.setDragEnabled (true);
         list.setCellRenderer (new MNodeRenderer ());
@@ -164,13 +203,13 @@ public class SearchPanel extends JPanel
                 }
                 else if (keycode == KeyEvent.VK_DELETE  ||  keycode == KeyEvent.VK_BACK_SPACE)
                 {
-                    MNode deleteMe = list.getSelectedValue ();
+                    MNode deleteMe = list.getSelectedValue ().doc;
                     if (deleteMe == null) return;
-                    modelPanel.undoManager.add (new DeleteDoc ((MDoc) deleteMe));
+                    ModelEditPanel.instance.undoManager.add (new DeleteDoc ((MDoc) deleteMe));
                 }
                 else if (keycode == KeyEvent.VK_INSERT)
                 {
-                    modelPanel.undoManager.add (new AddDoc ());
+                    ModelEditPanel.instance.undoManager.add (new AddDoc ());
                 }
             }
         });
@@ -188,6 +227,66 @@ public class SearchPanel extends JPanel
             public void focusLost (FocusEvent e)
             {
                 hideSelection ();
+            }
+        });
+        list.setTransferHandler (new TransferHandler ()
+        {
+            public boolean canImport (TransferHandler.TransferSupport xfer)
+            {
+                return xfer.isDataFlavorSupported (DataFlavor.stringFlavor);
+            }
+
+            public boolean importData (TransferHandler.TransferSupport xfer)
+            {
+                Schema schema = new Schema ();
+                MNode data = new MVolatile ();
+                try
+                {
+                    StringReader reader = new StringReader ((String) xfer.getTransferable ().getTransferData (DataFlavor.stringFlavor));
+                    schema.readAll (reader, data);
+                }
+                catch (IOException | UnsupportedFlavorException e)
+                {
+                    return false;
+                }
+
+                if (! schema.type.contains ("Part")) return false;
+                for (MNode n : data)  // data can contain several parts
+                {
+                    ModelEditPanel.instance.undoManager.add (new AddDoc (n.key (), n));
+                }
+
+                return true;
+            }
+
+            public int getSourceActions (JComponent comp)
+            {
+                return COPY;
+            }
+
+            protected Transferable createTransferable (JComponent comp)
+            {
+                Holder h = list.getSelectedValue ();
+                Schema schema = new Schema (1, "Part");
+                StringWriter writer = new StringWriter ();
+                try
+                {
+                    schema.write (writer);
+                    writer.write (h.doc.key () + String.format ("%n"));
+                    for (MNode c : h.doc) c.write (writer, " ");
+                    writer.close ();
+                    return new StringSelection (writer.toString ());
+                }
+                catch (IOException e)
+                {
+                }
+
+                return null;
+            }
+
+            protected void exportDone (JComponent source, Transferable data, int action)
+            {
+                if (! list.isFocusOwner ()) hideSelection ();
             }
         });
 
@@ -244,7 +343,7 @@ public class SearchPanel extends JPanel
         thread.start ();
     }
 
-    protected static class MNodeRenderer extends JTextField implements ListCellRenderer<MNode>
+    protected static class MNodeRenderer extends JTextField implements ListCellRenderer<Holder>
     {
         protected static DefaultHighlighter.DefaultHighlightPainter painter;
 
@@ -254,10 +353,10 @@ public class SearchPanel extends JPanel
             setBorder (new EmptyBorder (0, 0, 0, 0));
         }
 
-        public Component getListCellRendererComponent (JList<? extends MNode> list, MNode node, int index, boolean isSelected, boolean cellHasFocus)
+        public Component getListCellRendererComponent (JList<? extends Holder> list, Holder holder, int index, boolean isSelected, boolean cellHasFocus)
         {
-            String name = node.key ();
-            if (name.isEmpty ()) name = node.get ();
+            String name = holder.doc.key ();
+            if (name.isEmpty ()) name = holder.doc.get ();
             setText (name);
 
             if (isSelected)

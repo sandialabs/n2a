@@ -21,6 +21,7 @@ public class DeleteVariable extends Undoable
     protected List<String> path;  // to variable node
     protected int          index; // where to insert among siblings
     protected boolean      canceled;
+    protected String       name;
     protected MNode        savedSubtree;
     protected boolean      neutralized;
 
@@ -30,21 +31,22 @@ public class DeleteVariable extends Undoable
         path          = container.getKeyPath ();
         index         = container.getIndex (node);
         this.canceled = canceled;
+        name          = node.source.key ();
 
-        savedSubtree = new MVolatile (node.source.key (), "");
+        savedSubtree = new MVolatile ();
         savedSubtree.merge (node.source.getSource ());
     }
 
     public void undo ()
     {
         super.undo ();
-        AddVariable.create (path, index, savedSubtree, false);
+        AddVariable.create (path, index, name, savedSubtree, false);
     }
 
     public void redo ()
     {
         super.redo ();
-        AddVariable.destroy (path, canceled, savedSubtree.key ());
+        AddVariable.destroy (path, canceled, name);
     }
 
     public boolean replaceEdit (UndoableEdit edit)
@@ -52,7 +54,7 @@ public class DeleteVariable extends Undoable
         if (edit instanceof AddVariable)
         {
             AddVariable av = (AddVariable) edit;
-            if (path.equals (av.path)  &&  savedSubtree.key ().equals (av.createSubtree.key ())  &&  av.nameIsGenerated)
+            if (path.equals (av.path)  &&  name.equals (av.name)  &&  av.nameIsGenerated)
             {
                 neutralized = true;
                 return true;

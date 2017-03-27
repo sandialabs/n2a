@@ -11,6 +11,7 @@ import java.util.List;
 
 import javax.swing.undo.UndoableEdit;
 
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeReference;
@@ -28,11 +29,19 @@ public class AddReference extends Undoable
         @param parent Must be the node that contains $reference, not the $reference node itself.
         @param index Position in the unfiltered tree where the node should be inserted.
     **/
-    public AddReference (NodeBase parent, int index)
+    public AddReference (NodeBase parent, int index, MNode data)
     {
         path = parent.getKeyPath ();
         this.index = index;
-        name = AddAnnotation.uniqueName (parent, "$reference", "r");
+        if (data == null)
+        {
+            name = AddAnnotation.uniqueName (parent, "$reference", "r", false);
+        }
+        else
+        {
+            name = AddAnnotation.uniqueName (parent, "$reference", data.key (), true);
+            value = data.get ();
+        }
     }
 
     public void undo ()

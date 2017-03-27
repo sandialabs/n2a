@@ -1,5 +1,5 @@
 /*
-Copyright 2016 Sandia Corporation.
+Copyright 2016,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.Font;
+
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
@@ -61,7 +62,7 @@ public class NodeReferences extends NodeContainer
     }
 
     @Override
-    public NodeBase add (String type, JTree tree)
+    public NodeBase add (String type, JTree tree, MNode data)
     {
         if (type.isEmpty ()  ||  type.equals ("Reference"))
         {
@@ -74,11 +75,11 @@ public class NodeReferences extends NodeContainer
                 if (isNodeChild (selected)) index = getIndex (selected);  // unfiltered index
             }
             index++;
-            AddReference ar = new AddReference ((NodeBase) getParent (), index);
+            AddReference ar = new AddReference ((NodeBase) getParent (), index, data);
             ModelEditPanel.instance.undoManager.add (ar);
             return ar.createdNode;
         }
-        return ((NodeBase) getParent ()).add (type, tree);
+        return ((NodeBase) getParent ()).add (type, tree, data);
     }
 
     @Override

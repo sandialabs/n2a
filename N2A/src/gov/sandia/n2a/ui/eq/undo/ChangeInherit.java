@@ -1,5 +1,5 @@
 /*
-Copyright 2016 Sandia Corporation.
+Copyright 2016,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -28,11 +28,11 @@ public class ChangeInherit extends Undoable
     /**
         @param container The direct container of the node being changed.
     **/
-    public ChangeInherit (NodeInherit node, String valueBefore, String valueAfter)
+    public ChangeInherit (NodeInherit node, String valueAfter)
     {
-        path = node.getKeyPath ();  // include "$inherit"
-        this.valueBefore = valueBefore;
-        this.valueAfter  = valueAfter;
+        path            = node.getKeyPath ();  // include "$inherit"
+        valueBefore     = node.source.get ();
+        this.valueAfter = valueAfter;
     }
 
     public void undo ()

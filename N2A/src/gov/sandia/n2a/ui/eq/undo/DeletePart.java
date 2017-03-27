@@ -21,6 +21,7 @@ public class DeletePart extends Undoable
     protected List<String> path;  // to containing part
     protected int          index; // where to insert among siblings
     protected boolean      canceled;
+    protected String       name;
     protected MNode        savedSubtree;
     protected boolean      neutralized;
 
@@ -30,21 +31,22 @@ public class DeletePart extends Undoable
         path          = container.getKeyPath ();
         index         = container.getIndex (node);
         this.canceled = canceled;
+        name          = node.source.key ();
 
-        savedSubtree = new MVolatile (node.source.key (), "");
+        savedSubtree = new MVolatile ();
         savedSubtree.merge (node.source.getSource ());  // Only take the top-doc data, not the collated tree.
     }
 
     public void undo ()
     {
         super.undo ();
-        AddPart.create (path, index, savedSubtree, false);
+        AddPart.create (path, index, name, savedSubtree, false);
     }
 
     public void redo ()
     {
         super.redo ();
-        AddPart.destroy (path, canceled, savedSubtree.key ());
+        AddPart.destroy (path, canceled, name);
     }
 
     public boolean replaceEdit (UndoableEdit edit)
@@ -52,7 +54,7 @@ public class DeletePart extends Undoable
         if (edit instanceof AddPart)
         {
             AddPart ap = (AddPart) edit;
-            if (path.equals (ap.path)  &&  savedSubtree.key ().equals (ap.createSubtree.key ())  &&  ap.nameIsGenerated)
+            if (path.equals (ap.path)  &&  name.equals (ap.name)  &&  ap.nameIsGenerated)
             {
                 neutralized = true;
                 return true;

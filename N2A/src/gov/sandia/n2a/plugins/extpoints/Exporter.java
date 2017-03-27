@@ -11,14 +11,10 @@ import gov.sandia.n2a.db.MNode;
 
 import java.io.File;
 
-import javax.swing.JComponent;
-import javax.swing.JFileChooser;
-
 import replete.plugins.ExtensionPoint;
 
 public interface Exporter extends ExtensionPoint
 {
-    public String     getName ();
-    public JComponent getAccessory (JFileChooser fc);
-    public void       export (MNode document, File destination, JComponent accessory);
+    public String getName ();
+    public void   export (MNode document, File destination);
 }

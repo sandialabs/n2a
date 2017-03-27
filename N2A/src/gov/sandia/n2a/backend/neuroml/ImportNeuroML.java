@@ -13,8 +13,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 
-import javax.swing.JComponent;
-import javax.swing.JFileChooser;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -34,13 +32,7 @@ public class ImportNeuroML implements Importer
     }
 
     @Override
-    public JComponent getAccessory (final JFileChooser fc)
-    {
-        return null;
-    }
-
-    @Override
-    public void process (File source, JComponent accessory)
+    public void process (File source)
     {
         System.out.println ("Trying to load: " + source);
         try

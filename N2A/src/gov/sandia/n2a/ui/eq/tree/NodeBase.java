@@ -7,6 +7,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.eq.tree;
 
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.EquationTreeCellRenderer;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
@@ -132,6 +133,26 @@ public class NodeBase extends DefaultMutableTreeNode
         List<Integer> filtered = getFiltered ();
         if (filtered != null) index = filtered.get (index).intValue ();
         return (TreeNode) children.get (index);
+    }
+
+    public Enumeration<?> childrenFiltered ()
+    {
+        final List<Integer> filtered = getFiltered ();
+        if (filtered == null) return children ();
+        return new Enumeration<Object> ()
+        {
+            int i;
+
+            public boolean hasMoreElements ()
+            {
+                return i < filtered.size ();
+            }
+
+            public Object nextElement ()
+            {
+                return children.get (filtered.get (i++));  // Note the post-increment.
+            }
+        };
     }
 
     // Appearance in tree ----------------------------------------------------
@@ -305,6 +326,24 @@ public class NodeBase extends DefaultMutableTreeNode
         return tree.getGraphics ().getFontMetrics (f);
     }
 
+    // Copy/Drag -------------------------------------------------------------
+
+    public String getTypeName ()
+    {
+        Class<? extends NodeBase> c = getClass ();
+        return c.getSimpleName ().substring (4);  // remove "Node"
+    }
+
+    /**
+        Assemble the visible subtree, starting at this node, and return it as a child of the given MNode.
+    **/
+    public void copy (MNode result)
+    {
+        MNode n = result.set (source.key (), source.get ());
+        Enumeration<?> cf = childrenFiltered ();
+        while (cf.hasMoreElements ()) ((NodeBase) cf.nextElement ()).copy (n);
+    }
+
     // Structure maintenance -------------------------------------------------
 
     public List<String> getKeyPath ()
@@ -317,17 +356,19 @@ public class NodeBase extends DefaultMutableTreeNode
 
     public NodeBase child (String key)
     {
-        Enumeration i = children ();
-        while (i.hasMoreElements ())
+        if (children == null) return null;
+        for (Object o : children)
         {
-            NodeBase n = (NodeBase) i.nextElement ();
+            NodeBase n = (NodeBase) o;
             if (n.source.key ().equals (key)) return n;
+            
         }
         return null;
     }
 
     public NodeBase childFiltered (String key)
     {
+        if (children == null) return null;
         List<Integer> filtered = getFiltered ();
         if (filtered == null) return child (key);
         for (int i : filtered)
@@ -338,14 +379,9 @@ public class NodeBase extends DefaultMutableTreeNode
         return null;
     }
 
-    public NodeBase add (String type, JTree tree)
+    public NodeBase add (String type, JTree tree, MNode data)
     {
-        return ((NodeBase) getParent ()).add (type, tree);  // default action is to refer the add request up the tree
-    }
-
-    public NodeBase addDnD (String key, JTree tree)
-    {
-        return ((NodeBase) getParent ()).addDnD (key, tree);
+        return ((NodeBase) getParent ()).add (type, tree, data);  // default action is to refer the add request up the tree
     }
 
     public boolean allowEdit ()

@@ -19,17 +19,21 @@ import java.util.Vector;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
+import gov.sandia.n2a.ui.eq.undo.AddInherit;
 import gov.sandia.n2a.ui.eq.undo.AddPart;
 import gov.sandia.n2a.ui.eq.undo.AddReference;
 import gov.sandia.n2a.ui.eq.undo.AddVariable;
+import gov.sandia.n2a.ui.eq.undo.ChangeInherit;
 import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
 import gov.sandia.n2a.ui.eq.undo.DeletePart;
 import gov.sandia.n2a.ui.eq.undo.ChangeDoc;
 import gov.sandia.n2a.ui.eq.undo.ChangePart;
+import gov.sandia.n2a.ui.eq.undo.Undoable;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;
@@ -308,26 +312,14 @@ public class NodePart extends NodeContainer
         return parent.resolveName (name);
     }
 
-    @Override
-    public NodeBase add (String type, JTree tree)
-    {
-        return add (type, tree, null);
-    }
-
-    @Override
-    public NodeBase addDnD (String inherit, JTree tree)
-    {
-        return add ("Part", tree, inherit);
-    }
-
-    public NodeBase add (String type, JTree tree, String inherit)
+    public NodeBase add (String type, JTree tree, MNode data)
     {
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         if (tree.isCollapsed (new TreePath (getPath ()))  &&  model.getChildCount (this) > 0  &&  ! isRoot ())  // The node is deliberately closed to indicate user intent.
         {
             // The only thing that can contain a NodePart is another NodePart. (If that ever changes, the following code will break.)
-            if (type.isEmpty ()) return ((NodePart) getParent ()).add ("Part", tree, inherit);
-            return ((NodePart) getParent ()).add (type, tree, inherit);
+            if (type.isEmpty ()) return ((NodePart) getParent ()).add ("Part", tree, data);
+            return ((NodePart) getParent ()).add (type, tree, data);
         }
 
         int variableIndex = -1;
@@ -365,25 +357,56 @@ public class NodePart extends NodeContainer
 
         if (type.equals ("Annotation"))
         {
-            AddAnnotation aa = new AddAnnotation (this, metadataIndex);
+            AddAnnotation aa = new AddAnnotation (this, metadataIndex, data);
             ModelEditPanel.instance.undoManager.add (aa);  // aa will automagically insert a $metadata block if needed
             return aa.createdNode;
         }
+        else if (type.equals ("Annotations"))
+        {
+            // TODO: figure out how to handle this case
+            return null;
+        }
         else if (type.equals ("Reference"))
         {
-            AddReference ar = new AddReference (this, metadataIndex);
+            AddReference ar = new AddReference (this, metadataIndex, data);
             ModelEditPanel.instance.undoManager.add (ar);
             return ar.createdNode;
         }
+        else if (type.equals ("References"))
+        {
+            // TODO: figure out how to handle this case
+            return null;
+        }
         else if (type.equals ("Part"))
         {
-            AddPart ap = new AddPart (this, subpartIndex, inherit);
+            AddPart ap = new AddPart (this, subpartIndex, data);
             ModelEditPanel.instance.undoManager.add (ap);
             return ap.createdNode;
         }
+        else if (type.equals ("Inherit"))
+        {
+            Undoable un = null;
+            NodeInherit inherit = (NodeInherit) child ("$inherit");
+            String value = "";
+            if (data != null) value = data.get ();
+            if (inherit == null)
+            {
+                un = new AddInherit (this, value);
+            }
+            else if (! value.isEmpty ())
+            {
+                un = new ChangeInherit (inherit, value);
+            }
+            if (un != null) ModelEditPanel.instance.undoManager.add (un);
+            return child ("$inherit");
+        }
         else  // treat all other requests as "Variable"
         {
-            AddVariable av = new AddVariable (this, variableIndex);
+            if (data != null  &&  type.equals ("Equation"))
+            {
+                data = new MVolatile ("", data.get () + data.key ());  // convert equation into nameless variable
+            }
+            AddVariable av = new AddVariable (this, variableIndex, data);
             ModelEditPanel.instance.undoManager.add (av);
             return av.createdNode;
         }

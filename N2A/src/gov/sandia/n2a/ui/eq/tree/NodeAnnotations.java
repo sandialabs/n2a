@@ -62,7 +62,7 @@ public class NodeAnnotations extends NodeContainer
     }
     
     @Override
-    public NodeBase add (String type, JTree tree)
+    public NodeBase add (String type, JTree tree, MNode data)
     {
         if (type.isEmpty ()  ||  type.equals ("Annotation"))
         {
@@ -75,11 +75,11 @@ public class NodeAnnotations extends NodeContainer
                 if (isNodeChild (selected)) index = getIndex (selected);  // unfiltered index
             }
             index++;
-            AddAnnotation aa = new AddAnnotation ((NodeBase) getParent (), index);
+            AddAnnotation aa = new AddAnnotation ((NodeBase) getParent (), index, data);
             ModelEditPanel.instance.undoManager.add (aa);
             return aa.createdNode;
         }
-        return ((NodeBase) getParent ()).add (type, tree);
+        return ((NodeBase) getParent ()).add (type, tree, data);
     }
 
     @Override

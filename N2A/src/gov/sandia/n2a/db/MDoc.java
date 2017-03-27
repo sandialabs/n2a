@@ -1,5 +1,5 @@
 /*
-Copyright 2016 Sandia Corporation.
+Copyright 2016,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -7,8 +7,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.db;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -34,6 +32,8 @@ import java.util.TreeMap;
 **/
 public class MDoc extends MPersistent
 {
+    Schema schema = new Schema (1, "");
+
     /**
         Constructs a document as a child of an MDir.
         In this case, the key contains the file name in the dir, and the full path is constructed
@@ -181,18 +181,8 @@ public class MDoc extends MPersistent
         File file = path ();
         try
         {
-            BufferedReader reader = new BufferedReader (new FileReader (file));
-            reader.mark (64);  // enough to read schema line comfortably
-            String line = reader.readLine ().trim ();
-            String[] pieces = line.split ("=", 2);
-            if (pieces.length < 2  ||  ! pieces[0].equals ("N2A.schema")  ||  ! pieces[1].equals ("1"))
-            {
-                System.err.println ("WARNING: schema version not recognized. Proceeding as if it were.");
-                reader.reset ();  // This may have been an important line of input.
-            }
             needsWrite = true;  // lie to ourselves, to prevent being put onto the MDir write queue
-            read (reader);
-            reader.close ();
+            schema.readAll (new FileReader (file), this);
         }
         catch (IOException e)
         {
@@ -208,9 +198,8 @@ public class MDoc extends MPersistent
 	    try
 	    {
 	        file.getParentFile ().mkdirs ();
-	        BufferedWriter writer = new BufferedWriter (new FileWriter (file));
-	        writer.write (String.format ("N2A.schema=1%n"));
-	        for (MNode c : this) c.write (writer, "");  // only write out our children, not ourself (top-level node)
+	        FileWriter writer = new FileWriter (file);
+	        schema.writeAll (writer, this);
 	        writer.close ();
 	        clearChanged ();
 	    }

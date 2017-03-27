@@ -1,5 +1,5 @@
 /*
-Copyright 2016 Sandia Corporation.
+Copyright 2016,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -11,6 +11,7 @@ import java.awt.FontMetrics;
 import java.util.ArrayList;
 import java.util.List;
 
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
@@ -106,10 +107,10 @@ public class NodeAnnotation extends NodeBase
     }
 
     @Override
-    public NodeBase add (String type, JTree tree)
+    public NodeBase add (String type, JTree tree, MNode data)
     {
         if (type.isEmpty ()) type = "Annotation";  // By context, we assume the user wants to add another annotation.
-        return ((NodeBase) getParent ()).add (type, tree);
+        return ((NodeBase) getParent ()).add (type, tree, data);
     }
 
     @Override

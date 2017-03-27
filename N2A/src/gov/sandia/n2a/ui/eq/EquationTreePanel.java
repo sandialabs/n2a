@@ -11,6 +11,8 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MPersistent;
+import gov.sandia.n2a.db.MVolatile;
+import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.plugins.UMFPluginManager;
 import gov.sandia.n2a.plugins.extpoints.Backend;
@@ -31,6 +33,9 @@ import java.awt.FontMetrics;
 import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.StringSelection;
+import java.awt.datatransfer.Transferable;
+import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.FocusEvent;
@@ -39,9 +44,10 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
 import java.io.File;
+import java.io.IOException;
+import java.io.StringReader;
+import java.io.StringWriter;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Enumeration;
@@ -86,7 +92,6 @@ import replete.util.Lay;
 
 public class EquationTreePanel extends JPanel
 {
-    protected ModelEditPanel modelPanel;
     protected int jobCount = 0;  // for launching jobs
 
     // Tree
@@ -117,10 +122,8 @@ public class EquationTreePanel extends JPanel
     protected long       menuFilterCanceledAt = 0;
 
     // The main constructor. Most of the real work of setting up the UI is here, including some fairly elaborate listeners.
-    public EquationTreePanel (ModelEditPanel container)
+    public EquationTreePanel ()
     {
-        modelPanel = container;
-
         model = new FilteredTreeModel (null);
         tree  = new JTree (model)
         {
@@ -136,6 +139,7 @@ public class EquationTreePanel extends JPanel
         tree.setScrollsOnExpand (true);
         tree.getSelectionModel ().setSelectionMode (TreeSelectionModel.SINGLE_TREE_SELECTION);  // No multiple selection. It only makes deletes and moves more complicated.
         tree.setEditable (true);
+        tree.setDragEnabled (true);
         tree.setToggleClickCount (0);  // Disable expand/collapse on double-click
 
         // Remove key bindings that we wish to use for changing order of nodes
@@ -293,45 +297,135 @@ public class EquationTreePanel extends JPanel
 
         tree.setTransferHandler (new TransferHandler ()
         {
-            public boolean canImport (TransferHandler.TransferSupport support)
+            public boolean canImport (TransferHandler.TransferSupport xfer)
             {
-                if (! support.isDrop ()) return false;  // could also support pasting models from the clipboard, 
-                if (! support.isDataFlavorSupported (DataFlavor.stringFlavor)) return false;
-                return true;
+                return xfer.isDataFlavorSupported (DataFlavor.stringFlavor);
             }
 
-            public boolean importData (TransferHandler.TransferSupport support)
+            public boolean importData (TransferHandler.TransferSupport xfer)
             {
-                // Get key for dropped part
-                String key;
+                MNode data = new MVolatile ();
+                Schema schema = new Schema ();
                 try
                 {
-                    key = (String) support.getTransferable().getTransferData (DataFlavor.stringFlavor);
+                    StringReader reader = new StringReader ((String) xfer.getTransferable ().getTransferData (DataFlavor.stringFlavor));
+                    schema.readAll (reader, data);
                 }
-                catch (Exception e)
+                catch (IOException | UnsupportedFlavorException e)
                 {
                     return false;
                 }
-                key = key.split ("=", 2)[0];  // data actually contains name=path; rather than hack the search list, simply extract the key
 
-                // Determine container part
-                TreePath path = ((JTree.DropLocation) support.getDropLocation ()).getPath ();
+                // Determine paste/drop target
+                TreePath path;
+                if (xfer.isDrop ()) path = ((JTree.DropLocation) xfer.getDropLocation ()).getPath ();
+                else                path = tree.getSelectionPath ();
                 if (path == null)
                 {
-                    if (root == null) createNewModel ();
+                    if (root == null) ModelEditPanel.instance.undoManager.add (new AddDoc ());
                     tree.setSelectionRow (0);
                     path = tree.getSelectionPath ();
                 }
-                else
+                if (xfer.isDrop ()) tree.setSelectionPath (path);
+                NodeBase target = (NodeBase) path.getLastPathComponent ();
+
+                ModelEditPanel mep = ModelEditPanel.instance;
+
+                // An import can either be a new node in the tree, or a link (via inheritance) to an existing part.
+                // In the case of a link, the part may need to be fully imported if it does not already exist in the db.
+                if (schema.type.startsWith ("Clip"))
                 {
-                    tree.setSelectionPath (path);
+                    for (MNode child : data)
+                    {
+                        NodeBase added = target.add (schema.type.substring (4), tree, child);
+                        if (added == null) return false;
+                    }
+                    return true;
                 }
-                NodeBase dropTarget = (NodeBase) path.getLastPathComponent ();
-                NodeBase added = dropTarget.addDnD (key, tree);
-                if (added == null) return false;
-                modelPanel.panelSearch.hideSelection ();  // because DnD highlights a selection without triggering focus notifications
-                return true;
-            }  
+                else if (schema.type.equals ("Part"))
+                {
+                    for (MNode child : data)  // There could be multiple parts.
+                    {
+                        // Ensure the part is in our db
+                        String key = child.key ();
+                        if (AppData.models.child (key) == null) mep.undoManager.add (new AddDoc (key, child));
+
+                        // Create an include-style part
+                        MNode include = new MVolatile ();  // Note the empty key. This enables AddPart to generate a name.
+                        include.merge (child);  // TODO: What if this brings in a $inherit line, and that line does not match the $inherit line in the source part? One possibility is to add the new values to the end of the $inherit line created below.
+                        include.set ("$inherit", "\"" + key + "\"");
+                        NodeBase added = target.add ("Part", tree, include);
+                        if (added == null) return false;
+                    }
+                    return true;
+                }
+                return false;
+            }
+
+            public int getSourceActions (JComponent comp)
+            {
+                return COPY_OR_MOVE;
+            }
+
+            class TransferableNode extends StringSelection
+            {
+                public List<String> path;
+
+                public TransferableNode (String data, NodeBase source)
+                {
+                    super (data);
+                    path = source.getKeyPath ();
+                }
+
+                public NodeBase getSource ()
+                {
+                    MNode doc = AppData.models.child (path.get (0));
+                    if (doc != record) return null;
+
+                    NodeBase result = root;
+                    for (int i = 1; i < path.size (); i++)
+                    {
+                        result = (NodeBase) result.child (path.get (i));
+                        if (result == null) break;
+                    }
+                    return result;
+                }
+            }
+
+            protected Transferable createTransferable (JComponent comp)
+            {
+                NodeBase node = getSelected ();
+                if (node == null) return null;
+                MVolatile copy = new MVolatile ();
+                node.copy (copy);
+
+                Schema schema = new Schema (1, "Clip" + node.getTypeName ());
+                StringWriter writer = new StringWriter ();
+                try
+                {
+                    schema.write (writer);
+                    for (MNode c : copy) c.write (writer);
+                    writer.close ();
+
+                    return new TransferableNode (writer.toString (), node);
+                }
+                catch (IOException e)
+                {
+                }
+
+                return null;
+            }
+
+            protected void exportDone (JComponent source, Transferable data, int action)
+            {
+                if (action == MOVE  &&  data instanceof TransferableNode)
+                {
+                    // It is possible for the node to be removed from the tree before we get to it.
+                    // For example, a local drop of an $inherit node will cause the tree to rebuild.
+                    NodeBase node = ((TransferableNode) data).getSource ();
+                    if (node != null) node.delete (tree, false);
+                }
+            }
         });
 
         tree.addFocusListener (new FocusListener ()
@@ -364,7 +458,7 @@ public class EquationTreePanel extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                modelPanel.undoManager.add (new AddDoc ());
+                ModelEditPanel.instance.undoManager.add (new AddDoc ());
             }
         });
 
@@ -671,7 +765,6 @@ public class EquationTreePanel extends JPanel
         class ExporterFilter extends FileFilter
         {
             public Exporter exporter;
-            public JComponent accessory;  ///< Store the accessory so it can retain state between changes in file filter.
 
             ExporterFilter (Exporter exporter)
             {
@@ -688,12 +781,6 @@ public class EquationTreePanel extends JPanel
             public String getDescription ()
             {
                 return exporter.getName ();
-            }
-
-            public JComponent getAccessory (JFileChooser fc)
-            {
-                if (accessory == null) accessory = exporter.getAccessory (fc);
-                return accessory;
             }
         }
 
@@ -712,14 +799,6 @@ public class EquationTreePanel extends JPanel
                 fc.addChoosableFileFilter (ef);
                 if (ef.exporter.getName ().contains ("N2A")) n2a = ef;
             }
-            fc.addPropertyChangeListener (JFileChooser.FILE_FILTER_CHANGED_PROPERTY, new PropertyChangeListener ()
-            {
-                public void propertyChange (PropertyChangeEvent arg0)
-                {
-                    fc.setAccessory (((ExporterFilter) fc.getFileFilter ()).getAccessory (fc));
-                    fc.revalidate ();
-                }
-            });
             fc.setAcceptAllFileFilterUsed (false);
             if (n2a != null) fc.setFileFilter (n2a);
 
@@ -731,7 +810,7 @@ public class EquationTreePanel extends JPanel
             {
                 File path = fc.getSelectedFile ();
                 ExporterFilter filter = (ExporterFilter) fc.getFileFilter ();
-                filter.exporter.export (record, path, filter.accessory);
+                filter.exporter.export (record, path);
             }
         }
     };
@@ -743,7 +822,6 @@ public class EquationTreePanel extends JPanel
         class ImporterFilter extends FileFilter
         {
             public Importer importer;
-            public JComponent accessory;  ///< Store the accessory so it can retain state between changes in file filter.
 
             ImporterFilter (Importer importer)
             {
@@ -761,12 +839,6 @@ public class EquationTreePanel extends JPanel
             {
                 return importer.getName ();
             }
-
-            public JComponent getAccessory (JFileChooser fc)
-            {
-                if (accessory == null) accessory = importer.getAccessory (fc);
-                return accessory;
-            }
         }
 
         public void actionPerformed (ActionEvent e)
@@ -782,14 +854,6 @@ public class EquationTreePanel extends JPanel
                 fc.addChoosableFileFilter (f);
                 if (f.importer.getName ().contains ("N2A")) n2a = f;
             }
-            fc.addPropertyChangeListener (JFileChooser.FILE_FILTER_CHANGED_PROPERTY, new PropertyChangeListener ()
-            {
-                public void propertyChange (PropertyChangeEvent arg0)
-                {
-                    fc.setAccessory (((ImporterFilter) fc.getFileFilter ()).getAccessory (fc));
-                    fc.revalidate ();
-                }
-            });
             fc.setAcceptAllFileFilterUsed (false);
             if (n2a != null) fc.setFileFilter (n2a);
 
@@ -801,7 +865,7 @@ public class EquationTreePanel extends JPanel
             {
                 File path = fc.getSelectedFile ();
                 ImporterFilter filter = (ImporterFilter) fc.getFileFilter ();
-                filter.importer.process (path, filter.accessory);
+                filter.importer.process (path);
             }
         }
     };
@@ -831,12 +895,12 @@ public class EquationTreePanel extends JPanel
         NodeBase selected = getSelected ();
         if (selected == null)  // only happens when root is null
         {
-            createNewModel ();
+            ModelEditPanel.instance.undoManager.add (new AddDoc ());
             if (type.equals ("Part")) return;  // Since root is itself a Part, don't create another one. For anything else, fall through and add it to the newly-created model.
             selected = root;
         }
 
-        NodeBase editMe = selected.add (type, tree);
+        NodeBase editMe = selected.add (type, tree, null);
         if (editMe != null)
         {
             TreePath path = new TreePath (editMe.getPath ());
@@ -844,41 +908,6 @@ public class EquationTreePanel extends JPanel
             tree.setSelectionPath (path);
             tree.startEditingAtPath (path);
         }
-    }
-
-    public void createNewModel ()
-    {
-        MNode newModel = createNewModel ("New Model");
-        loadRootFromDB (newModel);
-    }
-
-    public MNode createNewModel (String name)
-    {
-        MNode models = AppData.models;
-        MNode result = models.child (name);
-        if (result == null)
-        {
-            result = models.set (name, "");
-        }
-        else
-        {
-            name += " ";
-            int suffix = 2;
-            while (true)
-            {
-                if (result.length () == 0) break;  // no children, so still a virgin
-                result = models.child (name + suffix);
-                if (result == null)
-                {
-                    result = models.set (name + suffix, "");
-                    break;
-                }
-                suffix++;
-            }
-        }
-
-        modelPanel.panelSearch.insertDoc (result, 0);
-        return result;
     }
 
     public void deleteSelected ()
@@ -905,7 +934,7 @@ public class EquationTreePanel extends JPanel
                 NodeBase nodeAfter = (NodeBase) model.getChild (parent, indexAfter);
                 indexBefore = parent.getIndex (nodeBefore);
                 indexAfter  = parent.getIndex (nodeAfter);
-                modelPanel.undoManager.add (new Move ((NodePart) parent, indexBefore, indexAfter));
+                ModelEditPanel.instance.undoManager.add (new Move ((NodePart) parent, indexBefore, indexAfter));
             }
         }
     }

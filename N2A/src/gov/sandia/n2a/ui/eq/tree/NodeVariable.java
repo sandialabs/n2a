@@ -234,16 +234,29 @@ public class NodeVariable extends NodeContainer
     }
 
     @Override
-    public NodeBase add (String type, JTree tree)
+    public void copy (MNode result)
     {
-        if (isBinding) return ((NodeBase) getParent ()).add ("Variable", tree);
+        MNode n = result.set (source.key (), source.get ());
+        Enumeration<?> cf = childrenFiltered ();
+        while (cf.hasMoreElements ())
+        {
+            NodeBase child = (NodeBase) cf.nextElement ();
+            if      (child instanceof NodeAnnotation) n.set ("$metadata",  child.source.key (), child.source.get ());
+            else if (child instanceof NodeReference)  n.set ("$reference", child.source.key (), child.source.get ());
+            else     child.copy (n);
+        }
+    }
 
+    @Override
+    public NodeBase add (String type, JTree tree, MNode data)
+    {
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         if (type.isEmpty ())
         {
-            if (model.getChildCount (this) == 0  ||  tree.isCollapsed (new TreePath (getPath ()))) return ((NodeBase) getParent ()).add ("Variable", tree);
+            if (model.getChildCount (this) == 0  ||  tree.isCollapsed (new TreePath (getPath ()))) return ((NodeBase) getParent ()).add ("Variable", tree, data);
             type = "Equation";
         }
+        if (isBinding) return ((NodeBase) getParent ()).add (type, tree, data);
 
         if (type.equals ("Equation"))
         {
@@ -255,7 +268,7 @@ public class NodeVariable extends NodeContainer
             if (index < getChildCount ()  &&  getChildAt (index) instanceof NodeEquation) index++;
 
             // Create an AddEquation action
-            AddEquation ae = new AddEquation (this, index);
+            AddEquation ae = new AddEquation (this, index, data);
             ModelEditPanel.instance.undoManager.add (ae);
             return ae.createdNode;
         }
@@ -266,18 +279,18 @@ public class NodeVariable extends NodeContainer
             int count = getChildCount ();
             while (index < count  &&  ! (children.get (index) instanceof NodeReference)) index++;
 
-            AddAnnotation aa = new AddAnnotation (this, index);
+            AddAnnotation aa = new AddAnnotation (this, index, data);
             ModelEditPanel.instance.undoManager.add (aa);
             return aa.createdNode;
         }
         else if (type.equals ("Reference"))
         {
-            AddReference ar = new AddReference (this, getChildCount ());
+            AddReference ar = new AddReference (this, getChildCount (), data);
             ModelEditPanel.instance.undoManager.add (ar);
             return ar.createdNode;
         }
 
-        return ((NodeBase) getParent ()).add (type, tree);  // refer all other requests up the tree
+        return ((NodeBase) getParent ()).add (type, tree, data);  // refer all other requests up the tree
     }
 
     /**

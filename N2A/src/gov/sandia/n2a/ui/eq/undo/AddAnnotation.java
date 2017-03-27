@@ -16,6 +16,7 @@ import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoableEdit;
 
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.ModelEditPanel;
@@ -36,20 +37,29 @@ public class AddAnnotation extends Undoable
         @param parent Must be the node that contains $metadata, not the $metadata node itself.
         @param index Position in the unfiltered tree where the node should be inserted.
     **/
-    public AddAnnotation (NodeBase parent, int index)
+    public AddAnnotation (NodeBase parent, int index, MNode data)
     {
         path = parent.getKeyPath ();
         this.index = index;
-        name = uniqueName (parent, "$metadata", "a");
+        if (data == null)
+        {
+            name = uniqueName (parent, "$metadata", "a", false);
+        }
+        else
+        {
+            name = uniqueName (parent, "$metadata", data.key (), true);
+            value = data.get ();
+        }
     }
 
-    public static String uniqueName (NodeBase parent, String blockName, String prefix)
+    public static String uniqueName (NodeBase parent, String blockName, String prefix, boolean allowEmptySuffix)
     {
-        MPart metadata = (MPart) parent.source.child (blockName);
+        MPart block = (MPart) parent.source.child (blockName);
         int suffix = 1;
-        if (metadata != null)
+        if (block != null)
         {
-            while (metadata.child (prefix + suffix) != null) suffix++;
+            if (allowEmptySuffix  &&  block.child (prefix) == null) return prefix;
+            while (block.child (prefix + suffix) != null) suffix++;
         }
         return prefix + suffix;
     }

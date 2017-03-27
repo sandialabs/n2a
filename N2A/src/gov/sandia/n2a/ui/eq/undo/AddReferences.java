@@ -1,5 +1,5 @@
 /*
-Copyright 2016 Sandia Corporation.
+Copyright 2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -9,43 +9,43 @@ package gov.sandia.n2a.ui.eq.undo;
 
 import java.util.List;
 
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
-import gov.sandia.n2a.ui.eq.tree.NodeReferences;
 
-public class DeleteReferences extends Undoable
+public class AddReferences extends Undoable
 {
     protected List<String> path;  ///< to parent of $metadata node
     protected int          index; ///< Position within parent node
     protected MVolatile    saved; ///< subtree under $metadata
 
-    public DeleteReferences (NodeBase node)
+    public AddReferences (NodeBase parent, int index, MNode data)
     {
-        NodeBase container = (NodeBase) node.getParent ();
-        path  = container.getKeyPath ();
-        index = container.getIndex (node);
+        path = parent.getKeyPath ();
+        this.index = index;
 
         saved = new MVolatile ("$references", "");
-        saved.merge (node.source.getSource ());  // We only save top-document data. $metadata node is guaranteed to be from top doc, due to guard in NodeAnnotations.delete().
+        saved.merge (data);
     }
 
     public void undo ()
     {
         super.undo ();
-        NodeFactory factory = new NodeFactory ()
-        {
-            public NodeBase create (MPart part)
-            {
-                return new NodeReferences (part);
-            }
-        };
-        AddAnnotations.create (path, index, saved, factory);
+        AddAnnotations.destroy (path, saved.key ());
     }
 
     public void redo ()
     {
         super.redo ();
-        AddAnnotations.destroy (path, saved.key ());
+        NodeFactory factory = new NodeFactory ()
+        {
+            public NodeBase create (MPart part)
+            {
+                return new NodeAnnotations (part);
+            }
+        };
+        AddAnnotations.create (path, index, saved, factory);
     }
 }

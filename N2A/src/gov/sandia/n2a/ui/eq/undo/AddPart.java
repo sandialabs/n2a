@@ -27,6 +27,7 @@ public class AddPart extends Undoable
 {
     protected List<String> path;  // to containing part
     protected int          index; // where to insert among siblings
+    protected String       name;
     protected MNode        createSubtree;
     protected boolean      nameIsGenerated;
     public    NodeBase     createdNode;  ///< Used by caller to initiate editing. Only valid immediately after call to redo().
@@ -35,25 +36,30 @@ public class AddPart extends Undoable
         @param parent Must be the node that contains $metadata, not the $metadata node itself.
         @param index Position in the unfiltered tree where the node should be inserted.
     **/
-    public AddPart (NodeBase parent, int index, String inherit)
+    public AddPart (NodeBase parent, int index, MNode data)
     {
         path = parent.getKeyPath ();
         this.index = index;
-        createSubtree = new MVolatile (uniqueName (parent, "p"), "");
-        if (inherit == null)
+
+        createSubtree = new MVolatile ();
+        if (data == null)
         {
+            name = uniqueName (parent, "p", 0, false);
             nameIsGenerated = true;
         }
         else
         {
-            createSubtree.set ("$inherit", "\"" + inherit + "\"");
-            nameIsGenerated = false;  // Because we don't go into edit mode on a drag-n-drop. If that changes, then always set nameIsGenerated to true.
+            createSubtree.merge (data);
+            name = data.key ();
+            if (name.isEmpty ()) name = uniqueName (parent, "p", 0, false);  // Even though this is actually generated, we don't plan to go directly into edit mode, so treat as if not generated.
+            else                 name = uniqueName (parent, name, 2, true);
+            nameIsGenerated = false;  // Because we don't go into edit mode on a drop or paste. If that changes, then always set nameIsGenerated to true.
         }
     }
 
-    public static String uniqueName (NodeBase parent, String prefix)
+    public static String uniqueName (NodeBase parent, String prefix, int suffix, boolean allowEmptySuffix)
     {
-        int suffix = 0;
+        if (allowEmptySuffix  &&  parent.source.child (prefix) == null) return prefix;
         while (true)
         {
             String result = prefix + suffix;
@@ -65,7 +71,7 @@ public class AddPart extends Undoable
     public void undo ()
     {
         super.undo ();
-        destroy (path, false, createSubtree.key ());
+        destroy (path, false, name);
     }
 
     public static void destroy (List<String> path, boolean canceled, String name)
@@ -103,16 +109,15 @@ public class AddPart extends Undoable
     public void redo ()
     {
         super.redo ();
-        createdNode = create (path, index, createSubtree, nameIsGenerated);
+        createdNode = create (path, index, name, createSubtree, nameIsGenerated);
     }
 
-    public static NodeBase create (List<String> path, int index, MNode newPart, boolean nameIsGenerated)
+    public static NodeBase create (List<String> path, int index, String name, MNode newPart, boolean nameIsGenerated)
     {
         NodeBase parent = locateNode (path);
         if (parent == null) throw new CannotRedoException ();
 
         // Update database
-        String name = newPart.key ();
         MPart createdPart = (MPart) parent.source.set (name, "");
         createdPart.merge (newPart);
 
@@ -145,12 +150,9 @@ public class AddPart extends Undoable
         if (nameIsGenerated  &&  edit instanceof ChangePart)
         {
             ChangePart change = (ChangePart) edit;
-            if (path.equals (change.path)  &&  createSubtree.key ().equals (change.nameBefore))
+            if (path.equals (change.path)  &&  name.equals (change.nameBefore))
             {
-                // There is not direct way to change the key of an MVolatile, so must create a new node and merge into it.
-                MNode nextSubtree = new MVolatile (change.nameAfter, "");
-                nextSubtree.merge (createSubtree);
-                createSubtree = nextSubtree;
+                name = change.nameAfter;
                 nameIsGenerated = false;
                 return true;
             }

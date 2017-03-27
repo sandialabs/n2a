@@ -9,14 +9,10 @@ package gov.sandia.n2a.plugins.extpoints;
 
 import java.io.File;
 
-import javax.swing.JComponent;
-import javax.swing.JFileChooser;
-
 import replete.plugins.ExtensionPoint;
 
 public interface Importer extends ExtensionPoint
 {
-    public String     getName ();
-    public JComponent getAccessory (JFileChooser fc);
-    public void       process (File source, JComponent accessory);
+    public String getName ();
+    public void   process (File source);
 }

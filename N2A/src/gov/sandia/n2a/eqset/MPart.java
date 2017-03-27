@@ -424,6 +424,36 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         return result;
     }
 
+    /**
+        Ensures that the minimal number of override nodes are created.
+        Processes $inherit first, so that as other children are set, they are recognized as matching
+        an inherited value when that is the case.
+    **/
+    public synchronized void merge (MNode that)
+    {
+        String value = that.get ();
+        if (! value.isEmpty ()) set (value);
+
+        // Process $inherit first
+        MNode thatInherit = that.child ("$inherit");
+        if (thatInherit != null)
+        {
+            MNode inherit = child ("$inherit");
+            if (inherit == null) inherit = set ("$inherit", "");
+            inherit.merge (thatInherit);
+        }
+
+        // Then the rest of the children
+        for (MNode thatChild : that)
+        {
+            if (thatChild == thatInherit) continue;
+            String index = thatChild.key ();
+            MNode c = child (index);
+            if (c == null) c = set (index, "");  // ensure a target child node exists
+            c.merge (thatChild);
+        }
+    }
+
     public synchronized void move (String fromIndex, String toIndex)
     {
         clear (toIndex);  // By definition, no top-level document nodes are allowed to remain at the destination. However, underrides may exist.

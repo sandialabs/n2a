@@ -40,6 +40,7 @@ public class AddInherit extends Undoable
 
     public static void destroy (List<String> path, boolean canceled)
     {
+        System.out.println ("destroy: " + path);
         NodePart parent = (NodePart) locateNode (path);
         if (parent == null) throw new CannotRedoException ();
 

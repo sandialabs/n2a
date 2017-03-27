@@ -36,8 +36,8 @@ public class ModelEditPanel extends JPanel
     {
         instance = this;
 
-        panelEquations = new EquationTreePanel (this);
-        panelSearch    = new SearchPanel       (this);
+        panelEquations = new EquationTreePanel ();
+        panelSearch    = new SearchPanel ();
 
         split = new JSplitPane (JSplitPane.HORIZONTAL_SPLIT, panelSearch, panelEquations);
         split.setOneTouchExpandable(true);
