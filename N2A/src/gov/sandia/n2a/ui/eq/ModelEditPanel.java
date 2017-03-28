@@ -47,18 +47,19 @@ public class ModelEditPanel extends JPanel
         setFocusCycleRoot (true);
 
         // Determine the split position.
-        int divider = AppData.state.getOrDefaultInt ("ModelEditPanel", "divider", "0");
-        if (divider > 0) split.setDividerLocation (divider);
-        else             split.setDividerLocation (0.25);
+        split.setDividerLocation (AppData.state.getOrDefaultInt ("ModelEditPanel", "divider", "150"));
         split.setResizeWeight (0.25);  // always favor equation tree over search
-
-        // TODO: Something seems to add 2px to the divider location each time the app is run. Probably during layout.
-        split.addPropertyChangeListener (split.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
+        split.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
+            boolean gotFirstChange;
             public void propertyChange (PropertyChangeEvent e)
             {
-                Object o = e.getNewValue ();
-                if (o != null) AppData.state.set ("ModelEditPanel", "divider", o.toString ());
+                if (gotFirstChange)  // Ignore first change, as it is induced by the initial layout, interacting with resize weight. This often results in a different value for divider location than the set one.
+                {
+                    Object o = e.getNewValue ();
+                    if (o instanceof Integer) AppData.state.set ("ModelEditPanel", "divider", o);
+                }
+                gotFirstChange = true;
             }
         });
 
