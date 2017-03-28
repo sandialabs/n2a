@@ -7,23 +7,37 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.eq.undo;
 
+import javax.swing.undo.UndoableEdit;
+
 public class UndoManager extends javax.swing.undo.UndoManager
 {
     public synchronized boolean add (Undoable edit)
     {
-        edit.redo ();  // All descendants of Do are expected to carry out their operation once on creation. We do that here for convenience.
+        edit.redo ();  // All descendants of Undoable are expected to carry out their operation once on creation. We do that here for convenience.
 
         if (! super.addEdit (edit)) return false;
-        if (edit.anihilate ())
+        UndoableEdit lastEdit = lastEdit ();  // lastEdit could be a CompoundEdit, thus we have to check ...
+        if (lastEdit instanceof Undoable  &&  ((Undoable) lastEdit).anihilate ())
         {
-            int last = edits.size () - 1;
-            trimEdits (last, last);  // We have to do this indirectly because we can't directly maintain indexOfNextAdd.
+            int lastIndex = edits.size () - 1;
+            trimEdits (lastIndex, lastIndex);  // We have to do this indirectly because indexOfNextAdd is package private, so we can't maintain it.
         }
         return true;
     }
 
-    public Undoable editToBeUndone ()
+    public synchronized void endCompoundEdit ()
     {
-        return (Undoable) super.editToBeUndone ();
+        UndoableEdit lastEdit = lastEdit ();
+        if (lastEdit instanceof CompoundEdit)
+        {
+            CompoundEdit compound = (CompoundEdit) lastEdit;
+            compound.end ();
+            if (compound.isEmpty ())
+            {
+                // Remove it. This is not strictly necessary, because an empty CompoundEdit will return false for isSignificant(), and thus not add a step for the user.
+                int lastIndex = edits.size () - 1;
+                trimEdits (lastIndex, lastIndex);
+            }
+        }
     }
 }

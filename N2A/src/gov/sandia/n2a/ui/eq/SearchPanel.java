@@ -13,6 +13,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
+import gov.sandia.n2a.ui.eq.undo.CompoundEdit;
 import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
@@ -251,10 +252,12 @@ public class SearchPanel extends JPanel
                 }
 
                 if (! schema.type.contains ("Part")) return false;
+                ModelEditPanel.instance.undoManager.addEdit (new CompoundEdit ());
                 for (MNode n : data)  // data can contain several parts
                 {
                     ModelEditPanel.instance.undoManager.add (new AddDoc (n.key (), n));
                 }
+                if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE) ModelEditPanel.instance.undoManager.endCompoundEdit ();
 
                 return true;
             }
@@ -287,6 +290,7 @@ public class SearchPanel extends JPanel
             protected void exportDone (JComponent source, Transferable data, int action)
             {
                 if (! list.isFocusOwner ()) hideSelection ();
+                ModelEditPanel.instance.undoManager.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
             }
         });
 

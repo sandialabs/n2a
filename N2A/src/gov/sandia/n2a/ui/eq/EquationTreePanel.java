@@ -25,6 +25,7 @@ import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
+import gov.sandia.n2a.ui.eq.undo.CompoundEdit;
 import gov.sandia.n2a.ui.eq.undo.Move;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.RunPanel;
@@ -316,6 +317,9 @@ public class EquationTreePanel extends JPanel
                     return false;
                 }
 
+                ModelEditPanel mep = ModelEditPanel.instance;
+                mep.undoManager.addEdit (new CompoundEdit ());
+
                 // Determine paste/drop target
                 TreePath path;
                 if (xfer.isDrop ()) path = ((JTree.DropLocation) xfer.getDropLocation ()).getPath ();
@@ -329,21 +333,25 @@ public class EquationTreePanel extends JPanel
                 if (xfer.isDrop ()) tree.setSelectionPath (path);
                 NodeBase target = (NodeBase) path.getLastPathComponent ();
 
-                ModelEditPanel mep = ModelEditPanel.instance;
-
                 // An import can either be a new node in the tree, or a link (via inheritance) to an existing part.
                 // In the case of a link, the part may need to be fully imported if it does not already exist in the db.
+                boolean result = false;
                 if (schema.type.startsWith ("Clip"))
                 {
+                    result = true;
                     for (MNode child : data)
                     {
                         NodeBase added = target.add (schema.type.substring (4), tree, child);
-                        if (added == null) return false;
+                        if (added == null)
+                        {
+                            result = false;
+                            break;
+                        }
                     }
-                    return true;
                 }
                 else if (schema.type.equals ("Part"))
                 {
+                    result = true;
                     for (MNode child : data)  // There could be multiple parts.
                     {
                         // Ensure the part is in our db
@@ -355,11 +363,15 @@ public class EquationTreePanel extends JPanel
                         include.merge (child);  // TODO: What if this brings in a $inherit line, and that line does not match the $inherit line in the source part? One possibility is to add the new values to the end of the $inherit line created below.
                         include.set ("$inherit", "\"" + key + "\"");
                         NodeBase added = target.add ("Part", tree, include);
-                        if (added == null) return false;
+                        if (added == null)
+                        {
+                            result = false;
+                            break;
+                        }
                     }
-                    return true;
                 }
-                return false;
+                if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE) mep.undoManager.endCompoundEdit ();
+                return result;
             }
 
             public int getSourceActions (JComponent comp)
@@ -425,6 +437,7 @@ public class EquationTreePanel extends JPanel
                     NodeBase node = ((TransferableNode) data).getSource ();
                     if (node != null) node.delete (tree, false);
                 }
+                ModelEditPanel.instance.undoManager.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
             }
         });
 
