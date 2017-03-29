@@ -10,8 +10,6 @@ package gov.sandia.n2a.parms;
 import java.util.ArrayList;
 import java.util.Collection;
 
-import replete.util.StringUtil;
-
 public class ParameterKeyPath extends ArrayList<Object> {
 
     public boolean useColon;
@@ -46,9 +44,7 @@ public class ParameterKeyPath extends ArrayList<Object> {
         for(int i = start; i < size(); i++) {
             rest += get(i) + ".";
         }
-        if(!rest.equals("")) {
-            rest = StringUtil.cut(rest, 1);
-        }
+        if(!rest.isEmpty ()) rest = rest.substring (0, rest.length () - 1);
         return rest;
     }
 

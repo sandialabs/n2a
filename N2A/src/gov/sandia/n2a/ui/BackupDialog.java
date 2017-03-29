@@ -22,13 +22,11 @@ import java.util.TreeSet;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
+import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JList;
 
-import replete.gui.windows.EscapeDialog;
-import replete.util.Lay;
-
-public class BackupDialog extends EscapeDialog
+public class BackupDialog extends JDialog
 {
     class BackupEntry implements Comparable<BackupEntry>
     {
@@ -68,7 +66,7 @@ public class BackupDialog extends EscapeDialog
                 public void actionPerformed (ActionEvent e)
                 {
                     backup ();
-                    closeDialog ();
+                    dispose ();
                 }
             }
         );
@@ -81,7 +79,7 @@ public class BackupDialog extends EscapeDialog
                 public void actionPerformed (ActionEvent e)
                 {
                     restore ();
-                    closeDialog ();
+                    dispose ();
                 }
             }
         );
@@ -106,7 +104,7 @@ public class BackupDialog extends EscapeDialog
             {
                 public void actionPerformed (ActionEvent e)
                 {
-                    closeDialog ();
+                    dispose ();
                 }
             }
         );

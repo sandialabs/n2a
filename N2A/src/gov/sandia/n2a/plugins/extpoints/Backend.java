@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -11,8 +11,10 @@ import java.io.PrintStream;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.parms.ParameterSpecification;
+import gov.sandia.n2a.plugins.ExtensionPoint;
+import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.parms.ParameterDomain;
-import replete.plugins.ExtensionPoint;
+
 
 public abstract class Backend implements ExtensionPoint
 {
@@ -41,6 +43,30 @@ public abstract class Backend implements ExtensionPoint
     {
     }
 
+    /**
+        Finds the Backend instance that matches the given name.
+        If no match is found, returns the Internal backend.
+        If Internal is missing, the system is too broken to run.
+    **/
+    public static Backend getBackend (String name)
+    {
+        Backend result = null;
+        Backend internal = null;
+        for (ExtensionPoint ext : PluginManager.getExtensionsForPoint (Backend.class))
+        {
+            Backend s = (Backend) ext;
+            if (s.getName ().equalsIgnoreCase (name))
+            {
+                result = s;
+                break;
+            }
+            if (s.getName ().equals ("Internal")) internal = s;
+        }
+        if (result == null) result = internal;
+        if (result == null) throw new RuntimeException ("Couldn't find internal simulator!");
+        return result;
+    }
+ 
     /**
         Returns the display name for this back-end.
     **/

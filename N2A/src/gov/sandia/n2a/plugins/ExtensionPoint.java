@@ -1,15 +1,18 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.plugins.extpoints;
+package gov.sandia.n2a.plugins;
 
-import java.awt.event.ActionEvent;
+/**
+ * This interface
+ *
+ * @author dtrumbo
+ */
 
-public interface UMFMenuActionListener
-{
-    public void actionPerformed (ActionEvent e);
+public interface ExtensionPoint {
+
 }

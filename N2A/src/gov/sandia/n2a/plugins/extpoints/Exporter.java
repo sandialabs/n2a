@@ -8,10 +8,10 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.plugins.extpoints;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.plugins.ExtensionPoint;
 
 import java.io.File;
 
-import replete.plugins.ExtensionPoint;
 
 public interface Exporter extends ExtensionPoint
 {

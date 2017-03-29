@@ -9,7 +9,7 @@ package gov.sandia.n2a.plugins.extpoints;
 
 import java.io.File;
 
-import replete.plugins.ExtensionPoint;
+import gov.sandia.n2a.plugins.ExtensionPoint;
 
 public interface Importer extends ExtensionPoint
 {

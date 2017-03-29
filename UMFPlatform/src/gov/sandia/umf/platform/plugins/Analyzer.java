@@ -7,8 +7,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.umf.platform.plugins;
 
+import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.umf.platform.runs.Run;
-import replete.plugins.ExtensionPoint;
 
 public interface Analyzer extends ExtensionPoint
 {

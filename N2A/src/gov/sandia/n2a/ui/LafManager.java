@@ -51,6 +51,7 @@ public class LafManager
             {
                 UIManager.setLookAndFeel (instance);
                 currentLaf = this;
+                AppData.state.set ("LookAndFeel", this);
             }
             catch (UnsupportedLookAndFeelException e)
             {
@@ -148,11 +149,6 @@ public class LafManager
     public static JMenu getMenu ()
     {
         return menu;
-    }
-
-    public static void save ()
-    {
-        AppData.state.set ("LookAndFeel", currentLaf);
     }
 
     public static void load ()

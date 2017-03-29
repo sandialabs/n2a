@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -9,12 +9,11 @@ package gov.sandia.n2a.execenvs;
 
 import gov.sandia.n2a.db.MNode;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.InputStreamReader;
 import java.util.Set;
 import java.util.TreeSet;
-
-import replete.process.ProcessUtil;
-import replete.util.FileUtil;
 
 public class Linux extends LocalMachineEnv
 {
@@ -23,32 +22,41 @@ public class Linux extends LocalMachineEnv
     {
         Set<Integer> result = new TreeSet<Integer> ();
         String[] cmdArray = new String[] {"ps", "-eo", "pid,command"};
-        String[] lines = ProcessUtil.getOutput (cmdArray);
-        for (String line : lines)
+        Process proc = Runtime.getRuntime ().exec (cmdArray);
+        try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
-            line = line.toLowerCase ();
-            if (line.contains ("n2a_job"))
+            String line;
+            while ((line = reader.readLine ()) != null)
             {
-                line = line.trim ();
-                String[] parts = line.split ("\\s+");  // any amount/type of whitespace forms the delimiter
-                result.add (new Integer (parts[0]));
+                line = line.toLowerCase ();
+                if (line.contains ("n2a_job"))
+                {
+                    line = line.trim ();
+                    String[] parts = line.split ("\\s+");  // any amount/type of whitespace forms the delimiter
+                    result.add (new Integer (parts[0]));
+                }
             }
         }
         return result;
     }
 
     @Override
-    public long getProcMem(Integer procNum)
+    public long getProcMem (Integer procNum) throws Exception
     {
-        long result = -1;    // error condition
         String[] cmdArray = new String[] {"ps", "-p", procNum.toString(), "-o", "pid,rss"};
-        String[] lines = ProcessUtil.getOutput (cmdArray);
-        if (lines.length == 2) {   // first line is headers, second has info we want
-            String line = lines[1].trim ();
+        Process proc = Runtime.getRuntime ().exec (cmdArray);
+        try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+        {
+            // first line is headers, second has info we want
+            String line = reader.readLine ();
+            if (line == null) return -1;
+            line = reader.readLine ();
+            if (line == null) return -1;
+
+            line = line.trim ();
             String[] parts = line.split ("\\s+");  // any amount/type of whitespace forms the delimiter
-            result = Long.parseLong(parts[1]) * 1024;
+            return Long.parseLong(parts[1]) * 1024;
         }
-        return result;
     }
 
     @Override
@@ -60,17 +68,17 @@ public class Linux extends LocalMachineEnv
         File err = new File (jobDir, "err");
 
         File script = new File (jobDir, "n2a_job");
-        FileUtil.writeTextContent (script, "#!/bin/bash\n" + command + " > '" + out.getAbsolutePath () + "' 2>> '" + err.getAbsolutePath () + "' &\ntouch finished\n");
+        stringToFile (script, "#!/bin/bash\n" + command + " > '" + out.getAbsolutePath () + "' 2>> '" + err.getAbsolutePath () + "' &\ntouch finished\n");
 
         String [] commandParm = {"chmod", "u+x", script.getAbsolutePath ()};
         Process p = Runtime.getRuntime ().exec (commandParm);
         p.waitFor ();
-        if (p.exitValue () != 0) throw new Exception ("Failed to change permissions on job script:\n" + FileUtil.getTextContent (p.getErrorStream ()));
+        if (p.exitValue () != 0) throw new Exception ("Failed to change permissions on job script:\n" + streamToString (p.getErrorStream ()));
 
         commandParm = new String[] {script.getAbsolutePath ()};
         p = Runtime.getRuntime ().exec (commandParm);
         p.waitFor ();
-        if (p.exitValue () != 0) throw new Exception ("Failed to run job:\n" + FileUtil.getTextContent (p.getErrorStream ()));
+        if (p.exitValue () != 0) throw new Exception ("Failed to run job:\n" + streamToString (p.getErrorStream ()));
     }
 
     @Override

@@ -11,7 +11,7 @@ import java.awt.Component;
 
 import javax.swing.ImageIcon;
 
-import replete.plugins.ExtensionPoint;
+import gov.sandia.n2a.plugins.ExtensionPoint;
 
 public interface RecordHandler extends ExtensionPoint
 {

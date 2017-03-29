@@ -12,6 +12,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.execenvs.ExecutionEnv;
 import gov.sandia.n2a.parms.ParameterSet;
+import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
 import gov.sandia.umf.platform.plugins.PlatformRecord;
@@ -19,7 +20,6 @@ import gov.sandia.umf.platform.plugins.PlatformRecord;
 import java.util.ArrayList;
 import java.util.List;
 
-import replete.plugins.PluginManager;
 import replete.xstream.XStreamWrapper;
 
 public class RunEnsemble

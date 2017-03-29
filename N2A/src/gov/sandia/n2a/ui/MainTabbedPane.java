@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2016 Sandia Corporation.
+Copyright 2013,2016,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -9,7 +9,8 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.ui;
 
 import gov.sandia.n2a.db.AppData;
-import gov.sandia.n2a.plugins.UMFPluginManager;
+import gov.sandia.n2a.plugins.ExtensionPoint;
+import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.RecordHandler;
 
 import java.awt.Component;
@@ -24,6 +25,7 @@ import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.Map.Entry;
 
 import javax.swing.Icon;
@@ -52,7 +54,12 @@ public class MainTabbedPane extends JTabbedPane
         String order = AppData.state.getOrDefault ("MainTabbedPane", "order", "Model");
         Set<String> sorted = new HashSet<String> ();
         String[] titles = order.split (",");  // comma-separated list
-        Map<String,RecordHandler> handlers = UMFPluginManager.getRecordHandlers ();
+        Map<String,RecordHandler> handlers = new TreeMap<String,RecordHandler> ();
+        for (ExtensionPoint ep : PluginManager.getExtensionsForPoint (RecordHandler.class))
+        {
+            RecordHandler rh = (RecordHandler) ep;
+            handlers.put (rh.getName (), rh);
+        }
         for (String title : titles)
         {
             RecordHandler handler = handlers.get (title);

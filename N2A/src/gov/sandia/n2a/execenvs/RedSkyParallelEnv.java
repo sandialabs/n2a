@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -16,14 +16,12 @@ import java.io.StringReader;
 import java.util.Set;
 import java.util.TreeSet;
 
-import replete.util.User;
-
 public class RedSkyParallelEnv extends RedSkyEnv
 {
     @Override
     public Set<Integer> getActiveProcs() throws Exception
     {
-        Result r = RedSkyConnection.exec ("squeue -o \"%u %i\" -u " + User.getName ());
+        Result r = RedSkyConnection.exec ("squeue -o \"%u %i\" -u " + System.getProperty ("user.name"));
         if (r.error && r.stdErr != null && !r.stdErr.equals (""))
         {
             throw new Exception (r.stdErr);

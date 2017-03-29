@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -13,9 +13,6 @@ import java.util.List;
 import java.util.Map;
 
 import javax.swing.ImageIcon;
-
-import replete.util.StringUtil;
-
 
 public class ParameterDomain {
 
@@ -183,9 +180,17 @@ public class ParameterDomain {
     public void list() {
         list(0);
     }
+
+    public static String spaces (int n)
+    {
+        String result = "";
+        for (int i = 0; i < n; i++) result = result + " ";
+        return result;
+    }
+
     private void list(int level) {
-        String sp = StringUtil.spaces(level * 4);
-        String sp2 = StringUtil.spaces((level + 1) * 4);
+        String sp = spaces(level * 4);
+        String sp2 = spaces((level + 1) * 4);
         System.out.println(sp + "[" + name + "]");
         for(Parameter param : params) {
             System.out.println(sp2 + param.getKey() + " = " + param.getDefaultValue());

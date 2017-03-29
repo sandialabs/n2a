@@ -12,6 +12,7 @@ import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
+import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
 import gov.sandia.n2a.ui.eq.undo.CompoundEdit;
 import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
@@ -53,7 +54,6 @@ import javax.swing.text.DefaultHighlighter;
 import javax.swing.text.Highlighter;
 
 import sun.swing.DefaultLookup;
-import replete.util.Lay;
 
 public class SearchPanel extends JPanel
 {

@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -10,14 +10,20 @@ package gov.sandia.n2a.execenvs;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.execenvs.beans.AllJobInfo;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
 import java.lang.management.OperatingSystemMXBean;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-
-import replete.util.ReflectionUtil;
+import java.util.stream.Collectors;
 
 public abstract class ExecutionEnv
 {
@@ -63,7 +69,7 @@ public abstract class ExecutionEnv
     */
 
     public abstract Set<Integer> getActiveProcs    ()                                  throws Exception;
-    public abstract long         getProcMem        (Integer procNum);
+    public abstract long         getProcMem        (Integer procNum)                   throws Exception;
     public abstract AllJobInfo   getJobs           ()                                  throws Exception;
     public abstract String       createJobDir      ()                                  throws Exception;
     public abstract void         createDir         (String path)                       throws Exception;
@@ -131,7 +137,7 @@ public abstract class ExecutionEnv
         OperatingSystemMXBean OS = ManagementFactory.getOperatingSystemMXBean ();
         try
         {
-            return (Long) ReflectionUtil.invoke ("getTotalPhysicalMemorySize", OS);
+            return (Long) invoke (OS, "getTotalPhysicalMemorySize");
         }
         catch (Exception e)
         {
@@ -145,7 +151,7 @@ public abstract class ExecutionEnv
         OperatingSystemMXBean OS = ManagementFactory.getOperatingSystemMXBean ();
         try
         {
-            return (Long) ReflectionUtil.invoke ("getFreePhysicalMemorySize", OS);
+            return (Long) invoke (OS, "getFreePhysicalMemorySize");
         }
         catch (Exception e)
         {
@@ -165,11 +171,62 @@ public abstract class ExecutionEnv
         OperatingSystemMXBean OS = ManagementFactory.getOperatingSystemMXBean ();
         try
         {
-            return (Long) ReflectionUtil.invoke ("getSystemCpuLoad", OS);
+            return (Long) invoke (OS, "getSystemCpuLoad");
         }
         catch (Exception e)
         {
             return OS.getSystemLoadAverage ();  // TODO: known to fail on Windows
+        }
+    }
+
+    // Utility functions -----------------------------------------------------
+
+    public static Object invoke (Object target, String methodName, Object... args)
+    {
+        Class<?> clazz = target.getClass ();
+        try
+        {
+            Class<?>[] parameterTypes = new Class<?>[args.length];
+            for (int a = 0; a < args.length; a++) parameterTypes[a] = args[a].getClass ();
+            Method m = clazz.getMethod (methodName, parameterTypes);
+            m.setAccessible (true);
+            return m.invoke (target, args);
+        }
+        catch (Exception e)
+        {
+            return null;
+        }
+    }
+
+    public static void stringToFile (File target, String value) throws IOException
+    {
+        try (FileOutputStream fos = new FileOutputStream (target))
+        {
+            fos.write (value.getBytes ("UTF-8"));
+        }
+    }
+
+    public static String streamToString (InputStream input)
+    {
+        try (BufferedReader reader = new BufferedReader (new InputStreamReader (input)))
+        {
+            return reader.lines ().collect (Collectors.joining ("\n"));
+        }
+        catch (IOException e)
+        {
+            return "";
+        }
+    }
+
+    public static String fileToString (File input)
+    {
+        try (FileInputStream fis = new FileInputStream (input))
+        {
+            return streamToString (fis);
+        }
+        catch (IOException e)
+        {
+            return "";
         }
     }
 }

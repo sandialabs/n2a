@@ -9,7 +9,6 @@ package gov.sandia.umf.platform.ui.ensemble.run;
 
 import gov.sandia.n2a.execenvs.ExecutionEnv;
 import gov.sandia.n2a.plugins.extpoints.Backend;
-import gov.sandia.n2a.ui.HelpLabels;
 import gov.sandia.umf.platform.ui.ensemble.images.ImageUtil;
 
 import java.awt.event.ActionEvent;

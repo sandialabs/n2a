@@ -9,10 +9,10 @@ package gov.sandia.n2a.backend.c;
 
 import javax.swing.ImageIcon;
 
-import replete.plugins.DefaultPlugin;
-import replete.plugins.ExtensionPoint;
+import gov.sandia.n2a.plugins.Plugin;
+import gov.sandia.n2a.plugins.ExtensionPoint;
 
-public class PluginC extends DefaultPlugin
+public class PluginC extends Plugin
 {
 	@Override
 	public String getName ()

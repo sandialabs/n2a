@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -17,16 +17,14 @@ import java.awt.Font;
 
 import javax.swing.BorderFactory;
 import javax.swing.Box;
+import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.plaf.basic.BasicHTML;
+import javax.swing.text.View;
 
-import replete.gui.controls.GradientPanel;
-import replete.gui.windows.EscapeDialog;
-import replete.util.GUIUtil;
-import replete.util.Lay;
-
-public class AboutDialog extends EscapeDialog
+public class AboutDialog extends JDialog
 {
     static JLabel lblTitle;
     static JLabel lblCopy;
@@ -47,8 +45,17 @@ public class AboutDialog extends EscapeDialog
         lblTitle = new JLabel("<html>" + pc.get ("name") + "</html>");
         lblTitle.setFont(f1);
         lblTitle.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(200, 200, 200)));
-        Dimension d = GUIUtil.getHTMLJLabelPreferredSize(lblTitle, 300, true);
-        lblTitle.setPreferredSize(d);
+
+        Dimension d = null;
+        View view = (View) lblTitle.getClientProperty (BasicHTML.propertyKey);
+        if (view != null)
+        {
+            view.setSize (300, 0);
+            float w = view.getPreferredSpan (View.X_AXIS);
+            float h = view.getPreferredSpan (View.Y_AXIS);
+            d = new Dimension ((int) Math.ceil (w), (int) Math.ceil (h));
+        }
+        lblTitle.setPreferredSize (d);
 
         lblCopy = new JLabel("<html>" + pc.get ("copyright") + "</html>");
         lblCopy.setFont(f2);
@@ -98,10 +105,9 @@ public class AboutDialog extends EscapeDialog
         }
         pnlText.add(Box.createVerticalGlue());
 
-        int x = -40;
-        GradientPanel gp = new GradientPanel(
-            new JPanel().getBackground(),
-            GUIUtil.deriveColor(new JPanel().getBackground(), x, x, x));
+        Color background = new JPanel ().getBackground ();
+        Color darker = background.darker ();
+        GradientPanel gp = new GradientPanel (background, darker);
 
         Lay.BLtg(gp, "C", pnlText, "eb=10");
 

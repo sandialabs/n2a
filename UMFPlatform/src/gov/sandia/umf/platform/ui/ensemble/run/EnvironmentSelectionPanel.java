@@ -8,8 +8,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.umf.platform.ui.ensemble.run;
 
 import gov.sandia.n2a.execenvs.ExecutionEnv;
-import gov.sandia.n2a.ui.HelpLabels;
-import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.umf.platform.ui.ensemble.UIController;
 
 import javax.swing.DefaultComboBoxModel;
@@ -79,10 +77,6 @@ public class EnvironmentSelectionPanel extends JPanel {
                 "eb=5rlb"
             )*/
         );
-    }
-
-    protected JPanel createLabelPanel(String text, String helpKey) {
-        return HelpLabels.createLabelPanel(MainFrame.getInstance(), text, helpKey);
     }
 
     public ExecutionEnv getEnvironment() {

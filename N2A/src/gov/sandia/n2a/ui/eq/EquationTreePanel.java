@@ -14,10 +14,12 @@ import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.plugins.UMFPluginManager;
+import gov.sandia.n2a.plugins.ExtensionPoint;
+import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.plugins.extpoints.Exporter;
 import gov.sandia.n2a.plugins.extpoints.Importer;
+import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.MainTabbedPane;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
@@ -86,10 +88,6 @@ import javax.swing.tree.ExpandVetoException;
 import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 import javax.swing.tree.TreeSelectionModel;
-
-import replete.plugins.ExtensionPoint;
-import replete.plugins.PluginManager;
-import replete.util.Lay;
 
 public class EquationTreePanel extends JPanel
 {
@@ -739,7 +737,7 @@ public class EquationTreePanel extends JPanel
             if (record == null) return;
 
             String simulatorName = record.get ("$metadata", "backend");
-            final Backend simulator = UMFPluginManager.getBackend (simulatorName);
+            final Backend simulator = Backend.getBackend (simulatorName);
             MNode runs = AppData.runs;
             String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + jobCount++;
             runs.set (jobKey, "");  // Create the dir and model doc
@@ -764,7 +762,7 @@ public class EquationTreePanel extends JPanel
                 }
             }.start ();
 
-            MainTabbedPane mtp = (MainTabbedPane) MainFrame.getInstance ().tabs;
+            MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
             RunPanel panelRun = (RunPanel) mtp.selectTab ("Runs");
             mtp.setPreferredFocus (panelRun, panelRun.tree);
             panelRun.addNewRun (job);
@@ -816,7 +814,7 @@ public class EquationTreePanel extends JPanel
             if (n2a != null) fc.setFileFilter (n2a);
 
             // Display chooser and collect result
-            int result = fc.showSaveDialog (MainFrame.getInstance ());
+            int result = fc.showSaveDialog (MainFrame.instance);
 
             // Do export
             if (result == JFileChooser.APPROVE_OPTION)
@@ -871,7 +869,7 @@ public class EquationTreePanel extends JPanel
             if (n2a != null) fc.setFileFilter (n2a);
 
             // Display chooser and collect result
-            int result = fc.showOpenDialog (MainFrame.getInstance ());
+            int result = fc.showOpenDialog (MainFrame.instance);
 
             // Do import
             if (result == JFileChooser.APPROVE_OPTION)

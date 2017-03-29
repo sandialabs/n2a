@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -14,12 +14,12 @@ import gov.sandia.n2a.execenvs.beans.Job;
 import gov.sandia.n2a.execenvs.beans.Resource;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
-
-import replete.util.FileUtil;
-
 
 public abstract class LocalMachineEnv extends ExecutionEnv
 {
@@ -96,7 +96,7 @@ public abstract class LocalMachineEnv extends ExecutionEnv
         String [] commands = {compiler, "-O3", "-o", binary, "-I" + dir, runtime, "-x", "c++", sourceFile};
         Process p = Runtime.getRuntime ().exec (commands);
         p.waitFor ();
-        if (p.exitValue () != 0) throw new Exception ("Failed to compile:\n" + FileUtil.getTextContent (p.getErrorStream ()));
+        if (p.exitValue () != 0) throw new Exception ("Failed to compile:\n" + streamToString (p.getErrorStream ()));
 
         return binary;
     }
@@ -123,7 +123,7 @@ public abstract class LocalMachineEnv extends ExecutionEnv
         String [] commands = {compiler, "-c", "-O3", "-I" + dir, "-o", binary, "-x", "c++", sourceFile};
         Process p = Runtime.getRuntime ().exec (commands);
         p.waitFor ();
-        if (p.exitValue () != 0) throw new Exception ("Failed to compile:\n" + FileUtil.getTextContent (p.getErrorStream ()));
+        if (p.exitValue () != 0) throw new Exception ("Failed to compile:\n" + streamToString (p.getErrorStream ()));
 
         return binary;
     }
@@ -131,13 +131,13 @@ public abstract class LocalMachineEnv extends ExecutionEnv
     @Override
     public void setFileContents (String path, String content) throws Exception
     {
-        FileUtil.writeTextContent (new File (path), content);
+        stringToFile (new File (path), content);
     }
 
     @Override
     public String getFileContents (String path) throws Exception
     {
-        return FileUtil.getTextContent (new File (path));
+        return fileToString (new File (path));
     }
 
     @Override
@@ -156,8 +156,7 @@ public abstract class LocalMachineEnv extends ExecutionEnv
     @Override
     public void downloadFile (String path, File destPath) throws Exception
     {
-        File file = new File(path);
-        FileUtil.copy (file, destPath);
+        Files.copy (Paths.get (path), destPath.toPath (), StandardCopyOption.REPLACE_EXISTING);
     }
 
     @Override

@@ -48,13 +48,14 @@ public class ModelEditPanel extends JPanel
 
         // Determine the split position.
         split.setDividerLocation (AppData.state.getOrDefaultInt ("ModelEditPanel", "divider", "150"));
-        split.setResizeWeight (0.25);  // always favor equation tree over search
         split.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
             boolean gotFirstChange;
             public void propertyChange (PropertyChangeEvent e)
             {
-                if (gotFirstChange)  // Ignore first change, as it is induced by the initial layout, interacting with resize weight. This often results in a different value for divider location than the set one.
+                // Ignore first change, as it is induced by the initial layout, interacting with resize weight.
+                // This often results in a different value for divider location than the set one.
+                if (gotFirstChange)
                 {
                     Object o = e.getNewValue ();
                     if (o instanceof Integer) AppData.state.set ("ModelEditPanel", "divider", o);

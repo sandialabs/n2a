@@ -8,9 +8,6 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.umf.platform.ui.ensemble.run;
 
 import gov.sandia.n2a.plugins.extpoints.Backend;
-import gov.sandia.n2a.ui.HelpLabels;
-import gov.sandia.n2a.ui.MainFrame;
-
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
@@ -59,10 +56,6 @@ public class SimulatorSelectionPanel extends JPanel
                 "C", Lay.lb(" ")
             )
         );
-    }
-
-    protected JPanel createLabelPanel(String text, String helpKey) {
-        return HelpLabels.createLabelPanel(MainFrame.getInstance(), text, helpKey);
     }
 
     public Backend getSimulator() {

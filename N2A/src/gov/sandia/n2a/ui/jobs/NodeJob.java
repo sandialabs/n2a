@@ -21,7 +21,6 @@ import java.time.Instant;
 import java.util.Date;
 
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.plugins.UMFPluginManager;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
@@ -117,7 +116,7 @@ public class NodeJob extends NodeBase
             if (expectedSimTime == 0) expectedSimTime = source.getOrDefaultDouble ("$metadata", "duration", "0");
             if (expectedSimTime > 0)
             {
-                Backend simulator = UMFPluginManager.getBackend (source.get ("$metadata", "backend"));
+                Backend simulator = Backend.getBackend (source.get ("$metadata", "backend"));
                 double t = simulator.currentSimTime (source);
                 if (t != 0) complete = Math.min (0.99999f, (float) (t / expectedSimTime));
             }

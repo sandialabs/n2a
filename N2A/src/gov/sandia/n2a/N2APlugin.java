@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -8,10 +8,11 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a;
 
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.plugins.Plugin;
+import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.plugins.extpoints.Exporter;
 import gov.sandia.n2a.plugins.extpoints.Importer;
-import gov.sandia.n2a.plugins.extpoints.MenuItems;
 import gov.sandia.n2a.plugins.extpoints.RecordHandler;
 import gov.sandia.n2a.transfer.ExportNative;
 import gov.sandia.n2a.transfer.ImportNative;
@@ -21,10 +22,7 @@ import gov.sandia.n2a.ui.jobs.RunHandler;
 
 import javax.swing.ImageIcon;
 
-import replete.plugins.DefaultPlugin;
-import replete.plugins.ExtensionPoint;
-
-public class N2APlugin extends DefaultPlugin
+public class N2APlugin extends Plugin
 {
     private static N2APlugin plugin;
     public static N2APlugin getInstance ()
@@ -88,7 +86,6 @@ public class N2APlugin extends DefaultPlugin
         return new Class[]
         {
             Backend.class,
-            MenuItems.class,
             RecordHandler.class,
             Exporter.class,
             Importer.class,

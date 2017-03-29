@@ -50,12 +50,11 @@ import gov.sandia.n2a.language.parse.ASTOperator;
 import gov.sandia.n2a.language.parse.ExpressionParser;
 import gov.sandia.n2a.language.parse.ParseException;
 import gov.sandia.n2a.language.type.Instance;
+import gov.sandia.n2a.plugins.ExtensionPoint;
+import gov.sandia.n2a.plugins.PluginManager;
 
 import java.util.List;
 import java.util.TreeMap;
-
-import replete.plugins.ExtensionPoint;
-import replete.plugins.PluginManager;
 
 public class Operator implements Cloneable, Comparable<Operator>
 {

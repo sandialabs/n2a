@@ -11,7 +11,6 @@ import gov.sandia.n2a.execenvs.beans.AllJobInfo;
 import gov.sandia.n2a.execenvs.beans.DateGroup;
 import gov.sandia.n2a.execenvs.beans.Job;
 import gov.sandia.n2a.execenvs.beans.Resource;
-import gov.sandia.n2a.plugins.UMFPluginManager;
 import gov.sandia.n2a.ssh.RedSkyConnection;
 import gov.sandia.n2a.ssh.RedSkyConnection.Result;
 
@@ -21,8 +20,6 @@ import java.io.StringReader;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
-
-import replete.util.FileUtil;
 
 public abstract class RedSkyEnv extends ExecutionEnv
 {
@@ -89,10 +86,8 @@ public abstract class RedSkyEnv extends ExecutionEnv
     @Override
     public void setFileContents (String path, String content) throws Exception
     {
-        File dir = UMFPluginManager.getStorageDir (RedSkyEnv.class);
-        dir.mkdirs ();
-        File tempFile = new File (dir, "tempSetFileContents");
-        FileUtil.writeTextContent (tempFile, content);
+        File tempFile = new File ("tempSetFileContents");  // Created in local working directory, which should be set to the job dir.
+        stringToFile (tempFile, content);
         Result r = RedSkyConnection.send (tempFile, path);
         if (r.error) throw new Exception ("Could not send file content to remote system: " + r.stdErr);
     }

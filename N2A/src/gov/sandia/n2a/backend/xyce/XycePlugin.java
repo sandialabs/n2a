@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -8,14 +8,13 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.backend.xyce;
 
 import gov.sandia.n2a.backend.xyce.function.Sinewave;
+import gov.sandia.n2a.plugins.Plugin;
+import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.ImageIcon;
 
-import replete.plugins.ExtensionPoint;
-import replete.plugins.DefaultPlugin;
-
-public class XycePlugin extends DefaultPlugin
+public class XycePlugin extends Plugin
 {
     public String getName ()
     {

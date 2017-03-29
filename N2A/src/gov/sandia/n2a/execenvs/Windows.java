@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -9,12 +9,11 @@ package gov.sandia.n2a.execenvs;
 
 import gov.sandia.n2a.db.MNode;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.InputStreamReader;
 import java.util.Set;
 import java.util.TreeSet;
-
-import replete.process.ProcessUtil;
-import replete.util.FileUtil;
 
 public class Windows extends LocalMachineEnv
 {
@@ -23,16 +22,19 @@ public class Windows extends LocalMachineEnv
     {
         Set<Integer> result = new TreeSet<Integer> ();
         String[] cmdArray = new String[] {"tasklist", "/v", "/fo", "table"};
-        String[] lines = ProcessUtil.getOutput (cmdArray);
-        for (String line : lines)
+        Process proc = Runtime.getRuntime ().exec (cmdArray);
+        try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
-            line = line.toLowerCase ();
-            if (line.contains ("n2a_job"))
+            String line;
+            while ((line = reader.readLine ()) != null)
             {
-                // If need to use /b for background and don't get title info anymore
-                String[] parts = line.split ("\\s+");
-                result.add (new Integer (parts[1]));
-                System.out.println ("FOUND! " + line);
+                line = line.toLowerCase ();
+                if (line.contains ("n2a_job"))
+                {
+                    // If need to use /b for background and don't get title info anymore
+                    String[] parts = line.split ("\\s+");
+                    result.add (new Integer (parts[1]));
+                }
             }
         }
         return result;
@@ -48,11 +50,11 @@ public class Windows extends LocalMachineEnv
 
         File script = new File (jobDir, "n2a_job.bat");
         File finished = new File (jobDir, "finished");
-        FileUtil.writeTextContent (script, command + " > " + quotePath (out.getAbsolutePath ()) + " 2>> " + quotePath (err.getAbsolutePath ()) + "\r\ntype nul >> " + quotePath (finished.getAbsolutePath()) + "\r\n");
+        stringToFile (script, command + " > " + quotePath (out.getAbsolutePath ()) + " 2>> " + quotePath (err.getAbsolutePath ()) + "\r\ntype nul >> " + quotePath (finished.getAbsolutePath()) + "\r\n");
         String [] commandParm = new String[] {"cmd", "/c", "start", "/b", script.getAbsolutePath ()};
         Process p = Runtime.getRuntime ().exec (commandParm);
         p.waitFor ();
-        if (p.exitValue () != 0) throw new Exception ("Failed to run job:\n" + FileUtil.getTextContent (p.getErrorStream ()));
+        if (p.exitValue () != 0) throw new Exception ("Failed to run job:\n" + streamToString (p.getErrorStream ()));
     }
 
     @Override

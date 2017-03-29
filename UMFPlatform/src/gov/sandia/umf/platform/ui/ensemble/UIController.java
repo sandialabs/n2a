@@ -10,6 +10,8 @@ package gov.sandia.umf.platform.ui.ensemble;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.execenvs.ExecutionEnv;
 import gov.sandia.n2a.parms.ParameterSpecification;
+import gov.sandia.n2a.plugins.ExtensionPoint;
+import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.umf.platform.ensemble.params.groups.ParameterSpecGroup;
@@ -23,8 +25,6 @@ import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 
 import replete.gui.windows.Dialogs;
-import replete.plugins.ExtensionPoint;
-import replete.plugins.PluginManager;
 import replete.util.ReflectionUtil;
 
 
@@ -66,7 +66,7 @@ public class UIController
                 // next line modifies groups to remove any that the Simulator will handle
                 simHandledGroups = divideEnsembleParams(model, groups, simulator);
             } catch (RuntimeException e) {
-                Dialogs.showDetails(MainFrame.getInstance (), "could not create run ensemble", e);
+                Dialogs.showDetails(MainFrame.instance, "could not create run ensemble", e);
                 return false;
             }
             List<String> outputExpressions = dlg.getSelectedOutputExpressions();

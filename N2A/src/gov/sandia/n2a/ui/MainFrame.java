@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -14,36 +14,26 @@ import gov.sandia.n2a.ui.images.ImageUtil;
 import java.awt.Image;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.awt.event.WindowStateListener;
 import java.util.ArrayList;
 
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
+import javax.swing.JFrame;
 
-import replete.gui.uiaction.UIActionMap;
-import replete.gui.uiaction.UIActionMenuBar;
-import replete.gui.windows.EscapeFrame;
-import replete.gui.windows.common.CommonWindow;
-import replete.util.Lay;
-
-// TODO: Restore to maximized state not working.
-
-public class MainFrame extends EscapeFrame implements HelpCapableWindow
+public class MainFrame extends JFrame
 {
-    protected static MainFrame instance;
-
-    public static MainFrame getInstance ()
-    {
-        if (instance == null) instance = new MainFrame ();
-        return instance;
-    }
+    public static MainFrame instance;
 
     public MainTabbedPane tabs;
-    public MainGlassPane glassPane;
 
     public MainFrame ()
     {
+        if (instance != null) throw new RuntimeException ("Multiple attempts to create main application window.");
+        instance = this;
+
         MNode pc = AppData.properties;
-        setTitle(pc.get ("name") + " v" + pc.get ("version"));
+        setTitle (pc.get ("name") + " v" + pc.get ("version"));
 
         ArrayList<Image> icons = new ArrayList<Image> ();
         icons.add (ImageUtil.getImage ("n2a-16.png").getImage ());
@@ -52,63 +42,57 @@ public class MainFrame extends EscapeFrame implements HelpCapableWindow
 
         tabs = new MainTabbedPane ();
 
-        UIActionMap actions = new MainFrameActionMap ();
-        actions.setState("ALL");
-        // TODO: ensure that the buttons in tb do not receive keyboard focus. They should only be mouse operated.
-        //UIActionToolBar tb = new UIActionToolBar(actions);
-        setJMenuBar(new UIActionMenuBar(actions));
-
         Lay.BLtg(this,
-            //"N", tb,
             "C", tabs
         );
 
-        setSize(600, 600);
-        setLocationRelativeTo(null);
+        MNode winProps = AppData.state.childOrCreate ("WinLayout");
+        int w = winProps.getOrDefaultInt ("width",  "800");
+        int h = winProps.getOrDefaultInt ("height", "600");
+        int x = winProps.getOrDefaultInt ("x",      "-1");
+        int y = winProps.getOrDefaultInt ("y",      "-1");
+        if (w >= 0  &&  h >= 0) setSize (w, h);
+        if (x >= 0  &&  y >= 0) setLocation (x, y);
+        else                    setLocationRelativeTo (null);
+        setExtendedState (winProps.getOrDefaultInt ("state", "0"));
+        setVisible (true);
 
-        tabs.addComponentListener(new ComponentAdapter() {
-            @Override
-            public void componentResized(ComponentEvent e) {
-                int border = 8;
-                HelpNotesPanel pnlHelpNotes = glassPane.getHelpNotesPanel();
-                pnlHelpNotes.setLocation(
-                    border,
-                    tabs.getLocation().y +
-                        tabs.getSize().height +
-                        getContentPane().getY() -
-                        pnlHelpNotes.getHeight() +
-                        getJMenuBar().getHeight() -
-                        border +
-                        7         // TODO: Fudge number... not sure why I need this.
-                    );
-            }
-        });
-
-        glassPane = new MainGlassPane ();
-        glassPane.setVisible(false);
-        setGlassPane(glassPane);
-
-        addClosingListener(new ChangeListener ()
+        addComponentListener (new ComponentAdapter ()
         {
-            public void stateChanged (ChangeEvent e)
+            public void componentResized (ComponentEvent e)
             {
-                for (CommonWindow win : getAllChildWindows ())
+                if (getExtendedState () == NORMAL)
                 {
-                    destroyChildWindow(win);
+                    AppData.state.set ("WinLayout", "width",  getWidth ());
+                    AppData.state.set ("WinLayout", "height", getHeight ());
                 }
-                AppData.quit ();  // Save data before exiting.
+            }
+
+            public void componentMoved (ComponentEvent e)
+            {
+                if (getExtendedState () == NORMAL)
+                {
+                    AppData.state.set ("WinLayout", "x", getX ());
+                    AppData.state.set ("WinLayout", "y", getY ());
+                }
             }
         });
-    }
 
-    public void showHelp (String topic, String content)
-    {
-        glassPane.showHelp (topic, content);
-    }
+        addWindowStateListener (new WindowStateListener ()
+        {
+            public void windowStateChanged (WindowEvent e)
+            {
+                AppData.state.set ("WinLayout", "state", getExtendedState ());
+            }
+        });
 
-    @Override
-    protected void escapePressed ()
-    {
-        if (glassPane.isHelpShowing ()) glassPane.hideHelp ();
+        setDefaultCloseOperation (EXIT_ON_CLOSE);
+        addWindowListener (new WindowAdapter ()
+        {
+            public void windowClosing (WindowEvent arg0)
+            {
+                AppData.quit ();  // Save all user settings (including those from other parts of the app) before exiting.
+            }
+        });
     }
 }

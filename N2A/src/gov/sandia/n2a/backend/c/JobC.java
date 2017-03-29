@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2016 Sandia Corporation.
+Copyright 2013,2016,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -34,7 +34,9 @@ import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -47,8 +49,7 @@ import java.util.NavigableSet;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeSet;
-
-import replete.util.FileUtil;
+import java.util.stream.Collectors;
 
 public class JobC
 {
@@ -86,7 +87,8 @@ public class JobC
             String[] sourceFiles = {"runtime.cc", "runtime.h", "Neighbor.cc"};
             for (String s : sourceFiles)
             {
-                String contents = FileUtil.getTextContent (JobC.class.getResource ("runtime/" + s).openStream ());
+                BufferedReader reader = new BufferedReader (new InputStreamReader (JobC.class.getResource ("runtime/" + s).openStream ()));
+                String contents = reader.lines ().collect (Collectors.joining ("\n"));
                 env.setFileContents (env.file (runtimeDir, s), contents);
             }
 
@@ -95,7 +97,8 @@ public class JobC
             sourceFiles = new String [] {"archive.h", "blasproto.h", "math.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "neighbor.h", "pointer.h", "string.h", "Vector.tcc"};
             for (String s : sourceFiles)
             {
-                String contents = FileUtil.getTextContent (JobC.class.getResource ("runtime/fl/" + s).openStream ());
+                BufferedReader reader = new BufferedReader (new InputStreamReader (JobC.class.getResource ("runtime/fl/" + s).openStream ()));
+                String contents = reader.lines ().collect (Collectors.joining ("\n"));
                 env.setFileContents (env.file (flDir, s), contents);
             }
 

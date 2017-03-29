@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2016 Sandia Corporation.
+Copyright 2013,2016,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -8,7 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a;
 
 import gov.sandia.n2a.db.AppData;
-import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.ui.AboutDialog;
 import gov.sandia.n2a.ui.LafManager;
 import gov.sandia.n2a.ui.MainFrame;
@@ -22,13 +22,6 @@ import java.util.ArrayList;
 
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
-
-import replete.gui.windows.Dialogs;
-import replete.gui.windows.common.CommonWindowClosingEvent;
-import replete.gui.windows.common.CommonWindowClosingListener;
-import replete.plugins.PluginManager;
 
 
 public class Main
@@ -72,47 +65,8 @@ public class Main
             public void run ()
             {
                 LafManager.load ();
-
-                final MainFrame mainFrame = MainFrame.getInstance ();
-                mainFrame.addAttemptToCloseListener (new CommonWindowClosingListener ()
-                {
-                    public void stateChanged (CommonWindowClosingEvent e)
-                    {
-                        LafManager.save ();
-
-                        MNode winProps = AppData.state.childOrCreate ("WinLayout");
-                        winProps.clear ();
-                        winProps.set ("x",      mainFrame.getX ());
-                        winProps.set ("y",      mainFrame.getY ());
-                        winProps.set ("width",  mainFrame.getWidth ());
-                        winProps.set ("height", mainFrame.getHeight ());
-                        winProps.set ("state",  mainFrame.getExtendedState ());
-
-                        AppData.state.save ();
-                    }
-                });
-                mainFrame.addClosingListener (new ChangeListener ()
-                {
-                    public void stateChanged (ChangeEvent e)
-                    {
-                        AppData.save ();
-                    }
-                });
-
-                MNode winProps = AppData.state.childOrCreate ("WinLayout");
-                int w = winProps.getOrDefaultInt ("width",  "-1");
-                int h = winProps.getOrDefaultInt ("height", "-1");
-                int x = winProps.getOrDefaultInt ("x",      "-1");
-                int y = winProps.getOrDefaultInt ("y",      "-1");
-                if (w >= 0  &&  h >= 0) mainFrame.setSize (w, h);
-                if (x >= 0  &&  y >= 0) mainFrame.setLocation (x, y);
-                else                    mainFrame.setLocationRelativeTo (mainFrame.getParent ());
-                mainFrame.ensureOnScreen (true);
-                mainFrame.setVisible (true);
-                mainFrame.setExtendedState (winProps.getOrDefaultInt ("state", "0"));
-
-                setUncaughtExceptionHandler (mainFrame);
-                Dialogs.registerApplicationWindow (mainFrame, AppData.properties.get ("name"));
+                new MainFrame ();
+                setUncaughtExceptionHandler (MainFrame.instance);
             }
         });
 

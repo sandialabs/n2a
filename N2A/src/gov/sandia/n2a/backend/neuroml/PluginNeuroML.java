@@ -1,5 +1,5 @@
 /*
-Copyright 2016 Sandia Corporation.
+Copyright 2016,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -9,10 +9,10 @@ package gov.sandia.n2a.backend.neuroml;
 
 import javax.swing.ImageIcon;
 
-import replete.plugins.DefaultPlugin;
-import replete.plugins.ExtensionPoint;
+import gov.sandia.n2a.plugins.Plugin;
+import gov.sandia.n2a.plugins.ExtensionPoint;
 
-public class PluginNeuroML extends DefaultPlugin
+public class PluginNeuroML extends Plugin
 {
 	@Override
 	public String getName ()
