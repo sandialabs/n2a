@@ -31,6 +31,7 @@ import gov.sandia.n2a.ui.eq.undo.CompoundEdit;
 import gov.sandia.n2a.ui.eq.undo.Move;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.RunPanel;
+import sun.swing.SwingUtilities2;
 
 import java.awt.FontMetrics;
 import java.awt.Insets;
@@ -47,6 +48,7 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
@@ -59,6 +61,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import javax.swing.AbstractAction;
+import javax.swing.Action;
+import javax.swing.ActionMap;
 import javax.swing.Box;
 import javax.swing.ButtonGroup;
 import javax.swing.InputMap;
@@ -141,13 +146,6 @@ public class EquationTreePanel extends JPanel
         tree.setDragEnabled (true);
         tree.setToggleClickCount (0);  // Disable expand/collapse on double-click
 
-        // Remove key bindings that we wish to use for changing order of nodes
-        InputMap inputMap = tree.getInputMap ();
-        inputMap             .remove (KeyStroke.getKeyStroke ("shift pressed UP"));
-        inputMap.getParent ().remove (KeyStroke.getKeyStroke ("shift pressed UP"));
-        inputMap             .remove (KeyStroke.getKeyStroke ("shift pressed DOWN"));
-        inputMap.getParent ().remove (KeyStroke.getKeyStroke ("shift pressed DOWN"));
-
         EquationTreeCellRenderer renderer = new EquationTreeCellRenderer ();
         tree.setCellRenderer (renderer);
 
@@ -186,6 +184,58 @@ public class EquationTreePanel extends JPanel
             }
         });
         tree.setCellEditor (editor);
+
+        InputMap inputMap = tree.getInputMap ();
+        inputMap.put (KeyStroke.getKeyStroke ("shift UP"),   "moveUp");
+        inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"), "moveDown");
+        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),     "add");
+        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),     "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"), "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),      "startEditing"); 
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl ENTER"), "startEditing");
+
+        ActionMap actionMap = tree.getActionMap ();
+        actionMap.put ("moveUp", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                moveSelected (-1);
+            }
+        });
+        actionMap.put ("moveDown", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                moveSelected (1);
+            }
+        });
+        actionMap.put ("add", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                addAtSelected ("");
+            }
+        });
+        actionMap.put ("delete", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                deleteSelected ();
+            }
+        });
+        actionMap.put ("startEditing", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                TreePath path = tree.getSelectionPath ();
+                if (path != null)
+                {
+                    boolean isControlDown = (e.getModifiers () & ActionEvent.CTRL_MASK) != 0;
+                    if (isControlDown  &&  ! (path.getLastPathComponent () instanceof NodePart)) editor.multiLineRequested = true;
+                    tree.startEditingAtPath (path);
+                }
+            }
+        });
 
         tree.addMouseListener (new MouseAdapter ()
         {
@@ -226,43 +276,6 @@ public class EquationTreePanel extends JPanel
                 if (newBounds != null) tree.paintImmediately (newBounds);
                 oldSelection = newSelection;
                 oldBounds    = newBounds;
-            }
-        });
-
-        tree.addKeyListener (new KeyAdapter ()
-        {
-            @Override
-            public void keyPressed (KeyEvent e)
-            {
-                int keycode = e.getKeyCode ();
-                if (keycode == KeyEvent.VK_DELETE  ||  keycode == KeyEvent.VK_BACK_SPACE)
-                {
-                    deleteSelected ();
-                }
-                else if (keycode == KeyEvent.VK_INSERT)
-                {
-                    addAtSelected ("");
-                }
-                else if (keycode == KeyEvent.VK_ENTER)
-                {
-                    TreePath path = tree.getSelectionPath ();
-                    if (path != null)
-                    {
-                        if (e.isControlDown ()  &&  ! (path.getLastPathComponent () instanceof NodePart)) editor.multiLineRequested = true;
-                        tree.startEditingAtPath (path);
-                    }
-                }
-                else if (e.isShiftDown ())
-                {
-                    if (keycode == KeyEvent.VK_UP)
-                    {
-                        moveSelected (-1);
-                    }
-                    else if (keycode == KeyEvent.VK_DOWN)
-                    {
-                        moveSelected (1);
-                    }
-                }
             }
         });
 

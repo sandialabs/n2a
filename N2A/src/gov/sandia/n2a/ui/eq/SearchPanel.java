@@ -39,12 +39,16 @@ import java.io.StringWriter;
 import java.util.LinkedList;
 import java.util.List;
 
+import javax.swing.AbstractAction;
+import javax.swing.ActionMap;
 import javax.swing.DefaultListModel;
+import javax.swing.InputMap;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
+import javax.swing.KeyStroke;
 import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
 import javax.swing.TransferHandler;
@@ -52,7 +56,6 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultHighlighter;
 import javax.swing.text.Highlighter;
-
 import sun.swing.DefaultLookup;
 
 public class SearchPanel extends JPanel
@@ -178,6 +181,38 @@ public class SearchPanel extends JPanel
         list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
         list.setDragEnabled (true);
         list.setCellRenderer (new MNodeRenderer ());
+
+        InputMap inputMap = list.getInputMap ();
+        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),     "add");
+        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),     "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"), "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),      "select");
+
+        ActionMap actionMap = list.getActionMap ();
+        actionMap.put ("add", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                ModelEditPanel.instance.undoManager.add (new AddDoc ());
+            }
+        });
+        actionMap.put ("delete", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                MNode deleteMe = list.getSelectedValue ().doc;
+                if (deleteMe == null) return;
+                ModelEditPanel.instance.undoManager.add (new DeleteDoc ((MDoc) deleteMe));
+            }
+        });
+        actionMap.put ("select", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                recordSelected ();
+            }
+        });
+
         list.addMouseListener (new MouseAdapter ()
         {
             public void mouseClicked (MouseEvent e)
@@ -191,29 +226,7 @@ public class SearchPanel extends JPanel
                 e.consume ();
             }
         });
-        list.addKeyListener (new KeyAdapter ()
-        {
-            @Override
-            public void keyPressed (KeyEvent e)
-            {
-                int keycode = e.getKeyCode ();
-                if (keycode == KeyEvent.VK_ENTER)
-                {
-                    recordSelected ();
-                    e.consume ();
-                }
-                else if (keycode == KeyEvent.VK_DELETE  ||  keycode == KeyEvent.VK_BACK_SPACE)
-                {
-                    MNode deleteMe = list.getSelectedValue ().doc;
-                    if (deleteMe == null) return;
-                    ModelEditPanel.instance.undoManager.add (new DeleteDoc ((MDoc) deleteMe));
-                }
-                else if (keycode == KeyEvent.VK_INSERT)
-                {
-                    ModelEditPanel.instance.undoManager.add (new AddDoc ());
-                }
-            }
-        });
+
         list.addFocusListener (new FocusListener ()
         {
             public void focusGained (FocusEvent e)
@@ -230,6 +243,7 @@ public class SearchPanel extends JPanel
                 hideSelection ();
             }
         });
+
         list.setTransferHandler (new TransferHandler ()
         {
             public boolean canImport (TransferHandler.TransferSupport xfer)
