@@ -10,7 +10,7 @@ package gov.sandia.umf.platform.ui.ensemble;
 import java.awt.Component;
 
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.plugins.extpoints.RecordHandler;
+import gov.sandia.n2a.plugins.extpoints.Activity;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
 
@@ -19,7 +19,7 @@ import javax.swing.JTabbedPane;
 
 import replete.util.Lay;
 
-public class RunEnsembleRecordHandler implements RecordHandler
+public class RunEnsembleRecordHandler implements Activity
 {
     @Override
     public ImageIcon getIcon ()

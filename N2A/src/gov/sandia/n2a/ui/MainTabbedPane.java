@@ -11,7 +11,7 @@ package gov.sandia.n2a.ui;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
-import gov.sandia.n2a.plugins.extpoints.RecordHandler;
+import gov.sandia.n2a.plugins.extpoints.Activity;
 
 import java.awt.Component;
 import java.awt.KeyboardFocusManager;
@@ -54,34 +54,34 @@ public class MainTabbedPane extends JTabbedPane
         String order = AppData.state.getOrDefault ("MainTabbedPane", "order", "Model");
         Set<String> sorted = new HashSet<String> ();
         String[] titles = order.split (",");  // comma-separated list
-        Map<String,RecordHandler> handlers = new TreeMap<String,RecordHandler> ();
-        for (ExtensionPoint ep : PluginManager.getExtensionsForPoint (RecordHandler.class))
+        Map<String,Activity> activities = new TreeMap<String,Activity> ();
+        for (ExtensionPoint ep : PluginManager.getExtensionsForPoint (Activity.class))
         {
-            RecordHandler rh = (RecordHandler) ep;
-            handlers.put (rh.getName (), rh);
+            Activity a = (Activity) ep;
+            activities.put (a.getName (), a);
         }
         for (String title : titles)
         {
-            RecordHandler handler = handlers.get (title);
-            if (handler != null)
+            Activity a = activities.get (title);
+            if (a != null)
             {
-                String name         = handler.getName ();
-                Icon icon           = handler.getIcon ();
-                Component component = handler.getPanel ();
-                lastFocus.put (component, handler.getInitialFocus (component));
+                String name         = a.getName ();
+                Icon icon           = a.getIcon ();
+                Component component = a.getPanel ();
+                lastFocus.put (component, a.getInitialFocus (component));
                 addTab (name, icon, component, null);
                 setMnemonicAt (getTabCount () - 1, KeyEvent.getExtendedKeyCodeForChar (name.charAt (0)));
                 sorted.add (title);
             }
         }
-        for (Entry<String,RecordHandler> e : handlers.entrySet ())
+        for (Entry<String,Activity> e : activities.entrySet ())
         {
             if (sorted.contains (e.getKey ())) continue;
-            RecordHandler handler = e.getValue ();
-            String name         = handler.getName ();
-            Icon icon           = handler.getIcon ();
-            Component component = handler.getPanel ();
-            lastFocus.put (component, handler.getInitialFocus (component));
+            Activity a = e.getValue ();
+            String name         = a.getName ();
+            Icon icon           = a.getIcon ();
+            Component component = a.getPanel ();
+            lastFocus.put (component, a.getInitialFocus (component));
             addTab (name, icon, component, null);
             setMnemonicAt (getTabCount () - 1, KeyEvent.getExtendedKeyCodeForChar (name.charAt (0)));
         }

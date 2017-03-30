@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2016,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -13,7 +13,7 @@ import javax.swing.ImageIcon;
 
 import gov.sandia.n2a.plugins.ExtensionPoint;
 
-public interface RecordHandler extends ExtensionPoint
+public interface Activity extends ExtensionPoint
 {
     public String    getName ();
     public ImageIcon getIcon ();

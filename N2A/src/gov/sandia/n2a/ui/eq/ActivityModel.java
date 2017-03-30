@@ -9,12 +9,12 @@ package gov.sandia.n2a.ui.eq;
 
 import java.awt.Component;
 
-import gov.sandia.n2a.plugins.extpoints.RecordHandler;
+import gov.sandia.n2a.plugins.extpoints.Activity;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.ImageIcon;
 
-public class ModelRecordHandler implements RecordHandler
+public class ActivityModel implements Activity
 {
     @Override
     public ImageIcon getIcon ()
