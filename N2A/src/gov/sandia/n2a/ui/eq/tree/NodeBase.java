@@ -357,6 +357,21 @@ public class NodeBase extends DefaultMutableTreeNode
         return result;
     }
 
+    public static NodeBase locateNode (List<String> path)
+    {
+        MNode doc = AppData.models.child (path.get (0));
+        PanelModel mep = PanelModel.instance;
+        mep.panelEquations.loadRootFromDB (doc);  // lazy; only loads if not already loaded
+        mep.panelEquations.tree.requestFocusInWindow ();  // likewise, focus only moves if it is not already on equation tree
+        NodeBase parent = mep.panelEquations.root;
+        for (int i = 1; i < path.size (); i++)
+        {
+            parent = (NodeBase) parent.child (path.get (i));  // not filtered, because we are concerned with maintaining the model, not the view
+            if (parent == null) break;
+        }
+        return parent;
+    }
+
     public NodeBase child (String key)
     {
         if (children == null) return null;
@@ -400,20 +415,5 @@ public class NodeBase extends DefaultMutableTreeNode
     public void delete (JTree tree, boolean canceled)
     {
         // Default action is to ignore request. Only nodes that can actually be deleted need to override this.
-    }
-
-    public static NodeBase locateNode (List<String> path)
-    {
-        MNode doc = AppData.models.child (path.get (0));
-        PanelModel mep = PanelModel.instance;
-        mep.panelEquations.loadRootFromDB (doc);  // lazy; only loads if not already loaded
-        mep.panelEquations.tree.requestFocusInWindow ();  // likewise, focus only moves if it is not already on equation tree
-        NodeBase parent = mep.panelEquations.root;
-        for (int i = 1; i < path.size (); i++)
-        {
-            parent = (NodeBase) parent.child (path.get (i));  // not filtered, because we are concerned with maintaining the model, not the view
-            if (parent == null) break;
-        }
-        return parent;
     }
 }
