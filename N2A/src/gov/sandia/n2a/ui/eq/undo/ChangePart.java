@@ -16,6 +16,7 @@ import javax.swing.undo.CannotRedoException;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -56,7 +57,7 @@ public class ChangePart extends Undoable
 
     public void apply (String nameBefore, String nameAfter)
     {
-        NodeBase parent = locateNode (path);
+        NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
         NodeBase temp = parent.child (nameBefore);
         if (! (temp instanceof NodePart)) throw new CannotRedoException ();

@@ -17,6 +17,7 @@ import javax.swing.undo.CannotUndoException;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -45,7 +46,7 @@ public class ChangeVariableToInherit extends Undoable
     {
         super.undo ();
 
-        NodePart parent = (NodePart) locateNode (path);
+        NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
 
         // Update the database
@@ -74,7 +75,7 @@ public class ChangeVariableToInherit extends Undoable
     {
         super.redo ();
 
-        NodePart parent = (NodePart) locateNode (path);
+        NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
 
         // Update database

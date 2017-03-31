@@ -7,10 +7,12 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 
 package gov.sandia.n2a.ui.eq.tree;
 
+import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.EquationTreeCellRenderer;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.PanelModel;
 
 import java.awt.Color;
 import java.awt.Font;
@@ -398,5 +400,20 @@ public class NodeBase extends DefaultMutableTreeNode
     public void delete (JTree tree, boolean canceled)
     {
         // Default action is to ignore request. Only nodes that can actually be deleted need to override this.
+    }
+
+    public static NodeBase locateNode (List<String> path)
+    {
+        MNode doc = AppData.models.child (path.get (0));
+        PanelModel mep = PanelModel.instance;
+        mep.panelEquations.loadRootFromDB (doc);  // lazy; only loads if not already loaded
+        mep.panelEquations.tree.requestFocusInWindow ();  // likewise, focus only moves if it is not already on equation tree
+        NodeBase parent = mep.panelEquations.root;
+        for (int i = 1; i < path.size (); i++)
+        {
+            parent = (NodeBase) parent.child (path.get (i));  // not filtered, because we are concerned with maintaining the model, not the view
+            if (parent == null) break;
+        }
+        return parent;
     }
 }

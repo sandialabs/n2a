@@ -11,6 +11,7 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.PanelModel;
 
 public class AddDoc extends Undoable

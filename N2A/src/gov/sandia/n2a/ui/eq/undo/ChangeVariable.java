@@ -18,6 +18,7 @@ import javax.swing.undo.UndoableEdit;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -72,7 +73,7 @@ public class ChangeVariable extends Undoable
 
     public static void apply (List<String> path, String nameBefore, String nameAfter, MNode savedTree)
     {
-        NodeBase parent = locateNode (path);
+        NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
         NodeVariable nodeBefore = (NodeVariable) parent.child (nameBefore);
         if (nodeBefore == null) throw new CannotRedoException ();

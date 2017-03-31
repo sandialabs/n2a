@@ -15,6 +15,7 @@ import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotRedoException;
 
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
@@ -68,7 +69,7 @@ public class ChangeAnnotation extends Undoable
 
     public static void apply (List<String> path, String nameBefore, String valueBefore, String nameAfter, String valueAfter, String blockName, NodeFactory factory)
     {
-        NodeBase parent = locateNode (path);
+        NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
         NodeBase nodeBefore = parent.child (nameBefore);
         if (nodeBefore == null) throw new CannotRedoException ();

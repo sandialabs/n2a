@@ -16,6 +16,7 @@ import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoableEdit;
 
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
@@ -65,7 +66,7 @@ public class Move extends Undoable
 
     public static void apply (List<String> path, int indexBefore, int indexAfter, int indexMetadata, boolean createOrder, boolean destroyOrder)
     {
-        NodeBase parent = locateNode (path);
+        NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
 
         PanelModel mep = PanelModel.instance;

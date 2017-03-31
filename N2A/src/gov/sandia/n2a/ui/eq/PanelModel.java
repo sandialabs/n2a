@@ -22,7 +22,7 @@ import javax.swing.KeyStroke;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 import gov.sandia.n2a.db.AppData;
-import gov.sandia.n2a.ui.eq.undo.UndoManager;
+import gov.sandia.n2a.ui.UndoManager;
 
 public class PanelModel extends JPanel
 {

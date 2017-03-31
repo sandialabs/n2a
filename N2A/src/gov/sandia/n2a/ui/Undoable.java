@@ -5,14 +5,7 @@ the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.ui.eq.undo;
-
-import gov.sandia.n2a.db.AppData;
-import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.ui.eq.PanelModel;
-import gov.sandia.n2a.ui.eq.tree.NodeBase;
-
-import java.util.List;
+package gov.sandia.n2a.ui;
 
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
@@ -87,20 +80,5 @@ public class Undoable implements UndoableEdit
     public String getRedoPresentationName ()
     {
         return "Redo " + getPresentationName ();
-    }
-
-    public static NodeBase locateNode (List<String> path)
-    {
-        MNode doc = AppData.models.child (path.get (0));
-        PanelModel mep = PanelModel.instance;
-        mep.panelEquations.loadRootFromDB (doc);  // lazy; only loads if not already loaded
-        mep.panelEquations.tree.requestFocusInWindow ();  // likewise, focus only moves if it is not already on equation tree
-        NodeBase parent = mep.panelEquations.root;
-        for (int i = 1; i < path.size (); i++)
-        {
-            parent = (NodeBase) parent.child (path.get (i));  // not filtered, because we are concerned with maintaining the model, not the view
-            if (parent == null) break;
-        }
-        return parent;
     }
 }

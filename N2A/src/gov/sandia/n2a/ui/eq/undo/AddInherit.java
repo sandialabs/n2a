@@ -16,6 +16,7 @@ import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoableEdit;
 
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -41,7 +42,7 @@ public class AddInherit extends Undoable
     public static void destroy (List<String> path, boolean canceled)
     {
         System.out.println ("destroy: " + path);
-        NodePart parent = (NodePart) locateNode (path);
+        NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
 
         NodeBase node = parent.child ("$inherit");
@@ -72,7 +73,7 @@ public class AddInherit extends Undoable
 
     public static void create (List<String> path, String value)
     {
-        NodePart parent = (NodePart) locateNode (path);
+        NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
 
         PanelModel mep = PanelModel.instance;

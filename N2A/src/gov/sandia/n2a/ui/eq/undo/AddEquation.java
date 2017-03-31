@@ -21,6 +21,7 @@ import javax.swing.undo.UndoableEdit;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -106,7 +107,7 @@ public class AddEquation extends Undoable
     public static void destroy (List<String> path, int equationCount, boolean canceled, String name, String combinerBefore)
     {
         // Retrieve created node
-        NodeBase parent = locateNode (path);
+        NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
         NodeBase createdNode = parent.child (name);
 
@@ -184,7 +185,7 @@ public class AddEquation extends Undoable
 
     public static NodeBase create (List<String> path, int equationCount, int index, String name, String combinerAfter, String value)
     {
-        NodeBase parent = locateNode (path);
+        NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
 
         PanelModel mep = PanelModel.instance;

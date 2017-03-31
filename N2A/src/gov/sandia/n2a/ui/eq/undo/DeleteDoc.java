@@ -11,6 +11,7 @@ import javax.swing.undo.UndoableEdit;
 
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MVolatile;
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.PanelModel;
 
 public class DeleteDoc extends Undoable

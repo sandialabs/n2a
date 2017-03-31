@@ -9,6 +9,7 @@ package gov.sandia.n2a.ui.eq.undo;
 
 import java.util.List;
 
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeInherit;
 

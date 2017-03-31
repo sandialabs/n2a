@@ -20,6 +20,7 @@ import javax.swing.undo.UndoableEdit;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -73,7 +74,7 @@ public class AddVariable extends Undoable
     public static void destroy (List<String> path, boolean canceled, String name)
     {
         // Retrieve created node
-        NodeBase parent = locateNode (path);
+        NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
         NodeVariable createdNode = (NodeVariable) parent.child (name);
 
@@ -114,7 +115,7 @@ public class AddVariable extends Undoable
 
     public static NodeBase create (List<String> path, int index, String name, MNode newPart, boolean nameIsGenerated)
     {
-        NodeBase parent = locateNode (path);
+        NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
 
         // Update database

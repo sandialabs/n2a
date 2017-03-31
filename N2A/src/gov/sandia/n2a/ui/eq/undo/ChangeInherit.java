@@ -13,6 +13,7 @@ import javax.swing.JTree;
 import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotRedoException;
 
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -49,7 +50,7 @@ public class ChangeInherit extends Undoable
 
     public void apply (String value)
     {
-        NodeBase node = locateNode (path);
+        NodeBase node = NodeBase.locateNode (path);
         if (node == null) throw new CannotRedoException ();
 
         PanelModel mep = PanelModel.instance;

@@ -18,6 +18,7 @@ import javax.swing.undo.UndoableEdit;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
@@ -73,7 +74,7 @@ public class AddAnnotation extends Undoable
     public static void destroy (List<String> path, boolean canceled, String name, String blockName)
     {
         // Retrieve created node
-        NodeBase parent = locateNode (path);
+        NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
         NodeBase container = parent;
         if (parent instanceof NodePart) container = parent.child (blockName);
@@ -148,7 +149,7 @@ public class AddAnnotation extends Undoable
 
     public static NodeBase create (List<String> path, int index, String name, String value, String blockName, NodeFactory factory, NodeFactory factoryBlock)
     {
-        NodeBase parent = locateNode (path);
+        NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
         MPart block = (MPart) parent.source.childOrCreate (blockName);
 
