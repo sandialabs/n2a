@@ -44,6 +44,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
@@ -381,7 +382,7 @@ public class PanelEquationTree extends JPanel
                         }
                     }
                 }
-                if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE) mep.undoManager.endCompoundEdit ();
+                if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE) mep.undoManager.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
                 return result;
             }
 
@@ -390,14 +391,23 @@ public class PanelEquationTree extends JPanel
                 return COPY_OR_MOVE;
             }
 
+            boolean dragInitiated;  // This is a horrible hack, but the simplest way to override the default MOVE action chosen internally by Swing.
+            public void exportAsDrag (JComponent comp, InputEvent e, int action)
+            {
+                dragInitiated = true;
+                super.exportAsDrag (comp, e, action);
+            }
+
             class TransferableNode extends StringSelection
             {
                 public List<String> path;
+                public boolean      drag;
 
-                public TransferableNode (String data, NodeBase source)
+                public TransferableNode (String data, NodeBase source, boolean drag)
                 {
                     super (data);
-                    path = source.getKeyPath ();
+                    path      = source.getKeyPath ();
+                    this.drag = drag;
                 }
 
                 public NodeBase getSource ()
@@ -417,10 +427,14 @@ public class PanelEquationTree extends JPanel
 
             protected Transferable createTransferable (JComponent comp)
             {
+                boolean drag = dragInitiated;
+                dragInitiated = false;
+
                 NodeBase node = getSelected ();
                 if (node == null) return null;
                 MVolatile copy = new MVolatile ();
                 node.copy (copy);
+                if (node == root) copy.set (node.source.key (), "");  // Remove file information from root node, if that is what we are sending.
 
                 Schema schema = new Schema (1, "Clip" + node.getTypeName ());
                 StringWriter writer = new StringWriter ();
@@ -430,7 +444,7 @@ public class PanelEquationTree extends JPanel
                     for (MNode c : copy) c.write (writer);
                     writer.close ();
 
-                    return new TransferableNode (writer.toString (), node);
+                    return new TransferableNode (writer.toString (), node, drag);
                 }
                 catch (IOException e)
                 {
@@ -441,7 +455,8 @@ public class PanelEquationTree extends JPanel
 
             protected void exportDone (JComponent source, Transferable data, int action)
             {
-                if (action == MOVE  &&  data instanceof TransferableNode)
+                TransferableNode tn = (TransferableNode) data;
+                if (action == MOVE  &&  ! tn.drag)
                 {
                     // It is possible for the node to be removed from the tree before we get to it.
                     // For example, a local drop of an $inherit node will cause the tree to rebuild.
