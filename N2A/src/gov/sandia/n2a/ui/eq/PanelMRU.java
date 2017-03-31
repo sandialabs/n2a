@@ -9,8 +9,6 @@ package gov.sandia.n2a.ui.eq;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.ui.Lay;
-
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.event.MouseAdapter;
@@ -48,7 +46,7 @@ public class PanelMRU extends JPanel
 
         // Load MRU from app data
         int index = 0;
-        for (MNode n : AppData.state.childOrCreate ("PanelMRU", "models"))
+        for (MNode n : AppData.state.childOrCreate ("PanelModel", "MRU"))
         {
             String name = n.get ();
             MNode part = AppData.models.child (name);
@@ -59,7 +57,7 @@ public class PanelMRU extends JPanel
     public void saveMRU ()
     {
         int limit = (list.getLastVisibleIndex () + 1) * 2;  // roughly twice the length of the visible list, which could be zero
-        MNode parts = AppData.state.childOrCreate ("PanelMRU", "models");
+        MNode parts = AppData.state.childOrCreate ("PanelModel", "MRU");
         parts.clear ();
         for (int i = 0; i < model.size ()  &&  i < limit; i++)
         {
@@ -90,6 +88,4 @@ public class PanelMRU extends JPanel
         model.add (0, h);
         saveMRU ();
     }
-
-    
 }

@@ -374,12 +374,12 @@ public class PanelEquationTree extends JPanel
 
         tree.setTransferHandler (new TransferHandler ()
         {
-            public boolean canImport (TransferHandler.TransferSupport xfer)
+            public boolean canImport (TransferSupport xfer)
             {
                 return xfer.isDataFlavorSupported (DataFlavor.stringFlavor);
             }
 
-            public boolean importData (TransferHandler.TransferSupport xfer)
+            public boolean importData (TransferSupport xfer)
             {
                 MNode data = new MVolatile ();
                 Schema schema = new Schema ();
@@ -492,20 +492,16 @@ public class PanelEquationTree extends JPanel
 
             protected void exportDone (JComponent source, Transferable data, int action)
             {
-                System.out.println ("exportDone");
                 TransferableNode tn = (TransferableNode) data;
                 if (action == MOVE)
                 {
-                    System.out.println ("  move");
                     // It is possible for the node to be removed from the tree before we get to it.
                     // For example, a local drop of an $inherit node will cause the tree to rebuild.
                     NodeBase node = ((TransferableNode) data).getSource ();
                     if (node != null)
                     {
-                        System.out.println ("  got node");
                         if (tn.drag)
                         {
-                            System.out.println ("  drag");
                             if (tn.newPartName != null  &&  node != root  &&  node.source.isFromTopDocument ())
                             {
                                 // Change this node into an include of the newly-created part.

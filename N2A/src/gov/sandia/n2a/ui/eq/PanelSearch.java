@@ -14,26 +14,25 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.Lay;
+import gov.sandia.n2a.ui.SafeTextTransferHandler;
 import gov.sandia.n2a.ui.eq.PanelEquationTree.TransferableNode;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
 import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
-import gov.sandia.n2a.ui.images.ImageUtil;
-
 import java.awt.Component;
-import java.awt.Dimension;
 import java.awt.EventQueue;
+import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.im.InputContext;
 import java.io.IOException;
 import java.io.StringReader;
 import java.io.StringWriter;
@@ -44,7 +43,6 @@ import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
 import javax.swing.DefaultListModel;
 import javax.swing.InputMap;
-import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JList;
 import javax.swing.JPanel;
@@ -54,15 +52,19 @@ import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
 import javax.swing.TransferHandler;
 import javax.swing.border.EmptyBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultHighlighter;
+import javax.swing.text.Document;
 import javax.swing.text.Highlighter;
+import javax.swing.text.JTextComponent;
+
 import sun.swing.DefaultLookup;
 
 public class PanelSearch extends JPanel
 {
     public JTextField               textQuery;
-    public JButton                  buttonClear;
     public JList<Holder>            list;
     public DefaultListModel<Holder> model;
     public int                      lastSelection = -1;
@@ -132,12 +134,12 @@ public class PanelSearch extends JPanel
 
         list.setTransferHandler (new TransferHandler ()
         {
-            public boolean canImport (TransferHandler.TransferSupport xfer)
+            public boolean canImport (TransferSupport xfer)
             {
                 return xfer.isDataFlavorSupported (DataFlavor.stringFlavor);
             }
 
-            public boolean importData (TransferHandler.TransferSupport xfer)
+            public boolean importData (TransferSupport xfer)
             {
                 Schema schema = new Schema ();
                 MNode data = new MVolatile ();
@@ -209,29 +211,30 @@ public class PanelSearch extends JPanel
         {
             public void keyReleased (KeyEvent e)
             {
-                search ();
+                if (e.getKeyCode () == KeyEvent.VK_ESCAPE) textQuery.setText ("");
             }
         });
-
-        buttonClear = new JButton (ImageUtil.getImage ("backspace.png"));
-        buttonClear.setPreferredSize (new Dimension (22, 22));
-        buttonClear.setOpaque (false);
-        buttonClear.setFocusable (false);
-        buttonClear.addActionListener (new ActionListener ()
+        textQuery.getDocument ().addDocumentListener (new DocumentListener ()
         {
-            public void actionPerformed (ActionEvent e)
+            public void insertUpdate (DocumentEvent e)
             {
-                textQuery.setText ("");
+                search ();
+            }
+
+            public void removeUpdate (DocumentEvent e)
+            {
+                search ();
+            }
+
+            public void changedUpdate (DocumentEvent e)
+            {
                 search ();
             }
         });
+        textQuery.setTransferHandler (new SafeTextTransferHandler ());
 
         Lay.BLtg (this,
-            "N", Lay.BL (
-                "C", textQuery,
-                "E", buttonClear,
-                "eb=2,hgap=2"
-            ),
+            "N", Lay.BL ("C", textQuery, "eb=2"),
             "C", Lay.sp (list)
         );
 
