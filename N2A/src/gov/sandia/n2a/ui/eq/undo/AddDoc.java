@@ -16,10 +16,11 @@ import gov.sandia.n2a.ui.eq.PanelModel;
 
 public class AddDoc extends Undoable
 {
-    protected String  name;
+    public    String  name;  // public so we can use the name in a potential Outsource operation
     protected boolean fromSearchPanel;
     protected int     index;  // 0 by default
     protected MNode   saved;
+    public    boolean wasShowing = true;
 
     public AddDoc ()
     {
@@ -90,7 +91,7 @@ public class AddDoc extends Undoable
     public void redo ()
     {
         super.redo ();
-        create (name, saved, 0, fromSearchPanel, true);
+        create (name, saved, 0, fromSearchPanel, wasShowing);
     }
 
     public static int create (String name, MNode saved, int index, boolean fromSearchPanel, boolean wasShowing)

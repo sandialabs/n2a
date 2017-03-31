@@ -14,6 +14,7 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.Lay;
+import gov.sandia.n2a.ui.eq.PanelEquationTree.TransferableNode;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
 import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -140,10 +141,13 @@ public class PanelSearch extends JPanel
             {
                 Schema schema = new Schema ();
                 MNode data = new MVolatile ();
+                TransferableNode xferNode = null;
                 try
                 {
-                    StringReader reader = new StringReader ((String) xfer.getTransferable ().getTransferData (DataFlavor.stringFlavor));
+                    Transferable xferable = xfer.getTransferable ();
+                    StringReader reader = new StringReader ((String) xferable.getTransferData (DataFlavor.stringFlavor));
                     schema.readAll (reader, data);
+                    if (xferable.isDataFlavorSupported (PanelEquationTree.nodeFlavor)) xferNode = (TransferableNode) xferable.getTransferData (PanelEquationTree.nodeFlavor);
                 }
                 catch (IOException | UnsupportedFlavorException e)
                 {
@@ -154,7 +158,14 @@ public class PanelSearch extends JPanel
                 PanelModel.instance.undoManager.addEdit (new CompoundEdit ());
                 for (MNode n : data)  // data can contain several parts
                 {
-                    PanelModel.instance.undoManager.add (new AddDoc (n.key (), n));
+                    AddDoc add = new AddDoc (n.key (), n);
+                    if (xferNode != null  &&  xferNode.drag)
+                    {
+                        add.wasShowing = false;  // on the presumption that the sending side will create an Outsource operation, and thus wants to keep the old model in the equation tree
+                        xferNode.newPartName = add.name;
+                    }
+                    PanelModel.instance.undoManager.add (add);
+                    break;  // For now, we only support transferring a single part. To do more, we need to add collections in TransferableNode for both the node paths and the created part names.
                 }
                 if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE) PanelModel.instance.undoManager.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
 

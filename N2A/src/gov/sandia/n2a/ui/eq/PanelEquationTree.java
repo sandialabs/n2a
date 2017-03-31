@@ -29,15 +29,15 @@ import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
 import gov.sandia.n2a.ui.eq.undo.Move;
+import gov.sandia.n2a.ui.eq.undo.Outsource;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.PanelRun;
-import sun.swing.SwingUtilities2;
-
 import java.awt.FontMetrics;
 import java.awt.Insets;
 import java.awt.Rectangle;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.ClipboardOwner;
 import java.awt.datatransfer.DataFlavor;
-import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.ActionEvent;
@@ -45,11 +45,8 @@ import java.awt.event.ActionListener;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
 import java.awt.event.InputEvent;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
@@ -63,7 +60,6 @@ import java.util.Locale;
 import java.util.Map;
 
 import javax.swing.AbstractAction;
-import javax.swing.Action;
 import javax.swing.ActionMap;
 import javax.swing.Box;
 import javax.swing.ButtonGroup;
@@ -125,6 +121,74 @@ public class PanelEquationTree extends JPanel
     protected JPopupMenu menuPopup;
     protected JPopupMenu menuFilter;
     protected long       menuFilterCanceledAt = 0;
+
+    /**
+        A data flavor that lets PanelSearch extract a TransferableNode instance for the purpose of adding info to it for our local exportDone().
+        This is necessary because Swing packs the Transferable into a proxy object which is sewn shut.
+    **/
+    public static final DataFlavor nodeFlavor = new DataFlavor (TransferableNode.class, null);
+
+    public class TransferableNode implements Transferable, ClipboardOwner
+    {
+        public String       data;
+        public List<String> path;
+        public boolean      drag;
+        public String       newPartName;  // If set non-null by the receiver (nasty hack), then this transfer resulted the creation of a new part.
+
+        public TransferableNode (String data, NodeBase source, boolean drag)
+        {
+            this.data = data;
+            path      = source.getKeyPath ();
+            this.drag = drag;
+        }
+
+        public NodeBase getSource ()
+        {
+            MNode doc = AppData.models.child (path.get (0));
+            if (doc != record) return null;
+
+            NodeBase result = root;
+            for (int i = 1; i < path.size (); i++)
+            {
+                result = (NodeBase) result.child (path.get (i));
+                if (result == null) break;
+            }
+            return result;
+        }
+
+        @Override
+        public void lostOwnership (Clipboard clipboard, Transferable contents)
+        {
+        }
+
+        @Override
+        public DataFlavor[] getTransferDataFlavors ()
+        {
+            DataFlavor[] result = new DataFlavor[3];
+            result[0] = DataFlavor.stringFlavor;
+            result[1] = DataFlavor.plainTextFlavor;
+            result[2] = nodeFlavor;
+            return result;
+        }
+
+        @Override
+        public boolean isDataFlavorSupported (DataFlavor flavor)
+        {
+            if (flavor.equals (DataFlavor.stringFlavor   )) return true;
+            if (flavor.equals (DataFlavor.plainTextFlavor)) return true;
+            if (flavor.equals (nodeFlavor                )) return true;
+            return false;
+        }
+
+        @Override
+        public Object getTransferData (DataFlavor flavor) throws UnsupportedFlavorException, IOException
+        {
+            if (flavor.equals (DataFlavor.stringFlavor   )) return data;
+            if (flavor.equals (DataFlavor.plainTextFlavor)) return new StringReader (data);
+            if (flavor.equals (nodeFlavor                )) return this;
+            throw new UnsupportedFlavorException (flavor);
+        }
+    }
 
     // The main constructor. Most of the real work of setting up the UI is here, including some fairly elaborate listeners.
     public PanelEquationTree ()
@@ -398,33 +462,6 @@ public class PanelEquationTree extends JPanel
                 super.exportAsDrag (comp, e, action);
             }
 
-            class TransferableNode extends StringSelection
-            {
-                public List<String> path;
-                public boolean      drag;
-
-                public TransferableNode (String data, NodeBase source, boolean drag)
-                {
-                    super (data);
-                    path      = source.getKeyPath ();
-                    this.drag = drag;
-                }
-
-                public NodeBase getSource ()
-                {
-                    MNode doc = AppData.models.child (path.get (0));
-                    if (doc != record) return null;
-
-                    NodeBase result = root;
-                    for (int i = 1; i < path.size (); i++)
-                    {
-                        result = (NodeBase) result.child (path.get (i));
-                        if (result == null) break;
-                    }
-                    return result;
-                }
-            }
-
             protected Transferable createTransferable (JComponent comp)
             {
                 boolean drag = dragInitiated;
@@ -455,13 +492,31 @@ public class PanelEquationTree extends JPanel
 
             protected void exportDone (JComponent source, Transferable data, int action)
             {
+                System.out.println ("exportDone");
                 TransferableNode tn = (TransferableNode) data;
-                if (action == MOVE  &&  ! tn.drag)
+                if (action == MOVE)
                 {
+                    System.out.println ("  move");
                     // It is possible for the node to be removed from the tree before we get to it.
                     // For example, a local drop of an $inherit node will cause the tree to rebuild.
                     NodeBase node = ((TransferableNode) data).getSource ();
-                    if (node != null) node.delete (tree, false);
+                    if (node != null)
+                    {
+                        System.out.println ("  got node");
+                        if (tn.drag)
+                        {
+                            System.out.println ("  drag");
+                            if (tn.newPartName != null  &&  node != root  &&  node.source.isFromTopDocument ())
+                            {
+                                // Change this node into an include of the newly-created part.
+                                PanelModel.instance.undoManager.add (new Outsource ((NodePart) node, tn.newPartName));
+                            }
+                        }
+                        else
+                        {
+                            node.delete (tree, false);
+                        }
+                    }
                 }
                 PanelModel.instance.undoManager.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
             }
