@@ -52,7 +52,7 @@ import javax.swing.tree.ExpandVetoException;
 import javax.swing.tree.TreePath;
 import javax.swing.tree.TreeSelectionModel;
 
-public class RunPanel extends JPanel
+public class PanelRun extends JPanel
 {
     public NodeBase         root;
     public DefaultTreeModel model;
@@ -68,7 +68,7 @@ public class RunPanel extends JPanel
     public MDir              runs;  // Copied from AppData for convenience
     public List<NodeJob>     running = new LinkedList<NodeJob> ();  // Jobs that we are actively monitoring because they may still be running.
 
-    public RunPanel ()
+    public PanelRun ()
     {
         root  = new NodeBase ();
         model = new DefaultTreeModel (root);
@@ -184,7 +184,7 @@ public class RunPanel extends JPanel
                     while (true)
                     {
                         NodeBase d = displayNode;  // Make local copy (atomic action) to prevent it changing from under us
-                        if (d instanceof NodeJob) ((NodeJob) d).monitorProgress (RunPanel.this);
+                        if (d instanceof NodeJob) ((NodeJob) d).monitorProgress (PanelRun.this);
                         if (shortCycles++ < 20)
                         {
                             Thread.sleep (1000);
@@ -198,7 +198,7 @@ public class RunPanel extends JPanel
                             while (i.hasNext ())
                             {
                                 NodeJob job = i.next ();
-                                if (job != d) job.monitorProgress (RunPanel.this);
+                                if (job != d) job.monitorProgress (PanelRun.this);
                                 if (job.complete >= 1) i.remove ();
                             }
                         }
@@ -314,7 +314,7 @@ public class RunPanel extends JPanel
                 }
             }
         });
-        for (MNode n : AppData.state.childOrCreate ("RunPanel", "scripts")) comboScript.addItem (n.get ());
+        for (MNode n : AppData.state.childOrCreate ("PanelRun", "scripts")) comboScript.addItem (n.get ());
 
         Lay.BLtg
         (
@@ -347,7 +347,7 @@ public class RunPanel extends JPanel
 
     public void saveScripts ()
     {
-        MNode scripts = AppData.state.childOrCreate ("RunPanel", "scripts");
+        MNode scripts = AppData.state.childOrCreate ("PanelRun", "scripts");
         scripts.clear ();
         for (int i = 0; i < comboScript.getItemCount (); i++)
         {
@@ -363,7 +363,7 @@ public class RunPanel extends JPanel
 
         public DisplayThread (NodeFile node, String viz)
         {
-            super ("RunPanel Fetch File");
+            super ("PanelRun Fetch File");
             this.node = node;
             this.viz  = viz;
         }
@@ -541,7 +541,7 @@ public class RunPanel extends JPanel
                 if (displayPane.getViewport ().getView () != displayText) displayPane.setViewportView (displayText);
             }
 
-            new Thread ("RunPanel Delete")
+            new Thread ("PanelRun Delete")
             {
                 public void run ()
                 {
@@ -587,7 +587,7 @@ public class RunPanel extends JPanel
         tree.setSelectionRow (0);
         tree.requestFocusInWindow ();
 
-        new Thread ("RunPanel Add New Run")
+        new Thread ("PanelRun Add New Run")
         {
             public void run ()
             {
@@ -602,7 +602,7 @@ public class RunPanel extends JPanel
                 {
                 }
 
-                node.monitorProgress (RunPanel.this);
+                node.monitorProgress (PanelRun.this);
                 if (node.complete < 1) synchronized (running) {running.add (0, node);}
             };
         }.start ();

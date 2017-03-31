@@ -16,7 +16,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.ModelEditPanel;
+import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.ChangeEquation;
 import gov.sandia.n2a.ui.eq.undo.DeleteEquation;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -145,13 +145,13 @@ public class NodeEquation extends NodeBase
 
         if (piecesAfter.expression.isEmpty ()) piecesAfter.expression = "0";
 
-        ModelEditPanel.instance.undoManager.add (new ChangeEquation (parent, piecesBefore.conditional, piecesBefore.combiner, piecesBefore.expression, piecesAfter.conditional, piecesAfter.combiner, piecesAfter.expression));
+        PanelModel.instance.undoManager.add (new ChangeEquation (parent, piecesBefore.conditional, piecesBefore.combiner, piecesBefore.expression, piecesAfter.conditional, piecesAfter.combiner, piecesAfter.expression));
     }
 
     @Override
     public void delete (JTree tree, boolean canceled)
     {
         if (! source.isFromTopDocument ()) return;
-        ModelEditPanel.instance.undoManager.add (new DeleteEquation (this, canceled));
+        PanelModel.instance.undoManager.add (new DeleteEquation (this, canceled));
     }
 }

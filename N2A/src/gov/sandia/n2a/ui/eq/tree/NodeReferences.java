@@ -12,7 +12,7 @@ import java.awt.Font;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.ModelEditPanel;
+import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddReference;
 import gov.sandia.n2a.ui.eq.undo.DeleteReferences;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -76,7 +76,7 @@ public class NodeReferences extends NodeContainer
             }
             index++;
             AddReference ar = new AddReference ((NodeBase) getParent (), index, data);
-            ModelEditPanel.instance.undoManager.add (ar);
+            PanelModel.instance.undoManager.add (ar);
             return ar.createdNode;
         }
         return ((NodeBase) getParent ()).add (type, tree, data);
@@ -92,6 +92,6 @@ public class NodeReferences extends NodeContainer
     public void delete (JTree tree, boolean canceled)
     {
         if (! source.isFromTopDocument ()) return;
-        ModelEditPanel.instance.undoManager.add (new DeleteReferences (this));
+        PanelModel.instance.undoManager.add (new DeleteReferences (this));
     }
 }

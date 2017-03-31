@@ -30,7 +30,7 @@ import gov.sandia.n2a.ui.eq.undo.AddDoc;
 import gov.sandia.n2a.ui.eq.undo.CompoundEdit;
 import gov.sandia.n2a.ui.eq.undo.Move;
 import gov.sandia.n2a.ui.images.ImageUtil;
-import gov.sandia.n2a.ui.jobs.RunPanel;
+import gov.sandia.n2a.ui.jobs.PanelRun;
 import sun.swing.SwingUtilities2;
 
 import java.awt.FontMetrics;
@@ -94,7 +94,7 @@ import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 import javax.swing.tree.TreeSelectionModel;
 
-public class EquationTreePanel extends JPanel
+public class PanelEquationTree extends JPanel
 {
     protected int jobCount = 0;  // for launching jobs
 
@@ -126,7 +126,7 @@ public class EquationTreePanel extends JPanel
     protected long       menuFilterCanceledAt = 0;
 
     // The main constructor. Most of the real work of setting up the UI is here, including some fairly elaborate listeners.
-    public EquationTreePanel ()
+    public PanelEquationTree ()
     {
         model = new FilteredTreeModel (null);
         tree  = new JTree (model)
@@ -328,7 +328,7 @@ public class EquationTreePanel extends JPanel
                     return false;
                 }
 
-                ModelEditPanel mep = ModelEditPanel.instance;
+                PanelModel mep = PanelModel.instance;
                 mep.undoManager.addEdit (new CompoundEdit ());
 
                 // Determine paste/drop target
@@ -337,7 +337,7 @@ public class EquationTreePanel extends JPanel
                 else                path = tree.getSelectionPath ();
                 if (path == null)
                 {
-                    if (root == null) ModelEditPanel.instance.undoManager.add (new AddDoc ());
+                    if (root == null) PanelModel.instance.undoManager.add (new AddDoc ());
                     tree.setSelectionRow (0);
                     path = tree.getSelectionPath ();
                 }
@@ -448,7 +448,7 @@ public class EquationTreePanel extends JPanel
                     NodeBase node = ((TransferableNode) data).getSource ();
                     if (node != null) node.delete (tree, false);
                 }
-                ModelEditPanel.instance.undoManager.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
+                PanelModel.instance.undoManager.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
             }
         });
 
@@ -482,7 +482,7 @@ public class EquationTreePanel extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                ModelEditPanel.instance.undoManager.add (new AddDoc ());
+                PanelModel.instance.undoManager.add (new AddDoc ());
             }
         });
 
@@ -776,7 +776,7 @@ public class EquationTreePanel extends JPanel
             }.start ();
 
             MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
-            RunPanel panelRun = (RunPanel) mtp.selectTab ("Runs");
+            PanelRun panelRun = (PanelRun) mtp.selectTab ("Runs");
             mtp.setPreferredFocus (panelRun, panelRun.tree);
             panelRun.addNewRun (job);
         }
@@ -919,7 +919,7 @@ public class EquationTreePanel extends JPanel
         NodeBase selected = getSelected ();
         if (selected == null)  // only happens when root is null
         {
-            ModelEditPanel.instance.undoManager.add (new AddDoc ());
+            PanelModel.instance.undoManager.add (new AddDoc ());
             if (type.equals ("Part")) return;  // Since root is itself a Part, don't create another one. For anything else, fall through and add it to the newly-created model.
             selected = root;
         }
@@ -958,7 +958,7 @@ public class EquationTreePanel extends JPanel
                 NodeBase nodeAfter = (NodeBase) model.getChild (parent, indexAfter);
                 indexBefore = parent.getIndex (nodeBefore);
                 indexAfter  = parent.getIndex (nodeAfter);
-                ModelEditPanel.instance.undoManager.add (new Move ((NodePart) parent, indexBefore, indexAfter));
+                PanelModel.instance.undoManager.add (new Move ((NodePart) parent, indexBefore, indexAfter));
             }
         }
     }

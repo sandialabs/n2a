@@ -16,7 +16,7 @@ import javax.swing.undo.UndoableEdit;
 
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.ModelEditPanel;
+import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeEquation;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
@@ -72,7 +72,7 @@ public class ChangeEquation extends Undoable
         NodeBase nodeBefore = parent.child (nameBefore);
         if (nodeBefore == null) throw new CannotRedoException ();
 
-        ModelEditPanel mep = ModelEditPanel.instance;
+        PanelModel mep = PanelModel.instance;
         JTree tree = mep.panelEquations.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         FontMetrics fm = nodeBefore.getFontMetrics (tree);

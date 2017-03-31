@@ -9,7 +9,7 @@ package gov.sandia.n2a.transfer;
 
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.plugins.extpoints.Importer;
-import gov.sandia.n2a.ui.eq.ModelEditPanel;
+import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
 
 import java.io.BufferedReader;
@@ -35,7 +35,7 @@ public class ImportNative implements Importer
             MVolatile doc = new MVolatile ();
             doc.read (reader);
             reader.close ();
-            ModelEditPanel.instance.undoManager.add (new AddDoc (source.getName (), doc));
+            PanelModel.instance.undoManager.add (new AddDoc (source.getName (), doc));
         }
         catch (IOException e)
         {

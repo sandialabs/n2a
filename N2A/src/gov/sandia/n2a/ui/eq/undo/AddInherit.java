@@ -17,7 +17,7 @@ import javax.swing.undo.UndoableEdit;
 
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.ModelEditPanel;
+import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
@@ -49,7 +49,7 @@ public class AddInherit extends Undoable
         int index = parent.getIndexFiltered (node);
         if (canceled) index--;
 
-        ModelEditPanel mep = ModelEditPanel.instance;
+        PanelModel mep = PanelModel.instance;
         JTree tree = mep.panelEquations.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
@@ -75,7 +75,7 @@ public class AddInherit extends Undoable
         NodePart parent = (NodePart) locateNode (path);
         if (parent == null) throw new CannotUndoException ();
 
-        ModelEditPanel mep = ModelEditPanel.instance;
+        PanelModel mep = PanelModel.instance;
         JTree tree = mep.panelEquations.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 

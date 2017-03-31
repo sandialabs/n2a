@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2016 Sandia Corporation.
+Copyright 2013,2016,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.ui.eq;
 
 import java.awt.BorderLayout;
+import java.awt.FontMetrics;
 import java.awt.event.ActionEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
@@ -23,44 +24,53 @@ import javax.swing.undo.CannotUndoException;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.ui.eq.undo.UndoManager;
 
-public class ModelEditPanel extends JPanel
+public class PanelModel extends JPanel
 {
-    public static ModelEditPanel instance;  ///< Technically, this class is a singleton, because only one would normally be created.
+    public static PanelModel instance;  ///< Technically, this class is a singleton, because only one would normally be created.
 
     public JSplitPane        split;
-    public SearchPanel       panelSearch;
-    public EquationTreePanel panelEquations;
+    public JSplitPane        splitMRU;
+    public PanelMRU          panelMRU;
+    public PanelSearch       panelSearch;
+    public PanelEquationTree panelEquations;
     public UndoManager       undoManager = new UndoManager ();
 
-    public ModelEditPanel ()
+    public PanelModel ()
     {
         instance = this;
 
-        panelEquations = new EquationTreePanel ();
-        panelSearch    = new SearchPanel ();
+        panelMRU       = new PanelMRU ();
+        panelSearch    = new PanelSearch ();
+        panelEquations = new PanelEquationTree ();
 
-        split = new JSplitPane (JSplitPane.HORIZONTAL_SPLIT, panelSearch, panelEquations);
+        splitMRU = new JSplitPane (JSplitPane.VERTICAL_SPLIT, panelMRU, panelSearch);
+        split = new JSplitPane (JSplitPane.HORIZONTAL_SPLIT, splitMRU, panelEquations);
         split.setOneTouchExpandable(true);
 
         setLayout (new BorderLayout ());
         add (split, BorderLayout.CENTER);
         setFocusCycleRoot (true);
 
-        // Determine the split position.
-        split.setDividerLocation (AppData.state.getOrDefaultInt ("ModelEditPanel", "divider", "150"));
-        split.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
+        // Determine the split positions.
+
+        FontMetrics fm = panelSearch.list.getFontMetrics (panelSearch.list.getFont ());
+        splitMRU.setDividerLocation (AppData.state.getOrDefaultInt ("PanelModel", "dividerMRU", String.valueOf (fm.getHeight () * 4)));
+        splitMRU.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
-            boolean gotFirstChange;
             public void propertyChange (PropertyChangeEvent e)
             {
-                // Ignore first change, as it is induced by the initial layout, interacting with resize weight.
-                // This often results in a different value for divider location than the set one.
-                if (gotFirstChange)
-                {
-                    Object o = e.getNewValue ();
-                    if (o instanceof Integer) AppData.state.set ("ModelEditPanel", "divider", o);
-                }
-                gotFirstChange = true;
+                Object o = e.getNewValue ();
+                if (o instanceof Integer) AppData.state.set ("PanelModel", "dividerMRU", o);
+            }
+        });
+
+        split.setDividerLocation (AppData.state.getOrDefaultInt ("PanelModel", "divider", String.valueOf (fm.stringWidth ("Example Hodgkin-Huxley Cable"))));
+        split.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
+        {
+            public void propertyChange (PropertyChangeEvent e)
+            {
+                Object o = e.getNewValue ();
+                if (o instanceof Integer) AppData.state.set ("PanelModel", "divider", o);
             }
         });
 

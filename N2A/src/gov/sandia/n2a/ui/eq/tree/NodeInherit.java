@@ -10,7 +10,7 @@ package gov.sandia.n2a.ui.eq.tree;
 
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.ModelEditPanel;
+import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.ChangeInherit;
 import gov.sandia.n2a.ui.eq.undo.DeleteInherit;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -77,13 +77,13 @@ public class NodeInherit extends NodeBase
             return;
         }
 
-        ModelEditPanel.instance.undoManager.add (new ChangeInherit (this, value));
+        PanelModel.instance.undoManager.add (new ChangeInherit (this, value));
     }
 
     @Override
     public void delete (JTree tree, boolean canceled)
     {
         if (! source.isFromTopDocument ()) return;
-        ModelEditPanel.instance.undoManager.add (new DeleteInherit (this, canceled));
+        PanelModel.instance.undoManager.add (new DeleteInherit (this, canceled));
     }
 }

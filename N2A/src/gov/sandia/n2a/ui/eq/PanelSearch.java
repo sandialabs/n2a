@@ -58,7 +58,7 @@ import javax.swing.text.DefaultHighlighter;
 import javax.swing.text.Highlighter;
 import sun.swing.DefaultLookup;
 
-public class SearchPanel extends JPanel
+public class PanelSearch extends JPanel
 {
     public JTextField               textQuery;
     public JButton                  buttonClear;
@@ -66,116 +66,7 @@ public class SearchPanel extends JPanel
     public DefaultListModel<Holder> model;
     public int                      lastSelection = -1;
 
-    /**
-        Indirect access to MDoc, because something calls toString(), which loads and returns the entire document.
-    **/
-    public class Holder
-    {
-        public MNode doc;
-
-        public Holder (MNode doc)
-        {
-            this.doc = doc;
-        }
-
-        public String toString ()
-        {
-            return doc.key ();
-        }
-
-        public boolean equals (Object that)
-        {
-            // MDocs are unique, so direct object equality is OK here.
-            if (that instanceof Holder) return ((Holder) that).doc == doc;
-            return false;
-        }
-    }
-
-    // Retrieve records matching the filter text, and deliver them to the model.
-    public class SearchThread extends Thread
-    {
-        public String query;
-        public boolean stop;
-        public List<MNode> results = new LinkedList<MNode> ();
-
-        public SearchThread (String query)
-        {
-            this.query = query.toLowerCase ();
-        }
-
-        @Override
-        public void run ()
-        {
-            for (MNode i : AppData.models)
-            {
-                if (i.key ().toLowerCase ().contains (query)) results.add (i);
-                if (stop) return;
-            }
-
-            // Update of list should be atomic with respect to other ui events.
-            EventQueue.invokeLater (new Runnable ()
-            {
-                public void run ()
-                {
-                    model.clear ();
-                    for (MNode record : results) model.addElement (new Holder (record));
-                }
-            });
-        }
-    }
-    protected SearchThread thread;
-
-    public void recordSelected ()
-    {
-        EventQueue.invokeLater (new Runnable ()
-        {
-            public void run ()
-            {
-                ModelEditPanel mep = ModelEditPanel.instance;
-                mep.panelEquations.loadRootFromDB (model.get (list.getSelectedIndex ()).doc);
-                mep.panelEquations.tree.requestFocusInWindow ();
-            }
-        });
-    }
-
-    public void hideSelection ()
-    {
-        lastSelection = list.getSelectedIndex ();
-        list.clearSelection ();
-    }
-
-    public int indexOf (MNode doc)
-    {
-        return model.indexOf (new Holder (doc));
-    }
-
-    public int removeDoc (MNode doc)
-    {
-        int index = model.indexOf (new Holder (doc));
-        if (index >= 0)
-        {
-            model.remove (index);
-            if (lastSelection > index) lastSelection--;
-            lastSelection = Math.min (model.size () - 1, lastSelection);
-        }
-        return index;
-    }
-
-    public int insertDoc (MNode doc, int at)
-    {
-        Holder h = new Holder (doc);
-        int index = model.indexOf (h);
-        if (index < 0)
-        {
-            if (at > model.size ()) at = 0;  // The list has changed, perhaps due to filtering, and our position is no longer valid, so simply insert at top.
-            model.add (at, h);
-            lastSelection = at;
-            return at;
-        }
-        return index;
-    }
-
-    public SearchPanel ()
+    public PanelSearch ()
     {
         list = new JList<Holder> (model = new DefaultListModel<Holder> ());
         list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
@@ -193,7 +84,7 @@ public class SearchPanel extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                ModelEditPanel.instance.undoManager.add (new AddDoc ());
+                PanelModel.instance.undoManager.add (new AddDoc ());
             }
         });
         actionMap.put ("delete", new AbstractAction ()
@@ -202,14 +93,14 @@ public class SearchPanel extends JPanel
             {
                 MNode deleteMe = list.getSelectedValue ().doc;
                 if (deleteMe == null) return;
-                ModelEditPanel.instance.undoManager.add (new DeleteDoc ((MDoc) deleteMe));
+                PanelModel.instance.undoManager.add (new DeleteDoc ((MDoc) deleteMe));
             }
         });
         actionMap.put ("select", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                recordSelected ();
+                selectCurrent ();
             }
         });
 
@@ -217,13 +108,7 @@ public class SearchPanel extends JPanel
         {
             public void mouseClicked (MouseEvent e)
             {
-                recordSelected ();
-                e.consume ();
-            }
-
-            public void mouseReleased (MouseEvent e)
-            {
-                e.consume ();
+                selectCurrent ();
             }
         });
 
@@ -266,12 +151,12 @@ public class SearchPanel extends JPanel
                 }
 
                 if (! schema.type.contains ("Part")) return false;
-                ModelEditPanel.instance.undoManager.addEdit (new CompoundEdit ());
+                PanelModel.instance.undoManager.addEdit (new CompoundEdit ());
                 for (MNode n : data)  // data can contain several parts
                 {
-                    ModelEditPanel.instance.undoManager.add (new AddDoc (n.key (), n));
+                    PanelModel.instance.undoManager.add (new AddDoc (n.key (), n));
                 }
-                if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE) ModelEditPanel.instance.undoManager.endCompoundEdit ();
+                if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE) PanelModel.instance.undoManager.endCompoundEdit ();
 
                 return true;
             }
@@ -304,7 +189,7 @@ public class SearchPanel extends JPanel
             protected void exportDone (JComponent source, Transferable data, int action)
             {
                 if (! list.isFocusOwner ()) hideSelection ();
-                ModelEditPanel.instance.undoManager.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
+                PanelModel.instance.undoManager.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
             }
         });
 
@@ -361,7 +246,127 @@ public class SearchPanel extends JPanel
         thread.start ();
     }
 
-    protected static class MNodeRenderer extends JTextField implements ListCellRenderer<Holder>
+    public void selectCurrent ()
+    {
+        int index = list.getSelectedIndex ();
+        if (index >= 0)
+        {
+            MNode doc = model.get (index).doc;
+            PanelModel.instance.panelMRU.useDoc (doc);
+            recordSelected (doc);
+        }
+    }
+
+    public static void recordSelected (MNode doc)
+    {
+        EventQueue.invokeLater (new Runnable ()
+        {
+            public void run ()
+            {
+                PanelModel mep = PanelModel.instance;
+                mep.panelEquations.loadRootFromDB (doc);
+                mep.panelEquations.tree.requestFocusInWindow ();
+            }
+        });
+    }
+
+    public void hideSelection ()
+    {
+        lastSelection = list.getSelectedIndex ();
+        list.clearSelection ();
+    }
+
+    public int indexOf (MNode doc)
+    {
+        return model.indexOf (new Holder (doc));
+    }
+
+    public int removeDoc (MNode doc)
+    {
+        int index = model.indexOf (new Holder (doc));
+        if (index >= 0)
+        {
+            model.remove (index);
+            if (lastSelection > index) lastSelection--;
+            lastSelection = Math.min (model.size () - 1, lastSelection);
+        }
+        return index;
+    }
+
+    public int insertDoc (MNode doc, int at)
+    {
+        Holder h = new Holder (doc);
+        int index = model.indexOf (h);
+        if (index < 0)
+        {
+            if (at > model.size ()) at = 0;  // The list has changed, perhaps due to filtering, and our position is no longer valid, so simply insert at top.
+            model.add (at, h);
+            lastSelection = at;
+            return at;
+        }
+        return index;
+    }
+
+    /**
+        Indirect access to MDoc, because something calls toString(), which loads and returns the entire document.
+    **/
+    public static class Holder
+    {
+        public MNode doc;
+
+        public Holder (MNode doc)
+        {
+            this.doc = doc;
+        }
+
+        public String toString ()
+        {
+            return doc.key ();
+        }
+
+        public boolean equals (Object that)
+        {
+            // MDocs are unique, so direct object equality is OK here.
+            if (that instanceof Holder) return ((Holder) that).doc == doc;
+            return false;
+        }
+    }
+
+    // Retrieve records matching the filter text, and deliver them to the model.
+    public class SearchThread extends Thread
+    {
+        public String query;
+        public boolean stop;
+        public List<MNode> results = new LinkedList<MNode> ();
+
+        public SearchThread (String query)
+        {
+            this.query = query.toLowerCase ();
+        }
+
+        @Override
+        public void run ()
+        {
+            for (MNode i : AppData.models)
+            {
+                if (i.key ().toLowerCase ().contains (query)) results.add (i);
+                if (stop) return;
+            }
+
+            // Update of list should be atomic with respect to other ui events.
+            EventQueue.invokeLater (new Runnable ()
+            {
+                public void run ()
+                {
+                    model.clear ();
+                    for (MNode record : results) model.addElement (new Holder (record));
+                }
+            });
+        }
+    }
+    protected SearchThread thread;
+
+    public static class MNodeRenderer extends JTextField implements ListCellRenderer<Holder>
     {
         protected static DefaultHighlighter.DefaultHighlightPainter painter;
 

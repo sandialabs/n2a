@@ -31,12 +31,12 @@ public class ActivityModel implements Activity
     @Override
     public Component getPanel ()
     {
-        return new ModelEditPanel ();
+        return new PanelModel ();
     }
 
     @Override
     public Component getInitialFocus (Component panel)
     {
-        return ((ModelEditPanel) panel).panelSearch.textQuery;
+        return ((PanelModel) panel).panelSearch.textQuery;
     }
 }

@@ -31,12 +31,12 @@ public class ActivityRun implements Activity
     @Override
     public Component getPanel ()
     {
-        return new RunPanel ();
+        return new PanelRun ();
     }
 
     @Override
     public Component getInitialFocus (Component panel)
     {
-        return ((RunPanel) panel).tree;
+        return ((PanelRun) panel).tree;
     }
 }

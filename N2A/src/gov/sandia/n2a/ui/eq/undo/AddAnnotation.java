@@ -19,7 +19,7 @@ import javax.swing.undo.UndoableEdit;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.ModelEditPanel;
+import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -79,7 +79,7 @@ public class AddAnnotation extends Undoable
         if (parent instanceof NodePart) container = parent.child (blockName);
         NodeBase createdNode = container.child (name);
 
-        ModelEditPanel mep = ModelEditPanel.instance;
+        PanelModel mep = PanelModel.instance;
         JTree tree = mep.panelEquations.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         FontMetrics fm = createdNode.getFontMetrics (tree);
@@ -152,7 +152,7 @@ public class AddAnnotation extends Undoable
         if (parent == null) throw new CannotRedoException ();
         MPart block = (MPart) parent.source.childOrCreate (blockName);
 
-        ModelEditPanel mep = ModelEditPanel.instance;
+        PanelModel mep = PanelModel.instance;
         JTree tree = mep.panelEquations.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         NodeBase container = parent;  // If this is a variable, then mix metadata with equations and references

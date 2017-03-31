@@ -73,7 +73,7 @@ public class NodeJob extends NodeBase
         return new ImageIcon (inProgress);
     }
 
-    public void monitorProgress (final RunPanel panel)
+    public void monitorProgress (final PanelRun panel)
     {
         if (complete >= 1) return;
 

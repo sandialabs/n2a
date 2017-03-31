@@ -18,7 +18,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.ModelEditPanel;
+import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeContainer;
@@ -49,7 +49,7 @@ public class AddAnnotations extends Undoable
         NodeBase parent = locateNode (path);
         if (parent == null) throw new CannotRedoException ();
 
-        ModelEditPanel mep = ModelEditPanel.instance;
+        PanelModel mep = PanelModel.instance;
         JTree tree = mep.panelEquations.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
@@ -92,7 +92,7 @@ public class AddAnnotations extends Undoable
         MPart block = (MPart) parent.source.childOrCreate (blockName);
         block.merge (saved);
 
-        ModelEditPanel mep = ModelEditPanel.instance;
+        PanelModel mep = PanelModel.instance;
         JTree tree = mep.panelEquations.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 

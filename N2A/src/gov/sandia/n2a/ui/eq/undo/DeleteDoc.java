@@ -11,7 +11,7 @@ import javax.swing.undo.UndoableEdit;
 
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MVolatile;
-import gov.sandia.n2a.ui.eq.ModelEditPanel;
+import gov.sandia.n2a.ui.eq.PanelModel;
 
 public class DeleteDoc extends Undoable
 {
@@ -26,8 +26,8 @@ public class DeleteDoc extends Undoable
         saved = new MVolatile (doc.key (), "");
         saved.merge (doc);  // in-memory copy of the entire document
 
-        ModelEditPanel mep = ModelEditPanel.instance;
-        fromSearchPanel = mep.panelSearch.list.getSelectedIndex () >= 0;
+        PanelModel mep = PanelModel.instance;
+        fromSearchPanel = mep.panelSearch.list.isFocusOwner ();
         index           = mep.panelSearch.indexOf (doc);
         wasShowing      = mep.panelEquations.record == doc;
     }

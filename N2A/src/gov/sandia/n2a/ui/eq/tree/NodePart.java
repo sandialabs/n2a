@@ -22,7 +22,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.ModelEditPanel;
+import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddInherit;
 import gov.sandia.n2a.ui.eq.undo.AddPart;
@@ -358,7 +358,7 @@ public class NodePart extends NodeContainer
         if (type.equals ("Annotation"))
         {
             AddAnnotation aa = new AddAnnotation (this, metadataIndex, data);
-            ModelEditPanel.instance.undoManager.add (aa);  // aa will automagically insert a $metadata block if needed
+            PanelModel.instance.undoManager.add (aa);  // aa will automagically insert a $metadata block if needed
             return aa.createdNode;
         }
         else if (type.equals ("Annotations"))
@@ -369,7 +369,7 @@ public class NodePart extends NodeContainer
         else if (type.equals ("Reference"))
         {
             AddReference ar = new AddReference (this, metadataIndex, data);
-            ModelEditPanel.instance.undoManager.add (ar);
+            PanelModel.instance.undoManager.add (ar);
             return ar.createdNode;
         }
         else if (type.equals ("References"))
@@ -380,7 +380,7 @@ public class NodePart extends NodeContainer
         else if (type.equals ("Part"))
         {
             AddPart ap = new AddPart (this, subpartIndex, data);
-            ModelEditPanel.instance.undoManager.add (ap);
+            PanelModel.instance.undoManager.add (ap);
             return ap.createdNode;
         }
         else if (type.equals ("Inherit"))
@@ -397,7 +397,7 @@ public class NodePart extends NodeContainer
             {
                 un = new ChangeInherit (inherit, value);
             }
-            if (un != null) ModelEditPanel.instance.undoManager.add (un);
+            if (un != null) PanelModel.instance.undoManager.add (un);
             return child ("$inherit");
         }
         else  // treat all other requests as "Variable"
@@ -407,7 +407,7 @@ public class NodePart extends NodeContainer
                 data = new MVolatile ("", data.get () + data.key ());  // convert equation into nameless variable
             }
             AddVariable av = new AddVariable (this, variableIndex, data);
-            ModelEditPanel.instance.undoManager.add (av);
+            PanelModel.instance.undoManager.add (av);
             return av.createdNode;
         }
     }
@@ -428,7 +428,7 @@ public class NodePart extends NodeContainer
             return;
         }
 
-        ModelEditPanel mep = ModelEditPanel.instance;
+        PanelModel mep = PanelModel.instance;
         if (isRoot ())  // Edits to root cause a rename of the document on disk
         {
             if (name.isEmpty ())
@@ -476,7 +476,7 @@ public class NodePart extends NodeContainer
     public void delete (JTree tree, boolean canceled)
     {
         if (! source.isFromTopDocument ()) return;  // This should be true of root, as well as any other node we might try to delete.
-        ModelEditPanel mep = ModelEditPanel.instance;
+        PanelModel mep = PanelModel.instance;
         if (isRoot ()) mep.undoManager.add (new DeleteDoc ((MDoc) source.getSource ()));
         else           mep.undoManager.add (new DeletePart (this, canceled));
     }

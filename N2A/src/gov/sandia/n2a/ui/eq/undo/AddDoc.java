@@ -11,7 +11,7 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
-import gov.sandia.n2a.ui.eq.ModelEditPanel;
+import gov.sandia.n2a.ui.eq.PanelModel;
 
 public class AddDoc extends Undoable
 {
@@ -34,7 +34,7 @@ public class AddDoc extends Undoable
     {
         this.saved = saved;
 
-        ModelEditPanel mep = ModelEditPanel.instance;
+        PanelModel mep = PanelModel.instance;
         fromSearchPanel = mep.panelSearch.list.isFocusOwner ();  // Otherwise, assume focus is on equation tree
 
         // Determine unique name in database
@@ -68,8 +68,9 @@ public class AddDoc extends Undoable
     public static int destroy (String name, boolean fromSearchPanel)
     {
         MNode doc = AppData.models.child (name);
-        ModelEditPanel mep = ModelEditPanel.instance;
+        PanelModel mep = PanelModel.instance;
         mep.panelEquations.recordDeleted (doc);
+        mep.panelMRU.removeDoc (doc);
         int result = mep.panelSearch.removeDoc (doc);
         ((MDoc) doc).delete ();
         mep.panelSearch.lastSelection = Math.min (mep.panelSearch.model.size () - 1, result);
@@ -95,7 +96,8 @@ public class AddDoc extends Undoable
     {
         MNode doc = AppData.models.set (name, "");
         doc.merge (saved);
-        ModelEditPanel mep = ModelEditPanel.instance;
+        PanelModel mep = PanelModel.instance;
+        mep.panelMRU.insertDoc (doc);
         int result = mep.panelSearch.insertDoc (doc, index);
         if (wasShowing) mep.panelEquations.loadRootFromDB (doc);
         mep.panelSearch.lastSelection = index;

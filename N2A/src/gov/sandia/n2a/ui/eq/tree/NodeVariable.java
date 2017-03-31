@@ -17,7 +17,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.ModelEditPanel;
+import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddEquation;
 import gov.sandia.n2a.ui.eq.undo.AddInherit;
@@ -269,7 +269,7 @@ public class NodeVariable extends NodeContainer
 
             // Create an AddEquation action
             AddEquation ae = new AddEquation (this, index, data);
-            ModelEditPanel.instance.undoManager.add (ae);
+            PanelModel.instance.undoManager.add (ae);
             return ae.createdNode;
         }
         else if (type.equals ("Annotation"))
@@ -280,13 +280,13 @@ public class NodeVariable extends NodeContainer
             while (index < count  &&  ! (children.get (index) instanceof NodeReference)) index++;
 
             AddAnnotation aa = new AddAnnotation (this, index, data);
-            ModelEditPanel.instance.undoManager.add (aa);
+            PanelModel.instance.undoManager.add (aa);
             return aa.createdNode;
         }
         else if (type.equals ("Reference"))
         {
             AddReference ar = new AddReference (this, getChildCount (), data);
-            ModelEditPanel.instance.undoManager.add (ar);
+            PanelModel.instance.undoManager.add (ar);
             return ar.createdNode;
         }
 
@@ -330,7 +330,7 @@ public class NodeVariable extends NodeContainer
         }
 
         // Handle creation of $inherit node.
-        ModelEditPanel mep = ModelEditPanel.instance;
+        PanelModel mep = PanelModel.instance;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         boolean newlyCreated =  getChildCount () == 0  &&  valueBefore.isEmpty ();  // Only a heuristic
         NodeBase parent = (NodeBase) getParent ();
@@ -460,6 +460,6 @@ public class NodeVariable extends NodeContainer
     public void delete (JTree tree, boolean canceled)
     {
         if (! source.isFromTopDocument ()) return;
-        ModelEditPanel.instance.undoManager.add (new DeleteVariable (this, canceled));
+        PanelModel.instance.undoManager.add (new DeleteVariable (this, canceled));
     }
 }

@@ -323,7 +323,8 @@ public class NodeBase extends DefaultMutableTreeNode
     {
         EquationTreeCellRenderer renderer = (EquationTreeCellRenderer) tree.getCellRenderer ();
         Font f = renderer.getFontFor (this);
-        return tree.getGraphics ().getFontMetrics (f);
+        return tree.getFontMetrics (f);
+        //return tree.getGraphics ().getFontMetrics (f);
     }
 
     // Copy/Drag -------------------------------------------------------------

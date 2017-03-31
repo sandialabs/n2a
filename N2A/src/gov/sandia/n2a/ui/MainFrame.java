@@ -42,7 +42,7 @@ public class MainFrame extends JFrame
 
         tabs = new MainTabbedPane ();
 
-        Lay.BLtg(this,
+        Lay.BLtg (this,
             "C", tabs
         );
 
@@ -91,7 +91,7 @@ public class MainFrame extends JFrame
         {
             public void windowClosing (WindowEvent arg0)
             {
-                AppData.quit ();  // Save all user settings (including those from other parts of the app) before exiting.
+                AppData.quit ();  // Save all user settings (including those from other parts of the app).
             }
         });
     }

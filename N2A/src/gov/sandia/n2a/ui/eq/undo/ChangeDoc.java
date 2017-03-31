@@ -9,7 +9,7 @@ package gov.sandia.n2a.ui.eq.undo;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.ui.eq.ModelEditPanel;
+import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
 public class ChangeDoc extends Undoable
@@ -43,7 +43,7 @@ public class ChangeDoc extends Undoable
     public static void rename (String A, String B)
     {
         AppData.models.move (A, B);
-        ModelEditPanel mep = ModelEditPanel.instance;
+        PanelModel mep = PanelModel.instance;
         MNode doc = AppData.models.child (B);
         mep.panelEquations.loadRootFromDB (doc);  // lazy; only loads if not already loaded
         NodePart root = mep.panelEquations.root;
@@ -51,6 +51,7 @@ public class ChangeDoc extends Undoable
         mep.panelEquations.tree.requestFocusInWindow ();  // likewise, focus only moves if it is not already on equation tree
         mep.panelEquations.tree.setSelectionRow (0);
         mep.panelEquations.model.nodeChanged (root);
-        mep.panelSearch.list.repaint ();  // Because the change in document name does not directly notify the list model.
+        mep.panelMRU.list.repaint ();  // Because the change in document name does not directly notify the list model.
+        mep.panelSearch.list.repaint ();
     }
 }

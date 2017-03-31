@@ -9,7 +9,7 @@ package gov.sandia.n2a.ui.eq.undo;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.ui.eq.ModelEditPanel;
+import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 
 import java.util.List;
@@ -92,7 +92,7 @@ public class Undoable implements UndoableEdit
     public static NodeBase locateNode (List<String> path)
     {
         MNode doc = AppData.models.child (path.get (0));
-        ModelEditPanel mep = ModelEditPanel.instance;
+        PanelModel mep = PanelModel.instance;
         mep.panelEquations.loadRootFromDB (doc);  // lazy; only loads if not already loaded
         mep.panelEquations.tree.requestFocusInWindow ();  // likewise, focus only moves if it is not already on equation tree
         NodeBase parent = mep.panelEquations.root;
