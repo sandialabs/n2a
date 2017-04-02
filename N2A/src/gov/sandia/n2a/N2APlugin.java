@@ -19,6 +19,7 @@ import gov.sandia.n2a.transfer.ImportNative;
 import gov.sandia.n2a.ui.eq.ActivityModel;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.ActivityRun;
+import gov.sandia.n2a.ui.ref.ActivityReference;
 
 import javax.swing.ImageIcon;
 
@@ -74,7 +75,7 @@ public class N2APlugin extends Plugin
             new ImportNative (),
             new ActivityModel (),
             new ActivityRun (),
-            //new ActivityReference (),
+            new ActivityReference (),
             //new RunEnsembleRecordHandler (),
         };
     }

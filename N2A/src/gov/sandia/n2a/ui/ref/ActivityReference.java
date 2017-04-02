@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -31,12 +31,12 @@ public class ActivityReference implements Activity
     @Override
     public Component getPanel ()
     {
-        return new ReferenceEditPanel ();
+        return new PanelReference ();
     }
 
     @Override
     public Component getInitialFocus (Component panel)
     {
-        return null;
+        return ((PanelReference) panel).panelSearch.textQuery;
     }
 }

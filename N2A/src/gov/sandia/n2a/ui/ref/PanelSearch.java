@@ -1,23 +1,21 @@
 /*
-Copyright 2013,2016,2017 Sandia Corporation.
+Copyright 2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.ui.eq;
+package gov.sandia.n2a.ui.ref;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
-import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.SafeTextTransferHandler;
-import gov.sandia.n2a.ui.eq.PanelEquationTree.TransferableNode;
-import gov.sandia.n2a.ui.eq.undo.AddDoc;
-import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
+import gov.sandia.n2a.ui.ref.undo.AddRef;
+import gov.sandia.n2a.ui.ref.undo.DeleteRef;
 import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.datatransfer.DataFlavor;
@@ -55,18 +53,19 @@ import javax.swing.event.DocumentListener;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultHighlighter;
 import javax.swing.text.Highlighter;
+
 import sun.swing.DefaultLookup;
 
 public class PanelSearch extends JPanel
 {
-    public JTextField               textQuery;
-    public JList<Holder>            list;
-    public DefaultListModel<Holder> model;
-    public int                      lastSelection = -1;
+    public JTextField              textQuery;
+    public JList<MNode>            list;
+    public DefaultListModel<MNode> model;
+    public int                     lastSelection = -1;
 
     public PanelSearch ()
     {
-        list = new JList<Holder> (model = new DefaultListModel<Holder> ());
+        list = new JList<MNode> (model = new DefaultListModel<MNode> ());
         list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
         list.setDragEnabled (true);
         list.setCellRenderer (new MNodeRenderer ());
@@ -82,16 +81,16 @@ public class PanelSearch extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                PanelModel.instance.undoManager.add (new AddDoc ());
+                PanelReference.instance.undoManager.add (new AddRef ());
             }
         });
         actionMap.put ("delete", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                MNode deleteMe = list.getSelectedValue ().doc;
+                MNode deleteMe = list.getSelectedValue ();
                 if (deleteMe == null) return;
-                PanelModel.instance.undoManager.add (new DeleteDoc ((MDoc) deleteMe));
+                PanelReference.instance.undoManager.add (new DeleteRef ((MDoc) deleteMe));
             }
         });
         actionMap.put ("select", new AbstractAction ()
@@ -129,43 +128,30 @@ public class PanelSearch extends JPanel
 
         list.setTransferHandler (new TransferHandler ()
         {
-            public boolean canImport (TransferSupport xfer)
+            public boolean canImport (TransferHandler.TransferSupport xfer)
             {
                 return xfer.isDataFlavorSupported (DataFlavor.stringFlavor);
             }
 
-            public boolean importData (TransferSupport xfer)
+            public boolean importData (TransferHandler.TransferSupport xfer)
             {
                 Schema schema = new Schema ();
                 MNode data = new MVolatile ();
-                TransferableNode xferNode = null;
                 try
                 {
-                    Transferable xferable = xfer.getTransferable ();
-                    StringReader reader = new StringReader ((String) xferable.getTransferData (DataFlavor.stringFlavor));
+                    StringReader reader = new StringReader ((String) xfer.getTransferable ().getTransferData (DataFlavor.stringFlavor));
                     schema.readAll (reader, data);
-                    if (xferable.isDataFlavorSupported (PanelEquationTree.nodeFlavor)) xferNode = (TransferableNode) xferable.getTransferData (PanelEquationTree.nodeFlavor);
                 }
                 catch (IOException | UnsupportedFlavorException e)
                 {
                     return false;
                 }
 
-                if (! schema.type.contains ("Part")) return false;
-                PanelModel.instance.undoManager.addEdit (new CompoundEdit ());
+                if (! schema.type.contains ("Reference")) return false;
                 for (MNode n : data)  // data can contain several parts
                 {
-                    AddDoc add = new AddDoc (n.key (), n);
-                    if (xferNode != null  &&  xferNode.drag)
-                    {
-                        add.wasShowing = false;  // on the presumption that the sending side will create an Outsource operation, and thus wants to keep the old model in the equation tree
-                        xferNode.newPartName = add.name;
-                    }
-                    PanelModel.instance.undoManager.add (add);
-                    break;  // For now, we only support transferring a single part. To do more, we need to add collections in TransferableNode for both the node paths and the created part names.
+                    PanelReference.instance.undoManager.add (new AddRef (n.key (), n));
                 }
-                if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE) PanelModel.instance.undoManager.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
-
                 return true;
             }
 
@@ -176,14 +162,14 @@ public class PanelSearch extends JPanel
 
             protected Transferable createTransferable (JComponent comp)
             {
-                Holder h = list.getSelectedValue ();
-                Schema schema = new Schema (1, "Part");
+                MNode ref = list.getSelectedValue ();
+                Schema schema = new Schema (1, "Reference");
                 StringWriter writer = new StringWriter ();
                 try
                 {
                     schema.write (writer);
-                    writer.write (h.doc.key () + String.format ("%n"));
-                    for (MNode c : h.doc) c.write (writer, " ");
+                    writer.write (ref.key () + String.format ("%n"));
+                    for (MNode c : ref) c.write (writer, " ");
                     writer.close ();
                     return new StringSelection (writer.toString ());
                 }
@@ -197,7 +183,6 @@ public class PanelSearch extends JPanel
             protected void exportDone (JComponent source, Transferable data, int action)
             {
                 if (! list.isFocusOwner ()) hideSelection ();
-                PanelModel.instance.undoManager.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
             }
         });
 
@@ -260,8 +245,8 @@ public class PanelSearch extends JPanel
         int index = list.getSelectedIndex ();
         if (index >= 0)
         {
-            MNode doc = model.get (index).doc;
-            PanelModel.instance.panelMRU.useDoc (doc);
+            MNode doc = model.get (index);
+            PanelReference.instance.panelMRU.useDoc (doc);
             recordSelected (doc);
         }
     }
@@ -272,9 +257,9 @@ public class PanelSearch extends JPanel
         {
             public void run ()
             {
-                PanelModel mep = PanelModel.instance;
-                mep.panelEquations.loadRootFromDB (doc);
-                mep.panelEquations.tree.requestFocusInWindow ();
+                PanelReference mep = PanelReference.instance;
+                mep.panelEntry.model.setRecord (doc);
+                mep.panelEntry.table.requestFocusInWindow ();
             }
         });
     }
@@ -287,12 +272,12 @@ public class PanelSearch extends JPanel
 
     public int indexOf (MNode doc)
     {
-        return model.indexOf (new Holder (doc));
+        return model.indexOf (doc);
     }
 
     public int removeDoc (MNode doc)
     {
-        int index = model.indexOf (new Holder (doc));
+        int index = model.indexOf (doc);
         if (index >= 0)
         {
             model.remove (index);
@@ -304,41 +289,15 @@ public class PanelSearch extends JPanel
 
     public int insertDoc (MNode doc, int at)
     {
-        Holder h = new Holder (doc);
-        int index = model.indexOf (h);
+        int index = model.indexOf (doc);
         if (index < 0)
         {
             if (at > model.size ()) at = 0;  // The list has changed, perhaps due to filtering, and our position is no longer valid, so simply insert at top.
-            model.add (at, h);
+            model.add (at, doc);
             lastSelection = at;
             return at;
         }
         return index;
-    }
-
-    /**
-        Indirect access to MDoc, because something calls toString(), which loads and returns the entire document.
-    **/
-    public static class Holder
-    {
-        public MNode doc;
-
-        public Holder (MNode doc)
-        {
-            this.doc = doc;
-        }
-
-        public String toString ()
-        {
-            return doc.key ();
-        }
-
-        public boolean equals (Object that)
-        {
-            // MDocs are unique, so direct object equality is OK here.
-            if (that instanceof Holder) return ((Holder) that).doc == doc;
-            return false;
-        }
     }
 
     // Retrieve records matching the filter text, and deliver them to the model.
@@ -356,7 +315,7 @@ public class PanelSearch extends JPanel
         @Override
         public void run ()
         {
-            for (MNode i : AppData.models)
+            for (MNode i : AppData.references)
             {
                 if (i.key ().toLowerCase ().contains (query)) results.add (i);
                 if (stop) return;
@@ -368,14 +327,14 @@ public class PanelSearch extends JPanel
                 public void run ()
                 {
                     model.clear ();
-                    for (MNode record : results) model.addElement (new Holder (record));
+                    for (MNode record : results) model.addElement (record);
                 }
             });
         }
     }
     protected SearchThread thread;
 
-    public static class MNodeRenderer extends JTextField implements ListCellRenderer<Holder>
+    public static class MNodeRenderer extends JTextField implements ListCellRenderer<MNode>
     {
         protected static DefaultHighlighter.DefaultHighlightPainter painter;
 
@@ -385,10 +344,10 @@ public class PanelSearch extends JPanel
             setBorder (new EmptyBorder (0, 0, 0, 0));
         }
 
-        public Component getListCellRendererComponent (JList<? extends Holder> list, Holder holder, int index, boolean isSelected, boolean cellHasFocus)
+        public Component getListCellRendererComponent (JList<? extends MNode> list, MNode doc, int index, boolean isSelected, boolean cellHasFocus)
         {
-            String name = holder.doc.key ();
-            if (name.isEmpty ()) name = holder.doc.get ();
+            String name = doc.get ("title");
+            if (name.isEmpty ()) name = doc.key ();
             setText (name);
 
             if (isSelected)
