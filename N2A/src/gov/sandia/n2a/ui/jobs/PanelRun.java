@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2016 Sandia Corporation.
+Copyright 2013,2016,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -24,6 +24,8 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -38,6 +40,7 @@ import javax.swing.Icon;
 import javax.swing.JComboBox;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
 import javax.swing.JToggleButton;
 import javax.swing.JTree;
@@ -316,10 +319,11 @@ public class PanelRun extends JPanel
         });
         for (MNode n : AppData.state.childOrCreate ("PanelRun", "scripts")) comboScript.addItem (n.get ());
 
+        JSplitPane split;
         Lay.BLtg
         (
             this,
-            Lay.SPL
+            split = Lay.SPL
             (
                 Lay.BL (treePane = Lay.sp (tree)),
                 Lay.BL
@@ -338,11 +342,20 @@ public class PanelRun extends JPanel
                         "C", comboScript
                     ),
                     "C", displayPane
-                ),
-                "divpixel=250"
+                )
             )
         );
         setFocusCycleRoot (true);
+
+        split.setDividerLocation (AppData.state.getOrDefaultInt ("PanelRun", "divider", "250"));
+        split.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
+        {
+            public void propertyChange (PropertyChangeEvent e)
+            {
+                Object o = e.getNewValue ();
+                if (o instanceof Integer) AppData.state.set ("PanelRun", "divider", o);
+            }
+        });
     }
 
     public void saveScripts ()
