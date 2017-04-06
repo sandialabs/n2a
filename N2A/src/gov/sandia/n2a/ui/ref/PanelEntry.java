@@ -9,6 +9,7 @@ package gov.sandia.n2a.ui.ref;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.ui.ref.undo.ChangeRef;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -79,11 +80,15 @@ public class PanelEntry extends JPanel
         table.setSurrendersFocusOnKeystroke (true);
 
         InputMap inputMap = table.getInputMap (WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
-        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),    "add");
-        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),    "delete");
-        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),     "startEditing");
-        inputMap.put (KeyStroke.getKeyStroke ("TAB"),       "cycleFocus");
-        inputMap.put (KeyStroke.getKeyStroke ("shift TAB"), "cycleFocus");
+        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),          "add");
+        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),          "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),           "startEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("TAB"),             "cycleFocus");
+        inputMap.put (KeyStroke.getKeyStroke ("shift TAB"),       "cycleFocus");
+        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+        inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
+
 
         ActionMap actionMap = table.getActionMap ();
         actionMap.put ("add", new AbstractAction ()
@@ -106,14 +111,30 @@ public class PanelEntry extends JPanel
             {
                 if ((e.getModifiers () & ActionEvent.SHIFT_MASK) == 0)
                 {
-                    //transferFocus ();  // This does not work
                     PanelReference.instance.panelSearch.textQuery.requestFocusInWindow ();
                 }
                 else
                 {
                     PanelReference.instance.panelSearch.list.requestFocusInWindow ();
-                    //transferFocusBackward ();  // But this does work.
                 }
+            }
+        });
+        actionMap.put ("Undo", new AbstractAction ("Undo")
+        {
+            public void actionPerformed (ActionEvent evt)
+            {
+                try {PanelReference.instance.undoManager.undo ();}
+                catch (CannotUndoException e) {}
+                catch (CannotRedoException e) {}
+            }
+        });
+        actionMap.put ("Redo", new AbstractAction ("Redo")
+        {
+            public void actionPerformed (ActionEvent evt)
+            {
+                try {PanelReference.instance.undoManager.redo();}
+                catch (CannotUndoException e) {}
+                catch (CannotRedoException e) {}
             }
         });
 
@@ -385,7 +406,7 @@ public class PanelEntry extends JPanel
                 {
                     if (name.isEmpty ()) return;  // not allowed
                     if (AppData.references.child (name) != null) return;  // not allowed, because another entry with that id already exists
-                    AppData.references.move (record.key (), name);
+                    PanelReference.instance.undoManager.add (new ChangeRef (record.key (), name));
                 }
                 else
                 {
