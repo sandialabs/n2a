@@ -9,7 +9,11 @@ package gov.sandia.n2a.ui.ref;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.ui.ref.undo.AddField;
+import gov.sandia.n2a.ui.ref.undo.ChangeField;
 import gov.sandia.n2a.ui.ref.undo.ChangeRef;
+import gov.sandia.n2a.ui.ref.undo.DeleteField;
+import gov.sandia.n2a.ui.ref.undo.RenameField;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -95,14 +99,19 @@ public class PanelEntry extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                model.insertRow ();
+                int row = table.getSelectedRow ();
+                if (row < 0) row = model.keys.size ();
+                if (row < 3) row = 3;  // keep id, form and title at the top
+                PanelReference.instance.undoManager.add (new AddField (model.record, row));
             }
         });
         actionMap.put ("delete", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                model.deleteRow ();
+                int row = table.getSelectedRow ();
+                if (row < 3) return;  // Protect id, form and title
+                PanelReference.instance.undoManager.add (new DeleteField (model.record, row));
             }
         });
         actionMap.put ("cycleFocus", new AbstractAction ()
@@ -382,22 +391,13 @@ public class PanelEntry extends JPanel
                 if (name.equals (key)) return;  // nothing to do
                 if (name.isEmpty ())  // field is deleted. Most likely it was a new field the user changed their mind about, but could also be an old field.
                 {
-                    deleteRow ();
+                    PanelReference.instance.undoManager.add (new DeleteField (record, row));
                     return;
                 }
                 if (record.child (name) != null) return;  // not allowed
                 if (name.equals ("id")) return;  // also not allowed; note that "form" and "title" are protected by previous line
 
-                int existingRow = keys.indexOf (name);
-                record.move (key, name);
-                keys.set (row, name);
-                updateColumnWidth ();
-                fireTableRowsUpdated (row, row);
-                if (existingRow >= 0)
-                {
-                    keys.remove (existingRow);
-                    fireTableRowsDeleted (existingRow, existingRow);
-                }
+                PanelReference.instance.undoManager.add (new RenameField (record, keys.indexOf (name), key, name));
             }
             else if (column == 1)  // value change
             {
@@ -410,68 +410,95 @@ public class PanelEntry extends JPanel
                 }
                 else
                 {
-                    if (name.isEmpty ()  &&  (form.required.contains (key)  ||  form.optional.contains (key)))
-                    {
-                        record.clear (key);
-                    }
-                    else
-                    {
-                        record.set (key, value);
-                    }
-                }
-
-                // Update display
-                if (row == 1)  // changed form, so need to rebuild
-                {
-                    focusCache.put (record, row);
-                    build ();
-                }
-                else
-                {
-                    fireTableCellUpdated (row, column);
-                    if (row == 2)  // title
-                    {
-                        PanelReference.instance.panelMRU.repaint ();
-                        PanelReference.instance.panelSearch.repaint ();
-                    }
+                    PanelReference.instance.undoManager.add (new ChangeField (record, key, name));  // "name" is really value, just in string form
                 }
             }
         }
 
-        public void insertRow ()
+        public void create (MNode doc, int row, String name, String value, boolean nameIsGenerated)
         {
-            // Determine unique key name
-            String newKey;
-            int suffix = 0;
-            while (true)
-            {
-                newKey = "k" + suffix++;
-                if (record.child (newKey) == null) break;
-            }
+            setRecord (doc);
 
-            // Add the row
-            int row = table.getSelectedRow ();
-            if (row < 0) row = keys.size ();
-            if (row < 3) row = 3;  // keep id, form and title at the top
-            keys.add (row, newKey);
-            record.set (newKey, "");
+            keys.add (row, name);
+            record.set (name, value);
             fireTableRowsInserted (row, row);
             table.changeSelection (row, 1, false, false);
-            editNewRow = true;
-            table.editCellAt (row, 0);
+            if (nameIsGenerated)
+            {
+                editNewRow = true;
+                table.editCellAt (row, 0);
+            }
         }
 
-        public void deleteRow ()
+        public void destroy (MNode doc, String key)
         {
-            int row = table.getSelectedRow ();
-            if (row < 3) return;  // Protect id, form and title
-            String key = keys.get (row);
+            setRecord (doc);
+
+            int row = keys.indexOf (key);
             keys.remove (row);
             record.clear (key);
             updateColumnWidth ();
             fireTableRowsDeleted (row, row);
             row = Math.min (row, table.getRowCount () - 1);
             table.changeSelection (row, 1, false, false);
+        }
+
+        public void rename (MNode doc, int exposedRow, String before, String after)
+        {
+            setRecord (doc);
+            int rowBefore = keys.indexOf (before);
+            int rowAfter  = keys.indexOf (after);
+
+            record.move (before, after);
+            if (rowAfter >= 0)  // This only happens when we're about to overwrite a standard field that has no assigned value.
+            {
+                keys.remove (rowAfter);
+                fireTableRowsDeleted (rowAfter, rowAfter);
+            }
+            else  // We might be about to expose a standard field that was previously overwritten.
+            {
+                if (form.required.contains (before)  ||  form.optional.contains (before))  // It is a standard field
+                {
+                    // Assume that exposedRow was saved when the field was overwritten.
+                    keys.add (exposedRow, before);
+                    fireTableRowsInserted (exposedRow, exposedRow);
+                }
+            }
+            keys.set (rowBefore, after);
+            updateColumnWidth ();
+            fireTableRowsUpdated (rowBefore, rowBefore);
+        }
+
+        public void changeValue (MNode doc, String key, String value)
+        {
+            setRecord (doc);
+
+            // Update data
+            if (value.isEmpty ()  &&  (form.required.contains (key)  ||  form.optional.contains (key)))
+            {
+                record.clear (key);
+            }
+            else
+            {
+                record.set (key, value);
+            }
+
+            // Update display
+            int row = keys.indexOf (key);
+            if (row == 1)  // changed form, so need to rebuild
+            {
+                focusCache.put (record, row);
+                build ();
+            }
+            else
+            {
+                fireTableCellUpdated (row, 1);
+                if (row == 2)  // title
+                {
+                    PanelReference.instance.panelMRU.repaint ();
+                    PanelReference.instance.panelSearch.repaint ();
+                }
+            }
         }
     }
 

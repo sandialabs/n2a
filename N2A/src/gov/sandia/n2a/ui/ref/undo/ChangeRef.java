@@ -43,11 +43,11 @@ public class ChangeRef extends Undoable
     public static void rename (String A, String B)
     {
         AppData.references.move (A, B);
-        PanelReference mep = PanelReference.instance;
+        PanelReference pr = PanelReference.instance;
         MNode doc = AppData.references.child (B);
-        mep.panelEntry.model.setRecord (doc);  // lazy; only loads if not already loaded
-        mep.panelEntry.model.fireTableRowsUpdated (0, 0);  // If we didn't rebuild in previous line, then we need to update display with changed data.
-        mep.panelEntry.table.requestFocusInWindow ();  // likewise, focus only moves if it is not already on equation tree
-        mep.panelEntry.table.changeSelection (0, 1, false, false);
+        pr.panelEntry.model.setRecord (doc);  // lazy; only loads if not already loaded
+        pr.panelEntry.model.fireTableRowsUpdated (0, 0);  // If we didn't rebuild in previous line, then we need to update display with changed data.
+        pr.panelEntry.table.requestFocusInWindow ();  // likewise, focus only moves if it is not already on equation tree
+        pr.panelEntry.table.changeSelection (0, 1, false, false);
     }
 }
