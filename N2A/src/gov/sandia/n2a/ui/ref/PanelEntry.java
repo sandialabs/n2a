@@ -471,7 +471,8 @@ public class PanelEntry extends JPanel
             }
             else if (column == 1)  // value change
             {
-                // Update data
+                String oldValue = record.get (key);
+                if (oldValue.equals (value)) return;  // nothing to do
                 if (row == 0)  // change id
                 {
                     if (name.isEmpty ()) return;  // not allowed

@@ -21,6 +21,11 @@ import java.util.List;
     The "M" in MNode refers to the MUMPS language, in which variables have this hierarchical structure.
 
     This class and all its descendants are thread-safe.
+    Note: Each class that extends this one must make its own choices about which methods to synchronize.
+    This base implementation only synchronizes those methods that clearly need it in this context.
+    For example, if an operation is implemented in terms of several other operations, and the state
+    of the tree should not be modified between those operations, then the method is synchronized.
+    If the method is naturally atomic, then it is not. Such choices may not hold for derived implementations.
 **/
 public class MNode implements Iterable<MNode>, Comparable<MNode>
 {
@@ -215,6 +220,13 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     {
     }
 
+    public synchronized void set (MNode value)
+    {
+        clear ();
+        merge (value);
+        if (value.get ().isEmpty ()) set ("");  // Since merge() does not overwrite our value if the source value is empty.
+    }
+
     /**
         Sets value of child node specified by index (effectively with a call to
         child.set(String)). Creates child node if it doesn't already exist.
@@ -223,6 +235,14 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     public MNode set (String index, String value)
     {
         return new MNode ();  // A completely useless object.
+    }
+
+    public synchronized MNode set (String index, MNode value)
+    {
+        clear (index);
+        MNode result = set (index, "");
+        result.merge (value);
+        return result;
     }
 
     /**
@@ -248,7 +268,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         c.set (deeperIndices[last]);
     }
 
-    public void set (Object parm0, Object... parms)
+    public synchronized void set (Object parm0, Object... parms)  // set() with no parameters is not allowed, so parm0 must be a specific Object, not an array.
     {
         String string0 = parm0.toString ();
         int length = parms.length;
@@ -257,6 +277,22 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
             set (string0);
             return;
         }
+
+        int last = length - 1;
+        if (parms[last] instanceof MNode)
+        {
+            MNode c = child (string0);
+            if (c == null) c = set (string0, "");
+            for (int i = 0; i < last; i++)
+            {
+                String s = parms[i].toString ();
+                MNode d = c.child (s);
+                if (d == null) d = c.set (s, "");
+                c = d;
+            }
+            c.set ((MNode) parms[last]);
+        }
+
         String string1 = parms[0].toString ();
         if (length == 1)
         {

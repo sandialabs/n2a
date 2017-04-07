@@ -11,7 +11,6 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
-import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.SafeTextTransferHandler;
 import gov.sandia.n2a.ui.ref.undo.AddEntry;
@@ -135,20 +134,19 @@ public class PanelSearch extends JPanel
 
             public boolean importData (TransferHandler.TransferSupport xfer)
             {
-                Schema schema = new Schema ();
+                ParserBibtex parser = new ParserBibtex ();
                 MNode data = new MVolatile ();
                 try
                 {
                     StringReader reader = new StringReader ((String) xfer.getTransferable ().getTransferData (DataFlavor.stringFlavor));
-                    schema.readAll (reader, data);
+                    parser.parse (reader, data);
                 }
                 catch (IOException | UnsupportedFlavorException e)
                 {
                     return false;
                 }
 
-                if (! schema.type.contains ("Reference")) return false;
-                for (MNode n : data)  // data can contain several parts
+                for (MNode n : data)  // data can contain several entries
                 {
                     PanelReference.instance.undoManager.add (new AddEntry (n.key (), n));
                 }
@@ -163,13 +161,15 @@ public class PanelSearch extends JPanel
             protected Transferable createTransferable (JComponent comp)
             {
                 MNode ref = list.getSelectedValue ();
-                Schema schema = new Schema (1, "Reference");
+                if (ref == null) return null;
+
                 StringWriter writer = new StringWriter ();
                 try
                 {
-                    schema.write (writer);
-                    writer.write (ref.key () + String.format ("%n"));
-                    for (MNode c : ref) c.write (writer, " ");
+                    String nl = String.format ("%n");
+                    writer.write ("@" + ref.get ("form") + "{" + ref.key () + "," + nl);
+                    for (MNode c : ref) writer.write ("  " + c.key () + "={" + c.get () + "}," + nl);
+                    writer.write ("}" + nl);
                     writer.close ();
                     return new StringSelection (writer.toString ());
                 }
