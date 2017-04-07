@@ -11,7 +11,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.ref.PanelReference;
 
-public class ChangeField extends Undoable
+public class ChangeTag extends Undoable
 {
     protected MNode  doc;
     protected String key;
@@ -21,7 +21,7 @@ public class ChangeField extends Undoable
     /**
         @param container The direct container of the node being changed.
     **/
-    public ChangeField (MNode doc, String key, String value)
+    public ChangeTag (MNode doc, String key, String value)
     {
         this.doc = doc;
         this.key = key;

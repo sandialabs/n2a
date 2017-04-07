@@ -11,12 +11,12 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.images.ImageUtil;
-import gov.sandia.n2a.ui.ref.undo.AddField;
-import gov.sandia.n2a.ui.ref.undo.AddRef;
-import gov.sandia.n2a.ui.ref.undo.ChangeField;
-import gov.sandia.n2a.ui.ref.undo.ChangeRef;
-import gov.sandia.n2a.ui.ref.undo.DeleteField;
-import gov.sandia.n2a.ui.ref.undo.RenameField;
+import gov.sandia.n2a.ui.ref.undo.AddTag;
+import gov.sandia.n2a.ui.ref.undo.AddEntry;
+import gov.sandia.n2a.ui.ref.undo.ChangeTag;
+import gov.sandia.n2a.ui.ref.undo.ChangeEntry;
+import gov.sandia.n2a.ui.ref.undo.DeleteTag;
+import gov.sandia.n2a.ui.ref.undo.RenameTag;
 
 import java.awt.Color;
 import java.awt.Component;
@@ -72,8 +72,8 @@ public class PanelEntry extends JPanel
     protected Map<MNode,Integer> focusCache = new HashMap<MNode,Integer> ();
 
     protected JButton buttonAddEntry;
-    protected JButton buttonAddField;
-    protected JButton buttonDeleteField;
+    protected JButton buttonAddTag;
+    protected JButton buttonDeleteTag;
 
     public PanelEntry ()
     {
@@ -105,14 +105,14 @@ public class PanelEntry extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                addField ();
+                addTag ();
             }
         });
         actionMap.put ("delete", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                deleteField ();
+                deleteTag ();
             }
         });
         actionMap.put ("cycleFocus", new AbstractAction ()
@@ -197,31 +197,31 @@ public class PanelEntry extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                PanelReference.instance.undoManager.add (new AddRef ());
+                PanelReference.instance.undoManager.add (new AddEntry ());
             }
         });
 
-        buttonAddField = new JButton (ImageUtil.getImage ("add.gif"));
-        buttonAddField.setMargin (new Insets (2, 2, 2, 2));
-        buttonAddField.setFocusable (false);
-        buttonAddField.setToolTipText ("New Field");
-        buttonAddField.addActionListener (new ActionListener ()
+        buttonAddTag = new JButton (ImageUtil.getImage ("add.gif"));
+        buttonAddTag.setMargin (new Insets (2, 2, 2, 2));
+        buttonAddTag.setFocusable (false);
+        buttonAddTag.setToolTipText ("New Tag");
+        buttonAddTag.addActionListener (new ActionListener ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                addField ();
+                addTag ();
             }
         });
 
-        buttonDeleteField = new JButton (ImageUtil.getImage ("remove.gif"));
-        buttonDeleteField.setMargin (new Insets (2, 2, 2, 2));
-        buttonDeleteField.setFocusable (false);
-        buttonDeleteField.setToolTipText ("Delete Field");
-        buttonDeleteField.addActionListener (new ActionListener ()
+        buttonDeleteTag = new JButton (ImageUtil.getImage ("remove.gif"));
+        buttonDeleteTag.setMargin (new Insets (2, 2, 2, 2));
+        buttonDeleteTag.setFocusable (false);
+        buttonDeleteTag.setToolTipText ("Delete Tag");
+        buttonDeleteTag.addActionListener (new ActionListener ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                deleteField ();
+                deleteTag ();
             }
         });
 
@@ -229,8 +229,8 @@ public class PanelEntry extends JPanel
             "N", Lay.WL ("L",
                 buttonAddEntry,
                 Box.createHorizontalStrut (15),
-                buttonAddField,
-                buttonDeleteField,
+                buttonAddTag,
+                buttonDeleteTag,
                 "hgap=5,vgap=1"
             ),
             "C", scrollPane
@@ -247,26 +247,26 @@ public class PanelEntry extends JPanel
         }
     }
 
-    public void addField ()
+    public void addTag ()
     {
         if (model.record == null)
         {
-            PanelReference.instance.undoManager.add (new AddRef ());
+            PanelReference.instance.undoManager.add (new AddEntry ());
         }
         else
         {
             int row = table.getSelectedRow ();
             if (row < 0) row = model.keys.size ();
             if (row < 3) row = 3;  // keep id, form and title at the top
-            PanelReference.instance.undoManager.add (new AddField (model.record, row));
+            PanelReference.instance.undoManager.add (new AddTag (model.record, row));
         }
     }
 
-    public void deleteField ()
+    public void deleteTag ()
     {
         int row = table.getSelectedRow ();
         if (row < 3) return;  // Protect id, form and title
-        PanelReference.instance.undoManager.add (new DeleteField (model.record, row));
+        PanelReference.instance.undoManager.add (new DeleteTag (model.record, row));
     }
 
     /**
@@ -350,7 +350,7 @@ public class PanelEntry extends JPanel
                     keys.add (n.key ());
                 }
 
-                // Inject form fields
+                // Inject form tags
                 String formName = record.get ("form");
                 form = forms.get (formName);
                 if (form != null)
@@ -420,7 +420,7 @@ public class PanelEntry extends JPanel
 
         public String getColumnName (int column)
         {
-            if (column == 0) return "Field";
+            if (column == 0) return "Tag";
             if (column == 1) return "Value";
             return "";
         }
@@ -459,15 +459,15 @@ public class PanelEntry extends JPanel
             if (column == 0)  // name change
             {
                 if (name.equals (key)) return;  // nothing to do
-                if (name.isEmpty ())  // field is deleted. Most likely it was a new field the user changed their mind about, but could also be an old field.
+                if (name.isEmpty ())  // tag is deleted. Most likely it was a new tag the user changed their mind about, but could also be an old tag.
                 {
-                    PanelReference.instance.undoManager.add (new DeleteField (record, row));
+                    PanelReference.instance.undoManager.add (new DeleteTag (record, row));
                     return;
                 }
                 if (record.child (name) != null) return;  // not allowed
                 if (name.equals ("id")) return;  // also not allowed; note that "form" and "title" are protected by previous line
 
-                PanelReference.instance.undoManager.add (new RenameField (record, keys.indexOf (name), key, name));
+                PanelReference.instance.undoManager.add (new RenameTag (record, keys.indexOf (name), key, name));
             }
             else if (column == 1)  // value change
             {
@@ -476,11 +476,11 @@ public class PanelEntry extends JPanel
                 {
                     if (name.isEmpty ()) return;  // not allowed
                     if (AppData.references.child (name) != null) return;  // not allowed, because another entry with that id already exists
-                    PanelReference.instance.undoManager.add (new ChangeRef (record.key (), name));
+                    PanelReference.instance.undoManager.add (new ChangeEntry (record.key (), name));
                 }
                 else
                 {
-                    PanelReference.instance.undoManager.add (new ChangeField (record, key, name));  // "name" is really value, just in string form
+                    PanelReference.instance.undoManager.add (new ChangeTag (record, key, name));  // "name" is really value, just in string form
                 }
             }
         }
@@ -520,16 +520,16 @@ public class PanelEntry extends JPanel
             int rowAfter  = keys.indexOf (after);
 
             record.move (before, after);
-            if (rowAfter >= 0)  // This only happens when we're about to overwrite a standard field that has no assigned value.
+            if (rowAfter >= 0)  // This only happens when we're about to overwrite a standard tag that has no assigned value.
             {
                 keys.remove (rowAfter);
                 fireTableRowsDeleted (rowAfter, rowAfter);
             }
-            else  // We might be about to expose a standard field that was previously overwritten.
+            else  // We might be about to expose a standard tag that was previously overwritten.
             {
-                if (form.required.contains (before)  ||  form.optional.contains (before))  // It is a standard field
+                if (form.required.contains (before)  ||  form.optional.contains (before))  // It is a standard tag
                 {
-                    // Assume that exposedRow was saved when the field was overwritten.
+                    // Assume that exposedRow was saved when the tag was overwritten.
                     keys.add (exposedRow, before);
                     fireTableRowsInserted (exposedRow, exposedRow);
                 }

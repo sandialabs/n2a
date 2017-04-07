@@ -14,7 +14,7 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.ref.PanelReference;
 
-public class AddRef extends Undoable
+public class AddEntry extends Undoable
 {
     protected String  id;
     protected boolean fromSearchPanel;
@@ -22,17 +22,17 @@ public class AddRef extends Undoable
     protected MNode   saved;
     public    boolean wasShowing = true;
 
-    public AddRef ()
+    public AddEntry ()
     {
         this ("ref", new MVolatile ());
     }
 
-    public AddRef (String id)
+    public AddEntry (String id)
     {
         this (id, new MVolatile ());
     }
 
-    public AddRef (String id, MNode saved)
+    public AddEntry (String id, MNode saved)
     {
         this.saved = saved;
 

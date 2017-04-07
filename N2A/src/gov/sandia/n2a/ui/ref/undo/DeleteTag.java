@@ -11,54 +11,54 @@ import javax.swing.undo.UndoableEdit;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.ui.Undoable;
+import gov.sandia.n2a.ui.ref.PanelEntry.MNodeTableModel;
 import gov.sandia.n2a.ui.ref.PanelReference;
 
-public class AddField extends Undoable
+public class DeleteTag extends Undoable
 {
     protected MNode   doc;
     protected int     row;
     protected String  key;
-    protected boolean nameIsGenerated;
+    protected String  value;
+    protected boolean neutralized;
 
-    public AddField (MNode doc, int row)
+    public DeleteTag (MNode doc, int row)
     {
         this.doc = doc;
         this.row = row;
-        nameIsGenerated = true;
-
-        MNode record = PanelReference.instance.panelEntry.model.record;
-        int suffix = 0;
-        while (true)
-        {
-            key = "k" + suffix++;
-            if (record.child (key) == null) break;
-        }
+        MNodeTableModel model = PanelReference.instance.panelEntry.model;
+        key   = model.keys.get (row);
+        value = model.record.get (key);
     }
 
     public void undo ()
     {
         super.undo ();
-        PanelReference.instance.panelEntry.model.destroy (doc, key);
+        PanelReference.instance.panelEntry.model.create (doc, row, key, value, false);
     }
 
     public void redo ()
     {
         super.redo ();
-        PanelReference.instance.panelEntry.model.create (doc, row, key, "", nameIsGenerated);
+        PanelReference.instance.panelEntry.model.destroy (doc, key);
     }
 
-    public boolean addEdit (UndoableEdit edit)
+    public boolean replaceEdit (UndoableEdit edit)
     {
-        if (nameIsGenerated  &&  edit instanceof RenameField)
+        if (edit instanceof AddTag)
         {
-            RenameField rename = (RenameField) edit;
-            if (key.equals (rename.before))
+            AddTag af = (AddTag) edit;
+            if (doc.equals (af.doc)  &&  key.equals (af.key)  &&  af.nameIsGenerated)
             {
-                key = rename.after;
-                nameIsGenerated = false;
+                neutralized = true;
                 return true;
             }
         }
         return false;
+    }
+
+    public boolean anihilate ()
+    {
+        return neutralized;
     }
 }

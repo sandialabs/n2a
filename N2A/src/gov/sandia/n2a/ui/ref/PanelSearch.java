@@ -14,8 +14,8 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.SafeTextTransferHandler;
-import gov.sandia.n2a.ui.ref.undo.AddRef;
-import gov.sandia.n2a.ui.ref.undo.DeleteRef;
+import gov.sandia.n2a.ui.ref.undo.AddEntry;
+import gov.sandia.n2a.ui.ref.undo.DeleteEntry;
 import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.datatransfer.DataFlavor;
@@ -81,7 +81,7 @@ public class PanelSearch extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                PanelReference.instance.undoManager.add (new AddRef ());
+                PanelReference.instance.undoManager.add (new AddEntry ());
             }
         });
         actionMap.put ("delete", new AbstractAction ()
@@ -90,7 +90,7 @@ public class PanelSearch extends JPanel
             {
                 MNode deleteMe = list.getSelectedValue ();
                 if (deleteMe == null) return;
-                PanelReference.instance.undoManager.add (new DeleteRef ((MDoc) deleteMe));
+                PanelReference.instance.undoManager.add (new DeleteEntry ((MDoc) deleteMe));
             }
         });
         actionMap.put ("select", new AbstractAction ()
@@ -150,7 +150,7 @@ public class PanelSearch extends JPanel
                 if (! schema.type.contains ("Reference")) return false;
                 for (MNode n : data)  // data can contain several parts
                 {
-                    PanelReference.instance.undoManager.add (new AddRef (n.key (), n));
+                    PanelReference.instance.undoManager.add (new AddEntry (n.key (), n));
                 }
                 return true;
             }

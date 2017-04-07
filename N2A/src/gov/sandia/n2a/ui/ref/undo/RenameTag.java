@@ -11,14 +11,14 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.ref.PanelReference;
 
-public class RenameField extends Undoable
+public class RenameTag extends Undoable
 {
     protected MNode  doc;
     protected int    exposedRow;
     protected String before;
     protected String after;
 
-    public RenameField (MNode doc, int exposedRow, String before, String after)
+    public RenameTag (MNode doc, int exposedRow, String before, String after)
     {
         this.doc        = doc;
         this.exposedRow = exposedRow;

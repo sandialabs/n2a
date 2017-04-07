@@ -12,12 +12,12 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.ref.PanelReference;
 
-public class ChangeRef extends Undoable
+public class ChangeEntry extends Undoable
 {
     protected String before;
     protected String after;
 
-    public ChangeRef (String before, String after)
+    public ChangeEntry (String before, String after)
     {
         this.before = before;
         this.after  = after;
