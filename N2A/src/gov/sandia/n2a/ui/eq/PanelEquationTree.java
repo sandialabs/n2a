@@ -641,7 +641,7 @@ public class PanelEquationTree extends JPanel
         });
 
         Lay.BLtg (this,
-            "N", Lay.FL ("L",
+            "N", Lay.WL ("L",
                 buttonAddModel,
                 Box.createHorizontalStrut (15),
                 buttonAddPart,

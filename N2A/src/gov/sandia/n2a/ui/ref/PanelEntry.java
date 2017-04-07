@@ -9,18 +9,22 @@ package gov.sandia.n2a.ui.ref;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.ui.Lay;
+import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.ref.undo.AddField;
+import gov.sandia.n2a.ui.ref.undo.AddRef;
 import gov.sandia.n2a.ui.ref.undo.ChangeField;
 import gov.sandia.n2a.ui.ref.undo.ChangeRef;
 import gov.sandia.n2a.ui.ref.undo.DeleteField;
 import gov.sandia.n2a.ui.ref.undo.RenameField;
 
-import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Font;
 import java.awt.FontMetrics;
+import java.awt.Insets;
 import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
 import java.awt.event.KeyAdapter;
@@ -34,7 +38,9 @@ import java.util.TreeMap;
 import javax.swing.AbstractAction;
 import javax.swing.AbstractCellEditor;
 import javax.swing.ActionMap;
+import javax.swing.Box;
 import javax.swing.InputMap;
+import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
@@ -65,14 +71,15 @@ public class PanelEntry extends JPanel
     protected JScrollPane        scrollPane;
     protected Map<MNode,Integer> focusCache = new HashMap<MNode,Integer> ();
 
+    protected JButton buttonAddEntry;
+    protected JButton buttonAddField;
+    protected JButton buttonDeleteField;
+
     public PanelEntry ()
     {
         model      = new MNodeTableModel ();
         table      = new JTable (model);
         scrollPane = new JScrollPane (table);
-
-        setLayout (new BorderLayout ());
-        add (scrollPane, BorderLayout.CENTER);
 
         table.setTableHeader (null);
         table.setAutoResizeMode (JTable.AUTO_RESIZE_LAST_COLUMN);
@@ -93,25 +100,19 @@ public class PanelEntry extends JPanel
         inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
         inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
 
-
         ActionMap actionMap = table.getActionMap ();
         actionMap.put ("add", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                int row = table.getSelectedRow ();
-                if (row < 0) row = model.keys.size ();
-                if (row < 3) row = 3;  // keep id, form and title at the top
-                PanelReference.instance.undoManager.add (new AddField (model.record, row));
+                addField ();
             }
         });
         actionMap.put ("delete", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                int row = table.getSelectedRow ();
-                if (row < 3) return;  // Protect id, form and title
-                PanelReference.instance.undoManager.add (new DeleteField (model.record, row));
+                deleteField ();
             }
         });
         actionMap.put ("cycleFocus", new AbstractAction ()
@@ -187,6 +188,53 @@ public class PanelEntry extends JPanel
                 });
             }
         });
+
+        buttonAddEntry = new JButton (ImageUtil.getImage ("book.gif"));
+        buttonAddEntry.setMargin (new Insets (2, 2, 2, 2));
+        buttonAddEntry.setFocusable (false);
+        buttonAddEntry.setToolTipText ("New Reference");
+        buttonAddEntry.addActionListener (new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                PanelReference.instance.undoManager.add (new AddRef ());
+            }
+        });
+
+        buttonAddField = new JButton (ImageUtil.getImage ("add.gif"));
+        buttonAddField.setMargin (new Insets (2, 2, 2, 2));
+        buttonAddField.setFocusable (false);
+        buttonAddField.setToolTipText ("New Field");
+        buttonAddField.addActionListener (new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                addField ();
+            }
+        });
+
+        buttonDeleteField = new JButton (ImageUtil.getImage ("remove.gif"));
+        buttonDeleteField.setMargin (new Insets (2, 2, 2, 2));
+        buttonDeleteField.setFocusable (false);
+        buttonDeleteField.setToolTipText ("Delete Field");
+        buttonDeleteField.addActionListener (new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                deleteField ();
+            }
+        });
+
+        Lay.BLtg (this,
+            "N", Lay.WL ("L",
+                buttonAddEntry,
+                Box.createHorizontalStrut (15),
+                buttonAddField,
+                buttonDeleteField,
+                "hgap=5,vgap=1"
+            ),
+            "C", scrollPane
+        );
     }
 
     public void refocus ()
@@ -197,6 +245,28 @@ public class PanelEntry extends JPanel
             if (cachedRow == null) table.changeSelection (0,         1, false, false);
             else                   table.changeSelection (cachedRow, 1, false, false);
         }
+    }
+
+    public void addField ()
+    {
+        if (model.record == null)
+        {
+            PanelReference.instance.undoManager.add (new AddRef ());
+        }
+        else
+        {
+            int row = table.getSelectedRow ();
+            if (row < 0) row = model.keys.size ();
+            if (row < 3) row = 3;  // keep id, form and title at the top
+            PanelReference.instance.undoManager.add (new AddField (model.record, row));
+        }
+    }
+
+    public void deleteField ()
+    {
+        int row = table.getSelectedRow ();
+        if (row < 3) return;  // Protect id, form and title
+        PanelReference.instance.undoManager.add (new DeleteField (model.record, row));
     }
 
     /**

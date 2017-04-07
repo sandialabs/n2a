@@ -63,6 +63,7 @@ import javax.swing.WindowConstants;
 import javax.swing.border.Border;
 import javax.swing.text.JTextComponent;
 
+
 /**
  * The Lay class has been designed to simplify and speed the development
  * of Java Swing UI's created by hand (in the absence of a UI builder).
@@ -491,6 +492,65 @@ public class Lay {
                 // Save components
             } else {
                 cmpsChosen.add((Component) arg);
+            }
+
+            // Else ignore
+        }
+
+        // Set layout on container, add components, and set hints on container.
+        Container cont = chooseContainer(target, hints);
+        cont.setLayout(fl);
+        for(Component c : cmpsChosen) {
+            cont.add(c);
+        }
+        setHints(cont, hints);
+        return (target == null) ? (JPanel) cont : null;
+    }
+
+
+    // //////////////
+    // WRAPLAYOUT //
+    // //////////////
+
+    // Layout Methods
+    public static JPanel WL(Object... args) {
+        return WLtg((Container) null, args);
+    }
+
+    public static JPanel WLtg(Container target, Object... args) {
+        HintList hints = new HintList();
+        List<Component> cmpsChosen = new ArrayList<Component>();
+        WrapLayout fl = new WrapLayout(FlowLayout.CENTER, 5, 5);
+
+        for(Object arg : args) {
+            if(arg instanceof String) {
+                String str = (String) arg;
+
+                // String axis override
+                if(flAlign.get(str.toUpperCase()) != null) {
+                    fl.setAlignment(flAlign.get(str.toUpperCase()));
+
+                // Add any hints
+                } else {
+                    hints.addHints(parseHints(str));
+                }
+
+            // Integer axis override
+            } else if(arg instanceof Integer) {
+                fl.setAlignment((Integer) arg);
+
+            // Save components
+            } else if(arg instanceof Component) {
+                cmpsChosen.add((Component) arg);
+
+            } else if(arg instanceof ImageIcon) {
+                if(target instanceof JFrame) {
+                    JFrame frame = (JFrame) target;
+                    frame.setIconImage(((ImageIcon) arg).getImage ());
+                } else if(target instanceof JDialog) {
+                    JDialog dlg = (JDialog) target;
+                    dlg.setIconImage(((ImageIcon) arg).getImage ());
+                }
             }
 
             // Else ignore
