@@ -31,6 +31,15 @@ public class DeleteTag extends Undoable
         value = model.record.get (key);
     }
 
+    public DeleteTag (MNode doc, String key)
+    {
+        this.doc = doc;
+        this.key = key;
+        MNodeTableModel model = PanelReference.instance.panelEntry.model;
+        row   = model.keys.indexOf (key);
+        value = model.record.get (key);
+    }
+
     public void undo ()
     {
         super.undo ();

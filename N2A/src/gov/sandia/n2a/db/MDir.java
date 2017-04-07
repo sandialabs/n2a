@@ -103,6 +103,14 @@ public class MDir extends MNode
         return result;
 	}
 
+	public static String validFilenameFrom (String name)
+	{
+	    // TODO: This is only sufficient for Linux. See what else is needed for Windows.
+        name = name.replace ("\\", "-");
+        name = name.replace ("/", "-");
+        return name;
+	}
+
 	public synchronized MNode child (String index)
     {
 	    if (index.isEmpty ()) return null;  // The file-existence code below can be fooled by an empty string, so explicitly guard against it.

@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.ui.ref;
 
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -23,12 +24,20 @@ import java.awt.Component;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Insets;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.ClipboardOwner;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.Transferable;
+import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.io.IOException;
+import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -51,6 +60,7 @@ import javax.swing.JTextArea;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
+import javax.swing.TransferHandler;
 import javax.swing.event.TableModelEvent;
 import javax.swing.event.TableModelListener;
 import javax.swing.plaf.basic.BasicComboBoxUI;
@@ -74,6 +84,53 @@ public class PanelEntry extends JPanel
     protected JButton buttonAddEntry;
     protected JButton buttonAddTag;
     protected JButton buttonDeleteTag;
+
+    public static final DataFlavor tagFlavor = new DataFlavor (TransferableTag.class, null);
+
+    public class TransferableTag implements Transferable, ClipboardOwner
+    {
+        public String  data;
+        public boolean drag;
+
+        public TransferableTag (String data, boolean drag)
+        {
+            this.data = data;
+            this.drag = drag;
+        }
+
+        @Override
+        public void lostOwnership (Clipboard clipboard, Transferable contents)
+        {
+        }
+
+        @Override
+        public DataFlavor[] getTransferDataFlavors ()
+        {
+            DataFlavor[] result = new DataFlavor[3];
+            result[0] = DataFlavor.stringFlavor;
+            result[1] = DataFlavor.plainTextFlavor;
+            result[2] = tagFlavor;
+            return result;
+        }
+
+        @Override
+        public boolean isDataFlavorSupported (DataFlavor flavor)
+        {
+            if (flavor.equals (DataFlavor.stringFlavor   )) return true;
+            if (flavor.equals (DataFlavor.plainTextFlavor)) return true;
+            if (flavor.equals (tagFlavor                 )) return true;
+            return false;
+        }
+
+        @Override
+        public Object getTransferData (DataFlavor flavor) throws UnsupportedFlavorException, IOException
+        {
+            if (flavor.equals (DataFlavor.stringFlavor   )) return data;
+            if (flavor.equals (DataFlavor.plainTextFlavor)) return new StringReader (data);
+            if (flavor.equals (tagFlavor                 )) return this;
+            throw new UnsupportedFlavorException (flavor);
+        }
+    }
 
     public PanelEntry ()
     {
@@ -161,6 +218,117 @@ public class PanelEntry extends JPanel
                 {
                     if (model.record != null) focusCache.put (model.record, table.getSelectedRow ());
                     table.clearSelection ();
+                }
+            }
+        });
+
+        table.setTransferHandler (new TransferHandler ()
+        {
+            public boolean canImport (TransferSupport xfer)
+            {
+                return xfer.isDataFlavorSupported (DataFlavor.stringFlavor);
+            }
+
+            public boolean importData (TransferSupport xfer)
+            {
+                String data;
+                try
+                {
+                    data = (String) xfer.getTransferable ().getTransferData (DataFlavor.stringFlavor);
+                }
+                catch (IOException | UnsupportedFlavorException e)
+                {
+                    return false;
+                }
+
+                if (data.isEmpty ()) return false;
+                if (data.contains ("\n")  ||  data.contains ("\r"))
+                {
+                    // Defend against complex formats, such as a full BibTeX entry.
+                    // If it is very likely to be a BibTeX entry, then forward it to the entry list for import.
+                    if (data.startsWith ("@")) return PanelReference.instance.panelSearch.list.getTransferHandler ().importData (xfer);
+                    return false;
+                }
+                if (model.record == null) return false;  // Nothing to import into, and we don't really want to mess with instant entry creation. (If we do, then need compound edit.)
+
+                int row;
+                int col;
+                if (xfer.isDrop ())
+                {
+                    JTable.DropLocation dl = (JTable.DropLocation) xfer.getDropLocation ();
+                    row = dl.getRow ();
+                    col = dl.getColumn ();
+                }
+                else
+                {
+                    row = table.getSelectedRow ();
+                    col = table.getSelectedColumn ();
+                }
+
+                String[] parts = data.split ("=", 2);
+                if (parts.length == 1)  // simple value
+                {
+                    model.setValueAt (parts[0], row, col);
+                    // TODO: may need a repaint here.
+                }
+                else  // tag=value
+                {
+                    String key   = parts[0];
+                    String value = parts[1];
+                    if (key.isEmpty ()) return false;
+                    int index = model.keys.indexOf (key);
+                    if (index >= 0)
+                    {
+                        if (key.equals ("id")) return false;
+                        model.setValueAt (value, index, 1);
+                    }
+                    else
+                    {
+                        PanelReference.instance.undoManager.add (new AddTag (model.record, row, key, value));
+                    }
+                }
+                return true;
+            }
+
+            public int getSourceActions (JComponent comp)
+            {
+                return COPY_OR_MOVE;
+            }
+
+            boolean dragInitiated;  // This is a horrible hack, but the simplest way to override the default MOVE action chosen internally by Swing.
+            public void exportAsDrag (JComponent comp, InputEvent e, int action)
+            {
+                dragInitiated = true;
+                super.exportAsDrag (comp, e, action);
+            }
+
+            protected Transferable createTransferable (JComponent comp)
+            {
+                boolean drag = dragInitiated;
+                dragInitiated = false;
+
+                int row = table.getSelectedRow ();
+                if (row < 0) return null;
+                String key = model.keys.get (row);
+                String value = model.record.get (key);
+                return new TransferableTag (key + "=" + value, drag);
+            }
+
+            protected void exportDone (JComponent source, Transferable data, int action)
+            {
+                if (action == MOVE  &&  ! ((TransferableTag) data).drag)
+                {
+                    try
+                    {
+                        String key = ((String) data.getTransferData (DataFlavor.stringFlavor)).split ("=", 2)[0];
+                        if (! key.equals ("id")  &&  ! key.equals ("form")  &&  ! key.equals ("title"))
+                        {
+                            PanelReference.instance.undoManager.add (new DeleteTag (model.record, key));
+                        }
+                    }
+                    catch (UnsupportedFlavorException | IOException e)
+                    {
+                    }
                 }
             }
         });
@@ -476,6 +644,7 @@ public class PanelEntry extends JPanel
                 if (row == 0)  // change id
                 {
                     if (name.isEmpty ()) return;  // not allowed
+                    name = MDir.validFilenameFrom (name);
                     if (AppData.references.child (name) != null) return;  // not allowed, because another entry with that id already exists
                     PanelReference.instance.undoManager.add (new ChangeEntry (record.key (), name));
                 }

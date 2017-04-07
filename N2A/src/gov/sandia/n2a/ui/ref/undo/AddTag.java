@@ -18,12 +18,14 @@ public class AddTag extends Undoable
     protected MNode   doc;
     protected int     row;
     protected String  key;
+    protected String  value;
     protected boolean nameIsGenerated;
 
     public AddTag (MNode doc, int row)
     {
         this.doc = doc;
         this.row = row;
+        value    = "";
         nameIsGenerated = true;
 
         MNode record = PanelReference.instance.panelEntry.model.record;
@@ -35,6 +37,15 @@ public class AddTag extends Undoable
         }
     }
 
+    public AddTag (MNode doc, int row, String key, String value)
+    {
+        this.doc   = doc;
+        this.row   = row;
+        this.key   = key;
+        this.value = value;
+        nameIsGenerated = false;
+    }
+
     public void undo ()
     {
         super.undo ();
@@ -44,7 +55,7 @@ public class AddTag extends Undoable
     public void redo ()
     {
         super.redo ();
-        PanelReference.instance.panelEntry.model.create (doc, row, key, "", nameIsGenerated);
+        PanelReference.instance.panelEntry.model.create (doc, row, key, value, nameIsGenerated);
     }
 
     public boolean addEdit (UndoableEdit edit)

@@ -17,6 +17,7 @@ import java.util.Set;
 import java.util.Vector;
 
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
@@ -412,6 +413,18 @@ public class NodePart extends NodeContainer
         }
     }
 
+    public static String validIdentifierFrom (String name)
+    {
+        StringBuilder result = new StringBuilder ();
+        for (int i = 0; i < name.length (); i++)
+        {
+            char c = name.charAt (i);
+            if (Character.isJavaIdentifierPart (c)) result.append (c);
+            else                                    result.append ('_');
+        }
+        return result.toString ();
+    }
+
     @Override
     public void applyEdit (JTree tree)
     {
@@ -438,7 +451,7 @@ public class NodePart extends NodeContainer
                 return;
             }
 
-            String stem = name;
+            String stem = MDir.validFilenameFrom (name);
             int suffix = 0;
             MNode models = AppData.models;
             MNode existingDocument = models.child (name);
@@ -459,6 +472,8 @@ public class NodePart extends NodeContainer
             delete (tree, true);
             return;
         }
+
+        name = validIdentifierFrom (name);
 
         NodeBase parent = (NodeBase) getParent ();
         NodeBase sibling = parent.child (name);

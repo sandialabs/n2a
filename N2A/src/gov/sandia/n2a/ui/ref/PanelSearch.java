@@ -8,6 +8,7 @@ Distributed under the BSD-3 license. See the file LICENSE for details.
 package gov.sandia.n2a.ui.ref;
 
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
@@ -148,7 +149,8 @@ public class PanelSearch extends JPanel
 
                 for (MNode n : data)  // data can contain several entries
                 {
-                    PanelReference.instance.undoManager.add (new AddEntry (n.key (), n));
+                    String key = MDir.validFilenameFrom (n.key ());
+                    PanelReference.instance.undoManager.add (new AddEntry (key, n));
                 }
                 return true;
             }
