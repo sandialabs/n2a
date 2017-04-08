@@ -13,6 +13,7 @@ import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.plugins.extpoints.Exporter;
 import gov.sandia.n2a.plugins.extpoints.Importer;
+import gov.sandia.n2a.plugins.extpoints.Settings;
 import gov.sandia.n2a.plugins.extpoints.Activity;
 import gov.sandia.n2a.transfer.ExportNative;
 import gov.sandia.n2a.transfer.ImportNative;
@@ -20,6 +21,10 @@ import gov.sandia.n2a.ui.eq.ActivityModel;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.ActivityRun;
 import gov.sandia.n2a.ui.ref.ActivityReference;
+import gov.sandia.n2a.ui.settings.ActivitySettings;
+import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
+import gov.sandia.n2a.ui.settings.SettingsAbout;
+import gov.sandia.n2a.ui.settings.SettingsBackup;
 
 import javax.swing.ImageIcon;
 
@@ -77,6 +82,10 @@ public class N2APlugin extends Plugin
             new ActivityRun (),
             new ActivityReference (),
             //new RunEnsembleRecordHandler (),
+            new ActivitySettings (),
+            new SettingsAbout (),
+            new SettingsBackup (),
+            new SettingsLookAndFeel ()
         };
     }
 
@@ -86,11 +95,12 @@ public class N2APlugin extends Plugin
     {
         return new Class[]
         {
-            Backend.class,
             Activity.class,
+            Backend.class,
             Exporter.class,
             Importer.class,
-            Operator.Factory.class
+            Operator.Factory.class,
+            Settings.class
         };
     }
 

@@ -9,9 +9,8 @@ package gov.sandia.n2a;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.plugins.PluginManager;
-import gov.sandia.n2a.ui.AboutDialog;
-import gov.sandia.n2a.ui.LafManager;
 import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 
 import java.awt.EventQueue;
 import java.io.File;
@@ -64,14 +63,11 @@ public class Main
         {
             public void run ()
             {
-                LafManager.load ();
+                SettingsLookAndFeel.instance.load ();  // Note that LafManager is instantiated when the plugin system is initialized above.
                 new MainFrame ();
                 setUncaughtExceptionHandler (MainFrame.instance);
             }
         });
-
-        // Build labels for the About dialog as the last thing this thread does, effectively in the background.
-        AboutDialog.initializeLabels ();
     }
 
     public static void setUncaughtExceptionHandler (final JFrame parent)

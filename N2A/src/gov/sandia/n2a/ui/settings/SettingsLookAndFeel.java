@@ -1,14 +1,17 @@
 /*
-Copyright 2016 Sandia Corporation.
+Copyright 2016,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
  */
 
-package gov.sandia.n2a.ui;
+package gov.sandia.n2a.ui.settings;
 
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.plugins.extpoints.Settings;
+import gov.sandia.n2a.ui.images.ImageUtil;
 
+import java.awt.Component;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -17,9 +20,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
+import javax.swing.BoxLayout;
 import javax.swing.ButtonGroup;
-import javax.swing.JMenu;
-import javax.swing.JRadioButtonMenuItem;
+import javax.swing.ImageIcon;
+import javax.swing.JPanel;
+import javax.swing.JRadioButton;
 import javax.swing.LookAndFeel;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
@@ -30,19 +35,21 @@ import javax.swing.plaf.metal.MetalLookAndFeel;
 import javax.swing.plaf.metal.MetalTheme;
 import javax.swing.plaf.metal.OceanTheme;
 
-public class LafManager
+public class SettingsLookAndFeel implements Settings
 {
-    protected static Map<String, Laf> catalog = new HashMap<String, Laf> ();
-    protected static JMenu            menu    = new JMenu ("Look&Feel");
-    protected static ButtonGroup      group   = new ButtonGroup ();
-    protected static ActionListener   menuListener;
-    protected static Laf              currentLaf;
+    public static SettingsLookAndFeel instance;
 
-    public static class Laf
+    protected Map<String, Laf> catalog = new HashMap<String, Laf> ();
+    protected JPanel           menu    = new JPanel ();
+    protected ButtonGroup      group   = new ButtonGroup ();
+    protected ActionListener   menuListener;
+    protected Laf              currentLaf;
+
+    public class Laf
     {
-        protected LookAndFeel          instance;
-        protected MetalTheme           theme;
-        protected JRadioButtonMenuItem item;
+        protected LookAndFeel  instance;
+        protected MetalTheme   theme;
+        protected JRadioButton item;
 
         public void apply ()
         {
@@ -67,8 +74,10 @@ public class LafManager
         }
     }
 
-    static
+    public SettingsLookAndFeel ()
     {
+        instance = this;
+
         Set<String> potential = new TreeSet<String> ();
         potential.add ("javax.swing.plaf.metal.MetalLookAndFeel");
         potential.add ("com.sun.java.swing.plaf.nimbus.NimbusLookAndFeel");
@@ -133,12 +142,13 @@ public class LafManager
             }
         };
 
+        menu.setLayout (new BoxLayout (menu, BoxLayout.Y_AXIS));
         String currentClass = UIManager.getLookAndFeel ().getClass ().getName ();
         for (Laf laf : catalog.values ())
         {
             boolean selected = currentClass.equals (laf.instance.getClass ().getName ());
             if (selected) currentLaf = laf;
-            laf.item = new JRadioButtonMenuItem (laf.toString (), selected);
+            laf.item = new JRadioButton (laf.toString (), selected);
             laf.item.addActionListener (menuListener);
             menu.add (laf.item);
             group.add (laf.item);
@@ -146,12 +156,7 @@ public class LafManager
         if (currentLaf != null) group.setSelected (currentLaf.item.getModel (), true);
     }
 
-    public static JMenu getMenu ()
-    {
-        return menu;
-    }
-
-    public static void load ()
+    public void load ()
     {
         String name = AppData.state.get ("LookAndFeel");
         if (name.isEmpty ()) return;
@@ -159,5 +164,29 @@ public class LafManager
         if (laf == null) return;
         laf.apply ();
         group.setSelected (laf.item.getModel (), true);
+    }
+
+    @Override
+    public String getName ()
+    {
+        return "Look & Feel";
+    }
+
+    @Override
+    public ImageIcon getIcon ()
+    {
+        return ImageUtil.getImage ("view.gif");
+    }
+
+    @Override
+    public Component getPanel ()
+    {
+        return menu;
+    }
+
+    @Override
+    public Component getInitialFocus (Component panel)
+    {
+        return panel;
     }
 }

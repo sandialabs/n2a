@@ -1,15 +1,18 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2013,2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
 */
 
-package gov.sandia.n2a.ui;
+package gov.sandia.n2a.ui.settings;
 
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.plugins.extpoints.Settings;
+import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
+import java.awt.Component;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
@@ -20,13 +23,13 @@ import java.util.Locale;
 import java.util.TreeSet;
 
 import javax.swing.DefaultListModel;
+import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
-import javax.swing.JDialog;
-import javax.swing.JFrame;
 import javax.swing.JList;
+import javax.swing.JPanel;
 
-public class BackupDialog extends JDialog
+public class SettingsBackup extends JPanel implements Settings
 {
     class BackupEntry implements Comparable<BackupEntry>
     {
@@ -52,10 +55,9 @@ public class BackupDialog extends JDialog
     public JList <BackupEntry> list = new JList <BackupEntry> ();
     JCheckBox RemoveAdded;
 
-    public BackupDialog (JFrame parent)
+    public SettingsBackup ()
     {
-        super (parent, "Backup Manager", true);
-        setIconImage (ImageUtil.getImage ("repo.gif").getImage ());
+        setName ("Backup");  // Necessary to fulfill Settings interface.
 
         JButton Backup = new JButton ("Backup", ImageUtil.getImage ("saveall.gif"));
         Backup.setMnemonic (KeyEvent.VK_B);
@@ -66,7 +68,6 @@ public class BackupDialog extends JDialog
                 public void actionPerformed (ActionEvent e)
                 {
                     backup ();
-                    dispose ();
                 }
             }
         );
@@ -79,7 +80,6 @@ public class BackupDialog extends JDialog
                 public void actionPerformed (ActionEvent e)
                 {
                     restore ();
-                    dispose ();
                 }
             }
         );
@@ -97,21 +97,7 @@ public class BackupDialog extends JDialog
             }
         );
 
-        JButton Cancel = new JButton ("Done", ImageUtil.getImage ("cancel.gif"));
-        Cancel.addActionListener
-        (
-            new ActionListener ()
-            {
-                public void actionPerformed (ActionEvent e)
-                {
-                    dispose ();
-                }
-            }
-        );
-
         RemoveAdded = new JCheckBox ("On restore, remove any new items added since the backup.");
-
-        getRootPane ().setDefaultButton (Cancel);
 
         populateList ();
         Lay.BLtg
@@ -121,11 +107,9 @@ public class BackupDialog extends JDialog
             "S", Lay.BL
             (
                 "N", RemoveAdded,
-                "C", Lay.FL ("R", Backup, Restore, Delete, Cancel)
+                "C", Lay.FL ("R", Backup, Restore, Delete)
             )
         );
-        pack ();
-        setLocationRelativeTo (getParent ());
     }
 
     public void populateList ()
@@ -178,5 +162,23 @@ public class BackupDialog extends JDialog
         if (deleteMe == null) return;
         deleteMe.file.delete ();
         populateList ();
+    }
+
+    @Override
+    public ImageIcon getIcon ()
+    {
+        return ImageUtil.getImage ("saveall.gif");
+    }
+
+    @Override
+    public Component getPanel ()
+    {
+        return this;
+    }
+
+    @Override
+    public Component getInitialFocus (Component panel)
+    {
+        return panel;
     }
 }
