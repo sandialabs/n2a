@@ -19,7 +19,7 @@ public class ActivitySettings implements Activity
     @Override
     public ImageIcon getIcon ()
     {
-        return ImageUtil.getImage ("gen.gif");
+        return ImageUtil.getImage ("settings.png");
     }
 
     @Override
