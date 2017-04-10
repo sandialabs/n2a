@@ -1032,7 +1032,7 @@ public class Lay {
                 hints.addHints(parseHints((String) arg));
             }
         }
-        JTextField txt = new JTextField ("" + text);
+        final JTextField txt = new JTextField ("" + text);
         if (hints.contains ("selectall"))
         {
             txt.addFocusListener (new FocusAdapter ()

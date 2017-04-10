@@ -266,7 +266,7 @@ public class PanelSearch extends JPanel
         }
     }
 
-    public static void recordSelected (MNode doc)
+    public static void recordSelected (final MNode doc)
     {
         EventQueue.invokeLater (new Runnable ()
         {
