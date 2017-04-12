@@ -12,6 +12,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import java.awt.Image;
+import java.awt.Toolkit;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.event.WindowAdapter;
@@ -32,8 +33,19 @@ public class MainFrame extends JFrame
         if (instance != null) throw new RuntimeException ("Multiple attempts to create main application window.");
         instance = this;
 
-        MNode pc = AppData.properties;
-        setTitle (pc.get ("name") + " v" + pc.get ("version"));
+        String appName = AppData.properties.get ("name");
+        setTitle (appName);
+
+        try
+        {
+            Toolkit xToolkit = Toolkit.getDefaultToolkit ();
+            java.lang.reflect.Field awtAppClassNameField = xToolkit.getClass ().getDeclaredField ("awtAppClassName");
+            awtAppClassNameField.setAccessible (true);
+            awtAppClassNameField.set (xToolkit, appName);
+        }
+        catch (Exception e)
+        {
+        }
 
         ArrayList<Image> icons = new ArrayList<Image> ();
         icons.add (ImageUtil.getImage ("n2a-16.png").getImage ());

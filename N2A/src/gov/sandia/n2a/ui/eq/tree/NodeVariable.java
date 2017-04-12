@@ -325,8 +325,8 @@ public class NodeVariable extends NodeContainer
         String valueBefore = source.get ();
         if (! nameAfter.matches ("[a-zA-Z_$][a-zA-Z0-9_$.]*[']*"))  // Not a proper variable name. The user actually passed a naked expression, so resurrect the old (probably auto-assigned) variable name.
         {
-            valueAfter = nameAfter;
             nameAfter  = nameBefore;
+            valueAfter = input;
         }
 
         // Handle creation of $inherit node.

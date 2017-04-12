@@ -16,85 +16,69 @@ import gov.sandia.n2a.ui.images.ImageUtil;
 
 import java.awt.Color;
 import java.awt.Component;
-import java.awt.Dimension;
-import java.awt.Font;
+import java.awt.Desktop;
+import java.awt.event.InputEvent;
+import java.awt.event.MouseEvent;
+import java.io.IOException;
+import java.net.URISyntaxException;
 
-import javax.swing.BorderFactory;
-import javax.swing.Box;
 import javax.swing.ImageIcon;
-import javax.swing.JLabel;
+import javax.swing.JEditorPane;
 import javax.swing.JPanel;
-import javax.swing.plaf.basic.BasicHTML;
-import javax.swing.text.View;
+import javax.swing.event.HyperlinkEvent;
+import javax.swing.event.HyperlinkListener;
 
 public class SettingsAbout extends JPanel implements Settings
 {
-    protected JLabel lblTitle;
-    protected JLabel lblCopy;
-    protected JLabel lblLicense;
-    protected JLabel lblContrib;
-    protected JLabel lblVersion;
-    protected JLabel lblSupport;
-
     public SettingsAbout ()
     {
         setName ("About");  // Necessary to fulfill Settings interface.
 
-        Font f1 = new Font ("Helvetica", Font.PLAIN, 16);
-        Font f2 = new Font ("Helvetica", Font.PLAIN, 12);
-
         MNode pc = AppData.properties;
 
-        lblTitle = new JLabel ("<html>" + pc.get ("name") + "</html>");
-        lblTitle.setFont (f1);
-        lblTitle.setBorder (BorderFactory.createMatteBorder (0, 0, 1, 0, new Color (200, 200, 200)));
+        JEditorPane html = new JEditorPane
+        (
+            "text/html",
 
-        Dimension d = null;
-        View view = (View) lblTitle.getClientProperty (BasicHTML.propertyKey);
-        if (view != null)
+            "<html><body>" +
+            "<p><span style='font-size:150%'>" + pc.get ("name") + "</span> version " + pc.get ("version") + "</p>" +
+            "<hr/>" +
+            "<p>&copy;2013,2015-2017 Sandia Corporation. Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains certain rights in this software.</p>" +
+            "<p>This software is released under the BSD license.  Please refer to the license information provided in this distribution for the complete text.</p>" +
+            "<p>Coders: Fred Rothganger, Derek Trumbo, Christy Warrender, Felix Wang</p>" +
+            "<p>Concept development: Brad Aimone, Corinne Teeter, Steve Verzi, Asmeret Bier, Brandon Rohrer, Ann Speed</p>" +
+            "<p>Technical support: <a href=\"mailto:frothga@sandia.gov\">frothga@sandia.gov</a></p>" +
+            "</body></html>"
+        );
+        html.setEditable (false);
+        html.setOpaque (false);
+        html.addHyperlinkListener (new HyperlinkListener ()
         {
-            view.setSize (300, 0);
-            float w = view.getPreferredSpan (View.X_AXIS);
-            float h = view.getPreferredSpan (View.Y_AXIS);
-            d = new Dimension ((int) Math.ceil (w), (int) Math.ceil (h));
-        }
-        lblTitle.setPreferredSize (d);
-
-        lblCopy = new JLabel ("<html>" + pc.get ("copyright") + "</html>");
-        lblCopy.setFont(f2);
-
-        lblLicense = new JLabel ("<html>" + pc.get ("license") + "</html>");
-        lblLicense.setFont(f2);
-
-        lblContrib = new JLabel ("<html><B>" + pc.get ("abbreviation") + "</B> was developed by " + pc.get ("developers") + ".</html>");
-        lblContrib.setFont(f2);
-
-        lblVersion = new JLabel ("Version: " + pc.get ("version"));
-        lblVersion.setFont(f2);
-
-        lblSupport = new JLabel ("<html>For technical support send e-mail to: <font color='blue'><u>" + pc.get ("support") + "</u></font></html>");
-        lblSupport.setFont(f2);
-
-        JPanel pnlText = Lay.BxL ("Y", "opaque=false");
-        pnlText.add (Box.createVerticalStrut (8));
-        pnlText.add (lblTitle);
-        pnlText.add (Box.createVerticalStrut (8));
-        pnlText.add (lblVersion);
-        pnlText.add (Box.createVerticalStrut (8));
-        pnlText.add (lblCopy);
-        pnlText.add (Box.createVerticalStrut (8));
-        pnlText.add (lblLicense);
-        pnlText.add (Box.createVerticalStrut (8));
-        pnlText.add (lblContrib);
-        pnlText.add (Box.createVerticalStrut (8));
-        pnlText.add (lblSupport);
-        pnlText.add (Box.createVerticalGlue ());
+            public void hyperlinkUpdate (HyperlinkEvent e)
+            {
+                InputEvent ie = e.getInputEvent ();
+                if (ie instanceof MouseEvent  &&  ((MouseEvent) ie).getClickCount () > 0)
+                {
+                    if (Desktop.isDesktopSupported ())
+                    {
+                        Desktop desktop = Desktop.getDesktop ();
+                        try
+                        {
+                            desktop.browse (e.getURL ().toURI ());
+                        }
+                        catch (IOException | URISyntaxException exception)
+                        {
+                        }
+                    }
+                }
+            }
+        });
 
         Color background = new JPanel ().getBackground ();
         Color darker = background.darker ();
         GradientPanel gp = new GradientPanel (background, darker);
 
-        Lay.BLtg (gp, "C", pnlText, "eb=10");
+        Lay.BLtg (gp, "C", html, "eb=10");
 
         Lay.BLtg (this,
             "N", Lay.lb (ImageUtil.getImage ("n2a-splash.png")),

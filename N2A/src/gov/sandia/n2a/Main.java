@@ -33,10 +33,6 @@ public class Main
         AppData.properties.set ("name",         "Neurons to Algorithms");
         AppData.properties.set ("abbreviation", "N2A");
         AppData.properties.set ("version",      "0.92");
-        AppData.properties.set ("developers",   "Fred Rothganger (PI), Derek Trumbo, Christy Warrender, Brad Aimone, Corinne Teeter, Brandon Rohrer, Steve Verzi, Ann Speed, Asmeret Bier, Felix Wang");
-        AppData.properties.set ("copyright",    "Copyright &copy; 2013,2016 Sandia Corporation. Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains certain rights in this software.");
-        AppData.properties.set ("license",      "This software is released under the BSD license.  Please refer to the license information provided in this distribution for the complete text.");
-        AppData.properties.set ("support",      "frothga@sandia.gov");
         AppData.checkInitialDB ();
 
         // Load plugins
