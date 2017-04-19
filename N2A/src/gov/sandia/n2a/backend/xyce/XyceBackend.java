@@ -30,6 +30,7 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.PrintStream;
 import java.nio.file.Files;
@@ -148,7 +149,7 @@ class XyceBackend extends Backend
             public void run ()
             {
                 String jobDir = new File (job.get ()).getParent ();
-                try {err.set (new PrintStream (new File (jobDir, "err")));}
+                try {err.set (new PrintStream (new FileOutputStream (new File (jobDir, "err"), true)));}
                 catch (FileNotFoundException e) {}
 
                 try
