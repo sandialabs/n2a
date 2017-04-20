@@ -253,6 +253,12 @@ public class PanelRun extends JPanel
         buttonText.addActionListener (graphListener);
         buttonText.setActionCommand ("Text");
 
+        JToggleButton buttonTable = new JToggleButton (ImageUtil.getImage ("properties.gif"));
+        buttonTable.setMargin (new Insets (2, 2, 2, 2));
+        buttonTable.setFocusable (false);
+        buttonTable.addActionListener (graphListener);
+        buttonTable.setActionCommand ("Table");
+
         JToggleButton buttonGraph = new JToggleButton (ImageUtil.getImage ("analysis.gif"));
         buttonGraph.setMargin (new Insets (2, 2, 2, 2));
         buttonGraph.setFocusable (false);
@@ -267,6 +273,7 @@ public class PanelRun extends JPanel
 
         buttons = new ButtonGroup ();
         buttons.add (buttonText);
+        buttons.add (buttonTable);
         buttons.add (buttonGraph);
         buttons.add (buttonRaster);
         buttonText.setSelected (true);
@@ -334,6 +341,7 @@ public class PanelRun extends JPanel
                         (
                             "L",
                             buttonText,
+                            buttonTable,
                             buttonGraph,
                             buttonRaster,
                             Lay.BL (buttonMonospace, "eb=20l20r"),
@@ -413,8 +421,13 @@ public class PanelRun extends JPanel
 
                     if (graphable)
                     {
-                        JPanel panel = null;
-                        if (viz.equals ("Graph"))
+                        Component panel = null;
+                        if (viz.equals ("Table"))
+                        {
+                            Table table = new Table (path);
+                            panel = table.createVisualization ();
+                        }
+                        else if (viz.equals ("Graph"))
                         {
                             Plot plot = new Plot (path);
                             if (! plot.columns.isEmpty ()) panel = plot.createGraphPanel ();
@@ -428,7 +441,7 @@ public class PanelRun extends JPanel
                         if (stop) return;
                         if (panel != null)
                         {
-                            final JPanel p = panel;
+                            final Component p = panel;
                             EventQueue.invokeLater (new Runnable ()
                             {
                                 @Override
