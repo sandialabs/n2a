@@ -27,7 +27,7 @@ import javax.swing.JTree;
 
 public class NodeEquation extends NodeBase
 {
-    protected static ImageIcon icon = ImageUtil.getImage ("equation.png");
+    protected static ImageIcon icon = ImageUtil.getImage ("assign.png");
     protected List<Integer> columnWidths;
 
     public NodeEquation (MPart source)

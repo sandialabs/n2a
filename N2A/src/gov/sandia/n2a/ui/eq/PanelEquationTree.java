@@ -566,7 +566,7 @@ public class PanelEquationTree extends JPanel
         buttonAddVariable.setActionCommand ("Variable");
         buttonAddVariable.addActionListener (listenerAdd);
 
-        buttonAddEquation = new JButton (ImageUtil.getImage ("equation.png"));
+        buttonAddEquation = new JButton (ImageUtil.getImage ("assign.png"));
         buttonAddEquation.setMargin (new Insets (2, 2, 2, 2));
         buttonAddEquation.setFocusable (false);
         buttonAddEquation.setToolTipText ("Add Equation");
