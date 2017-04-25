@@ -1571,7 +1571,7 @@ public class EquationSet implements Comparable<EquationSet>
             v.simplify ();
 
             // Check if we have a constant
-            v.removeAttribute ("constant");  // It should not be necessary to remove this (anything already "constant" should be correctly tagged), but we do so to be thorough.
+            // Don't remove an existing "constant" tag. Such specially added tags are presumed to be correct.
             if (v.hasAttribute ("externalWrite")) continue;  // Regardless of the local math, a variable that gets written is not constant.
             if (v.equations.size () != 1) continue;
             EquationEntry e = v.equations.first ();
@@ -1777,6 +1777,7 @@ public class EquationSet implements Comparable<EquationSet>
     public void findInitOnly ()
     {
         while (findInitOnlyRecursive ()) {}
+        purgeInitOnlyTemporary ();
     }
 
     public static class ReplaceInit extends Transformer
@@ -1878,18 +1879,20 @@ public class EquationSet implements Comparable<EquationSet>
 
                                 // Since constants have already been located (via simplify), we can be certain that any symbolic
                                 // constant has already been replaced. Therefore, only the "initOnly" attribute matters here.
-                                if (av.reference == null  ||  av.reference.variable == null  ||  ! av.reference.variable.hasAttribute ("initOnly")) isInitOnly = false;
+                                if (av.reference == null  ||  av.reference.variable == null) isInitOnly = false;
+                                Variable r = av.reference.variable;
+                                if (! r.hasAttribute ("initOnly")) isInitOnly = false;
 
                                 // Also verify that the variables we depend on are available during the appropriate phase of init
-                                if (isInitOnly)
+                                if (isInitOnly  &&  ! r.hasAttribute ("temporary"))  // Note that temporaries are always available.
                                 {
                                     if (v.name.startsWith ("$"))  // we are a $variable, so we can only depend on $index and $init
                                     {
-                                        if (! av.reference.variable.name.equals ("$index")  &&  ! av.reference.variable.name.equals ("$init")) isInitOnly = false;
+                                        if (! r.name.equals ("$index")  &&  ! r.name.equals ("$init")) isInitOnly = false;
                                     }
                                     else  // we are a regular variable, so can only depend on $variables
                                     {
-                                        if (! av.reference.variable.name.startsWith ("$")) isInitOnly = false;
+                                        if (! r.name.startsWith ("$")) isInitOnly = false;
                                     }
                                 }
                             }
@@ -1918,6 +1921,22 @@ public class EquationSet implements Comparable<EquationSet>
         }
 
         return changed;
+    }
+
+    /**
+        findInitOnly() propagates the "initOnly" attribute through temporaries, but the final
+        attribute set of a variable cannot contain both, as they are mutually contradictory.
+        "initOnly" requires storage, while "temporary" forbids it. We give "temporary"
+        precedence, because we prioritize memory efficiency over time efficiency.
+    **/
+    public void purgeInitOnlyTemporary ()
+    {
+        for (EquationSet p : parts) p.purgeInitOnlyTemporary ();
+
+        for (Variable v : variables)
+        {
+            if (v.hasAttribute ("temporary")  &&  v.hasAttribute ("initOnly")) v.removeAttribute ("initOnly");
+        }
     }
 
     /**

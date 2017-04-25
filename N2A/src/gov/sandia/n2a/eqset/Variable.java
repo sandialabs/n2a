@@ -48,9 +48,9 @@ public class Variable implements Comparable<Variable>
 
     // graph analysis
     public List<Variable>               uses;       // Variables we depend on. Forms a digraph (which may have cycles) on Variable nodes.
-    public List<Object>                 usedBy;     // Variables and EquationSets that depends on us.
+    public List<Object>                 usedBy;     // Variables and EquationSets that depend on us.
     public List<Variable>               before;     // Variables that must be evaluated after us. Generally the same as uses, unless we are a temporary, in which case the ordering is reversed. Note EquationSet.ordered
-    public Variable                     visited;    // Points to the previous variable visited on the current path. Used to prevent infinite recursion. Only work on a single thread.
+    public Variable                     visited;    // Points to the previous variable visited on the current path. Used to prevent infinite recursion. Only works on a single thread.
     public int                          priority;   // For evaluation order.
 
     // Internal backend
@@ -392,6 +392,37 @@ public class Variable implements Comparable<Variable>
         return ! usedBy.isEmpty ();
     }
 
+    public boolean neededBySpecial ()
+    {
+        return neededBySpecial (null);
+    }
+
+    protected boolean neededBySpecial (Variable from)
+    {
+        if (usedBy == null) return false;
+
+        Variable p = from;
+        while (p != null)
+        {
+            if (p == this) return false;
+            p = p.visited;
+        }
+        visited = from;
+
+        for (Object u : usedBy)
+        {
+            if (! (u instanceof Variable)) continue;
+            Variable v = (Variable) u;
+
+            if (v.container != container) continue;  // Don't exit the current equation set.
+            if (v.name.startsWith ("$")) return true;
+            if (v == this) continue;
+            if (v.neededBySpecial (this)) return true;
+        }
+
+        return false;
+    }
+
     /**
         Determines if query exists anywhere in our dependency graph.
         @return The actual Variable we depend on (as opposed to the query object).
@@ -399,34 +430,31 @@ public class Variable implements Comparable<Variable>
     **/
     public Variable dependsOn (Variable query)
     {
-        if (query.equals (this)) return null;  // Don't depend on ourself.
-        visited = null;
-        return dependsOnRecursive (query);
+        if (query.equals (this)) return null;  // Don't report direct dependency on self. This simplifies code when collecting a list of dependencies, because generally this variable will be evaluated explicitly, after the dependencies.
+        return dependsOn (query, null);
     }
 
-    protected Variable dependsOnRecursive (Variable query)
+    protected Variable dependsOn (Variable query, Variable from)
     {
         if (query.equals (this)) return this;
+        if (uses == null) return null;
 
         // Prevent infinite recursion
-        Variable p = visited;
+        Variable p = from;
         while (p != null)
         {
             if (p == this) return null;
             p = p.visited;
         }
+        visited = from;
 
-        if (uses != null)
+        for (Variable u : uses)
         {
-            for (Variable u : uses)
-            {
-                if (u.container != container) continue;  // Don't exit the current equation set.
-                u.visited = this;
-                Variable result = u.dependsOnRecursive (query);
-                if (result != null) return result;
-            }
+            if (u.container != container) continue;  // Don't exit the current equation set.
+            Variable result = u.dependsOn (query, this);
+            if (result != null) return result;
         }
-        
+
         return null;
     }
 

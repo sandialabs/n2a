@@ -276,10 +276,12 @@ public class Instance extends Type
         Instance nextLevel = container.container;
         boolean top = nextLevel instanceof Wrapper  ||  nextLevel == null;
 
-        String result = "";
-        if (! top) result = equations.name;
+        String result;
+        if (top) result = "";
+        else     result = equations.name;
+
         InternalBackendData bed = (InternalBackendData) equations.backendData;
-        if (bed.index != null) result += get (bed.index);
+        if (bed.index != null  &&  ! (this instanceof Population)) result += get (bed.index);
 
         if (top) return result;
         String prefix = nextLevel.path ();

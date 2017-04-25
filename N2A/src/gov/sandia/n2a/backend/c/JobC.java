@@ -394,7 +394,7 @@ public class JobC
                 {
                     boolean initOnly               = v.hasAttribute ("initOnly");
                     boolean derivativeOrDependency = v.hasAttribute ("derivativeOrDependency");
-                    if (! initOnly) bed.localUpdate.add (v);
+                    if (! initOnly) bed.localUpdate.add (v);  // TODO: ensure that initOnly temporary variables are handled correctly. IE: their value doesn't change after init, but they still need to be calculated on the fly.
                     if (derivativeOrDependency) bed.localDerivativeUpdate.add (v);
                     if (v.hasAttribute ("reference"))
                     {
@@ -1566,7 +1566,7 @@ public class JobC
             }
             for (Variable v : bed.localInit)
             {
-                if (! v.name.startsWith ("$")) continue;
+                if (! v.name.startsWith ("$")) continue;  // TODO: This doesn't allow in temporaries that a $variable may depend on. See InternalBackendData sorting section for example of how to handle this better.
                 if (v.name.equals ("$live")) continue;
                 if (v.name.equals ("$type")) throw new Exception ("$type must be conditional, and it must never be assigned during init.");  // TODO: Work out logic of $type better. This trap should not be here.
                 multiconditional (v, context, "  ");

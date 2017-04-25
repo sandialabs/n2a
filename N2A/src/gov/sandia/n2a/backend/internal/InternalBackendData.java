@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Sandia Corporation.
+Copyright 2015-2017 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the BSD-3 license. See the file LICENSE for details.
@@ -79,6 +79,8 @@ public class InternalBackendData
     public Variable   dt;  // $t'
     public Variable   type;
     public Variable   xyz;
+
+    public List<Variable> Pdependencies;  // If $p is temporary, then this list contains any other temporary variables (in evaluation order) that it depends on.
 
     /**
         If the model uses events or otherwise has non-constant frequency, then we
@@ -166,6 +168,7 @@ public class InternalBackendData
         public static final int RISE     = 0;
         public static final int FALL     = 1;
         public static final int CHANGE   = 2;
+        public static final int NONZERO  = 3;
 
         public EventTarget (DollarEvent event)
         {
@@ -205,7 +208,10 @@ public class InternalBackendData
                 if (result != null  &&  v.writeIndex >= 0) temp.set (v, result);
             }
 
-            double before = ((Scalar) temp.get (track.reference)).value;
+            double before;
+            if (this.edge == NONZERO) before = 0;  // just to silence error about uninitialized variable
+            else                      before = ((Scalar) temp.get (track.reference)).value;
+
             double after;
             if (trackOne)  // This is a single variable, so check its value directly.
             {
@@ -214,7 +220,7 @@ public class InternalBackendData
             else  // This is an expression, so use our private auxiliary variable.
             {
                 Scalar result = (Scalar) event.operands[0].eval (temp);
-                temp.setFinal (track, result);  // Since the variable is effectively hidden, we don't wait for the finalize phase.
+                if (this.edge != NONZERO) temp.setFinal (track, result);  // Since the variable is effectively hidden, we don't wait for the finalize phase.
                 after = result.value;
             }
 
@@ -222,12 +228,16 @@ public class InternalBackendData
             if (edge == EVALUATE)
             {
                 Text t = (Text) event.operands[2].eval (temp);
-                if      (t.value.equalsIgnoreCase ("change")) edge = CHANGE;
-                else if (t.value.equalsIgnoreCase ("fall"  )) edge = FALL;
-                else                                          edge = RISE;
+                if      (t.value.equalsIgnoreCase ("nonzero")) edge = NONZERO;
+                else if (t.value.equalsIgnoreCase ("change" )) edge = CHANGE;
+                else if (t.value.equalsIgnoreCase ("fall"   )) edge = FALL;
+                else                                           edge = RISE;
             }
             switch (edge)
             {
+                case NONZERO:
+                    if (after == 0) return -2;
+                    break;
                 case CHANGE:
                     if (before == after) return -2;
                     break;
@@ -364,9 +374,10 @@ public class InternalBackendData
                                 if (c.value instanceof Text)
                                 {
                                     Text t = (Text) c.value;
-                                    if      (t.value.equalsIgnoreCase ("change")) et.edge = EventTarget.CHANGE;
-                                    else if (t.value.equalsIgnoreCase ("fall"  )) et.edge = EventTarget.FALL;
-                                    else                                          et.edge = EventTarget.RISE;
+                                    if      (t.value.equalsIgnoreCase ("nonzero")) et.edge = EventTarget.NONZERO;
+                                    else if (t.value.equalsIgnoreCase ("change" )) et.edge = EventTarget.CHANGE;
+                                    else if (t.value.equalsIgnoreCase ("fall"   )) et.edge = EventTarget.FALL;
+                                    else                                           et.edge = EventTarget.RISE;
                                 }
                                 else
                                 {
@@ -420,7 +431,7 @@ public class InternalBackendData
                                     et.track.reference = reference;
                                 }
                             }
-                            if (! et.trackOne)  // expression, so create auxiliary variable
+                            if (! et.trackOne  &&  et.edge != EventTarget.NONZERO)  // Expression, so create auxiliary variable. Aux not needed for NONZERO, because no change detection.
                             {
                                 et.track = new Variable ("$event_aux" + eventTargets.size (), 0);
                                 et.track.type = new Scalar (0);
@@ -556,7 +567,7 @@ public class InternalBackendData
                 if (! v.hasAny (new String[] {"constant", "accessor", "readOnly"})  ||  v.hasAll (new String[] {"constant", "reference"}))  // eliminate non-computed values, unless they refer to a variable outside the immediate equation set
                 {
                     boolean initOnly = v.hasAttribute ("initOnly");
-                    boolean updates = ! initOnly  &&  v.equations.size () > 0  &&  (v.derivative == null  ||  v.hasAttribute ("updates"));
+                    boolean updates  = ! initOnly  &&  v.equations.size () > 0  &&  (v.derivative == null  ||  v.hasAttribute ("updates"));
                     if (updates) globalUpdate.add (v);
                     if (v.hasAttribute ("reference"))
                     {
@@ -631,7 +642,7 @@ public class InternalBackendData
                 if (! v.hasAny (new String[] {"constant", "accessor", "readOnly"})  ||  v.hasAll (new String[] {"constant", "reference"}))
                 {
                     boolean initOnly = v.hasAttribute ("initOnly");
-                    boolean updates = ! initOnly  &&  v.equations.size () > 0  &&  (v.derivative == null  ||  v.hasAttribute ("updates"));
+                    boolean updates  = ! initOnly  &&  v.equations.size () > 0  &&  (v.derivative == null  ||  v.hasAttribute ("updates"));
                     if (updates) localUpdate.add (v);
                     if (v.hasAttribute ("reference"))
                     {
@@ -650,7 +661,7 @@ public class InternalBackendData
                         boolean temporary = v.hasAttribute ("temporary");
                         if (! temporary  ||  v.hasUsers ())
                         {
-                            if (v.name.startsWith ("$"))
+                            if (v.name.startsWith ("$")  ||  (temporary  &&  v.neededBySpecial ()))
                             {
                                 if (! v.name.equals ("$index")  &&  ! v.name.equals ("$live")) localInitSpecial.add (v);
                             }
@@ -695,6 +706,18 @@ public class InternalBackendData
             {
                 if (v.hasAttribute ("global")) globalIntegrated.add (v);
                 else                            localIntegrated.add (v);
+            }
+        }
+
+        if (p != null  &&  p.hasAttribute ("temporary"))
+        {
+            Pdependencies = new ArrayList<Variable> ();
+            for (Variable t : s.ordered)
+            {
+                if (t.hasAttribute ("temporary")  &&  p.dependsOn (t) != null)
+                {
+                    Pdependencies.add (t);
+                }
             }
         }
 
@@ -758,7 +781,7 @@ public class InternalBackendData
             }
         }
 
-
+        
         // Set index on variables
         // Initially readIndex = writeIndex = -1, and readTemp = writeTemp = false
 
@@ -971,13 +994,16 @@ public class InternalBackendData
             if (hasIntegrated) break;
             hasIntegrated = ((InternalBackendData) p.backendData).globalIntegrated.size () > 0;
         }
-        boolean dtCanChange =  dt != null  &&  ! dt.hasAttribute ("initOnly");
+        boolean dtCanChange =  dt != null  &&  dt.equations.size () > 0  &&  ! dt.hasAttribute ("initOnly");
+        // Note: dt can also change if we use a variable-step integrator. At present, Internal doesn't do that,
+        // and it is unlikely to ever do so.
 
         if (hasIntegrated  &&  (eventTargets.size () > 0  ||  dtCanChange))
         {
             lastT = new Variable ("$lastT");
             lastT.readIndex = lastT.writeIndex = countLocalFloat++;
             namesLocalFloat.add (lastT.nameString ());
+            lastT.type = new Scalar (0);
         }
     }
 
