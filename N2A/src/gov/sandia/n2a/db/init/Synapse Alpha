@@ -1,9 +1,11 @@
 N2A.schema=1
 $inherit="Synapse Conductance"
-G
+G=0@$init
+G'=(exp(1)*a-G)/tau
+a
  @$init=0
- @event=G+Gmax*W
-G'=-G/tauDecay
-tauDecay=2ms
+ @event=a+Gmax*W
+a'=-a/tau
+tau=1ms
  $metadata
   public

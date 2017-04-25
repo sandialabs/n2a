@@ -95,7 +95,10 @@ public class AppData
             "Neuron Izhikevich",
             "Neuron Izhikevich 2007",
             "Neuron LIF",
-            //"Synapse Exponential",
+            "Synapse Alpha",
+            "Synapse Conductance",
+            "Synapse Exponential",
+            "Synapse Exponential Double",
             "Synapse Voltage Step"
         };
         try

@@ -1,0 +1,18 @@
+N2A.schema=1
+$inherit="Synapse Conductance"
+E=0
+ $metadata
+  backend.xyce.param=eRev
+G=Gmax*(b-a)@
+Tpeak=log(tauDecay/tauRise)*(tauDecay*tauRise)/(tauDecay-tauRise)
+a
+ @$init=0
+ @event=a+(W*f)
+a'=-a/tauRise
+b
+ @$init=0
+ @event=b+(W*f)
+b'=-b/tauDecay
+f=1/(exp(-Tpeak/tauDecay)-exp(-Tpeak/tauRise))
+tauDecay=2ms
+tauRise=1ms
