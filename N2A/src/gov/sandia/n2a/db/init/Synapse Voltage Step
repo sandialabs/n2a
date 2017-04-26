@@ -3,8 +3,8 @@ $metadata
  notes=This synapse directly changes the postsynaptic voltage by a specific increment. Primarily for use in models targeted to the STPU.
 A=$connect("Neuron")
 B=$connect("Neuron")
-B.V=+Vdelta@$event(A.V>=A.Vpeak,0)
-Vdelta=10mV
+B.V=+Vstep@$event(A.V>=A.Vpeak,0)
+Vstep=10mV
  $metadata
   notes=The desired change in postsynaptic voltage. This does not account for dynamics of the postsynaptic neuron, such as leakage current and voltage resets due to spiking.
   public
