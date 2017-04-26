@@ -43,7 +43,7 @@ public class AddInherit extends Undoable
     {
         System.out.println ("destroy: " + path);
         NodePart parent = (NodePart) NodeBase.locateNode (path);
-        if (parent == null) throw new CannotRedoException ();
+        if (parent == null) throw new CannotUndoException ();
 
         NodeBase node = parent.child ("$inherit");
         TreeNode[] nodePath = node.getPath ();
@@ -74,7 +74,7 @@ public class AddInherit extends Undoable
     public static void create (List<String> path, String value)
     {
         NodePart parent = (NodePart) NodeBase.locateNode (path);
-        if (parent == null) throw new CannotUndoException ();
+        if (parent == null) throw new CannotRedoException ();
 
         PanelModel mep = PanelModel.instance;
         JTree tree = mep.panelEquations.tree;

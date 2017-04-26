@@ -117,6 +117,9 @@ public class AddPart extends Undoable
     {
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
+        NodeBase n = parent.child (name);
+        if (n != null  &&  ! (n instanceof NodePart)) throw new CannotUndoException ();  // Should be blocked by GUI constraints, but this defends against ill-formed model on clipboard.
+        NodePart createdNode = (NodePart) n;
 
         // Update database
         MPart createdPart = (MPart) parent.source.set (name, "");
@@ -128,7 +131,6 @@ public class AddPart extends Undoable
         JTree tree = mep.panelEquations.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
-        NodePart createdNode = (NodePart) parent.child (name);  // It's either a NodePart or null. Any other case should be blocked by GUI constraints.
         if (createdNode == null)
         {
             createdNode = new NodePart (createdPart);

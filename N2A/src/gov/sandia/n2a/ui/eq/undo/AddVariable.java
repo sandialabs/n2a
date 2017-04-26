@@ -117,6 +117,9 @@ public class AddVariable extends Undoable
     {
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
+        NodeBase n = parent.child (name);
+        if (n != null  &&  ! (n instanceof NodeVariable)) throw new CannotRedoException ();  // Should be blocked by GUI constraints, but this defends against ill-formed model on clipboard.
+        NodeVariable createdNode = (NodeVariable) n;
 
         // Update database
         MPart createdPart = (MPart) parent.source.set (name, "");
@@ -128,7 +131,6 @@ public class AddVariable extends Undoable
         JTree tree = mep.panelEquations.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
-        NodeVariable createdNode = (NodeVariable) parent.child (name);  // It's either a NodeVariable or null. Any other case should be blocked by GUI constraints.
         boolean alreadyExists = createdNode != null;
         if (! alreadyExists) createdNode = new NodeVariable (createdPart);
         if (nameIsGenerated) createdNode.setUserObject ("");  // pure create, so about to go into edit mode. This should only happen on first application of the create action, and should only be possible if visibility is already correct.

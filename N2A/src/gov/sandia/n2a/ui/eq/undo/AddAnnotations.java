@@ -48,7 +48,7 @@ public class AddAnnotations extends Undoable
     public static void destroy (List<String> path, String blockName)
     {
         NodeBase parent = NodeBase.locateNode (path);
-        if (parent == null) throw new CannotRedoException ();
+        if (parent == null) throw new CannotUndoException ();
 
         PanelModel mep = PanelModel.instance;
         JTree tree = mep.panelEquations.tree;
@@ -88,8 +88,12 @@ public class AddAnnotations extends Undoable
     public static void create (List<String> path, int index, MNode saved, NodeFactory factory)
     {
         NodeBase parent = NodeBase.locateNode (path);
-        if (parent == null) throw new CannotUndoException ();
+        if (parent == null) throw new CannotRedoException ();
         String blockName = saved.key ();
+        NodeBase n = parent.child (blockName);
+        if (n != null  &&  ! (n instanceof NodeContainer)) throw new CannotRedoException ();
+        NodeContainer node = (NodeContainer) n;
+
         MPart block = (MPart) parent.source.childOrCreate (blockName);
         block.merge (saved);
 
@@ -97,7 +101,6 @@ public class AddAnnotations extends Undoable
         JTree tree = mep.panelEquations.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
-        NodeContainer node = (NodeContainer) parent.child (blockName);
         if (node == null)
         {
             node = (NodeContainer) factory.create (block);
