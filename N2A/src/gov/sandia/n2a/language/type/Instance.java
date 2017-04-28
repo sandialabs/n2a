@@ -156,6 +156,41 @@ public class Instance extends Type
         return true;
     }
 
+    /**
+        Sets any values touched by a zero-delay event as if they were set by the most recent sim cycle.
+        @param v Implicitly, this is an "externalWrite" variable.
+    **/
+    public void finishEvent (Variable v)
+    {
+        Type current  = get (v);
+        Type buffered = getFinal (v);
+        switch (v.assignment)
+        {
+            case Variable.ADD:
+                setFinal (v, current.add (buffered));
+                set (v, v.type);
+                break;
+            case Variable.MULTIPLY:
+            case Variable.DIVIDE:
+                setFinal (v, current.multiply (buffered));
+                if (v.type instanceof Matrix) set (v, ((Matrix) v.type).identity ());
+                else                          set (v, new Scalar (1));
+                break;
+            case Variable.MIN:
+                setFinal (v, current.min (buffered));
+                if (v.type instanceof Matrix) set (v, ((Matrix) v.type).clear (Double.POSITIVE_INFINITY));
+                else                          set (v, new Scalar (Double.POSITIVE_INFINITY));
+                break;
+            case Variable.MAX:
+                setFinal (v, current.max (buffered));
+                if (v.type instanceof Matrix) set (v, ((Matrix) v.type).clear (Double.NEGATIVE_INFINITY));
+                else                          set (v, new Scalar (Double.NEGATIVE_INFINITY));
+                break;
+            default:
+                setFinal (v, buffered);
+        }
+    }
+
     public Type EQ (Type that) throws EvaluationException
     {
         if (this == that) return new Scalar (1);

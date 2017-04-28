@@ -10,10 +10,12 @@ package gov.sandia.n2a.eqset;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
+import gov.sandia.n2a.language.function.DollarEvent;
 import gov.sandia.n2a.language.function.Max;
 import gov.sandia.n2a.language.function.Min;
 import gov.sandia.n2a.language.operator.Add;
@@ -456,6 +458,51 @@ public class Variable implements Comparable<Variable>
         }
 
         return null;
+    }
+
+    /**
+        Scans the expressions in this variable, and the expression in any temporary variables they reference,
+        for any instance of $event(). Only analyzes within the current equation set.
+    **/
+    public boolean dependsOnEvent ()
+    {
+        return dependsOnEvent (null);
+    }
+
+    protected boolean dependsOnEvent (Variable from)
+    {
+        // Prevent infinite recursion
+        Variable p = from;
+        while (p != null)
+        {
+            if (p == this) return false;
+            p = p.visited;
+        }
+        visited = from;
+
+        // Scan temporary variables we depend on
+        if (uses != null)
+        {
+            for (Variable u : uses)
+            {
+                if (! u.hasAttribute ("temporary")) continue;
+                if (u.dependsOnEvent (this)) return true;
+            }
+        }
+
+        // Scan equations
+        class EventVisitor extends Visitor
+        {
+            boolean found;
+            public boolean visit (Operator op)
+            {
+                if (op instanceof DollarEvent) found = true;
+                return ! found;
+            }
+        }
+        EventVisitor visitor = new EventVisitor ();
+        visit (visitor);
+        return visitor.found;
     }
 
     public void setBefore (Variable after)

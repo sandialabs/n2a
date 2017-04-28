@@ -50,6 +50,11 @@ public class Simulator implements Iterable<Part>
     public PrintStream               out;
     // Note: System.in will get bound into an Input.Holder if used at all.
 
+    public static int BEFORE = -1;
+    public static int DURING =  0;
+    public static int AFTER  =  1;
+    public int eventMode = DURING;
+
     public Event currentEvent;
 
     public class ResizeRequest

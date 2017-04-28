@@ -92,9 +92,10 @@ public class InternalBackendData
     public Variable lastT;
 
     // Event structures
-    public List<Integer>     eventLatches = new ArrayList<Integer> ();  // Indices within Instance.valuesFloat of each latch block. Generally, there will only be one, if any. Used to reset latches during finalize phase.
-    public List<EventTarget> eventTargets = new ArrayList<EventTarget> ();
-    public List<EventSource> eventSources = new ArrayList<EventSource> ();
+    public List<Integer>     eventLatches    = new ArrayList<Integer> ();  // Indices within Instance.valuesFloat of each latch block. Generally, there will only be one, if any. Used to reset latches during finalize phase.
+    public List<EventTarget> eventTargets    = new ArrayList<EventTarget> ();
+    public List<EventSource> eventSources    = new ArrayList<EventSource> ();
+    public List<Variable>    eventReferences = new ArrayList<Variable> ();  // Variables in referenced parts that need to be finalized when this part executes due to a zero-delay event.
 
     public boolean populationCanGrowOrDie;
     public boolean populationCanResize;
@@ -326,14 +327,16 @@ public class InternalBackendData
     {
         class EventVisitor extends Visitor
         {
-            public int valueIndex = -1;
-            public int mask;
-            public boolean exception = false;
+            public int     valueIndex = -1;
+            public int     mask;
+            public boolean exception;
+            public boolean found;
 
             public boolean visit (Operator op)
             {
                 if (op instanceof DollarEvent)
                 {
+                    found = true;
                     DollarEvent de = (DollarEvent) op;
                     if (de.eventType == null)  // this $event has not yet been analyzed
                     {
@@ -510,9 +513,11 @@ public class InternalBackendData
         EventVisitor eventVisitor = new EventVisitor ();
         for (Variable v : s.variables)
         {
+            eventVisitor.found = false;
             v.visit (eventVisitor);
+            if (eventVisitor.exception) throw new Backend.AbortRun ();
+            if ((eventVisitor.found  ||  v.dependsOnEvent ())  &&  v.reference.variable != v) eventReferences.add (v);
         }
-        if (eventVisitor.exception) throw new Backend.AbortRun ();
     }
 
     public void analyze (EquationSet s)
@@ -1104,6 +1109,9 @@ public class InternalBackendData
 
         dumpReferenceSet ("localReference", localReference);
         dumpReferenceSet ("globalReference", globalReference);
+
+        System.out.println ("  eventReferences:");
+        for (Variable v : eventReferences) System.out.println ("    " + v.nameString () + " in " + v.container.name);
     }
 
     public void dumpVariableList (String name, List<Variable> list)

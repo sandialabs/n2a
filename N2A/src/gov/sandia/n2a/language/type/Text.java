@@ -110,6 +110,18 @@ public class Text extends Type
         return new Text (value + that.toString ());
     }
 
+    public Type min (Type that)
+    {
+        if (compareTo (that) > 0) return new Text (that);
+        return this;
+    }
+
+    public Type max (Type that)
+    {
+        if (compareTo (that) < 0) return new Text (that);
+        return this;
+    }
+
     public Type EQ (Type that) throws EvaluationException
     {
         return new Scalar (value.equals (that.toString ()) ? 1 : 0);

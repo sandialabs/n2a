@@ -41,6 +41,18 @@ public class Matrix extends Type
         value = new double[columns][rows];
     }
 
+    public Matrix (int rows, int columns, double initialValue)
+    {
+        value = new double[columns][rows];
+        for (int c = 0; c < columns; c++)
+        {
+            for (int r = 0; r < rows; r++)
+            {
+                value[c][r] = initialValue;
+            }
+        }
+    }
+
     public Matrix (File path) throws EvaluationException
     {
         try
@@ -201,6 +213,31 @@ public class Matrix extends Type
         int h = value[0].length;
         if (h < 1) return new Matrix ();
         return new Matrix (h, w);
+    }
+
+    public Matrix clear (double initialValue)
+    {
+        int w = value.length;
+        if (w < 1) return new Matrix ();
+        int h = value[0].length;
+        if (h < 1) return new Matrix ();
+        return new Matrix (h, w, initialValue);
+    }
+
+    /**
+        @return A copy of this object, with diagonal elements set to 1 and off-diagonals set to zero.
+     */
+    public Matrix identity ()
+    {
+        int w = value.length;
+        if (w < 1) return new Matrix ();
+        int h = value[0].length;
+        if (h < 1) return new Matrix ();
+
+        Matrix result = new Matrix (h, w);
+        h = Math.min (w, h);
+        for (int r = 0; r < h; r++) result.value[r][r] = 1;
+        return result;
     }
 
     public Type add (Type that) throws EvaluationException
@@ -402,6 +439,86 @@ public class Matrix extends Type
             return result;
         }
         if (that instanceof Text) return divide (new Matrix ((Text) that));
+        throw new EvaluationException ("type mismatch");
+    }
+
+    public Type min (Type that)
+    {
+        if (that instanceof Matrix)
+        {
+            double[][] B = ((Matrix) that).value;
+            int w = value.length;
+            int h = value[0].length;
+            int ow = Math.min (w, B.length);
+            int oh = Math.min (h, B[0].length);
+            Matrix result = new Matrix (h, w);
+            for (int c = 0; c < ow; c++)
+            {
+              for (int r = 0;  r < oh; r++) result.value[c][r] = Math.min (value[c][r], B[c][r]);
+              for (int r = oh; r < h;  r++) result.value[c][r] = Math.min (value[c][r], 0);
+            }
+            for (int c = ow; c < w; c++)
+            {
+              for (int r = 0; r < h; r++)   result.value[c][r] = Math.min (value[c][r], 0);
+            }
+            return result;
+        }
+        if (that instanceof Scalar)
+        {
+            double scalar = ((Scalar) that).value;
+            int w = value.length;
+            int h = value[0].length;
+            Matrix result = new Matrix (h, w);
+            for (int c = 0; c < w; c++)
+            {
+                for (int r = 0; r < h; r++)
+                {
+                    result.value[c][r] = Math.min (value[c][r], scalar);
+                }
+            }
+            return result;
+        }
+        if (that instanceof Text) return min (new Matrix ((Text) that));
+        throw new EvaluationException ("type mismatch");
+    }
+
+    public Type max (Type that)
+    {
+        if (that instanceof Matrix)
+        {
+            double[][] B = ((Matrix) that).value;
+            int w = value.length;
+            int h = value[0].length;
+            int ow = Math.min (w, B.length);
+            int oh = Math.min (h, B[0].length);
+            Matrix result = new Matrix (h, w);
+            for (int c = 0; c < ow; c++)
+            {
+              for (int r = 0;  r < oh; r++) result.value[c][r] = Math.max (value[c][r], B[c][r]);
+              for (int r = oh; r < h;  r++) result.value[c][r] = Math.max (value[c][r], 0);
+            }
+            for (int c = ow; c < w; c++)
+            {
+              for (int r = 0; r < h; r++)   result.value[c][r] = Math.max (value[c][r], 0);
+            }
+            return result;
+        }
+        if (that instanceof Scalar)
+        {
+            double scalar = ((Scalar) that).value;
+            int w = value.length;
+            int h = value[0].length;
+            Matrix result = new Matrix (h, w);
+            for (int c = 0; c < w; c++)
+            {
+                for (int r = 0; r < h; r++)
+                {
+                    result.value[c][r] = Math.max (value[c][r], scalar);
+                }
+            }
+            return result;
+        }
+        if (that instanceof Text) return max (new Matrix ((Text) that));
         throw new EvaluationException ("type mismatch");
     }
 

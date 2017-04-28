@@ -200,16 +200,8 @@ public class Part extends Instance
                     case Variable.ADD:      temp.set (v, current.add      (result)); break;
                     case Variable.MULTIPLY: temp.set (v, current.multiply (result)); break;
                     case Variable.DIVIDE:   temp.set (v, current.divide   (result)); break;
-                    case Variable.MIN:
-                    {
-                        if (((Scalar) result.LT (current)).value != 0) temp.set (v, result);
-                        break;
-                    }
-                    case Variable.MAX:
-                    {
-                        if (((Scalar) result.GT (current)).value != 0) temp.set (v, result);
-                        break;
-                    }
+                    case Variable.MIN:      temp.set (v, current.min      (result)); break;
+                    case Variable.MAX:      temp.set (v, current.max      (result)); break;
                 }
             }
         }
@@ -238,15 +230,33 @@ public class Part extends Instance
                     double delay = eventType.test (i, simulator);
                     if (delay == -2) continue;  // the trigger condition was not satisfied 
                     EventSpikeSingle spike;
-                    if (delay >= 0)
-                    {
-                        spike = new EventSpikeSingle (); // : new EventSpikeSingleLatch ();
-                        spike.t = simulator.currentEvent.t + delay;
-                    }
-                    else  // delay == -1 --> event was triggered, but timing is no-care
+                    if (delay < 0)  // event was triggered, but timing is no-care
                     {
                         spike = new EventSpikeSingleLatch ();
                         spike.t = simulator.currentEvent.t;  // queue immediately after current cycle, so latches get set for next full cycle
+                    }
+                    else if (delay == 0)  // process as close to current cycle as possible
+                    {
+                        spike = new EventSpikeSingle ();  // fully execute the event (not latch it)
+                        spike.t = simulator.currentEvent.t;  // queue immediately
+                    }
+                    else
+                    {
+                        // Is delay an quantum number of $t' steps?
+                        double ratio = delay / event.dt;
+                        int    step  = (int) Math.round (ratio);
+                        if (Math.abs (ratio - step) < 1e-3)
+                        {
+                            if (simulator.eventMode == Simulator.DURING) spike = new EventSpikeSingleLatch ();
+                            else                                         spike = new EventSpikeSingle ();
+                            if (simulator.eventMode == Simulator.AFTER) delay = (step + 1e-6) * event.dt;
+                            else                                        delay = (step - 1e-6) * event.dt;
+                        }
+                        else
+                        {
+                            spike = new EventSpikeSingle ();
+                        }
+                        spike.t = simulator.currentEvent.t + delay;
                     }
                     spike.eventType = eventType;
                     simulator.eventQueue.add (spike);
@@ -258,15 +268,32 @@ public class Part extends Instance
                 if (delay >= -1)  // the trigger condition was satisfied
                 {
                     EventSpikeMulti spike;
-                    if (delay >= 0)
-                    {
-                        spike = new EventSpikeMulti ();
-                        spike.t = simulator.currentEvent.t + delay;
-                    }
-                    else
+                    if (delay < 0)
                     {
                         spike = new EventSpikeMultiLatch ();
                         spike.t = simulator.currentEvent.t;
+                    }
+                    else if (delay == 0)
+                    {
+                        spike = new EventSpikeMulti ();
+                        spike.t = simulator.currentEvent.t;
+                    }
+                    else
+                    {
+                        double ratio = delay / event.dt;
+                        int    step  = (int) Math.round (ratio);
+                        if (Math.abs (ratio - step) < 1e-3)
+                        {
+                            if (simulator.eventMode == Simulator.DURING) spike = new EventSpikeMultiLatch ();
+                            else                                         spike = new EventSpikeMulti ();
+                            if (simulator.eventMode == Simulator.AFTER) delay = (step + 1e-6) * event.dt;
+                            else                                        delay = (step - 1e-6) * event.dt;
+                        }
+                        else
+                        {
+                            spike = new EventSpikeMulti ();
+                        }
+                        spike.t = simulator.currentEvent.t + delay;
                     }
                     spike.eventType = eventType;
                     // We don't copy the array, just keep a reference to it. What could go wrong with this?
@@ -300,16 +327,19 @@ public class Part extends Instance
                 case Variable.ADD:
                     set (v, v.type);  // initial value is zero-equivalent (additive identity)
                     break;
-                // TODO: make the following cases type-sensitive
                 case Variable.MULTIPLY:
                 case Variable.DIVIDE:
-                    set (v, new Scalar (1));  // multiplicative identity
+                    // multiplicative identity
+                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).identity ());
+                    else                          set (v, new Scalar (1));
                     break;
                 case Variable.MIN:
-                    set (v, new Scalar (Double.POSITIVE_INFINITY));
+                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).clear (Double.POSITIVE_INFINITY));
+                    else                          set (v, new Scalar (Double.POSITIVE_INFINITY));
                     break;
                 case Variable.MAX:
-                    set (v, new Scalar (Double.NEGATIVE_INFINITY));
+                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).clear (Double.NEGATIVE_INFINITY));
+                    else                          set (v, new Scalar (Double.NEGATIVE_INFINITY));
                     break;
                 // For all other assignment types, do nothing. Effectively, buffered value is initialized to current value
             }

@@ -49,6 +49,16 @@ public abstract class Type implements Comparable<Type>
         throw new EvaluationException ("Operation not supported on this type.");
     }
 
+    public Type min (Type that) throws EvaluationException
+    {
+        throw new EvaluationException ("Operation not supported on this type.");
+    }
+
+    public Type max (Type that) throws EvaluationException
+    {
+        throw new EvaluationException ("Operation not supported on this type.");
+    }
+
     public Type EQ (Type that) throws EvaluationException
     {
         throw new EvaluationException ("Operation not supported on this type.");

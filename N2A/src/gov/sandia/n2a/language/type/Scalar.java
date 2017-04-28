@@ -153,6 +153,50 @@ public class Scalar extends Type
         throw new EvaluationException ("type mismatch");
     }
 
+    public Type min (Type that)
+    {
+        if (that instanceof Scalar) return new Scalar (Math.min (value, ((Scalar) that).value));
+        if (that instanceof Text  ) return new Scalar (Math.min (value, Double.valueOf (((Text) that).value)));
+        if (that instanceof Matrix)
+        {
+            double[][] B = ((Matrix) that).value;
+            int w = B.length;
+            int h = B[0].length;
+            Matrix result = new Matrix (h, w);
+            for (int c = 0; c < w; c++)
+            {
+                for (int r = 0; r < h; r++)
+                {
+                    result.value[c][r] = Math.min (value, B[c][r]);
+                }
+            }
+            return result;
+        }
+        throw new EvaluationException ("type mismatch");
+    }
+
+    public Type max (Type that)
+    {
+        if (that instanceof Scalar) return new Scalar (Math.max (value, ((Scalar) that).value));
+        if (that instanceof Text  ) return new Scalar (Math.max (value, Double.valueOf (((Text) that).value)));
+        if (that instanceof Matrix)
+        {
+            double[][] B = ((Matrix) that).value;
+            int w = B.length;
+            int h = B[0].length;
+            Matrix result = new Matrix (h, w);
+            for (int c = 0; c < w; c++)
+            {
+                for (int r = 0; r < h; r++)
+                {
+                    result.value[c][r] = Math.max (value, B[c][r]);
+                }
+            }
+            return result;
+        }
+        throw new EvaluationException ("type mismatch");
+    }
+
     public Type EQ (Type that) throws EvaluationException
     {
         if (that instanceof Scalar) return new Scalar ((value == ((Scalar) that).value               ) ? 1 : 0);

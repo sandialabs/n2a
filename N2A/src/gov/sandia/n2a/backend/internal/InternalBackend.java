@@ -79,7 +79,14 @@ public class InternalBackend extends Backend
                 if (! duration.isEmpty ()) job.set ("$metadata", "duration", duration);
 
                 long seed = job.getOrDefaultLong ("$metadata", "seed", "0");
+
+                String e = job.get ("$metadata", "backend.internal.event");
+                int                      eventMode = Simulator.DURING;
+                if (e.equals ("after"))  eventMode = Simulator.AFTER;
+                if (e.equals ("before")) eventMode = Simulator.BEFORE;
+
                 simulator = new Simulator (new Wrapper (digestedModel), seed);
+                simulator.eventMode = eventMode;
                 simulator.run ();  // Does not return until simulation is finished.
                 Files.copy (new ByteArrayInputStream ("success".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
             }

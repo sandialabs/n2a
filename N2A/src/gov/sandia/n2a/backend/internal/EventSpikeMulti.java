@@ -2,6 +2,7 @@ package gov.sandia.n2a.backend.internal;
 
 import java.util.List;
 
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.type.Instance;
 
 public class EventSpikeMulti extends EventSpike
@@ -13,7 +14,13 @@ public class EventSpikeMulti extends EventSpike
         setFlag ();
         for (Instance i : targets) simulator.integrate (i);
         for (Instance i : targets) i.update (simulator);
-        for (Instance i : targets) if (! i.finish (simulator)) i.dequeue ();
+        for (Instance i : targets)
+        {
+            boolean live = i.finish (simulator);
+            InternalBackendData bed = (InternalBackendData) i.equations.backendData;
+            for (Variable v : bed.eventReferences) ((Instance) i.valuesObject[v.reference.index]).finishEvent (v.reference.variable);
+            if (! live) i.dequeue ();
+        }
     }
 
     public void setFlag ()
