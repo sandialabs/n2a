@@ -41,15 +41,17 @@ public class Main
         pluginClassNames.add ("gov.sandia.n2a.backend.xyce.XycePlugin");
         pluginClassNames.add ("gov.sandia.n2a.backend.c.PluginC");
         pluginClassNames.add ("gov.sandia.n2a.backend.neuroml.PluginNeuroML");
+
+        ArrayList<File> pluginDirs = new ArrayList<File> ();
+        pluginDirs.add (new File (AppData.properties.get ("resourceDir"), "plugins"));
+
         for (String arg : args)
         {
-            if (arg.startsWith ("plugin=")) pluginClassNames.add (arg.substring (7));
+            if (arg.startsWith ("plugin="   )) pluginClassNames.add           (arg.substring (7));
+            if (arg.startsWith ("pluginDir=")) pluginDirs      .add (new File (arg.substring (10)));
         }
 
-        File[] pluginDirs = new File[1];
-        pluginDirs[0] = new File (AppData.properties.get ("resourceDir"), "plugins");
-
-        if (! PluginManager.initialize (new N2APlugin (), pluginClassNames.toArray (new String[0]), pluginDirs))
+        if (! PluginManager.initialize (new N2APlugin (), pluginClassNames.toArray (new String[0]), pluginDirs.toArray (new File[0])))
         {
             System.err.println (PluginManager.getInitializationErrors ());
         }
