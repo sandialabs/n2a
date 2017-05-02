@@ -6,7 +6,4 @@ G=0.1mS
 V=Vrest@$init||V>=Vpeak
 Vpeak=35mV
  $metadata
-  backend.stpu.param=pot_thr
-leakage=G/C
- $metadata
-  backend.stpu.param=lkg_val
+  backend.stpu.param=peak
