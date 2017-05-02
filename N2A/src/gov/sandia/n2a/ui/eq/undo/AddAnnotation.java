@@ -56,10 +56,10 @@ public class AddAnnotation extends Undoable
     public static String uniqueName (NodeBase parent, String blockName, String prefix, boolean allowEmptySuffix)
     {
         MPart block = (MPart) parent.source.child (blockName);
+        if (allowEmptySuffix  &&  (block == null  ||  block.child (prefix) == null)) return prefix;
         int suffix = 1;
         if (block != null)
         {
-            if (allowEmptySuffix  &&  block.child (prefix) == null) return prefix;
             while (block.child (prefix + suffix) != null) suffix++;
         }
         return prefix + suffix;
