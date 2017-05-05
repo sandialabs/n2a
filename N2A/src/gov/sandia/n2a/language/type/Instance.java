@@ -82,6 +82,18 @@ public class Instance extends Type
     }
 
     /**
+        Convenience function for retrieving backend-specific parameters from a part.
+        Allows the variable to be null (not found), in which case we return the given default value.
+    **/
+    public double parm (Variable v, double d)
+    {
+        if (v == null) return d;
+        Type result = get (v);
+        if (result instanceof Scalar) return ((Scalar) result).value;
+        return d;
+    }
+
+    /**
         Stores a value, either local or referenced.
     **/
     public void set (Variable v, Type value)
