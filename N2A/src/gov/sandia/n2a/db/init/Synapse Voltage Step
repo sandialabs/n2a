@@ -6,5 +6,6 @@ B=$connect("Neuron")
 B.V=+Vstep@$event(A.V>=A.Vpeak,0)
 Vstep=10mV
  $metadata
+  backend.stpu.parm=weight
   notes=The desired change in postsynaptic voltage. This does not account for dynamics of the postsynaptic neuron, such as leakage current and voltage resets due to spiking.
   public

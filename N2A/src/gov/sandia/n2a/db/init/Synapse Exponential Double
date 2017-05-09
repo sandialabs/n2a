@@ -15,4 +15,8 @@ b
 b'=-b/tauDecay
 f=1/(exp(-Tpeak/tauDecay)-exp(-Tpeak/tauRise))
 tauDecay=2ms
+ $metadata
+  backend.stpu.parm
 tauRise=1ms
+ $metadata
+  backend.stpu.parm

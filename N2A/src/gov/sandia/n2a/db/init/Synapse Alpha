@@ -8,4 +8,5 @@ a
 a'=-a/tau
 tau=1ms
  $metadata
+  backend.stpu.parm=tauRise,tauDecay
   public
