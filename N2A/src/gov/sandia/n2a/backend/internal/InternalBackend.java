@@ -44,7 +44,7 @@ public class InternalBackend extends Backend
     @Override
     public void execute (MNode job)
     {
-        Thread simulationThread = new SimulationThread (job);  // ctor starts the thread, if construction is successful
+        Thread simulationThread = new SimulationThread (job);
         simulationThread.setDaemon (true);
         simulationThread.start ();
     }
