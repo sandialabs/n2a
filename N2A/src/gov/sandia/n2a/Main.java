@@ -61,7 +61,7 @@ public class Main
         {
             public void run ()
             {
-                SettingsLookAndFeel.instance.load ();  // Note that LafManager is instantiated when the plugin system is initialized above.
+                SettingsLookAndFeel.instance.load ();  // Note that SettingsLookAndFeel is instantiated when the plugin system is initialized above.
                 new MainFrame ();
                 setUncaughtExceptionHandler (MainFrame.instance);
             }

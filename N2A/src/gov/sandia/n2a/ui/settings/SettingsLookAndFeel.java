@@ -9,6 +9,7 @@ package gov.sandia.n2a.ui.settings;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.plugins.extpoints.Settings;
+import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import java.awt.Component;
@@ -17,19 +18,24 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeSet;
 
 import javax.swing.BoxLayout;
 import javax.swing.ButtonGroup;
 import javax.swing.ImageIcon;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
+import javax.swing.JTextField;
 import javax.swing.LookAndFeel;
 import javax.swing.SwingUtilities;
+import javax.swing.UIDefaults;
 import javax.swing.UIManager;
 import javax.swing.UnsupportedLookAndFeelException;
 import javax.swing.UIManager.LookAndFeelInfo;
+import javax.swing.plaf.FontUIResource;
 import javax.swing.plaf.metal.DefaultMetalTheme;
 import javax.swing.plaf.metal.MetalLookAndFeel;
 import javax.swing.plaf.metal.MetalTheme;
@@ -44,6 +50,9 @@ public class SettingsLookAndFeel implements Settings
     protected ButtonGroup      group   = new ButtonGroup ();
     protected ActionListener   menuListener;
     protected Laf              currentLaf;
+    protected float            fontScale = 1;
+    protected JTextField       fieldFontScale;
+    protected Set<Object>      overriddenKeys;
 
     public class Laf
     {
@@ -51,14 +60,47 @@ public class SettingsLookAndFeel implements Settings
         protected MetalTheme   theme;
         protected JRadioButton item;
 
+        public void getFonts ()
+        {
+        }
+
         public void apply ()
         {
-            if (theme != null) MetalLookAndFeel.setCurrentTheme (theme);
             try
             {
+                if (overriddenKeys != null)
+                {
+                    UIDefaults defaults = UIManager.getDefaults ();
+                    for (Object key : overriddenKeys)
+                    {
+                        defaults.put (key, null);
+                    }
+                    overriddenKeys = null;
+                }
+
+                if (theme != null) MetalLookAndFeel.setCurrentTheme (theme);
                 UIManager.setLookAndFeel (instance);
                 currentLaf = this;
                 AppData.state.set ("LookAndFeel", this);
+                AppData.state.set ("FontScale", fontScale);
+
+                // Set scaled fonts.
+                if (fontScale != 1)
+                {
+                    overriddenKeys = new TreeSet<Object> ();
+                    UIDefaults defaults = UIManager.getDefaults ();
+                    for (Entry<Object,Object> e : defaults.entrySet ())
+                    {
+                        Object key   = e.getKey ();
+                        Object value = defaults.get (key);
+                        if (value instanceof FontUIResource)
+                        {
+                            FontUIResource fr = (FontUIResource) value;
+                            defaults.put (key, new FontUIResource (fr.deriveFont (fr.getSize2D () * fontScale)));
+                            overriddenKeys.add (key);
+                        }
+                    }
+                }
             }
             catch (UnsupportedLookAndFeelException e)
             {
@@ -113,15 +155,18 @@ public class SettingsLookAndFeel implements Settings
                 Laf lafTheme = new Laf ();
                 lafTheme.instance = laf.instance;
                 lafTheme.theme = new OceanTheme ();
+                lafTheme.getFonts ();
                 catalog.put (lafTheme.toString (), lafTheme);
 
                 lafTheme = new Laf ();
                 lafTheme.instance = laf.instance;
                 lafTheme.theme = new DefaultMetalTheme ();
+                lafTheme.getFonts ();
                 catalog.put (lafTheme.toString (), lafTheme);
             }
             else
             {
+                laf.getFonts ();
                 catalog.put (laf.toString (), laf);
             }
         }
@@ -154,10 +199,28 @@ public class SettingsLookAndFeel implements Settings
             group.add (laf.item);
         }
         if (currentLaf != null) group.setSelected (currentLaf.item.getModel (), true);
+
+        JLabel labelFontScale = new JLabel ("Font Scale:");
+        fieldFontScale = new JTextField (Float.toString (fontScale), 10);
+        fieldFontScale.addActionListener (new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent arg0)
+            {
+                fontScale = Float.parseFloat (fieldFontScale.getText ());
+                if (fontScale <= 0) fontScale = 1;
+                if (fontScale > 5) fontScale = 5;  // Bigger than this may make the app unusable. If user really needs bigger font, they can hack the client state file directly.
+                fieldFontScale.setText (Float.toString (fontScale));
+                if (currentLaf != null) currentLaf.apply ();
+            }
+        });
+        menu.add (Lay.FL (labelFontScale, fieldFontScale));
     }
 
     public void load ()
     {
+        fontScale = (float) AppData.state.getOrDefaultDouble ("FontScale", "1");
+        fieldFontScale.setText (Float.toString (fontScale));
+
         String name = AppData.state.get ("LookAndFeel");
         if (name.isEmpty ()) return;
         Laf laf = catalog.get (name);
