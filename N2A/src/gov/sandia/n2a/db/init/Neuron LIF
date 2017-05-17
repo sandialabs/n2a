@@ -3,7 +3,9 @@ $inherit="Neuron"
 $metadata
  backend.stpu.component=lif
 G=0.1mS
-V=Vrest@$init||V>=Vpeak
+V
+ @init=Vrest
+ @V>=Vpeak=Vrest
 Vpeak=35mV
  $metadata
-  backend.stpu.param=peak
+  backend.stpu.parm=peak
