@@ -814,7 +814,7 @@ public class PanelEquationTree extends JPanel
         {
             if (record == null) return;
 
-            String simulatorName = record.get ("$metadata", "backend");
+            String simulatorName = root.source.get ("$metadata", "backend");  // Note that "record" is the raw model, while "root.source" is the collated model.
             final Backend simulator = Backend.getBackend (simulatorName);
             MNode runs = AppData.runs;
             String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + jobCount++;
