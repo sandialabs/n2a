@@ -82,6 +82,7 @@ public class OutputParser
                         }
                         c.values.add (value);
                     }
+                    for (; p < columns.size (); p++) columns.get (p).values.add (defaultValue);  // Because the structure is not sparse, we must fill out every row.
                     row++;
                 }
             }
