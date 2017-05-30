@@ -4,7 +4,7 @@ $metadata
  backend.stpu.component=lif
 G=0.1mS
 V
- @init=Vrest
+ @$init=Vrest
  @V>=Vpeak=Vrest
 Vpeak=35mV
  $metadata
