@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2016 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -65,6 +65,7 @@ public class InternalBackend extends Backend
             try {err.set (new PrintStream (new FileOutputStream (new File (jobDir, "err"), true)));}
             catch (FileNotFoundException e) {}
 
+            long elapsedTime = 0;
             try
             {
                 Files.createFile (Paths.get (jobDir, "started"));
@@ -86,7 +87,9 @@ public class InternalBackend extends Backend
 
                 simulator = new Simulator (new Wrapper (digestedModel), seed);
                 simulator.eventMode = eventMode;
+                elapsedTime = System.nanoTime ();
                 simulator.run ();  // Does not return until simulation is finished.
+                elapsedTime = System.nanoTime () - elapsedTime;
                 Files.copy (new ByteArrayInputStream ("success".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
             }
             catch (Exception e)
@@ -98,6 +101,7 @@ public class InternalBackend extends Backend
             }
 
             PrintStream e = err.get ();
+            e.println ("Execution time: " + elapsedTime / 1e9 + " seconds");
             if (e != System.err)
             {
                 e.close ();
