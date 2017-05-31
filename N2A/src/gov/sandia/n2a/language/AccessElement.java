@@ -24,12 +24,9 @@ public class AccessElement extends Function
         if (! (o instanceof ASTList)) throw new ParseException ("AST for function has unexpected form");
         ASTList l = (ASTList) o;
         int count = l.jjtGetNumChildren ();
+
         operands = new Operator[count+1];
-
-        AccessVariable av = new AccessVariable ();
-        operands[0] = av;
-        av.name = node.jjtGetValue ().toString ();
-
+        operands[0] = new AccessVariable (node.jjtGetValue ().toString ());
         for (int i = 0; i < count; i++)
         {
             operands[i+1] = Operator.getFrom ((SimpleNode) l.jjtGetChild (i));

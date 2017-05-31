@@ -209,15 +209,13 @@ public class Device
             // have a capacitance of its own, but this will allow adding a user-defined
             // current I to a synapse node.
             Variable v = inputs.get (inputNode);
-            AccessVariable av = new AccessVariable ();
-            av.reference = v.reference;
+            AccessVariable av = new AccessVariable (v.reference);
             Operator inputEq;
             if (device.getDeviceTypeName ().equals ("neuron"))
             {
                 Divide d = new Divide ();
                 d.operand0 = av;
-                av = new AccessVariable ();
-                av.reference = paramList.get (device.getCapacitanceVar ()).reference;
+                av = new AccessVariable (paramList.get (device.getCapacitanceVar ()).reference);
                 d.operand1 = av;
                 inputEq = d;
             }

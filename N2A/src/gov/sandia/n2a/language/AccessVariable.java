@@ -17,6 +17,20 @@ public class AccessVariable extends Operator
     public String name; // only needed to resolve the variable (since we will abandon the AST node)
     public VariableReference reference;  // non-null when this node has been resolved in the context of an EquationSet
 
+    public AccessVariable ()
+    {
+    }
+
+    public AccessVariable (String name)
+    {
+        this.name = name;
+    }
+
+    public AccessVariable (VariableReference reference)
+    {
+        this.reference = reference;
+    }
+
     public int getOrder ()
     {
         String temp = name;
