@@ -19,9 +19,11 @@ import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.AccessVariable;
+import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
@@ -200,7 +202,34 @@ public class Output extends Function
             variableName = v.name;
         }
 
-        if (operands.length < 2)  // We need $index to auto-generate names.
+        boolean needIndex = false;  // Do we need $index to auto-generate names?
+        if (operands.length == 1) needIndex = true;
+        else if (operands.length == 2)
+        {
+            // Determine if first parm is a file name.
+            class StringVisitor extends Visitor
+            {
+                boolean foundString;
+                public boolean visit (Operator op)
+                {
+                    if (op instanceof Constant)
+                    {
+                        Constant c = (Constant) op;
+                        if (c.value instanceof Text)
+                        {
+                            foundString = true;
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+            }
+            StringVisitor visitor = new StringVisitor ();
+            operands[0].visit (visitor);
+            needIndex = visitor.foundString;
+        }
+
+        if (needIndex)
         {
             EquationSet container = v.container;
             if (container.connectionBindings == null)  // regular part
