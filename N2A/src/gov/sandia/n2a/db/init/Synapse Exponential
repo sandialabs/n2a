@@ -6,5 +6,5 @@ G
 G'=-G/tauDecay
 tauDecay=2ms
  $metadata
-  backend.stpu.parm
+  backend.stpu.param
   public

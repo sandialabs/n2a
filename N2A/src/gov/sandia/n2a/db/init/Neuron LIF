@@ -8,4 +8,4 @@ V
  @V>=Vpeak=Vrest
 Vpeak=35mV
  $metadata
-  backend.stpu.parm=peak
+  backend.stpu.param=peak
