@@ -275,7 +275,8 @@ public class JobC
             ps.close ();
             Backend.err.remove ();
         }
-        env.submitJob (job, command);
+        long pid = env.submitJob (job, command);
+        job.set ("$metadata", "pid", pid);
     }
 
     public void generateClassList (EquationSet s, StringBuilder result)

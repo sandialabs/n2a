@@ -17,9 +17,9 @@ import java.util.TreeSet;
 public class Linux extends LocalMachineEnv
 {
     @Override
-    public Set<Integer> getActiveProcs () throws Exception
+    public Set<Long> getActiveProcs () throws Exception
     {
-        Set<Integer> result = new TreeSet<Integer> ();
+        Set<Long> result = new TreeSet<Long> ();
         String[] cmdArray = new String[] {"ps", "-eo", "pid,command"};
         Process proc = Runtime.getRuntime ().exec (cmdArray);
         try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
@@ -32,7 +32,7 @@ public class Linux extends LocalMachineEnv
                 {
                     line = line.trim ();
                     String[] parts = line.split ("\\s+");  // any amount/type of whitespace forms the delimiter
-                    result.add (new Integer (parts[0]));
+                    result.add (Long.parseLong (parts[0]));
                 }
             }
         }
@@ -40,9 +40,9 @@ public class Linux extends LocalMachineEnv
     }
 
     @Override
-    public long getProcMem (Integer procNum) throws Exception
+    public long getProcMem (long pid) throws Exception
     {
-        String[] cmdArray = new String[] {"ps", "-p", procNum.toString(), "-o", "pid,rss"};
+        String[] cmdArray = new String[] {"ps", "-p", String.valueOf (pid), "-o", "pid,rss"};
         Process proc = Runtime.getRuntime ().exec (cmdArray);
         try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
@@ -59,7 +59,7 @@ public class Linux extends LocalMachineEnv
     }
 
     @Override
-    public void submitJob (MNode job, String command) throws Exception
+    public long submitJob (MNode job, String command) throws Exception
     {
         String jobDir = new File (job.get ()).getParent ();
 
@@ -78,6 +78,14 @@ public class Linux extends LocalMachineEnv
         p = Runtime.getRuntime ().exec (commandParm);
         p.waitFor ();
         if (p.exitValue () != 0) throw new Exception ("Failed to run job:\n" + streamToString (p.getErrorStream ()));
+
+        return 0;  // TODO Get pid of newly started job
+    }
+
+    @Override
+    public void killJob (long pid) throws Exception
+    {
+        Runtime.getRuntime ().exec (new String[] {"kill", "-9", String.valueOf (pid)});
     }
 
     @Override

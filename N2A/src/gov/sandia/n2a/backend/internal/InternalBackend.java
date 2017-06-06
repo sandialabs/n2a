@@ -41,11 +41,29 @@ public class InternalBackend extends Backend
     }
 
     @Override
-    public void execute (MNode job)
+    public void start (MNode job)
     {
         Thread simulationThread = new SimulationThread (job);
         simulationThread.setDaemon (true);
         simulationThread.start ();
+    }
+
+    @Override
+    public void kill (MNode job)
+    {
+        Thread[] threads = new Thread[Thread.activeCount ()];
+        int count = Thread.enumerate (threads);
+        for (int i = 0; i < count; i++)
+        {
+            Thread t = threads[i];
+            if (t instanceof SimulationThread)
+            {
+                SimulationThread s = (SimulationThread) t;
+                if (s.job != job) continue;
+                if (s.simulator != null) s.simulator.stop = true;
+                return;
+            }
+        }
     }
 
     public class SimulationThread extends Thread
@@ -90,7 +108,8 @@ public class InternalBackend extends Backend
                 elapsedTime = System.nanoTime ();
                 simulator.run ();  // Does not return until simulation is finished.
                 elapsedTime = System.nanoTime () - elapsedTime;
-                Files.copy (new ByteArrayInputStream ("success".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
+                if (simulator.stop) Files.copy (new ByteArrayInputStream ("killed" .getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
+                else                Files.copy (new ByteArrayInputStream ("success".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
             }
             catch (Exception e)
             {
@@ -123,6 +142,7 @@ public class InternalBackend extends Backend
                 SimulationThread s = (SimulationThread) t;
                 if (s.job != job) continue;
                 if (s.simulator != null  &&  s.simulator.currentEvent != null) return s.simulator.currentEvent.t;
+                return 0;
             }
         }
         return 0;

@@ -116,7 +116,16 @@ public abstract class Backend implements ExtensionPoint
         For a local machine, start the process that actually computes the job.
         For a remote system, submit the job to whatever scheduler may exist there.
     **/
-    public void execute (MNode job)
+    public void start (MNode job)
+    {
+    }
+
+    /**
+        Make best-effort attempt to terminate run.
+        For a local machine, this could involve killing the proces.
+        For a remote machine, this could involve asking the scheduler to kill the job.
+    **/
+    public void kill (MNode job)
     {
     }
 

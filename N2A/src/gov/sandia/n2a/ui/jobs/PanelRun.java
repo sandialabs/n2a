@@ -36,6 +36,7 @@ import java.util.regex.Matcher;
 
 import javax.swing.ButtonGroup;
 import javax.swing.Icon;
+import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -61,6 +62,7 @@ public class PanelRun extends JPanel
     public JTree            tree;
     public JScrollPane      treePane;
 
+    public JButton           buttonStop;
     public ButtonGroup       buttons;
     public JComboBox<String> comboScript;
     public JTextArea         displayText;
@@ -216,27 +218,18 @@ public class PanelRun extends JPanel
 
         displayText = new JTextArea ();
         displayText.setEditable(false);
+        displayPane.setViewportView (displayText);
 
-        final JToggleButton buttonMonospace = new JToggleButton ("Monospace");
-        buttonMonospace.setFont (new Font (Font.MONOSPACED, Font.PLAIN, buttonMonospace.getFont ().getSize ()));
-        buttonMonospace.setFocusable (false);
-        buttonMonospace.addActionListener (new ActionListener()
+        buttonStop = new JButton (ImageUtil.getImage ("stop.gif"));
+        buttonStop.setMargin (new Insets (2, 2, 2, 2));
+        buttonStop.setFocusable (false);
+        buttonStop.addActionListener (new ActionListener ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                int size = displayText.getFont ().getSize ();
-                if (buttonMonospace.isSelected ())
-                {
-                    displayText.setFont (new Font (Font.MONOSPACED, Font.PLAIN, size));
-                }
-                else
-                {
-                    displayText.setFont (new Font (Font.SANS_SERIF, Font.PLAIN, size));
-                }
+                if (displayNode instanceof NodeJob) ((NodeJob) displayNode).stop ();
             }
         });
-
-        displayPane.setViewportView (displayText);
 
         ActionListener graphListener = new ActionListener ()
         {
@@ -276,6 +269,25 @@ public class PanelRun extends JPanel
         buttons.add (buttonGraph);
         buttons.add (buttonRaster);
         buttonText.setSelected (true);
+
+        final JToggleButton buttonMonospace = new JToggleButton ("Monospace");
+        buttonMonospace.setFont (new Font (Font.MONOSPACED, Font.PLAIN, buttonMonospace.getFont ().getSize ()));
+        buttonMonospace.setFocusable (false);
+        buttonMonospace.addActionListener (new ActionListener()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                int size = displayText.getFont ().getSize ();
+                if (buttonMonospace.isSelected ())
+                {
+                    displayText.setFont (new Font (Font.MONOSPACED, Font.PLAIN, size));
+                }
+                else
+                {
+                    displayText.setFont (new Font (Font.SANS_SERIF, Font.PLAIN, size));
+                }
+            }
+        });
 
         comboScript = new JComboBox<String> ();
         comboScript.setEditable (true);
@@ -339,6 +351,7 @@ public class PanelRun extends JPanel
                         "W", Lay.FL
                         (
                             "L",
+                            Lay.BL (buttonStop, "eb=20r"),
                             buttonText,
                             buttonTable,
                             buttonGraph,
@@ -521,7 +534,8 @@ public class PanelRun extends JPanel
         else if (job.complete == 0)                      contents.append (" Started");
         else if (job.complete > 0  &&  job.complete < 1) contents.append (" " + Math.round (job.complete * 100) + "%");
         else if (job.complete == 1)                      contents.append (" Success");
-        else                                             contents.append (" Failed");
+        else if (job.complete == 3)                      contents.append (" Killed");
+        else                                             contents.append (" Failed");  // complete==2, or any value not specified above
         contents.append ("\n");
         if (job.dateStarted  != null) contents.append ("  started:  " + job.dateStarted  + "\n");
         if (job.dateFinished != null) contents.append ("  finished: " + job.dateFinished + "\n");
@@ -578,7 +592,11 @@ public class PanelRun extends JPanel
                         MDoc doc = (MDoc) job.source;
                         ExecutionEnv env = ExecutionEnv.factory (doc.getOrDefault ("$metadata", "host", "localhost"));
                         String jobName = doc.key ();
-                        try {env.deleteJob (jobName);}  // TODO: Also terminate execution, if possible.
+                        try
+                        {
+                            if (job.complete < 1) job.stop ();
+                            env.deleteJob (jobName);
+                        }
                         catch (Exception e) {}
 
                         doc.delete ();

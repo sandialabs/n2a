@@ -19,13 +19,13 @@ import java.util.TreeSet;
 public class RedSkyLoginEnv extends RedSkyEnv
 {
     @Override
-    public Set<Integer> getActiveProcs () throws Exception
+    public Set<Long> getActiveProcs () throws Exception
     {
         Result r = RedSkyConnection.exec ("ps ux");
         if (r.error) throw new Exception (r.stdErr);
         BufferedReader reader = new BufferedReader (new StringReader (r.stdOut));
 
-        Set<Integer> result = new TreeSet<Integer> ();
+        Set<Long> result = new TreeSet<Long> ();
         String line;
         while ((line = reader.readLine ()) != null)
         {
@@ -33,16 +33,23 @@ public class RedSkyLoginEnv extends RedSkyEnv
             if (! line.contains ("model")) continue;
             line = line.trim ();
             String[] parts = line.split ("\\s+");  // any amount/type of whitespace forms the delimiter
-            result.add (new Integer (parts[1]));  // pid is second column
+            result.add (new Long (parts[1]));  // pid is second column
         }
         return result;
     }
 
     @Override
-    public void submitJob (MNode job, String command) throws Exception
+    public long submitJob (MNode job, String command) throws Exception
     {
         String jobDir = job.get ("$metadata", "remote.dir");  // Of course, this is a dir this class generated for the job.
         RedSkyConnection.exec (command + " > '" + jobDir + "/out' 2> '" + jobDir + "/err' &", true);
+        return 0;  // TODO: get id of newly started job
+    }
+
+    @Override
+    public void killJob (long pid) throws Exception
+    {
+        RedSkyConnection.exec ("kill -9 " + pid);
     }
 
     public String getNamedValue (String name, String defaultValue)
@@ -52,8 +59,9 @@ public class RedSkyLoginEnv extends RedSkyEnv
     }
 
 	@Override
-	public long getProcMem(Integer procNum) {
-		// TODO Auto-generated method stub
+	public long getProcMem (long pid)
+	{
+	    // TODO: measure process memory usage
 		return 0;
 	}
 }

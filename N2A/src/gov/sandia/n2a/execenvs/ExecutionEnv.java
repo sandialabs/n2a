@@ -67,8 +67,8 @@ public abstract class ExecutionEnv
         * downloading remote files belongs in a P2P protocol
     */
 
-    public abstract Set<Integer> getActiveProcs    ()                                  throws Exception;
-    public abstract long         getProcMem        (Integer procNum)                   throws Exception;
+    public abstract Set<Long>    getActiveProcs    ()                                  throws Exception;
+    public abstract long         getProcMem        (long pid)                          throws Exception;
     public abstract AllJobInfo   getJobs           ()                                  throws Exception;
     public abstract String       createJobDir      ()                                  throws Exception;
     public abstract void         createDir         (String path)                       throws Exception;
@@ -84,7 +84,8 @@ public abstract class ExecutionEnv
      * Sets up piping of the program's stdout and stderr to files "out" and "err" respectively.
      * If a file called "in" exists in the jobDir, then pipes it into the program.
      */
-    public abstract void         submitJob         (MNode job, String command)         throws Exception;
+    public abstract long         submitJob         (MNode job, String command)         throws Exception;
+    public abstract void         killJob           (long pid)                          throws Exception;
     public abstract void         setFileContents   (String path, String content)       throws Exception;
     public abstract String       getFileContents   (String path)                       throws Exception;
     public abstract void         deleteJob         (String jobName)                    throws Exception;

@@ -830,7 +830,7 @@ public class PanelEquationTree extends JPanel
                 {
                     try
                     {
-                        simulator.execute (job);
+                        simulator.start (job);
                     }
                     catch (Exception e)
                     {

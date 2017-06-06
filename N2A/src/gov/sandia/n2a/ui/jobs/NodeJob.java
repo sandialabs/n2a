@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2016 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -34,9 +34,10 @@ public class NodeJob extends NodeBase
     protected static ImageIcon iconComplete = ImageUtil.getImage ("complete.gif");
     protected static ImageIcon iconUnknown  = ImageUtil.getImage ("help.gif");
     protected static ImageIcon iconFailed   = ImageUtil.getImage ("remove.gif");
+    protected static ImageIcon iconStopped  = ImageUtil.getImage ("stop.gif");
 
     protected MNode source;
-    protected float complete = -1;  // A number between 0 and 1, where 0 means just started, and 1 means done. -1 means unknown. 2 means failed
+    protected float complete = -1;  // A number between 0 and 1, where 0 means just started, and 1 means done. -1 means unknown. 2 means failed. 3 means terminated.
     protected Date dateStarted = null;
     protected Date dateFinished = null;
     protected double expectedSimTime = 0;  // If greater than 0, then we can use this to estimate percent complete.
@@ -59,6 +60,7 @@ public class NodeJob extends NodeBase
         if (complete == -1) return iconUnknown;
         if (complete ==  1) return iconComplete;
         if (complete ==  2) return iconFailed;
+        if (complete ==  3) return iconStopped;
 
         // Create an icon on the fly which represents percent complete as a pie-chart
         BufferedImage inProgress = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
@@ -102,10 +104,11 @@ public class NodeJob extends NodeBase
                 }
                 catch (IOException e) {}
 
-                if (line.length () >= 7  ||  Duration.between (dateFinished.toInstant (), Instant.now ()).abs ().getSeconds () > 10)
+                if (line.length () >= 6  ||  Duration.between (dateFinished.toInstant (), Instant.now ()).abs ().getSeconds () > 10)
                 {
-                    if (line.equals ("success")) complete = 1;
-                    else                         complete = 2;
+                    if      (line.equals ("success")) complete = 1;
+                    else if (line.equals ("killed" )) complete = 3;
+                    else                              complete = 2;
                 }
             }
         }
@@ -133,6 +136,11 @@ public class NodeJob extends NodeBase
                 }
             });
         }
+    }
+
+    public void stop ()
+    {
+        Backend.getBackend (source.get ("$metadata", "backend")).kill (source);
     }
 
     public void build (JTree tree)

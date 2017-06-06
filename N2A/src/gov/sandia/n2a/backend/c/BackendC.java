@@ -6,14 +6,18 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.backend.c;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 import gov.sandia.n2a.backend.internal.InternalBackend;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.EquationSet;
+import gov.sandia.n2a.execenvs.ExecutionEnv;
 import gov.sandia.n2a.parms.Parameter;
 import gov.sandia.n2a.parms.ParameterDomain;
 import gov.sandia.n2a.plugins.extpoints.Backend;
@@ -53,7 +57,7 @@ public class BackendC extends Backend
     }
 
     @Override
-    public void execute (final MNode job)
+    public void start (final MNode job)
     {
         Thread t = new Thread ("BackendC.execute")
         {
@@ -82,6 +86,22 @@ public class BackendC extends Backend
         };
         t.setDaemon (true);
         t.start ();
+    }
+
+    @Override
+    public void kill (MNode job)
+    {
+        long pid = job.getOrDefaultLong ("$metadata", "pid", "0");
+        if (pid != 0)
+        {
+            try
+            {
+                ExecutionEnv.factory (job.getOrDefault ("$metadata", "host", "localhost")).killJob (pid);
+                String jobDir = new File (job.get ()).getParent ();
+                Files.copy (new ByteArrayInputStream ("killed".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
+            }
+            catch (Exception e) {}
+        }
     }
 
     @Override

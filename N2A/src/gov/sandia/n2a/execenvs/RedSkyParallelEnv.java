@@ -18,25 +18,25 @@ import java.util.TreeSet;
 public class RedSkyParallelEnv extends RedSkyEnv
 {
     @Override
-    public Set<Integer> getActiveProcs() throws Exception
+    public Set<Long> getActiveProcs() throws Exception
     {
         Result r = RedSkyConnection.exec ("squeue -o \"%u %i\" -u " + System.getProperty ("user.name"));
         if (r.error && r.stdErr != null && !r.stdErr.equals (""))
         {
             throw new Exception (r.stdErr);
         }
-        Set<Integer> result = new TreeSet<Integer> ();
+        Set<Long> result = new TreeSet<Long> ();
         BufferedReader reader = new BufferedReader (new StringReader (r.stdOut));
         String line;
         while((line = reader.readLine ()) != null)
         {
-            result.add (new Integer (line.substring (line.indexOf (" ") + 1)));
+            result.add (new Long (line.substring (line.indexOf (" ") + 1)));
         }
         return result;
     }
 
     @Override
-    public void submitJob (MNode job, String command) throws Exception
+    public long submitJob (MNode job, String command) throws Exception
     {
         String jobDir = job.get          ("$metadata", "remote.dir");
         String cores  = job.getOrDefault ("$metadata", "cores",        "1");
@@ -63,10 +63,27 @@ public class RedSkyParallelEnv extends RedSkyEnv
         );
         if (r.error) throw new Exception ("Could not start process: " + r.stdErr);
 
-        // Part of the output of an sbatch launch is the job #.  This could be used
-        // to track the job directly.  Example output:
+        // Example output:
         //   Using wcid "FY139768"  found on CLI.
         //   Submitted batch job 10979768
+        BufferedReader reader = new BufferedReader (new StringReader (r.stdOut));
+        while (reader.ready ())
+        {
+            String line = reader.readLine ();
+            String[] parts = line.split ("job", 2);
+            if (parts.length == 2)
+            {
+                return Long.parseLong (parts[1].trim ());
+            }
+        }
+
+        return 0;
+    }
+
+    @Override
+    public void killJob (long pid) throws Exception
+    {
+        RedSkyConnection.exec ("scancel " + pid);
     }
 
     public String getNamedValue (String name, String defaultValue)
@@ -76,8 +93,9 @@ public class RedSkyParallelEnv extends RedSkyEnv
     }
 
 	@Override
-	public long getProcMem(Integer procNum) {
-		// TODO Auto-generated method stub
+	public long getProcMem (long pid)
+	{
+		// TODO Get process memory usage
 		return 0;
 	}
 }

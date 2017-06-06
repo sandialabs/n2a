@@ -55,6 +55,7 @@ public class Simulator implements Iterable<Part>
     public int eventMode = DURING;
 
     public Event currentEvent;
+    public boolean stop;  // Flag to terminate event loop as soon as possible
 
     public class ResizeRequest
     {
@@ -118,7 +119,7 @@ public class Simulator implements Iterable<Part>
     public void run ()
     {
         // This is the core simulation loop.
-        while (! eventQueue.isEmpty ())
+        while (! eventQueue.isEmpty ()  &&  ! stop)
         {
             currentEvent = eventQueue.remove ();
             currentEvent.run (this);

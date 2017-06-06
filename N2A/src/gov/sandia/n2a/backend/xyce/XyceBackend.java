@@ -27,6 +27,7 @@ import gov.sandia.n2a.parms.Parameter;
 import gov.sandia.n2a.parms.ParameterDomain;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -88,7 +89,7 @@ class XyceBackend extends Backend
         // if there are already xyce sims running, use them to estimate needs
         // if not, assume we have space for one
         try {
-            Set<Integer> procs = execEnv.getActiveProcs();
+            Set<Long> procs = execEnv.getActiveProcs();
             int numRunning = procs.size();
             if (numRunning == 0) {
                 System.out.println("resourcesAvailable:  numRunning=0");
@@ -110,7 +111,7 @@ class XyceBackend extends Backend
             // Instead, ask system for memory usage per proc
             // TODO - use this approach for CPU usage also?
             long maxMem = -1;
-            for (Integer procNum : procs) {
+            for (Long procNum : procs) {
                 long procMem = execEnv.getProcMem(procNum);
                 if (procMem>maxMem) {
                     maxMem = procMem;
@@ -140,7 +141,7 @@ class XyceBackend extends Backend
     }
 
     @Override
-    public void execute (final MNode job)
+    public void start (final MNode job)
     {
         Thread t = new Thread ()
         {
@@ -184,7 +185,8 @@ class XyceBackend extends Backend
                         ps.close ();
                         Backend.err.remove ();
                     }
-                    env.submitJob (job, xyce + " " + env.quotePath (cirFile) + " -o " + env.quotePath (prnFile));
+                    long pid = env.submitJob (job, xyce + " " + env.quotePath (cirFile) + " -o " + env.quotePath (prnFile));
+                    job.set ("$metadata", "pid", pid);
                 }
                 catch (AbortRun a)
                 {
@@ -200,6 +202,22 @@ class XyceBackend extends Backend
         };
         t.setDaemon (true);
         t.start ();
+    }
+
+    @Override
+    public void kill (MNode job)
+    {
+        long pid = job.getOrDefaultLong ("$metadata", "pid", "0");
+        if (pid != 0)
+        {
+            try
+            {
+                ExecutionEnv.factory (job.getOrDefault ("$metadata", "host", "localhost")).killJob (pid);
+                String jobDir = new File (job.get ()).getParent ();
+                Files.copy (new ByteArrayInputStream ("killed".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
+            }
+            catch (Exception e) {}
+        }
     }
 
     @Override
