@@ -223,6 +223,7 @@ public class PanelRun extends JPanel
         buttonStop = new JButton (ImageUtil.getImage ("stop.gif"));
         buttonStop.setMargin (new Insets (2, 2, 2, 2));
         buttonStop.setFocusable (false);
+        buttonStop.setToolTipText ("Kill Job");
         buttonStop.addActionListener (new ActionListener ()
         {
             public void actionPerformed (ActionEvent e)
@@ -242,24 +243,28 @@ public class PanelRun extends JPanel
         JToggleButton buttonText = new JToggleButton (ImageUtil.getImage ("document.png"));
         buttonText.setMargin (new Insets (2, 2, 2, 2));
         buttonText.setFocusable (false);
+        buttonText.setToolTipText ("Display Text");
         buttonText.addActionListener (graphListener);
         buttonText.setActionCommand ("Text");
 
         JToggleButton buttonTable = new JToggleButton (ImageUtil.getImage ("properties.gif"));
         buttonTable.setMargin (new Insets (2, 2, 2, 2));
         buttonTable.setFocusable (false);
+        buttonTable.setToolTipText ("Display Table");
         buttonTable.addActionListener (graphListener);
         buttonTable.setActionCommand ("Table");
 
         JToggleButton buttonGraph = new JToggleButton (ImageUtil.getImage ("analysis.gif"));
         buttonGraph.setMargin (new Insets (2, 2, 2, 2));
         buttonGraph.setFocusable (false);
+        buttonGraph.setToolTipText ("Display Graph");
         buttonGraph.addActionListener (graphListener);
         buttonGraph.setActionCommand ("Graph");
 
         JToggleButton buttonRaster = new JToggleButton (ImageUtil.getImage ("raster.png"));
         buttonRaster.setMargin (new Insets (2, 2, 2, 2));
         buttonRaster.setFocusable (false);
+        buttonRaster.setToolTipText ("Display Spike Raster");
         buttonRaster.addActionListener (graphListener);
         buttonRaster.setActionCommand ("Raster");
 
@@ -273,6 +278,7 @@ public class PanelRun extends JPanel
         final JToggleButton buttonMonospace = new JToggleButton ("Monospace");
         buttonMonospace.setFont (new Font (Font.MONOSPACED, Font.PLAIN, buttonMonospace.getFont ().getSize ()));
         buttonMonospace.setFocusable (false);
+        buttonMonospace.setToolTipText ("Use Fixed-Width Font");
         buttonMonospace.addActionListener (new ActionListener()
         {
             public void actionPerformed (ActionEvent e)
@@ -291,6 +297,7 @@ public class PanelRun extends JPanel
 
         comboScript = new JComboBox<String> ();
         comboScript.setEditable (true);
+        comboScript.setToolTipText ("Run Script");
         comboScript.addActionListener (new ActionListener ()
         {
             public void actionPerformed (ActionEvent e)
