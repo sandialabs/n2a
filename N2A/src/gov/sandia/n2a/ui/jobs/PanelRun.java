@@ -52,6 +52,7 @@ import javax.swing.event.TreeWillExpandListener;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.ExpandVetoException;
+import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 import javax.swing.tree.TreeSelectionModel;
 
@@ -228,7 +229,18 @@ public class PanelRun extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                if (displayNode instanceof NodeJob) ((NodeJob) displayNode).stop ();
+                if (displayNode == null) return;
+                NodeJob killNode = null;
+                if (displayNode instanceof NodeJob)
+                {
+                    killNode = (NodeJob) displayNode;
+                }
+                else
+                {
+                    TreeNode parent = displayNode.getParent ();
+                    if (parent instanceof NodeJob) killNode = (NodeJob) parent;
+                }
+                if (killNode != null) killNode.stop ();
             }
         });
 
