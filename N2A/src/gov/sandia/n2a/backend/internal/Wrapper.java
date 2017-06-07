@@ -42,11 +42,6 @@ public class Wrapper extends Part
     public boolean finish (Simulator simulator)
     {
         populations[0].finish (simulator);
-        boolean result = ((PopulationCompartment) populations[0]).n > 0;
-        if (result)  // only trace if sim is still running
-        {
-            for (Entry<String,Output.Holder> h : simulator.outputs.entrySet ()) h.getValue ().writeTrace ();
-        }
-        return result;
+        return ((PopulationCompartment) populations[0]).n > 0;
     }
 }

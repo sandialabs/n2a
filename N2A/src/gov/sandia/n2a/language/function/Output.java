@@ -64,10 +64,20 @@ public class Output extends Function
 
         public void trace (String column, float value)
         {
-            if (columnValues.isEmpty ())  // slip $t into first column 
+            if (! traceReceived)  // First trace for this cycle
             {
-                columnMap.put ("$t", 0);
-                columnValues.add ((float) simulator.currentEvent.t);
+                float t;
+                if (simulator.currentEvent == null) t = 0;
+                else                                t = (float) simulator.currentEvent.t;
+                if (columnValues.isEmpty ())  // slip $t into first column 
+                {
+                    columnMap.put ("$t", 0);
+                    columnValues.add (t);
+                }
+                else
+                {
+                    columnValues.set (0, t);
+                }
             }
 
             Integer index = columnMap.get (column);
@@ -115,20 +125,14 @@ public class Output extends Function
             }
 
             // Write values
-            if (count > 0)
+            for (int i = 0; i <= last; i++)
             {
-                // $t is guaranteed to be column 0, and furthermore, we are still within the current event that generated these column values
-                columnValues.set (0, (float) simulator.currentEvent.t);
-
-                for (int i = 0; i <= last; i++)
-                {
-                    Float c = columnValues.get (i);
-                    if (! c.isNaN ()) out.print (c);
-                    if (i < last) out.print ("\t");
-                    columnValues.set (i, Float.NaN);
-                }
-                out.println ();
+                Float c = columnValues.get (i);
+                if (! c.isNaN ()) out.print (c);
+                if (i < last) out.print ("\t");
+                columnValues.set (i, Float.NaN);
             }
+            out.println ();
 
             traceReceived = false;
         }

@@ -90,8 +90,7 @@ public class Simulator implements Iterable<Part>
 
         currentEvent = e;
         wrapper.init (this);
-        for (PopulationConnection p : connectQueue) p.connect (this);
-        connectQueue.clear ();
+        updatePopulations ();
 
         if (e.head.next != e.head)  // if event is not empty (that is, if model did not move itself to a different period)
         {
@@ -121,6 +120,9 @@ public class Simulator implements Iterable<Part>
         // This is the core simulation loop.
         while (! eventQueue.isEmpty ()  &&  ! stop)
         {
+            // By putting trace at the top of this loop, we prevent output from the final cycle.
+            // This is usually an extra cycle to finish tear-down, so we don't want to see its output.
+            for (Entry<String,Output.Holder> h : outputs.entrySet ()) h.getValue ().writeTrace ();
             currentEvent = eventQueue.remove ();
             currentEvent.run (this);
         }
@@ -146,10 +148,7 @@ public class Simulator implements Iterable<Part>
     public void updatePopulations ()
     {
         // Resize populations that have requested it
-        for (ResizeRequest r : resizeQueue)
-        {
-            r.compartment.resize (this, r.size);
-        }
+        for (ResizeRequest r : resizeQueue) r.compartment.resize (this, r.size);
         resizeQueue.clear ();
 
         // Evaluate connection populations that have requested it

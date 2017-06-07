@@ -227,7 +227,7 @@ public class Part extends Instance
                 for (Instance i : monitors)
                 {
                     double delay = eventType.test (i, simulator);
-                    if (delay == -2) continue;  // the trigger condition was not satisfied 
+                    if (delay == -2) continue;  // the trigger condition was not satisfied
                     EventSpikeSingle spike;
                     if (delay < 0)  // event was triggered, but timing is no-care
                     {
