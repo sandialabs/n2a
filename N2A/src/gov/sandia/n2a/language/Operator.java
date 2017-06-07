@@ -15,6 +15,8 @@ import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Grid;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Log;
+import gov.sandia.n2a.language.function.Max;
+import gov.sandia.n2a.language.function.Min;
 import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.Pulse;
 import gov.sandia.n2a.language.function.ReadMatrix;
@@ -199,6 +201,8 @@ public class Operator implements Cloneable, Comparable<Operator>
         register (Grid         .factory ());
         register (Input        .factory ());
         register (Log          .factory ());
+        register (Max          .factory ());
+        register (Min          .factory ());
         register (Norm         .factory ());
         register (Pulse        .factory ());
         register (ReadMatrix   .factory ());

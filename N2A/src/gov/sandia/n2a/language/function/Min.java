@@ -6,12 +6,10 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.function;
 
-import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
-import gov.sandia.n2a.language.type.Scalar;
 
 public class Min extends Function
 {
@@ -35,11 +33,7 @@ public class Min extends Function
     {
         Type arg0 = operands[0].eval (context);
         Type arg1 = operands[1].eval (context);
-        if (arg0 instanceof Scalar  &&  arg1 instanceof Scalar)
-        {
-            return new Scalar (Math.min (((Scalar) arg0).value, ((Scalar) arg1).value));
-        }
-        throw new EvaluationException ("type mismatch");
+        return arg0.min (arg1);
     }
 
     public String toString ()
