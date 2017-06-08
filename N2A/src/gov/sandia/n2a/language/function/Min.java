@@ -31,9 +31,9 @@ public class Min extends Function
 
     public Type eval (Instance context)
     {
-        Type arg0 = operands[0].eval (context);
-        Type arg1 = operands[1].eval (context);
-        return arg0.min (arg1);
+        Type result = operands[0].eval (context);
+        for (int i = 1; i < operands.length; i++) result = result.min (operands[i].eval (context));
+        return result;
     }
 
     public String toString ()
