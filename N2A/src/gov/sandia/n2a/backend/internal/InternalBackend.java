@@ -239,6 +239,7 @@ public class InternalBackend extends Backend
         // We don't really need the "simulator" attribute, because it has no impact on the behavior of Internal
         e.makeConstantDtInitOnly ();
         e.findInitOnly ();
+        e.purgeInitOnlyTemporary ();
         e.findDeath ();
         e.setAttributesLive ();
         e.forceTemporaryStorageForSpecials ();

@@ -1776,7 +1776,6 @@ public class EquationSet implements Comparable<EquationSet>
     public void findInitOnly ()
     {
         while (findInitOnlyRecursive ()) {}
-        purgeInitOnlyTemporary ();
     }
 
     public static class ReplaceInit extends Transformer
