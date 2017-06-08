@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2016 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -55,28 +55,36 @@ public class Output extends Function
 
     public static class Holder
     {
-        public Map<String,Integer> columnMap       = new HashMap<String,Integer> ();  ///< Maps from column name to column position.
-        public List<Float>         columnValues    = new ArrayList<Float> ();         ///< Holds current value for each column.
-        public int                 columnsPrevious = 0;                               ///< Number of columns written in previous cycle.
-        public boolean             traceReceived   = false;                           ///< Indicates that at least one column was touched during the current cycle.
+        public Map<String,Integer> columnMap    = new HashMap<String,Integer> ();  ///< Maps from column name to column position.
+        public List<Float>         columnValues = new ArrayList<Float> ();         ///< Holds current value for each column.
+        public int                 columnsPrevious;                                ///< Number of columns written in previous cycle.
+        public boolean             traceReceived;                                  ///< Indicates that at least one column was touched during the current cycle.
+        public double              t;
         public PrintStream         out;
-        public Simulator           simulator;  ///< So we can get current time
+        public Simulator           simulator;  ///< So we can get time associated with each trace() call.
 
         public void trace (String column, float value)
         {
+            // Detect when time changes and dump any previously traced values.
+            double now;
+            if (simulator.currentEvent == null) now = 0;
+            else                                now = (float) simulator.currentEvent.t;
+            if (now > t)
+            {
+                writeTrace ();
+                t = now;
+            }
+
             if (! traceReceived)  // First trace for this cycle
             {
-                float t;
-                if (simulator.currentEvent == null) t = 0;
-                else                                t = (float) simulator.currentEvent.t;
                 if (columnValues.isEmpty ())  // slip $t into first column 
                 {
                     columnMap.put ("$t", 0);
-                    columnValues.add (t);
+                    columnValues.add ((float) t);
                 }
                 else
                 {
-                    columnValues.set (0, t);
+                    columnValues.set (0, (float) t);
                 }
             }
 

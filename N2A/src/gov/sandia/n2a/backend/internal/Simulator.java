@@ -120,9 +120,6 @@ public class Simulator implements Iterable<Part>
         // This is the core simulation loop.
         while (! eventQueue.isEmpty ()  &&  ! stop)
         {
-            // By putting trace at the top of this loop, we prevent output from the final cycle.
-            // This is usually an extra cycle to finish tear-down, so we don't want to see its output.
-            for (Entry<String,Output.Holder> h : outputs.entrySet ()) h.getValue ().writeTrace ();
             currentEvent = eventQueue.remove ();
             currentEvent.run (this);
         }
@@ -134,9 +131,11 @@ public class Simulator implements Iterable<Part>
             try {h.getValue ().stream.close ();}
             catch (IOException e) {}
         }
-        for (Entry<String,Output.Holder> h : outputs.entrySet ())
+        for (Entry<String,Output.Holder> e : outputs.entrySet ())
         {
-            h.getValue ().out.close ();
+            Output.Holder h = e.getValue ();
+            h.writeTrace ();
+            h.out.close ();
         }
     }
 
