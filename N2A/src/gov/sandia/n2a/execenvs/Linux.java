@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -79,7 +79,23 @@ public class Linux extends LocalMachineEnv
         p.waitFor ();
         if (p.exitValue () != 0) throw new Exception ("Failed to run job:\n" + streamToString (p.getErrorStream ()));
 
-        return 0;  // TODO Get pid of newly started job
+        // Get PID of newly created job
+        // A command line containing the path to the job dir should uniquely identify the correct process.
+        Process proc = Runtime.getRuntime ().exec (new String[] {"ps", "-ewwo", "pid,command"});
+        try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+        {
+            String line;
+            while ((line = reader.readLine ()) != null)
+            {
+                if (line.contains (jobDir))
+                {
+                    line = line.trim ();
+                    String[] parts = line.split ("\\s+");  // any amount/type of whitespace forms the delimiter
+                    return Long.parseLong (parts[0]);
+                }
+            }
+        }
+        return 0;
     }
 
     @Override

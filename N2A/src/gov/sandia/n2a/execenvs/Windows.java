@@ -55,7 +55,22 @@ public class Windows extends LocalMachineEnv
         p.waitFor ();
         if (p.exitValue () != 0) throw new Exception ("Failed to run job:\n" + streamToString (p.getErrorStream ()));
 
-        return 0;  // TODO: Get PID of newly started job
+        // Get PID of newly-started job
+        Process proc = Runtime.getRuntime ().exec (new String[] {"tasklist", "/v", "/fo", "table"});  // TODO: might be safer to use CSV format instead
+        try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+        {
+            String line;
+            while ((line = reader.readLine ()) != null)
+            {
+                line = line.toLowerCase ();
+                if (line.contains (jobDir))
+                {
+                    String[] parts = line.split ("\\s+");
+                    return Long.parseLong (parts[1]);
+                }
+            }
+        }
+        return 0;
     }
 
     @Override

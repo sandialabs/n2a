@@ -1,5 +1,5 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -43,7 +43,19 @@ public class RedSkyLoginEnv extends RedSkyEnv
     {
         String jobDir = job.get ("$metadata", "remote.dir");  // Of course, this is a dir this class generated for the job.
         RedSkyConnection.exec (command + " > '" + jobDir + "/out' 2> '" + jobDir + "/err' &", true);
-        return 0;  // TODO: get id of newly started job
+
+        // Get PID of newly-created job
+        Result r = RedSkyConnection.exec ("ps -ewwo pid,command");
+        if (r.error) return 0;
+        BufferedReader reader = new BufferedReader (new StringReader (r.stdOut));
+        String line;
+        while ((line = reader.readLine ()) != null)
+        {
+            line = line.trim ();
+            String[] parts = line.split ("\\s+");  // any amount/type of whitespace forms the delimiter
+            return Long.parseLong (parts[0]);
+        }
+        return 0;
     }
 
     @Override
