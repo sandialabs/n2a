@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2016,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -17,6 +17,7 @@ import gov.sandia.n2a.ui.SafeTextTransferHandler;
 import gov.sandia.n2a.ui.eq.PanelEquationTree.TransferableNode;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
 import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
+
 import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.datatransfer.DataFlavor;
@@ -48,13 +49,13 @@ import javax.swing.KeyStroke;
 import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
 import javax.swing.TransferHandler;
+import javax.swing.UIManager;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultHighlighter;
 import javax.swing.text.Highlighter;
-import sun.swing.DefaultLookup;
 
 public class PanelSearch extends JPanel
 {
@@ -62,13 +63,14 @@ public class PanelSearch extends JPanel
     public JList<Holder>            list;
     public DefaultListModel<Holder> model;
     public int                      lastSelection = -1;
+    public MNodeRenderer            renderer = new MNodeRenderer ();
 
     public PanelSearch ()
     {
         list = new JList<Holder> (model = new DefaultListModel<Holder> ());
         list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
         list.setDragEnabled (true);
-        list.setCellRenderer (new MNodeRenderer ());
+        list.setCellRenderer (renderer);
 
         InputMap inputMap = list.getInputMap ();
         inputMap.put (KeyStroke.getKeyStroke ("INSERT"),     "add");
@@ -105,7 +107,8 @@ public class PanelSearch extends JPanel
         {
             public void mouseClicked (MouseEvent e)
             {
-                selectCurrent ();
+                int clicks = e.getClickCount ();
+                if (clicks > 1) selectCurrent ();
             }
         });
 
@@ -315,6 +318,12 @@ public class PanelSearch extends JPanel
         return index;
     }
 
+    public void updateUI ()
+    {
+        super.updateUI ();
+        if (renderer != null) renderer.updateUI ();
+    }
+
     /**
         Indirect access to MDoc, because something calls toString(), which loads and returns the entire document.
     **/
@@ -380,7 +389,7 @@ public class PanelSearch extends JPanel
 
         public MNodeRenderer ()
         {
-            painter = new DefaultHighlighter.DefaultHighlightPainter (DefaultLookup.getColor (this, ui, "List.selectionBackground"));
+            painter = new DefaultHighlighter.DefaultHighlightPainter (UIManager.getColor ("List.selectionBackground"));
             setBorder (new EmptyBorder (0, 0, 0, 0));
         }
 
@@ -404,6 +413,12 @@ public class PanelSearch extends JPanel
             }
 
             return this;
+        }
+
+        public void updateUI ()
+        {
+            super.updateUI ();
+            painter = new DefaultHighlighter.DefaultHighlightPainter (UIManager.getColor ("List.selectionBackground"));
         }
     }
 }
