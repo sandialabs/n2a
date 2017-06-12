@@ -26,7 +26,6 @@ public class Wrapper extends Part
     public void init (Simulator simulator)
     {
         populations[0].init (simulator);
-        for (Entry<String,Output.Holder> h : simulator.outputs.entrySet ()) h.getValue ().writeTrace ();
     }
 
     public void integrate (Simulator simulator)
