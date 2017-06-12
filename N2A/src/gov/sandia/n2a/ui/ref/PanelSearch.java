@@ -15,6 +15,7 @@ import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.SafeTextTransferHandler;
 import gov.sandia.n2a.ui.ref.undo.AddEntry;
 import gov.sandia.n2a.ui.ref.undo.DeleteEntry;
+
 import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.datatransfer.DataFlavor;
@@ -46,6 +47,7 @@ import javax.swing.KeyStroke;
 import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
 import javax.swing.TransferHandler;
+import javax.swing.UIManager;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -61,13 +63,14 @@ public class PanelSearch extends JPanel
     public JList<MNode>            list;
     public DefaultListModel<MNode> model;
     public int                     lastSelection = -1;
+    public MNodeRenderer           renderer = new MNodeRenderer ();
 
     public PanelSearch ()
     {
         list = new JList<MNode> (model = new DefaultListModel<MNode> ());
         list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
         list.setDragEnabled (true);
-        list.setCellRenderer (new MNodeRenderer ());
+        list.setCellRenderer (renderer);
 
         InputMap inputMap = list.getInputMap ();
         inputMap.put (KeyStroke.getKeyStroke ("INSERT"),     "add");
@@ -104,7 +107,7 @@ public class PanelSearch extends JPanel
         {
             public void mouseClicked (MouseEvent e)
             {
-                selectCurrent ();
+                if (e.getClickCount () > 1) selectCurrent ();
             }
         });
 
@@ -301,6 +304,12 @@ public class PanelSearch extends JPanel
         return index;
     }
 
+    public void updateUI ()
+    {
+        super.updateUI ();
+        if (renderer != null) renderer.updateUI ();
+    }
+
     // Retrieve records matching the filter text, and deliver them to the model.
     public class SearchThread extends Thread
     {
@@ -341,7 +350,7 @@ public class PanelSearch extends JPanel
 
         public MNodeRenderer ()
         {
-            painter = new DefaultHighlighter.DefaultHighlightPainter (DefaultLookup.getColor (this, ui, "List.selectionBackground"));
+            painter = new DefaultHighlighter.DefaultHighlightPainter (UIManager.getColor ("List.selectionBackground"));
             setBorder (new EmptyBorder (0, 0, 0, 0));
         }
 
@@ -365,6 +374,12 @@ public class PanelSearch extends JPanel
             }
 
             return this;
+        }
+
+        public void updateUI ()
+        {
+            super.updateUI ();
+            painter = new DefaultHighlighter.DefaultHighlightPainter (UIManager.getColor ("List.selectionBackground"));
         }
     }
 }

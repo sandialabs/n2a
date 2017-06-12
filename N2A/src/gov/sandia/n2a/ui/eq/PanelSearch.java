@@ -107,8 +107,7 @@ public class PanelSearch extends JPanel
         {
             public void mouseClicked (MouseEvent e)
             {
-                int clicks = e.getClickCount ();
-                if (clicks > 1) selectCurrent ();
+                if (e.getClickCount () > 1) selectCurrent ();
             }
         });
 
