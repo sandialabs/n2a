@@ -249,9 +249,10 @@ public class InternalBackendData
                     if (after == 0  ||  before != 0) return -2;
             }
 
-            if (delay >= -1) return delay;
+            if (delay >= -1) return delay;  // constant delay, which is either -1 (no care), 0 or greater
+            // otherwise, evaluate delay
             double result = ((Scalar) event.operands[1].eval (temp)).value;
-            if (result < 0) result = -1;
+            if (result < 0) return -1;  // force any negative value to be exactly -1 (no care)
             return result;
         }
 
@@ -266,7 +267,9 @@ public class InternalBackendData
                 Type result = v.eval (temp);
                 if (result != null  &&  v.writeIndex >= 0) temp.set (v, result);
             }
-            return ((Scalar) event.operands[1].eval (temp)).value;
+            double result = ((Scalar) event.operands[1].eval (temp)).value;
+            if (result < 0) return -1;
+            return result;
         }
 
         public boolean equals (Object that)
@@ -478,8 +481,8 @@ public class InternalBackendData
                                     {
                                         AccessVariable av = (AccessVariable) op;
                                         EquationSet container = av.reference.variable.container;
-                                        uniqueContainers.add (container);  // we could add the target part as one of the containers, if in fact we use local variables in the trigger expression
-                                        if (container != s  &&  ! et.sources.containsKey (container))  // external reference, so we need to plug a monitor into the other part
+                                        uniqueContainers.add (container);  // could include the target part itself, if in fact we use local variables in the event parameters
+                                        if (container != s  &&  ! et.sources.containsKey (container))  // external reference, so we need to plug a monitor into the other part. TODO: Create monitor for local-only event?
                                         {
                                             InternalBackendData containerBed = (InternalBackendData) container.backendData;
                                             EventSource es = new EventSource ();
@@ -496,11 +499,13 @@ public class InternalBackendData
                                 }
                             }
                             ReferenceVisitor rv = new ReferenceVisitor ();
-                            de.operands[0].visit (rv);
-                            // If all the variables used by the trigger expression are within the same source
+                            de.visit (rv);
+                            // If all the variables used by the event expression are within the same source
                             // part, then the answer will be the same for all registered target parts. However,
                             // if any of the variables belong to a different source part or to the target part
                             // itself, then the answer could vary, and every target must be tested separately.
+                            // If the trigger expression only references self, then there will only be one
+                            // monitor to test.
                             if (rv.uniqueContainers.size () > 1) et.testAll = true;
                         }
                     }
