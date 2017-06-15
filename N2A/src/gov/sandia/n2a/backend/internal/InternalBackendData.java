@@ -237,6 +237,15 @@ public class InternalBackendData
             {
                 case NONZERO:
                     if (after == 0) return -2;
+                    // Guard against multiple events in a given cycle.
+                    // Note that other trigger types don't need this because they set the auxiliary variable,
+                    // so the next test in the same cycle will no longer see change.
+                    if (timeIndex >= 0)
+                    {
+                        float moduloTime = (float) Math.IEEEremainder (simulator.currentEvent.t, 1);  // Wrap time at 1 second, to fit in float precision.
+                        if (targetPart.valuesFloat[timeIndex] == moduloTime) return -2;
+                        targetPart.valuesFloat[timeIndex] = moduloTime;
+                    }
                     break;
                 case CHANGE:
                     if (before == after) return -2;
@@ -247,13 +256,6 @@ public class InternalBackendData
                 case RISE:
                 default:
                     if (after == 0  ||  before != 0) return -2;
-            }
-
-            if (timeIndex >= 0)  // Guard against multiple events in a given cycle.
-            {
-                float moduloTime = (float) Math.IEEEremainder (simulator.currentEvent.t, 1);  // Wrap time at 1 second, to fit in float precision.
-                if (targetPart.valuesFloat[timeIndex] == moduloTime) return -2;
-                targetPart.valuesFloat[timeIndex] = moduloTime;
             }
 
             if (delay >= -1) return delay;  // constant delay, which is either -1 (no care), 0 or greater
@@ -340,7 +342,6 @@ public class InternalBackendData
         {
             public int     valueIndex = -1;
             public int     mask;
-            public boolean exception;
             public boolean found;
 
             public boolean visit (Operator op)
@@ -376,8 +377,10 @@ public class InternalBackendData
                             mask <<= 1;
                             if (mask > 0x20000000) valueIndex = -1;  // Allocate another float when we declare over 30 events ... but who would ever need that?
 
-                            // Analyze the $event
-                            //   edge type
+                            
+                            // Analyze the $event ...
+
+                            // Determine edge type
                             if (de.operands.length < 3)
                             {
                                 et.edge = EventTarget.RISE;
@@ -395,7 +398,8 @@ public class InternalBackendData
                                 }
                                 else
                                 {
-                                    throw new EvaluationException ("Edge type for $event() must be specified with a string.");
+                                    Backend.err.get ().println ("ERROR: Edge type for $event() must be specified with a string.");
+                                    throw new Backend.AbortRun ();
                                 }
                             }
                             else
@@ -403,7 +407,7 @@ public class InternalBackendData
                                 et.edge = EventTarget.EVALUATE;
                             }
 
-                            //   auxiliary variable
+                            // Allocate auxiliary variable
                             if (de.operands[0] instanceof AccessVariable)
                             {
                                 AccessVariable av = (AccessVariable) de.operands[0];
@@ -418,7 +422,7 @@ public class InternalBackendData
                                     if (v.container != s)
                                     {
                                         Backend.err.get ().println ("ERROR: Attempt to reference a temporary in an external part: " + v.container.name + "." + v.nameString () + " from " + s.name);
-                                        exception = true;
+                                        throw new Backend.AbortRun ();
                                     }
                                 }
                                 else
@@ -439,8 +443,8 @@ public class InternalBackendData
                                 namesLocalFloat.add (et.track.name);
                             }
 
-                            //   locate any temporaries for evaluation. TODO: for more efficiency, we could have separate lists of temporaries for the condition and delay operands
-                            //     Tie into the dependency graph using a phantom variable (which can go away afterward without damaging the graph).
+                            // Locate any temporaries for evaluation. TODO: for more efficiency, we could have separate lists of temporaries for the condition and delay operands
+                            //   Tie into the dependency graph using a phantom variable (which can go away afterward without damaging the graph).
                             final Variable phantom = new Variable ("$event");
                             phantom.uses = new ArrayList<Variable> ();
                             for (int i = 0; i < et.event.operands.length; i++) et.event.operands[i].visit (new Visitor ()
@@ -457,14 +461,14 @@ public class InternalBackendData
                                     return true;
                                 }
                             });
-                            //     Scan all variables in equation set to see if we need them
+                            //   Scan all variables in equation set to see if we need them
                             for (Variable t : s.variables)
                             {
                                 if (t.hasAttribute ("temporary")  &&  phantom.dependsOn (t) != null) et.dependencies.add (t);
                             }
 
-                            //   delay
-                            //   already initialized: et.delay = -1
+                            // Delay
+                            // Note the default is already set to -1 (no care)
                             class DelayVisitor extends Visitor
                             {
                                 TreeSet<EquationSet> containers = new TreeSet<EquationSet> ();
@@ -495,7 +499,7 @@ public class InternalBackendData
                                 }
                             }
 
-                            //   set up monitors in source parts
+                            // Set up monitors in source parts
                             class ConditionVisitor extends Visitor
                             {
                                 TreeSet<EquationSet> containers = new TreeSet<EquationSet> ();
@@ -535,29 +539,22 @@ public class InternalBackendData
                                 boolean neverFires = false;
                                 if (de.operands[0] instanceof Constant)
                                 {
-                                    if (de.operands.length < 3)
+                                    if (et.edge == EventTarget.NONZERO)
                                     {
-                                        neverFires = true;
-                                    }
-                                    else if (de.operands[2] instanceof Constant)
-                                    {
-                                        Type op2 = ((Constant) de.operands[2]).value;
-                                        if (op2 instanceof Text  &&  ((Text) op2).value.equals ("nonzero"))
+                                        Type op0 = ((Constant) de.operands[0]).value;
+                                        if (op0 instanceof Scalar)
                                         {
-                                            Type op0 = ((Constant) de.operands[0]).value;
-                                            if (op0 instanceof Scalar)
-                                            {
-                                                neverFires = ((Scalar) op0).value == 0;
-                                            }
-                                            else
-                                            {
-                                                neverFires = true;
-                                            }
+                                            neverFires = ((Scalar) op0).value == 0;
                                         }
                                         else
                                         {
-                                            neverFires = true;
+                                            Backend.err.get ().println ("ERROR: Condition for $event() must resolve to a number.");
+                                            throw new Backend.AbortRun ();
                                         }
+                                    }
+                                    else if (et.edge != EventTarget.EVALUATE)
+                                    {
+                                        neverFires = true;
                                     }
                                 }
 
@@ -573,7 +570,7 @@ public class InternalBackendData
                                 }
                             }
 
-                            //   Determine if monitor needs to test every target, or if one representative target is sufficient
+                            // Determine if monitor needs to test every target, or if one representative target is sufficient
                             for (Entry<EquationSet,EventSource> e : et.sources.entrySet ())
                             {
                                 EquationSet container = e.getKey ();
@@ -587,8 +584,8 @@ public class InternalBackendData
                                 if (dv.containers.size () > 1  ||  (dv.containers.size () == 1  &&  dv.containers.first () != container)) source.delayEach = true;
                             }
 
-                            //   Force multiple sources to generate only one event in a given cycle
-                            if (et.sources.size () > 1)
+                            // Force multiple sources to generate only one event in a given cycle
+                            if (et.sources.size () > 1  &&  et.edge == EventTarget.NONZERO)
                             {
                                 et.timeIndex = countLocalFloat++;
                                 namesLocalFloat.add ("$event_time" + eventTargets.size ());
@@ -605,7 +602,6 @@ public class InternalBackendData
         {
             eventVisitor.found = false;
             v.visit (eventVisitor);
-            if (eventVisitor.exception) throw new Backend.AbortRun ();
             if ((eventVisitor.found  ||  v.dependsOnEvent ())  &&  v.reference.variable != v) eventReferences.add (v);
         }
     }
