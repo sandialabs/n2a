@@ -46,16 +46,17 @@ public class AddEquation extends Undoable
         combinerBefore = new Variable.ParsedValue (parent.source.get ()).combiner;
         combinerAfter  = combinerBefore;
 
+        TreeSet<String> equations = new TreeSet<String> ();
+        for (MNode n : parent.source)
+        {
+            String key = n.key ();
+            if (key.startsWith ("@")) equations.add (key.substring (1));
+        }
+        equationCount = equations.size ();
+
         // Select a unique name
         if (data == null)
         {
-            TreeSet<String> equations = new TreeSet<String> ();
-            for (MNode n : parent.source)
-            {
-                String key = n.key ();
-                if (key.startsWith ("@")) equations.add (key.substring (1));
-            }
-            equationCount = equations.size ();
             if (equationCount == 0)
             {
                 Variable.ParsedValue pieces = new Variable.ParsedValue (parent.source.get ());
