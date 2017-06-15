@@ -31,6 +31,7 @@ import gov.sandia.n2a.ui.eq.undo.Move;
 import gov.sandia.n2a.ui.eq.undo.Outsource;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.PanelRun;
+
 import java.awt.FontMetrics;
 import java.awt.Insets;
 import java.awt.Rectangle;
@@ -62,6 +63,7 @@ import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
 import javax.swing.Box;
 import javax.swing.ButtonGroup;
+import javax.swing.ImageIcon;
 import javax.swing.InputMap;
 import javax.swing.JButton;
 import javax.swing.JComponent;
@@ -120,6 +122,10 @@ public class PanelEquationTree extends JPanel
     protected JPopupMenu menuPopup;
     protected JPopupMenu menuFilter;
     protected long       menuFilterCanceledAt = 0;
+
+    protected static ImageIcon iconFilterAll    = ImageUtil.getImage ("filter.png");
+    protected static ImageIcon iconFilterPublic = ImageUtil.getImage ("filterPublic.png");
+    protected static ImageIcon iconFilterLocal  = ImageUtil.getImage ("filterLocal.png");
 
     /**
         A data flavor that lets PanelSearch extract a TransferableNode instance for the purpose of adding info to it for our local exportDone().
@@ -699,15 +705,23 @@ public class PanelEquationTree extends JPanel
         menuPopup.add (itemDelete);
 
         // Filter menu
-        JRadioButtonMenuItem itemFilterAll = new JRadioButtonMenuItem ("All", false);
-        itemFilterAll.addActionListener (listenerFilter);
+        int filterLevel = AppData.state.getOrDefaultInt ("PanelModel", "filter", String.valueOf (FilteredTreeModel.PUBLIC));
+        model.setFilterLevel (filterLevel, tree);  // root is still null, so this has no immediate effect
+        switch (filterLevel)
+        {
+            case FilteredTreeModel.ALL:    buttonFilter.setIcon (iconFilterAll);    break;
+            case FilteredTreeModel.PUBLIC: buttonFilter.setIcon (iconFilterPublic); break;
+            case FilteredTreeModel.LOCAL:  buttonFilter.setIcon (iconFilterLocal);  break;
+        }
 
-        JRadioButtonMenuItem itemFilterPublic = new JRadioButtonMenuItem ("Public", true);
-        model.setFilterLevel (FilteredTreeModel.PUBLIC, tree);  // root is still null, so this has no immediate effect
+        JRadioButtonMenuItem itemFilterAll    = new JRadioButtonMenuItem ("All",    model.filterLevel == FilteredTreeModel.ALL);
+        itemFilterAll   .addActionListener (listenerFilter);
+
+        JRadioButtonMenuItem itemFilterPublic = new JRadioButtonMenuItem ("Public", model.filterLevel == FilteredTreeModel.PUBLIC);
         itemFilterPublic.addActionListener (listenerFilter);
 
-        JRadioButtonMenuItem itemFilterLocal = new JRadioButtonMenuItem ("Local", false);
-        itemFilterLocal.addActionListener (listenerFilter);
+        JRadioButtonMenuItem itemFilterLocal  = new JRadioButtonMenuItem ("Local",  model.filterLevel == FilteredTreeModel.LOCAL);
+        itemFilterLocal .addActionListener (listenerFilter);
 
         menuFilter = new JPopupMenu ();
         menuFilter.add (itemFilterAll);
@@ -964,9 +978,22 @@ public class PanelEquationTree extends JPanel
         public void actionPerformed (ActionEvent e)
         {
             String action = e.getActionCommand ();
-            if      (action.equals ("All"   )) model.setFilterLevel (FilteredTreeModel.ALL,    tree);
-            else if (action.equals ("Public")) model.setFilterLevel (FilteredTreeModel.PUBLIC, tree);
-            else if (action.equals ("Local" )) model.setFilterLevel (FilteredTreeModel.LOCAL,  tree);
+            if (action.equals ("All"))
+            {
+                model.setFilterLevel (FilteredTreeModel.ALL, tree);
+                buttonFilter.setIcon (iconFilterAll);
+            }
+            else if (action.equals ("Public"))
+            {
+                model.setFilterLevel (FilteredTreeModel.PUBLIC, tree);
+                buttonFilter.setIcon (iconFilterPublic);
+            }
+            else if (action.equals ("Local"))
+            {
+                model.setFilterLevel (FilteredTreeModel.LOCAL, tree);
+                buttonFilter.setIcon (iconFilterLocal);
+            }
+            AppData.state.set ("PanelModel", "filter", model.filterLevel);
         }
     };
 
