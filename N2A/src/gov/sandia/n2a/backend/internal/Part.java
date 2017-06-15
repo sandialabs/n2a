@@ -59,6 +59,10 @@ public class Part extends Instance
         {
             valuesObject[es.monitorIndex] = new ArrayList<Instance> ();
         }
+        for (EventTarget et : bed.eventTargets)
+        {
+            if (et.timeIndex >= 0) valuesFloat[et.timeIndex] = 10;  // Since value is modulo 1 second, this initial value is different than anything that might ever be set. This allows events to be generated when $t=0.
+        }
     }
 
     public Type get (Variable v)
@@ -133,7 +137,9 @@ public class Part extends Instance
             for (Entry<EquationSet,EventSource> i : et.sources.entrySet ())
             {
                 EventSource es = i.getValue ();
-                Part source = ((Part) valuesObject[es.reference.index]);
+                Part source;
+                if (es.reference == null) source = this;
+                else                      source = (Part) valuesObject[es.reference.index];
                 @SuppressWarnings("unchecked")
                 ArrayList<Instance> monitors = (ArrayList<Instance>) source.valuesObject[es.monitorIndex];
                 monitors.add (this);
@@ -224,7 +230,7 @@ public class Part extends Instance
             if (monitors.size () == 0) continue;
 
             EventTarget eventType = es.target;
-            if (eventType.testAll)
+            if (es.testEach)
             {
                 for (Instance i : monitors)
                 {
@@ -270,44 +276,86 @@ public class Part extends Instance
                 double delay = eventType.test (monitors.get (0), simulator);
                 if (delay < -1) continue;  // the trigger condition was not satisfied
 
-                EventSpikeMulti spike;
-                if (delay < 0)
+                if (es.delayEach)  // Each target instance may require a different delay.
                 {
-                    spike = new EventSpikeMultiLatch ();
-                    spike.t = simulator.currentEvent.t;
-                }
-                else if (delay == 0)
-                {
-                    spike = new EventSpikeMulti ();
-                    spike.t = simulator.currentEvent.t;
-                }
-                else
-                {
-                    double ratio = delay / event.dt;
-                    int    step  = (int) Math.round (ratio);
-                    if (Math.abs (ratio - step) < 1e-3)
+                    for (Instance i : monitors)
                     {
-                        if (simulator.eventMode == Simulator.DURING) spike = new EventSpikeMultiLatch ();
-                        else                                         spike = new EventSpikeMulti ();
-                        if (simulator.eventMode == Simulator.AFTER) delay = (step + 1e-6) * event.dt;
-                        else                                        delay = (step - 1e-6) * event.dt;
+                        delay = eventType.delay (i, simulator);  // This results in one redundant eval, of first entry in monitors. Not clear if it's worth the work to avoid this.
+
+                        EventSpikeSingle spike;
+                        if (delay < 0)
+                        {
+                            spike = new EventSpikeSingleLatch ();
+                            spike.t = simulator.currentEvent.t;
+                        }
+                        else if (delay == 0)
+                        {
+                            spike = new EventSpikeSingle ();
+                            spike.t = simulator.currentEvent.t;
+                        }
+                        else
+                        {
+                            double ratio = delay / event.dt;
+                            int    step  = (int) Math.round (ratio);
+                            if (Math.abs (ratio - step) < 1e-3)
+                            {
+                                if (simulator.eventMode == Simulator.DURING) spike = new EventSpikeSingleLatch ();
+                                else                                         spike = new EventSpikeSingle ();
+                                if (simulator.eventMode == Simulator.AFTER) delay = (step + 1e-6) * event.dt;
+                                else                                        delay = (step - 1e-6) * event.dt;
+                            }
+                            else
+                            {
+                                spike = new EventSpikeSingle ();
+                            }
+                            spike.t = simulator.currentEvent.t + delay;
+                        }
+                        spike.eventType = eventType;
+                        spike.target    = i;
+                        simulator.eventQueue.add (spike);
+                    }
+                }
+                else  // All delays are the same.
+                {
+                    EventSpikeMulti spike;
+                    if (delay < 0)
+                    {
+                        spike = new EventSpikeMultiLatch ();
+                        spike.t = simulator.currentEvent.t;
+                    }
+                    else if (delay == 0)
+                    {
+                        spike = new EventSpikeMulti ();
+                        spike.t = simulator.currentEvent.t;
                     }
                     else
                     {
-                        spike = new EventSpikeMulti ();
+                        double ratio = delay / event.dt;
+                        int    step  = (int) Math.round (ratio);
+                        if (Math.abs (ratio - step) < 1e-3)
+                        {
+                            if (simulator.eventMode == Simulator.DURING) spike = new EventSpikeMultiLatch ();
+                            else                                         spike = new EventSpikeMulti ();
+                            if (simulator.eventMode == Simulator.AFTER) delay = (step + 1e-6) * event.dt;
+                            else                                        delay = (step - 1e-6) * event.dt;
+                        }
+                        else
+                        {
+                            spike = new EventSpikeMulti ();
+                        }
+                        spike.t = simulator.currentEvent.t + delay;
                     }
-                    spike.t = simulator.currentEvent.t + delay;
+                    spike.eventType = eventType;
+                    // We don't copy the array, just keep a reference to it. What could go wrong with this?
+                    // If a part dies and tries to remove itself from the list while it is being used to deliver spikes,
+                    // then we could get a null pointer exception. Solution is to synchronize access to the list.
+                    // If a connection is born while the spike is in flight, one could argue that it shouldn't
+                    // receive it, but one could also argue that it should. In nature these two things (spikes
+                    // and synapse creation) occur at vastly different timescales. Wouldn't a nascent synapse
+                    // receive spikes even as it is forming?
+                    spike.targets = monitors;
+                    simulator.eventQueue.add (spike);
                 }
-                spike.eventType = eventType;
-                // We don't copy the array, just keep a reference to it. What could go wrong with this?
-                // If a part dies and tries to remove itself from the list while it is being used to deliver spikes,
-                // then we could get a null pointer exception. Solution is to synchronize access to the list.
-                // If a connection is born while the spike is in flight, one could argue that it shouldn't
-                // receive it, but one could also argue that it should. In nature these two things (spikes
-                // and synapse creation) occur at vastly different timescales. Wouldn't a nascent synapse
-                // receive spikes even as it is forming?
-                spike.targets = monitors;
-                simulator.eventQueue.add (spike);
             }
         }
 

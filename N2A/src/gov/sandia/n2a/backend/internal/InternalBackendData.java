@@ -141,12 +141,12 @@ public class InternalBackendData
 
     public class EventTarget
     {
-        public DollarEvent event;       // For evaluating whether the event should be triggered. There may be several equivalent $event() calls in the part, so this is just one representative of the group.
-        public int         valueIndex;  // position of bit array in valuesFloat
-        public int         mask;        // an unsigned AND between this and the (int cast) entry from valuesFloat will indicate event active
-        public boolean     testAll;     // indicates that the monitor must test every event target of this type separately, generally because the trigger references variables outside the source part
+        public DollarEvent event;          // For evaluating whether the event should be triggered. There may be several equivalent $event() calls in the part, so this is just one representative of the group.
+        public int         valueIndex;     // position of bit array in valuesFloat
+        public int         mask;           // an unsigned AND between this and the (int cast) entry from valuesFloat will indicate event active
         public int         edge  = RISE;
-        public double      delay = -1;  // default is no-care; Indicates to process event in next regularly scheduled cycle of the target part
+        public double      delay = -1;     // default is no-care; Indicates to process event in next regularly scheduled cycle of the target part
+        public int         timeIndex = -1; // position in valuesFloat of timestamp when last event to this target was generated; used to force multiple sources to generate only one event in a given cycle; -1 means the guard is unneeded
         public Map<EquationSet,EventSource> sources = new TreeMap<EquationSet,EventSource> ();
         public List<Variable> dependencies = new ArrayList<Variable> ();
 
@@ -249,6 +249,13 @@ public class InternalBackendData
                     if (after == 0  ||  before != 0) return -2;
             }
 
+            if (timeIndex >= 0)  // Guard against multiple events in a given cycle.
+            {
+                float moduloTime = (float) Math.IEEEremainder (simulator.currentEvent.t, 1);  // Wrap time at 1 second, to fit in float precision.
+                if (targetPart.valuesFloat[timeIndex] == moduloTime) return -2;
+                targetPart.valuesFloat[timeIndex] = moduloTime;
+            }
+
             if (delay >= -1) return delay;  // constant delay, which is either -1 (no care), 0 or greater
             // otherwise, evaluate delay
             double result = ((Scalar) event.operands[1].eval (temp)).value;
@@ -282,7 +289,9 @@ public class InternalBackendData
     {
         public EventTarget       target;
         public int               monitorIndex; // position of monitor array in source_instance.valuesObject
-        public VariableReference reference;    // position of reference to source part in target_instance.valuesObject
+        public VariableReference reference;    // for determining index of source part in target_instance.valuesObject. This is done indirectly so that event analysis can be done before indices are fully assigned.
+        public boolean           testEach;     // indicates that the monitor must test each target instance, generally because the trigger references variables outside the source part
+        public boolean           delayEach;    // indicates that the monitor evaluate the delay for each target instance
     }
 
     public class ReferenceComparator implements Comparator<VariableReference>
@@ -394,22 +403,6 @@ public class InternalBackendData
                                 et.edge = EventTarget.EVALUATE;
                             }
 
-                            //   delay
-                            //   already initialized: et.delay = -1
-                            if (de.operands.length >= 2)
-                            {
-                                if (de.operands[1] instanceof Constant)
-                                {
-                                    Constant c = (Constant) de.operands[1];
-                                    et.delay = ((Scalar) c.value).value;
-                                    if (et.delay < 0) et.delay = -1;
-                                }
-                                else
-                                {
-                                    et.delay = -2;  // indicates that we need to evaluate delay at run time
-                                }
-                            }
-
                             //   auxiliary variable
                             if (de.operands[0] instanceof AccessVariable)
                             {
@@ -446,7 +439,7 @@ public class InternalBackendData
                                 namesLocalFloat.add (et.track.name);
                             }
 
-                            //   locate any temporaries for evaluation
+                            //   locate any temporaries for evaluation. TODO: for more efficiency, we could have separate lists of temporaries for the condition and delay operands
                             //     Tie into the dependency graph using a phantom variable (which can go away afterward without damaging the graph).
                             final Variable phantom = new Variable ("$event");
                             phantom.uses = new ArrayList<Variable> ();
@@ -470,43 +463,136 @@ public class InternalBackendData
                                 if (t.hasAttribute ("temporary")  &&  phantom.dependsOn (t) != null) et.dependencies.add (t);
                             }
 
-                            //   set up monitors in source parts
-                            //   and determine if monitor needs to test every target, or if one representative target is sufficient
-                            class ReferenceVisitor extends Visitor
+                            //   delay
+                            //   already initialized: et.delay = -1
+                            class DelayVisitor extends Visitor
                             {
-                                TreeSet<EquationSet> uniqueContainers = new TreeSet<EquationSet> ();
+                                TreeSet<EquationSet> containers = new TreeSet<EquationSet> ();
                                 public boolean visit (Operator op)
                                 {
                                     if (op instanceof AccessVariable)
                                     {
                                         AccessVariable av = (AccessVariable) op;
-                                        EquationSet container = av.reference.variable.container;
-                                        uniqueContainers.add (container);  // could include the target part itself, if in fact we use local variables in the event parameters
-                                        if (container != s  &&  ! et.sources.containsKey (container))  // external reference, so we need to plug a monitor into the other part. TODO: Create monitor for local-only event?
+                                        containers.add (av.reference.variable.container);  // could include the target part itself, if in fact we use local variables
+                                        return false;
+                                    }
+                                    return true;
+                                }
+                            }
+                            DelayVisitor dv = new DelayVisitor ();
+                            if (de.operands.length >= 2)
+                            {
+                                if (de.operands[1] instanceof Constant)
+                                {
+                                    Constant c = (Constant) de.operands[1];
+                                    et.delay = (float) ((Scalar) c.value).value;
+                                    if (et.delay < 0) et.delay = -1;
+                                }
+                                else
+                                {
+                                    et.delay = -2;  // indicates that we need to evaluate delay at run time
+                                    de.operands[1].visit (dv);
+                                }
+                            }
+
+                            //   set up monitors in source parts
+                            class ConditionVisitor extends Visitor
+                            {
+                                TreeSet<EquationSet> containers = new TreeSet<EquationSet> ();
+                                public boolean visit (Operator op)
+                                {
+                                    if (op instanceof AccessVariable)
+                                    {
+                                        AccessVariable av = (AccessVariable) op;
+                                        Variable v = av.reference.variable;
+                                        EquationSet sourceContainer = v.container;
+                                        containers.add (sourceContainer);
+
+                                        // Set up monitors for values that can vary during update.
+                                        if (! (v.hasAttribute ("constant")  ||  v.hasAttribute ("initOnly")  ||  et.sources.containsKey (sourceContainer)))
                                         {
-                                            InternalBackendData containerBed = (InternalBackendData) container.backendData;
+                                            InternalBackendData sourceBed = (InternalBackendData) sourceContainer.backendData;
                                             EventSource es = new EventSource ();
                                             es.target       = et;
-                                            es.monitorIndex = containerBed.countLocalObject++;
-                                            es.reference    = av.reference;
-                                            containerBed.namesLocalObject.add ("$event_monitor_" + s.prefix ());
-                                            containerBed.eventSources.add (es);
-                                            et.sources.put (container, es);
+                                            es.monitorIndex = sourceBed.countLocalObject++;
+                                            if (sourceContainer != s) es.reference = av.reference;  // null means self-reference, a special case handled in Part
+                                            sourceBed.namesLocalObject.add ("$event_monitor_" + s.prefix ());  // TODO: Consolidate monitors that share the same trigger condition.
+                                            sourceBed.eventSources.add (es);
+                                            et.sources.put (sourceContainer, es);
                                         }
                                         return false;
                                     }
                                     return true;
                                 }
                             }
-                            ReferenceVisitor rv = new ReferenceVisitor ();
-                            de.visit (rv);
-                            // If all the variables used by the event expression are within the same source
-                            // part, then the answer will be the same for all registered target parts. However,
-                            // if any of the variables belong to a different source part or to the target part
-                            // itself, then the answer could vary, and every target must be tested separately.
-                            // If the trigger expression only references self, then there will only be one
-                            // monitor to test.
-                            if (rv.uniqueContainers.size () > 1) et.testAll = true;
+                            ConditionVisitor cv = new ConditionVisitor ();
+                            de.operands[0].visit (cv);
+
+                            //   Special case for event with no references that vary
+                            if (et.sources.isEmpty ())
+                            {
+                                // We can avoid creating a self monitor if we know for certain that the event will never fire
+                                boolean neverFires = false;
+                                if (de.operands[0] instanceof Constant)
+                                {
+                                    if (de.operands.length < 3)
+                                    {
+                                        neverFires = true;
+                                    }
+                                    else if (de.operands[2] instanceof Constant)
+                                    {
+                                        Type op2 = ((Constant) de.operands[2]).value;
+                                        if (op2 instanceof Text  &&  ((Text) op2).value.equals ("nonzero"))
+                                        {
+                                            Type op0 = ((Constant) de.operands[0]).value;
+                                            if (op0 instanceof Scalar)
+                                            {
+                                                neverFires = ((Scalar) op0).value == 0;
+                                            }
+                                            else
+                                            {
+                                                neverFires = true;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            neverFires = true;
+                                        }
+                                    }
+                                }
+
+                                if (! neverFires)
+                                {
+                                    EventSource es = new EventSource ();
+                                    es.target       = et;
+                                    es.monitorIndex = countLocalObject++;
+                                    // es.reference should be null for self
+                                    namesLocalObject.add ("$event_monitor_" + s.prefix ());
+                                    eventSources.add (es);
+                                    et.sources.put (s, es);
+                                }
+                            }
+
+                            //   Determine if monitor needs to test every target, or if one representative target is sufficient
+                            for (Entry<EquationSet,EventSource> e : et.sources.entrySet ())
+                            {
+                                EquationSet container = e.getKey ();
+                                EventSource source    = e.getValue ();
+                                // If all the variables used by the event expression are within the same source
+                                // part, then the answer will be the same for all registered target parts. However,
+                                // if any of the variables belong to a different source part, then it's possible for
+                                // different combinations of instances (via references from the target) to be
+                                // associated with any given source instance, so every target must be evaluated separately.
+                                if (cv.containers.size () > 1) source.testEach = true;
+                                if (dv.containers.size () > 1  ||  (dv.containers.size () == 1  &&  dv.containers.first () != container)) source.delayEach = true;
+                            }
+
+                            //   Force multiple sources to generate only one event in a given cycle
+                            if (et.sources.size () > 1)
+                            {
+                                et.timeIndex = countLocalFloat++;
+                                namesLocalFloat.add ("$event_time" + eventTargets.size ());
+                            }
                         }
                     }
                 }
