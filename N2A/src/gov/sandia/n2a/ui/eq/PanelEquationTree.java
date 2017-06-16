@@ -752,6 +752,8 @@ public class PanelEquationTree extends JPanel
     public void loadRootFromDB (MNode doc)
     {
         if (record == doc) return;
+        // Save tree state for current record, but only if it's better than the previously-saved state.
+        if (record != null  &&  (focusCache.get (record) == null  ||  tree.getSelectionPath () != null)) focusCache.put (record, new StoredPath (tree));
         record = doc;
         try
         {

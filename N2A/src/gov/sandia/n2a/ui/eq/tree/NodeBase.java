@@ -378,7 +378,6 @@ public class NodeBase extends DefaultMutableTreeNode
         {
             NodeBase n = (NodeBase) o;
             if (n.source.key ().equals (key)) return n;
-            
         }
         return null;
     }
