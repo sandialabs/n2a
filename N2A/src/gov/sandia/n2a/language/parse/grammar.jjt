@@ -44,12 +44,17 @@ PARSER_END(ExpressionParser)
 
 // Tokens --------------------------------------------------------------------
 
+TOKEN_MGR_DECLS:
+{
+    int parenDepth;  // For counting parentheses nesting in PossibleUnit mode
+}
+
 <*> SKIP:
 {
     " " | "\t" | "\n"
 }
 
-TOKEN:
+<DEFAULT> TOKEN:
 {
       <COMMA:   "," >
     | <SEMI:    ";" >
@@ -91,11 +96,7 @@ TOKEN:
 
 <PossibleUnit> TOKEN:
 {
-      <UNIT:
-        ["\"","#","'","0"-":","?"-"]","_"-"{"]  // Everything in ASCII 33-126, except forbidden start characters and }
-        (["!"-"'","*"-"|","~"])*                // Everything in ASCII 33-126, except parentheses and }
-        (["}"])?> : DEFAULT                     // If there is a }, it always ends the unit expression.
-
+      <UNIT: (["\"","#","'","0"-":","?"-"]","_"-"{","}"])+>  // Everything in ASCII 33-126, except forbidden start characters. Notice that square brackets are allowed at this level.
     | <UCOMMA:   ","  > {matchedToken.kind = ExpressionParserConstants.COMMA;  }: DEFAULT
     | <USEMI:    ";"  > {matchedToken.kind = ExpressionParserConstants.SEMI;   }: DEFAULT
     | <UGT:      ">"  > {matchedToken.kind = ExpressionParserConstants.GT;     }: DEFAULT
@@ -115,8 +116,16 @@ TOKEN:
     | <UNOT:     "!"  > {matchedToken.kind = ExpressionParserConstants.NOT;    }: DEFAULT
     | <UPOWER:   "^"  > {matchedToken.kind = ExpressionParserConstants.POWER;  }: DEFAULT
     | <UTILDE:   "~"  > {matchedToken.kind = ExpressionParserConstants.TILDE;  }: DEFAULT
-    | <ULRND:    "("  > {matchedToken.kind = ExpressionParserConstants.LRND;   }: DEFAULT
-    | <URRND:    ")"  > {matchedToken.kind = ExpressionParserConstants.RRND;   }: DEFAULT
+    | <PURRND:   ")"  > {matchedToken.kind = ExpressionParserConstants.RRND;   }: DEFAULT
+    | <PULRND:   "("  > {matchedToken.kind = ExpressionParserConstants.UNIT; parenDepth = 1;}: FullUCUM
+}
+
+<FullUCUM> TOKEN:
+{
+      <UUNIT: (["!"-"'","*"-"~"])+>  // Everything in ASCII 33-126, except parentheses
+                   {matchedToken.kind = ExpressionParserConstants.UNIT;}
+    | <ULRND: "("> {matchedToken.kind = ExpressionParserConstants.UNIT; parenDepth++;}
+    | <URRND: ")"> {matchedToken.kind = ExpressionParserConstants.UNIT; parenDepth--; if (parenDepth <= 0) SwitchTo (PossibleUnit);}
 }
 
 
@@ -321,7 +330,7 @@ void Identifier() #Identifier : {Token t; Token p = null;}
     }
 }
 
-void Constant() #Constant : {Token t; Token u = null;}
+void Constant() #Constant : {Token t; Token u; String UCUM = "";}
 {
     t = <STRING>
     {
@@ -330,10 +339,10 @@ void Constant() #Constant : {Token t; Token u = null;}
         jjtThis.jjtSetValue (text);
     }
       |
-    t = <NUMBER> [u = <UNIT>]
+    t = <NUMBER> (u = <UNIT> {UCUM += u.image;})*
     {
         double value = Double.parseDouble (t.image);
-        if (u != null) value = Unit.valueOf (u.image).toStandardUnit ().convert (value);
+        if (! UCUM.isEmpty ()) value = Unit.valueOf (UCUM).toStandardUnit ().convert (value);
         jjtThis.jjtSetValue (new Scalar (value));
     }
 }
