@@ -16,7 +16,7 @@ public class EquationEntry implements Comparable<EquationEntry>
     public Variable variable;    // Our container
     public String   ifString;    // only for sorting. TODO: get rid of ifString. Instead, convert conditional to a canonical form with well-defined sort order. This will enable us to combine logically equivalent conditions, as well prioritize more restrictive conditions.
     public Operator expression;
-    public Operator conditional;
+    public Operator condition;
 
     /**
         @param variable This equation must be explicitly added to variable.equations 
@@ -47,8 +47,8 @@ public class EquationEntry implements Comparable<EquationEntry>
         }
         else
         {
-            conditional = Operator.parse (key);
-            ifString = conditional.render ();
+            condition = Operator.parse (key);
+            ifString  = condition.render ();
         }
     }
 
@@ -63,27 +63,27 @@ public class EquationEntry implements Comparable<EquationEntry>
         ifString = "";
         if (parts.length > 1)
         {
-            conditional = Operator.parse (parts[1]);
-            ifString = conditional.render ();
+            condition = Operator.parse (parts[1]);
+            ifString  = condition.render ();
         }
     }
 
     public void visit (Visitor visitor)
     {
-        if (expression  != null) expression .visit (visitor);
-        if (conditional != null) conditional.visit (visitor);
+        if (expression != null) expression.visit (visitor);
+        if (condition  != null) condition .visit (visitor);
     }
 
     public void render (Renderer renderer)
     {
-        if (expression  != null)
+        if (expression != null)
         {
             expression.render (renderer);
         }
-        if (conditional != null)
+        if (condition != null)
         {
             renderer.result.append (" @ ");
-            conditional.render (renderer);
+            condition.render (renderer);
         }
     }
 

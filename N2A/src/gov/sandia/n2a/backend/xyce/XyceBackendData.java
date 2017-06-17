@@ -151,8 +151,8 @@ public class XyceBackendData
 
     public boolean isExplicitInit (EquationEntry e)
     {
-        if (e.expression == null  ||  e.conditional == null) return false;  // We must have an expression and it must be conditional.
-        Type condition = e.conditional.eval (new Instance ()
+        if (e.expression == null  ||  e.condition == null) return false;  // We must have an expression and it must be conditional.
+        Type condition = e.condition.eval (new Instance ()
         {
             public Type get (VariableReference r) throws EvaluationException
             {
@@ -161,6 +161,6 @@ public class XyceBackendData
             }
         });
         if (! (condition instanceof Scalar)  ||  ((Scalar) condition).value == 0) return false;  // must actually fire during init phase
-        return new ContainsVariable (new Variable ("$init")).check (e.conditional);  // must actually contain $init
+        return new ContainsVariable (new Variable ("$init")).check (e.condition);  // must actually contain $init
     }
 }

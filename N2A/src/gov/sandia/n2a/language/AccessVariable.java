@@ -62,7 +62,7 @@ public class AccessVariable extends Operator
         if (v.hasAttribute ("externalWrite")) return this;  // A variable may locally evaluate to a constant, yet be subject to change from outside equations.
         if (v.equations.size () != 1) return this;
         EquationEntry e = v.equations.first ();
-        if (e.expression == null  ||  e.conditional != null) return this;
+        if (e.expression == null  ||  e.condition != null) return this;
         if (e.expression instanceof Constant) return e.expression;
 
         // Attempt to simplify expression, and maybe get a Constant

@@ -296,10 +296,10 @@ public class Variable implements Comparable<Variable>
             {
                 e.expression = e.expression.transform (transformer);
             }
-            if (e.conditional != null)
+            if (e.condition != null)
             {
-                e.conditional = e.conditional.transform (transformer);
-                e.ifString = e.conditional.render ();
+                e.condition = e.condition.transform (transformer);
+                e.ifString  = e.condition.render ();
             }
         }
     }
@@ -313,10 +313,10 @@ public class Variable implements Comparable<Variable>
             {
                 e.expression = e.expression.simplify (this);
             }
-            if (e.conditional != null)
+            if (e.condition != null)
             {
-                e.conditional = e.conditional.simplify (this);
-                e.ifString = e.conditional.render ();
+                e.condition = e.condition.simplify (this);
+                e.ifString  = e.condition.render ();
             }
         }
         // TODO: Re-sort the equations? Delete any that have constant 0 for their condition?
@@ -327,8 +327,8 @@ public class Variable implements Comparable<Variable>
         // Assume that EquationEntry orders itself to put the default equations last, and particularly an unconditional equation after one with $init
         for (EquationEntry e : equations)  // Scan for first equation whose condition is nonzero
         {
-            if (e.conditional == null) return e.expression.eval (instance);
-            Object doit = e.conditional.eval (instance);
+            if (e.condition == null) return e.expression.eval (instance);
+            Object doit = e.condition.eval (instance);
             if (doit instanceof Scalar  &&  ((Scalar) doit).value != 0) return e.expression.eval (instance);
         }
         if (name.equals ("$type")) return new Scalar (0);  // $type should not have a default equation. Instead, always reset to 0.
@@ -342,8 +342,8 @@ public class Variable implements Comparable<Variable>
     {
         for (EquationEntry e : equations)
         {
-            if (e.conditional == null) return e;
-            Object doit = e.conditional.eval (instance);
+            if (e.condition == null) return e;
+            Object doit = e.condition.eval (instance);
             if (doit instanceof Scalar  &&  ((Scalar) doit).value != 0) return e;
         }
         return null;

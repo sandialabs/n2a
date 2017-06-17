@@ -240,7 +240,7 @@ public class EquationSet implements Comparable<EquationSet>
             // Detect instance variables
             if (v.equations.size () != 1) continue;
             EquationEntry ee = v.equations.first ();
-            if (ee.conditional != null) continue;
+            if (ee.condition != null) continue;
             if (! (ee.expression instanceof AccessVariable)) continue;
 
             // Resolve connection endpoint to a specific equation set
@@ -1161,7 +1161,7 @@ public class EquationSet implements Comparable<EquationSet>
             for (EquationEntry e : n.equations)
             {
                 // Even if each expression is constant, $n could still change during operation if it is a multi-conditional.
-                if (e.conditional != null  &&  ! (e.conditional instanceof Constant))
+                if (e.condition != null  &&  ! (e.condition instanceof Constant))
                 {
                     lethalN = true;
                     break;
@@ -1195,11 +1195,11 @@ public class EquationSet implements Comparable<EquationSet>
                 // If this occurs anywhere but pre-init, then $p is lethal.
 
                 // Check if condition fires during init phase
-                if (e.conditional != null)
+                if (e.condition != null)
                 {
                     replaceInit.init = 1;
                     replaceInit.live = 1;
-                    Operator test = e.conditional.deepCopy ().transform (replaceInit).simplify (p);
+                    Operator test = e.condition.deepCopy ().transform (replaceInit).simplify (p);
                     if (test instanceof Constant)
                     {
                         Constant c = (Constant) test;
@@ -1207,7 +1207,7 @@ public class EquationSet implements Comparable<EquationSet>
                         {
                             // Check if condition fires during update phase
                             replaceInit.init = 0;
-                            test = e.conditional.deepCopy ().transform (replaceInit).simplify (p);
+                            test = e.condition.deepCopy ().transform (replaceInit).simplify (p);
                             if (test instanceof Constant)
                             {
                                 c = (Constant) test;
@@ -1574,7 +1574,7 @@ public class EquationSet implements Comparable<EquationSet>
             if (v.hasAttribute ("externalWrite")) continue;  // Regardless of the local math, a variable that gets written is not constant.
             if (v.equations.size () != 1) continue;
             EquationEntry e = v.equations.first ();
-            if (e.conditional != null) continue;
+            if (e.condition != null) continue;
             if (e.expression instanceof Constant) v.addAttribute ("constant");
         }
     }
@@ -1815,7 +1815,7 @@ public class EquationSet implements Comparable<EquationSet>
             EquationEntry update = null;  // If we have a single update equation, then we may still be initOnly if it depends only on constants or other initOnly variables. Save the update equation for analysis.
             for (EquationEntry e : v.equations)
             {
-                if (e.conditional == null)
+                if (e.condition == null)
                 {
                     firesDuringInit++;
                     firesDuringUpdate++;
@@ -1826,7 +1826,7 @@ public class EquationSet implements Comparable<EquationSet>
                     // init
                     replaceInit.init = 1;
                     replaceInit.live = 1;
-                    Operator test = e.conditional.deepCopy ().transform (replaceInit).simplify (v);
+                    Operator test = e.condition.deepCopy ().transform (replaceInit).simplify (v);
                     boolean fires = true;
                     if (test instanceof Constant)
                     {
@@ -1838,7 +1838,7 @@ public class EquationSet implements Comparable<EquationSet>
                     // update
                     replaceInit.init = 0;
                     replaceInit.live = 1;
-                    test = e.conditional.deepCopy ().transform (replaceInit).simplify (v);
+                    test = e.condition.deepCopy ().transform (replaceInit).simplify (v);
                     fires = true;
                     if (test instanceof Constant)
                     {
@@ -1902,7 +1902,7 @@ public class EquationSet implements Comparable<EquationSet>
                 }
                 VisitInitOnly visitor = new VisitInitOnly ();
 
-                if (update.conditional != null) update.conditional.visit (visitor);
+                if (update.condition != null) update.condition.visit (visitor);
                 if (visitor.isInitOnly)
                 {
                     update.expression.visit (visitor);

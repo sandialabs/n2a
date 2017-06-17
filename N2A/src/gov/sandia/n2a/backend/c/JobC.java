@@ -933,7 +933,7 @@ public class JobC
         for (EquationEntry e : v.equations)
         {
             if (e.expression  != null) e.expression .visit (visitor);
-            if (e.conditional != null) e.conditional.visit (visitor);
+            if (e.condition != null) e.condition.visit (visitor);
         }
     }
 
@@ -2395,7 +2395,7 @@ public class JobC
         // Dump matrices needed by conditions
         for (EquationEntry e : v.equations)
         {
-            if (e.conditional != null) prepareMatrices (e.conditional, context, pad);
+            if (e.condition != null) prepareMatrices (e.condition, context, pad);
         }
 
         // Write the conditional equations
@@ -2412,7 +2412,7 @@ public class JobC
             {
                 if (e.ifString.equals ("$init")) continue;
             }
-            if (e.conditional != null)
+            if (e.condition != null)
             {
                 String ifString;
                 if (haveIf)
@@ -2426,7 +2426,7 @@ public class JobC
                     padIf = pad + "  ";
                 }
                 context.result.append (pad + ifString);
-                e.conditional.render (context);
+                e.condition.render (context);
                 context.result.append (")\n");
                 context.result.append (pad + "{\n");
             }
