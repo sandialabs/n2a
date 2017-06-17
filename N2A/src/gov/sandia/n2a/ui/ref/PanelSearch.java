@@ -55,8 +55,6 @@ import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultHighlighter;
 import javax.swing.text.Highlighter;
 
-import sun.swing.DefaultLookup;
-
 public class PanelSearch extends JPanel
 {
     public JTextField              textQuery;
@@ -130,12 +128,12 @@ public class PanelSearch extends JPanel
 
         list.setTransferHandler (new TransferHandler ()
         {
-            public boolean canImport (TransferHandler.TransferSupport xfer)
+            public boolean canImport (TransferSupport xfer)
             {
                 return xfer.isDataFlavorSupported (DataFlavor.stringFlavor);
             }
 
-            public boolean importData (TransferHandler.TransferSupport xfer)
+            public boolean importData (TransferSupport xfer)
             {
                 ParserBibtex parser = new ParserBibtex ();
                 MNode data = new MVolatile ();
@@ -190,7 +188,9 @@ public class PanelSearch extends JPanel
             }
         });
 
+
         textQuery = new JTextField ();
+
         textQuery.addKeyListener (new KeyAdapter ()
         {
             public void keyReleased (KeyEvent e)
@@ -198,6 +198,7 @@ public class PanelSearch extends JPanel
                 if (e.getKeyCode () == KeyEvent.VK_ESCAPE) textQuery.setText ("");
             }
         });
+
         textQuery.getDocument ().addDocumentListener (new DocumentListener ()
         {
             public void insertUpdate (DocumentEvent e)
@@ -215,7 +216,24 @@ public class PanelSearch extends JPanel
                 search ();
             }
         });
-        textQuery.setTransferHandler (new SafeTextTransferHandler ());
+
+        textQuery.setTransferHandler (new SafeTextTransferHandler ()
+        {
+            public boolean importData (TransferSupport support)
+            {
+                try
+                {
+                    String data = (String) support.getTransferable ().getTransferData (DataFlavor.stringFlavor);
+                    if (data.contains ("@")) return list.getTransferHandler ().importData (support);  // indicates BibTeX format
+                    return super.importData (support);  // Base class will reject serialized N2A objects
+                }
+                catch (IOException | UnsupportedFlavorException e)
+                {
+                    return false;
+                }
+            }
+        });
+
 
         Lay.BLtg (this,
             "N", Lay.BL ("C", textQuery, "eb=2"),

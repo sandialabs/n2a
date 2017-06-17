@@ -27,6 +27,9 @@ public class SafeTextTransferHandler extends TransferHandler
 {
     public boolean canImport (TransferSupport support)
     {
+        JTextComponent c = (JTextComponent) support.getComponent ();
+        if (! (c.isEditable ()  &&  c.isEnabled ())) return false;
+
         // A subtle gotcha is that canImport() can't actually read DnD data, because it is called
         // before the drop is accepted. Instead, we have to reject N2A-sourced data in importData().
         // Here, we simply check if the right flavor is available.

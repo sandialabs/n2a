@@ -9,6 +9,7 @@ package gov.sandia.n2a.ui.settings;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.plugins.extpoints.Settings;
 import gov.sandia.n2a.ui.Lay;
+import gov.sandia.n2a.ui.SafeTextTransferHandler;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import java.awt.Component;
@@ -212,6 +213,7 @@ public class SettingsLookAndFeel implements Settings
                 if (currentLaf != null) currentLaf.apply ();
             }
         });
+        fieldFontScale.setTransferHandler (new SafeTextTransferHandler ());
         menu.add (Lay.FL (labelFontScale, fieldFontScale));
     }
 

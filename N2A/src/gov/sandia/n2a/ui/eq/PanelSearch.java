@@ -244,7 +244,15 @@ public class PanelSearch extends JPanel
             }
         });
 
-        textQuery.setTransferHandler (new SafeTextTransferHandler ());
+        textQuery.setTransferHandler (new SafeTextTransferHandler ()
+        {
+            public boolean importData (TransferSupport support)
+            {
+                boolean result = super.importData (support);
+                if (! result) result = list.getTransferHandler ().importData (support);
+                return result;
+            }
+        });
 
 
         Lay.BLtg (this,

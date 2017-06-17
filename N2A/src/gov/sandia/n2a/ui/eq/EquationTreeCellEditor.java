@@ -12,6 +12,8 @@ import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.Graphics;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.FocusEvent;
@@ -19,6 +21,8 @@ import java.awt.event.FocusListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
+import java.awt.im.InputContext;
+import java.io.IOException;
 import java.util.EventObject;
 
 import javax.swing.AbstractAction;
@@ -33,15 +37,21 @@ import javax.swing.JTree;
 import javax.swing.JViewport;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
+import javax.swing.TransferHandler;
+import javax.swing.TransferHandler.TransferSupport;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.TreeSelectionEvent;
 import javax.swing.event.TreeSelectionListener;
+import javax.swing.text.JTextComponent;
 import javax.swing.tree.TreeCellEditor;
 import javax.swing.tree.TreePath;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoManager;
 
+import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.MainTabbedPane;
+import gov.sandia.n2a.ui.SafeTextTransferHandler;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 
 /**
@@ -142,7 +152,11 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
 
             public void focusLost (FocusEvent e)
             {
-                if (editingNode != null) stopCellEditing ();
+                if (editingNode != null)
+                {
+                    stopCellEditing ();
+                    ((MainTabbedPane) MainFrame.instance.tabs).setPreferredFocus (PanelModel.instance, tree);
+                }
             }
         });
 
@@ -154,6 +168,17 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             }
         });
 
+        TransferHandler xfer = new SafeTextTransferHandler ()
+        {
+            public boolean importData (TransferSupport support)
+            {
+                boolean result = super.importData (support);
+                if (! result) result = tree.getTransferHandler ().importData (support);
+                return result;
+            }
+        };
+        oneLineEditor.setTransferHandler (xfer);
+
 
         multiLineEditor = new JTextArea ();
         multiLinePane = new JScrollPane (multiLineEditor);
@@ -161,6 +186,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         multiLineEditor.setWrapStyleWord (true);
         multiLineEditor.setRows (6);
         multiLineEditor.setTabSize (4);
+        multiLineEditor.setTransferHandler (xfer);
 
         multiLineEditor.getDocument ().addUndoableEditListener (undoManager);
         inputMap = multiLineEditor.getInputMap ();
@@ -195,7 +221,11 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
 
             public void focusLost (FocusEvent e)
             {
-                if (editingNode != null) stopCellEditing ();
+                if (editingNode != null)
+                {
+                    stopCellEditing ();
+                    ((MainTabbedPane) MainFrame.instance.tabs).setPreferredFocus (PanelModel.instance, tree);
+                }
             }
         });
 

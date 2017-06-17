@@ -853,7 +853,7 @@ public class PanelEquationTree extends JPanel
             if (tree.isEditing ())
             {
                 tree.stopEditing ();
-                mtp.setPreferredFocus (PanelModel.instance, PanelModel.instance.panelEquations.tree);  // Because tree does not reclaim the focus before focus shifts to the run tab.
+                mtp.setPreferredFocus (PanelModel.instance, tree);  // Because tree does not reclaim the focus before focus shifts to the run tab.
             }
 
             String simulatorName = root.source.get ("$metadata", "backend");  // Note that "record" is the raw model, while "root.source" is the collated model.
