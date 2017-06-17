@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2016,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -12,12 +12,19 @@ import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Activity;
 
+import java.awt.Color;
 import java.awt.Component;
+import java.awt.Cursor;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Graphics2D;
+import java.awt.Image;
 import java.awt.KeyboardFocusManager;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.util.HashSet;
@@ -28,6 +35,7 @@ import java.util.TreeMap;
 import java.util.Map.Entry;
 
 import javax.swing.Icon;
+import javax.swing.ImageIcon;
 import javax.swing.JTabbedPane;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -35,13 +43,14 @@ import javax.swing.event.MouseInputAdapter;
 
 public class MainTabbedPane extends JTabbedPane
 {
+    protected boolean   dragged;  // Becomes true if a mouse dragged event is received.
     protected int       draggedTab;
     protected Icon      draggedIcon;
     protected String    draggedTitle;
     protected Component draggedComponent;
     protected String    draggedToolTip;
     protected int       draggedMnemonic;
-    protected int       lastX;
+    protected Cursor    savedCursor;  // replaced during drag
     protected int       lastSelectedIndex = 0;
 
     protected Hashtable<Component,Component> lastFocus = new Hashtable<Component,Component> ();
@@ -91,8 +100,8 @@ public class MainTabbedPane extends JTabbedPane
             @Override
             public void mousePressed (MouseEvent e)
             {
-                lastX = e.getX ();
-                draggedTab = indexAtLocation (lastX, e.getY ());
+                dragged = false;
+                draggedTab = indexAtLocation (e.getX (), e.getY ());
                 if (draggedTab >= 0)
                 {
                     draggedTitle     = getTitleAt       (draggedTab);
@@ -100,38 +109,42 @@ public class MainTabbedPane extends JTabbedPane
                     draggedComponent = getComponentAt   (draggedTab);
                     draggedToolTip   = getToolTipTextAt (draggedTab);
                     draggedMnemonic  = getMnemonicAt    (draggedTab);
-                    setSelectedIndex (-1);
                 }
             }
 
             @Override
             public void mouseReleased (MouseEvent e)
             {
-                if (draggedTab >= 0)
+                if (dragged  &&  draggedTab >= 0)
                 {
-                    setSelectedIndex (draggedTab);
-                    draggedTab = -1;
+                    int currentX = Math.min (getWidth (), Math.max (0, e.getX ()));
+                    int currentTab = indexAtLocation (currentX, 10);
+                    if (currentTab >= 0  &&  currentTab != draggedTab)
+                    {
+                        removeTabAt (draggedTab);
+                        insertTab (draggedTitle, draggedIcon, draggedComponent, draggedToolTip, currentTab);
+                        setMnemonicAt (currentTab, draggedMnemonic);
+                        setSelectedIndex (currentTab);
 
-                    String order = getTitleAt (0);
-                    for (int i = 1; i < getTabCount (); i++) order += "," + getTitleAt (i);
-                    AppData.state.set ("MainTabbedPane", "order", order);
+                        String order = getTitleAt (0);
+                        for (int i = 1; i < getTabCount (); i++) order += "," + getTitleAt (i);
+                        AppData.state.set ("MainTabbedPane", "order", order);
+                    }
                 }
+                dragged = false;
+                setCursor (savedCursor);
             }
 
             @Override
             public void mouseDragged (MouseEvent e)
             {
-                if (draggedTab < 0) return;
-                int currentX = Math.min (getWidth (), Math.max (0, e.getX ()));
-                int currentTab = indexAtLocation (currentX, 10);
-                if (currentTab < 0) return;
-                if (currentTab == draggedTab) return;
-                if ((currentTab - draggedTab) * (currentX - lastX) < 0) return;  // Only move tab in same direction as drag. Prevents thrashing in case where tabs are different widths.
-
-                removeTabAt (draggedTab);
-                insertTab (draggedTitle, draggedIcon, draggedComponent, draggedToolTip, currentTab);
-                setMnemonicAt (currentTab, draggedMnemonic);
-                draggedTab = currentTab;
+                if (! dragged)  // drag is initiating, so change cursor
+                {
+                    savedCursor = getCursor ();
+                    java.awt.Toolkit toolkit = java.awt.Toolkit.getDefaultToolkit ();
+                    setCursor (toolkit.createCustomCursor (((ImageIcon) draggedIcon).getImage (), new java.awt.Point (0, 0), ""));
+                }
+                dragged = true;
             }
         };
         addMouseListener       (mouseAdapter);
@@ -206,7 +219,7 @@ public class MainTabbedPane extends JTabbedPane
             if (getTitleAt (i).equals (tabName))
             {
                 setSelectedIndex (i);
-                return getComponent (i);
+                return getComponentAt (i);
             }
         }
         return null;

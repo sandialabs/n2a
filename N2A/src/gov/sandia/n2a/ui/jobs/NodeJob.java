@@ -63,7 +63,7 @@ public class NodeJob extends NodeBase
         if (complete ==  3) return iconStopped;
 
         // Create an icon on the fly which represents percent complete as a pie-chart
-        BufferedImage inProgress = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+        BufferedImage inProgress = new BufferedImage (16, 16, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = inProgress.createGraphics ();
         g.setBackground (new Color (0, 0, 0, 1));
         g.clearRect (0, 0, 16, 16);
