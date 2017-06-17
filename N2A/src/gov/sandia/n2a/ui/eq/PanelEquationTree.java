@@ -213,6 +213,7 @@ public class PanelEquationTree extends JPanel
         tree.setScrollsOnExpand (true);
         tree.getSelectionModel ().setSelectionMode (TreeSelectionModel.SINGLE_TREE_SELECTION);  // No multiple selection. It only makes deletes and moves more complicated.
         tree.setEditable (true);
+        tree.setInvokesStopCellEditing (true);  // auto-save current edits, as much as possible
         tree.setDragEnabled (true);
         tree.setToggleClickCount (0);  // Disable expand/collapse on double-click
 
@@ -225,19 +226,23 @@ public class PanelEquationTree extends JPanel
             @Override
             public void editingStopped (ChangeEvent e)
             {
-                editor.editingNode.applyEdit (tree);
+                NodeBase node = editor.editingNode;
+                editor.editingNode = null;
+                node.applyEdit (tree);
             }
 
             @Override
             public void editingCanceled (ChangeEvent e)
             {
+                NodeBase node = editor.editingNode;
+                editor.editingNode = null;
+
                 // We only get back an empty string if we explicitly set it before editing starts.
                 // Certain types of nodes do this when inserting a new instance into the tree, via NodeBase.add()
                 // We desire in this case that escape cause the new node to evaporate.
-                Object o = editor.editingNode.getUserObject ();
+                Object o = node.getUserObject ();
                 if (! (o instanceof String)) return;
 
-                NodeBase node   = editor.editingNode;
                 NodeBase parent = (NodeBase) node.getParent ();
                 if (((String) o).isEmpty ())
                 {
@@ -537,11 +542,9 @@ public class PanelEquationTree extends JPanel
 
             public void focusLost (FocusEvent e)
             {
-                if (! e.isTemporary ()  &&  ! tree.isEditing ())  // The shift to the editing component appears as a loss of focus.
-                {
-                    if (record != null) focusCache.put (record, new StoredPath (tree));
-                    tree.clearSelection ();
-                }
+                // The shift to the editing component appears as a loss of focus.
+                // The shift to a popup menu appears as a "temporary" loss of focus.
+                if (! e.isTemporary ()  &&  ! tree.isEditing ()) yieldFocus ();
             }
         });
 
@@ -553,6 +556,7 @@ public class PanelEquationTree extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
+                tree.stopEditing ();
                 PanelModel.instance.undoManager.add (new AddDoc ());
             }
         });
@@ -752,8 +756,12 @@ public class PanelEquationTree extends JPanel
     public void loadRootFromDB (MNode doc)
     {
         if (record == doc) return;
-        // Save tree state for current record, but only if it's better than the previously-saved state.
-        if (record != null  &&  (focusCache.get (record) == null  ||  tree.getSelectionPath () != null)) focusCache.put (record, new StoredPath (tree));
+        if (record != null)
+        {
+            tree.stopEditing ();
+            // Save tree state for current record, but only if it's better than the previously-saved state.
+            if (focusCache.get (record) == null  ||  tree.getSelectionPath () != null) focusCache.put (record, new StoredPath (tree));
+        }
         record = doc;
         try
         {
@@ -795,10 +803,20 @@ public class PanelEquationTree extends JPanel
         tree.paintImmediately (scrollPane.getViewport ().getViewRect ());
     }
 
+    public void yieldFocus ()
+    {
+        if (tree.getSelectionCount () > 0)
+        {
+            focusCache.put (record, new StoredPath (tree));
+            tree.clearSelection ();
+        }
+    }
+
     ActionListener listenerAdd = new ActionListener ()
     {
         public void actionPerformed (ActionEvent e)
         {
+            tree.stopEditing ();
             addAtSelected (e.getActionCommand ());
         }
     };
@@ -807,6 +825,7 @@ public class PanelEquationTree extends JPanel
     {
         public void actionPerformed (ActionEvent e)
         {
+            tree.stopEditing ();  // It may seem odd to save a cell just before destroying it, but this gives cleaner UI painting.
             deleteSelected ();
         }
     };
@@ -815,6 +834,7 @@ public class PanelEquationTree extends JPanel
     {
         public void actionPerformed (ActionEvent e)
         {
+            tree.stopEditing ();
             moveSelected (Integer.valueOf (e.getActionCommand ()));
         }
     };
@@ -829,6 +849,12 @@ public class PanelEquationTree extends JPanel
         public void actionPerformed (ActionEvent e)
         {
             if (record == null) return;
+            MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
+            if (tree.isEditing ())
+            {
+                tree.stopEditing ();
+                mtp.setPreferredFocus (PanelModel.instance, PanelModel.instance.panelEquations.tree);  // Because tree does not reclaim the focus before focus shifts to the run tab.
+            }
 
             String simulatorName = root.source.get ("$metadata", "backend");  // Note that "record" is the raw model, while "root.source" is the collated model.
             final Backend simulator = Backend.getBackend (simulatorName);
@@ -856,7 +882,6 @@ public class PanelEquationTree extends JPanel
                 }
             }.start ();
 
-            MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
             PanelRun panelRun = (PanelRun) mtp.selectTab ("Runs");
             mtp.setPreferredFocus (panelRun, panelRun.tree);
             panelRun.addNewRun (job);
@@ -892,6 +917,7 @@ public class PanelEquationTree extends JPanel
         public void actionPerformed (ActionEvent e)
         {
             if (record == null) return;
+            tree.stopEditing ();
 
             // Construct and customize a file chooser
             final JFileChooser fc = new JFileChooser (AppData.properties.get ("resourceDir"));
@@ -948,6 +974,8 @@ public class PanelEquationTree extends JPanel
 
         public void actionPerformed (ActionEvent e)
         {
+            tree.stopEditing ();
+
             // Construct and customize a file chooser
             final JFileChooser fc = new JFileChooser (AppData.properties.get ("resourceDir"));
             fc.setDialogTitle ("Import");
@@ -979,6 +1007,8 @@ public class PanelEquationTree extends JPanel
     {
         public void actionPerformed (ActionEvent e)
         {
+            tree.stopEditing ();
+
             String action = e.getActionCommand ();
             if (action.equals ("All"))
             {

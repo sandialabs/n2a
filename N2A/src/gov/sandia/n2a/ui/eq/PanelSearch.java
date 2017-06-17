@@ -115,6 +115,7 @@ public class PanelSearch extends JPanel
         {
             public void focusGained (FocusEvent e)
             {
+                PanelModel.instance.panelEquations.yieldFocus ();
                 if (list.getSelectedIndex () < 0)
                 {
                     if (lastSelection < 0  ||  lastSelection >= model.getSize ()) list.setSelectedIndex (0);
@@ -202,7 +203,9 @@ public class PanelSearch extends JPanel
             }
         });
 
+
         textQuery = new JTextField ();
+
         textQuery.addKeyListener (new KeyAdapter ()
         {
             public void keyReleased (KeyEvent e)
@@ -210,6 +213,19 @@ public class PanelSearch extends JPanel
                 if (e.getKeyCode () == KeyEvent.VK_ESCAPE) textQuery.setText ("");
             }
         });
+
+        textQuery.addFocusListener (new FocusListener ()
+        {
+            public void focusGained (FocusEvent e)
+            {
+                PanelModel.instance.panelEquations.yieldFocus ();
+            }
+
+            public void focusLost (FocusEvent e)
+            {
+            }
+        });
+
         textQuery.getDocument ().addDocumentListener (new DocumentListener ()
         {
             public void insertUpdate (DocumentEvent e)
@@ -227,7 +243,9 @@ public class PanelSearch extends JPanel
                 search ();
             }
         });
+
         textQuery.setTransferHandler (new SafeTextTransferHandler ());
+
 
         Lay.BLtg (this,
             "N", Lay.BL ("C", textQuery, "eb=2"),

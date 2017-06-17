@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2016 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -63,7 +63,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
     protected JScrollPane              multiLinePane;  // provides scrolling for multiLineEditor, and acts as the editingComponent
 
     protected TreePath                 lastPath;
-    public    boolean                  multiLineRequested;  ///< Indicates that the next getTreeCellEditorComponent() call should return multi-line, even the node is normally single line.
+    public    boolean                  multiLineRequested;  ///< Indicates that the next getTreeCellEditorComponent() call should return multi-line, even if the node is normally single line.
     protected NodeBase                 editingNode;
     protected Container                editingContainer;
     protected Component                editingComponent;
@@ -82,6 +82,10 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         oneLineEditor.setBorder (new EmptyBorder (0, 0, 0, 0));
 
         oneLineEditor.getDocument ().addUndoableEditListener (undoManager);
+        InputMap inputMap = oneLineEditor.getInputMap ();
+        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+        inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
         ActionMap actionMap = oneLineEditor.getActionMap ();
         actionMap.put ("Undo", new AbstractAction ("Undo")
         {
@@ -99,10 +103,6 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
                 catch (CannotRedoException e) {}
             }
         });
-        InputMap inputMap = oneLineEditor.getInputMap ();
-        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
-        inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
-        inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
 
         oneLineEditor.addFocusListener (new FocusListener ()
         {
@@ -142,6 +142,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
 
             public void focusLost (FocusEvent e)
             {
+                if (editingNode != null) stopCellEditing ();
             }
         });
 
@@ -162,6 +163,12 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         multiLineEditor.setTabSize (4);
 
         multiLineEditor.getDocument ().addUndoableEditListener (undoManager);
+        inputMap = multiLineEditor.getInputMap ();
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),           "none");
+        inputMap.put (KeyStroke.getKeyStroke ("control ENTER"),   "insert-break");
+        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+        inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
         actionMap = multiLineEditor.getActionMap ();
         actionMap.put ("Undo", new AbstractAction ("Undo")
         {
@@ -179,12 +186,18 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
                 catch (CannotRedoException e) {}
             }
         });
-        inputMap = multiLineEditor.getInputMap ();
-        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),           "none");
-        inputMap.put (KeyStroke.getKeyStroke ("control ENTER"),   "insert-break");
-        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
-        inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
-        inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
+
+        multiLineEditor.addFocusListener (new FocusListener ()
+        {
+            public void focusGained (FocusEvent e)
+            {
+            }
+
+            public void focusLost (FocusEvent e)
+            {
+                if (editingNode != null) stopCellEditing ();
+            }
+        });
 
         multiLineEditor.addKeyListener (new KeyAdapter ()
         {
