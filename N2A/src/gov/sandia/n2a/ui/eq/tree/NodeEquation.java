@@ -121,12 +121,12 @@ public class NodeEquation extends NodeBase
         Variable.ParsedValue piecesAfter  = new Variable.ParsedValue (input);
 
         NodeVariable parent = (NodeVariable) getParent ();
-        if (! piecesBefore.conditional.equals (piecesAfter.conditional))
+        if (! piecesBefore.condition.equals (piecesAfter.condition))
         {
-            MPart partAfter = (MPart) parent.source.child ("@" + piecesAfter.conditional);
+            MPart partAfter = (MPart) parent.source.child ("@" + piecesAfter.condition);
             if (partAfter != null  &&  partAfter.isFromTopDocument ())  // Can't overwrite another top-document node
             {
-                piecesAfter.conditional = piecesBefore.conditional;
+                piecesAfter.condition = piecesBefore.condition;
             }
         }
 
@@ -144,7 +144,7 @@ public class NodeEquation extends NodeBase
 
         if (piecesAfter.expression.isEmpty ()) piecesAfter.expression = "0";
 
-        PanelModel.instance.undoManager.add (new ChangeEquation (parent, piecesBefore.conditional, piecesBefore.combiner, piecesBefore.expression, piecesAfter.conditional, piecesAfter.combiner, piecesAfter.expression));
+        PanelModel.instance.undoManager.add (new ChangeEquation (parent, piecesBefore.condition, piecesBefore.combiner, piecesBefore.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
     }
 
     @Override

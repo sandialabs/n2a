@@ -98,7 +98,7 @@ public class NodeVariable extends NodeContainer
         }
 
         Variable.ParsedValue pieces = new Variable.ParsedValue (source.get ());
-        boolean empty =  pieces.expression.isEmpty ()  &&  pieces.conditional.isEmpty ();
+        boolean empty =  pieces.expression.isEmpty ()  &&  pieces.condition.isEmpty ();
 
         // Collapse or expand
         if (equationCount > 0)
@@ -107,7 +107,7 @@ public class NodeVariable extends NodeContainer
             {
                 // Expand
                 source.set (pieces.combiner);
-                source.set ("@" + pieces.conditional, pieces.expression);  // may override an existing equation
+                source.set ("@" + pieces.condition, pieces.expression);  // may override an existing equation
             }
             else if (equationCount == 1)
             {
@@ -227,7 +227,7 @@ public class NodeVariable extends NodeContainer
         
         offset = tabs.get (1).intValue () - fm.stringWidth (result);
         result = result + pad (offset, fm) + pieces.expression;
-        if (! pieces.conditional.isEmpty ()) result = result + " @ " + pieces.conditional;
+        if (! pieces.condition.isEmpty ()) result = result + " @ " + pieces.condition;
 
         setUserObject (result);
     }
@@ -378,7 +378,7 @@ public class NodeVariable extends NodeContainer
         {
             Variable.ParsedValue piecesDest  = new Variable.ParsedValue (nodeAfter.source.get ());  // In this section, "dest" refers to state of target node before it is overwritten, while "after" refers to newly input values from user.
             Variable.ParsedValue piecesAfter = new Variable.ParsedValue (valueAfter);
-            boolean expressionAfter = ! piecesAfter.expression.isEmpty ()  ||  ! piecesAfter.conditional.isEmpty ();
+            boolean expressionAfter = ! piecesAfter.expression.isEmpty ()  ||  ! piecesAfter.condition.isEmpty ();
             if (piecesAfter.combiner  .isEmpty ()) piecesAfter.combiner   = piecesDest.combiner;  // If the user doesn't specify a combiner, absorb it from our destination.
             if (piecesAfter.expression.isEmpty ()) piecesAfter.expression = "0";
 
@@ -392,7 +392,7 @@ public class NodeVariable extends NodeContainer
                 {
                     equationCount++;
                     NodeEquation e = (NodeEquation) c;
-                    if (e.source.key ().substring (1).equals (piecesAfter.conditional)) equationMatch = e;
+                    if (e.source.key ().substring (1).equals (piecesAfter.condition)) equationMatch = e;
                 }
             }
 
@@ -402,12 +402,12 @@ public class NodeVariable extends NodeContainer
                 {
                     if (equationMatch == null)
                     {
-                        mep.undoManager.add (new AddEquation (this, piecesAfter.conditional, piecesAfter.combiner, piecesAfter.expression));
+                        mep.undoManager.add (new AddEquation (this, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
                     }
                     else
                     {
                         Variable.ParsedValue piecesMatch = new Variable.ParsedValue (piecesDest.combiner + equationMatch.source.get () + equationMatch.source.key ());
-                        mep.undoManager.add (new ChangeEquation (this, piecesMatch.conditional, piecesMatch.combiner, piecesMatch.expression, piecesAfter.conditional, piecesAfter.combiner, piecesAfter.expression));
+                        mep.undoManager.add (new ChangeEquation (this, piecesMatch.condition, piecesMatch.combiner, piecesMatch.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
                     }
                     parent.updateTabStops (fm);
                     parent.allNodesChanged (model);
@@ -421,25 +421,25 @@ public class NodeVariable extends NodeContainer
                     NodeVariable nva = (NodeVariable) nodeAfter;
                     if (equationCount == 0)
                     {
-                        if (piecesAfter.conditional.equals (piecesDest.conditional))
+                        if (piecesAfter.condition.equals (piecesDest.condition))
                         {
                             mep.undoManager.add (new ChangeVariable (nva, nameAfter, valueAfter, getKeyPath ()));
                         }
                         else
                         {
-                            mep.undoManager.add (new AddEquation (nva, piecesAfter.conditional, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
+                            mep.undoManager.add (new AddEquation (nva, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
                         }
                     }
                     else
                     {
                         if (equationMatch == null)
                         {
-                            mep.undoManager.add (new AddEquation (nva, piecesAfter.conditional, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
+                            mep.undoManager.add (new AddEquation (nva, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
                         }
                         else
                         {
                             Variable.ParsedValue piecesMatch = new Variable.ParsedValue (piecesDest.combiner + equationMatch.source.get () + equationMatch.source.key ());
-                            mep.undoManager.add (new ChangeEquation (nva, piecesMatch.conditional, piecesMatch.combiner, piecesMatch.expression, piecesAfter.conditional, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
+                            mep.undoManager.add (new ChangeEquation (nva, piecesMatch.condition, piecesMatch.combiner, piecesMatch.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
                         }
                     }
                     // commit suicide

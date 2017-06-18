@@ -169,7 +169,7 @@ public class Variable implements Comparable<Variable>
     {
         public String combiner;
         public String expression;
-        public String conditional;
+        public String condition;
 
         public ParsedValue (String value)
         {
@@ -177,7 +177,7 @@ public class Variable implements Comparable<Variable>
             {
                 combiner = "";
                 expression = "";
-                conditional = "";
+                condition = "";
                 return;
             }
 
@@ -190,21 +190,21 @@ public class Variable implements Comparable<Variable>
             // Extract the conditional expression, if any
             String[] pieces = value.split ("@", 2);
             expression = pieces[0].trim ();
-            if (pieces.length < 2) conditional = "";
-            else                   conditional = pieces[1].trim ().replaceAll ("[\\n\\t]", "");
+            if (pieces.length < 2) condition = "";
+            else                   condition = pieces[1].trim ().replaceAll ("[\\n\\t]", "");
         }
 
         public boolean equals (Object that)
         {
             if (! (that instanceof ParsedValue)) return false;
             ParsedValue p = (ParsedValue) that;
-            return  p.combiner.equals (combiner)  &&  p.expression.equals (expression)  &&  p.conditional.equals (conditional);
+            return  p.combiner.equals (combiner)  &&  p.expression.equals (expression)  &&  p.condition.equals (condition);
         }
 
         public String toString ()
         {
-            if (conditional.isEmpty ()) return combiner + expression;
-            return combiner + expression + "@" + conditional;
+            if (condition.isEmpty ()) return combiner + expression;
+            return combiner + expression + "@" + condition;
         }
     }
 
