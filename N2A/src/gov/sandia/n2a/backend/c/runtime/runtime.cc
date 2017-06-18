@@ -179,7 +179,7 @@ MatrixResult<float> uniform (int dimension)
 map<string, int> columnMap;  // TODO: should use unordered_map and a C11 compiler
 vector<float>    columnValues;
 
-float trace (float value, const string & column)
+float output (float value, const string & column)
 {
     map<string, int>::iterator result = columnMap.find (column);
     if (result == columnMap.end ())

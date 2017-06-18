@@ -33,7 +33,7 @@ extern fl::MatrixResult<float> uniform      (int dimension);
     @param column Label for the value. Once allocated, it never goes away for the remainder of the simulation.
     @return The value provide as input. Thus, trace() can be inserted into any expression.
 **/
-extern float trace        (float value, const std::string & column);
+extern float output       (float value, const std::string & column);
 extern void  writeTrace   ();  ///< called only by top-level Population::finalize()
 extern void  writeHeaders ();  ///< called only by main() on termination of simulation
 

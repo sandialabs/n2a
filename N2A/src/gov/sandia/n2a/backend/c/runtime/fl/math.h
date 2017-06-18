@@ -66,21 +66,7 @@ namespace std
   }
 #endif
 
-#ifndef _MSC_VER
-
-  inline int
-  isinf (float a)
-  {
-	return isinff (a);
-  }
-
-  inline int
-  isnan (float a)
-  {
-	return isnanf (a);
-  }
-
-#else
+#ifdef _MSC_VER
 
   inline int
   isnan (double a)
