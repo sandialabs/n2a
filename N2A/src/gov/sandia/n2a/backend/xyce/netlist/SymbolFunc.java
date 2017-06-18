@@ -1,5 +1,5 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -9,9 +9,9 @@ package gov.sandia.n2a.backend.xyce.netlist;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.AccessVariable;
-import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Visitor;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -51,7 +51,8 @@ public class SymbolFunc extends Symbol
         if (args.size () == 0)
         {
             // if there aren't any arguments, something's wrong - this could have been a constant
-            throw new EvaluationException ("Trying to create .func for " + eq.variable.name + " but there are no arguments");
+            Backend.err.get ().println ("Trying to create .func for " + eq.variable.name + " but there are no arguments");
+            throw new Backend.AbortRun ();
         }
     }
 

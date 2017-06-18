@@ -11,6 +11,7 @@ import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorBinary;
+import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
@@ -87,28 +88,38 @@ public class Variable implements Comparable<Variable>
         this.order = order;
     }
 
-    public Variable (EquationSet container, MNode source) throws Exception
+    public Variable (EquationSet container, MNode source) throws ParseException
     {
         this.container = container;
         equations = new TreeSet<EquationEntry> ();  // It is possible for Variable to be parse from MNode without any equations, but code that relies this ctor expects a non-null equations member.
 
         parseLHS (source.key ());
         String rhs = source.get ();
-        if (! rhs.isEmpty ())
+        try
         {
-            rhs = parseAssignment (rhs);
-            if (! rhs.isEmpty ()) add (new EquationEntry (rhs));
-        }
-        for (MNode i : source)
-        {
-            String key = i.key ();
-            if (key.startsWith ("@")) add (new EquationEntry (i));
-            if (key.equals ("$metadata"))
+            if (! rhs.isEmpty ())
             {
-                if (metadata == null) metadata = new TreeMap<String,String> ();
-                for (MNode m : i) metadata.put (m.key (), m.get ());
+                rhs = parseAssignment (rhs);
+                if (! rhs.isEmpty ()) add (new EquationEntry (rhs));
             }
-            // Ignore references, as they have no function in simulation.
+            for (MNode i : source)
+            {
+                String key = i.key ();
+                if (key.startsWith ("@")) add (new EquationEntry (i));
+                if (key.equals ("$metadata"))
+                {
+                    if (metadata == null) metadata = new TreeMap<String,String> ();
+                    for (MNode m : i) metadata.put (m.key (), m.get ());
+                }
+                // Ignore references, as they have no function in simulation.
+            }
+        }
+        catch (ParseException e)
+        {
+            String prefix = container.prefix () + "." + source.key () + "=" + combinerString ();
+            e.line = prefix + e.line;
+            e.column += prefix.length ();
+            throw e;
         }
     }
 
@@ -121,6 +132,31 @@ public class Variable implements Comparable<Variable>
             order++;
             name = name.substring (0, name.length () - 1);
         }
+    }
+
+    /**
+        Checks for a combining operator at the beginning of the right-hand side, and removes it
+        for further processing.
+    **/
+    public String parseAssignment (String rhs)
+    {
+        assignment = REPLACE;  // Assuming that an = was found before calling this function.
+
+        rhs = rhs.trim ();
+        char first;
+        if (rhs.isEmpty ()) first = 0;
+        else                first = rhs.charAt (0);
+        switch (first)
+        {
+            case '+': assignment = ADD;           return rhs.substring (1);
+            case '*': assignment = MULTIPLY;      return rhs.substring (1);
+            case '/': assignment = DIVIDE;        return rhs.substring (1);
+            case '<': assignment = MIN;           return rhs.substring (1);
+            case '>': assignment = MAX;           return rhs.substring (1);
+            case ':': addAttribute ("temporary"); return rhs.substring (1);  // We are already set to REPLACE
+        }
+
+        return rhs;
     }
 
     /**
@@ -170,31 +206,6 @@ public class Variable implements Comparable<Variable>
             if (conditional.isEmpty ()) return combiner + expression;
             return combiner + expression + "@" + conditional;
         }
-    }
-
-    /**
-        Checks for a combining operator at the beginning of the right-hand side, and removes it
-        for further processing.
-    **/
-    public String parseAssignment (String rhs)
-    {
-        assignment = REPLACE;  // Assuming that an = was found before calling this function.
-
-        rhs = rhs.trim ();
-        char first;
-        if (rhs.isEmpty ()) first = 0;
-        else                first = rhs.charAt (0);
-        switch (first)
-        {
-            case '+': assignment = ADD;           return rhs.substring (1);
-            case '*': assignment = MULTIPLY;      return rhs.substring (1);
-            case '/': assignment = DIVIDE;        return rhs.substring (1);
-            case '<': assignment = MIN;           return rhs.substring (1);
-            case '>': assignment = MAX;           return rhs.substring (1);
-            case ':': addAttribute ("temporary"); return rhs.substring (1);  // We are already set to REPLACE
-        }
-
-        return rhs;
     }
 
     public EquationEntry find (EquationEntry query)

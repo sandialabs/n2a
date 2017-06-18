@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.execenvs;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ssh.RedSkyConnection;
 import gov.sandia.n2a.ssh.RedSkyConnection.Result;
 
@@ -23,7 +24,8 @@ public class RedSkyParallelEnv extends RedSkyEnv
         Result r = RedSkyConnection.exec ("squeue -o \"%u %i\" -u " + System.getProperty ("user.name"));
         if (r.error && r.stdErr != null && !r.stdErr.equals (""))
         {
-            throw new Exception (r.stdErr);
+            Backend.err.get ().println (r.stdErr);
+            throw new Backend.AbortRun ();
         }
         Set<Long> result = new TreeSet<Long> ();
         BufferedReader reader = new BufferedReader (new StringReader (r.stdOut));
@@ -61,7 +63,11 @@ public class RedSkyParallelEnv extends RedSkyEnv
             + " --error='"           + jobDir + "/err'"
             + " '" + jobDir + "/n2a_job'"
         );
-        if (r.error) throw new Exception ("Could not start process: " + r.stdErr);
+        if (r.error)
+        {
+            Backend.err.get ().println ("Could not start process: " + r.stdErr);
+            throw new Backend.AbortRun ();
+        }
 
         // Example output:
         //   Using wcid "FY139768"  found on CLI.

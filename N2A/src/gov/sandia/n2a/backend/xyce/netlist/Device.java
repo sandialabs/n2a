@@ -1,5 +1,5 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -16,6 +16,7 @@ import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.operator.Divide;
 import gov.sandia.n2a.language.type.Instance;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -88,7 +89,11 @@ public class Device
 
         String deviceName = s.getNamedValue (DEVICE_TAG);
         if (deviceName != null) device = XyceDevice.createFor (deviceName);
-        if (device == null) throw new EvaluationException ("unrecognized device name " + deviceName + " for " + eqSet.name);
+        if (device == null)
+        {
+            Backend.err.get ().println ("unrecognized device name " + deviceName + " for " + eqSet.name);
+            throw new Backend.AbortRun ();
+        }
 
         modelName = eqSet.name + "Model";
 
@@ -114,7 +119,8 @@ public class Device
                 {
                     if (! device.isAllowedModelParameter (value))
                     {
-                        throw new EvaluationException ("unrecognized parameter " + value + " for device " + deviceName);
+                        Backend.err.get ().println ("unrecognized parameter " + value + " for device " + deviceName);
+                        throw new Backend.AbortRun ();
                     }
                     paramList.put (value.toUpperCase (), v);
                 }
@@ -126,7 +132,8 @@ public class Device
                     int index = Integer.parseInt (value) - 1;
                     if (! device.isValidNodeIndex (index))
                     {
-                        throw new EvaluationException("unrecognized/illegal node index " + index + " for device " + deviceName + " variable " + v.name);
+                        Backend.err.get ().println ("unrecognized/illegal node index " + index + " for device " + deviceName + " variable " + v.name);
+                        throw new Backend.AbortRun ();
                     }
                     varnames.set (index, v);
                 }
@@ -137,7 +144,8 @@ public class Device
                     // Main purpose would be in case user wants to output those vars
                     if (! device.isInternalVariable (value))
                     {
-                        throw new EvaluationException ("unrecognized internal variable " + value + " for device " + deviceName);
+                        Backend.err.get ().println ("unrecognized internal variable " + value + " for device " + deviceName);
+                        throw new Backend.AbortRun ();
                     }
                     ivars.put (v, value);
                 }

@@ -24,7 +24,7 @@ import javax.measure.unit.Unit;
 
 public class ExpressionParser
 {
-    public static SimpleNode parse (String line) throws ParseException
+    public static SimpleNode parse (String line) throws gov.sandia.n2a.language.ParseException
     {
         try
         {
@@ -35,7 +35,17 @@ public class ExpressionParser
         }
         catch (TokenMgrError t)
         {
-            throw new ParseException ("Lexical error");
+            String column = t.getMessage ().split ("column ", 2)[1].trim ().split ("\\.", 2)[0];  // See TokenMgrError.LexicalError() for the structure of the string we are pulling apart here.
+            throw new gov.sandia.n2a.language.ParseException ("Lexical error:", line, Integer.parseInt (column) - 1);
+        }
+        catch (ParseException t)
+        {
+            String message = t.getMessage ();
+            if (message == null  ||  message.isEmpty ()) message = "Syntax error";
+            message += ":";
+            int column = 0;
+            if (t.currentToken != null  &&  t.currentToken.next != null) column = t.currentToken.next.beginColumn;
+            throw new gov.sandia.n2a.language.ParseException (message, line, column - 1);
         }
     }
 }
@@ -342,7 +352,20 @@ void Constant() #Constant : {Token t; Token u; String UCUM = "";}
     t = <NUMBER> (u = <UNIT> {UCUM += u.image;})*
     {
         double value = Double.parseDouble (t.image);
-        if (! UCUM.isEmpty ()) value = Unit.valueOf (UCUM).toStandardUnit ().convert (value);
+        if (! UCUM.isEmpty ())
+        {
+            try
+            {
+                value = Unit.valueOf (UCUM).toStandardUnit ().convert (value);
+            }
+            catch (IllegalArgumentException e)
+            {
+                ParseException p = new ParseException ("UCUM syntax error");
+                p.currentToken = t;
+                t.next.beginColumn += ((java.text.ParseException) e.getCause ()).getErrorOffset ();
+                throw p;
+            }
+        }
         jjtThis.jjtSetValue (new Scalar (value));
     }
 }

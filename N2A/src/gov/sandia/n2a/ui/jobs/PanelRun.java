@@ -291,6 +291,8 @@ public class PanelRun extends JPanel
         buttonMonospace.setFont (new Font (Font.MONOSPACED, Font.PLAIN, buttonMonospace.getFont ().getSize ()));
         buttonMonospace.setFocusable (false);
         buttonMonospace.setToolTipText ("Use Fixed-Width Font");
+        buttonMonospace.setSelected (true);  // default to monospace font, so compiler errors make sense
+        displayText.setFont (new Font (Font.MONOSPACED, Font.PLAIN, displayText.getFont ().getSize ()));
         buttonMonospace.addActionListener (new ActionListener()
         {
             public void actionPerformed (ActionEvent e)

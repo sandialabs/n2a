@@ -1,5 +1,5 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -50,7 +50,6 @@ import gov.sandia.n2a.language.parse.ASTMatrix;
 import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.parse.ASTOperator;
 import gov.sandia.n2a.language.parse.ExpressionParser;
-import gov.sandia.n2a.language.parse.ParseException;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;

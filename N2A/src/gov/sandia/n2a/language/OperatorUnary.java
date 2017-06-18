@@ -8,7 +8,6 @@ package gov.sandia.n2a.language;
 
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.parse.SimpleNode;
-import gov.sandia.n2a.language.parse.ParseException;
 
 public class OperatorUnary extends Operator
 {
@@ -16,7 +15,7 @@ public class OperatorUnary extends Operator
 
     public void getOperandsFrom (SimpleNode node) throws ParseException
     {
-        if (node.jjtGetNumChildren () != 1) throw new ParseException ("AST for operator has unexpected form");
+        if (node.jjtGetNumChildren () != 1) throw new Error ("AST for operator has unexpected form");
         operand = Operator.getFrom ((SimpleNode) node.jjtGetChild (0));
     }
 

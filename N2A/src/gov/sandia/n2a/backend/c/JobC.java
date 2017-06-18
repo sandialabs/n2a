@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2016,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -66,7 +66,8 @@ public class JobC
         String runtimeDir = env.getNamedValue ("c.directory");
         if (runtimeDir.length () == 0)
         {
-            throw new Exception ("Couldn't determine runtime directory");
+            Backend.err.get ().println ("Couldn't determine runtime directory");
+            throw new Backend.AbortRun ();
         }
         String runtime;
         try
@@ -1050,7 +1051,11 @@ public class JobC
             Variable n = s.find (new Variable ("$n", 0));
             if (n != null)
             {
-                if (s.connectionBindings != null) throw new Exception ("$n is not applicable to connections");
+                if (s.connectionBindings != null)
+                {
+                    Backend.err.get ().println ("$n is not applicable to connections");
+                    throw new Backend.AbortRun ();
+                }
                 result.append ("  resize (simulator, " + resolve (n.reference, context, false) + ");\n");
             }
         }
@@ -1568,7 +1573,11 @@ public class JobC
             {
                 if (! v.name.startsWith ("$")) continue;  // TODO: This doesn't allow in temporaries that a $variable may depend on. See InternalBackendData sorting section for example of how to handle this better.
                 if (v.name.equals ("$live")) continue;
-                if (v.name.equals ("$type")) throw new Exception ("$type must be conditional, and it must never be assigned during init.");  // TODO: Work out logic of $type better. This trap should not be here.
+                if (v.name.equals ("$type"))
+                {
+                    Backend.err.get ().println ("$type must be conditional, and it must never be assigned during init.");  // TODO: Work out logic of $type better. This trap should not be here.
+                    throw new Backend.AbortRun ();
+                }
                 multiconditional (v, context, "  ");
             }
             // finalize $variables
@@ -2314,7 +2323,8 @@ public class JobC
             boolean connectionDest   = dest  .connectionBindings != null;
             if (connectionSource != connectionDest)
             {
-                throw new Exception ("Can't change $type between connection and non-connection.");
+                Backend.err.get ().println ("Can't change $type between connection and non-connection.");
+                throw new Backend.AbortRun ();
                 // Why not? Because a connection *must* know the instances it connects, while
                 // a compartment cannot know those instances. Thus, one can never be converted
                 // to the other.
@@ -2336,7 +2346,11 @@ public class JobC
                 {
                     String name = c.getKey ();
                     Entry<String, EquationSet> d = source.connectionBindings.floorEntry (name);
-                    if (d == null  ||  ! d.getKey ().equals (name)) throw new Exception ("Unfulfilled connection binding during $type change.");
+                    if (d == null  ||  ! d.getKey ().equals (name))
+                    {
+                        Backend.err.get ().println ("Unfulfilled connection binding during $type change.");
+                        throw new Backend.AbortRun ();
+                    }
                     result.append ("  to->" + mangle (name) + " = from->" + mangle (name) + ";\n");
                 }
             }
@@ -2436,7 +2450,11 @@ public class JobC
                 // was actually triggered. During finalize(), this will select a piece of code that implements
                 // this particular split. Afterward, $type will be set to an appropriate index within the split,
                 // per the N2A language document.
-                if (! (e.expression instanceof Split)) throw new Exception ("Unexpected expression for $type");
+                if (! (e.expression instanceof Split))
+                {
+                    Backend.err.get ().println ("Unexpected expression for $type");
+                    throw new Backend.AbortRun ();
+                }
                 int index = context.part.splits.indexOf (((Split) e.expression).parts);
                 context.result.append (padIf + resolve (v.reference, context, true) + " = " + (index + 1) + ";\n");
             }
@@ -2623,7 +2641,11 @@ public class JobC
         if      (v.type instanceof Scalar) return " = 0";
         else if (v.type instanceof Matrix) return ".clear ()";
         else if (v.type instanceof Text  ) return ".clear ()";
-        else throw new Exception ("Unknown Type");
+        else
+        {
+            Backend.err.get ().println ("Unknown Type");
+            throw new Backend.AbortRun ();
+        }
     }
 
     public static String prefix (EquationSet t)

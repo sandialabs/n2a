@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.execenvs;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -53,7 +54,11 @@ public class Windows extends LocalMachineEnv
         String [] commandParm = new String[] {"cmd", "/c", "start", "/b", script.getAbsolutePath ()};
         Process p = Runtime.getRuntime ().exec (commandParm);
         p.waitFor ();
-        if (p.exitValue () != 0) throw new Exception ("Failed to run job:\n" + streamToString (p.getErrorStream ()));
+        if (p.exitValue () != 0)
+        {
+            Backend.err.get ().println ("Failed to run job:\n" + streamToString (p.getErrorStream ()));
+            throw new Backend.AbortRun ();
+        }
 
         // Get PID of newly-started job
         Process proc = Runtime.getRuntime ().exec (new String[] {"tasklist", "/v", "/fo", "table"});  // TODO: might be safer to use CSV format instead

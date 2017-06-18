@@ -1,5 +1,5 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -8,6 +8,7 @@ package gov.sandia.n2a.eqset;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Visitor;
 
@@ -37,18 +38,35 @@ public class EquationEntry implements Comparable<EquationEntry>
         symbol is included in the stored index (to allow commingling with $metadata
         and $reference).
     **/
-    public EquationEntry (MNode source) throws Exception
+    public EquationEntry (MNode source) throws ParseException
     {
-        expression = Operator.parse (source.get ());
-        String key = source.key ().substring (1);  // The key should always begin with @
-        if (key.isEmpty ())
+        ifString                = source.key ();
+        String expressionString = source.get ();
+        System.out.println ("eq parse mnode " + ifString + " " + expressionString);
+        try
         {
-            ifString = "";
+            expression = Operator.parse (expressionString);
         }
-        else
+        catch (ParseException e)
         {
-            condition = Operator.parse (key);
-            ifString  = condition.render ();
+            e.line += ifString;
+            throw e;
+        }
+
+        ifString = ifString.substring (1);  // The key should always begin with @
+        if (! ifString.isEmpty ())
+        {
+            try
+            {
+                condition = Operator.parse (ifString);
+            }
+            catch (ParseException e)
+            {
+                e.line = expressionString + "@" + e.line;
+                e.column += expressionString.length () + 1;
+                throw e;
+            }
+            ifString  = condition.render ();  // to normalize formatting, since we rely on this string for sorting and comparison
         }
     }
 
@@ -56,15 +74,33 @@ public class EquationEntry implements Comparable<EquationEntry>
         Parses the right-hand side of an equation and converts it into an EquationEntry.
         The caller is responsible for adding the equation object to the correct variable.
     **/
-    public EquationEntry (String rhs) throws Exception
+    public EquationEntry (String rhs) throws ParseException
     {
         String[] parts = rhs.split ("@");
-        expression = Operator.parse (parts[0]);
+        try
+        {
+            expression = Operator.parse (parts[0]);
+        }
+        catch (ParseException e)
+        {
+            e.line = rhs;
+            throw e;
+        }
+
         ifString = "";
         if (parts.length > 1)
         {
-            condition = Operator.parse (parts[1]);
-            ifString  = condition.render ();
+            try
+            {
+                condition = Operator.parse (parts[1]);
+            }
+            catch (ParseException e)
+            {
+                e.line = rhs;
+                e.column += parts[0].length () + 1;
+                throw e;
+            }
+            ifString = condition.render ();
         }
     }
 

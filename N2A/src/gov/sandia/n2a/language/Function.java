@@ -9,7 +9,6 @@ package gov.sandia.n2a.language;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.parse.ASTList;
 import gov.sandia.n2a.language.parse.SimpleNode;
-import gov.sandia.n2a.language.parse.ParseException;
 
 public class Function extends Operator
 {
@@ -22,9 +21,9 @@ public class Function extends Operator
             operands = new Operator[0];
             return;
         }
-        if (node.jjtGetNumChildren () != 1) throw new ParseException ("AST for function has unexpected form");
+        if (node.jjtGetNumChildren () != 1) throw new Error ("AST for function has unexpected form");
         Object o = node.jjtGetChild (0);
-        if (! (o instanceof ASTList)) throw new ParseException ("AST for function has unexpected form");
+        if (! (o instanceof ASTList)) throw new Error ("AST for function has unexpected form");
         ASTList l = (ASTList) o;
         int count = l.jjtGetNumChildren ();
         operands = new Operator[count];

@@ -12,7 +12,6 @@ import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.language.parse.ASTIdentifier;
 import gov.sandia.n2a.language.parse.ASTList;
 import gov.sandia.n2a.language.parse.SimpleNode;
-import gov.sandia.n2a.language.parse.ParseException;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 
@@ -23,14 +22,14 @@ public class Split extends Operator
 
     public void getOperandsFrom (SimpleNode node) throws ParseException
     {
-        if (! (node instanceof ASTList)) throw new ParseException ("AST for type list has unexpected form");
+        if (! (node instanceof ASTList)) throw new Error ("AST for type list has unexpected form");
         ASTList l = (ASTList) node;
         int count = l.jjtGetNumChildren ();
         names = new String[count];
         for (int i = 0; i < count; i++)
         {
             SimpleNode n = (SimpleNode) l.jjtGetChild (i);
-            if (! (n instanceof ASTIdentifier)) throw new ParseException ("AST for type list has unexpected form");
+            if (! (n instanceof ASTIdentifier)) throw new ParseException ("Items in $type list must all be part names.");
             names[i] = n.jjtGetValue ().toString ();
         }
     }

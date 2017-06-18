@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.execenvs;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -72,12 +73,20 @@ public class Linux extends LocalMachineEnv
         String [] commandParm = {"chmod", "u+x", script.getAbsolutePath ()};
         Process p = Runtime.getRuntime ().exec (commandParm);
         p.waitFor ();
-        if (p.exitValue () != 0) throw new Exception ("Failed to change permissions on job script:\n" + streamToString (p.getErrorStream ()));
+        if (p.exitValue () != 0)
+        {
+            Backend.err.get ().println ("Failed to change permissions on job script:\n" + streamToString (p.getErrorStream ()));
+            throw new Backend.AbortRun ();
+        }
 
         commandParm = new String[] {script.getAbsolutePath ()};
         p = Runtime.getRuntime ().exec (commandParm);
         p.waitFor ();
-        if (p.exitValue () != 0) throw new Exception ("Failed to run job:\n" + streamToString (p.getErrorStream ()));
+        if (p.exitValue () != 0)
+        {
+            Backend.err.get ().println ("Failed to run job:\n" + streamToString (p.getErrorStream ()));
+            throw new Backend.AbortRun ();
+        }
 
         // Get PID of newly created job
         // A command line containing the path to the job dir should uniquely identify the correct process.

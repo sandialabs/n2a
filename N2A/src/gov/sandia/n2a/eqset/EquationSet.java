@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2016 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -12,6 +12,7 @@ import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorBinary;
+import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Split;
 import gov.sandia.n2a.language.Transformer;
@@ -119,6 +120,7 @@ public class EquationSet implements Comparable<EquationSet>
         metadata       = new TreeMap<String, String> ();
 
         // Sort equations by object-oriented operation
+        boolean exception = false;
         for (MNode e : source)
         {
             String index = e.key ();
@@ -131,9 +133,22 @@ public class EquationSet implements Comparable<EquationSet>
             }
 
             // That leaves only parts and variables
-            if (MPart.isPart (e)) parts    .add (new EquationSet (this, e));
-            else                  variables.add (new Variable    (this, e));
+            try
+            {
+                if (MPart.isPart (e)) parts    .add (new EquationSet (this, e));
+                else                  variables.add (new Variable    (this, e));
+            }
+            catch (ParseException pe)
+            {
+                exception = true;
+                pe.print (Backend.err.get ());
+            }
+            catch (Exception ee)
+            {
+                exception = true;
+            }
         }
+        if (exception) throw new Backend.AbortRun ();
     }
 
     /**
@@ -216,9 +231,22 @@ public class EquationSet implements Comparable<EquationSet>
     **/
     public void resolveConnectionBindings () throws Exception
     {
+        LinkedList<String> unresolved = new LinkedList<String> ();
+        resolveConnectionBindings (unresolved);
+        if (unresolved.size () > 0)
+        {
+            PrintStream ps = Backend.err.get ();
+            ps.println ("Unresolved connection targets:");
+            for (String v : unresolved) ps.println ("  " + v);
+            throw new Backend.AbortRun ();
+        }
+    }
+
+    public void resolveConnectionBindings (LinkedList<String> unresolved) throws Exception
+    {
         for (EquationSet s : parts)
         {
-            s.resolveConnectionBindings ();
+            s.resolveConnectionBindings (unresolved);
         }
 
         // Scan for equations that look and smell like connection bindings.
@@ -248,8 +276,7 @@ public class EquationSet implements Comparable<EquationSet>
             EquationSet s = findEquationSet (targetName);
             if (s == null)
             {
-                // TODO: add a warning to a compile results object, to display to the user
-                //throw new Exception ("Failed to resolve connection target: " + targetName);
+                unresolved.add (prefix () + "." + v.nameString () + " --> " + targetName);
                 continue;
             }
 
@@ -429,8 +456,9 @@ public class EquationSet implements Comparable<EquationSet>
                     && ! (   (v.reference.variable.assignment == Variable.MULTIPLY  &&  v.assignment == Variable.DIVIDE)  // This line and the next say that * and / are compatible with each other, so ignore that case.
                           || (v.reference.variable.assignment == Variable.DIVIDE    &&  v.assignment == Variable.MULTIPLY)))
                 {
-                    Backend.err.get ().println ("WARNING: Reference to " + v.nameString () + " has different combining operator than target variable. Resolving in favor of higher-precedence operator.");
-                    v.assignment = v.reference.variable.assignment = Math.max (v.assignment, v.reference.variable.assignment);
+                    Variable target = v.reference.variable;
+                    Backend.err.get ().println ("WARNING: Reference " + prefix () + "." + v.nameString () + " has different combining operator than target variable (" + target.container.prefix () + "." + target.nameString () + "). Resolving in favor of higher-precedence operator.");
+                    v.assignment = target.assignment = Math.max (v.assignment, target.assignment);
                 }
             }
         }
@@ -443,7 +471,7 @@ public class EquationSet implements Comparable<EquationSet>
     public void resolveRHS () throws Exception
     {
         LinkedList<String> unresolved = new LinkedList<String> ();
-        resolveRHSrecursive (unresolved);
+        resolveRHS (unresolved);
         if (unresolved.size () > 0)
         {
             PrintStream ps = Backend.err.get ();
@@ -453,11 +481,11 @@ public class EquationSet implements Comparable<EquationSet>
         }
     }
 
-    public void resolveRHSrecursive (LinkedList<String> unresolved)
+    public void resolveRHS (LinkedList<String> unresolved)
     {
         for (EquationSet s : parts)
         {
-            s.resolveRHSrecursive (unresolved);
+            s.resolveRHS (unresolved);
         }
     
         class Resolver extends Transformer
@@ -474,7 +502,7 @@ public class EquationSet implements Comparable<EquationSet>
                     EquationSet dest = resolveEquationSet (query, false);
                     if (dest == null)
                     {
-                        unresolved.add (av.name);
+                        unresolved.add (av.name + "\t" + from.container.prefix () + "." + from.nameString ());
                     }
                     else
                     {
@@ -490,7 +518,7 @@ public class EquationSet implements Comparable<EquationSet>
                             }
                             else
                             {
-                                unresolved.add (av.name);
+                                unresolved.add (av.name + "\t" + from.container.prefix () + "." + from.nameString ());
                             }
                         }
                         else
@@ -515,7 +543,7 @@ public class EquationSet implements Comparable<EquationSet>
                         String temp = split.names[i];
                         EquationSet part = container.parts.floor (new EquationSet (temp));
                         if (part.name.equals (temp)) split.parts.add (part);
-                        else unresolved.add (temp);
+                        else unresolved.add (temp + "\t" + from.container.prefix () + "." + from.nameString ());
                     }
                 }
                 return null;
@@ -1679,7 +1707,7 @@ public class EquationSet implements Comparable<EquationSet>
                     && ! u.hasAttribute ("temporary")  // temporaries follow the opposite rule on ordering, so don't consider them here
                     &&  ordered.indexOf (u) < index)  // and finally, is it actually ahead of me in the odering?
                 {
-                    System.out.println ("cyclic dependency: " + v.name + " comes after " + u.name);
+                    Backend.err.get ().println ("Cyclic dependency: " + v.name + " comes after " + u.name);
                     u.addAttribute ("cycle");  // must be buffered; otherwise we will get the "after" value rather than "before"
                 }
             }

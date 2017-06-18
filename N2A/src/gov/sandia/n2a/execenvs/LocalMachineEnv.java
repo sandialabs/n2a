@@ -11,6 +11,7 @@ import gov.sandia.n2a.execenvs.beans.AllJobInfo;
 import gov.sandia.n2a.execenvs.beans.DateGroup;
 import gov.sandia.n2a.execenvs.beans.Job;
 import gov.sandia.n2a.execenvs.beans.Resource;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -62,7 +63,8 @@ public abstract class LocalMachineEnv extends ExecutionEnv
         File jobDir = new File (dir, jobName);
         if (! jobDir.mkdirs ())
         {
-            throw new Exception ("Could not create job directory");
+            Backend.err.get ().println ("Could not create job directory");
+            throw new Backend.AbortRun ();
         }
         return jobDir.getAbsolutePath ();
     }
@@ -71,13 +73,11 @@ public abstract class LocalMachineEnv extends ExecutionEnv
     public void createDir (String path) throws Exception
     {
         File dir = new File (path);
-        if (dir.isDirectory ())
-        {
-            return;
-        }
+        if (dir.isDirectory ()) return;
         if (! dir.mkdirs ())
         {
-            throw new Exception ("Could not create directory: " + path);
+            Backend.err.get ().println ("Could not create directory: " + path);
+            throw new Backend.AbortRun ();
         }
     }
 
@@ -95,7 +95,11 @@ public abstract class LocalMachineEnv extends ExecutionEnv
         String [] commands = {compiler, "-O3", "-o", binary, "-I" + dir, runtime, "-x", "c++", sourceFile};
         Process p = Runtime.getRuntime ().exec (commands);
         p.waitFor ();
-        if (p.exitValue () != 0) throw new Exception ("Failed to compile:\n" + streamToString (p.getErrorStream ()));
+        if (p.exitValue () != 0)
+        {
+            Backend.err.get ().println ("Failed to compile:\n" + streamToString (p.getErrorStream ()));
+            throw new Backend.AbortRun ();
+        }
 
         return binary;
     }
@@ -114,7 +118,11 @@ public abstract class LocalMachineEnv extends ExecutionEnv
         String binary = new File (dir, stem + ".o").getAbsolutePath ();
 
         long sourceDate = lastModified (sourceFile);
-        if (sourceDate == 0) throw new Exception ("No source file for runtime");
+        if (sourceDate == 0)
+        {
+            Backend.err.get ().println ("No source file for runtime");
+            throw new Backend.AbortRun ();
+        }
         if (lastModified (binary) > sourceDate) return binary;  // early out, because we are already compiled
 
         String compiler = getNamedValue ("c.compiler", "g++");
@@ -122,7 +130,11 @@ public abstract class LocalMachineEnv extends ExecutionEnv
         String [] commands = {compiler, "-c", "-O3", "-I" + dir, "-o", binary, "-x", "c++", sourceFile};
         Process p = Runtime.getRuntime ().exec (commands);
         p.waitFor ();
-        if (p.exitValue () != 0) throw new Exception ("Failed to compile:\n" + streamToString (p.getErrorStream ()));
+        if (p.exitValue () != 0)
+        {
+            Backend.err.get ().println ("Failed to compile:\n" + streamToString (p.getErrorStream ()));
+            throw new Backend.AbortRun ();
+        }
 
         return binary;
     }

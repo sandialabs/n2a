@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.execenvs;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ssh.RedSkyConnection;
 import gov.sandia.n2a.ssh.RedSkyConnection.Result;
 
@@ -22,7 +23,11 @@ public class RedSkyLoginEnv extends RedSkyEnv
     public Set<Long> getActiveProcs () throws Exception
     {
         Result r = RedSkyConnection.exec ("ps ux");
-        if (r.error) throw new Exception (r.stdErr);
+        if (r.error)
+        {
+            Backend.err.get ().println (r.stdErr);
+            throw new Backend.AbortRun ();
+        }
         BufferedReader reader = new BufferedReader (new StringReader (r.stdOut));
 
         Set<Long> result = new TreeSet<Long> ();

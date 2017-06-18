@@ -10,6 +10,7 @@ import gov.sandia.n2a.execenvs.beans.AllJobInfo;
 import gov.sandia.n2a.execenvs.beans.DateGroup;
 import gov.sandia.n2a.execenvs.beans.Job;
 import gov.sandia.n2a.execenvs.beans.Resource;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ssh.RedSkyConnection;
 import gov.sandia.n2a.ssh.RedSkyConnection.Result;
 
@@ -28,7 +29,11 @@ public abstract class RedSkyEnv extends ExecutionEnv
         String dir = getNamedValue ("directory.jobs");
         int dirLength = dir.length ();
         Result r = RedSkyConnection.exec ("find '" + dir + "'");
-        if (r.error) throw new Exception (r.stdErr);
+        if (r.error)
+        {
+            Backend.err.get ().println (r.stdErr);
+            throw new Backend.AbortRun ();
+        }
 
         AllJobInfo result = new AllJobInfo ();
         BufferedReader reader = new BufferedReader (new StringReader (r.stdOut));
@@ -56,7 +61,11 @@ public abstract class RedSkyEnv extends ExecutionEnv
         String jobName = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + jobCount++;
         String jobDir = dir + "/" + jobName;
         Result r = RedSkyConnection.exec ("mkdir -p '" + jobDir + "'");
-        if (r.error) throw new Exception ("Could not create job directory: " + r.stdErr);
+        if (r.error)
+        {
+            Backend.err.get ().println ("Could not create job directory: " + r.stdErr);
+            throw new Backend.AbortRun ();
+        }
         return jobDir;
     }
 
@@ -64,7 +73,11 @@ public abstract class RedSkyEnv extends ExecutionEnv
     public void createDir (String path) throws Exception
     {
         Result r = RedSkyConnection.exec ("mkdir -p '" + path + "'");
-        if (r.error) throw new Exception ("Could not create job directory: " + r.stdErr);
+        if (r.error)
+        {
+            Backend.err.get ().println ("Could not create job directory: " + r.stdErr);
+            throw new Backend.AbortRun ();
+        }
     }
 
     @Override
@@ -72,14 +85,19 @@ public abstract class RedSkyEnv extends ExecutionEnv
     {
         String binary = sourceFile + ".bin";
         Result r = RedSkyConnection.exec ("g++ -o '" + binary + "' '" + runtime + "' -x c++ '" + sourceFile + "'");
-        if (r.error) throw new Exception ("Failed to compile: " + r.stdErr);
+        if (r.error)
+        {
+            Backend.err.get ().println ("Failed to compile: " + r.stdErr);
+            throw new Backend.AbortRun ();
+        }
         return binary;
     }
 
     @Override
     public String buildRuntime (String sourceFile) throws Exception
     {
-        throw new Exception ("Not implemented");
+        Backend.err.get ().println ("buildRuntime() not implemented");
+        throw new Backend.AbortRun ();
     }
 
     @Override
@@ -88,14 +106,22 @@ public abstract class RedSkyEnv extends ExecutionEnv
         File tempFile = new File ("tempSetFileContents");  // Created in local working directory, which should be set to the job dir.
         stringToFile (tempFile, content);
         Result r = RedSkyConnection.send (tempFile, path);
-        if (r.error) throw new Exception ("Could not send file content to remote system: " + r.stdErr);
+        if (r.error)
+        {
+            Backend.err.get ().println ("Could not send file content to remote system: " + r.stdErr);
+            throw new Backend.AbortRun ();
+        }
     }
 
     @Override
     public String getFileContents (String path) throws Exception
     {
         Result r = RedSkyConnection.exec ("cat '" + path + "'");
-        if (r.error) throw new Exception (r.stdErr);
+        if (r.error)
+        {
+            Backend.err.get ().println (r.stdErr);
+            throw new Backend.AbortRun ();
+        }
         return r.stdOut;
     }
 
@@ -106,14 +132,22 @@ public abstract class RedSkyEnv extends ExecutionEnv
         String path = dir + "/" + jobName;
         String rmCmd = "rm -rf '" + path + "'";
         Result r = RedSkyConnection.exec (rmCmd);
-        if (r.error) throw new Exception (r.stdErr);
+        if (r.error)
+        {
+            Backend.err.get ().println (r.stdErr);
+            throw new Backend.AbortRun ();
+        }
     }
 
     @Override
     public void downloadFile (String path, File destPath) throws Exception
     {
         Result r = RedSkyConnection.receive (path, destPath);
-        if (r.error) throw new Exception(r.stdErr);
+        if (r.error)
+        {
+            Backend.err.get ().println (r.stdErr);
+            throw new Backend.AbortRun ();
+        }
     }
 
     public long lastModified (String path)

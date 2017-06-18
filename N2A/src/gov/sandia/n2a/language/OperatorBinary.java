@@ -8,7 +8,6 @@ package gov.sandia.n2a.language;
 
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.parse.SimpleNode;
-import gov.sandia.n2a.language.parse.ParseException;
 
 public class OperatorBinary extends Operator
 {
@@ -17,7 +16,7 @@ public class OperatorBinary extends Operator
 
     public void getOperandsFrom (SimpleNode node) throws ParseException
     {
-        if (node.jjtGetNumChildren () != 2) throw new ParseException ("AST for operator has unexpected form");
+        if (node.jjtGetNumChildren () != 2) throw new Error ("AST for operator has unexpected form");
         operand0 = Operator.getFrom ((SimpleNode) node.jjtGetChild (0));
         operand1 = Operator.getFrom ((SimpleNode) node.jjtGetChild (1));
     }
