@@ -16,6 +16,7 @@ import javax.swing.undo.CannotRedoException;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -45,7 +46,7 @@ public class ChangeAnnotation extends Undoable
     public void undo ()
     {
         super.undo ();
-        apply (path, nameAfter, valueAfter, nameBefore, valueBefore, "$metadata", new NodeFactory ()
+        apply (path, nameAfter, nameBefore, valueBefore, "$metadata", new NodeFactory ()
         {
             public NodeBase create (MPart part)
             {
@@ -57,7 +58,7 @@ public class ChangeAnnotation extends Undoable
     public void redo ()
     {
         super.redo ();
-        apply (path, nameBefore, valueBefore, nameAfter, valueAfter, "$metadata", new NodeFactory ()
+        apply (path, nameBefore, nameAfter, valueAfter, "$metadata", new NodeFactory ()
         {
             public NodeBase create (MPart part)
             {
@@ -66,15 +67,15 @@ public class ChangeAnnotation extends Undoable
         });
     }
 
-    public static void apply (List<String> path, String nameBefore, String valueBefore, String nameAfter, String valueAfter, String blockName, NodeFactory factory)
+    public static void apply (List<String> path, String nameBefore, String nameAfter, String valueAfter, String blockName, NodeFactory factory)
     {
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
         NodeBase nodeBefore = parent.child (nameBefore);
         if (nodeBefore == null) throw new CannotRedoException ();
 
-        PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquations.tree;
+        PanelEquationTree pet = PanelModel.instance.panelEquations;
+        JTree tree = pet.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         FontMetrics fm = nodeBefore.getFontMetrics (tree);
 
@@ -124,7 +125,10 @@ public class ChangeAnnotation extends Undoable
         parent.allNodesChanged (model);
 
         TreeNode[] nodePath = nodeAfter.getPath ();
-        mep.panelEquations.updateOrder (nodePath);
-        mep.panelEquations.updateVisibility (nodePath);
+        pet.updateOrder (nodePath);
+        pet.updateVisibility (nodePath);
+
+        // Only an inherited lock node can be touched by editing. It is possible to activate (make local) if the user assigns a specific value to it.
+        if (path.size () == 2  &&  path.get (1).equals ("$metadata")  &&  (nameBefore.equals ("lock")  ||  nameAfter.equals ("lock"))) pet.updateLock ();
     }
 }

@@ -19,6 +19,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
@@ -52,6 +53,14 @@ public class AddAnnotation extends Undoable
         }
     }
 
+    public AddAnnotation (NodeBase parent, int index, String name, String value)
+    {
+        path = parent.getKeyPath ();
+        this.index = index;
+        this.name  = uniqueName (parent, "$metadata", name, true);
+        this.value = value;
+    }
+
     public static String uniqueName (NodeBase parent, String blockName, String prefix, boolean allowEmptySuffix)
     {
         MPart block = (MPart) parent.source.child (blockName);
@@ -79,8 +88,8 @@ public class AddAnnotation extends Undoable
         if (parent instanceof NodePart) container = parent.child (blockName);
         NodeBase createdNode = container.child (name);
 
-        PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquations.tree;
+        PanelEquationTree pet = PanelModel.instance.panelEquations;
+        JTree tree = pet.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         FontMetrics fm = createdNode.getFontMetrics (tree);
 
@@ -123,7 +132,8 @@ public class AddAnnotation extends Undoable
             container.updateTabStops (fm);
             container.allNodesChanged (model);
         }
-        mep.panelEquations.updateVisibility (createdPath, index);
+        pet.updateVisibility (createdPath, index);
+        if (path.size () == 1  &&  name.equals ("lock")) pet.updateLock ();
     }
 
     public void redo ()
@@ -152,8 +162,8 @@ public class AddAnnotation extends Undoable
         if (parent == null) throw new CannotRedoException ();
         MPart block = (MPart) parent.source.childOrCreate (blockName);
 
-        PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquations.tree;
+        PanelEquationTree pet = PanelModel.instance.panelEquations;
+        JTree tree = pet.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         NodeBase container = parent;  // If this is a variable, then mix metadata with equations and references
         if (parent instanceof NodePart)  // If this is a part, then display special block
@@ -190,8 +200,9 @@ public class AddAnnotation extends Undoable
             container.updateTabStops (fm);
             container.allNodesChanged (model);
             TreeNode[] createdPath = createdNode.getPath ();
-            mep.panelEquations.updateOrder (createdPath);
-            mep.panelEquations.updateVisibility (createdPath);
+            pet.updateOrder (createdPath);
+            pet.updateVisibility (createdPath);
+            if (path.size () == 1  &&  name.equals ("lock")) pet.updateLock ();
         }
 
         return createdNode;

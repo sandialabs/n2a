@@ -37,7 +37,7 @@ public class ChangeReference extends Undoable
     public void undo ()
     {
         super.undo ();
-        ChangeAnnotation.apply (path, nameAfter, valueAfter, nameBefore, valueBefore, "$reference", new NodeFactory ()
+        ChangeAnnotation.apply (path, nameAfter, nameBefore, valueBefore, "$reference", new NodeFactory ()
         {
             public NodeBase create (MPart part)
             {
@@ -49,7 +49,7 @@ public class ChangeReference extends Undoable
     public void redo ()
     {
         super.redo ();
-        ChangeAnnotation.apply (path, nameBefore, valueBefore, nameAfter, valueAfter, "$reference", new NodeFactory ()
+        ChangeAnnotation.apply (path, nameBefore, nameAfter, valueAfter, "$reference", new NodeFactory ()
         {
             public NodeBase create (MPart part)
             {

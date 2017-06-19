@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2016,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -22,11 +22,16 @@ import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.MainTabbedPane;
+import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
+import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
+import gov.sandia.n2a.ui.eq.undo.ChangeAnnotation;
+import gov.sandia.n2a.ui.eq.undo.ChangeLock;
+import gov.sandia.n2a.ui.eq.undo.DeleteAnnotation;
 import gov.sandia.n2a.ui.eq.undo.Move;
 import gov.sandia.n2a.ui.eq.undo.Outsource;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -101,6 +106,7 @@ public class PanelEquationTree extends JPanel
     public    FilteredTreeModel     model;
     public    NodePart              root;
     public    MNode                 record;
+    public    boolean               locked;  // Indicates state of $metadata.lock node, as well as buttonLock. All three items are kept synchronized by the buttonLock listener.
     protected JScrollPane           scrollPane;
     protected Map<MNode,StoredPath> focusCache = new HashMap<MNode,StoredPath> ();
     protected boolean               needsFullRepaint;
@@ -119,6 +125,8 @@ public class PanelEquationTree extends JPanel
     protected JButton buttonExport;
     protected JButton buttonImport;
     protected JButton buttonFilter;
+    protected JButton buttonLock;
+
     protected JPopupMenu menuPopup;
     protected JPopupMenu menuFilter;
     protected long       menuFilterCanceledAt = 0;
@@ -126,6 +134,8 @@ public class PanelEquationTree extends JPanel
     protected static ImageIcon iconFilterAll    = ImageUtil.getImage ("filter.png");
     protected static ImageIcon iconFilterPublic = ImageUtil.getImage ("filterPublic.png");
     protected static ImageIcon iconFilterLocal  = ImageUtil.getImage ("filterLocal.png");
+    protected static ImageIcon iconLocked       = ImageUtil.getImage ("locked.png");
+    protected static ImageIcon iconUnlocked     = ImageUtil.getImage ("unlocked.png");
 
     /**
         A data flavor that lets PanelSearch extract a TransferableNode instance for the purpose of adding info to it for our local exportDone().
@@ -303,7 +313,7 @@ public class PanelEquationTree extends JPanel
             public void actionPerformed (ActionEvent e)
             {
                 TreePath path = tree.getSelectionPath ();
-                if (path != null)
+                if (path != null  &&  ! locked)
                 {
                     boolean isControlDown = (e.getModifiers () & ActionEvent.CTRL_MASK) != 0;
                     if (isControlDown  &&  ! (path.getLastPathComponent () instanceof NodePart)) editor.multiLineRequested = true;
@@ -319,7 +329,7 @@ public class PanelEquationTree extends JPanel
                 if (SwingUtilities.isLeftMouseButton (e)  &&  e.getClickCount () == 2)
                 {
                     TreePath path = tree.getClosestPathForLocation (e.getX (), e.getY ());
-                    if (path != null) tree.startEditingAtPath (path);
+                    if (path != null  &&  ! locked) tree.startEditingAtPath (path);
                 }
                 else if (SwingUtilities.isRightMouseButton (e)  &&   e.getClickCount () == 1)
                 {
@@ -386,11 +396,13 @@ public class PanelEquationTree extends JPanel
         {
             public boolean canImport (TransferSupport xfer)
             {
-                return xfer.isDataFlavorSupported (DataFlavor.stringFlavor);
+                return ! locked  &&  xfer.isDataFlavorSupported (DataFlavor.stringFlavor);
             }
 
             public boolean importData (TransferSupport xfer)
             {
+                if (locked) return false;
+
                 MNode data = new MVolatile ();
                 Schema schema = new Schema ();
                 try
@@ -503,7 +515,7 @@ public class PanelEquationTree extends JPanel
             protected void exportDone (JComponent source, Transferable data, int action)
             {
                 TransferableNode tn = (TransferableNode) data;
-                if (action == MOVE)
+                if (action == MOVE  &&  ! locked)
                 {
                     // It is possible for the node to be removed from the tree before we get to it.
                     // For example, a local drop of an $inherit node will cause the tree to rebuild.
@@ -649,6 +661,36 @@ public class PanelEquationTree extends JPanel
             }
         });
 
+        buttonLock = new JButton (iconUnlocked);
+        buttonLock.setMargin (new Insets (2, 2, 2, 2));
+        buttonLock.setFocusable (false);
+        buttonLock.setToolTipText ("Editable (ctrl-shift-click to lock)");
+        buttonLock.addActionListener (new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                int mask = ActionEvent.CTRL_MASK | ActionEvent.SHIFT_MASK;
+                if ((e.getModifiers () & mask) == mask)
+                {
+                    // The state of the button is updated by the undo object ...
+                    NodeBase nodeLock = null;
+                    NodeBase metadata = root.child ("$metadata");
+                    if (metadata != null) nodeLock = metadata.child ("lock");
+                    UndoManager um = PanelModel.instance.undoManager;
+                    if (locked)  // Currently locked, so change to unlocked
+                    {
+                        // If we're locked, then nodeLock must be non-null
+                        um.add (new DeleteAnnotation (nodeLock, false));
+                    }
+                    else  // Currently unlocked, so change to locked
+                    {
+                        if (nodeLock == null) um.add (new AddAnnotation (root, 0, "lock", ""));
+                        else                  um.add (new ChangeLock (metadata));
+                    }
+                }
+            }
+        });
+
         Lay.BLtg (this,
             "N", Lay.WL ("L",
                 buttonAddModel,
@@ -664,6 +706,7 @@ public class PanelEquationTree extends JPanel
                 buttonMoveUp,
                 buttonMoveDown,
                 Box.createHorizontalStrut (15),
+                buttonLock,
                 buttonFilter,
                 Box.createHorizontalStrut (15),
                 buttonRun,
@@ -769,6 +812,7 @@ public class PanelEquationTree extends JPanel
             root.build ();
             root.findConnections ();
             model.setRoot (root);  // triggers repaint, but may be too slow
+            updateLock ();
             needsFullRepaint = true;  // next call to repaintSouth() will repaint everything
 
             StoredPath sp = focusCache.get (record);
@@ -809,6 +853,21 @@ public class PanelEquationTree extends JPanel
         {
             focusCache.put (record, new StoredPath (tree));
             tree.clearSelection ();
+        }
+    }
+
+    public void updateLock ()
+    {
+        locked = record.child ("$metadata", "lock") != null;  // This is a direct member of record, not inherited, because we aren't using the collated tree.
+        if (locked)
+        {
+            buttonLock.setToolTipText ("Read-only (ctrl-shift-click to unlock)");
+            buttonLock.setIcon (iconLocked);
+        }
+        else
+        {
+            buttonLock.setToolTipText ("Editable (ctrl-shift-click to lock)");
+            buttonLock.setIcon (iconUnlocked);
         }
     }
 
@@ -1040,6 +1099,7 @@ public class PanelEquationTree extends JPanel
 
     public void addAtSelected (String type)
     {
+        if (locked) return;
         NodeBase selected = getSelected ();
         if (selected == null)  // only happens when root is null
         {
@@ -1060,12 +1120,14 @@ public class PanelEquationTree extends JPanel
 
     public void deleteSelected ()
     {
+        if (locked) return;
         NodeBase selected = getSelected ();
         if (selected != null) selected.delete (tree, false);
     }
 
     public void moveSelected (int direction)
     {
+        if (locked) return;
         TreePath path = tree.getSelectionPath ();
         if (path == null) return;
 
