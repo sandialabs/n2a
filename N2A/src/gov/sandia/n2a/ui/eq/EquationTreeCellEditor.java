@@ -80,7 +80,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
     protected Icon                     editingIcon;
     protected int                      offset;
 
-    public EquationTreeCellEditor (JTree tree, EquationTreeCellRenderer renderer)
+    public EquationTreeCellEditor (final JTree tree, EquationTreeCellRenderer renderer)
     {
         setTree (tree);
         this.renderer = renderer;
