@@ -10,12 +10,16 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.Transferable;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import javax.swing.DefaultListModel;
+import javax.swing.JComponent;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.ListSelectionModel;
+import javax.swing.TransferHandler;
 
 public class PanelMRU extends JPanel
 {
@@ -28,6 +32,7 @@ public class PanelMRU extends JPanel
         list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
         list.setCellRenderer (new PanelSearch.MNodeRenderer ());
         list.setFocusable (false);
+        list.setDragEnabled (true);
         list.addMouseListener (new MouseAdapter ()
         {
             public void mouseClicked (MouseEvent e)
@@ -35,6 +40,35 @@ public class PanelMRU extends JPanel
                 int index = list.getSelectedIndex ();
                 if (index >= 0) PanelSearch.recordSelected (model.get (index).doc);
                 list.clearSelection ();
+            }
+        });
+        list.setTransferHandler (new TransferHandler ()
+        {
+            public boolean canImport (TransferSupport xfer)
+            {
+                return xfer.isDataFlavorSupported (DataFlavor.stringFlavor);
+            }
+
+            public boolean importData (TransferSupport xfer)
+            {
+                list.clearSelection ();
+                return PanelModel.instance.panelSearch.transferHandler.importData (xfer);
+            }
+
+            public int getSourceActions (JComponent comp)
+            {
+                return COPY;
+            }
+
+            protected Transferable createTransferable (JComponent comp)
+            {
+                return list.getSelectedValue ().createTransferable ();
+            }
+
+            protected void exportDone (JComponent source, Transferable data, int action)
+            {
+                list.clearSelection ();
+                PanelModel.instance.undoManager.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
             }
         });
 

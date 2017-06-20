@@ -42,7 +42,6 @@ public class EquationEntry implements Comparable<EquationEntry>
     {
         ifString                = source.key ();
         String expressionString = source.get ();
-        System.out.println ("eq parse mnode " + ifString + " " + expressionString);
         try
         {
             expression = Operator.parse (expressionString);

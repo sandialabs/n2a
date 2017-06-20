@@ -64,6 +64,7 @@ public class PanelSearch extends JPanel
     public DefaultListModel<Holder> model;
     public int                      lastSelection = -1;
     public MNodeRenderer            renderer = new MNodeRenderer ();
+    public TransferHandler          transferHandler;
 
     public PanelSearch ()
     {
@@ -129,7 +130,7 @@ public class PanelSearch extends JPanel
             }
         });
 
-        list.setTransferHandler (new TransferHandler ()
+        transferHandler = new TransferHandler ()
         {
             public boolean canImport (TransferSupport xfer)
             {
@@ -178,22 +179,7 @@ public class PanelSearch extends JPanel
 
             protected Transferable createTransferable (JComponent comp)
             {
-                Holder h = list.getSelectedValue ();
-                Schema schema = new Schema (1, "Part");
-                StringWriter writer = new StringWriter ();
-                try
-                {
-                    schema.write (writer);
-                    writer.write (h.doc.key () + String.format ("%n"));
-                    for (MNode c : h.doc) c.write (writer, " ");
-                    writer.close ();
-                    return new StringSelection (writer.toString ());
-                }
-                catch (IOException e)
-                {
-                }
-
-                return null;
+                return list.getSelectedValue ().createTransferable ();
             }
 
             protected void exportDone (JComponent source, Transferable data, int action)
@@ -201,7 +187,8 @@ public class PanelSearch extends JPanel
                 if (! list.isFocusOwner ()) hideSelection ();
                 PanelModel.instance.undoManager.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
             }
-        });
+        };
+        list.setTransferHandler (transferHandler);
 
 
         textQuery = new JTextField ();
@@ -249,7 +236,7 @@ public class PanelSearch extends JPanel
             public boolean importData (TransferSupport support)
             {
                 boolean result = super.importData (support);
-                if (! result) result = list.getTransferHandler ().importData (support);
+                if (! result) result = transferHandler.importData (support);
                 return result;
             }
         });
@@ -359,6 +346,25 @@ public class PanelSearch extends JPanel
         public Holder (MNode doc)
         {
             this.doc = doc;
+        }
+
+        public Transferable createTransferable ()
+        {
+            Schema schema = new Schema (1, "Part");
+            StringWriter writer = new StringWriter ();
+            try
+            {
+                schema.write (writer);
+                writer.write (doc.key () + String.format ("%n"));
+                for (MNode c : doc) c.write (writer, " ");
+                writer.close ();
+                return new StringSelection (writer.toString ());
+            }
+            catch (IOException e)
+            {
+            }
+
+            return null;
         }
 
         public String toString ()
