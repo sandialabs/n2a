@@ -29,9 +29,6 @@ public class ChangeVariableToInherit extends Undoable
     protected MNode  treeBefore;
     protected String valueAfter;
 
-    /**
-        @param variable The direct container of the node being changed.
-    **/
     public ChangeVariableToInherit (NodeVariable variable, String valueAfter)
     {
         NodeBase parent = (NodeBase) variable.getParent ();

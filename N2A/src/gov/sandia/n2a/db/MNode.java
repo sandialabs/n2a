@@ -144,6 +144,19 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     }
 
     /**
+        Digs down tree as far as possible to retrieve value; returns "" if node does not exist.
+    **/
+    public String get (Object... indices)
+    {
+        int length = indices.length;
+        String[] shiftedIndices = new String[length];
+        String index0 = indices[0].toString ();
+        for (int i = 1; i < length; i++) shiftedIndices[i-1] = indices[i].toString ();
+        shiftedIndices[length-1] = "";
+        return getOrDefault (index0, shiftedIndices);
+    }
+
+    /**
         Retrieve our own value, or the given default if we are set to "".
         Note that this is the only get function that needs to be overridden by subclasses,
         and even this is optional.

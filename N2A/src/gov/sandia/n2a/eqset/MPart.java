@@ -10,6 +10,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.NavigableMap;
 import java.util.TreeMap;
+import java.util.UUID;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
@@ -97,38 +98,75 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     public synchronized void inherit (LinkedList<MPersistent> visited)
     {
         if (children == null) return;
-        MPart from = (MPart) children.get ("$inherit");
-        if (from != null) inherit (visited, from, from.get ());
+        MPart root = (MPart) children.get ("$inherit");
+        if (root != null) inherit (visited, root, root);
     }
 
     /**
         Injects inherited equations as children of this node.
         Handles recursion up the hierarchy of parents.
         @param visited Used to guard against a document loading itself.
-        @param from The node in the collated tree (named "$inherit") which triggered the current
+        @param root The node in the collated tree (named "$inherit") which triggered the current
         round of inheritance. May be a child of a higher node, or a child of this node, but never a child
         of a lower node.
-        @param value The RHS of the $inherit statement. We parse this into a set of part names
+        @param from The $inherit node to be processed. We parse this into a set of part names
         which we retrieve from the database.
     **/
-    public synchronized void inherit (LinkedList<MPersistent> visited, MPart from, String value)
+    public synchronized void inherit (LinkedList<MPersistent> visited, MPart root, MNode from)
     {
-        String[] parentNames = value.split (",");
-        for (String parentName : parentNames)
+        boolean maintainable =  from == root  &&  root.isFromTopDocument ();
+        boolean changedName = false;  // Indicates that at least one name changed due to UUID resolution. This lets us delay updating the field until all names are processed.
+
+        String[] parentNames = from.get ().split (",");
+        for (int i = 0; i < parentNames.length; i++)
         {
+            String parentName = parentNames[i];
+            String uuid       = from.get (i);
             parentName = parentName.trim ().replace ("\"", "");
             MPersistent parentSource = (MPersistent) AppData.models.child (parentName);
+
+            if (parentSource != null  &&  ! uuid.isEmpty ())
+            {
+                UUID originalUUID  = UUID.fromString (uuid);
+                UUID retrievedUUID = UUID.fromString (parentSource.get ("$metadata", "uuid"));
+                if (! retrievedUUID.equals (originalUUID)) parentSource = null;  // Even though the name matches, parentSource is not really the same model that was originally linked.
+            }
+            if (parentSource == null)
+            {
+                if (! uuid.isEmpty ())
+                {
+                    parentSource = AppData.getModel (UUID.fromString (uuid));
+                    if (parentSource != null  &&  maintainable)  // relink
+                    {
+                        parentNames[i] = parentSource.key ();
+                        changedName = true;
+                    }
+                }
+            }
+            else
+            {
+                if (uuid.isEmpty ()  &&  maintainable) root.set (i, parentSource.get ("$metadata", "uuid"));
+            }
+
             if (parentSource != null  &&  ! visited.contains (parentSource))
             {
-                underrideChildren (from, parentSource);
+                underrideChildren (root, parentSource);
                 MPersistent parentFrom = (MPersistent) parentSource.child ("$inherit");
                 if (parentFrom != null)
                 {
                     visited.push (parentSource);
-                    inherit (visited, from, parentFrom.get ());  // yes, we continue to treat the root "from" as the initiator for all the inherited equations
+                    inherit (visited, root, parentFrom);  // yes, we continue to treat the root as the initiator for all the inherited equations
                     visited.pop ();
                 }
             }
+        }
+
+        if (changedName)
+        {
+            StringBuilder value = new StringBuilder ();
+            value.append (parentNames[0]);
+            for (int i = 1; i < parentNames.length; i++) value.append ("," + parentNames[i]);
+            root.set (value.toString ());
         }
     }
 

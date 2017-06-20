@@ -6,6 +6,8 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.undo;
 
+import java.util.UUID;
+
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.ui.Undoable;
@@ -45,6 +47,8 @@ public class ChangeDoc extends Undoable
         AppData.models.move (A, B);
         PanelModel mep = PanelModel.instance;
         MNode doc = AppData.models.child (B);
+        String uuid = doc.get ("$metadata", "uuid");
+        if (! uuid.isEmpty ()) AppData.set (UUID.fromString (uuid), doc);
         mep.panelEquations.loadRootFromDB (doc);  // lazy; only loads if not already loaded
         NodePart root = mep.panelEquations.root;
         root.setUserObject ();

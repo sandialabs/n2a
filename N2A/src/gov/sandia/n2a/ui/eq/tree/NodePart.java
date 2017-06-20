@@ -450,7 +450,10 @@ public class NodePart extends NodeContainer
                 return;
             }
 
-            String stem = MDir.validFilenameFrom (name);
+            name = MDir.validFilenameFrom (name);
+            name = name.replace (",", "-");  // In addition to filename constraints, we also forbid comma, because these names are used in list expressions.
+
+            String stem = name;
             int suffix = 0;
             MNode models = AppData.models;
             MNode existingDocument = models.child (name);

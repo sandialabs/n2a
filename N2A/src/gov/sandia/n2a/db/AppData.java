@@ -16,8 +16,11 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -31,7 +34,6 @@ import java.util.zip.ZipOutputStream;
 **/
 public class AppData
 {
-    // TODO: combine these as children of a proper root MNode
     public static MDir  models;
     public static MDir  references;
     public static MDir  runs;
@@ -40,6 +42,8 @@ public class AppData
 
     protected static boolean stop;
     protected static Thread saveThread;
+
+    protected static Map<UUID,String> indexUUID;  ///< Maps UUIDs to model names. Model names are required to be unique, so they function as the direct key into the models database.
 
     static
     {
@@ -115,6 +119,27 @@ public class AppData
         {
             System.err.println ("Unable to load some or all of initial DB");
         }
+    }
+
+    public static void set (UUID key, MNode model)
+    {
+        if (indexUUID == null) return;  // If there is ever a get(UUID), then this new entry will get indexed along with everything else.
+        if (model == null) indexUUID.remove (key);
+        else               indexUUID.put (key, model.key ());
+    }
+
+    public static MDoc getModel (UUID key)
+    {
+        if (indexUUID == null)
+        {
+            indexUUID = new HashMap<UUID,String> ();
+            for (MNode n : models)
+            {
+                String uuid = n.get ("$metadata", "uuid");
+                if (! uuid.isEmpty ()) indexUUID.put (UUID.fromString (uuid), n.key ());
+            }
+        }
+        return (MDoc) models.child (indexUUID.get (key));
     }
 
     public synchronized static void save ()

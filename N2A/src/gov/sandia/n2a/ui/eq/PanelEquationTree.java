@@ -29,7 +29,6 @@ import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
-import gov.sandia.n2a.ui.eq.undo.ChangeAnnotation;
 import gov.sandia.n2a.ui.eq.undo.ChangeLock;
 import gov.sandia.n2a.ui.eq.undo.DeleteAnnotation;
 import gov.sandia.n2a.ui.eq.undo.Move;
@@ -459,7 +458,7 @@ public class PanelEquationTree extends JPanel
                         // Create an include-style part
                         MNode include = new MVolatile ();  // Note the empty key. This enables AddPart to generate a name.
                         include.merge (child);  // TODO: What if this brings in a $inherit line, and that line does not match the $inherit line in the source part? One possibility is to add the new values to the end of the $inherit line created below.
-                        include.set ("$inherit", "\"" + key + "\"");
+                        include.set ("$inherit", key);
                         NodeBase added = target.add ("Part", tree, include);
                         if (added == null)
                         {
