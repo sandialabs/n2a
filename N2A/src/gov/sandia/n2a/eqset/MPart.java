@@ -171,6 +171,25 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     }
 
     /**
+        Locate each parent and record its UUID.
+        Assumes that this function is called on an $inherit line from the top-level document.
+        Unlike inherit(), this function fully trusts the part names given on the $inherit line.
+    **/
+    public void setInherit (String value)
+    {
+        clear ();  // Remove children. This will have to change if we store other metadata under $inherit (such as a comment).
+        String[] parentNames = value.split (",");
+        for (int i = 0; i < parentNames.length; i++)
+        {
+            String parentName = parentNames[i];
+            parentName = parentName.trim ().replace ("\"", "");
+            MPersistent parentSource = (MPersistent) AppData.models.child (parentName);
+            if (parentSource != null) set (i, parentSource.get ("$metadata", "uuid"));
+        }
+        set (value);
+    }
+
+    /**
         Injects inherited equations at this node.
         Handles recursion down our containment hierarchy.
         This method only changes the node if it has no existing inheritedFrom value,
