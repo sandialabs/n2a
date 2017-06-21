@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.tree;
 
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelModel;
@@ -15,7 +16,6 @@ import gov.sandia.n2a.ui.eq.undo.DeleteInherit;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import java.awt.Rectangle;
-
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
@@ -44,6 +44,13 @@ public class NodeInherit extends NodeBase
     public Icon getIcon (boolean expanded)
     {
         return icon;
+    }
+
+    @Override
+    public void copy (MNode result)
+    {
+        MNode n = result.set (source.key (), "");
+        n.merge (source);
     }
 
     @Override

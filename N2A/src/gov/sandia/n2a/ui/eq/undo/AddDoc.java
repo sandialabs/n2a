@@ -17,6 +17,7 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
+import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.PanelModel;
 
@@ -108,10 +109,10 @@ public class AddDoc extends Undoable
 
     public static int create (String name, MNode saved, int index, boolean fromSearchPanel, boolean wasShowing)
     {
-        MNode doc = AppData.models.set (name, "");
-        doc.merge (saved);
-        String uuid = doc.get ("$metadata", "uuid");
-        if (! uuid.isEmpty ()) AppData.set (UUID.fromString (uuid), doc);
+        MDoc doc = (MDoc) AppData.models.set (name, "");
+        MPart fold = new MPart (doc);
+        fold.merge (saved);  // By merging indirectly, through MPart, we get rid of nodes which duplicate inherited values.
+        AppData.set (UUID.fromString (doc.get ("$metadata", "uuid")), doc);
 
         PanelModel mep = PanelModel.instance;
         mep.panelMRU.insertDoc (doc);

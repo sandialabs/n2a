@@ -56,7 +56,7 @@ public class ChangeInherit extends Undoable
         JTree tree = mep.panelEquations.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
-        node.source.setInherit (value);  // Complex restructuring happens here.
+        node.source.set (value);  // Complex restructuring happens here.
 
         NodePart parent = (NodePart) node.getParent ();
         parent.build ();

@@ -921,7 +921,7 @@ public class PanelEquationTree extends JPanel
             runs.set (jobKey, "");  // Create the dir and model doc
             final MNode job = runs.child (jobKey);
             job.merge (root.source);
-            job.set ("$inherit", "\"" + record.key () + "\"");
+            job.set ("$inherit", record.key ());
             ((MDoc) job).save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
 
             new Thread ()

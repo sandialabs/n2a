@@ -171,25 +171,6 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     }
 
     /**
-        Locate each parent and record its UUID.
-        Assumes that this function is called on an $inherit line from the top-level document.
-        Unlike inherit(), this function fully trusts the part names given on the $inherit line.
-    **/
-    public void setInherit (String value)
-    {
-        clear ();  // Remove children. This will have to change if we store other metadata under $inherit (such as a comment).
-        String[] parentNames = value.split (",");
-        for (int i = 0; i < parentNames.length; i++)
-        {
-            String parentName = parentNames[i];
-            parentName = parentName.trim ().replace ("\"", "");
-            MPersistent parentSource = (MPersistent) AppData.models.child (parentName);
-            if (parentSource != null) set (i, parentSource.get ("$metadata", "uuid"));
-        }
-        set (value);
-    }
-
-    /**
         Injects inherited equations at this node.
         Handles recursion down our containment hierarchy.
         This method only changes the node if it has no existing inheritedFrom value,
@@ -451,6 +432,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         if (couldReset) clearPath ();
         if (source.key ().equals ("$inherit"))  // We changed a $inherit node, so rebuild our subtree.
         {
+            getUUIDs ();
             container.purge (this, null);  // Undo the effect we had on the subtree.
             container.expand ();
         }
@@ -474,10 +456,28 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         children.put (index, result);
         if (index.equals ("$inherit"))  // We've created an $inherit line, so load the inherited equations.
         {
+            result.getUUIDs ();
             // Purge is unnecessary because "result" is a new entry. There is no previous $inherit line.
             expand ();
         }
         return result;
+    }
+
+    /**
+        Subroutine of set() which locates each parent and records its UUID.
+        Must only be called on an $inherit node in the top-level document.
+    **/
+    protected synchronized void getUUIDs ()
+    {
+        clear ();  // Remove children. This will have to change if we ever store other metadata under $inherit (such as a comment).
+        String[] parentNames = get ().split (",");
+        for (int i = 0; i < parentNames.length; i++)
+        {
+            String parentName = parentNames[i];
+            parentName = parentName.trim ().replace ("\"", "");
+            MPersistent parentSource = (MPersistent) AppData.models.child (parentName);
+            if (parentSource != null) set (i, parentSource.get ("$metadata", "uuid"));
+        }
     }
 
     /**
@@ -494,9 +494,37 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         MNode thatInherit = that.child ("$inherit");
         if (thatInherit != null)
         {
-            MNode inherit = child ("$inherit");
-            if (inherit == null) inherit = set ("$inherit", "");
-            inherit.merge (thatInherit);
+            MPart inherit = (MPart) child ("$inherit");
+            boolean existing =  inherit != null;
+            if (! existing) inherit = (MPart) set ("$inherit", "");
+            
+            // Now do the equivalent of inherit.merge(thatInherit), but pay attention to UUIDs.
+            // If "that" comes from an outside source, it could merge in UUIDs which disagree
+            // with the ones we would otherwise look up during getUUIDs() called by set(). To honor the
+            // imported UUIDs (that is, prioritize them over imported names), we merge the metadata
+            // under $inherit first, then set the node itself in a way that avoids calling getUUIDs().
+            for (MNode thatInheritChild : thatInherit)
+            {
+                String index = thatInheritChild.key ();
+                MNode c = inherit.child (index);
+                if (c == null) c = inherit.set (index, "");
+                c.merge (thatInheritChild);
+            }
+            String thatInheritValue = thatInherit.get ();
+            if (! thatInheritValue.isEmpty ())
+            {
+                // This is a copy of set() with appropriate modifications
+                String thisInheritValue = inherit.source.get ();
+                if (! thisInheritValue.equals (thatInheritValue))
+                {
+                    boolean couldReset = inherit.original.get ().equals (thatInheritValue);
+                    if (! couldReset) inherit.override ();
+                    inherit.source.set (value);
+                    if (couldReset) inherit.clearPath ();
+                    if (existing) purge (inherit, null);
+                    expand ();
+                }
+            }
         }
 
         // Then the rest of the children
