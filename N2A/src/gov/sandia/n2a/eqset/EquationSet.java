@@ -254,7 +254,7 @@ public class EquationSet implements Comparable<EquationSet>
         // * Only one equation on the variable.
         // * Unconditional (conditional bindings are not permitted)
         // * No operators, only a name on RHS that appears like a variable name.
-        // * RHS name is order 0 (not a derivative)
+        // * Both LHS and RHS are order 0 (not a derivatives)
         // * No variable in the current equation set matches the name.
         // $up is permitted. The explicit name of a higher container may also be used,
         // provided nothing matches the name on the way up.
@@ -266,17 +266,20 @@ public class EquationSet implements Comparable<EquationSet>
             Variable v = i.next ();
 
             // Detect instance variables
+            if (v.order > 0) continue;
             if (v.equations.size () != 1) continue;
             EquationEntry ee = v.equations.first ();
             if (ee.condition != null) continue;
             if (! (ee.expression instanceof AccessVariable)) continue;
+            AccessVariable av = (AccessVariable) ee.expression;
+            if (av.getOrder () > 0) continue;
+            if (find (new Variable (av.getName ())) != null) continue;
 
             // Resolve connection endpoint to a specific equation set
-            String targetName = ((AccessVariable) ee.expression).name;
-            EquationSet s = findEquationSet (targetName);
+            EquationSet s = findEquationSet (av.name);
             if (s == null)
             {
-                unresolved.add (prefix () + "." + v.nameString () + " --> " + targetName);
+                unresolved.add (prefix () + "." + v.nameString () + " --> " + av.name);
                 continue;
             }
 
