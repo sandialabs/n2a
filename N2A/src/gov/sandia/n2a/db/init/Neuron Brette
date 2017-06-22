@@ -1,7 +1,10 @@
 N2A.schema=1
 $inherit="Neuron Hodgkin-Huxley"
+ 0=166b015ccda6e28b
 $metadata
  backend.xyce.device=neuron9
+ id=166b015ccda65963
+ lock
  notes=|
    Based on equations from Brette et al 2007, which in turn are based on a model by Traub
    

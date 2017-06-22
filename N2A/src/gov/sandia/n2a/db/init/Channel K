@@ -1,11 +1,15 @@
 N2A.schema=1
 $inherit="Channel"
+ 0=166b015ccda2fd5e
+$metadata
+ id=166b015ccda36adc
+ lock
 E=-12mV +Voffset
  $metadata
-  backend.xyce.param="eK"
+  backend.xyce.param=eK
 G=36mS
  $metadata
-  backend.xyce.param="gK"
+  backend.xyce.param=gK
 I=G*n^4*(E-V)
 alpha_n=:(0.1-0.01*u)/(exp(1-0.1*u)-1)
  $metadata
@@ -16,4 +20,4 @@ beta_n=:0.125*exp(-u/80)
 n=0.6@$init
 n'=(alpha_n*(1-n)-beta_n*n)/1ms
  $metadata
-  backend.xyce.internalVar="n"
+  backend.xyce.internalVar=n

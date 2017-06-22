@@ -1,7 +1,10 @@
 N2A.schema=1
 $inherit="Neuron"
+ 0=166b015ccda620cb
 $metadata
  backend.xyce.device=neuron1
+ id=166b015ccda6e28b
+ lock
  notes=|
    From Koch, chapter 6
    Models the potential across the membrane over time by specifying changes in each of several ion currents:  Na, K, and a ‘leak’ current (generally used to make the resting potential come out right)
@@ -18,5 +21,7 @@ $metadata
    Models a Hodgkin-Huxley compartment fully as well as a Hodgkin-Huxley point neuron.
 K
  $inherit="Channel K"
+  0=166b015ccda36adc
 Na
  $inherit="Channel Na"
+  0=166b015ccda4fa7c

@@ -1,4 +1,7 @@
 N2A.schema=1
+$metadata
+ id=166b015ccdaa5a31
+ lock
 A=$connect("Neuron")
 B=$connect("Neuron")
 B.I=+G*(E-B.V)

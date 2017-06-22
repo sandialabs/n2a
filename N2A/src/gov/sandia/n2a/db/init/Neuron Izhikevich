@@ -1,5 +1,9 @@
 N2A.schema=1
 $inherit="Neuron"
+ 0=166b015ccda620cb
+$metadata
+ id=166b015ccda7428b
+ lock
 V=c@$init||V>=Vpeak
 V'=0.04e6*V^2+5e3*V+140-u/1mV +I/C
 Vpeak=30mV

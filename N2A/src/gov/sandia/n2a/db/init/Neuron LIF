@@ -1,7 +1,10 @@
 N2A.schema=1
 $inherit="Neuron"
+ 0=166b015ccda620cb
 $metadata
  backend.stpu.component=lif
+ id=166b015ccda9c699
+ lock
 G=0.1mS
 V
  @$init=Vrest

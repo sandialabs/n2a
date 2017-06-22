@@ -1,4 +1,7 @@
 N2A.schema=1
+$metadata
+ id=166b015ccda56f33
+ lock
 A=$connect("Hodgkin-Huxley Compartment")
 A.V'=+(B.V-A.V)/(A.C*R)
 B=$connect("Hodgkin-Huxley Compartment")

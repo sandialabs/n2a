@@ -1,5 +1,9 @@
 N2A.schema=1
 $inherit="Synapse Conductance"
+ 0=166b015ccdaa5a31
+$metadata
+ id=166b015ccdaab9e9
+ lock
 E=0
  $metadata
   backend.xyce.param=eRev

@@ -1,7 +1,10 @@
 N2A.schema=1
 $inherit="Neuron"
+ 0=166b015ccda620cb
 $metadata
  backend.xyce.device=neuron7
+ id=166b015ccda982da
+ lock
 $p=$t<520ms
 C=100uF
  $metadata
@@ -17,28 +20,28 @@ Vrest=-60mV
   backend.xyce.param=Vr
 Vthresh=-40mV
  $metadata
-  backend.xyce.param="Vt"
+  backend.xyce.param=Vt
 a=0.03
  $metadata
-  backend.xyce.param="a"
+  backend.xyce.param=a
   public
 b=-2
  $metadata
-  backend.xyce.param="b"
+  backend.xyce.param=b
   public
 c=-50mV
  $metadata
-  backend.xyce.param="c"
+  backend.xyce.param=c
   public
 d=100mV
  $metadata
-  backend.xyce.param="d"
+  backend.xyce.param=d
   public
 k=0.7
  $metadata
-  backend.xyce.param="k"
+  backend.xyce.param=k
 u=u+d@V>=Vpeak
 u'=a*(b*(V-Vrest)-u)/1mV
  $metadata
-  backend.xyce.internalVar="u"
+  backend.xyce.internalVar=u
 x0=trace(V)
