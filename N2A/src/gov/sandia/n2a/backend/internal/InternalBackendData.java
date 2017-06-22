@@ -79,7 +79,7 @@ public class InternalBackendData
     public Variable   type;
     public Variable   xyz;
 
-    public List<Variable> Pdependencies;  // If $p is temporary, then this list contains any other temporary variables (in evaluation order) that it depends on.
+    public List<Variable> Pdependencies;  // Contains any temporary variables (in evaluation order) that $p depends on. Guaranteed non-null if $p is non-null.
 
     /**
         If the model uses events or otherwise has non-constant frequency, then we
@@ -800,7 +800,7 @@ public class InternalBackendData
             }
         }
 
-        if (p != null  &&  p.hasAttribute ("temporary"))
+        if (p != null)
         {
             Pdependencies = new ArrayList<Variable> ();
             for (Variable t : s.ordered)
