@@ -276,15 +276,17 @@ public class EquationSet implements Comparable<EquationSet>
             if (find (new Variable (av.getName ())) != null) continue;
 
             // Resolve connection endpoint to a specific equation set
-            EquationSet s = findEquationSet (av.name);
-            if (s == null)
+            Object o = resolveConnectionBinding (av.name);
+            if (o == null)
             {
                 unresolved.add (prefix () + "." + v.nameString () + " --> " + av.name);
                 continue;
             }
+            if (! (o instanceof EquationSet)) continue;  // Could be a variable or prefix referring to an already-found connection.
 
             // Store connection binding
             if (connectionBindings == null) connectionBindings = new TreeMap<String, EquationSet> ();
+            EquationSet s = (EquationSet) o;
             connectionBindings.put (v.name, s);
             s.connected = true;
             i.remove ();  // Should no longer be in the equation list, as there is nothing further to compute.
@@ -294,8 +296,10 @@ public class EquationSet implements Comparable<EquationSet>
     /**
         Returns reference to the named equation set, based on a search starting in the
         current equation set and applying all the N2A name-resolution rules.
+        @return null if the search fails. EquationSet if the connection target is found.
+        String if a prefix of the query matches an already-known connection.
     **/
-    public EquationSet findEquationSet (String query)
+    public Object resolveConnectionBinding (String query)
     {
         if (query.isEmpty ()) return this;
         String[] pieces = query.split ("\\.", 2);
@@ -307,16 +311,23 @@ public class EquationSet implements Comparable<EquationSet>
         if (ns.equals ("$up"))  // Don't bother with local checks if we know we are going up
         {
             if (container == null) return null;
-            return container.findEquationSet (nextName);
+            return container.resolveConnectionBinding (nextName);
         }
 
         EquationSet p = parts.floor (new EquationSet (ns));
-        if (p != null  &&  p.name.equals (ns)) return p.findEquationSet (nextName);
+        if (p != null  &&  p.name.equals (ns)) return p.resolveConnectionBinding (nextName);
 
-        if (find (new Variable (ns)) != null) return null;  // not allowed to match any of our variables
+        if (connectionBindings != null)
+        {
+            p = connectionBindings.get (ns);  // ns may name an existing (already found) connection binding. In this case, it is probably a prefix for a variable in the target equation set.
+            if (p != null) return ns;  // Just something besides null or EquationSet
+        }
+
+        Variable v = find (new Variable (ns));
+        if (v != null) return v;  // Matching a variable means this is not a reference to an equation set. This is not an error if nextName is empty.
 
         if (container == null) return null;
-        return container.findEquationSet (query);
+        return container.resolveConnectionBinding (query);
     }
 
     /**
