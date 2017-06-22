@@ -225,8 +225,8 @@ public class InternalBackend extends Backend
         e.findIntegrated ();
         e.resolveLHS ();
         e.resolveRHS ();
-        e.determineTraceVariableName ();
         e.findConstants ();
+        e.determineTraceVariableName ();
         e.removeUnused ();  // especially get rid of unneeded $variables created by addSpecials()
         e.collectSplits ();
         e.findAccountableConnections ();
