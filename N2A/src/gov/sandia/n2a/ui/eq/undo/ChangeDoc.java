@@ -1,12 +1,10 @@
 /*
-Copyright 2016 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.ui.eq.undo;
-
-import java.util.UUID;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
@@ -47,8 +45,8 @@ public class ChangeDoc extends Undoable
         AppData.models.move (A, B);
         PanelModel mep = PanelModel.instance;
         MNode doc = AppData.models.child (B);
-        String uuid = doc.get ("$metadata", "uuid");
-        if (! uuid.isEmpty ()) AppData.set (UUID.fromString (uuid), doc);
+        String id = doc.get ("$metadata", "id");
+        if (! id.isEmpty ()) AppData.set (id, doc);
         mep.panelEquations.loadRootFromDB (doc);  // lazy; only loads if not already loaded
         NodePart root = mep.panelEquations.root;
         root.setUserObject ();

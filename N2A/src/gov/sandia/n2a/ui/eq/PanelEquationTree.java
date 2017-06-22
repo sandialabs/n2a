@@ -458,7 +458,8 @@ public class PanelEquationTree extends JPanel
                         // Create an include-style part
                         MNode include = new MVolatile ();  // Note the empty key. This enables AddPart to generate a name.
                         include.merge (child);  // TODO: What if this brings in a $inherit line, and that line does not match the $inherit line in the source part? One possibility is to add the new values to the end of the $inherit line created below.
-                        include.set ("$inherit", key);
+                        include.clear ("$inherit");  // get rid of IDs from included part, so they won't override the new $inherit line ...
+                        include.set ("$inherit", "\"" + key + "\"");
                         NodeBase added = target.add ("Part", tree, include);
                         if (added == null)
                         {
@@ -862,11 +863,13 @@ public class PanelEquationTree extends JPanel
         {
             buttonLock.setToolTipText ("Read-only (ctrl-shift-click to unlock)");
             buttonLock.setIcon (iconLocked);
+            tree.setEditable (false);
         }
         else
         {
             buttonLock.setToolTipText ("Editable (ctrl-shift-click to lock)");
             buttonLock.setIcon (iconUnlocked);
+            tree.setEditable (true);
         }
     }
 
@@ -921,7 +924,7 @@ public class PanelEquationTree extends JPanel
             runs.set (jobKey, "");  // Create the dir and model doc
             final MNode job = runs.child (jobKey);
             job.merge (root.source);
-            job.set ("$inherit", record.key ());
+            job.set ("$inherit", "\"" + record.key () + "\"");
             ((MDoc) job).save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
 
             new Thread ()

@@ -10,8 +10,6 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.NavigableMap;
 import java.util.TreeMap;
-import java.util.UUID;
-
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MPersistent;
@@ -115,27 +113,27 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     public synchronized void inherit (LinkedList<MPersistent> visited, MPart root, MNode from)
     {
         boolean maintainable =  from == root  &&  root.isFromTopDocument ();
-        boolean changedName = false;  // Indicates that at least one name changed due to UUID resolution. This lets us delay updating the field until all names are processed.
+        boolean changedName = false;  // Indicates that at least one name changed due to ID resolution. This lets us delay updating the field until all names are processed.
 
         String[] parentNames = from.get ().split (",");
         for (int i = 0; i < parentNames.length; i++)
         {
             String parentName = parentNames[i];
-            String uuid       = from.get (i);
+            String id         = from.get (i);
             parentName = parentName.trim ().replace ("\"", "");
             MPersistent parentSource = (MPersistent) AppData.models.child (parentName);
 
-            if (parentSource != null  &&  ! uuid.isEmpty ())
+            String parentID = "";
+            if (parentSource != null)
             {
-                UUID originalUUID  = UUID.fromString (uuid);
-                UUID retrievedUUID = UUID.fromString (parentSource.get ("$metadata", "uuid"));
-                if (! retrievedUUID.equals (originalUUID)) parentSource = null;  // Even though the name matches, parentSource is not really the same model that was originally linked.
+                parentID = parentSource.get ("$metadata", "id");
+                if (! id.isEmpty ()  &&  ! parentID.equals (id)) parentSource = null;  // Even though the name matches, parentSource is not really the same model that was originally linked.
             }
             if (parentSource == null)
             {
-                if (! uuid.isEmpty ())
+                if (! id.isEmpty ())
                 {
-                    parentSource = AppData.getModel (UUID.fromString (uuid));
+                    parentSource = AppData.getModel (id);
                     if (parentSource != null  &&  maintainable)  // relink
                     {
                         parentNames[i] = parentSource.key ();
@@ -145,7 +143,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
             }
             else
             {
-                if (uuid.isEmpty ()  &&  maintainable) root.set (i, parentSource.get ("$metadata", "uuid"));
+                if (id.isEmpty ()  &&  ! parentID.isEmpty ()  &&  maintainable) root.set (i, parentID);
             }
 
             if (parentSource != null  &&  ! visited.contains (parentSource))
@@ -432,7 +430,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         if (couldReset) clearPath ();
         if (source.key ().equals ("$inherit"))  // We changed a $inherit node, so rebuild our subtree.
         {
-            getUUIDs ();
+            getIDs ();
             container.purge (this, null);  // Undo the effect we had on the subtree.
             container.expand ();
         }
@@ -456,7 +454,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         children.put (index, result);
         if (index.equals ("$inherit"))  // We've created an $inherit line, so load the inherited equations.
         {
-            result.getUUIDs ();
+            result.getIDs ();
             // Purge is unnecessary because "result" is a new entry. There is no previous $inherit line.
             expand ();
         }
@@ -464,10 +462,10 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     }
 
     /**
-        Subroutine of set() which locates each parent and records its UUID.
+        Subroutine of set() which locates each parent and records its ID.
         Must only be called on an $inherit node in the top-level document.
     **/
-    protected synchronized void getUUIDs ()
+    protected synchronized void getIDs ()
     {
         clear ();  // Remove children. This will have to change if we ever store other metadata under $inherit (such as a comment).
         String[] parentNames = get ().split (",");
@@ -476,7 +474,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
             String parentName = parentNames[i];
             parentName = parentName.trim ().replace ("\"", "");
             MPersistent parentSource = (MPersistent) AppData.models.child (parentName);
-            if (parentSource != null) set (i, parentSource.get ("$metadata", "uuid"));
+            if (parentSource != null) set (i, parentSource.get ("$metadata", "id"));
         }
     }
 
@@ -498,11 +496,11 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
             boolean existing =  inherit != null;
             if (! existing) inherit = (MPart) set ("$inherit", "");
             
-            // Now do the equivalent of inherit.merge(thatInherit), but pay attention to UUIDs.
-            // If "that" comes from an outside source, it could merge in UUIDs which disagree
-            // with the ones we would otherwise look up during getUUIDs() called by set(). To honor the
-            // imported UUIDs (that is, prioritize them over imported names), we merge the metadata
-            // under $inherit first, then set the node itself in a way that avoids calling getUUIDs().
+            // Now do the equivalent of inherit.merge(thatInherit), but pay attention to IDs.
+            // If "that" comes from an outside source, it could merge in IDs which disagree
+            // with the ones we would otherwise look up during getIDs() called by set(). To honor the
+            // imported IDs (that is, prioritize them over imported names), we merge the metadata
+            // under $inherit first, then set the node itself in a way that avoids calling getIDs().
             for (MNode thatInheritChild : thatInherit)
             {
                 String index = thatInheritChild.key ();
@@ -519,7 +517,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
                 {
                     boolean couldReset = inherit.original.get ().equals (thatInheritValue);
                     if (! couldReset) inherit.override ();
-                    inherit.source.set (value);
+                    inherit.source.set (thatInheritValue);
                     if (couldReset) inherit.clearPath ();
                     if (existing) purge (inherit, null);
                     expand ();

@@ -20,7 +20,6 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -43,7 +42,7 @@ public class AppData
     protected static boolean stop;
     protected static Thread saveThread;
 
-    protected static Map<UUID,String> indexUUID;  ///< Maps UUIDs to model names. Model names are required to be unique, so they function as the direct key into the models database.
+    protected static Map<String,String> indexID;  ///< Maps IDs to model names. Model names are required to be unique, so they function as the direct key into the models database.
 
     static
     {
@@ -121,25 +120,27 @@ public class AppData
         }
     }
 
-    public static void set (UUID key, MNode model)
+    public static void set (String id, MNode model)
     {
-        if (indexUUID == null) return;  // If there is ever a get(UUID), then this new entry will get indexed along with everything else.
-        if (model == null) indexUUID.remove (key);
-        else               indexUUID.put (key, model.key ());
+        if (indexID == null) return;  // When get(ID) is called, this new entry will get indexed along with everything else.
+        if (model == null) indexID.remove (id);
+        else               indexID.put (id, model.key ());
     }
 
-    public static MDoc getModel (UUID key)
+    public static MDoc getModel (String id)
     {
-        if (indexUUID == null)
+        if (indexID == null)
         {
-            indexUUID = new HashMap<UUID,String> ();
+            indexID = new HashMap<String,String> ();
             for (MNode n : models)
             {
-                String uuid = n.get ("$metadata", "uuid");
-                if (! uuid.isEmpty ()) indexUUID.put (UUID.fromString (uuid), n.key ());
+                String nid = n.get ("$metadata", "id");
+                if (! nid.isEmpty ()) indexID.put (nid, n.key ());
             }
         }
-        return (MDoc) models.child (indexUUID.get (key));
+        String name = indexID.get (id);
+        if (name == null) return null;
+        return (MDoc) models.child (name);
     }
 
     public synchronized static void save ()
