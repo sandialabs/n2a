@@ -404,10 +404,13 @@ public class PanelEquationTree extends JPanel
 
                 MNode data = new MVolatile ();
                 Schema schema = new Schema ();
+                TransferableNode xferNode = null;  // used only to detect if the source is ourselves (equation tree)
                 try
                 {
-                    StringReader reader = new StringReader ((String) xfer.getTransferable ().getTransferData (DataFlavor.stringFlavor));
+                    Transferable xferable = xfer.getTransferable ();
+                    StringReader reader = new StringReader ((String) xferable.getTransferData (DataFlavor.stringFlavor));
                     schema.readAll (reader, data);
+                    if (xferable.isDataFlavorSupported (PanelEquationTree.nodeFlavor)) xferNode = (TransferableNode) xferable.getTransferData (PanelEquationTree.nodeFlavor);
                 }
                 catch (IOException | UnsupportedFlavorException e)
                 {
@@ -468,7 +471,7 @@ public class PanelEquationTree extends JPanel
                         }
                     }
                 }
-                if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE) mep.undoManager.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
+                if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE  ||  xferNode == null) mep.undoManager.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
                 return result;
             }
 

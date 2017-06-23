@@ -167,7 +167,7 @@ public class PanelSearch extends JPanel
                     PanelModel.instance.undoManager.add (add);
                     break;  // For now, we only support transferring a single part. To do more, we need to add collections in TransferableNode for both the node paths and the created part names.
                 }
-                if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE) PanelModel.instance.undoManager.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
+                if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE  ||  xferNode == null) PanelModel.instance.undoManager.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
 
                 return true;
             }
