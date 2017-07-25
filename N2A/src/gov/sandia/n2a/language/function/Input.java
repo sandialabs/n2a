@@ -52,13 +52,11 @@ public class Input extends Function
         public double              nextLine      = -1;
         public double[]            nextValues    = empty;
         public Map<String,Integer> columnMap = new TreeMap<String,Integer> ();
-        public boolean             raw;   // indicates that column index should be interpreted as integer rather than real in [0,1]
-        public boolean             time;  // indicates that row index should be interpreted as time in seconds
         public int                 timeColumn = 0;
         public boolean             timeColumnSet;
         public double              epsilon;
 
-        public void getRow (double requested) throws IOException
+        public void getRow (double requested, boolean time) throws IOException
         {
             while (true)
             {
@@ -130,7 +128,7 @@ public class Input extends Function
         }
     }
 
-    public Holder getRow (Instance context, Type op1)
+    public Holder getRow (Instance context, Type op1, boolean time)
     {
         Simulator simulator = Simulator.getSimulator (context);
         if (simulator == null) return null;  // If we can't cache a line from the requested stream, then semantics of this function are lost, so give up.
@@ -148,19 +146,13 @@ public class Input extends Function
                 if (path.isEmpty ()) H.stream = new BufferedReader (new InputStreamReader (System.in));  // not ideal; reading stdin should be reserved for headless operation
                 else                 H.stream = new BufferedReader (new FileReader (new File (path).getAbsoluteFile ()));
 
-                String mode = "";
-                if      (op1 instanceof Text) mode = ((Text) op1                       ).value;
-                else if (operands.length > 3) mode = ((Text) operands[3].eval (context)).value;
-                if (mode.contains ("raw" )) H.raw  = true;
-                if (mode.contains ("time")) H.time = true;
-
                 H.epsilon = Math.sqrt (Math.ulp (1.0));  // sqrt (machine epsilon), about 1e-8
                 if (simulator.currentEvent instanceof EventStep) H.epsilon = Math.min (H.epsilon, ((EventStep) simulator.currentEvent).dt / 1000);
 
                 simulator.inputs.put (path, H);
             }
-            if (op1 instanceof Scalar) H.getRow (((Scalar) op1).value);
-            else                       H.getRow (0);
+            if (op1 instanceof Scalar) H.getRow (((Scalar) op1).value, time);
+            else                       H.getRow (0,                    time);
         }
         catch (IOException e)
         {
@@ -173,16 +165,19 @@ public class Input extends Function
     public Type eval (Instance context)
     {
         Type op1 = operands[1].eval (context);
-        Holder H = getRow (context, op1);
-        if (H == null) return new Scalar (0);
 
         String mode = "";
-        if      (op1 instanceof Text) mode = ((Text) op1                       ).value;
-        else if (operands.length > 3) mode = ((Text) operands[3].eval (context)).value;
+        if      (operands.length > 3) mode = ((Text) operands[3].eval (context)).value;
+        else if (op1 instanceof Text) mode = ((Text) op1                       ).value;
+        boolean time = mode.contains ("time");
+
+        Holder H = getRow (context, op1, time);
+        if (H == null) return new Scalar (0);
+
         if (mode.contains ("columns"))
         {
             int result = Math.max (H.currentValues.length, H.columnMap.size ());
-            if (H.time) result = Math.max (0, result - 1);
+            if (time) result = Math.max (0, result - 1);
             return new Scalar (result);
         }
 
@@ -201,34 +196,34 @@ public class Input extends Function
 
         int columns    = H.currentValues.length;
         int lastColumn = columns - 1;
-        if (H.raw)
+        if (mode.contains ("raw"))
         {
             int c = (int) Math.round (column);
-            if (H.time  &&  c >= H.timeColumn) c++;  // time column is not included in raw index
+            if (time  &&  c >= H.timeColumn) c++;  // time column is not included in raw index
             if      (c < 0       ) c = 0;
             else if (c >= columns) c = lastColumn;
             return new Scalar (H.currentValues[c]);
         }
         else
         {
-            if (H.time) column *= (lastColumn - 1);  // time column is not included in interpolation
-            else        column *=  lastColumn;
+            if (time) column *= (lastColumn - 1);  // time column is not included in interpolation
+            else      column *=  lastColumn;
             int c = (int) Math.floor (column);
             double b = column - c;
             int d = c + 1;
-            if (H.time)
+            if (time)
             {
                 if (c >= H.timeColumn) c++;  // Implicitly, d will also be >= timeColumn.
                 if (d >= H.timeColumn) d++; 
             }
             if (c < 0)
             {
-                if (H.time  &&  H.timeColumn == 0  &&  H.currentValues.length > 1) return new Scalar (H.currentValues[1]);
+                if (time  &&  H.timeColumn == 0  &&  H.currentValues.length > 1) return new Scalar (H.currentValues[1]);
                 return new Scalar (H.currentValues[0]);
             }
             if (c >= lastColumn)
             {
-                if (H.time  &&  H.timeColumn == lastColumn  &&  H.currentValues.length > 1) return new Scalar (H.currentValues[lastColumn - 1]);
+                if (time  &&  H.timeColumn == lastColumn  &&  H.currentValues.length > 1) return new Scalar (H.currentValues[lastColumn - 1]);
                 return new Scalar (H.currentValues[lastColumn]);
             }
             return new Scalar ((1 - b) * H.currentValues[c] + b * H.currentValues[d]);
