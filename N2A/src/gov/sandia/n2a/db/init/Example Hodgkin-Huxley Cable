@@ -10,7 +10,7 @@ C
  A=HH
  B=HH
 HH
- $inherit="Neuron Hodgkin-Huxley"
+ $inherit=Cell Hodgkin-Huxley
   0=166b015ccda6e28b
  $n=3
  I=10uA@$index==0

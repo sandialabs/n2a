@@ -1,5 +1,5 @@
 N2A.schema=1
-$inherit="Neuron"
+$inherit=Cell
  0=166b015ccda620cb
 $metadata
  backend.stpu.component=lif

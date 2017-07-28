@@ -1,5 +1,5 @@
 N2A.schema=1
-$inherit="Neuron Hodgkin-Huxley"
+$inherit=Cell Hodgkin-Huxley
  0=166b015ccda6e28b
 $metadata
  backend.xyce.device=neuron9
