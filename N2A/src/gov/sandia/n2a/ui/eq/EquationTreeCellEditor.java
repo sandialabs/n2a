@@ -12,8 +12,6 @@ import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.Graphics;
-import java.awt.datatransfer.DataFlavor;
-import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.FocusEvent;
@@ -21,8 +19,7 @@ import java.awt.event.FocusListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
-import java.awt.im.InputContext;
-import java.io.IOException;
+import java.util.Arrays;
 import java.util.EventObject;
 
 import javax.swing.AbstractAction;
@@ -38,11 +35,9 @@ import javax.swing.JViewport;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
-import javax.swing.TransferHandler.TransferSupport;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.TreeSelectionEvent;
 import javax.swing.event.TreeSelectionListener;
-import javax.swing.text.JTextComponent;
 import javax.swing.tree.TreeCellEditor;
 import javax.swing.tree.TreePath;
 import javax.swing.undo.CannotRedoException;
@@ -53,6 +48,8 @@ import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.MainTabbedPane;
 import gov.sandia.n2a.ui.SafeTextTransferHandler;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
+import gov.sandia.n2a.ui.eq.tree.NodeEquation;
+import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 /**
     Custom tree cell editor that cooperates with NodeBase icon and text styles.
@@ -172,6 +169,9 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         {
             public boolean importData (TransferSupport support)
             {
+                if      (editingNode instanceof NodeVariable) setSafeTypes ("Equation", "Variable");
+                else if (editingNode instanceof NodeEquation) setSafeTypes ("Equation");
+                else                                          setSafeTypes ();
                 boolean result = super.importData (support);
                 if (! result) result = tree.getTransferHandler ().importData (support);
                 return result;

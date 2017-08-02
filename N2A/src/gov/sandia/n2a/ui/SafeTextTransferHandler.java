@@ -12,19 +12,35 @@ import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.im.InputContext;
+import java.io.BufferedReader;
 import java.io.IOException;
-
+import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import javax.swing.JComponent;
 import javax.swing.TransferHandler;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
 
+import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MVolatile;
+import gov.sandia.n2a.db.Schema;
+
 /**
     Supports basic CCP and DnD for JTextComponents while rejecting any drop/paste which contains N2A data.
 **/
 public class SafeTextTransferHandler extends TransferHandler
 {
+    public List<String> safeTypes;
+
+    public void setSafeTypes (String... safeTypes)
+    {
+        if (safeTypes.length == 0) this.safeTypes = null;
+        else                       this.safeTypes = Arrays.asList (safeTypes);
+    }
+
     public boolean canImport (TransferSupport support)
     {
         JTextComponent c = (JTextComponent) support.getComponent ();
@@ -41,7 +57,36 @@ public class SafeTextTransferHandler extends TransferHandler
         try
         {
             String data = (String) support.getTransferable ().getTransferData (DataFlavor.stringFlavor);
-            if (data.startsWith ("N2A.schema")) return false;
+            if (data.startsWith ("N2A.schema"))
+            {
+                if (safeTypes == null) return false;
+
+                Schema         schema = new Schema ();
+                MNode          nodes  = new MVolatile ();
+                BufferedReader br     = new BufferedReader (new StringReader (data));
+
+                schema.read (br);
+                if (schema.type.startsWith ("Clip")) schema.type = schema.type.substring (4);
+                if (! safeTypes.contains (schema.type))
+                {
+                    br.close ();
+                    return false;
+                }
+
+                nodes.read (br);
+                br.close ();
+
+                // Process into a suitable string
+                for (MNode n : nodes)
+                {
+                    String key   = n.key ();
+                    String value = n.get ();
+                    if      (key.startsWith ("@")) data = value + key;
+                    else if (value.isEmpty ())     data = key;
+                    else                           data = key + "=" + value;
+                    break;  // Only process the first node
+                }
+            }
 
             JTextComponent comp = (JTextComponent) support.getComponent ();
             InputContext ic = comp.getInputContext ();
