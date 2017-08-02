@@ -259,6 +259,20 @@ public class NodeVariable extends NodeContainer
 
         if (type.equals ("Equation"))
         {
+            // Determine if pasting over an existing equation
+            if (data != null)
+            {
+                String key = data.key ();  // includes @
+                NodeBase existingEquation = child (key);
+                if (existingEquation != null)
+                {
+                    key = key.substring (1);  // remove the @, since ChangeEquation expects strings from ParsedValue
+                    String combiner = new Variable.ParsedValue (source.get ()).combiner;
+                    PanelModel.instance.undoManager.add (new ChangeEquation (this, key, combiner, existingEquation.source.get (), key, combiner, data.get ()));
+                    return existingEquation;  // Somewhat of a cheat, since we didn't really add it. OTOH, a paste operation should not be followed by edit mode.
+                }
+            }
+
             // Determine index for new equation
             int index = 0;
             NodeBase child = (NodeBase) tree.getLastSelectedPathComponent ();
