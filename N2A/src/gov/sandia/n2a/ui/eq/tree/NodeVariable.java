@@ -138,7 +138,7 @@ public class NodeVariable extends NodeContainer
             if (name.endsWith ("'")) return;
 
             // Determine if our RHS has the right form. If so, scan for the referent.
-            if (value.matches ("[a-zA-Z_$][a-zA-Z0-9_$.]*"))
+            if (NodePart.isValidIdentifier (value))
             {
                 NodeBase referent = parent.resolveName (value);
                 if (referent instanceof NodePart) isBinding = true;
@@ -300,6 +300,26 @@ public class NodeVariable extends NodeContainer
         return ((NodeBase) getParent ()).add (type, tree, data);  // refer all other requests up the tree
     }
 
+    public static boolean isValidIdentifier (String name)
+    {
+        if (name.length () == 0) return false;
+
+        char c = name.charAt (0);
+        if (! Character.isJavaIdentifierStart (c)) return false;
+
+        int i = 1;
+        for (; i < name.length (); i++)
+        {
+            c = name.charAt (i);
+            if (! Character.isJavaIdentifierPart (c)  &&  c != '.') break;
+        }
+        for (; i < name.length (); i++)
+        {
+            if (name.charAt (i) != '\'') break;
+        }
+        return i >= name.length ();
+    }
+
     /**
         Enforces all the different use cases associated with editing of variables.
         This is the most complex node class, and does the most work. Some of the use cases include:
@@ -349,7 +369,7 @@ public class NodeVariable extends NodeContainer
         // Handle a naked expression.
         String nameBefore  = source.key ();
         String valueBefore = source.get ();
-        if (! nameAfter.matches ("[a-zA-Z_$][a-zA-Z0-9_$.]*[']*"))  // Not a proper variable name. The user actually passed a naked expression, so resurrect the old (probably auto-assigned) variable name.
+        if (! isValidIdentifier (nameAfter))  // Not a proper variable name. The user actually passed a naked expression, so resurrect the old (probably auto-assigned) variable name.
         {
             nameAfter  = nameBefore;
             valueAfter = input;

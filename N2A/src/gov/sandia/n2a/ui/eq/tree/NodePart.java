@@ -414,14 +414,35 @@ public class NodePart extends NodeContainer
 
     public static String validIdentifierFrom (String name)
     {
+        if (name.length () == 0) return "";
+
         StringBuilder result = new StringBuilder ();
-        for (int i = 0; i < name.length (); i++)
+        char c = name.charAt (0);
+        if (Character.isJavaIdentifierStart (c)) result.append (c);
+        else                                     result.append ('_');
+        for (int i = 1; i < name.length (); i++)
         {
-            char c = name.charAt (i);
+            c = name.charAt (i);
             if (Character.isJavaIdentifierPart (c)) result.append (c);
             else                                    result.append ('_');
         }
         return result.toString ();
+    }
+
+    public static boolean isValidIdentifier (String name)
+    {
+        if (name.length () == 0) return false;
+
+        char c = name.charAt (0);
+        if (! Character.isJavaIdentifierStart (c)) return false;
+
+        for (int i = 1; i < name.length (); i++)
+        {
+            c = name.charAt (i);
+            if (! Character.isJavaIdentifierPart (c)) return false;
+        }
+
+        return true;
     }
 
     @Override

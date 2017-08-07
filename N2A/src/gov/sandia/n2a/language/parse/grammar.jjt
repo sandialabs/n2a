@@ -91,7 +91,7 @@ TOKEN_MGR_DECLS:
     | <RRND:    ")" >
 
     | <IDENTIFIER: <LETTER>(<LETTER>|<DIGIT>)*(<PRIME>)*>
-    | <#LETTER: ["A"-"Z", "a"-"z", "_", "$", "."]>
+    | <#LETTER: ["$", ".", "A"-"Z", "_", "a"-"z", "\u0080"-"\uffff"]>  // Past lower-ASCII we don't care about character class.
     | <#DIGIT:  ["0"-"9"]>
     | <#PRIME:  "'">
 
