@@ -173,13 +173,7 @@ public class NodeVariable extends NodeContainer
         if (editing) return source.key () + "=" + source.get ();  // We're about to go into edit, so remove tabs.
         if (! expanded  &&  children != null)  // show "..." when multi-line equation is collapsed
         {
-            for (Object o : children)
-            {
-                if (o instanceof NodeEquation)
-                {
-                    return result + "...";
-                }
-            }
+            for (Object o : children) if (o instanceof NodeEquation) return result + "...";
         }
         return result;
     }
@@ -224,7 +218,7 @@ public class NodeVariable extends NodeContainer
 
         int offset = tabs.get (0).intValue () - fm.stringWidth (result);
         result = result + pad (offset, fm) + "=" + pieces.combiner;
-        
+
         offset = tabs.get (1).intValue () - fm.stringWidth (result);
         result = result + pad (offset, fm) + pieces.expression;
         if (! pieces.condition.isEmpty ()) result = result + " @ " + pieces.condition;
@@ -327,8 +321,27 @@ public class NodeVariable extends NodeContainer
         String[] parts = input.split ("=", 2);
         String nameAfter = parts[0].trim ().replaceAll ("[ \\n\\t]", "");
         String valueAfter;
-        if (parts.length > 1) valueAfter = parts[1].trim ();
-        else                  valueAfter = "0";  // Assume input was a variable name with no assignment.
+        if (parts.length > 1)
+        {
+            valueAfter = parts[1].trim ();
+            if (valueAfter.isEmpty ())
+            {
+                boolean hasEquations = false;
+                if (children != null)
+                {
+                    for (Object o : children) if (o instanceof NodeEquation)
+                    {
+                        hasEquations = true;
+                        break;
+                    }
+                }
+                if (! hasEquations) valueAfter = "0";  // Empty assignment is prohibited. Otherwise, it would be impossible to distinguish variables from parts.
+            }
+        }
+        else
+        {
+            valueAfter = "0";  // Assume input was a variable name with no assignment.
+        }
 
         // What follows is a series of analyses, most having to do with enforcing constraints
         // on name change (which implies moving the variable tree or otherwise modifying another variable).
@@ -393,8 +406,7 @@ public class NodeVariable extends NodeContainer
             Variable.ParsedValue piecesDest  = new Variable.ParsedValue (nodeAfter.source.get ());  // In this section, "dest" refers to state of target node before it is overwritten, while "after" refers to newly input values from user.
             Variable.ParsedValue piecesAfter = new Variable.ParsedValue (valueAfter);
             boolean expressionAfter = ! piecesAfter.expression.isEmpty ()  ||  ! piecesAfter.condition.isEmpty ();
-            if (piecesAfter.combiner  .isEmpty ()) piecesAfter.combiner   = piecesDest.combiner;  // If the user doesn't specify a combiner, absorb it from our destination.
-            if (piecesAfter.expression.isEmpty ()) piecesAfter.expression = "0";
+            if (piecesAfter.combiner.isEmpty ()) piecesAfter.combiner = piecesDest.combiner;  // If the user doesn't specify a combiner, absorb it from our destination.
 
             int          equationCount = 0;
             NodeEquation equationMatch = null; 

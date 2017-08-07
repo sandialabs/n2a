@@ -170,8 +170,8 @@ public class NodeBase extends DefaultMutableTreeNode
 
     public Color getForegroundColor ()
     {
-        if (source.isFromTopDocument ()) return (Color.black);
-        return                                   Color.blue;
+        if (source.isFromTopDocument ()) return Color.black;
+        return                                  Color.blue;
     }
 
     /**

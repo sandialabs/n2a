@@ -91,7 +91,7 @@ public class Variable implements Comparable<Variable>
     public Variable (EquationSet container, MNode source) throws ParseException
     {
         this.container = container;
-        equations = new TreeSet<EquationEntry> ();  // It is possible for Variable to be parse from MNode without any equations, but code that relies this ctor expects a non-null equations member.
+        equations = new TreeSet<EquationEntry> ();  // It is possible for Variable to be parsed from MNode without any equations, but code that relies on this ctor expects a non-null equations member.
 
         parseLHS (source.key ());
         String rhs = source.get ();
@@ -105,7 +105,11 @@ public class Variable implements Comparable<Variable>
             for (MNode i : source)
             {
                 String key = i.key ();
-                if (key.startsWith ("@")) add (new EquationEntry (i));
+                if (key.startsWith ("@"))
+                {
+                    EquationEntry e = new EquationEntry (i);
+                    if (e.expression != null) add (e);
+                }
                 if (key.equals ("$metadata"))
                 {
                     if (metadata == null) metadata = new TreeMap<String,String> ();

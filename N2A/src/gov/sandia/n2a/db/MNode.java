@@ -236,7 +236,6 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     {
         clear ();
         merge (value);
-        if (value.get ().isEmpty ()) set ("");  // Since merge() does not overwrite our value if the source value is empty.
     }
 
     /**
@@ -320,15 +319,14 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     /**
         Deep copies the source node into this node, while leaving any non-overlapping values in
-        this node unchanged. The value of this node will only be replaced if the value of the source
-        node is not empty. In either case, any matching children are then merged. Any children in the
-        source with no match in this node are deep-copied. Any children in this node with no match in
-        the source remain unchanged.
+        this node unchanged. The value of this node is replaced, even if the source node is the
+        empty string. Any matching children are then merged. Any children in the source with no
+        match in this node are deep-copied. Any children in this node with no match in the source
+        remain unchanged.
     **/
     public synchronized void merge (MNode that)
     {
-        String value = that.get ();
-        if (! value.isEmpty ()) set (value);
+        set (that.get ());
         for (MNode thatChild : that)
         {
             String index = thatChild.key ();

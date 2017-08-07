@@ -277,6 +277,11 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         return original != source  ||  inheritedFrom == null;
     }
 
+    public boolean isOverridden ()
+    {
+        return original != source;
+    }
+
     public MPart getParent ()
     {
         return container;
@@ -485,8 +490,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     **/
     public synchronized void merge (MNode that)
     {
-        String value = that.get ();
-        if (! value.isEmpty ()) set (value);
+        set (that.get ());
 
         // Process $inherit first
         MNode thatInherit = that.child ("$inherit");

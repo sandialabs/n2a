@@ -42,6 +42,7 @@ public class EquationEntry implements Comparable<EquationEntry>
     {
         ifString                = source.key ();
         String expressionString = source.get ();
+        if (expressionString.isEmpty ()) return;  // Has no meaning for simulation. Probably a revoked equation.
         try
         {
             expression = Operator.parse (expressionString);
@@ -65,7 +66,7 @@ public class EquationEntry implements Comparable<EquationEntry>
                 e.column += expressionString.length () + 1;
                 throw e;
             }
-            ifString  = condition.render ();  // to normalize formatting, since we rely on this string for sorting and comparison
+            ifString = condition.render ();  // to normalize formatting, since we rely on this string for sorting and comparison
         }
     }
 

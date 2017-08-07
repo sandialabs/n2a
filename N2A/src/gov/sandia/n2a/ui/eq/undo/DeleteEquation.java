@@ -42,7 +42,7 @@ public class DeleteEquation extends Undoable
             String key = n.key ();
             if (key.startsWith ("@")) equationCount++;
         }
-        equationCount--;  // For this equation which is about to be deleted
+        if (! node.source.isOverridden ()) equationCount--;  // For this equation which is about to be deleted
         if (equationCount < 2) equationCount = 0;  // Because we always merge a single equation back into a one-line variable=equation.
     }
 

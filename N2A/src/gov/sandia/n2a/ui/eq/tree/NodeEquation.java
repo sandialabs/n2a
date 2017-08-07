@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.tree;
 
+import java.awt.Color;
 import java.awt.FontMetrics;
 import java.util.ArrayList;
 import java.util.List;
@@ -48,9 +49,16 @@ public class NodeEquation extends NodeBase
         {
             result           = source.get ();
             String condition = source.key ();
-            if (! condition.equals ("@")) result = result + condition;
+            if (! condition.equals ("@")  ||  result.length () == 0) result = result + condition;
         }
         return result;
+    }
+
+    @Override
+    public Color getForegroundColor ()
+    {
+        if (source.get ().isEmpty ()) return Color.red;
+        return super.getForegroundColor ();
     }
 
     @Override
@@ -87,7 +95,7 @@ public class NodeEquation extends NodeBase
     {
         String key    = source.key ();
         String result = source.get ();
-        if (! key.equals ("@"))  // Means that there is more than blank for a condition. In all cases, condition starts with "@".
+        if (! key.equals ("@")  ||  result.length () == 0)  // Condition always starts with @, but might otherwise be empty, if it is the default equation. Generally, don't show the @ for the default equation, unless it has been revoked.
         {
             int offset = tabs.get (0).intValue () - fm.stringWidth (result);
             result = result + pad (offset, fm) + "@ " + key.substring (1);
@@ -142,15 +150,23 @@ public class NodeEquation extends NodeBase
         piecesBefore.combiner = parent.source.get ();  // The fact that we are modifying an existing equation node indicates that the variable (parent) should only contain a combiner.
         if (piecesAfter.combiner.isEmpty ()) piecesAfter.combiner = piecesBefore.combiner;
 
-        if (piecesAfter.expression.isEmpty ()) piecesAfter.expression = "0";
-
         PanelModel.instance.undoManager.add (new ChangeEquation (parent, piecesBefore.condition, piecesBefore.combiner, piecesBefore.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
     }
 
     @Override
     public void delete (JTree tree, boolean canceled)
     {
-        if (! source.isFromTopDocument ()) return;
-        PanelModel.instance.undoManager.add (new DeleteEquation (this, canceled));
+        if (source.isFromTopDocument ())
+        {
+            PanelModel.instance.undoManager.add (new DeleteEquation (this, canceled));
+        }
+        else
+        {
+            NodeVariable parent   = (NodeVariable) getParent ();
+            String       combiner = parent.source.get ();
+            String       name     = source.key ().substring (1);  // strip @ from name, as required by ChangeEquation
+            String       value    = source.get ();
+            PanelModel.instance.undoManager.add (new ChangeEquation (parent, name, combiner, value, name, combiner, ""));  // revoke the equation
+        }
     }
 }

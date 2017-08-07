@@ -135,8 +135,15 @@ public class EquationSet implements Comparable<EquationSet>
             // That leaves only parts and variables
             try
             {
-                if (MPart.isPart (e)) parts    .add (new EquationSet (this, e));
-                else                  variables.add (new Variable    (this, e));
+                if (MPart.isPart (e))
+                {
+                    parts.add (new EquationSet (this, e));
+                }
+                else
+                {
+                    Variable v = new Variable (this, e);
+                    if (v.equations.size () > 0) variables.add (v);  // A variable with no equations has no meaning for simulation, and is most likely a revocation.
+                }
             }
             catch (ParseException pe)
             {
@@ -165,45 +172,6 @@ public class EquationSet implements Comparable<EquationSet>
     {
         v.container = this;
         return variables.add (v);
-    }
-
-    /**
-        Merge given equation set into this, where contents of that always take precedence.
-        @param that No longer usable after the merge, as certain contents may be extracted,
-        modified, and incorporated into this.
-    **/
-    public void merge (EquationSet that)
-    {
-        // Merge variables, and collate equations within each variable
-        for (Variable v : that.variables)
-        {
-            Variable r = variables.floor (v);
-            if (r == null  ||  ! r.equals (v))
-            {
-                add (v);
-            }
-            else
-            {
-                r.merge (v);
-            }
-        }
-
-        // Merge parts, and collate contents of any that are already present
-        for (EquationSet p : that.parts)
-        {
-            EquationSet r = parts.floor (p);
-            if (r == null  ||  ! r.equals (p))
-            {
-                parts.add (p);
-                p.container = this;
-            }
-            else
-            {
-                r.merge (p);
-            }
-        }
-
-        metadata.putAll (that.metadata);
     }
 
     /**

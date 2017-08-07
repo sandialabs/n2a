@@ -162,6 +162,8 @@ public class AddVariable extends Undoable
             {
                 name = change.nameAfter;
                 nameIsGenerated = false;
+                createSubtree.merge (change.savedTree);  // Generally, there should be nothing in savedTree. Just being thorough.
+                createSubtree.set (change.valueAfter);
                 return true;
             }
         }
