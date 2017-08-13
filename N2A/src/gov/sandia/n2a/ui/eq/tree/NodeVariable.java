@@ -339,6 +339,15 @@ public class NodeVariable extends NodeContainer
         return i >= name.length ();
     }
 
+    public boolean hasEquations ()
+    {
+        if (children != null)
+        {
+            for (Object o : children) if (o instanceof NodeEquation) return true;
+        }
+        return false;
+    }
+
     /**
         Enforces all the different use cases associated with editing of variables.
         This is the most complex node class, and does the most work. Some of the use cases include:
@@ -517,16 +526,7 @@ public class NodeVariable extends NodeContainer
             }
             else
             {
-                boolean hasEquations = false;
-                if (children != null)
-                {
-                    for (Object o : children) if (o instanceof NodeEquation)
-                    {
-                        hasEquations = true;
-                        break;
-                    }
-                }
-                if (! hasEquations) valueAfter = "$kill";
+                if (! hasEquations ()) valueAfter = "$kill";
             }
         }
         mep.undoManager.add (new ChangeVariable (this, nameAfter, valueAfter));
@@ -535,7 +535,16 @@ public class NodeVariable extends NodeContainer
     @Override
     public void delete (JTree tree, boolean canceled)
     {
-        if (! source.isFromTopDocument ()) return;
-        PanelModel.instance.undoManager.add (new DeleteVariable (this, canceled));
+        if (source.isFromTopDocument ())
+        {
+            PanelModel.instance.undoManager.add (new DeleteVariable (this, canceled));
+        }
+        else
+        {
+            if (! hasEquations ())
+            {
+                PanelModel.instance.undoManager.add (new ChangeVariable (this, source.key (), "$kill"));  // revoke the variable
+            }
+        }
     }
 }
