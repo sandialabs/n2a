@@ -12,7 +12,6 @@ import java.awt.FontMetrics;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
-
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
@@ -33,7 +32,7 @@ import javax.swing.ImageIcon;
 import javax.swing.JTree;
 import javax.swing.tree.TreePath;
 
-public class NodeVariable extends NodeContainer
+public class NodeVariable extends NodeFilter
 {
     protected static ImageIcon iconVariable = ImageUtil.getImage ("delta.png");
     protected static ImageIcon iconBinding  = ImageUtil.getImage ("connect.gif");
@@ -163,9 +162,11 @@ public class NodeVariable extends NodeContainer
     @Override
     public boolean visible (int filterLevel)
     {
-        if (filterLevel == FilteredTreeModel.ALL) return true;
-        if (source.isFromTopDocument ()) return true;
-        if (filterLevel >= FilteredTreeModel.LOCAL) return false;  // Since we already fail the "local" requirement
+        if (filterLevel == FilteredTreeModel.REVOKED) return true;
+        if (source.get ().startsWith ("$kill"))       return false;
+        if (filterLevel == FilteredTreeModel.ALL    ) return true;
+        if (source.isFromTopDocument ())              return true;
+        if (filterLevel >= FilteredTreeModel.LOCAL)   return false;  // Since we already fail the "local" requirement
         // FilteredTreeModel.PUBLIC ...
         return source.child ("$metadata", "public") != null;
     }

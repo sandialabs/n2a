@@ -36,6 +36,15 @@ public class NodeEquation extends NodeBase
     }
 
     @Override
+    public boolean visible (int filterLevel)
+    {
+        if (filterLevel == FilteredTreeModel.REVOKED) return true;
+        String value = source.get ();
+        if (value.isEmpty ()  ||  value.startsWith ("$kill")) return false;
+        return true;
+    }
+
+    @Override
     public Icon getIcon (boolean expanded)
     {
         return icon;

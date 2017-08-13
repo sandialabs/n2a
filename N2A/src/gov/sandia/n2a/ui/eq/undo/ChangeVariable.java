@@ -86,7 +86,7 @@ public class ChangeVariable extends Undoable
         if (nameBefore.equals (nameAfter))
         {
             nodeAfter = nodeBefore;
-            nodeAfter.source.set (savedTree.get ());  // Sub-tree is not relevant here.
+            nodeAfter.source.set (savedTree.get ());  // Same as valueAfter. Sub-tree is not relevant here.
         }
         else
         {

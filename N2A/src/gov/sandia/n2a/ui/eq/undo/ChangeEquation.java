@@ -113,6 +113,8 @@ public class ChangeEquation extends Undoable
                     nodeAfter = new NodeEquation (newPart);
                     model.insertNodeIntoUnfiltered (nodeAfter, parent, index);
                 }
+                if (nodeBefore.visible (model.filterLevel)) model.nodeChanged (nodeBefore);
+                else                                        parent.hide (nodeBefore, model, true);
             }
         }
 

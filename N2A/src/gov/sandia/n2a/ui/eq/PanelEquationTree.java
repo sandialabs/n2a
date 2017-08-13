@@ -130,11 +130,12 @@ public class PanelEquationTree extends JPanel
     protected JPopupMenu menuFilter;
     protected long       menuFilterCanceledAt = 0;
 
-    protected static ImageIcon iconFilterAll    = ImageUtil.getImage ("filter.png");
-    protected static ImageIcon iconFilterPublic = ImageUtil.getImage ("filterPublic.png");
-    protected static ImageIcon iconFilterLocal  = ImageUtil.getImage ("filterLocal.png");
-    protected static ImageIcon iconLocked       = ImageUtil.getImage ("locked.png");
-    protected static ImageIcon iconUnlocked     = ImageUtil.getImage ("unlocked.png");
+    protected static ImageIcon iconFilterRevoked = ImageUtil.getImage ("filterRevoked.png");
+    protected static ImageIcon iconFilterAll     = ImageUtil.getImage ("filter.png");
+    protected static ImageIcon iconFilterPublic  = ImageUtil.getImage ("filterPublic.png");
+    protected static ImageIcon iconFilterLocal   = ImageUtil.getImage ("filterLocal.png");
+    protected static ImageIcon iconLocked        = ImageUtil.getImage ("locked.png");
+    protected static ImageIcon iconUnlocked      = ImageUtil.getImage ("unlocked.png");
 
     /**
         A data flavor that lets PanelSearch extract a TransferableNode instance for the purpose of adding info to it for our local exportDone().
@@ -759,21 +760,26 @@ public class PanelEquationTree extends JPanel
         model.setFilterLevel (filterLevel, tree);  // root is still null, so this has no immediate effect
         switch (filterLevel)
         {
-            case FilteredTreeModel.ALL:    buttonFilter.setIcon (iconFilterAll);    break;
-            case FilteredTreeModel.PUBLIC: buttonFilter.setIcon (iconFilterPublic); break;
-            case FilteredTreeModel.LOCAL:  buttonFilter.setIcon (iconFilterLocal);  break;
+            case FilteredTreeModel.REVOKED: buttonFilter.setIcon (iconFilterRevoked); break;
+            case FilteredTreeModel.ALL:     buttonFilter.setIcon (iconFilterAll);     break;
+            case FilteredTreeModel.PUBLIC:  buttonFilter.setIcon (iconFilterPublic);  break;
+            case FilteredTreeModel.LOCAL:   buttonFilter.setIcon (iconFilterLocal);   break;
         }
 
-        JRadioButtonMenuItem itemFilterAll    = new JRadioButtonMenuItem ("All",    model.filterLevel == FilteredTreeModel.ALL);
-        itemFilterAll   .addActionListener (listenerFilter);
+        JRadioButtonMenuItem itemFilterRevoked = new JRadioButtonMenuItem ("Revoked", model.filterLevel == FilteredTreeModel.REVOKED);
+        itemFilterRevoked.addActionListener (listenerFilter);
 
-        JRadioButtonMenuItem itemFilterPublic = new JRadioButtonMenuItem ("Public", model.filterLevel == FilteredTreeModel.PUBLIC);
-        itemFilterPublic.addActionListener (listenerFilter);
+        JRadioButtonMenuItem itemFilterAll     = new JRadioButtonMenuItem ("All",     model.filterLevel == FilteredTreeModel.ALL);
+        itemFilterAll    .addActionListener (listenerFilter);
 
-        JRadioButtonMenuItem itemFilterLocal  = new JRadioButtonMenuItem ("Local",  model.filterLevel == FilteredTreeModel.LOCAL);
-        itemFilterLocal .addActionListener (listenerFilter);
+        JRadioButtonMenuItem itemFilterPublic  = new JRadioButtonMenuItem ("Public",  model.filterLevel == FilteredTreeModel.PUBLIC);
+        itemFilterPublic .addActionListener (listenerFilter);
+
+        JRadioButtonMenuItem itemFilterLocal   = new JRadioButtonMenuItem ("Local",   model.filterLevel == FilteredTreeModel.LOCAL);
+        itemFilterLocal  .addActionListener (listenerFilter);
 
         menuFilter = new JPopupMenu ();
+        menuFilter.add (itemFilterRevoked);
         menuFilter.add (itemFilterAll);
         menuFilter.add (itemFilterPublic);
         menuFilter.add (itemFilterLocal);
@@ -794,6 +800,7 @@ public class PanelEquationTree extends JPanel
         });
 
         ButtonGroup groupFilter = new ButtonGroup ();
+        groupFilter.add (itemFilterRevoked);
         groupFilter.add (itemFilterAll);
         groupFilter.add (itemFilterPublic);
         groupFilter.add (itemFilterLocal);
@@ -1074,7 +1081,12 @@ public class PanelEquationTree extends JPanel
             tree.stopEditing ();
 
             String action = e.getActionCommand ();
-            if (action.equals ("All"))
+            if (action.equals ("Revoked"))
+            {
+                model.setFilterLevel (FilteredTreeModel.REVOKED, tree);
+                buttonFilter.setIcon (iconFilterRevoked);
+            }
+            else if (action.equals ("All"))
             {
                 model.setFilterLevel (FilteredTreeModel.ALL, tree);
                 buttonFilter.setIcon (iconFilterAll);
