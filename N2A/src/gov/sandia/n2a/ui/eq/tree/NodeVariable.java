@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.tree;
 
+import java.awt.Color;
 import java.awt.FontMetrics;
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -45,6 +46,13 @@ public class NodeVariable extends NodeContainer
         this.source = source;
     }
 
+    public String getValue ()
+    {
+        String value = source.get ();
+        if (value.startsWith ("$kill")) return "";
+        return value;
+    }
+
     @Override
     public void build ()
     {
@@ -56,7 +64,7 @@ public class NodeVariable extends NodeContainer
         // We may actually make small changes to the database here, which is not ideal,
         // but should do little harm.
         if (source.isFromTopDocument ()) enforceOneLine (source);
-        setUserObject (source.key () + "=" + source.get ());
+        setUserObject (source.key () + "=" + getValue ());
         for (MNode n : source)
         {
             if (n.key ().startsWith ("@")) add (new NodeEquation ((MPart) n));
@@ -97,7 +105,9 @@ public class NodeVariable extends NodeContainer
             }
         }
 
-        Variable.ParsedValue pieces = new Variable.ParsedValue (source.get ());
+        String value = source.get ();
+        if (value.startsWith ("$kill")) value = "";
+        Variable.ParsedValue pieces = new Variable.ParsedValue (value);
         boolean empty =  pieces.expression.isEmpty ()  &&  pieces.condition.isEmpty ();
 
         // Collapse or expand
@@ -133,6 +143,8 @@ public class NodeVariable extends NodeContainer
         }
         else
         {
+            if (value.isEmpty ()  ||  value.startsWith ("$kill")) return;
+
             // Determine if our LHS has the right form.
             String name = source.key ().trim ();
             if (name.endsWith ("'")) return;
@@ -170,12 +182,19 @@ public class NodeVariable extends NodeContainer
     {
         String result = toString ();
         if (result.isEmpty ()) return result;  // Allow user object to be "" for new nodes.
-        if (editing) return source.key () + "=" + source.get ();  // We're about to go into edit, so remove tabs.
+        if (editing) return source.key () + "=" + getValue ();  // We're about to go into edit, so remove tabs.
         if (! expanded  &&  children != null)  // show "..." when multi-line equation is collapsed
         {
             for (Object o : children) if (o instanceof NodeEquation) return result + "...";
         }
         return result;
+    }
+
+    @Override
+    public Color getForegroundColor ()
+    {
+        if (source.get ().startsWith ("$kill")) return Color.red;
+        return super.getForegroundColor ();
     }
 
     @Override
@@ -200,7 +219,7 @@ public class NodeVariable extends NodeContainer
             columnWidths.add (0);
         }
         columnWidths.set (0, fm.stringWidth (source.key () + " "));
-        Variable.ParsedValue pieces = new Variable.ParsedValue (source.get ());
+        Variable.ParsedValue pieces = new Variable.ParsedValue (getValue ());
         columnWidths.set (1, fm.stringWidth ("=" + pieces.combiner + " "));
     }
 
@@ -214,7 +233,7 @@ public class NodeVariable extends NodeContainer
     public void applyTabStops (List<Integer> tabs, FontMetrics fm)
     {
         String result = source.key ();
-        Variable.ParsedValue pieces = new Variable.ParsedValue (source.get ());
+        Variable.ParsedValue pieces = new Variable.ParsedValue (getValue ());
 
         int offset = tabs.get (0).intValue () - fm.stringWidth (result);
         result = result + pad (offset, fm) + "=" + pieces.combiner;
@@ -341,26 +360,14 @@ public class NodeVariable extends NodeContainer
         String[] parts = input.split ("=", 2);
         String nameAfter = parts[0].trim ().replaceAll ("[ \\n\\t]", "");
         String valueAfter;
-        if (parts.length > 1)
+        if (parts.length > 1)  // Explicit assignment
         {
             valueAfter = parts[1].trim ();
-            if (valueAfter.isEmpty ())
-            {
-                boolean hasEquations = false;
-                if (children != null)
-                {
-                    for (Object o : children) if (o instanceof NodeEquation)
-                    {
-                        hasEquations = true;
-                        break;
-                    }
-                }
-                if (! hasEquations) valueAfter = "0";  // Empty assignment is prohibited. Otherwise, it would be impossible to distinguish variables from parts.
-            }
+            if (valueAfter.startsWith ("$kill")) valueAfter = valueAfter.substring (5).trim ();
         }
         else
         {
-            valueAfter = "0";  // Assume input was a variable name with no assignment.
+            valueAfter = "0";  // Assume input was a variable name with no assignment. Note: an explicit assignment is required to revoke a variable.
         }
 
         // What follows is a series of analyses, most having to do with enforcing constraints
@@ -368,7 +375,7 @@ public class NodeVariable extends NodeContainer
 
         // Handle a naked expression.
         String nameBefore  = source.key ();
-        String valueBefore = source.get ();
+        String valueBefore = getValue ();
         if (! isValidIdentifier (nameAfter))  // Not a proper variable name. The user actually passed a naked expression, so resurrect the old (probably auto-assigned) variable name.
         {
             nameAfter  = nameBefore;
@@ -421,9 +428,10 @@ public class NodeVariable extends NodeContainer
         }
 
         // Detect and handle special cases
-        if (nodeAfter != null)
+        if (nodeAfter != null)  // There exists a variable in the target location, so we may end up injecting an equation into a multiconditional expression.
         {
-            Variable.ParsedValue piecesDest  = new Variable.ParsedValue (nodeAfter.source.get ());  // In this section, "dest" refers to state of target node before it is overwritten, while "after" refers to newly input values from user.
+            // In this section, "dest" refers to state of target node before it is overwritten, while "after" refers to newly input values from user.
+            Variable.ParsedValue piecesDest  = new Variable.ParsedValue (((NodeVariable) nodeAfter).getValue ());
             Variable.ParsedValue piecesAfter = new Variable.ParsedValue (valueAfter);
             boolean expressionAfter = ! piecesAfter.expression.isEmpty ()  ||  ! piecesAfter.condition.isEmpty ();
             if (piecesAfter.combiner.isEmpty ()) piecesAfter.combiner = piecesDest.combiner;  // If the user doesn't specify a combiner, absorb it from our destination.
@@ -444,13 +452,14 @@ public class NodeVariable extends NodeContainer
 
             if (nodeAfter == this)
             {
-                if (equationCount > 0  &&  expressionAfter)
+                if (equationCount > 0  &&  expressionAfter)  // Inject an equation into ourselves.
                 {
-                    if (equationMatch == null)
+                    if (equationMatch == null)  // New equation
                     {
+                        // It is possible to add an equation revocation here without there being an existing equation to revoke.
                         mep.undoManager.add (new AddEquation (this, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
                     }
-                    else
+                    else  // Overwrite an existing equation
                     {
                         Variable.ParsedValue piecesMatch = new Variable.ParsedValue (piecesDest.combiner + equationMatch.source.get () + equationMatch.source.key ());
                         mep.undoManager.add (new ChangeEquation (this, piecesMatch.condition, piecesMatch.combiner, piecesMatch.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
@@ -462,27 +471,30 @@ public class NodeVariable extends NodeContainer
             }
             else
             {
-                if (newlyCreated)
+                if (newlyCreated)  // The newly created node has been renamed such that it will inject into/over an existing variable.
                 {
                     NodeVariable nva = (NodeVariable) nodeAfter;
                     if (equationCount == 0)
                     {
-                        if (piecesAfter.condition.equals (piecesDest.condition))
+                        if (piecesAfter.condition.equals (piecesDest.condition))  // Directly overwrite the target, since they share the say name and condition.
                         {
+                            if (valueAfter.isEmpty ()) valueAfter = "$kill";
                             mep.undoManager.add (new ChangeVariable (nva, nameAfter, valueAfter, getKeyPath ()));
                         }
-                        else
+                        else  // Inject new equation and change target into a multiconditional variable.
                         {
+                            // Possible to revoke non-existent equation
                             mep.undoManager.add (new AddEquation (nva, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
                         }
                     }
                     else
                     {
-                        if (equationMatch == null)
+                        if (equationMatch == null)  // Add  new equation to an existing multiconditional.
                         {
+                            // Possible to revoke non-existent equation
                             mep.undoManager.add (new AddEquation (nva, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
                         }
-                        else
+                        else  // Overwrite an existing equation in a multiconditional
                         {
                             Variable.ParsedValue piecesMatch = new Variable.ParsedValue (piecesDest.combiner + equationMatch.source.get () + equationMatch.source.key ());
                             mep.undoManager.add (new ChangeEquation (nva, piecesMatch.condition, piecesMatch.combiner, piecesMatch.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
@@ -497,7 +509,26 @@ public class NodeVariable extends NodeContainer
         }
 
         // The default action
-        if (newlyCreated  &&  valueAfter.isEmpty ()) valueAfter = "0";
+        if (valueAfter.isEmpty ())
+        {
+            if (newlyCreated)
+            {
+                valueAfter = "0";
+            }
+            else
+            {
+                boolean hasEquations = false;
+                if (children != null)
+                {
+                    for (Object o : children) if (o instanceof NodeEquation)
+                    {
+                        hasEquations = true;
+                        break;
+                    }
+                }
+                if (! hasEquations) valueAfter = "$kill";
+            }
+        }
         mep.undoManager.add (new ChangeVariable (this, nameAfter, valueAfter));
     }
 

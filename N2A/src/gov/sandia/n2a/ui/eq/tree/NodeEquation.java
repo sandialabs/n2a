@@ -57,7 +57,8 @@ public class NodeEquation extends NodeBase
     @Override
     public Color getForegroundColor ()
     {
-        if (source.get ().isEmpty ()) return Color.red;
+        String value = source.get ();
+        if (value.isEmpty ()  ||  value.startsWith ("$kill")) return Color.red;
         return super.getForegroundColor ();
     }
 

@@ -42,7 +42,7 @@ public class EquationEntry implements Comparable<EquationEntry>
     {
         ifString                = source.key ();
         String expressionString = source.get ();
-        if (expressionString.isEmpty ()) return;  // Has no meaning for simulation. Probably a revoked equation.
+        if (expressionString.isEmpty ()  ||  expressionString.startsWith ("$kill")) return;  // Has no meaning for simulation. Probably a revoked equation.
         try
         {
             expression = Operator.parse (expressionString);
@@ -77,6 +77,7 @@ public class EquationEntry implements Comparable<EquationEntry>
     public EquationEntry (String rhs) throws ParseException
     {
         String[] parts = rhs.split ("@");
+        if (parts[0].isEmpty ()  ||  parts[0].startsWith ("$kill")) return;
         try
         {
             expression = Operator.parse (parts[0]);

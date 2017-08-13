@@ -116,6 +116,12 @@ public class ChangeEquation extends Undoable
             }
         }
 
+        if (parent.getChildCount () > 0)
+        {
+            NodeBase firstChild = (NodeBase) parent.getChildAt (0);
+            if (firstChild.needsInitTabs ()) firstChild.initTabs (fm);
+        }
+
         if (! parent.source.get ().equals (combinerAfter))
         {
             parent.source.set (combinerAfter);

@@ -94,13 +94,14 @@ public class Variable implements Comparable<Variable>
         equations = new TreeSet<EquationEntry> ();  // It is possible for Variable to be parsed from MNode without any equations, but code that relies on this ctor expects a non-null equations member.
 
         parseLHS (source.key ());
-        String rhs = source.get ();
         try
         {
+            String rhs = source.get ();
             if (! rhs.isEmpty ())
             {
                 rhs = parseAssignment (rhs);
-                if (! rhs.isEmpty ()) add (new EquationEntry (rhs));
+                EquationEntry e = new EquationEntry (rhs);
+                if (e.expression != null) add (e);
             }
             for (MNode i : source)
             {
