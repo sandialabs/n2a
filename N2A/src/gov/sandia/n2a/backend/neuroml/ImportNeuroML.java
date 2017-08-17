@@ -41,6 +41,8 @@ public class ImportNeuroML implements Importer
             factory.setCoalescing (true);
             factory.setIgnoringComments (true);
             factory.setIgnoringElementContentWhitespace (true);
+            factory.setValidating (false);
+            factory.setXIncludeAware (true);  // Doesn't seem to actually include other files, at least on the samples I've tried so far. Must be missing something.
             DocumentBuilder builder = factory.newDocumentBuilder ();
             Document doc = builder.parse (source);
 
@@ -86,40 +88,41 @@ public class ImportNeuroML implements Importer
 
     public void dump (PrintStream out, Node n, String prefix)
     {
-        out.print (prefix);
         String prefix1 = prefix + " ";
         String prefix2 = prefix + "  ";
 
+        boolean skip = false;
         int type = n.getNodeType();
         switch (type)
         {
             case Node.ATTRIBUTE_NODE:
-                out.print ("ATTR:");
+                out.print (prefix + "ATTR:");
                 dumpDetail (out, n);
+                skip = true;  // skip attribute, because child is just a text node with redundant display info
                 break;
 
             case Node.CDATA_SECTION_NODE:
-                out.print ("CDATA:");
+                out.print (prefix + "CDATA:");
                 dumpDetail (out, n);
                 break;
 
             case Node.COMMENT_NODE:
-                out.print ("COMM:");
+                out.print (prefix + "COMM:");
                 dumpDetail (out, n);
                 break;
 
             case Node.DOCUMENT_FRAGMENT_NODE:
-                out.print ("DOC_FRAG:");
+                out.print (prefix + "DOC_FRAG:");
                 dumpDetail (out, n);
                 break;
 
             case Node.DOCUMENT_NODE:
-                out.print ("DOC:");
+                out.print (prefix + "DOC:");
                 dumpDetail (out, n);
                 break;
 
             case Node.DOCUMENT_TYPE_NODE:
-                out.print ("DOC_TYPE:");
+                out.print (prefix + "DOC_TYPE:");
                 dumpDetail (out, n);
                 NamedNodeMap nodeMap = ((DocumentType) n).getEntities ();
                 for (int i = 0; i < nodeMap.getLength (); i++)
@@ -129,7 +132,7 @@ public class ImportNeuroML implements Importer
                 break;
 
             case Node.ELEMENT_NODE:
-                out.print ("ELEM:");
+                out.print (prefix + "ELEM:");
                 dumpDetail (out, n);
                 NamedNodeMap atts = n.getAttributes ();
                 for (int i = 0; i < atts.getLength (); i++)
@@ -139,38 +142,45 @@ public class ImportNeuroML implements Importer
                 break;
 
             case Node.ENTITY_NODE:
-                out.print ("ENT:");
+                out.print (prefix + "ENT:");
                 dumpDetail (out, n);
                 break;
 
             case Node.ENTITY_REFERENCE_NODE:
-                out.print ("ENT_REF:");
+                out.print (prefix + "ENT_REF:");
                 dumpDetail (out, n);
                 break;
 
             case Node.NOTATION_NODE:
-                out.print ("NOTATION:");
+                out.print (prefix + "NOTATION:");
                 dumpDetail (out, n);
                 break;
 
             case Node.PROCESSING_INSTRUCTION_NODE:
-                out.print ("PROC_INST:");
+                out.print (prefix + "PROC_INST:");
                 dumpDetail (out, n);
                 break;
 
             case Node.TEXT_NODE:
-                out.print ("TEXT:");
-                dumpDetail (out, n);
+                if (n.getNodeValue ().trim ().isEmpty ())
+                {
+                    skip = true;
+                }
+                else
+                {
+                    out.print (prefix + "TEXT:");
+                    dumpDetail (out, n);
+                }
                 break;
 
             default:
-                out.print ("UNSUPPORTED NODE: " + type);
+                out.print (prefix + "UNSUPPORTED NODE: " + type);
                 dumpDetail (out, n);
                 break;
         }
 
         // Dump children
-        if (type != Node.ATTRIBUTE_NODE)  // skip attribute, because child is just a text node with redundant display info
+        if (! skip)
         {
             for (Node child = n.getFirstChild (); child != null; child = child.getNextSibling ())
             {
