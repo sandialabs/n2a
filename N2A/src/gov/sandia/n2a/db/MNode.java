@@ -171,7 +171,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     **/
     public synchronized String getOrDefault (String parm0, String... parms)
     {
-        if (parms.length == 0) return getOrDefault (parm0);  // This could happen indirectly through getOfDefaultType(), where Type is a specific basic type.
+        if (parms.length == 0) return getOrDefault (parm0);  // This could happen indirectly through getOrDefaultType(), where Type is a specific basic type.
 
         int last = parms.length - 1;
         String defaultValue = parms[last];
@@ -187,42 +187,131 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     public boolean getBoolean ()
     {
-        return Boolean.parseBoolean (get ());
+        String value = get ();
+        if (value.trim ().equals ("1")) return true;
+        return Boolean.parseBoolean (value);
     }
 
     public int getInt ()
     {
-        return Integer.parseInt (get ());
+        try
+        {
+            return Integer.parseInt (get ());
+        }
+        catch (NumberFormatException e)
+        {
+            return 0;
+        }
     }
 
     public long getLong ()
     {
-        return Long.parseLong (get ());
+        try
+        {
+            return Long.parseLong (get ());
+        }
+        catch (NumberFormatException e)
+        {
+            return 0;
+        }
     }
 
     public double getDouble ()
     {
-        return Double.parseDouble (get ());
+        try
+        {
+            return Double.parseDouble (get ());
+        }
+        catch (NumberFormatException e)
+        {
+            return 0;
+        }
+    }
+
+    public boolean getBoolean (Object... indices)
+    {
+        String value = get (indices);
+        if (value.trim ().equals ("1")) return true;
+        return Boolean.parseBoolean (value);
+    }
+
+    public int getInt (Object... indices)
+    {
+        try
+        {
+            return Integer.parseInt (get (indices));
+        }
+        catch (NumberFormatException e)
+        {
+            return 0;
+        }
+    }
+
+    public long getLong (Object... indices)
+    {
+        try
+        {
+            return Long.parseLong (get (indices));
+        }
+        catch (NumberFormatException e)
+        {
+            return 0;
+        }
+    }
+
+    public double getDouble (Object... indices)
+    {
+        try
+        {
+            return Double.parseDouble (get (indices));
+        }
+        catch (NumberFormatException e)
+        {
+            return 0;
+        }
     }
 
     public boolean getOrDefaultBoolean (String index0, String... parms)
     {
-        return Boolean.parseBoolean (getOrDefault (index0, parms));
+        String value = getOrDefault (index0, parms);
+        if (value.trim ().equals ("1")) return true;
+        return Boolean.parseBoolean (value);
     }
 
     public int getOrDefaultInt (String index0, String... parms)
     {
-        return Integer.parseInt (getOrDefault (index0, parms));
+        try
+        {
+            return Integer.parseInt (getOrDefault (index0, parms));
+        }
+        catch (NumberFormatException e)
+        {
+            return 0;
+        }
     }
 
     public long getOrDefaultLong (String index0, String... parms)
     {
-        return Long.parseLong (getOrDefault (index0, parms));
+        try
+        {
+            return Long.parseLong (getOrDefault (index0, parms));
+        }
+        catch (NumberFormatException e)
+        {
+            return 0;
+        }
     }
 
     public double getOrDefaultDouble (String index0, String... parms)
     {
-        return Double.parseDouble (getOrDefault (index0, parms));
+        try
+        {
+            return Double.parseDouble (getOrDefault (index0, parms));
+        }
+        catch (NumberFormatException e)
+        {
+            return 0;
+        }
     }
 
     /**

@@ -1,5 +1,5 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -67,6 +67,11 @@ public class Matrix extends Type
     public Matrix (Text that) throws EvaluationException
     {
         load (new StringReader (that.value));
+    }
+
+    public Matrix (String that) throws EvaluationException
+    {
+        load (new StringReader (that));
     }
 
     public void load (Reader stream) throws EvaluationException
@@ -203,6 +208,16 @@ public class Matrix extends Type
     public Scalar getScalar (int row, int column)
     {
         return new Scalar (value[column][row]);
+    }
+
+    public void set (int row, int column, double a)
+    {
+        value[column][row] = a;
+    }
+
+    public void set (int row, double a)
+    {
+        value[0][row] = a;
     }
 
     public Type clear ()

@@ -1033,7 +1033,7 @@ public class PanelEquationTree extends JPanel
             @Override
             public boolean accept (File f)
             {
-                return true;
+                return importer.accept (f);
             }
 
             @Override
@@ -1050,16 +1050,12 @@ public class PanelEquationTree extends JPanel
             // Construct and customize a file chooser
             final JFileChooser fc = new JFileChooser (AppData.properties.get ("resourceDir"));
             fc.setDialogTitle ("Import");
-            ImporterFilter n2a = null;
             List<ExtensionPoint> exps = PluginManager.getExtensionsForPoint (Importer.class);
             for (ExtensionPoint exp : exps)
             {
                 ImporterFilter f = new ImporterFilter ((Importer) exp);
                 fc.addChoosableFileFilter (f);
-                if (f.importer.getName ().contains ("N2A")) n2a = f;
             }
-            fc.setAcceptAllFileFilterUsed (false);
-            if (n2a != null) fc.setFileFilter (n2a);
 
             // Display chooser and collect result
             int result = fc.showOpenDialog (MainFrame.instance);
@@ -1068,8 +1064,18 @@ public class PanelEquationTree extends JPanel
             if (result == JFileChooser.APPROVE_OPTION)
             {
                 File path = fc.getSelectedFile ();
-                ImporterFilter filter = (ImporterFilter) fc.getFileFilter ();
-                filter.importer.process (path);
+                Importer bestImporter = null;
+                float    bestP        = 0;
+                for (ExtensionPoint exp : exps)
+                {
+                    float P = ((Importer) exp).isIn (path);
+                    if (P > bestP)
+                    {
+                        bestP        = P;
+                        bestImporter = (Importer) exp;
+                    }
+                }
+                if (bestImporter != null) bestImporter.process (path);
             }
         }
     };

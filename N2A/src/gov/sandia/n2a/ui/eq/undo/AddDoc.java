@@ -19,7 +19,7 @@ public class AddDoc extends Undoable
     public    String  name;  // public so we can use the name in a potential Outsource operation
     protected boolean fromSearchPanel;
     protected int     index;  // 0 by default
-    protected MNode   saved;
+    public    MNode   saved;  // public so we can fill it in with imported model after creating an instance of this class
     public    boolean wasShowing = true;
 
     public AddDoc ()

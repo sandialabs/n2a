@@ -1,5 +1,5 @@
 /*
-Copyright 2016,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -27,17 +27,39 @@ public class ImportNative implements Importer
     @Override
     public void process (File source)
     {
-        try
+        try (BufferedReader reader = new BufferedReader (new FileReader (source)))
         {
-            BufferedReader reader = new BufferedReader (new FileReader (source));
             reader.readLine ();  // dispose of schema line
             MVolatile doc = new MVolatile ();
             doc.read (reader);
-            reader.close ();
             PanelModel.instance.undoManager.add (new AddDoc (source.getName (), doc));
         }
         catch (IOException e)
         {
         }
+    }
+
+    @Override
+    public float isIn (File source)
+    {
+        try (BufferedReader reader = new BufferedReader (new FileReader (source)))
+        {
+            String line = reader.readLine ();
+            if (line.startsWith ("N2A.schema")) return 1;
+        }
+        catch (IOException e)
+        {
+        }
+        return 0;
+    }
+
+    @Override
+    public boolean accept (File source)
+    {
+        if (source.isDirectory ()) return true;
+        String name = source.getName ();
+        int lastDot = name.lastIndexOf ('.');
+        if (lastDot >= 0  &&  name.substring (lastDot).equalsIgnoreCase (".n2a")) return true;
+        return false;
     }
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2016 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -8,19 +8,10 @@ package gov.sandia.n2a.backend.neuroml;
 
 import gov.sandia.n2a.plugins.extpoints.Importer;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
-import java.io.PrintStream;
-
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-
-import org.w3c.dom.Document;
-import org.w3c.dom.DocumentType;
-import org.w3c.dom.NamedNodeMap;
-import org.w3c.dom.Node;
-import org.xml.sax.SAXException;
 
 public class ImportNeuroML implements Importer
 {
@@ -33,159 +24,35 @@ public class ImportNeuroML implements Importer
     @Override
     public void process (File source)
     {
-        System.out.println ("Trying to load: " + source);
-        try
-        {
-            // Open and parse XML document
-            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance ();
-            factory.setCoalescing (true);
-            factory.setIgnoringComments (true);
-            factory.setIgnoringElementContentWhitespace (true);
-            factory.setValidating (false);
-            factory.setXIncludeAware (true);  // Doesn't seem to actually include other files, at least on the samples I've tried so far. Must be missing something.
-            DocumentBuilder builder = factory.newDocumentBuilder ();
-            Document doc = builder.parse (source);
+        new ImportJob ().process (source);
+    }
 
-            // Extract models
-            dump (System.out, doc, "");
+    @Override
+    public float isIn (File source)
+    {
+        String name = source.getName ();
+        int lastDot = name.lastIndexOf ('.');
+        if (lastDot >= 0  &&  name.substring (lastDot).equalsIgnoreCase (".nml")) return 1;
+
+        try (BufferedReader reader = new BufferedReader (new FileReader (source)))
+        {
+            String line = reader.readLine ();
+            if (line.toLowerCase ().startsWith ("<?xml")) return 0.8f;
+            // To be absolutely certain, could check for top-level tags that normally start a NeuroML section.
         }
         catch (IOException e)
         {
         }
-        catch (ParserConfigurationException e)
-        {
-        }
-        catch (SAXException e)
-        {
-        }
+        return 0;
     }
 
-    // -----------------------------------------------------------------------
-    // The following methods come from the JAXB tutorial (with some modification).
-
-    public void dumpDetail (PrintStream out, Node n)
+    @Override
+    public boolean accept (File source)
     {
-        out.print (" nodeName=\"" + n.getNodeName () + "\"");
-
-        String val = n.getNamespaceURI ();
-        if (val != null) out.print (" uri=\"" + val + "\"");
-
-        val = n.getPrefix ();
-        if (val != null) out.print (" pre=\"" + val + "\"");
-
-        val = n.getLocalName ();
-        if (val != null) out.print (" local=\"" + val + "\"");
-
-        val = n.getNodeValue ();
-        if (val != null)
-        {
-            out.print (" nodeValue=");
-            if (val.trim ().isEmpty ()) out.print("[WS]");  // Whitespace
-            else                        out.print("\"" + n.getNodeValue () + "\"");
-        }
-        out.println ();
-    }
-
-    public void dump (PrintStream out, Node n, String prefix)
-    {
-        String prefix1 = prefix + " ";
-        String prefix2 = prefix + "  ";
-
-        boolean skip = false;
-        int type = n.getNodeType();
-        switch (type)
-        {
-            case Node.ATTRIBUTE_NODE:
-                out.print (prefix + "ATTR:");
-                dumpDetail (out, n);
-                skip = true;  // skip attribute, because child is just a text node with redundant display info
-                break;
-
-            case Node.CDATA_SECTION_NODE:
-                out.print (prefix + "CDATA:");
-                dumpDetail (out, n);
-                break;
-
-            case Node.COMMENT_NODE:
-                out.print (prefix + "COMM:");
-                dumpDetail (out, n);
-                break;
-
-            case Node.DOCUMENT_FRAGMENT_NODE:
-                out.print (prefix + "DOC_FRAG:");
-                dumpDetail (out, n);
-                break;
-
-            case Node.DOCUMENT_NODE:
-                out.print (prefix + "DOC:");
-                dumpDetail (out, n);
-                break;
-
-            case Node.DOCUMENT_TYPE_NODE:
-                out.print (prefix + "DOC_TYPE:");
-                dumpDetail (out, n);
-                NamedNodeMap nodeMap = ((DocumentType) n).getEntities ();
-                for (int i = 0; i < nodeMap.getLength (); i++)
-                {
-                    dump (out, nodeMap.item (i), prefix2);
-                }
-                break;
-
-            case Node.ELEMENT_NODE:
-                out.print (prefix + "ELEM:");
-                dumpDetail (out, n);
-                NamedNodeMap atts = n.getAttributes ();
-                for (int i = 0; i < atts.getLength (); i++)
-                {
-                    dump (out, atts.item (i), prefix2);
-                }
-                break;
-
-            case Node.ENTITY_NODE:
-                out.print (prefix + "ENT:");
-                dumpDetail (out, n);
-                break;
-
-            case Node.ENTITY_REFERENCE_NODE:
-                out.print (prefix + "ENT_REF:");
-                dumpDetail (out, n);
-                break;
-
-            case Node.NOTATION_NODE:
-                out.print (prefix + "NOTATION:");
-                dumpDetail (out, n);
-                break;
-
-            case Node.PROCESSING_INSTRUCTION_NODE:
-                out.print (prefix + "PROC_INST:");
-                dumpDetail (out, n);
-                break;
-
-            case Node.TEXT_NODE:
-                if (n.getNodeValue ().trim ().isEmpty ())
-                {
-                    skip = true;
-                }
-                else
-                {
-                    out.print (prefix + "TEXT:");
-                    dumpDetail (out, n);
-                }
-                break;
-
-            default:
-                out.print (prefix + "UNSUPPORTED NODE: " + type);
-                dumpDetail (out, n);
-                break;
-        }
-
-        // Dump children
-        if (! skip)
-        {
-            for (Node child = n.getFirstChild (); child != null; child = child.getNextSibling ())
-            {
-                dump (out, child, prefix1);
-            }
-        }
+        if (source.isDirectory ()) return true;
+        String name = source.getName ();
+        int lastDot = name.lastIndexOf ('.');
+        if (lastDot >= 0  &&  name.substring (lastDot).equalsIgnoreCase (".nml")) return true;
+        return false;
     }
 }
