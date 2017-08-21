@@ -1,5 +1,5 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -11,6 +11,7 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.type.Instance;
+import gov.sandia.n2a.language.type.Scalar;
 
 public class AccessVariable extends Operator
 {
@@ -29,6 +30,7 @@ public class AccessVariable extends Operator
     public AccessVariable (VariableReference reference)
     {
         this.reference = reference;
+        name = reference.variable.nameString ();
     }
 
     public int getOrder ()
@@ -62,8 +64,20 @@ public class AccessVariable extends Operator
         if (v.hasAttribute ("externalWrite")) return this;  // A variable may locally evaluate to a constant, yet be subject to change from outside equations.
         if (v.equations.size () != 1) return this;
         EquationEntry e = v.equations.first ();
-        if (e.expression == null  ||  e.condition != null) return this;
-        if (e.expression instanceof Constant) return e.expression;
+        if (e.expression == null) return this;
+        if (e.condition != null)
+        {
+            if (! (e.condition instanceof Constant)) return this;
+            // Check for nonzero constant
+            Type value = ((Constant) e.condition).value;
+            if (! (value instanceof Scalar)  ||  ((Scalar) value).value == 0) return this;  // This second condition should be eliminated by Variable.simplify(), but until it is, don't do anything here.
+        }
+        if (e.expression instanceof Constant)
+        {
+            from.removeDependencyOn (v);
+            from.changed = true;
+            return e.expression;
+        }
 
         // Attempt to simplify expression, and maybe get a Constant
         Variable p = from;
@@ -74,7 +88,25 @@ public class AccessVariable extends Operator
         }
         v.visited = from;
         e.expression = e.expression.simplify (v);
-        if (e.expression instanceof Constant) return e.expression;
+        if (e.expression instanceof Constant)
+        {
+            from.removeDependencyOn (v);
+            from.changed = true;
+            return e.expression;
+        }
+        if (e.expression instanceof AccessVariable)  // Our variable is simply an alias for another variable, so grab the other variable instead.
+        {
+            AccessVariable av = (AccessVariable) e.expression;
+            Variable v2 = av.reference.variable;
+            if (v2 == v) return this;
+            // Note: Folding an aliased variable will very likely remove one or more steps of delay in the movement of values through an equation set.
+            // This might go against the user's intention. The folding can be blocked by adding a condition
+            reference = av.reference;
+            name      = av.reference.variable.nameString ();
+            from.removeDependencyOn (v);
+            from.addDependencyOn (v2);
+            from.changed = true;
+        }
         return this;
     }
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -55,7 +55,11 @@ public class OperatorUnary extends Operator
     public Operator simplify (Variable from)
     {
         operand = operand.simplify (from);
-        if (operand instanceof Constant) return new Constant (eval (null));
+        if (operand instanceof Constant)
+        {
+            from.changed = true;
+            return new Constant (eval (null));
+        }
         return this;
     }
 

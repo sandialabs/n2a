@@ -1,5 +1,5 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -53,6 +53,24 @@ public class Function extends Operator
         return false;
     }
 
+    /**
+        Indicates that when all parameters of this function are constant, its value can be replaced by a constant at compile time.
+        Most basic arithmetic functions fall in this category. Random number generators, inputs and outputs do not.
+    **/
+    public boolean canBeConstant ()
+    {
+        return true;
+    }
+
+    /**
+        Indicates that when all parameters of this function are known during the init cycle and do not change after that,
+        this function only needs to be evaluated once.
+    **/
+    public boolean canBeInitOnly ()
+    {
+        return canBeConstant ();
+    }
+
     public void visit (Visitor visitor)
     {
         if (! visitor.visit (this)) return;
@@ -69,7 +87,24 @@ public class Function extends Operator
 
     public Operator simplify (Variable from)
     {
-        for (int i = 0; i < operands.length; i++) operands[i] = operands[i].simplify (from);
+        if (canBeConstant ())
+        {
+            boolean constant = true;
+            for (int i = 0; i < operands.length; i++)
+            {
+                operands[i] = operands[i].simplify (from);
+                if (! (operands[i] instanceof Constant)) constant = false;
+            }
+            if (constant)
+            {
+                from.changed = true;
+                return new Constant (eval (null));  // A function should report canBeConstant() true only if null is safe to pass here.
+            }
+        }
+        else
+        {
+            for (int i = 0; i < operands.length; i++) operands[i] = operands[i].simplify (from);
+        }
         return this;
     }
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -35,11 +35,21 @@ public class ReadMatrix extends Function
         };
     }
 
+    public boolean canBeConstant ()
+    {
+        return false;
+    }
+
+    public boolean canBeInitOnly ()
+    {
+        return true;
+    }
+
     public Type eval (Instance context)
     {
         String path = ((Text) operands[0].eval (context)).value;
         Simulator simulator = Simulator.getSimulator (context);
-        if (simulator == null) return new Scalar (0);  // absence of simulator indicates analysis phase, so opening files is unecessary
+        if (simulator == null) return new Scalar (0);  // absence of simulator indicates analysis phase, so opening files is unnecessary
 
         Matrix A = simulator.matrices.get (path);
         if (A == null)

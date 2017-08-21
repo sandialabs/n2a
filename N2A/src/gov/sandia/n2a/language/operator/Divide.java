@@ -1,5 +1,5 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -45,7 +45,11 @@ public class Divide extends OperatorBinary
         if (operand1 instanceof Constant)
         {
             Type c1 = ((Constant) operand1).value;
-            if (c1 instanceof Scalar  &&  ((Scalar) c1).value == 1) return operand0;
+            if (c1 instanceof Scalar  &&  ((Scalar) c1).value == 1)
+            {
+                from.changed = true;
+                return operand0;
+            }
         }
         return this;
     }

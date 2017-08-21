@@ -1,5 +1,5 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.eqset;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -25,6 +26,7 @@ import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -49,11 +51,12 @@ public class Variable implements Comparable<Variable>
     public Variable                     derivative; // The variable from which we are integrated, if any.
 
     // graph analysis
-    public List<Variable>               uses;       // Variables we depend on. Forms a digraph (which may have cycles) on Variable nodes.
+    public Map<Variable,Integer>        uses;       // Variables we depend on, along with count of the number of references we make. Forms a digraph (which may have cycles) on Variable nodes.
     public List<Object>                 usedBy;     // Variables and EquationSets that depend on us.
     public List<Variable>               before;     // Variables that must be evaluated after us. Generally the same as uses, unless we are a temporary, in which case the ordering is reversed. Note EquationSet.ordered
     public Variable                     visited;    // Points to the previous variable visited on the current path. Used to prevent infinite recursion. Only works on a single thread.
     public int                          priority;   // For evaluation order.
+    public boolean                      changed;    // Indicates that simplify() touched one or more equations in a way that merits another pass.
 
     // Internal backend
     // TODO: put this in a beckendData field, similar to EquationSet.backendData. The problem with this is the extra overhead to unpack the object.
@@ -320,9 +323,12 @@ public class Variable implements Comparable<Variable>
         }
     }
 
-    public void simplify ()
+    public boolean simplify ()
     {
-        if (equations == null) return;
+        if (equations == null) return false;
+        changed = false;
+        TreeSet<EquationEntry> nextEquations = new TreeSet<EquationEntry> ();
+        TreeSet<EquationEntry> alwaysTrue    = new TreeSet<EquationEntry> ();
         for (EquationEntry e : equations)
         {
             if (e.expression != null)
@@ -334,8 +340,42 @@ public class Variable implements Comparable<Variable>
                 e.condition = e.condition.simplify (this);
                 e.ifString  = e.condition.render ();
             }
+
+            if (e.ifString.equals ("0"))
+            {
+                // Drop equation because it will never fire.
+                changed = true;
+            }
+            else if (e.ifString.equals ("1"))
+            {
+                alwaysTrue.add (e);
+                nextEquations.add (e);
+            }
+            else if (e.ifString.isEmpty ()  &&  e.expression instanceof AccessVariable  &&  ((AccessVariable) e.expression).reference.variable == this)
+            {
+                // Drop this default equation because it is redundant. Simulator always copies value to next cycle when no equation fires.
+                changed = true;
+            }
+            else
+            {
+                nextEquations.add (e);
+            }
         }
-        // TODO: Re-sort the equations? Delete any that have constant 0 for their condition?
+        if (alwaysTrue.size () == 1)
+        {
+            changed = true;
+            equations = alwaysTrue;
+
+            // Make the equation unconditional, since it always fires anyway.
+            EquationEntry e = equations.first ();
+            e.condition = null;
+            e.ifString = "";
+        }
+        else
+        {
+            equations = nextEquations;
+        }
+        return changed;
     }
 
     public Type eval (Instance instance) throws EvaluationException
@@ -368,21 +408,37 @@ public class Variable implements Comparable<Variable>
     /**
         Record what other variables this variable depends on.
     **/
-    public void addDependency (Variable whatWeNeed)
+    public void addDependencyOn (Variable whatWeNeed)
     {
         if (uses == null)
         {
-            uses = new ArrayList<Variable> ();
+            uses = new IdentityHashMap<Variable,Integer> ();
         }
-        else
+        else if (uses.containsKey (whatWeNeed))
         {
-            // This is crude and costs O(n^2), but using something better like a TreeSet would
-            // force us to use the Comparable interface. However, we need exact object identity.
-            // FWIW, when the number of dependencies is low, this is probably more efficient.
-            for (Variable u : uses) if (u == whatWeNeed) return;  // already recorded this dependency, so don't do it again
+            uses.put (whatWeNeed, uses.get (whatWeNeed) + 1);
+            return;
         }
-        uses.add (whatWeNeed);
+        uses.put (whatWeNeed, 1);
         whatWeNeed.addUser (this);
+    }
+
+    public void removeDependencyOn (Variable whatWeDontNeedAnymore)
+    {
+        if (uses == null) return;
+        if (uses.containsKey (whatWeDontNeedAnymore))
+        {
+            int newCount = uses.get (whatWeDontNeedAnymore) - 1;
+            if (newCount > 0)
+            {
+                uses.put (whatWeDontNeedAnymore, newCount);
+            }
+            else
+            {
+                uses.remove (whatWeDontNeedAnymore);
+                whatWeDontNeedAnymore.removeUser (this);
+            }
+        }
     }
 
     /**
@@ -398,9 +454,22 @@ public class Variable implements Comparable<Variable>
         }
         else
         {
-            if (usedBy.contains (user)) return;
+            for (Object b : usedBy) if (b == user) return;  // Don't add more than once.
         }
         usedBy.add (user);
+    }
+
+    public void removeUser (Object user)
+    {
+        if (usedBy == null) return;
+        for (int i = 0; i < usedBy.size (); i++)
+        {
+            if (usedBy.get (i) == user)
+            {
+                usedBy.remove (i);
+                break;
+            }
+        }
     }
 
     public boolean hasUsers ()
@@ -465,7 +534,7 @@ public class Variable implements Comparable<Variable>
         }
         visited = from;
 
-        for (Variable u : uses)
+        for (Variable u : uses.keySet ())
         {
             if (u.container != container) continue;  // Don't exit the current equation set.
             Variable result = u.dependsOn (query, this);
@@ -498,7 +567,7 @@ public class Variable implements Comparable<Variable>
         // Scan temporary variables we depend on
         if (uses != null)
         {
-            for (Variable u : uses)
+            for (Variable u : uses.keySet ())
             {
                 if (! u.hasAttribute ("temporary")) continue;
                 if (u.dependsOnEvent (this)) return true;
@@ -531,11 +600,9 @@ public class Variable implements Comparable<Variable>
 
     public void setBefore ()
     {
-        if (uses == null)
-        {
-            return;
-        }
-        for (Variable v : uses)
+        if (uses == null) return;
+
+        for (Variable v : uses.keySet ())
         {
             if (v.reference == null  ||  v.reference.variable.container != container)  // not resolved to the same equation set
             {
@@ -585,7 +652,7 @@ public class Variable implements Comparable<Variable>
         if (hasAttribute ("derivativeOrDependency")) return;
         addAttribute ("derivativeOrDependency");
         if (uses == null) return;
-        for (Variable u : uses)
+        for (Variable u : uses.keySet ())
         {
             if (u.hasAttribute ("temporary")) u.tagDerivativeOrDependency ();
         }
@@ -632,60 +699,33 @@ public class Variable implements Comparable<Variable>
     **/
     public void addAttribute (String attribute)
     {
-        if (attributes == null)
-        {
-            attributes = new TreeSet<String> ();
-        }
+        if (attributes == null) attributes = new TreeSet<String> ();
         attributes.add (attribute);
     }
 
     public void removeAttribute (String attribute)
     {
-        if (attributes == null)
-        {
-            return;
-        }
+        if (attributes == null) return;
         attributes.remove (attribute);
     }
 
     public boolean hasAttribute (String attribute)
     {
-        if (attributes == null)
-        {
-            return false;
-        }
+        if (attributes == null) return false;
         return attributes.contains (attribute);
     }
 
-    public boolean hasAll (String[] attributeArray)
+    public boolean hasAll (String... attributeArray)
     {
-        if (attributes == null)
-        {
-            return false;
-        }
-        for (String s : attributeArray)
-        {
-            if (! attributes.contains (s))
-            {
-                return false;
-            }
-        }
+        if (attributes == null) return false;
+        for (String s : attributeArray) if (! attributes.contains (s)) return false;
         return true;
     }
 
-    public boolean hasAny (String[] attributeArray)
+    public boolean hasAny (String... attributeArray)
     {
-        if (attributes == null)
-        {
-            return false;
-        }
-        for (String s : attributeArray)
-        {
-            if (attributes.contains (s))
-            {
-                return true;
-            }
-        }
+        if (attributes == null) return false;
+        for (String s : attributeArray) if (attributes.contains (s)) return true;
         return false;
     }
 
@@ -745,6 +785,10 @@ public class Variable implements Comparable<Variable>
         return metadata.entrySet ();
     }
 
+    /**
+        Warning: This function is only suitable for sorting variables within a single equation set.
+        Don't rely on the Comparable interface to handle identity across sets.
+    **/
     public int compareTo (Variable that)
     {
         int result = name.compareTo (that.name);

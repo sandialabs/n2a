@@ -1,5 +1,5 @@
 /*
-Copyright 2016,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -40,6 +40,16 @@ public class Input extends Function
                 return new Input ();
             }
         };
+    }
+
+    public boolean canBeConstant ()
+    {
+        return false;
+    }
+
+    public boolean canBeInitOnly ()
+    {
+        return true;
     }
 
     public static class Holder

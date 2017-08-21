@@ -53,6 +53,11 @@ public class Output extends Function
         return true;
     }
 
+    public boolean canBeConstant ()
+    {
+        return false;
+    }
+
     public static class Holder
     {
         public Map<String,Integer> columnMap    = new HashMap<String,Integer> ();  ///< Maps from column name to column position.
@@ -266,7 +271,7 @@ public class Output extends Function
             Variable index = container.find (new Variable ("$index"));
             if (index != null  &&  ! container.isSingleton ())
             {
-                v.addDependency (index);
+                v.addDependencyOn (index);
             }
             container = container.container;
         }

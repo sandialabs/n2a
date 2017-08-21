@@ -1,5 +1,5 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -47,6 +47,7 @@ public class OR extends OperatorBinary
             Type c0 = ((Constant) operand0).value;
             if (c0 instanceof Scalar)
             {
+                from.changed = true;
                 double value = ((Scalar) c0).value;
                 if (value == 0) return operand1;
                 else            return new Constant (new Scalar (1));
@@ -57,6 +58,7 @@ public class OR extends OperatorBinary
             Type c1 = ((Constant) operand1).value;
             if (c1 instanceof Scalar)
             {
+                from.changed = true;
                 double value = ((Scalar) c1).value;
                 if (value == 0) return operand0;
                 else            return new Constant (new Scalar (1));

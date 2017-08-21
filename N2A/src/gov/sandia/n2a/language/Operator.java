@@ -146,6 +146,26 @@ public class Operator implements Cloneable, Comparable<Operator>
         return this;
     }
 
+    /**
+        Remove the dependency of "from" on each variable accessed within the expression tree. 
+    **/
+    public void releaseDependencies (final Variable from)
+    {
+        visit (new Visitor ()
+        {
+            public boolean visit (Operator op)
+            {
+                if (op instanceof AccessVariable)
+                {
+                    AccessVariable av = (AccessVariable) op;
+                    from.removeDependencyOn (av.reference.variable);
+                    return false;
+                }
+                return true;
+            }
+        });
+    }
+
     public String render ()
     {
         Renderer renderer = new Renderer ();

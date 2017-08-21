@@ -1,5 +1,5 @@
 /*
-Copyright 2016 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -527,9 +527,8 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
             String line = reader.line.trim ();
             String[] pieces = line.split ("=", -1);  // Negative limit means to create empty string in resulting array for any zero-length pieces (as opposed to ignoring them). The following algorithm depends on this.
             String index = pieces[0];
-            int last = pieces.length - 1;
             int i = 1;
-            for (; i < last; i++)  // Note that we never include the last piece in the index, unless there is only one piece (see initial assignment above).
+            for (; i < pieces.length; i++)  // Note: It is OK if everything goes in the index, leaving an empty value.
             {
                 if (pieces[i].isEmpty ()  ||  index.endsWith ("=")  ||  index.endsWith ("<")  ||  index.endsWith (">")  ||  index.endsWith ("!"))
                 {
@@ -539,10 +538,10 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
                 break;
             }
             String value = "";
-            if (i <= last)
+            if (i < pieces.length)
             {
                 value = pieces[i++];
-                while (i <= last) value = value + "=" + pieces[i++];
+                while (i < pieces.length) value = value + "=" + pieces[i++];
             }
             index = index.trim ();
             value = value.trim ();

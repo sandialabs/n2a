@@ -10,6 +10,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.ParseException;
@@ -18,9 +19,7 @@ import gov.sandia.n2a.language.Split;
 import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
-import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Output;
-import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.GE;
 import gov.sandia.n2a.language.operator.GT;
 import gov.sandia.n2a.language.operator.LE;
@@ -432,7 +431,7 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 v.addAttribute ("reference");
                 v.reference.variable.addAttribute ("externalWrite");
-                v.reference.variable.addDependency (v);  // v.reference.variable receives an external write from v, and therefore its value depends on v
+                v.reference.variable.addDependencyOn (v);  // v.reference.variable receives an external write from v, and therefore its value depends on v
                 v.reference.variable.container.referenced = true;
                 if (   v.reference.variable.assignment != v.assignment
                     && ! (   (v.reference.variable.assignment == Variable.MULTIPLY  &&  v.assignment == Variable.DIVIDE)  // This line and the next say that * and / are compatible with each other, so ignore that case.
@@ -505,7 +504,7 @@ public class EquationSet implements Comparable<EquationSet>
                         }
                         else
                         {
-                            from.addDependency (query.reference.variable);
+                            from.addDependencyOn (query.reference.variable);
                             if (from.container != query.reference.variable.container)
                             {
                                 query.reference.variable.addAttribute ("externalRead");
@@ -1014,7 +1013,7 @@ public class EquationSet implements Comparable<EquationSet>
                     vo.equations = new TreeSet<EquationEntry> ();
                     found = vo;
                 }
-                found.addDependency (last);
+                found.addDependencyOn (last);
                 last = found;
             }
         }
@@ -1570,23 +1569,34 @@ public class EquationSet implements Comparable<EquationSet>
     **/
     public void findConstants ()
     {
+        while (findConstantsEval ());
+    }
+
+    protected boolean findConstantsEval ()
+    {
+        boolean changed = false;
         for (EquationSet s : parts)
         {
-            s.findConstants ();
+            if (s.findConstantsEval ()) changed = true;
         }
 
         for (Variable v : variables)
         {
-            v.simplify ();
+            if (v.simplify ()) changed = true;
 
             // Check if we have a constant
-            // Don't remove an existing "constant" tag. Such specially added tags are presumed to be correct.
+            if (v.hasAttribute ("constant")) continue;  // If this already has a "constant" tag, it was specially added so presumably correct.
             if (v.hasAttribute ("externalWrite")) continue;  // Regardless of the local math, a variable that gets written is not constant.
             if (v.equations.size () != 1) continue;
             EquationEntry e = v.equations.first ();
             if (e.condition != null) continue;
-            if (e.expression instanceof Constant) v.addAttribute ("constant");
+            if (e.expression instanceof Constant)
+            {
+                v.addAttribute ("constant");
+                changed = true;
+            }
         }
+        return changed;
     }
 
     /**
@@ -1682,7 +1692,7 @@ public class EquationSet implements Comparable<EquationSet>
         {
             Variable v = ordered.get (index);
             if (v.uses == null) continue;
-            for (Variable u : v.uses)
+            for (Variable u : v.uses.keySet ())
             {
                 if (   u.container == this  // must be in same equation set for order to matter
                     && ! (u.name.equals (v.name)  &&  u.order == v.order + 1)  // must not be my derivative
@@ -1896,7 +1906,7 @@ public class EquationSet implements Comparable<EquationSet>
                                 {
                                     if (v.name.startsWith ("$"))  // we are a $variable, so we can only depend on $index and $init
                                     {
-                                        if (! r.name.equals ("$index")  &&  ! r.name.equals ("$init")) isInitOnly = false;
+                                        if (! "$index,$init,$live".contains (r.name)) isInitOnly = false;
                                     }
                                     else  // we are a regular variable, so can only depend on $variables
                                     {
@@ -1904,8 +1914,11 @@ public class EquationSet implements Comparable<EquationSet>
                                     }
                                 }
                             }
-                            else if (op instanceof Gaussian) isInitOnly = false;  // A random number generator cannot be classified constant, even if its parameters are constant.
-                            else if (op instanceof Uniform ) isInitOnly = false;
+                            else if (op instanceof Function)
+                            {
+                                Function f = (Function) op;
+                                if (! f.canBeInitOnly ()) isInitOnly = false;
+                            }
                         }
                         return isInitOnly;
                     }

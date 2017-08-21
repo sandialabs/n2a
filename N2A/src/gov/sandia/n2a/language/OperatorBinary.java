@@ -1,5 +1,5 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -61,7 +61,11 @@ public class OperatorBinary extends Operator
     {
         operand0 = operand0.simplify (from);
         operand1 = operand1.simplify (from);
-        if (operand0 instanceof Constant  &&  operand1 instanceof Constant) return new Constant (eval (null));
+        if (operand0 instanceof Constant  &&  operand1 instanceof Constant)
+        {
+            from.changed = true;
+            return new Constant (eval (null));
+        }
         return this;
     }
 

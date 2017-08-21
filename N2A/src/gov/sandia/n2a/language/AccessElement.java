@@ -1,5 +1,5 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -35,24 +35,40 @@ public class AccessElement extends Function
     public Operator simplify (Variable from)
     {
         for (int i = 0; i < operands.length; i++) operands[i] = operands[i].simplify (from);
-        if (operands.length == 1) return operands[0];
-        // Implicitly, the number of operands is > 1
-        int row = 0;
+        if (operands.length == 1)
+        {
+            from.changed = true;
+            return operands[0];
+        }
+
+        // All operand positions beyond 0 are subscripts, presumably into a matrix at operands[0].
+        // Attempt to replace the element access with a constant.
+        int row = -1;
         int col = 0;
         if (operands[1] instanceof Constant)
         {
             Constant c = (Constant) operands[1];
             if (c.value instanceof Scalar) row = (int) ((Scalar) c.value).value;
         }
-        if (operands.length > 2  &&  operands[2] instanceof Constant)
+        if (operands.length > 2)
         {
-            Constant c = (Constant) operands[2];
-            if (c.value instanceof Scalar) col = (int) ((Scalar) c.value).value;
+            col = -1;
+            if (operands[2] instanceof Constant)
+            {
+                Constant c = (Constant) operands[2];
+                if (c.value instanceof Scalar) col = (int) ((Scalar) c.value).value;
+            }
         }
+        if (row < 0  ||  col < 0) return this;
+            
         if (operands[0] instanceof Constant)
         {
             Constant c = (Constant) operands[0];
-            if (c.value instanceof Matrix) return new Constant (new Scalar (((Matrix) c.value).getDouble (row, col)));
+            if (c.value instanceof Matrix)
+            {
+                from.changed = true;
+                return new Constant (new Scalar (((Matrix) c.value).getDouble (row, col)));
+            }
         }
         else
         {
@@ -64,11 +80,17 @@ public class AccessElement extends Function
                 if (v.equations != null  &&  v.equations.size () == 1)
                 {
                     EquationEntry e = v.equations.first ();
-                    if (e.expression instanceof BuildMatrix)
+                    if (e.expression instanceof BuildMatrix)  // Ideally, we would also ensure e.condition is satisfied. However, only weird code would have a condition at all.
                     {
                         BuildMatrix b = (BuildMatrix) e.expression;
                         Operator element = b.getElement (row, col);
-                        if (element != null  &&  element instanceof Constant) return element;
+                        if (element != null  &&  element instanceof Constant)
+                        {
+                            from.changed = true;
+                            e.expression.releaseDependencies (from);
+                            if (e.condition != null) e.condition.releaseDependencies (from);
+                            return element;
+                        }
                     }
                 }
             }

@@ -1,5 +1,5 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -89,7 +89,7 @@ public class SymbolPulse extends Symbol
         }
         ReplaceTime replaceTime = new ReplaceTime ();
         o = replacePulse.pulse.operands[0].deepCopy ().transform (replaceTime);
-        delay = o.simplify (null);
+        delay = o.simplify (eq.variable);
 
         // fill in operands that are equivalent
         width  = replacePulse.pulse.operands[1];

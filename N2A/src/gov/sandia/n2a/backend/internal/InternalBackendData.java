@@ -22,6 +22,7 @@ import gov.sandia.n2a.language.type.Text;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 
 import java.util.Comparator;
+import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.ArrayList;
@@ -446,7 +447,7 @@ public class InternalBackendData
                             // Locate any temporaries for evaluation. TODO: for more efficiency, we could have separate lists of temporaries for the condition and delay operands
                             //   Tie into the dependency graph using a phantom variable (which can go away afterward without damaging the graph).
                             final Variable phantom = new Variable ("$event");
-                            phantom.uses = new ArrayList<Variable> ();
+                            phantom.uses = new IdentityHashMap<Variable,Integer> ();
                             for (int i = 0; i < et.event.operands.length; i++) et.event.operands[i].visit (new Visitor ()
                             {
                                 public boolean visit (Operator op)
@@ -455,7 +456,7 @@ public class InternalBackendData
                                     {
                                         AccessVariable av = (AccessVariable) op;
                                         Variable v = av.reference.variable;
-                                        if (! phantom.uses.contains (v)) phantom.uses.add (v);
+                                        if (! phantom.uses.containsKey (v)) phantom.uses.put (v, 1);
                                         return false;
                                     }
                                     return true;
