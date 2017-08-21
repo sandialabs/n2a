@@ -19,6 +19,8 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.Set;
 
 import javax.xml.parsers.DocumentBuilder;
@@ -35,6 +37,9 @@ public class ImportJob
     File source;
     MNode model;
     AddDoc action;
+
+    Pattern floatParser = Pattern.compile ("[-+]?(NaN|Infinity|([0-9]*\\.?[0-9]*([eE][-+]?[0-9]+)?))");
+    static final double epsilon = Math.ulp (1);
 
     public void process (File source)
     {
@@ -458,7 +463,7 @@ public class ImportJob
                     break;
                 case "specificCapacitance":
                     property = allocateProperty (child, cell, G);
-                    property.set ("C", getAttribute (child, "value"));
+                    property.set ("C", biophysicalUnits (getAttribute (child, "value")));
                     break;
                 case "intracellularProperties":
                     biophysicalProperties (child, cell, G);
@@ -508,7 +513,7 @@ public class ImportJob
             if (a.getNodeName ().equals ("id")) continue;
             if (a.getNodeName ().equals ("segment")) continue;
             if (a.getNodeName ().equals ("segmentGroup")) continue;
-            result.set (a.getNodeName (), biophysicalUnits (a.getNodeValue ()));
+            result.set (a.getNodeName (), biophysicalUnits (a.getNodeValue ()));  // biophysicalUnits() will only modify text if there is a numeric value
         }
         return result;
     }
@@ -518,7 +523,33 @@ public class ImportJob
     **/
     public String morphologyUnits (String value)
     {
-        return value;
+        value = value.trim ();
+        int unitIndex = findUnits (value);
+        if (unitIndex == 0) return value;  // no number
+        if (unitIndex >= value.length ()) return value + "um";  // default morphology units are micometers
+
+        String units = value.substring (unitIndex).trim ();
+        value        = value.substring (0, unitIndex);
+
+        return value + cleanupUnits (units);
+    }
+
+    public int findUnits (String value)
+    {
+        Matcher m = floatParser.matcher (value);
+        m.find ();
+        return m.end ();
+    }
+
+    public String cleanupUnits (String units)
+    {
+        units = units.replace ("_per_", "/");
+        units = units.replace ("_", ".");
+        units = units.replace (" ", ".");
+        units = units.replace ("ohm", "Ohm");
+        units = units.replace ("KOhm", "kOhm");
+        if (units.contains ("/")  ||  units.contains (".")) return "(" + units + ")";
+        return units;
     }
 
     /**
@@ -526,7 +557,15 @@ public class ImportJob
     **/
     public String biophysicalUnits (String value)
     {
-        return value;
+        value = value.trim ();
+        int unitIndex = findUnits (value);
+        if (unitIndex == 0) return value;  // no number
+        if (unitIndex >= value.length ()) return value;  // no units; need to apply defaults here
+
+        String units = value.substring (unitIndex).trim ();
+        value        = value.substring (0, unitIndex);
+
+        return value + cleanupUnits (units);
     }
 
     public class Segment
@@ -538,14 +577,11 @@ public class ImportJob
         MNode   part;   // compartment of which this segment is an instance
         int     index;  // within part
 
-        // TODO: better unit handling
-        // Convert everything to double (both matrices and scalars).
-        // During output, convert back to preferred unit scale. For example, express everything in micrometers.
         double  fractionAlong    = 1;
-        String  proximal         = "";
-        String  distal           = "";
-        String  proximalDiameter = "";
-        String  distalDiameter   = "";
+        Matrix  proximal;
+        Matrix  distal;
+        double  proximalDiameter = -1;
+        double  distalDiameter   = -1;
 
         public Segment (Node node)
         {
@@ -560,18 +596,18 @@ public class ImportJob
                         fractionAlong = getAttribute (child, "fractionAlong", 1.0);
                         break;
                     case "proximal":
-                        String x = morphologyUnits (getAttribute (child, "x"));
-                        String y = morphologyUnits (getAttribute (child, "y"));
-                        String z = morphologyUnits (getAttribute (child, "z"));
-                        proximal = "[" + x + ";" + y + ";" + z + "]";
-                        proximalDiameter = morphologyUnits (getAttribute (child, "diameter"));
+                        proximal = new Matrix (3, 1);
+                        proximal.set   (0, Matrix.convert (morphologyUnits (getAttribute (child, "x"))));
+                        proximal.set   (1, Matrix.convert (morphologyUnits (getAttribute (child, "y"))));
+                        proximal.set   (2, Matrix.convert (morphologyUnits (getAttribute (child, "z"))));
+                        proximalDiameter = Matrix.convert (morphologyUnits (getAttribute (child, "diameter")));
                         break;
                     case "distal":
-                        x = morphologyUnits (getAttribute (child, "x"));
-                        y = morphologyUnits (getAttribute (child, "y"));
-                        z = morphologyUnits (getAttribute (child, "z"));
-                        distal = "[" + x + ";" + y + ";" + z + "]";
-                        distalDiameter = morphologyUnits (getAttribute (child, "diameter"));
+                        distal = new Matrix (3, 1);
+                        distal.set   (0, Matrix.convert (morphologyUnits (getAttribute (child, "x"))));
+                        distal.set   (1, Matrix.convert (morphologyUnits (getAttribute (child, "y"))));
+                        distal.set   (2, Matrix.convert (morphologyUnits (getAttribute (child, "z"))));
+                        distalDiameter = Matrix.convert (morphologyUnits (getAttribute (child, "diameter")));
                         break;
                 }
             }
@@ -582,7 +618,7 @@ public class ImportJob
         **/
         public void resolveProximal ()
         {
-            if (! proximal.isEmpty ()  ||  parent == null) return;
+            if (proximal != null  ||  parent == null) return;
             if (fractionAlong == 1)
             {
                 proximal = parent.distal;
@@ -591,14 +627,13 @@ public class ImportJob
             else
             {
                 parent.resolveProximal ();
-                // TODO: handle unit conversion inside Matrix load()
-                Matrix A = new Matrix (parent.proximal);
-                Matrix B = new Matrix (parent.distal);
-                proximal = B.subtract (A).multiply (new Scalar (fractionAlong)).add (A).toString ();
+                Matrix A = parent.proximal;
+                Matrix B = parent.distal;
+                proximal = (Matrix) B.subtract (A).multiply (new Scalar (fractionAlong)).add (A);
 
-                double a = Double.parseDouble (parent.proximalDiameter);
-                double b = Double.parseDouble (parent.distalDiameter);
-                proximalDiameter = String.valueOf ((b - a) * fractionAlong + a);
+                double a = parent.proximalDiameter;
+                double b = parent.distalDiameter;
+                proximalDiameter = (b - a) * fractionAlong + a;
             }
         }
 
@@ -608,19 +643,36 @@ public class ImportJob
             if (index < 0)  // only one instance, so make values unconditional
             {
                 this.index = 0;
-                if (! distal          .isEmpty ()) part.set ("$xyz",      distal);
-                if (! proximal        .isEmpty ()) part.set ("xyz0",      proximal);
-                if (! distalDiameter  .isEmpty ()) part.set ("diameter",  distalDiameter);
-                if (! proximalDiameter.isEmpty ()) part.set ("diameter0", proximalDiameter);
+                if (distal           != null) part.set ("$xyz",      format (distal));
+                if (proximal         != null) part.set ("xyz0",      format (proximal));
+                if (distalDiameter   >= 0   ) part.set ("diameter",  format (distalDiameter));
+                if (proximalDiameter >= 0   ) part.set ("diameter0", format (proximalDiameter));
             }
             else  // multiple instances
             {
                 this.index = index;
-                if (! distal          .isEmpty ()) part.set ("$xyz",      "@$index==" + index, distal);
-                if (! proximal        .isEmpty ()) part.set ("xyz0",      "@$index==" + index, proximal);
-                if (! distalDiameter  .isEmpty ()) part.set ("diameter",  "@$index==" + index, distalDiameter);
-                if (! proximalDiameter.isEmpty ()) part.set ("diameter0", "@$index==" + index, proximalDiameter);
+                if (distal           != null) part.set ("$xyz",      "@$index==" + index, format (distal));
+                if (proximal         != null) part.set ("xyz0",      "@$index==" + index, format (proximal));
+                if (distalDiameter   >= 0   ) part.set ("diameter",  "@$index==" + index, format (distalDiameter));
+                if (proximalDiameter >= 0   ) part.set ("diameter0", "@$index==" + index, format (proximalDiameter));
             }
+        }
+
+        public String format (double a)
+        {
+            a *= 1e6;
+            double i = Math.round (a);
+            if (Math.abs (i - a) < epsilon)  // This is an integer
+            {
+                if (i == 0) return "0";
+                return ((long) i) + "um";
+            }
+            return a + "um";
+        }
+
+        public String format (Matrix A)
+        {
+            return "[" + format (A.getDouble (0)) + ";" + format (A.getDouble (1)) + ";" + format (A.getDouble (2)) + "]";
         }
     }
 }

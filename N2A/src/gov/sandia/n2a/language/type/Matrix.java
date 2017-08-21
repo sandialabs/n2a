@@ -16,7 +16,12 @@ import java.io.StringWriter;
 import java.util.ArrayList;
 
 import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.parse.ASTConstant;
+import gov.sandia.n2a.language.parse.ASTList;
+import gov.sandia.n2a.language.parse.ExpressionParser;
+import gov.sandia.n2a.language.parse.SimpleNode;
 
 /**
     Matrix type.
@@ -74,7 +79,17 @@ public class Matrix extends Type
         load (new StringReader (that));
     }
 
+    public Matrix (String that, boolean units) throws EvaluationException
+    {
+        load (new StringReader (that), units);
+    }
+
     public void load (Reader stream) throws EvaluationException
+    {
+        load (stream, false);
+    }
+
+    public void load (Reader stream, boolean units) throws EvaluationException
     {
         try
         {
@@ -134,12 +149,18 @@ public class Matrix extends Type
                         if (position == -1) position = line.indexOf ("\t");
                         if (position == -1)
                         {
-                            row.add (Double.valueOf (line));
+                            double value;
+                            if (units) value = convert        (line);
+                            else       value = Double.valueOf (line);
+                            row.add (value);
                             break;
                         }
                         else
                         {
-                            row.add (Double.valueOf (line.substring (0, position)));
+                            double value;
+                            if (units) value = convert        (line.substring (0, position));
+                            else       value = Double.valueOf (line.substring (0, position));
+                            row.add (value);
                         }
                         line = line.substring (position + 1);
                         line = line.trim ();
@@ -189,6 +210,23 @@ public class Matrix extends Type
         }
     }
 
+    public static double convert (String expression)
+    {
+        try
+        {
+            SimpleNode ast = ExpressionParser.parse (expression);
+            if (! (ast instanceof ASTList)  ||  ast.jjtGetNumChildren () != 1) return 0;
+            ast = (SimpleNode) ast.jjtGetChild (0);
+            if (! (ast instanceof ASTConstant)) return 0;
+            Object result = ((ASTConstant) ast).jjtGetValue ();
+            if (result instanceof Scalar) return ((Scalar) result).value;
+        }
+        catch (ParseException e)
+        {
+        }
+        return 0;
+    }
+
     public int rows ()
     {
         if (value.length < 1) return 0;
@@ -203,6 +241,11 @@ public class Matrix extends Type
     public double getDouble (int row, int column)
     {
         return value[column][row];
+    }
+
+    public double getDouble (int row)
+    {
+        return value[0][row];
     }
 
     public Scalar getScalar (int row, int column)
