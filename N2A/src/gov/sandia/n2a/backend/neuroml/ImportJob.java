@@ -6,17 +6,20 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.backend.neuroml;
 
+import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MVolatile;
+import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
-import gov.sandia.n2a.ui.eq.PanelModel;
-import gov.sandia.n2a.ui.eq.undo.AddDoc;
-
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.regex.Matcher;
@@ -34,16 +37,21 @@ import org.xml.sax.SAXException;
 
 public class ImportJob
 {
-    File source;
-    MNode model;
-    AddDoc action;
+    LinkedList<File> sources   = new LinkedList<File> ();
+    MNode            models    = new MVolatile ();
+    String           modelName = "";
+    List<MNode>      resolve   = new ArrayList<MNode> ();  // Nodes which contain a $inherit that refers to a locally defined part rather than a standard part. The local part must either be copied in or converted into a global model.
 
-    Pattern floatParser = Pattern.compile ("[-+]?(NaN|Infinity|([0-9]*\\.?[0-9]*([eE][-+]?[0-9]+)?))");
+    Pattern floatParser   = Pattern.compile ("[-+]?(NaN|Infinity|([0-9]*\\.?[0-9]*([eE][-+]?[0-9]+)?))");
+    Pattern forbiddenUCUM = Pattern.compile ("[.,;><=!&|+\\-*/%\\^~]");
     static final double epsilon = Math.ulp (1);
+
+    // Note: Utility functions and helper classes are at the end of this class.
+    // These include generic functions to extract data from elements, such as their text or attributes.
 
     public void process (File source)
     {
-        this.source = source;
+        sources.push (source);
         try
         {
             // Open and parse XML document
@@ -51,7 +59,6 @@ public class ImportJob
             factory.setCoalescing (true);
             factory.setIgnoringComments (true);
             factory.setIgnoringElementContentWhitespace (true);
-            factory.setValidating (false);
             factory.setXIncludeAware (true);  // Doesn't seem to actually include other files, at least on the samples I've tried so far. Must be missing something.
             DocumentBuilder builder = factory.newDocumentBuilder ();
             Document doc = builder.parse (source);
@@ -59,7 +66,6 @@ public class ImportJob
             // Extract models
             //dump (System.out, doc, "");
             process (doc);
-            if (action != null) PanelModel.instance.undoManager.add (action);
         }
         catch (IOException e)
         {
@@ -70,6 +76,7 @@ public class ImportJob
         catch (SAXException e)
         {
         }
+        sources.pop ();
     }
 
     public void process (Node node)
@@ -84,80 +91,127 @@ public class ImportJob
         switch (node.getNodeName ())
         {
             case "neuroml": neuroml (node); break;
-            case "cell"   : cell    (node); break;
-        }
-    }
-
-    public String getText (Node node)
-    {
-        String result = "";
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            if (child.getNodeType () == Node.TEXT_NODE) result = result + child.getNodeValue ();
-        }
-        return result;
-    }
-
-    public String getAttribute (Node node, String name)
-    {
-        return getAttribute (node, name, "");
-    }
-
-    public String getAttribute (Node node, String name, String defaultValue)
-    {
-        Node attribute = node.getAttributes ().getNamedItem (name);
-        if (attribute == null) return defaultValue;
-        return attribute.getNodeValue ();
-    }
-
-    public int getAttribute (Node node, String name, int defaultValue)
-    {
-        try
-        {
-            return Integer.parseInt (getAttribute (node, name, String.valueOf (defaultValue)));
-        }
-        catch (NumberFormatException e)
-        {
-            return defaultValue;
-        }
-    }
-
-    public double getAttribute (Node node, String name, double defaultValue)
-    {
-        try
-        {
-            return Double.parseDouble (getAttribute (node, name, String.valueOf (defaultValue)));
-        }
-        catch (NumberFormatException e)
-        {
-            return defaultValue;
         }
     }
 
     public void neuroml (Node node)
     {
-        String modelName = getAttribute (node, "id");
         if (modelName.isEmpty ())
         {
-            // Calculate name from file
-            modelName = source.getName ();
-            int lastDot = modelName.lastIndexOf ('.');
-            if (lastDot >= 0  &&  modelName.substring (lastDot).equalsIgnoreCase (".nml")) modelName = modelName.substring (0, lastDot);
+            modelName = getAttribute (node, "id");
+            if (modelName.isEmpty ()) modelName = "New Model";
         }
-        if (modelName.isEmpty ()) modelName = "New Model";
-        action = new AddDoc (modelName);
-        model = action.saved;
 
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
-            if (child.getNodeType () == Node.ELEMENT_NODE) process (child);
+            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+            switch (child.getNodeName ())
+            {
+                case "include":
+                    File nextSource = new File (sources.getLast ().getParentFile (), getAttribute (child, "href"));
+                    process (nextSource);
+                    break;
+                case "cell":
+                    cell (child);
+                    break;
+                case "network":
+                    network (child);
+                    break;
+                default:
+                    genericPart (child, models.childOrCreate (modelName));  // Assume that any top-level element not captured above is an abstract cell type.
+                    break;
+            }
         }
+    }
+
+    /**
+        Perform data manipulations that must wait until all nodes are read.
+    **/
+    public void postprocess ()
+    {
+        for (MNode r : resolve)
+        {
+            String partName = r.get ("$inherit").replace ("\"", "");
+            MNode part = models.child (modelName, partName);
+            System.out.println ("processing:" + r.key () + " " + partName);
+
+            // Triage
+            int count = part.getInt ("$count");
+            if (count > 0)  // triage is necessary
+            {
+                if (count == 1)
+                {
+                    count = -1;  // part has only one user, so it should simply be deleted after merging
+                }
+                else  // count > 1, so part could be moved out to its own model
+                {
+                    // Criterion: If a part has subparts, then it is heavy-weight and should be moved out.
+                    // A part that merely sets some parameters on an inherited model is light-weight, and should simply be merged everywhere it is used.
+                    boolean heavy = false;
+                    for (MNode s : part)
+                    {
+                        if (MPart.isPart (s))
+                        {
+                            heavy = true;
+                            break;
+                        }
+                    }
+                    if (heavy) count = -2;  // part should be made into an independent model
+                    else       count = -1;
+                }
+                part.set ("$count", count);
+            }
+            System.out.println ("  count=" + count);
+            if (count == -1)
+            {
+                System.out.println ("  merge");
+                r.merge (part);
+                r.clear ("$count");
+            }
+            else
+            {
+                System.out.println ("  inherit");
+                r.set ("$inherit", modelName + " " + partName);
+            }
+        }
+
+        // Move heavy-weight parts into separate models
+        Iterator<MNode> it = models.child (modelName).iterator ();
+        while (it.hasNext ())
+        {
+            MNode part = it.next ();
+            int count = part.getInt ("$count");
+            if (count < 0)
+            {
+                if (count == -2)
+                {
+                    part.clear ("$count");
+                    String partName = part.key ();
+                    MNode model = models.childOrCreate (modelName + " " + partName);
+                    model.merge (part);
+                }
+                it.remove ();
+            }
+        }
+
+        // Move network items up to top level
+        MNode network = models.child (modelName, "$network");
+        if (network != null)
+        {
+            for (MNode p : network)
+            {
+                MNode dest = models.childOrCreate (modelName, p.key ());
+                dest.merge (p);
+            }
+        }
+        models.clear (modelName, "$network");
     }
 
     public void cell (Node node)
     {
         String id   = getAttribute (node, "id", "MISSING_ID");  // MISSING_ID indicates an ill-formed nml file.
-        MNode  cell = model.set (id, "");
+        MNode  cell = models.childOrCreate (modelName, id);
+        cell.set ("$inherit", "cell");
 
         Map<Integer,Segment> segments = new HashMap<Integer,Segment> ();
         MatrixBoolean        G        = new MatrixBoolean ();
@@ -214,6 +268,7 @@ public class ImportJob
                     cell.child ("$group").move (groupName, newName);
                     cell.set ("$groupIndex", currentColumn, newName);
                     p.set (newName);
+                    groupName = newName;
                 }
 
                 // Distribute properties to original segment groups
@@ -227,7 +282,7 @@ public class ImportJob
                 }
                 else
                 {
-                    MNode part = cell.child ("$group", p.get ());
+                    MNode part = cell.child ("$group", groupName);
                     part.merge (p);
                     part.set ("");
                 }
@@ -346,6 +401,18 @@ public class ImportJob
             }
             part.clear ("$G");
             part.clear ("$M");
+            for (MNode property : part)
+            {
+                // Any subparts of a membrane property are likely ion channels, so need to tag any top-level definitions they use
+                for (MNode m : property)
+                {
+                    String inherit = m.get ("$inherit").replace ("\"", "");
+                    if (inherit.isEmpty ()) continue;
+                    // check for standard part
+                    MNode model = AppData.models.child (inherit);
+                    if (model == null  ||  model.child ("$metadata", "backend.neuroml.part") == null) addDependency (m, inherit);
+                }
+            }
 
             // Add segments
             int count = M.columnNorm0 (c);
@@ -395,6 +462,62 @@ public class ImportJob
         cell.clear ("$properties");
         cell.clear ("$group");
         cell.clear ("$groupIndex");
+    }
+
+    public void network (Node node)
+    {
+        MNode network = models.childOrCreate (modelName, "$network");
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+            switch (child.getNodeName ())
+            {
+                case "population":
+                    MNode part = genericPart (child, network);
+                    int    n         = part.getInt ("size");
+                    String component = part.get    ("component").trim ();  // Should always be defined.
+                    part.clear ("size");
+                    part.clear ("component");
+                    if (n > 1) part.set ("$n", n);
+                    part.set ("$inherit", "\"" + component + "\"");
+                    addDependency (part, component);
+                    break;
+                case "continuousProjection":
+                    part = genericPart (child, network);
+                    part.move ("presynapticPopulation",  "A");
+                    part.move ("postsynapticPopulation", "B");
+                    break;
+                case "explicitInput":
+                    explicitInput (child);
+                    break;
+            }
+        }
+    }
+
+    public MNode genericPart (Node node, MNode container)
+    {
+        String idField = "id";
+        if (node.getNodeName ().contains ("Rate")) idField = "type";  // TODO: test more carefully for various nodes
+        String id = getAttribute (node, idField);
+
+        MNode part = container.set (id, "");
+        part.set ("$inherit", "\"" + node.getNodeName ().trim () + "\"");
+
+        NamedNodeMap attributes = node.getAttributes ();
+        int count = attributes.getLength ();
+        for (int i = 0; i < count; i++)
+        {
+            Node a = attributes.item (i);
+            if (a.getNodeName ().equals (idField)) continue;
+            part.set (a.getNodeName (), biophysicalUnits (a.getNodeValue ()));  // biophysicalUnits() will only modify text if there is a numeric value
+        }
+
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () == Node.ELEMENT_NODE) genericPart (child, part);
+        }
+
+        return part;
     }
 
     public void morphology (Node node, MNode cell, Map<Integer,Segment> segments, MatrixBoolean G)
@@ -457,9 +580,10 @@ public class ImportJob
                 case "channelPopulation":
                 case "channelDensity":
                     MNode property = allocateProperty (child, cell, G);
-                    String ionChannel = property.get ("ionChannel");
+                    property.set ("$inherit", "\"" + child.getNodeName () + "\"");
+                    String ionChannel = property.get ("ionChannel").trim ();
                     property.clear ("ionChannel");
-                    property.set ("$inherit", "\"" + ionChannel + "\"");
+                    property.set ("ionChannel", "$inherit", "\"" + ionChannel + "\"");
                     break;
                 case "specificCapacitance":
                     property = allocateProperty (child, cell, G);
@@ -518,6 +642,31 @@ public class ImportJob
         return result;
     }
 
+    public void addDependency (MNode part, String inherit)
+    {
+        resolve.add (part);
+        MNode component = models.childOrCreate (modelName, inherit);
+        int count = component.getInt ("$count");
+        component.set ("$count", count + 1);
+    }
+
+    public void explicitInput (Node node)
+    {
+        String input  = getAttribute (node, "input");
+        String target = getAttribute (node, "target");
+        int index = 0;
+        int i = target.indexOf ('[');
+        if (i >= 0)
+        {
+            String suffix = target.substring (i + 1);
+            target = target.substring (0, i);
+            i = suffix.indexOf (']');
+            if (i >= 0) suffix = suffix.substring (0, i);
+            index = Integer.valueOf (suffix);
+        }
+        // TODO: get documentation to figure out the intent of this element
+    }
+
     /**
         Convert the given value to be in appropriate units, in the context of a morphology section.
     **/
@@ -544,11 +693,12 @@ public class ImportJob
     public String cleanupUnits (String units)
     {
         units = units.replace ("_per_", "/");
-        units = units.replace ("_", ".");
-        units = units.replace (" ", ".");
-        units = units.replace ("ohm", "Ohm");
-        units = units.replace ("KOhm", "kOhm");
-        if (units.contains ("/")  ||  units.contains (".")) return "(" + units + ")";
+        units = units.replace ("per_",  "/");
+        units = units.replace ("_",     ".");
+        units = units.replace (" ",     ".");
+        units = units.replace ("ohm",   "Ohm");
+        units = units.replace ("KOhm",  "kOhm");
+        if (forbiddenUCUM.matcher (units).find ()) return "(" + units + ")";
         return units;
     }
 
@@ -566,6 +716,52 @@ public class ImportJob
         value        = value.substring (0, unitIndex);
 
         return value + cleanupUnits (units);
+    }
+
+    public String getText (Node node)
+    {
+        String result = "";
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () == Node.TEXT_NODE) result = result + child.getNodeValue ();
+        }
+        return result;
+    }
+
+    public String getAttribute (Node node, String name)
+    {
+        return getAttribute (node, name, "");
+    }
+
+    public String getAttribute (Node node, String name, String defaultValue)
+    {
+        Node attribute = node.getAttributes ().getNamedItem (name);
+        if (attribute == null) return defaultValue;
+        return attribute.getNodeValue ();
+    }
+
+    public int getAttribute (Node node, String name, int defaultValue)
+    {
+        try
+        {
+            return Integer.parseInt (getAttribute (node, name, String.valueOf (defaultValue)));
+        }
+        catch (NumberFormatException e)
+        {
+            return defaultValue;
+        }
+    }
+
+    public double getAttribute (Node node, String name, double defaultValue)
+    {
+        try
+        {
+            return Double.parseDouble (getAttribute (node, name, String.valueOf (defaultValue)));
+        }
+        catch (NumberFormatException e)
+        {
+            return defaultValue;
+        }
     }
 
     public class Segment

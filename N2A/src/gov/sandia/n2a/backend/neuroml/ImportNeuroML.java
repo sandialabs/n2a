@@ -6,7 +6,12 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.backend.neuroml;
 
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.extpoints.Importer;
+import gov.sandia.n2a.ui.CompoundEdit;
+import gov.sandia.n2a.ui.UndoManager;
+import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.undo.AddDoc;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -24,7 +29,20 @@ public class ImportNeuroML implements Importer
     @Override
     public void process (File source)
     {
-        new ImportJob ().process (source);
+        ImportJob job = new ImportJob ();
+        job.process (source);
+        job.postprocess ();
+
+        UndoManager um = PanelModel.instance.undoManager;
+        um.addEdit (new CompoundEdit ());
+        for (MNode m : job.models)
+        {
+            String key = m.key ();
+            if (key.equals (job.modelName)) continue;  // Save the best for last. That is, ensure that the main model is the one selected after all add operations are applied.
+            um.add (new AddDoc (key, m));
+        }
+        um.add (new AddDoc (job.modelName, job.models.child (job.modelName)));
+        um.endCompoundEdit ();
     }
 
     @Override
