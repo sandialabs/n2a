@@ -13,6 +13,7 @@ import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
+import gov.sandia.n2a.language.type.Text;
 
 public class Grid extends Function
 {
@@ -39,17 +40,33 @@ public class Grid extends Function
         int nx = 1;
         int ny = 1;
         int nz = 1;
+        boolean raw = false;
         if (operands.length >= 2) nx = (int) Math.floor (((Scalar) operands[1].eval (context)).value);
         if (operands.length >= 3) nx = (int) Math.floor (((Scalar) operands[2].eval (context)).value);
         if (operands.length >= 4) nx = (int) Math.floor (((Scalar) operands[3].eval (context)).value);
-        int sx = ny * nz;  // stride x
+        if (operands.length >= 5)
+        {
+            Type mode = operands[4].eval (context);
+            if (mode instanceof Text  &&  ((Text) mode).value.contains ("raw")) raw = true;
+        }
 
         // compute xyz in stride order
         Matrix result = new Matrix (3, 1);
-        result.value[0][0] = ((i / sx) + 0.5) / nx;  // (i / sx) is an integer operation, so remainder is truncated.
-        i %= sx;
-        result.value[0][1] = ((i / nz) + 0.5) / ny;
-        result.value[0][2] = ((i % nz) + 0.5) / nz;
+        int sx = ny * nz;  // stride x
+        if (raw)
+        {
+            result.value[0][0] = i / sx;  // (i / sx) is an integer operation, so remainder is truncated.
+            i %= sx;
+            result.value[0][1] = i / nz;
+            result.value[0][2] = i % nz;
+        }
+        else
+        {
+            result.value[0][0] = ((i / sx) + 0.5) / nx;
+            i %= sx;
+            result.value[0][1] = ((i / nz) + 0.5) / ny;
+            result.value[0][2] = ((i % nz) + 0.5) / nz;
+        }
         return result;
     }
 

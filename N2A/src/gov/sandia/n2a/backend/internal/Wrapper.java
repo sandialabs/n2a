@@ -6,11 +6,8 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.backend.internal;
 
-import java.util.Map.Entry;
-
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.language.EvaluationException;
-import gov.sandia.n2a.language.function.Output;
 
 public class Wrapper extends Part
 {

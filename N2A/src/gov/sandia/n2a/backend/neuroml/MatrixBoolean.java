@@ -105,6 +105,15 @@ public class MatrixBoolean
         return result;
     }
 
+    public int indexInColumn (int row, int col)
+    {
+        if (col >= data.size ()) return -1;
+        boolean[] column = data.get (col);
+        int result = 0;
+        for (int r = 0; r < row; r++) if (column[r]) result++;
+        return result;
+    }
+
     /**
         Collapse rows with the same pattern into single rows, and compute
         a permutation matrix (of sorts) which can recover the original matrix.
