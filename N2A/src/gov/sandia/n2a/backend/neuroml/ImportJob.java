@@ -226,13 +226,15 @@ public class ImportJob
 
     public void ionChannel (Node node)
     {
-        String id   = getAttribute (node, "id", "MISSING_ID");
-        String type = getAttribute (node, "type");
+        String id      = getAttribute (node, "id", "MISSING_ID");
+        String type    = getAttribute (node, "type");
+        String species = getAttribute (node, "species");
         String inherit;
         if (type.isEmpty ()) inherit = node.getNodeName ();
         else                 inherit = type;
         MNode part = models.childOrCreate (modelName, id);  // Expect to always create this part rather than fetch an existing child.
         part.set ("$inherit", "\"" + inherit + "\"");
+        if (! species.isEmpty ()) part.set ("$metadata", "species", species);
 
         NamedNodeMap attributes = node.getAttributes ();
         int count = attributes.getLength ();
@@ -738,28 +740,78 @@ public class ImportJob
         {
             if (child.getNodeType () != Node.ELEMENT_NODE) continue;
             String name = child.getNodeName ();
+            if      (name.startsWith ("membrane")) membraneProperties      (child, cell, G);
+            else if (name.startsWith ("extra"   )) extracellularProperties (child, cell);
+            else if (name.startsWith ("intra"   )) intracellularProperties (child, cell);
+        }
+    }
+
+    public void membraneProperties (Node node, MNode cell, MatrixBoolean G)
+    {
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+
+            MNode property = allocateProperty (child, cell, G);
+            String name = child.getNodeName ();
+            if (name.startsWith ("channel"))
+            {
+                property.set ("$inherit", "\"" + name + "\"");
+
+                String ionChannel = property.get ("ionChannel");
+                property.clear ("ionChannel");
+                property.set ("ionChannel", "$inherit", "\"" + ionChannel + "\"");
+
+                String ion = property.get ("ion");
+                property.clear ("ion");
+                property.set ("$metadata", "ion", ion);
+            }
+            else
+            {
+                switch (name)
+                {
+                    case "spikeThresh":
+                        property.set ("Vpeak", biophysicalUnits (getAttribute (child, "value")));
+                        break;
+                    case "specificCapacitance":
+                        property.set ("C", biophysicalUnits (getAttribute (child, "value")));
+                        break;
+                    case "initMembPotential":
+                        property.set ("V", "@$init", biophysicalUnits (getAttribute (child, "value")));
+                        break;
+                }
+            }
+        }
+    }
+
+    public void intracellularProperties (Node node, MNode cell)
+    {
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+            String name = child.getNodeName ();
+
             switch (name)
             {
-                case "membraneProperties":
-                    biophysicalProperties (child, cell, G);
-                    break;
-                case "channelPopulation":
-                case "channelDensity":
-                    MNode property = allocateProperty (child, cell, G);
-                    property.set ("$inherit", "\"" + name + "\"");
-                    String ionChannel = property.get ("ionChannel");
-                    property.clear ("ionChannel");
-                    property.set ("ionChannel", "$inherit", "\"" + ionChannel + "\"");
-                    break;
-                case "specificCapacitance":
-                    property = allocateProperty (child, cell, G);
-                    property.set ("C", biophysicalUnits (getAttribute (child, "value")));
-                    break;
-                case "intracellularProperties":
-                    biophysicalProperties (child, cell, G);
+                case "species":
                     break;
                 case "resistivity":
                     cell.set ("R", biophysicalUnits (getAttribute (child, "value")));
+                    break;
+            }
+        }
+    }
+
+    public void extracellularProperties (Node node, MNode cell)
+    {
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+            String name = child.getNodeName ();
+
+            switch (name)
+            {
+                case "species":
                     break;
             }
         }
@@ -804,6 +856,7 @@ public class ImportJob
             if (name.equals ("id")) continue;
             if (name.equals ("segment")) continue;
             if (name.equals ("segmentGroup")) continue;
+            if (name.equals ("value")) continue;  // Caller will extract this directly from XML node.
             result.set (name, biophysicalUnits (a.getNodeValue ()));  // biophysicalUnits() will only modify text if there is a numeric value
         }
         return result;
@@ -1078,8 +1131,8 @@ public class ImportJob
     {
         String id             = getAttribute (node, "id");
         String synapse        = getAttribute (node, "synapse");
-        String A              = getAttribute (node, "presynapticpopulation");
-        String B              = getAttribute (node, "postsynapticpopulation");
+        String A              = getAttribute (node, "presynapticPopulation");
+        String B              = getAttribute (node, "postsynapticPopulation");
         String projectionType = node.getNodeName ();
 
         List<Connection> connections = new ArrayList<Connection> ();
@@ -1146,7 +1199,12 @@ public class ImportJob
                    postSegment   = getAttribute  (child, "postSegmentId", -1);
             double postFraction  = getAttribute  (child, "postFractionAlong", 0.5);
 
-            if (instancesA != null) preCell  = instancesA.getOrDefault (preCell,  "$index", preCell);
+            if (child.getNodeName ().endsWith ("Instance"))  // ID is in "instance" format, which seems to be an XPath of sorts
+            {
+                preCell  = extractIDfromPath (preCell);
+                postCell = extractIDfromPath (postCell);
+            }
+            if (instancesA != null) preCell  = instancesA.getOrDefault (preCell,  "$index", preCell);  // Map NeuroML ID to assigned N2A $index, falling back on ID if $index has not been assigned.
             if (instancesB != null) postCell = instancesB.getOrDefault (postCell, "$index", postCell);
 
             Connection query = new Connection ();
@@ -1322,6 +1380,15 @@ public class ImportJob
         }
     }
 
+    public String extractIDfromPath (String path)
+    {
+        // I don't yet understand how these paths are supposed to work, because they are thoroughly undocumented.
+        // This simple-minded parser works on the examples I've seen.
+        String[] pieces = path.split ("/");
+        if (pieces.length < 3) return path;
+        return pieces[2];
+    }
+
     public void explicitInput (Node node, MNode network)
     {
         String input  = getAttribute (node, "input");
@@ -1343,8 +1410,13 @@ public class ImportJob
         MNode d = part.set ("A", input);
         addDependency (d, input);
         part.set ("B", target);  // The target could also be folded into this connection part during dependency resolution, but that would actually make the model more ugly.
-        part.set ("$p", "@B.$index==" + index, "1");
-        part.set ("$p", "@",                   "0");
+
+        MNode targetPart = network.child (target);
+        if (targetPart == null  ||  ! targetPart.getOrDefault ("$n", "1").equals ("1"))  // We only have to explicitly set $p if the target part has more than one instance.
+        {
+            part.set ("$p", "@B.$index==" + index, "1");
+            part.set ("$p", "@",                   "0");
+        }
     }
 
     public void genericPart (Node node, MNode container)
