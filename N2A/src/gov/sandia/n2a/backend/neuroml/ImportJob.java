@@ -147,6 +147,7 @@ public class ImportJob
         MNode component = models.childOrCreate (modelName, inherit);
         int count = component.getInt ("$count");
         component.set ("$count", count + 1);
+        if (part.get ().equals (inherit)) component.set ("$connected", "");
     }
 
     /**
@@ -154,7 +155,7 @@ public class ImportJob
     **/
     public void postprocess ()
     {
-        // Also remove remaining temporary keys before doing any merges.
+        // Remove some temporary keys before doing merges.
         for (MNode c : models.child (modelName)) c.clear ("$groupIndex");
 
         // Resolve referenced parts
@@ -163,9 +164,11 @@ public class ImportJob
             String partName = r.get ("$inherit").replace ("\"", "");
             if (partName.isEmpty ()) partName = r.get ();  // For connections, the part name might be a direct value.
             MNode part = models.child (modelName, partName);
+            if (part == null) continue;
 
             // Triage
             int count = part.getInt ("$count");
+            boolean connected = part.child ("$connected") != null;
             if (count > 0)  // triage is necessary
             {
                 if (count == 1)
@@ -174,19 +177,26 @@ public class ImportJob
                 }
                 else  // count > 1, so part could be moved out to its own model
                 {
-                    // Criterion: If a part has subparts, then it is heavy-weight and should be moved out.
-                    // A part that merely sets some parameters on an inherited model is light-weight, and should simply be merged everywhere it is used.
-                    boolean heavy = false;
-                    for (MNode s : part)
+                    if (connected)
                     {
-                        if (MPart.isPart (s))
-                        {
-                            heavy = true;
-                            break;
-                        }
+                        count = -3;
                     }
-                    if (heavy) count = -2;  // part should be made into an independent model
-                    else       count = -1;
+                    else
+                    {
+                        // Criterion: If a part has subparts, then it is heavy-weight and should be moved out.
+                        // A part that merely sets some parameters on an inherited model is light-weight, and should simply be merged everywhere it is used.
+                        boolean heavy = false;
+                        for (MNode s : part)
+                        {
+                            if (MPart.isPart (s))
+                            {
+                                heavy = true;
+                                break;
+                            }
+                        }
+                        if (heavy) count = -2;  // part should be made into an independent model
+                        else       count = -1;
+                    }
                 }
                 part.set ("$count", count);
             }
@@ -194,11 +204,13 @@ public class ImportJob
             {
                 r.merge (part);
                 r.clear ("$count");
+                r.clear ("$connected");
             }
-            else
+            else if (count == -2)
             {
                 r.set ("$inherit", "\"" + modelName + " " + partName + "\"");
             }
+            // count == -3 means leave in place as a connection target
         }
 
         // Move heavy-weight parts into separate models
@@ -209,14 +221,15 @@ public class ImportJob
             int count = part.getInt ("$count");
             if (count < 0)
             {
+                part.clear ("$count");
+                part.clear ("$connected");
                 if (count == -2)
                 {
-                    part.clear ("$count");
                     String partName = part.key ();
                     MNode model = models.childOrCreate (modelName + " " + partName);
                     model.merge (part);
                 }
-                it.remove ();
+                if (count > -3) it.remove ();
             }
         }
 
@@ -1018,6 +1031,7 @@ public class ImportJob
                 case "projection":
                 case "continuousProjection":
                 case "electricalProjection":
+                case "inputList":
                     projection (child, network);
                     break;
                 case "explicitInput":
@@ -1204,21 +1218,31 @@ public class ImportJob
         }
     }
 
+    /**
+        Contains minor hacks to handle InputList along with the 3 projection types.
+    **/
     public void projection (Node node, MNode network)
     {
-        String id             = getAttribute (node, "id");
-        String synapse        = getAttribute (node, "synapse");
-        String A              = getAttribute (node, "presynapticPopulation");
-        String B              = getAttribute (node, "postsynapticPopulation");
+        String id             = getAttribute  (node, "id");
+        String synapse        = getAttribute  (node, "synapse");
+        String A              = getAttributes (node, "presynapticPopulation",  "component");
+        String B              = getAttributes (node, "postsynapticPopulation", "population");
         String projectionType = node.getNodeName ();
 
         List<Connection> connections = new ArrayList<Connection> ();
         Connection base = new Connection ();
         connections.add (base);
         base.part = network.set (id, "");
-        if (projectionType.equals ("continuousprojection"))
+        base.part.set ("A", A);
+        base.part.set ("B", B);
+        if (projectionType.equals ("continuousProjection"))
         {
             base.part.set ("$inherit", "\"" + projectionType + "\"");
+        }
+        else if (projectionType.equals ("inputList"))
+        {
+            base.part.set ("$inherit", "\"Current Injection\"");
+            addDependency (base.part.child ("A"), A);
         }
         else
         {
@@ -1229,8 +1253,6 @@ public class ImportJob
                 addDependency (base.part, synapse);
             }
         }
-        base.part.set ("A", A);
-        base.part.set ("B", B);
 
         NamedNodeMap attributes = node.getAttributes ();
         int count = attributes.getLength ();
@@ -1242,6 +1264,8 @@ public class ImportJob
             if (name.equals ("synapse"               )) continue;
             if (name.equals ("presynapticPopulation" )) continue;
             if (name.equals ("postsynapticPopulation")) continue;
+            if (name.equals ("component"             )) continue;
+            if (name.equals ("population"            )) continue;
             base.part.set (name, biophysicalUnits (a.getNodeValue ()));  // biophysicalUnits() will only modify text if there is a numeric value
         }
 
@@ -1261,23 +1285,31 @@ public class ImportJob
         {
             if (child.getNodeType () != Node.ELEMENT_NODE) continue;
 
-            int    childID       = getAttribute  (child, "id", 0);
+            // Gather info
+            String name    = child.getNodeName ();
+            int    childID = getAttribute  (child, "id", 0);
 
-            String preComponent  = getAttribute  (child, "preComponent");
-            String preCell       = getAttributes (child, "preCell", "preCellId");
-            int    preSegment    = getAttribute  (child, "preSegment", -1);
-            if (preSegment < 0)
-                   preSegment    = getAttribute  (child, "preSegmentId", -1);
-            double preFraction   = getAttribute  (child, "preFractionAlong", 0.5);
+            String preComponent      = getAttribute  (child, "preComponent");
+            String preCell           = getAttributes (child, "preCell", "preCellId");
+            String preSegmentString  = getAttributes (child, "preSegment", "preSegmentId");
+            String preFractionString = getAttribute  (child, "preFractionAlong");
 
-            String postComponent = getAttribute  (child, "postComponent");
-            String postCell      = getAttributes (child, "postCell", "postCellId");
-            int    postSegment   = getAttribute  (child, "postSegment", -1);
-            if (postSegment < 0)
-                   postSegment   = getAttribute  (child, "postSegmentId", -1);
-            double postFraction  = getAttribute  (child, "postFractionAlong", 0.5);
+            String postComponent      = getAttribute  (child, "postComponent");
+            String postCell           = getAttributes (child, "postCell", "postCellId", "target");
+            String postSegmentString  = getAttributes (child, "postSegment", "postSegmentId", "segmentId");
+            String postFractionString = getAttributes (child, "postFractionAlong", "fractionAlong");
 
-            if (child.getNodeName ().endsWith ("Instance"))  // ID is in "instance" format, which seems to be an XPath of sorts
+            int preSegment = -1;
+            if (! preSegmentString.isEmpty ()) preSegment = Integer.valueOf (preSegmentString);
+            double preFraction = 0.5;
+            if (! preFractionString.isEmpty ()) preFraction = Double.valueOf (preFractionString);
+
+            int postSegment = -1;
+            if (! postSegmentString.isEmpty ()) postSegment = Integer.valueOf (postSegmentString);
+            double postFraction = 0.5;
+            if (! postFractionString.isEmpty ()) postFraction = Double.valueOf (postFractionString);
+
+            if (name.equals ("input")  ||  name.endsWith ("Instance"))  // "instance" format, which seems to be an XPath of sorts
             {
                 preCell  = extractIDfromPath (preCell);
                 postCell = extractIDfromPath (postCell);
@@ -1285,6 +1317,7 @@ public class ImportJob
             if (instancesA != null) preCell  = instancesA.getOrDefault (preCell,  "$index", preCell);  // Map NeuroML ID to assigned N2A $index, falling back on ID if $index has not been assigned.
             if (instancesB != null) postCell = instancesB.getOrDefault (postCell, "$index", postCell);
 
+            // Assemble query
             Connection query = new Connection ();
             if (! synapse      .isEmpty ()) query.synapse       = synapse;
             if (! preComponent .isEmpty ()) query.preComponent  = preComponent;
@@ -1328,10 +1361,10 @@ public class ImportJob
                 }
             }
 
-            // Check for folding
+            // Choose part
             Connection connection;
             int match = connections.indexOf (query);
-            if (match >= 0)
+            if (match >= 0)  // Use existing part. Update some initial info.
             {
                 connection = connections.get (match);
 
@@ -1364,7 +1397,7 @@ public class ImportJob
                     addDependency (connection.part.child ("postComponent"), connection.postComponent);
                 }
             }
-            else
+            else  // Create new part, cloning relevant info.
             {
                 connections.add (query);
                 connection = query;
@@ -1462,6 +1495,7 @@ public class ImportJob
     {
         // I don't yet understand how these paths are supposed to work, because they are thoroughly undocumented.
         // This simple-minded parser works on the examples I've seen.
+        if (path.isEmpty ()) return path;
         String[] pieces = path.split ("/");
         if (pieces.length < 3) return path;
         return pieces[2];
