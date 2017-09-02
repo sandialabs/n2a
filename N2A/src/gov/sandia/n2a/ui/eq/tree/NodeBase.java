@@ -163,6 +163,10 @@ public class NodeBase extends DefaultMutableTreeNode
         return null;
     }
 
+    /**
+        @param editing When true, the returned text should be suitable for editing.
+        Tabs should be removed for ease of navigation.
+    **/
     public String getText (boolean expanded, boolean editing)
     {
         return toString ();  // parent class uses the "user object", which is the string we set elsewhere
@@ -291,8 +295,8 @@ public class NodeBase extends DefaultMutableTreeNode
     /**
         Prepare to efficiently respond to getText() with a modified value that produces column alignment.
         This might involve inserting space or tab characters into a cached version of the text.
-        Note that the tabbed version of the text is not stored as the user object, because that is used
-        primarily for editing, and in edit mode tabs should be avoided to reduce navigation.
+        The tabbed version of the text may be stored as the user object, because getText() will be
+        called to obtain the text for editing.
         @param tabs The first column always starts at 0, so 0 is not included in the list of tab stops.
     **/
     public void applyTabStops (List<Integer> tabs, FontMetrics fm)

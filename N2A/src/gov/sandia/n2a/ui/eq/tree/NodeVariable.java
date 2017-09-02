@@ -215,7 +215,7 @@ public class NodeVariable extends NodeFilter
     {
         if (columnWidths == null)
         {
-            columnWidths = new ArrayList<Integer> (1);
+            columnWidths = new ArrayList<Integer> (2);
             columnWidths.add (0);
             columnWidths.add (0);
         }

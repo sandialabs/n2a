@@ -1,5 +1,5 @@
 /*
-Copyright 2016,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -15,7 +15,11 @@ import gov.sandia.n2a.ui.eq.undo.ChangeInherit;
 import gov.sandia.n2a.ui.eq.undo.DeleteInherit;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
+import java.awt.FontMetrics;
 import java.awt.Rectangle;
+import java.util.ArrayList;
+import java.util.List;
+
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
@@ -24,6 +28,7 @@ import javax.swing.tree.TreePath;
 public class NodeInherit extends NodeBase
 {
     protected static ImageIcon icon = ImageUtil.getImage ("inherit.png");
+    protected List<Integer> columnWidths;
 
     public NodeInherit (MPart source)
     {
@@ -44,6 +49,53 @@ public class NodeInherit extends NodeBase
     public Icon getIcon (boolean expanded)
     {
         return icon;
+    }
+
+    @Override
+    public String getText (boolean expanded, boolean editing)
+    {
+        String result = toString ();
+        if (editing  &&  ! result.isEmpty ()) return source.key () + "=" + source.get ();
+        return result;
+    }
+
+    @Override
+    public boolean needsInitTabs ()
+    {
+        return columnWidths == null;
+    }
+
+    @Override
+    public void updateColumnWidths (FontMetrics fm)
+    {
+        if (columnWidths == null)
+        {
+            columnWidths = new ArrayList<Integer> (2);
+            columnWidths.add (0);
+            columnWidths.add (0);
+        }
+        columnWidths.set (0, fm.stringWidth (source.key () + " "));
+        columnWidths.set (1, fm.stringWidth ("= "));
+    }
+
+    @Override
+    public List<Integer> getColumnWidths ()
+    {
+        return columnWidths;
+    }
+
+    @Override
+    public void applyTabStops (List<Integer> tabs, FontMetrics fm)
+    {
+        String result = source.key ();
+
+        int offset = tabs.get (0) - fm.stringWidth (result);
+        result = result + pad (offset, fm) + "=";
+
+        offset = tabs.get (1) - fm.stringWidth (result);
+        result = result + pad (offset, fm) + source.get ();
+
+        setUserObject (result);
     }
 
     @Override
