@@ -604,14 +604,14 @@ public class ImportJob
             }
 
             // Add segments
-            int count = M.columnNorm0 (c);
-            part.set ("$n", count);
+            int n = M.columnNorm0 (c);
+            if (n > 1) part.set ("$n", n);
             int index = 0;
             for (int r = 0; r < M.rows (); r++)
             {
                 if (! M.get (r, c)) continue;
                 Segment s = segments.get (r);
-                if (count > 1)
+                if (n > 1)
                 {
                     if (! s.name.isEmpty ()) part.set ("$metadata", "name" + index, s.name);
                     s.output (part, index++);
@@ -625,33 +625,47 @@ public class ImportJob
         }
 
         // Create connections to complete the cables
+        // Note that all connections are explicit, even within the same group.
+        // TODO: Convert these to unary connections directly from child segment to parent segment.
         for (Entry<Integer,Segment> e : segments.entrySet ())
         {
             Segment s = e.getValue ();
             if (s.parent == null) continue;
-            int n = s.part.getInt ("$n");
-            String connectionName = s.part.key () + "_to_" + s.parent.part.key ();
+
+            int childN = s.part.getOrDefaultInt ("$n", "1");
+            String connectionName = s.parent.part.key () + "_to_" + s.part.key ();
             MNode connection = cell.child (connectionName);
             if (connection == null)
             {
                 connection = cell.set (connectionName, "");
                 connection.set ("$inherit", "\"Coupling Voltage\"");
-
-                String parentName = "parent";
-                int suffix = 2;
-                while (s.part.child (parentName) != null) parentName = "parent" + suffix++;
-                connection.set ("$parent", parentName);  // temporary memo
-
-                connection.set ("A", s.part.key ());
-                connection.set ("B", s.parent.part.key ());
+                connection.set ("A", s.parent.part.key ());
+                connection.set ("B", s       .part.key ());
                 connection.set ("R", "$kill");  // Force use of container's value.
-                connection.set ("$p", "B.$index==A." + parentName);
-                if (n > 1) s.part.set (parentName, "@", "-1");
+
+                int parentN = s.parent.part.getOrDefaultInt ("$n", "1");
+                if (parentN > 1)
+                {
+                    String parentName = "parent";
+                    int suffix = 2;
+                    while (s.part.child (parentName) != null) parentName = "parent" + suffix++;
+                    connection.set ("$parent", parentName);  // temporary memo
+
+                    connection.set ("$p", "A.$index==B." + parentName);
+                    if (childN > 1) s.part.set (parentName, "@", "-1");
+                }
+                else if (childN > 1)
+                {
+                    connection.set ("$p", "B.$index==" + s.index);
+                }
             }
 
             String parentName = connection.get ("$parent");
-            if (n == 1) s.part.set (parentName, s.parent.index);
-            else        s.part.set (parentName, "@" + s.index, s.parent.index);
+            if (! parentName.isEmpty ())
+            {
+                if (childN > 1) s.part.set (parentName, "@" + s.index, s.parent.index);
+                else            s.part.set (parentName, s.parent.index);
+            }
         }
 
         // Clean up temporary nodes.
