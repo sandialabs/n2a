@@ -37,11 +37,13 @@ import org.xml.sax.SAXException;
 
 public class ImportJob
 {
-    LinkedList<File>          sources     = new LinkedList<File> ();
-    MNode                     models      = new MVolatile ();
-    String                    modelName   = "";
-    List<MNode>               resolve     = new ArrayList<MNode> ();  // Nodes which contain a $inherit that refers to a locally defined part rather than a standard part. The local part must either be copied in or converted into a global model.
-    Map<String,MatrixBoolean> cellSegment = new HashMap<String,MatrixBoolean> ();  // Map from cell IDs to their associated segment matrix. The matrix itself maps from segment index to group index.
+    LinkedList<File>          sources      = new LinkedList<File> ();
+    MNode                     models       = new MVolatile ();
+    String                    modelName    = "";
+    List<MNode>               resolve      = new ArrayList<MNode> ();  // Nodes which contain a $inherit that refers to a locally defined part rather than a standard part. The local part must either be copied in or converted into a global model.
+    Map<String,MatrixBoolean> cellSegment  = new HashMap<String,MatrixBoolean> ();  // Map from cell IDs to their associated segment matrix. The matrix itself maps from segment index to group index.
+    Map<String,Node>          morphologies = new HashMap<String,Node> ();  // Map from IDs to top-level morphology blocks.
+    Map<String,Node>          biophysics   = new HashMap<String,Node> ();  // Map from IDs to top-level biophysics blocks.
 
     Pattern floatParser   = Pattern.compile ("[-+]?(NaN|Infinity|([0-9]*\\.?[0-9]*([eE][-+]?[0-9]+)?))");
     Pattern forbiddenUCUM = Pattern.compile ("[.,;><=!&|+\\-*/%\\^~]");
@@ -115,10 +117,16 @@ public class ImportJob
                     File nextSource = new File (sources.getLast ().getParentFile (), getAttribute (child, "href"));
                     process (nextSource);
                     break;
+                case "morphology":
+                    morphologies.put (getAttribute (child, "id"), child);
+                    break;
                 case "ionChannel":
                 case "ionChannelHH":
                 case "ionChannelKS":
                     ionChannel (child);
+                    break;
+                case "biophysicalProperties":
+                    biophysics.put (getAttribute (child, "id"), child);
                     break;
                 case "cell":
                     cell (child);
@@ -146,6 +154,10 @@ public class ImportJob
     **/
     public void postprocess ()
     {
+        // Also remove remaining temporary keys before doing any merges.
+        for (MNode c : models.child (modelName)) c.clear ("$groupIndex");
+
+        // Resolve referenced parts
         for (MNode r : resolve)
         {
             String partName = r.get ("$inherit").replace ("\"", "");
@@ -190,12 +202,10 @@ public class ImportJob
         }
 
         // Move heavy-weight parts into separate models
-        // Also remove remaining temporary keys
         Iterator<MNode> it = models.child (modelName).iterator ();
         while (it.hasNext ())
         {
             MNode part = it.next ();
-            part.clear ("$groupIndex");
             int count = part.getInt ("$count");
             if (count < 0)
             {
@@ -327,10 +337,25 @@ public class ImportJob
             if (child.getNodeType () != Node.ELEMENT_NODE) continue;
             switch (child.getNodeName ())
             {
-                case "notes"                : cell.set ("$metadata", "notes", getText (child)); break;
                 case "morphology"           : morphology (child, cell, segments, G);            break;
                 case "biophysicalProperties": biophysicalProperties (child, cell, G);           break;
+                default                     : genericPart (child, cell);  // Also handles generic metadata elements.
             }
+        }
+
+        // Alternate attribute-based method for pulling in morphology and biophysics
+        // This will only work if such sections appear before this cell node. It seems that the NeuroML spec guarantees this.
+        String include = getAttribute (node, "morphology");
+        if (! include.isEmpty ())
+        {
+            Node child = morphologies.get (include);
+            if (child != null) morphology (child, cell, segments, G);
+        }
+        include = getAttribute (node, "biophysicalProperties");
+        if (! include.isEmpty ())
+        {
+            Node child = biophysics.get (include);
+            if (child != null) biophysicalProperties (child, cell, G);
         }
 
 
@@ -342,6 +367,26 @@ public class ImportJob
             if (s.parentID >= 0) s.parent = segments.get (s.parentID);
         }
         for (Entry<Integer,Segment> e : segments.entrySet ()) e.getValue ().resolveProximal ();
+
+        // If no segment groups have been defined, create a single catch-all group.
+        if (segments.size () > 0)
+        {
+            MNode groups = cell.child ("$group");
+            if (groups == null)
+            {
+                int smallestID = Integer.MAX_VALUE;
+                for (Entry<Integer,Segment> e : segments.entrySet ())
+                {
+                    int ID = Integer.valueOf (e.getKey ());
+                    smallestID = Math.min (ID, smallestID);
+                    G.set (ID, 0);
+                }
+                String name = segments.get (smallestID).name;  // Name the group after the first segment, if it has a name.
+                if (name.isEmpty ()) name = "segments";
+                cell.set ("$group", name, "$G", 0);
+                cell.set ("$groupIndex", 0, name);
+            }
+        }
 
         MNode properties = cell.child ("$properties");
         if (properties != null)
@@ -355,22 +400,26 @@ public class ImportJob
                     int length = groupName.length ();
                     int r = Integer.parseInt (groupName.substring (1, length-1));
                     int currentColumn = cell.getInt ("$group", groupName, "$G");
-                    int bestColumn = currentColumn;
-                    int bestCount  = 1;
-                    for (int c = 0; c < G.columns (); c++)
+                    String newName = segments.get (r).name;
+                    if (newName.isEmpty ()  ||  cell.child ("$group", newName) != null)
                     {
-                        if (c == currentColumn) continue;
-                        if (! G.get (r, c)) continue;
-
-                        int count = G.columnNorm0 (c);
-                        if (count > bestCount)
+                        int bestColumn = currentColumn;
+                        int bestCount  = 1;
+                        for (int c = 0; c < G.columns (); c++)
                         {
-                            bestColumn = c;
-                            bestCount  = count;
+                            if (c == currentColumn) continue;
+                            if (! G.get (r, c)) continue;
+
+                            int count = G.columnNorm0 (c);
+                            if (count > bestCount)
+                            {
+                                bestColumn = c;
+                                bestCount  = count;
+                            }
                         }
+                        if (bestColumn == currentColumn) newName = "segment_" + r;
+                        else                             newName = cell.get ("$groupIndex", bestColumn) + "_" + r;
                     }
-                    String newName = "segment_" + r;
-                    if (bestColumn != currentColumn) newName = cell.get ("$groupIndex", bestColumn) + "_" + r;
                     cell.child ("$group").move (groupName, newName);
                     cell.set ("$groupIndex", currentColumn, newName);
                     p.set (newName);
@@ -389,8 +438,11 @@ public class ImportJob
                 else
                 {
                     MNode part = cell.child ("$group", groupName);
-                    part.merge (p);
-                    part.set ("");
+                    if (part != null)  // Missing group is a symptom of an ill-formed file.
+                    {
+                        part.merge (p);
+                        part.set ("");
+                    }
                 }
             }
         }
@@ -401,7 +453,7 @@ public class ImportJob
         // Ideally, the sets exactly match the segment groups, but in general there may be more sets.
         // If a set exactly matches an original segment group, it gets that group's name.
         // Then, the set that has the largest overlap with an unclaimed segment group, without exceeding it, gets its name.
-        // All remaining sets get a name formed from a concatenation of each segment it overlaps with.
+        // All remaining sets get a name formed from a concatenation of each group it overlaps with.
 
         MatrixBoolean O = new MatrixBoolean ();
         MatrixBoolean M = new MatrixBoolean ();
@@ -412,6 +464,7 @@ public class ImportJob
         int columnsG = G.columns ();
         int columnsM = M.columns ();
         Set<Integer> newIndices = new HashSet<Integer>  (columnsM);
+        Map<Integer,String> finalNames = new HashMap<Integer,String> (columnsM);
         for (int i = 0; i < columnsM; i++)
         {
             MatrixBoolean A = M.column (i);
@@ -422,7 +475,8 @@ public class ImportJob
                 {
                     found = true;
                     String name = cell.get ("$groupIndex", j);  // maps index to group name
-                    cell.set (name, "$M", i);
+                    cell.set (name, "");
+                    finalNames.put (i, name);
                     break;
                 }
             }
@@ -471,7 +525,8 @@ public class ImportJob
                 it.remove ();
 
                 String name = cell.get ("$groupIndex", bestIndex);
-                cell.set (name, "$M", i);
+                cell.set (name, "");
+                finalNames.put (i, name);
             }
         }
 
@@ -488,26 +543,40 @@ public class ImportJob
                     name = name + groupName;
                 }
             }
-            cell.set (name, "$M", i);
+            cell.set (name, "");
+            finalNames.put (i, name);
         }
 
         // Add segments and properties to the parts
-        for (MNode part : cell)
+        for (Entry<Integer,String> e : finalNames.entrySet ())
         {
-            int c = part.getOrDefaultInt ("$M", "-1");  // column of M, the mapping from segments to new groups
-            if (c < 0) continue;
+            int c = e.getKey ();  // column of M, the mapping from segments to new groups
+            String currentName = e.getValue ();
+            MNode part = cell.child (currentName);
+
+            // Rename any part with a single segment to the name of that segment, provided it is unique.
+            if (M.columnNorm0 (c) == 1)
+            {
+                int r = M.firstNonzeroRow (c);
+                String newName = segments.get (r).name;
+                // Note that all named parts have already been added to cell, so we can do a lookup there for uniqueness.
+                if (! newName.isEmpty ()  &&  ! newName.equals (currentName)  &&  cell.child (newName) == null)
+                {
+                    cell.move (currentName, newName);
+                    e.setValue (newName);
+                    currentName = newName;
+                }
+            }
 
             // Merge original groups into new part
             for (int i = 0; i < columnsG; i++)
             {
-                if (O.get (c, i))  // rows of O are new parts; columns are original segment groups
+                if (O.get (c, i))  // rows of O are new parts (columns of M); columns of O are original segment groups
                 {
-                    String groupName = cell.get ("$groupIndex", i);
+                    String groupName = cell.get ("$groupIndex", i);  // a name from the original set of groups, not the new groups
                     part.merge (cell.child ("$group", groupName));
                 }
             }
-            part.clear ("$G");
-            part.clear ("$M");
             for (MNode property : part)
             {
                 // Any subparts of a membrane property are likely ion channels, so need to tag any top-level definitions they use
@@ -529,8 +598,16 @@ public class ImportJob
             {
                 if (! M.get (r, c)) continue;
                 Segment s = segments.get (r);
-                if (count > 1) s.output (part, index++);
-                else           s.output (part, -1);
+                if (count > 1)
+                {
+                    if (! s.name.isEmpty ()) part.set ("$metadata", "name" + index, s.name);
+                    s.output (part, index++);
+                }
+                else
+                {
+                    if (! s.name.isEmpty ()  &&  ! s.name.equals (currentName)) part.set ("$metadata", "name", s.name);
+                    s.output (part, -1);
+                }
             }
         }
 
@@ -572,10 +649,8 @@ public class ImportJob
         {
             part.clear ("$parent");
             part.clear ("$G");
-            int c = part.getOrDefaultInt ("$M", "-1");
-            if (c >= 0) cell.set ("$groupIndex", c, part.key ());
-            part.clear ("$M");
         }
+        for (Entry<Integer,String> e : finalNames.entrySet ()) cell.set ("$groupIndex", e.getKey (), e.getValue ());
     }
 
     public void morphology (Node node, MNode cell, Map<Integer,Segment> segments, MatrixBoolean G)
@@ -599,6 +674,7 @@ public class ImportJob
     public class Segment
     {
         int     id;
+        String  name;
         int     parentID         = -1;
         Segment parent;
 
@@ -613,7 +689,8 @@ public class ImportJob
 
         public Segment (Node node)
         {
-            id = Integer.parseInt (getAttribute (node, "id", "0"));
+            id   = Integer.parseInt (getAttribute (node, "id", "0"));
+            name =                   getAttribute (node, "name"); 
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
                 if (child.getNodeType () != Node.ELEMENT_NODE) continue;
@@ -1147,8 +1224,9 @@ public class ImportJob
         {
             if (! synapse.isEmpty ())
             {
-                base.part.set ("$inherit", "\"" + synapse + "\"");
                 base.synapse = synapse;
+                base.part.set ("$inherit", "\"" + synapse + "\"");
+                addDependency (base.part, synapse);
             }
         }
         base.part.set ("A", A);
@@ -1419,6 +1497,11 @@ public class ImportJob
         }
     }
 
+    /**
+        Handles elements in a generic manner, including metadata elements.
+        Generic elements get processed into parts under the given container.
+        Metadata elements get added to the $metadata node the given container.
+    **/
     public void genericPart (Node node, MNode container)
     {
         String name = node.getNodeName ();
@@ -1427,6 +1510,14 @@ public class ImportJob
             container.set ("$metadata", "notes", getText (node));
             return;
         }
+        if (name.equals ("property"))
+        {
+            String tag   = getAttribute (node, "tag");
+            String value = getAttribute (node, "value");
+            container.set ("$metadata", tag, value);
+            return;
+        }
+        if (name.equals ("annotation")) return;
 
         String id = getAttribute (node, "id");
         MNode part = container.set (id, "");

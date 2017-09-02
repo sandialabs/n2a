@@ -114,6 +114,14 @@ public class MatrixBoolean
         return result;
     }
 
+    public int firstNonzeroRow (int col)
+    {
+        if (col >= data.size ()) return -1;
+        boolean[] column = data.get (col);
+        for (int r = 0; r < column.length; r++) if (column[r]) return r;
+        return -1;
+    }
+
     /**
         Collapse rows with the same pattern into single rows, and compute
         a permutation matrix (of sorts) which can recover the original matrix.
