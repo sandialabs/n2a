@@ -51,8 +51,6 @@ public class ImportJob
     Pattern forbiddenUCUM = Pattern.compile ("[.,;><=!&|+\\-*/%\\^~]");
     static final double epsilon = Math.ulp (1);
 
-    // Note: Utility functions are at the end of this class. These include generic functions to extract data from elements, such as their text or attributes.
-
     public void process (File source)
     {
         sources.push (source);
@@ -1380,6 +1378,7 @@ public class ImportJob
         if (instances != null)
         {
             int count = instances.length ();
+            if (count > 1) part.set ("$n", count);
             int index = 0;
             for (MNode i : instances)
             {
@@ -1509,6 +1508,12 @@ public class ImportJob
         String B              = getAttributes (node, "postsynapticPopulation", "population");
         String projectionType = node.getNodeName ();
 
+        // TODO: This code is wrong. It should be more strictly typed.
+        // Specifically, don't create a preliminary connection part and then update it.
+        // Instead, store the projection info, and create the first connection part when called for by a connection element.
+        // Once a connection is created, never change any of its distinguishing info.
+        // Still fold compatible connections together, but compatibility depends on exact match, not wildcard match.
+        // IE: if one connection does not specify (say) a preComponent, that is the same as specifying no preComponent, rather than no-care.
         List<Connection> connections = new ArrayList<Connection> ();
         Connection base = new Connection ();
         connections.add (base);
@@ -1558,17 +1563,15 @@ public class ImportJob
         MNode instancesB = network.child (B, "$instance");
         boolean preSingleton  = network.getOrDefaultInt (A, "$n", "1") == 1;  // This assumes that a population always has $n set if it is anything besides 1.
         boolean postSingleton = network.getOrDefaultInt (B, "$n", "1") == 1;
-        boolean wroteDefaultP            = false;
-        boolean wroteDefaultPreFraction  = false;
-        boolean wroteDefaultPostFraction = false;
+        String preCondition  = "";  // for fractionAlong
+        String postCondition = "";
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
             if (child.getNodeType () != Node.ELEMENT_NODE) continue;
 
             // Gather info
-            String name    = child.getNodeName ();
-            int    childID = getAttribute (child, "id", 0);
-            synapse        = getAttribute (child, "synapse");
+            int childID = getAttribute (child, "id", 0);
+            synapse     = getAttribute (child, "synapse");
 
             String preComponent      = getAttribute  (child, "preComponent");
             String preCell           = getAttributes (child, "preCell", "preCellId");
@@ -1590,11 +1593,8 @@ public class ImportJob
             double postFraction = 0.5;
             if (! postFractionString.isEmpty ()) postFraction = Double.valueOf (postFractionString);
 
-            if (name.equals ("input")  ||  name.endsWith ("Instance"))  // "instance" format, which seems to be an XPath of sorts
-            {
-                preCell  = extractIDfromPath (preCell);
-                postCell = extractIDfromPath (postCell);
-            }
+            preCell  = extractIDfromPath (preCell);
+            postCell = extractIDfromPath (postCell);
             if (instancesA != null) preCell  = instancesA.getOrDefault (preCell,  "$index", preCell);  // Map NeuroML ID to assigned N2A $index, falling back on ID if $index has not been assigned.
             if (instancesB != null) postCell = instancesB.getOrDefault (postCell, "$index", postCell);
 
@@ -1609,16 +1609,19 @@ public class ImportJob
             {
                 // preSegment is the ID, effectively the row in the segment*group matrix
                 // We must find the column associated with it, so we can map to a group part.
-                MatrixBoolean M = cellSegment.get (A);
+                String cell = network.get (A, "$inherit").replace ("\"", "");
+                MatrixBoolean M = cellSegment.get (cell);
                 if (M != null)
                 {
                     count = M.columns ();
-                    int c = 0;
-                    for (; c < count; c++) if (M.get (preSegment, c)) break;
-                    if (c < count)
+                    for (int c = 0; c < count; c++)
                     {
-                        query.preGroup = models.get (modelName, A, "$groupIndex", c);
-                        preSegmentIndex = M.indexInColumn (preSegment, c);
+                        if (M.get (preSegment, c))
+                        {
+                            query.preGroup = models.get (modelName, cell, "$groupIndex", c);
+                            preSegmentIndex = M.indexInColumn (preSegment, c);
+                            break;
+                        }
                     }
                 }
             }
@@ -1626,18 +1629,19 @@ public class ImportJob
             int postSegmentIndex = 0;
             if (postSegment >= 0)
             {
-                // preSegment is the ID, effectively the row in the segment*group matrix
-                // We must find the column associated with it, so we can map to a group part.
-                MatrixBoolean M = cellSegment.get (B);
+                String cell = network.get (B, "$inherit").replace ("\"", "");
+                MatrixBoolean M = cellSegment.get (cell);
                 if (M != null)
                 {
                     count = M.columns ();
-                    int c = 0;
-                    for (; c < count; c++) if (M.get (postSegment, c)) break;
-                    if (c < count)
+                    for (int c = 0; c < count; c++)
                     {
-                        query.postGroup = models.get (modelName, A, "$groupIndex", c);
-                        postSegmentIndex = M.indexInColumn (postSegment, c);
+                        if (M.get (postSegment, c))
+                        {
+                            query.postGroup = models.get (modelName, cell, "$groupIndex", c);
+                            postSegmentIndex = M.indexInColumn (postSegment, c);
+                            break;
+                        }
                     }
                 }
             }
@@ -1683,24 +1687,38 @@ public class ImportJob
                 connections.add (query);
                 connection = query;
                 connection.part = network.set (id + childID, base.part);
+                connection.part.clear ("$p");
+                connection.part.clear ("preFraction");
+                connection.part.clear ("postFraction");
+                connection.part.clear ("preComponent");
+                connection.part.clear ("postComponent");
 
-                if (query.preGroup  != null) connection.part.set ("A", A + "." + connection.preGroup);
-                if (query.postGroup != null) connection.part.set ("B", B + "." + connection.postGroup);
-                if (query.synapse   != null)
-                {
-                    connection.part.set ("$inherit", "\"" + connection.synapse + "\"");
-                    addDependency (connection.part, connection.synapse);
-                }
-                if (query.preComponent != null)
+                if (connection.preGroup == null) connection.part.set ("A", A);
+                else                             connection.part.set ("A", A + "." + connection.preGroup);
+                if (connection.postGroup == null) connection.part.set ("B", B);
+                else                              connection.part.set ("B", B + "." + connection.postGroup);
+                if (connection.preComponent != null)
                 {
                     connection.part.set ("preComponent", "$inherit", "\"" + connection.preComponent + "\"");
                     addDependency (connection.part.child ("preComponent"), connection.preComponent);
                 }
-                if (query.postComponent != null)
+                if (connection.postComponent != null)
                 {
                     connection.part.set ("postComponent", "$inherit", "\"" + connection.postComponent + "\"");
                     addDependency (connection.part.child ("postComponent"), connection.postComponent);
                 }
+
+                String inherit = connection.part.get ("$inherit").replace ("\"", "");
+                if (connection.synapse == null)
+                {
+                    connection.synapse = inherit;
+                }
+                else
+                {
+                    connection.part.set ("$inherit", "\"" + connection.synapse + "\"");
+                    inherit = connection.synapse;
+                }
+                addDependency (connection.part, inherit);
             }
 
            
@@ -1729,44 +1747,59 @@ public class ImportJob
             }
             if (! condition.isEmpty ())
             {
-                connection.part.set ("$p", "@" + condition, "1");
-                if (! wroteDefaultP)
+                MNode p = connection.part.child ("$p");
+                if (p == null)
                 {
-                    connection.part.set ("$p", "@", "0");
-                    wroteDefaultP = true;
+                    connection.part.set ("$p", condition);
+                }
+                else
+                {
+                    if (p.length () == 0)  // There is exactly one condition already existing, and we transition to multi-part equation.
+                    {
+                        p.set ("@", "0");
+                        p.set ("@" + p.get (), "1");
+                        p.set ("");
+                    }
+                    p.set ("@" + condition, "1");
                 }
             }
 
             if (preFraction != 0.5)
             {
-                if (connection.preGroup == null)
+                MNode p = connection.part.child ("preFraction");
+                if (p == null)
                 {
-                    connection.part.set ("preFraction=" + preFraction);  // No segment group is explicitly addressed, so this is more of a memo.
+                    connection.part.set ("preFraction", preFraction);
+                    preCondition = condition;
                 }
                 else
                 {
-                    connection.part.set ("preFraction", "@" + preSegmentIndex, preFraction);
-                    if (! wroteDefaultPreFraction)
+                    if (p.length () == 0)
                     {
-                        connection.part.set ("preFraction", "@", "0.5");
-                        wroteDefaultPreFraction = true;
+                        p.set ("@", "0.5");
+                        p.set ("@" + preCondition, p.get ());
+                        p.set ("");
                     }
+                    p.set ("preFraction", "@" + condition, preFraction);
                 }
             }
             if (postFraction != 0.5)
             {
-                if (connection.postGroup == null)
+                MNode p = connection.part.child ("postFraction");
+                if (p == null)
                 {
-                    connection.part.set ("postFraction=" + postFraction);
+                    connection.part.set ("postFraction", postFraction);
+                    postCondition = condition;
                 }
                 else
                 {
-                    connection.part.set ("postFraction", "@" + postSegmentIndex, postFraction);
-                    if (! wroteDefaultPostFraction)
+                    if (p.length () == 0)
                     {
-                        connection.part.set ("postFraction", "@", "0.5");
-                        wroteDefaultPostFraction = true;
+                        p.set ("@", "0.5");
+                        p.set ("@" + postCondition, p.get ());
+                        p.set ("");
                     }
+                    p.set ("postFraction", "@" + condition, postFraction);
                 }
             }
         }
@@ -1834,7 +1867,10 @@ public class ImportJob
         }
         if (name.equals ("annotation")) return;
 
-        String id = getAttribute (node, "id");
+        String id = getAttribute (node, "id", name);
+        String stem = id;
+        int suffix = 2;
+        while (container.child (id) != null) id = stem + suffix++;
         MNode part = container.set (id, "");
         part.set ("$inherit", "\"" + name + "\"");
 
