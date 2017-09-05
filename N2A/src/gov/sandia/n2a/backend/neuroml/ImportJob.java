@@ -133,6 +133,10 @@ public class ImportJob
                 case "cell":
                     cell (child);
                     break;
+                case "spikeArray":
+                case "timedSynapticInput":
+                    spikeArray (child);
+                    break;
                 case "network":
                     network (child);
                     break;
@@ -1249,6 +1253,35 @@ public class ImportJob
         value        = value.substring (0, unitIndex);
 
         return value + cleanupUnits (units);
+    }
+
+    public void spikeArray (Node node)
+    {
+        String id = getAttribute (node, "id");
+        MNode part = models.childOrCreate (modelName, id);
+        part.set ("$inherit", "\"" + node.getNodeName () + "\"");
+
+        NamedNodeMap attributes = node.getAttributes ();
+        int count = attributes.getLength ();
+        for (int i = 0; i < count; i++)
+        {
+            Node a = attributes.item (i);
+            String name = a.getNodeName ();
+            if (name.equals ("id")) continue;
+            part.set (name, biophysicalUnits (a.getNodeValue ()));
+        }
+
+        // TODO: sort the spikes, to guarantee monotonicity
+        String spikes = "[";
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () == Node.ELEMENT_NODE  &&  child.getNodeName ().equals ("spike"))
+            {
+                if (spikes.length () > 1) spikes += ";";
+                spikes += biophysicalUnits (getAttribute (child, "time"));
+            }
+        }
+        part.set ("spikes", spikes + "]");
     }
 
     public void network (Node node)
