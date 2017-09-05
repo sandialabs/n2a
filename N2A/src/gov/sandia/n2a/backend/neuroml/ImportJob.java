@@ -25,6 +25,8 @@ import java.util.Map.Entry;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -357,7 +359,7 @@ public class ImportJob
         }
 
         // Alternate attribute-based method for pulling in morphology and biophysics
-        // This will only work if such sections appear before this cell node. It seems that the NeuroML spec guarantees this.
+        // This only works if such sections appear before this cell node. It seems that the NeuroML spec guarantees this.
         String include = getAttribute (node, "morphology");
         if (! include.isEmpty ())
         {
@@ -377,28 +379,34 @@ public class ImportJob
         for (Entry<Integer,Segment> e : segments.entrySet ())
         {
             Segment s = e.getValue ();
-            if (s.parentID >= 0) s.parent = segments.get (s.parentID);
+            if (s.parentID >= 0  &&  s.parent == null)
+            {
+                s.parent = segments.get (s.parentID);
+                s.parent.children.add (s);
+            }
         }
         for (Entry<Integer,Segment> e : segments.entrySet ()) e.getValue ().resolveProximal ();
+        MNode groups = cell.child ("$group");
+        if (groups != null)
+        {
+            for (MNode g : groups) applyPaths (segments, g, G);
+            for (MNode g : groups) includeGroups (groups, g, G);
+        }
 
         // If no segment groups have been defined, create a single catch-all group.
-        if (segments.size () > 0)
+        if (groups == null  &&  segments.size () > 0)
         {
-            MNode groups = cell.child ("$group");
-            if (groups == null)
+            int smallestID = Integer.MAX_VALUE;
+            for (Entry<Integer,Segment> e : segments.entrySet ())
             {
-                int smallestID = Integer.MAX_VALUE;
-                for (Entry<Integer,Segment> e : segments.entrySet ())
-                {
-                    int ID = Integer.valueOf (e.getKey ());
-                    smallestID = Math.min (ID, smallestID);
-                    G.set (ID, 0);
-                }
-                String name = segments.get (smallestID).name;  // Name the group after the first segment, if it has a name.
-                if (name.isEmpty ()) name = "segments";
-                cell.set ("$group", name, "$G", 0);
-                cell.set ("$groupIndex", 0, name);
+                int ID = Integer.valueOf (e.getKey ());
+                smallestID = Math.min (ID, smallestID);
+                G.set (ID, 0);
             }
+            String name = segments.get (smallestID).name;  // Name the group after the first segment, if it has a name.
+            if (name.isEmpty ()) name = "segments";
+            cell.set ("$group", name, "$G", 0);
+            cell.set ("$groupIndex", 0, name);
         }
 
         MNode properties = cell.child ("$properties");
@@ -603,6 +611,25 @@ public class ImportJob
                 }
             }
 
+            // Collect inhomogeneous variables
+            String pathLength = "";
+            for (MNode v : part)
+            {
+                if (! v.get ("$metadata", "backend.neuroml.param").equals ("pathLength")) continue;
+                if (pathLength.isEmpty ())
+                {
+                    pathLength = "pathLength";
+                    int count = 2;
+                    while (part.child (pathLength) != null) pathLength = "pathLength" + count++;
+                }
+                double a = v.getDouble ("$metadata", "backend.neuroml.param.a");
+                double b = v.getDouble ("$metadata", "backend.neuroml.param.b");
+                String value = pathLength;
+                if (a != 1) value += "*" + a;
+                if (b != 0) value += "+" + b;
+                v.set (value);
+            }
+
             // Add segments
             int n = M.columnNorm0 (c);
             if (n > 1) part.set ("$n", n);
@@ -611,15 +638,19 @@ public class ImportJob
             {
                 if (! M.get (r, c)) continue;
                 Segment s = segments.get (r);
+                
                 if (n > 1)
                 {
                     if (! s.name.isEmpty ()) part.set ("$metadata", "name" + index, s.name);
+                    if (! pathLength.isEmpty ()) part.set (pathLength, "@$index==" + index, s.pathLength (0.5));  // mid-point method. TODO: add way to subdivide segments for more precise modeling of varying density
                     s.output (part, index++);
                 }
                 else
                 {
                     if (! s.name.isEmpty ()  &&  ! s.name.equals (currentName)) part.set ("$metadata", "name", s.name);
+                    if (! pathLength.isEmpty ()) part.set (pathLength, s.pathLength (0.5));
                     s.output (part, -1);
+                    break;  // Since we've already processed the only segment.
                 }
             }
         }
@@ -652,7 +683,11 @@ public class ImportJob
                     connection.set ("$parent", parentName);  // temporary memo
 
                     connection.set ("$p", "A.$index==B." + parentName);
-                    if (childN > 1) s.part.set (parentName, "@", "-1");
+                    if (childN > 1)
+                    {
+                        s.part.set (parentName, ":");
+                        s.part.set (parentName, "@", "-1");
+                    }
                 }
                 else if (childN > 1)
                 {
@@ -663,7 +698,7 @@ public class ImportJob
             String parentName = connection.get ("$parent");
             if (! parentName.isEmpty ())
             {
-                if (childN > 1) s.part.set (parentName, "@" + s.index, s.parent.index);
+                if (childN > 1) s.part.set (parentName, "@$index==" + s.index, s.parent.index);
                 else            s.part.set (parentName, s.parent.index);
             }
         }
@@ -676,6 +711,11 @@ public class ImportJob
         {
             part.clear ("$parent");
             part.clear ("$G");
+            for (MNode v : part)
+            {
+                v.clear ("$metadata", "backend.neuroml.param.a");
+                v.clear ("$metadata", "backend.neuroml.param.b");
+            }
         }
         for (Entry<Integer,String> e : finalNames.entrySet ()) cell.set ("$groupIndex", e.getKey (), e.getValue ());
     }
@@ -698,21 +738,23 @@ public class ImportJob
         }
     }
 
-    public class Segment
+    public class Segment implements Comparable<Segment>
     {
-        int     id;
-        String  name;
-        int     parentID         = -1;
-        Segment parent;
+        int          id;  // NeuroML id; row number in G matrix
+        String       name;
+        int          parentID           = -1;
+        Segment      parent;
+        Set<Segment> children           = new TreeSet<Segment> ();
 
-        MNode   part;   // compartment of which this segment is an instance
-        int     index;  // within part
+        MNode        part;   // compartment of which this segment is an instance
+        int          index;  // $index within part
 
-        double  fractionAlong    = 1;
-        Matrix  proximal;
-        Matrix  distal;
-        double  proximalDiameter = -1;
-        double  distalDiameter   = -1;
+        double       fractionAlong      = 1;
+        Matrix       proximal;
+        Matrix       distal;
+        double       proximalDiameter   = -1;
+        double       distalDiameter     = -1;
+        double       proximalPathLength = -1;  // Path length from proximal end to root. Used to calculate pathLength().
 
         public Segment (Node node)
         {
@@ -769,6 +811,16 @@ public class ImportJob
             }
         }
 
+        public double pathLength (double fraction)
+        {
+            if (proximalPathLength < 0)
+            {
+                if (parent == null) proximalPathLength = 0;
+                else                proximalPathLength = parent.pathLength (fractionAlong);
+            }
+            return proximalPathLength + ((Matrix) distal.subtract (proximal)).norm (2) * fraction;
+        }
+
         public void output (MNode part, int index)
         {
             this.part = part;
@@ -806,6 +858,11 @@ public class ImportJob
         {
             return "[" + format (A.getDouble (0)) + ";" + format (A.getDouble (1)) + ";" + format (A.getDouble (2)) + "]";
         }
+
+        public int compareTo (Segment o)
+        {
+            return id - o.id;
+        }
     }
 
     public void segmentGroup (Node node, MNode cell, MatrixBoolean G)
@@ -829,13 +886,135 @@ public class ImportJob
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
             if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-            if (child.getNodeName ().equals ("member"))
+            switch (child.getNodeName ())
             {
-                String segment = getAttribute (child, "segment");
-                if (segment.isEmpty ()) continue;
-                G.set (Integer.parseInt (segment), c);
+                case "member":
+                    G.set (getAttribute (child, "segment", 0), c);
+                    break;
+                case "include":
+                    String include = part.get ("$include");  // not $inherit
+                    if (! include.isEmpty ()) include += ",";
+                    include += getAttribute (child, "segmentGroup");
+                    part.set ("$include", include);
+                    break;
+                case "path":
+                case "subtree":
+                    segmentPath (child, part);
+                    break;
+                case "inhomogeneousParameter":
+                    inhomogeneousParameter (child, part);
+                    break;
             }
         }
+    }
+
+    public void segmentPath (Node node, MNode group)
+    {
+        int from = -1;
+        int to   = -1;
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+            switch (child.getNodeName ())
+            {
+                case "from": from = getAttribute (child, "segment", 0); break; 
+                case "to"  : to   = getAttribute (child, "segment", 0); break; 
+            }
+        }
+        if (from >= 0)
+        {
+            MNode paths = group.childOrCreate ("$paths");
+            int index = paths.length ();
+            if (to >= 0) paths.set (index, from + "," + to);
+            else         paths.set (index, from);
+        }
+    }
+
+    public void applyPaths (Map<Integer,Segment> segments, MNode group, MatrixBoolean G)
+    {
+        MNode paths = group.child ("$paths");
+        if (paths == null) return;
+
+        int c = group.getInt ("$G");
+        for (MNode p : paths)
+        {
+            String[] pieces = p.get ().split (",");
+            if (pieces.length == 1)  // subtree
+            {
+                int from = Integer.valueOf (pieces[0]);
+                applyPath (segments.get (from), G, c);
+            }
+            else  // path
+            {
+                int from = Integer.valueOf (pieces[0]);
+                int to   = Integer.valueOf (pieces[1]);
+                if (from > to)
+                {
+                    for (int r = to; r <= from; r++) G.set (r, c);
+                }
+                else
+                {
+                    for (int r = from; r <= to; r++) G.set (r, c);
+                }
+            }
+        }
+
+        group.clear ("$paths");
+    }
+
+    public void applyPath (Segment s, MatrixBoolean G, int c)
+    {
+        G.set (s.id, c);
+        for (Segment t : s.children) applyPath (t, G, c);
+    }
+
+    public void includeGroups (MNode groups, MNode g, MatrixBoolean G)
+    {
+        String include = g.get ("$include");
+        if (include.isEmpty ()) return;
+        g.clear ("$include");
+
+        int columnG = g.getInt ("$G");
+        String[] pieces = include.split (",");
+        for (String i : pieces)
+        {
+            MNode p = groups.child (i);
+            if (p == null) continue;
+            includeGroups (groups, p, G);
+            // Underride the contents of g using p
+            for (MNode f : p)
+            {
+                MNode child = g.childOrCreate (f.key ());
+                if (child.length () == 0) child.merge (f);
+            }
+            // Merge segment members
+            int columnP = p.getInt ("$G");
+            G.OR (columnG, columnP);
+        }
+    }
+
+    public void inhomogeneousParameter (Node node, MNode group)
+    {
+        //String id       = getAttribute (node, "id");
+        String variable = getAttribute (node, "variable");
+
+        String translationStart = "0";
+        String normalizationEnd = "1";
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+            switch (child.getNodeName ())
+            {
+                case "proximal": translationStart = getAttribute (child, "translationStart"); break;
+                case "distal"  : normalizationEnd = getAttribute (child, "normalizationEnd"); break;
+            }
+        }
+
+        // TODO: What is the correct interpretation of translationStart and normalizationEnd?
+        // Here we assume they are a linear transformation of the path length: variable = pathLength * normalizatonEnd + translationStart
+        group.set (variable, "$metadata", "backend.neuroml.param",   "pathLength");
+        group.set (variable, "$metadata", "backend.neuroml.param.a", normalizationEnd);
+        group.set (variable, "$metadata", "backend.neuroml.param.b", translationStart);
     }
 
     public void biophysicalProperties (Node node, MNode cell, MatrixBoolean G)
@@ -845,8 +1024,8 @@ public class ImportJob
             if (child.getNodeType () != Node.ELEMENT_NODE) continue;
             String name = child.getNodeName ();
             if      (name.startsWith ("membrane")) membraneProperties      (child, cell, G);
-            else if (name.startsWith ("extra"   )) extracellularProperties (child, cell);
             else if (name.startsWith ("intra"   )) intracellularProperties (child, cell);
+            else if (name.startsWith ("extra"   )) extracellularProperties (child, cell);
         }
     }
 
@@ -860,63 +1039,23 @@ public class ImportJob
             String name = child.getNodeName ();
             if (name.startsWith ("channel"))
             {
-                property.set ("$inherit", "\"" + name + "\"");
-
-                String ionChannel = property.get ("ionChannel");
-                property.clear ("ionChannel");
-                property.set ("ionChannel", "$inherit", "\"" + ionChannel + "\"");
-
-                String ion = property.get ("ion");
-                property.clear ("ion");
-                property.set ("$metadata", "ion", ion);
+                channel (child, cell, property);
             }
             else
             {
+                String value = biophysicalUnits (getAttribute (child, "value"));
                 switch (name)
                 {
                     case "spikeThresh":
-                        property.set ("Vpeak", biophysicalUnits (getAttribute (child, "value")));
+                        property.set ("Vpeak", value);
                         break;
                     case "specificCapacitance":
-                        property.set ("C", biophysicalUnits (getAttribute (child, "value")));
+                        property.set ("C", value);
                         break;
                     case "initMembPotential":
-                        property.set ("V", "@$init", biophysicalUnits (getAttribute (child, "value")));
+                        property.set ("V", "@$init", value);
                         break;
                 }
-            }
-        }
-    }
-
-    public void intracellularProperties (Node node, MNode cell)
-    {
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-            String name = child.getNodeName ();
-
-            switch (name)
-            {
-                case "species":
-                    break;
-                case "resistivity":
-                    cell.set ("R", biophysicalUnits (getAttribute (child, "value")));
-                    break;
-            }
-        }
-    }
-
-    public void extracellularProperties (Node node, MNode cell)
-    {
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-            String name = child.getNodeName ();
-
-            switch (name)
-            {
-                case "species":
-                    break;
             }
         }
     }
@@ -950,7 +1089,7 @@ public class ImportJob
         if (id.isEmpty ()) return result;
 
         // Create a subpart with the given name
-        result = result.set (id, "");  
+        MNode subpart = result.set (id, "");  
         NamedNodeMap attributes = node.getAttributes ();
         int count = attributes.getLength ();
         for (int i = 0; i < count; i++)
@@ -961,9 +1100,103 @@ public class ImportJob
             if (name.equals ("segment")) continue;
             if (name.equals ("segmentGroup")) continue;
             if (name.equals ("value")) continue;  // Caller will extract this directly from XML node.
-            result.set (name, biophysicalUnits (a.getNodeValue ()));  // biophysicalUnits() will only modify text if there is a numeric value
+            subpart.set (name, biophysicalUnits (a.getNodeValue ()));  // biophysicalUnits() will only modify text if there is a numeric value
         }
         return result;
+    }
+
+    public void channel (Node node, MNode cell, MNode property)
+    {
+        MNode subpart = property.iterator ().next ();  // retrieve the first (and only) subpart
+
+        String name = node.getNodeName ();
+        subpart.set ("$inherit", "\"" + name + "\"");
+
+        String ionChannel = subpart.get ("ionChannel");
+        subpart.clear ("ionChannel");
+        subpart.set ("ionChannel", "$inherit", "\"" + ionChannel + "\"");
+
+        String ion = subpart.get ("ion");
+        subpart.clear ("ion");
+        subpart.set ("$metadata", "ion", ion);
+
+        String parentGroup = property.get ();
+        Map<String,MNode> groupProperty = new TreeMap<String,MNode> ();
+        groupProperty.put (parentGroup, property);
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () != Node.ELEMENT_NODE  ||  ! child.getNodeName ().equals ("variableParameter")) continue;
+            String parameter    = getAttribute (child, "parameter");
+            String segmentGroup = getAttribute (child, "segmentGroup");
+
+            MNode clone = property;
+            if (! segmentGroup.equals (parentGroup))
+            {
+                if (parentGroup.equals ("[all]"))  // segment group was not or should not be assigned at level of channel part
+                {
+                    groupProperty.remove (parentGroup);
+                    groupProperty.put (segmentGroup, property);
+                    property.set (segmentGroup);  // assumes that the target group will exist when needed
+                    parentGroup = segmentGroup;
+                }
+                else  // different than previously assigned group, so may need to clone the property
+                {
+                    clone = groupProperty.get (segmentGroup);
+                    if (clone == null)
+                    {
+                        MNode properties = cell.child ("$properties");
+                        clone = properties.set (String.valueOf (properties.length ()), segmentGroup);
+                        clone.merge (property);
+                        clone.set (segmentGroup);
+                        groupProperty.put (segmentGroup, clone);
+                    }
+                }
+                subpart = clone.iterator ().next ();
+                subpart.set (parameter, variableParameter (child));
+            }
+        }
+    }
+
+    public String variableParameter (Node node)
+    {
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () == Node.ELEMENT_NODE  &&  child.getNodeName ().equals ("inhomogeneousValue")) return getAttribute (child, "value");
+        }
+        return "";
+    }
+
+    public void intracellularProperties (Node node, MNode cell)
+    {
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+            String name = child.getNodeName ();
+
+            switch (name)
+            {
+                case "species":
+                    break;
+                case "resistivity":
+                    cell.set ("R", biophysicalUnits (getAttribute (child, "value")));
+                    break;
+            }
+        }
+    }
+
+    public void extracellularProperties (Node node, MNode cell)
+    {
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+            String name = child.getNodeName ();
+
+            switch (name)
+            {
+                case "species":
+                    break;
+            }
+        }
     }
 
     /**
@@ -1301,7 +1534,8 @@ public class ImportJob
 
             // Gather info
             String name    = child.getNodeName ();
-            int    childID = getAttribute  (child, "id", 0);
+            int    childID = getAttribute (child, "id", 0);
+            synapse        = getAttribute (child, "synapse");
 
             String preComponent      = getAttribute  (child, "preComponent");
             String preCell           = getAttributes (child, "preCell", "preCellId");

@@ -122,6 +122,13 @@ public class MatrixBoolean
         return -1;
     }
 
+    public void OR (int colTo, int colFrom)
+    {
+        if (colFrom >= data.size ()) return;
+        boolean[] column = data.get (colFrom);
+        for (int r = 0; r < column.length; r++) if (column[r]) set (r, colTo);
+    }
+
     /**
         Collapse rows with the same pattern into single rows, and compute
         a permutation matrix (of sorts) which can recover the original matrix.
