@@ -1467,20 +1467,12 @@ public class ImportJob
 
     public static class Connection
     {
-        // null means wildcard
-        // empty string means required to be blank
-        public String preGroup;
-        public String postGroup;
-        public String synapse;
-        public String preComponent;
-        public String postComponent;
+        public String preGroup      = "";
+        public String postGroup     = "";
+        public String inherit       = "";
+        public String preComponent  = "";
+        public String postComponent = "";
         public MNode  part;
-
-        public static boolean check (String a, String b)
-        {
-            if (a == null  ||  b == null) return true;  // wildcard match
-            return a.equals (b);
-        }
 
         @Override
         public boolean equals (Object o)
@@ -1488,11 +1480,11 @@ public class ImportJob
             if (! (o instanceof Connection)) return false;
             Connection that = (Connection) o;
 
-            if (! check (preGroup,      that.preGroup     )) return false;
-            if (! check (postGroup,     that.postGroup    )) return false;
-            if (! check (synapse,       that.synapse      )) return false;
-            if (! check (preComponent,  that.preComponent )) return false;
-            if (! check (postComponent, that.postComponent)) return false;
+            if (! preGroup     .equals (that.preGroup     )) return false;
+            if (! postGroup    .equals (that.postGroup    )) return false;
+            if (! inherit      .equals (that.inherit      )) return false;
+            if (! preComponent .equals (that.preComponent )) return false;
+            if (! postComponent.equals (that.postComponent)) return false;
             return true;
         }
     }
@@ -1503,41 +1495,16 @@ public class ImportJob
     public void projection (Node node, MNode network)
     {
         String id             = getAttribute  (node, "id");
-        String synapse        = getAttribute  (node, "synapse");
+        String inherit        = getAttribute  (node, "synapse");
         String A              = getAttributes (node, "presynapticPopulation",  "component");
         String B              = getAttributes (node, "postsynapticPopulation", "population");
         String projectionType = node.getNodeName ();
 
-        // TODO: This code is wrong. It should be more strictly typed.
-        // Specifically, don't create a preliminary connection part and then update it.
-        // Instead, store the projection info, and create the first connection part when called for by a connection element.
-        // Once a connection is created, never change any of its distinguishing info.
-        // Still fold compatible connections together, but compatibility depends on exact match, not wildcard match.
-        // IE: if one connection does not specify (say) a preComponent, that is the same as specifying no preComponent, rather than no-care.
-        List<Connection> connections = new ArrayList<Connection> ();
-        Connection base = new Connection ();
-        connections.add (base);
-        base.part = network.set (id, "");
-        base.part.set ("A", A);
-        base.part.set ("B", B);
-        if (projectionType.equals ("continuousProjection"))
-        {
-            base.part.set ("$inherit", "\"" + projectionType + "\"");
-        }
-        else if (projectionType.equals ("inputList"))
-        {
-            base.part.set ("$inherit", "\"Current Injection\"");
-            addDependency (base.part.child ("A"), A);
-        }
-        else
-        {
-            if (! synapse.isEmpty ())
-            {
-                base.synapse = synapse;
-                base.part.set ("$inherit", "\"" + synapse + "\"");
-                addDependency (base.part, synapse);
-            }
-        }
+        MNode base = new MVolatile ();
+        base.set ("A", A);
+        base.set ("B", B);
+        if (projectionType.equals ("continuousProjection")) inherit = projectionType;
+        else if (projectionType.equals ("inputList"))       inherit = "Current Injection";
 
         NamedNodeMap attributes = node.getAttributes ();
         int count = attributes.getLength ();
@@ -1551,7 +1518,7 @@ public class ImportJob
             if (name.equals ("postsynapticPopulation")) continue;
             if (name.equals ("component"             )) continue;
             if (name.equals ("population"            )) continue;
-            base.part.set (name, biophysicalUnits (a.getNodeValue ()));  // biophysicalUnits() will only modify text if there is a numeric value
+            base.set (name, biophysicalUnits (a.getNodeValue ()));  // biophysicalUnits() will only modify text if there is a numeric value
         }
 
         // Children are specific connections.
@@ -1559,26 +1526,34 @@ public class ImportJob
         // from one entry to the next. These must be made into separate connection objects, so try to fold
         // them as much as possible.
         // For other connection types, attributes can be set up as conditional constants.
+
         MNode instancesA = network.child (A, "$instance");
         MNode instancesB = network.child (B, "$instance");
-        boolean preSingleton  = network.getOrDefaultInt (A, "$n", "1") == 1;  // This assumes that a population always has $n set if it is anything besides 1.
-        boolean postSingleton = network.getOrDefaultInt (B, "$n", "1") == 1;
         String preCondition  = "";  // for fractionAlong
         String postCondition = "";
+
+        boolean postSingleton = network.getOrDefaultInt (B, "$n", "1") == 1;  // This assumes that a population always has $n set if it is anything besides 1.
+        boolean preSingleton;  // A requires more testing, because it could be the "component" of an input list.
+        boolean Acomponent = ! getAttribute (node, "component").isEmpty ();
+        if (Acomponent) preSingleton = models .getOrDefaultInt (modelName, A, "$n", "1") == 1;
+        else            preSingleton = network.getOrDefaultInt (           A, "$n", "1") == 1;
+
+        List<Connection> connections = new ArrayList<Connection> ();
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
             if (child.getNodeType () != Node.ELEMENT_NODE) continue;
 
-            // Gather info
-            int childID = getAttribute (child, "id", 0);
-            synapse     = getAttribute (child, "synapse");
+            // Collect data and assemble query
+            Connection connection = new Connection ();
+            int childID   = getAttribute (child, "id", 0);
+            connection.inherit = getAttribute (child, "synapse", inherit);
 
-            String preComponent      = getAttribute  (child, "preComponent");
+            connection.preComponent  = getAttribute  (child, "preComponent");
             String preCell           = getAttributes (child, "preCell", "preCellId");
             String preSegmentString  = getAttributes (child, "preSegment", "preSegmentId");
             String preFractionString = getAttribute  (child, "preFractionAlong");
 
-            String postComponent      = getAttribute  (child, "postComponent");
+            connection.postComponent  = getAttribute  (child, "postComponent");
             String postCell           = getAttributes (child, "postCell", "postCellId", "target");
             String postSegmentString  = getAttributes (child, "postSegment", "postSegmentId", "segmentId");
             String postFractionString = getAttributes (child, "postFractionAlong", "fractionAlong");
@@ -1598,12 +1573,6 @@ public class ImportJob
             if (instancesA != null) preCell  = instancesA.getOrDefault (preCell,  "$index", preCell);  // Map NeuroML ID to assigned N2A $index, falling back on ID if $index has not been assigned.
             if (instancesB != null) postCell = instancesB.getOrDefault (postCell, "$index", postCell);
 
-            // Assemble query
-            Connection query = new Connection ();
-            if (! synapse      .isEmpty ()) query.synapse       = synapse;
-            if (! preComponent .isEmpty ()) query.preComponent  = preComponent;
-            if (! postComponent.isEmpty ()) query.postComponent = postComponent;
-
             int preSegmentIndex = 0;
             if (preSegment >= 0)
             {
@@ -1618,7 +1587,7 @@ public class ImportJob
                     {
                         if (M.get (preSegment, c))
                         {
-                            query.preGroup = models.get (modelName, cell, "$groupIndex", c);
+                            connection.preGroup = models.get (modelName, cell, "$groupIndex", c);
                             preSegmentIndex = M.indexInColumn (preSegment, c);
                             break;
                         }
@@ -1638,7 +1607,7 @@ public class ImportJob
                     {
                         if (M.get (postSegment, c))
                         {
-                            query.postGroup = models.get (modelName, cell, "$groupIndex", c);
+                            connection.postGroup = models.get (modelName, cell, "$groupIndex", c);
                             postSegmentIndex = M.indexInColumn (postSegment, c);
                             break;
                         }
@@ -1647,89 +1616,53 @@ public class ImportJob
             }
 
             // Choose part
-            Connection connection;
-            int match = connections.indexOf (query);
-            if (match >= 0)  // Use existing part. Update some initial info.
+            int match = connections.indexOf (connection);
+            if (match >= 0)  // Use existing part.
             {
                 connection = connections.get (match);
-
-                if (query.preGroup != null  &&  connection.preGroup == null)
-                {
-                    connection.preGroup = query.preGroup;
-                    connection.part.set ("A", A + "." + connection.preGroup);
-                }
-                if (query.postGroup != null  &&  connection.postGroup == null)
-                {
-                    connection.postGroup = query.postGroup;
-                    connection.part.set ("B", B + "." + connection.postGroup);
-                }
-                if (query.synapse != null  &&  connection.synapse == null)
-                {
-                    connection.synapse = query.synapse;
-                    connection.part.set ("$inherit", "\"" + connection.synapse + "\"");
-                    addDependency (connection.part, connection.synapse);
-                }
-                if (query.preComponent != null  &&  connection.preComponent == null)
-                {
-                    connection.preComponent = query.preComponent;
-                    connection.part.set ("preComponent", "$inherit", "\"" + connection.preComponent + "\"");
-                    addDependency (connection.part.child ("preComponent"), connection.preComponent);
-                }
-                if (query.postComponent != null  &&  connection.postComponent == null)
-                {
-                    connection.postComponent = query.postComponent;
-                    connection.part.set ("postComponent", "$inherit", "\"" + connection.postComponent + "\"");
-                    addDependency (connection.part.child ("postComponent"), connection.postComponent);
-                }
             }
             else  // Create new part, cloning relevant info.
             {
-                connections.add (query);
-                connection = query;
-                connection.part = network.set (id + childID, base.part);
-                connection.part.clear ("$p");
-                connection.part.clear ("preFraction");
-                connection.part.clear ("postFraction");
-                connection.part.clear ("preComponent");
-                connection.part.clear ("postComponent");
+                connections.add (connection);
+                if (network.child (id) == null) connection.part = network.set (id,           base);
+                else                            connection.part = network.set (id + childID, base);  // Another part has already consumed the base name, so augment it with some index. Any index will do, but childID is convenient.
 
-                if (connection.preGroup == null) connection.part.set ("A", A);
-                else                             connection.part.set ("A", A + "." + connection.preGroup);
-                if (connection.postGroup == null) connection.part.set ("B", B);
-                else                              connection.part.set ("B", B + "." + connection.postGroup);
-                if (connection.preComponent != null)
+                if (connection.postGroup.isEmpty ()) connection.part.set ("B", B);
+                else                                 connection.part.set ("B", B + "." + connection.postGroup);
+                if (connection.preGroup.isEmpty ())
+                {
+                    connection.part.set ("A", A);
+                    if (Acomponent) addDependency (connection.part.child ("A"), A);
+                }
+                else
+                {
+                    connection.part.set ("A", A + "." + connection.preGroup);
+                }
+                if (! connection.preComponent.isEmpty ())
                 {
                     connection.part.set ("preComponent", "$inherit", "\"" + connection.preComponent + "\"");
                     addDependency (connection.part.child ("preComponent"), connection.preComponent);
                 }
-                if (connection.postComponent != null)
+                if (! connection.postComponent.isEmpty ())
                 {
                     connection.part.set ("postComponent", "$inherit", "\"" + connection.postComponent + "\"");
                     addDependency (connection.part.child ("postComponent"), connection.postComponent);
                 }
-
-                String inherit = connection.part.get ("$inherit").replace ("\"", "");
-                if (connection.synapse == null)
+                if (! connection.inherit.isEmpty ())
                 {
-                    connection.synapse = inherit;
+                    connection.part.set ("$inherit", "\"" + connection.inherit + "\"");
+                    addDependency (connection.part, connection.inherit);
                 }
-                else
-                {
-                    connection.part.set ("$inherit", "\"" + connection.synapse + "\"");
-                    inherit = connection.synapse;
-                }
-                addDependency (connection.part, inherit);
             }
-
            
             // Add conditional info
             String condition = "";
             if (! preSingleton)
             {
-                if (connection.preGroup == null) condition = "A.$index=="     + preCell;
-                else                             condition = "A.$up.$index==" + preCell;
+                if (connection.preGroup.isEmpty ()) condition = "A.$index=="     + preCell;
+                else                                condition = "A.$up.$index==" + preCell;
             }
-            if (connection.preGroup != null)
+            if (! connection.preGroup.isEmpty ())
             {
                 if (! condition.isEmpty ()) condition += "&&";
                 condition += "A.$index==" + preSegmentIndex;
@@ -1737,10 +1670,10 @@ public class ImportJob
             if (! postSingleton)
             {
                 if (! condition.isEmpty ()) condition += "&&";
-                if (connection.postGroup == null) condition += "B.$index=="     + postCell;
-                else                              condition += "B.$up.$index==" + postCell;
+                if (connection.postGroup.isEmpty ()) condition += "B.$index=="     + postCell;
+                else                                 condition += "B.$up.$index==" + postCell;
             }
-            if (connection.postGroup != null)
+            if (! connection.postGroup.isEmpty ())
             {
                 if (! condition.isEmpty ()) condition += "&&";
                 condition += "B.$index==" + postSegmentIndex;
@@ -1801,6 +1734,16 @@ public class ImportJob
                     }
                     p.set ("postFraction", "@" + condition, postFraction);
                 }
+            }
+        }
+
+        if (connections.size () == 0)  // No connections were added, so add a minimalist projection part.
+        {
+            MNode part = network.set (id, base);
+            if (! inherit.isEmpty ())
+            {
+                part.set ("$inherit", "\"" + inherit + "\"");
+                addDependency (part, inherit);
             }
         }
     }
