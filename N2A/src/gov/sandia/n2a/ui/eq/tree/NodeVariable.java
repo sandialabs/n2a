@@ -149,7 +149,7 @@ public class NodeVariable extends NodeFilter
             if (name.endsWith ("'")) return;
 
             // Determine if our RHS has the right form. If so, scan for the referent.
-            if (NodePart.isValidIdentifier (value))
+            if (NodePart.isIdentifierPath (value))
             {
                 NodeBase referent = parent.resolveName (value);
                 if (referent instanceof NodePart) isBinding = true;

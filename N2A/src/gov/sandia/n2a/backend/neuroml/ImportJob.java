@@ -1532,11 +1532,11 @@ public class ImportJob
         String preCondition  = "";  // for fractionAlong
         String postCondition = "";
 
-        boolean postSingleton = network.getOrDefaultInt (B, "$n", "1") == 1;  // This assumes that a population always has $n set if it is anything besides 1.
-        boolean preSingleton;  // A requires more testing, because it could be the "component" of an input list.
+        boolean postCellSingleton = network.getOrDefaultInt (B, "$n", "1") == 1;  // This assumes that a population always has $n set if it is anything besides 1.
+        boolean preCellSingleton;  // A requires more testing, because it could be the "component" of an input list.
         boolean Acomponent = ! getAttribute (node, "component").isEmpty ();
-        if (Acomponent) preSingleton = models .getOrDefaultInt (modelName, A, "$n", "1") == 1;
-        else            preSingleton = network.getOrDefaultInt (           A, "$n", "1") == 1;
+        if (Acomponent) preCellSingleton = models .getOrDefaultInt (modelName, A, "$n", "1") == 1;
+        else            preCellSingleton = network.getOrDefaultInt (           A, "$n", "1") == 1;
 
         List<Connection> connections = new ArrayList<Connection> ();
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
@@ -1574,6 +1574,7 @@ public class ImportJob
             if (instancesB != null) postCell = instancesB.getOrDefault (postCell, "$index", postCell);
 
             int preSegmentIndex = 0;
+            boolean preSegmentSingleton = false;
             if (preSegment >= 0)
             {
                 // preSegment is the ID, effectively the row in the segment*group matrix
@@ -1589,6 +1590,7 @@ public class ImportJob
                         {
                             connection.preGroup = models.get (modelName, cell, "$groupIndex", c);
                             preSegmentIndex = M.indexInColumn (preSegment, c);
+                            preSegmentSingleton = models.getOrDefaultInt (modelName, cell, connection.preGroup, "$n", "1") == 1;
                             break;
                         }
                     }
@@ -1596,6 +1598,7 @@ public class ImportJob
             }
 
             int postSegmentIndex = 0;
+            boolean postSegmentSingleton = false;
             if (postSegment >= 0)
             {
                 String cell = network.get (B, "$inherit").replace ("\"", "");
@@ -1609,6 +1612,7 @@ public class ImportJob
                         {
                             connection.postGroup = models.get (modelName, cell, "$groupIndex", c);
                             postSegmentIndex = M.indexInColumn (postSegment, c);
+                            postSegmentSingleton = models.getOrDefaultInt (modelName, cell, connection.postGroup, "$n", "1") == 1;
                             break;
                         }
                     }
@@ -1657,23 +1661,23 @@ public class ImportJob
            
             // Add conditional info
             String condition = "";
-            if (! preSingleton)
+            if (! preCellSingleton)
             {
                 if (connection.preGroup.isEmpty ()) condition = "A.$index=="     + preCell;
                 else                                condition = "A.$up.$index==" + preCell;
             }
-            if (! connection.preGroup.isEmpty ())
-            {
-                if (! condition.isEmpty ()) condition += "&&";
-                condition += "A.$index==" + preSegmentIndex;
-            }
-            if (! postSingleton)
+            if (! postCellSingleton)
             {
                 if (! condition.isEmpty ()) condition += "&&";
                 if (connection.postGroup.isEmpty ()) condition += "B.$index=="     + postCell;
                 else                                 condition += "B.$up.$index==" + postCell;
             }
-            if (! connection.postGroup.isEmpty ())
+            if (! preSegmentSingleton  &&  ! connection.preGroup.isEmpty ())
+            {
+                if (! condition.isEmpty ()) condition += "&&";
+                condition += "A.$index==" + preSegmentIndex;
+            }
+            if (! postSegmentSingleton  &&  ! connection.postGroup.isEmpty ())
             {
                 if (! condition.isEmpty ()) condition += "&&";
                 condition += "B.$index==" + postSegmentIndex;

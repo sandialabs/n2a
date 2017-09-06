@@ -343,7 +343,7 @@ public class NodePart extends NodeFilter
         return result.toString ();
     }
 
-    public static boolean isValidIdentifier (String name)
+    public static boolean isIdentifierPath (String name)
     {
         if (name.length () == 0) return false;
 
@@ -353,7 +353,7 @@ public class NodePart extends NodeFilter
         for (int i = 1; i < name.length (); i++)
         {
             c = name.charAt (i);
-            if (! Character.isJavaIdentifierPart (c)) return false;
+            if (! Character.isJavaIdentifierPart (c)  &&  c != '.') return false;
         }
 
         return true;
