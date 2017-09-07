@@ -12,6 +12,8 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
+import gov.sandia.n2a.ui.eq.undo.AddDoc;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -106,6 +108,9 @@ public class ImportJob
         {
             modelName = getAttribute (node, "id");
             if (modelName.isEmpty ()) modelName = "New Model";
+            // Preemptively scan for unique name, so our references to any sibling parts remain valid.
+            // IE: a name collision in the main part implies that sibling parts will also have name collisions.
+            modelName = AddDoc.uniqueName (modelName);
         }
 
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
@@ -206,6 +211,7 @@ public class ImportJob
             }
             if (count == -1)
             {
+                // TODO: This should really be an underride, not override. However, there don't seem to be any conflicting nodes.
                 r.merge (part);
                 r.clear ("$count");
                 r.clear ("$connected");
@@ -592,13 +598,31 @@ public class ImportJob
             }
 
             // Merge original groups into new part
-            for (int i = 0; i < columnsG; i++)
+            //   A heuristic is that smaller groups (ones with fewer segments) are more specific, so their metadata should take precedence.
+            //   Thus, we sort the relevant original groups by size and apply them in that order.
+            class ColumnSize implements Comparable<ColumnSize>
             {
-                if (O.get (c, i))  // rows of O are new parts (columns of M); columns of O are original segment groups
+                public int column;
+                public int size;  // number of rows in column
+                public ColumnSize (int column, int size)
                 {
-                    String groupName = cell.get ("$groupIndex", i);  // a name from the original set of groups, not the new groups
-                    part.merge (cell.child ("$group", groupName));
+                    this.column = column;
+                    this.size   = size;
                 }
+                public int compareTo (ColumnSize o)
+                {
+                    int result = size - o.size;
+                    if (result != 0) return result;
+                    return column - o.column;  // Just a tie breaker. Favors lower-numbered column.
+                }
+            }
+            TreeSet<ColumnSize> sortedColumns = new TreeSet<ColumnSize> ();
+            //   rows of O are new parts (columns of M); columns of O are original segment groups
+            for (int i = 0; i < columnsG; i++) if (O.get (c, i)) sortedColumns.add (new ColumnSize (i, G.columnNorm0 (i)));
+            for (ColumnSize cs : sortedColumns)
+            {
+                String groupName = cell.get ("$groupIndex", cs.column);  // a name from the original set of groups, not the new groups
+                part.mergeUnder (cell.child ("$group", groupName));
             }
             for (MNode property : part)
             {
@@ -606,7 +630,7 @@ public class ImportJob
                 for (MNode m : property)
                 {
                     String inherit = m.get ("$inherit").replace ("\"", "");
-                    if (inherit.isEmpty ()) continue;
+                    if (inherit.isEmpty ()) continue;  // $metadata and any parameters are at the same level as subparts, but they will of course lack a $inherit line.
                     // check for standard part
                     MNode model = AppData.models.child (inherit);
                     if (model == null  ||  model.child ("$metadata", "backend.neuroml.part") == null) addDependency (m, inherit);
@@ -869,9 +893,10 @@ public class ImportJob
 
     public void segmentGroup (Node node, MNode cell, MatrixBoolean G)
     {
-        int c = G.columns ();
+        MNode groups = cell.childOrCreate ("$group");
+        int c = groups.length ();
         String groupName = getAttribute (node, "id");
-        MNode part = cell.childOrCreate ("$group", groupName);
+        MNode part = groups.childOrCreate (groupName);
         part.set ("$G", c);
         cell.set ("$groupIndex", c, groupName);
 
@@ -900,7 +925,7 @@ public class ImportJob
                     part.set ("$include", include);
                     break;
                 case "path":
-                case "subtree":
+                case "subTree":
                     segmentPath (child, part);
                     break;
                 case "inhomogeneousParameter":
@@ -983,15 +1008,12 @@ public class ImportJob
             MNode p = groups.child (i);
             if (p == null) continue;
             includeGroups (groups, p, G);
-            // Underride the contents of g using p
-            for (MNode f : p)
-            {
-                MNode child = g.childOrCreate (f.key ());
-                if (child.length () == 0) child.merge (f);
-            }
             // Merge segment members
             int columnP = p.getInt ("$G");
             G.OR (columnG, columnP);
+            // Don't merge metadata from included groups, only members.
+            // All metadata will get combined when groups are finalized in cell().
+            // If it is merged here, it gets combined twice, and some items can leak into groups they are not really related to.
         }
     }
 
@@ -1080,9 +1102,10 @@ public class ImportJob
                 group = "[" + group + "]";  // proper name will be assigned later, during post-processing
                 if (cell.child ("$group", group) == null)
                 {
-                    int c = G.columns ();
+                    MNode groups = cell.childOrCreate ("$group");
+                    int c = groups.length ();
                     G.set (r, c);
-                    cell.set ("$group", group, "$G", c);
+                    groups.set (group, "$G", c);
                     cell.set ("$groupIndex", c, group);
                 }
             }
@@ -1474,6 +1497,81 @@ public class ImportJob
         public String postComponent = "";
         public MNode  part;
 
+        public TreeMap<Double,TreeSet<String>> preFractions  = new TreeMap<Double,TreeSet<String>> ();
+        public TreeMap<Double,TreeSet<String>> postFractions = new TreeMap<Double,TreeSet<String>> ();
+        public TreeMap<Double,TreeSet<String>> weights       = new TreeMap<Double,TreeSet<String>> ();
+        public TreeMap<Double,TreeSet<String>> delays        = new TreeMap<Double,TreeSet<String>> ();
+
+        public void add (TreeMap<Double,TreeSet<String>> collection, String value, String condition)
+        {
+            add (collection, Matrix.convert (value), condition);
+        }
+
+        public void add (TreeMap<Double,TreeSet<String>> collection, double value, String condition)
+        {
+            TreeSet<String> conditions = collection.get (value);
+            if (conditions == null)
+            {
+                conditions = new TreeSet<String> ();
+                collection.put (value, conditions);
+            }
+            conditions.add (condition);
+        }
+
+        public void injectConditionalValues ()
+        {
+            injectConditionalValue ("preFraction",  preFractions,  0.5, false);
+            injectConditionalValue ("postFraction", postFractions, 0.5, false);
+            injectConditionalValue ("weight",       weights,       1.0, false);
+            injectConditionalValue ("delay",        delays,        0.0, true);
+        }
+
+        public void injectConditionalValue (String name, TreeMap<Double,TreeSet<String>> collection, double defaultValue, boolean outputSeconds)
+        {
+            if (collection.size () == 0) return;
+            if (collection.size () == 1)
+            {
+                double value = collection.firstKey ();
+                if (value == defaultValue) return;  // Default value should be inherited, so no need to set it.
+                TreeSet<String> conditions = collection.firstEntry ().getValue ();
+                if (conditions.size () == 1  &&  conditions.first ().isEmpty ())  // Unconditional value. This occurs when both source and destination populations are singletons.
+                {
+                    if (outputSeconds)
+                    {
+                        if (value >= 1) part.set (name, value + "s");
+                        else            part.set (name, value * 1000 + "ms");
+                    }
+                    else
+                    {
+                        part.set (name, value);
+                    }
+                    return;
+                }
+            }
+
+            MNode v = part.childOrCreate (name);
+            v.set ("@", defaultValue);
+            for (Entry<Double,TreeSet<String>> e : collection.entrySet ())
+            {
+                String condition = "";
+                for (String c : e.getValue ())
+                {
+                    if (! condition.isEmpty ()) condition += "||";
+                    condition += c;
+                }
+                double value = e.getKey ();
+                if (outputSeconds)
+                {
+                    if (value >= 1) part.set (name, value + "s");
+                    else            part.set (name, value * 1000 + "ms");
+                }
+                else
+                {
+                    v.set ("@" + condition, value);
+                }
+            }
+        }
+
         @Override
         public boolean equals (Object o)
         {
@@ -1503,8 +1601,8 @@ public class ImportJob
         MNode base = new MVolatile ();
         base.set ("A", A);
         base.set ("B", B);
-        if (projectionType.equals ("continuousProjection")) inherit = projectionType;
-        else if (projectionType.equals ("inputList"))       inherit = "Current Injection";
+        if      (projectionType.equals ("continuousProjection")) inherit = "continuousProjection";
+        else if (projectionType.equals ("inputList"))            inherit = "Current Injection";
 
         NamedNodeMap attributes = node.getAttributes ();
         int count = attributes.getLength ();
@@ -1529,8 +1627,6 @@ public class ImportJob
 
         MNode instancesA = network.child (A, "$instance");
         MNode instancesB = network.child (B, "$instance");
-        String preCondition  = "";  // for fractionAlong
-        String postCondition = "";
 
         boolean postCellSingleton = network.getOrDefaultInt (B, "$n", "1") == 1;  // This assumes that a population always has $n set if it is anything besides 1.
         boolean preCellSingleton;  // A requires more testing, because it could be the "component" of an input list.
@@ -1545,7 +1641,7 @@ public class ImportJob
 
             // Collect data and assemble query
             Connection connection = new Connection ();
-            int childID   = getAttribute (child, "id", 0);
+            int childID        = getAttribute (child, "id", 0);
             connection.inherit = getAttribute (child, "synapse", inherit);
 
             connection.preComponent  = getAttribute  (child, "preComponent");
@@ -1557,6 +1653,9 @@ public class ImportJob
             String postCell           = getAttributes (child, "postCell", "postCellId", "target");
             String postSegmentString  = getAttributes (child, "postSegment", "postSegmentId", "segmentId");
             String postFractionString = getAttributes (child, "postFractionAlong", "fractionAlong");
+
+            double weight = getAttribute (child, "weight", 1.0);
+            String delay  = getAttribute (child, "delay");
 
             int preSegment = -1;
             if (! preSegmentString.isEmpty ()) preSegment = Integer.valueOf (preSegmentString);
@@ -1660,6 +1759,7 @@ public class ImportJob
             }
            
             // Add conditional info
+
             String condition = "";
             if (! preCellSingleton)
             {
@@ -1701,45 +1801,12 @@ public class ImportJob
                 }
             }
 
-            if (preFraction != 0.5)
-            {
-                MNode p = connection.part.child ("preFraction");
-                if (p == null)
-                {
-                    connection.part.set ("preFraction", preFraction);
-                    preCondition = condition;
-                }
-                else
-                {
-                    if (p.length () == 0)
-                    {
-                        p.set ("@", "0.5");
-                        p.set ("@" + preCondition, p.get ());
-                        p.set ("");
-                    }
-                    p.set ("preFraction", "@" + condition, preFraction);
-                }
-            }
-            if (postFraction != 0.5)
-            {
-                MNode p = connection.part.child ("postFraction");
-                if (p == null)
-                {
-                    connection.part.set ("postFraction", postFraction);
-                    postCondition = condition;
-                }
-                else
-                {
-                    if (p.length () == 0)
-                    {
-                        p.set ("@", "0.5");
-                        p.set ("@" + postCondition, p.get ());
-                        p.set ("");
-                    }
-                    p.set ("postFraction", "@" + condition, postFraction);
-                }
-            }
+            if (preFraction  != 0.5) connection.add (connection.preFractions,  preFraction,  condition);
+            if (postFraction != 0.5) connection.add (connection.postFractions, postFraction, condition);
+            if (weight       != 1.0) connection.add (connection.weights,       weight,       condition);
+            if (! delay.isEmpty ())  connection.add (connection.delays,        delay,        condition);
         }
+        for (Connection c : connections) c.injectConditionalValues ();
 
         if (connections.size () == 0)  // No connections were added, so add a minimalist projection part.
         {
@@ -1752,11 +1819,22 @@ public class ImportJob
         }
     }
 
+    /**
+        Handle all the random and inconsistent ways that population member IDs are represented.
+    **/
     public String extractIDfromPath (String path)
     {
-        // I don't yet understand how these paths are supposed to work, because they are thoroughly undocumented.
-        // This simple-minded parser works on the examples I've seen.
         if (path.isEmpty ()) return path;
+
+        int i = path.indexOf ('[');
+        if (i >= 0)
+        {
+            String suffix = path.substring (i + 1);
+            i = suffix.indexOf (']');
+            if (i >= 0) suffix = suffix.substring (0, i);
+            return suffix;
+        }
+
         String[] pieces = path.split ("/");
         if (pieces.length < 3) return path;
         return pieces[2];

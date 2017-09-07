@@ -210,6 +210,9 @@ public class Matrix extends Type
         }
     }
 
+    /**
+        Given a string containing a number with units, convert to the scaled SI value.
+    **/
     public static double convert (String expression)
     {
         try

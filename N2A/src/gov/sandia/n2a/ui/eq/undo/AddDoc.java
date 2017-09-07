@@ -34,35 +34,37 @@ public class AddDoc extends Undoable
 
     public AddDoc (String name, MNode saved)
     {
+        this.name  = uniqueName (name);
         this.saved = saved;
 
         PanelModel mep = PanelModel.instance;
         fromSearchPanel = mep.panelSearch.list.isFocusOwner ();  // Otherwise, assume focus is on equation tree
 
-        // Determine unique name in database
-        MNode models = AppData.models;
-        MNode existing = models.child (name);
-        if (existing == null)
-        {
-            this.name = name;
-        }
-        else
-        {
-            name += " ";
-            int suffix = 2;
-            while (true)
-            {
-                if (existing.length () == 0) break;  // no children, so still a virgin
-                this.name = name + suffix;
-                existing = models.child (this.name);
-                if (existing == null) break;
-                suffix++;
-            }
-        }
-
         // Insert ID, if given doc does not already have one.
         MNode id = saved.childOrCreate ("$metadata", "id");
         if (id.get ().isEmpty ()) id.set (generateID ());
+    }
+
+    /**
+        Determine unique name in database
+    **/
+    public static String uniqueName (String name)
+    {
+        MNode models = AppData.models;
+        MNode existing = models.child (name);
+        if (existing == null) return name;
+
+        String result = name;
+        name += " ";
+        int suffix = 2;
+        while (true)
+        {
+            if (existing.length () == 0) return result;  // no children, so still a virgin
+            result = name + suffix;
+            existing = models.child (result);
+            if (existing == null) return result;
+            suffix++;
+        }
     }
 
     public void undo ()
