@@ -43,7 +43,7 @@ public class Scalar extends Type
     public Type add (Type that) throws EvaluationException
     {
         if (that instanceof Scalar) return new Scalar (value + ((Scalar) that).value);
-        if (that instanceof Text  ) return new Scalar (value + Double.valueOf (((Text) that).value));
+        if (that instanceof Text  ) return new Text   (value + ((Text)   that).value);  // Although inconsistent with all other operations where scalar is on left, this is more useful as it allows arbitrary string construction.
         if (that instanceof Matrix) return that.add (this);
         throw new EvaluationException ("type mismatch");
     }

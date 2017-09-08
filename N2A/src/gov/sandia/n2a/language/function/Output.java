@@ -67,6 +67,7 @@ public class Output extends Function
         public double              t;
         public PrintStream         out;
         public Simulator           simulator;  ///< So we can get time associated with each trace() call.
+        public boolean             raw;  ///< Indicates that column is an exact index.
 
         public void trace (String column, float value)
         {
@@ -96,7 +97,16 @@ public class Output extends Function
             Integer index = columnMap.get (column);
             if (index == null)
             {
-                columnMap.put (column, columnValues.size ());
+                if (raw)
+                {
+                    int i = Integer.valueOf (column) + 1;  // offset for time in first column
+                    while (columnValues.size () < i) columnValues.add (Float.NaN);
+                    columnMap.put (column, i);
+                }
+                else
+                {
+                    columnMap.put (column, columnValues.size ());
+                }
                 columnValues.add (value);
             }
             else
@@ -115,7 +125,7 @@ public class Output extends Function
             int last  = count - 1;
 
             // Write headers if new columns have been added
-            if (count > columnsPrevious)
+            if (! raw  &&  count > columnsPrevious)
             {
                 String headers[] = new String[count];
                 for (Entry<String,Integer> i : columnMap.entrySet ())
@@ -187,6 +197,11 @@ public class Output extends Function
                     }
                 }
 
+                if (operands.length > columnParameter + 1)
+                {
+                    H.raw = operands[columnParameter+1].eval (context).toString ().contains ("raw");
+                }
+
                 simulator.outputs.put (path, H);
             }
 
@@ -201,6 +216,7 @@ public class Output extends Function
                 if (prefix.isEmpty ()) column =                variableName;
                 else                   column = prefix + "." + variableName;
             }
+
             H.trace (column, (float) ((Scalar) result).value);
         }
 

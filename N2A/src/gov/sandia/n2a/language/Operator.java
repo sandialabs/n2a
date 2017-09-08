@@ -11,6 +11,7 @@ import gov.sandia.n2a.language.function.AbsoluteValue;
 import gov.sandia.n2a.language.function.Cosine;
 import gov.sandia.n2a.language.function.DollarEvent;
 import gov.sandia.n2a.language.function.Exp;
+import gov.sandia.n2a.language.function.Floor;
 import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Grid;
 import gov.sandia.n2a.language.function.Input;
@@ -218,6 +219,7 @@ public class Operator implements Cloneable, Comparable<Operator>
         register (DollarEvent  .factory ());
         register (Exp          .factory ());
         register (Gaussian     .factory ());
+        register (Floor        .factory ());
         register (Grid         .factory ());
         register (Input        .factory ());
         register (Log          .factory ());

@@ -94,6 +94,7 @@ public class Matrix extends Type
         try
         {
             ArrayList<ArrayList<Double>> temp = new ArrayList<ArrayList<Double>> ();
+            ArrayList<Double> row = new ArrayList<Double> ();
             int columns = 0;
             boolean transpose = false;
 
@@ -107,71 +108,56 @@ public class Matrix extends Type
             while (token != '['  &&  stream.ready ());
 
             // Read rows until closing "]"
-            String line = "";
-            boolean comment = false;
+            char[] buffer = new char[1024];  // for one floating-point number, so far more than enough
+            int index = 0;
             boolean done = false;
             while (stream.ready ()  &&  ! done)
             {
                 token = (char) stream.read ();
-
-                boolean processLine = false;
                 switch (token)
                 {
                     case '\r':
                         break;  // ignore CR characters
-                    case '#':
-                        comment = true;
-                        break;
-                    case '\n':
-                        comment = false;
-                    case ';':
-                        if (! comment) processLine = true;
-                        break;
-                    case ']':
-                        if (! comment)
+                    case ' ':
+                    case '\t':
+                        if (index == 0) break;  // ignore leading whitespace (equivalent to trim)
+                    case ',':
+                        // Process element
+                        if (index == 0)
                         {
-                            done = true;
-                            processLine = true;
-                        }
-                        break;
-                    default:
-                        if (! comment) line += token;
-                }
-
-                if (processLine)
-                {
-                    ArrayList<Double> row = new ArrayList<Double> ();
-                    line = line.trim ();
-                    while (line.length () > 0)
-                    {
-                        int                 position = line.indexOf (',' );  // The valid element delimiters are comma, space and tab
-                        if (position == -1) position = line.indexOf (" " );
-                        if (position == -1) position = line.indexOf ("\t");
-                        if (position == -1)
-                        {
-                            double value;
-                            if (units) value = convert        (line);
-                            else       value = Double.valueOf (line);
-                            row.add (value);
-                            break;
+                            row.add (0.0);
                         }
                         else
                         {
-                            double value;
-                            if (units) value = convert        (line.substring (0, position));
-                            else       value = Double.valueOf (line.substring (0, position));
-                            row.add (value);
+                            String value = String.valueOf (buffer, 0, index);
+                            index = 0;
+                            if (units) row.add (convert        (value));
+                            else       row.add (Double.valueOf (value));
                         }
-                        line = line.substring (position + 1);
-                        line = line.trim ();
-                    }
-                    int c = row.size ();
-                    if (c > 0)
-                    {
-                        temp.add (row);
-                        columns = Math.max (columns, c);
-                    }
-                    line = "";
+                        break;
+                    case ']':
+                        done = true;
+                    case ';':
+                    case '\n':
+                        // Process any final element
+                        if (index > 0)
+                        {
+                            String value = String.valueOf (buffer, 0, index);
+                            index = 0;
+                            if (units) row.add (convert        (value));
+                            else       row.add (Double.valueOf (value));
+                        }
+                        // Process line
+                        int c = row.size ();
+                        if (c > 0)
+                        {
+                            temp.add (row);
+                            columns = Math.max (columns, c);
+                            row = new ArrayList<Double> (columns);
+                        }
+                        break;
+                    default:
+                        buffer[index++] = token;  // If we overrun the buffer, we should automatically get an index out of range error.
                 }
             }
 
@@ -182,7 +168,7 @@ public class Matrix extends Type
                 value = new double[rows][columns];
                 for (int r = 0; r < rows; r++)
                 {
-                    ArrayList<Double> row = temp.get (r);
+                    row = temp.get (r);
                     for (int c = 0; c < row.size (); c++)
                     {
                         value[r][c] = row.get (c);
@@ -194,7 +180,7 @@ public class Matrix extends Type
                 value = new double[columns][rows];
                 for (int r = 0; r < rows; r++)
                 {
-                    ArrayList<Double> row = temp.get (r);
+                    row = temp.get (r);
                     for (int c = 0; c < row.size (); c++)
                     {
                         value[c][r] = row.get (c);
@@ -206,7 +192,7 @@ public class Matrix extends Type
         }
         catch (IOException error)
         {
-            throw new EvaluationException ("Failed to convert string to matrix");
+            throw new EvaluationException ("Failed to convert input to matrix");
         }
     }
 

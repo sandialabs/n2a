@@ -99,6 +99,7 @@ public class AccessVariable extends Operator
             AccessVariable av = (AccessVariable) e.expression;
             Variable v2 = av.reference.variable;
             if (v2 == v) return this;
+            if (v2.hasAttribute ("temporary")  &&  v2.container != from.container) return this;  // Can't reference a temporary outside the current equation set.
             // Note: Folding an aliased variable will very likely remove one or more steps of delay in the movement of values through an equation set.
             // This might go against the user's intention. The folding can be blocked by adding a condition
             reference = av.reference;

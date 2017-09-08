@@ -325,12 +325,12 @@ void PrimaryExpression() : {}
     MatrixExpression()
 }
 
-// TODO: Make () an operation that applies to any expression, not just variables and functions.
 void MatrixExpression() #Matrix : {}
 {
     <LSQ> CommaExpression() (<SEMI> CommaExpression())* <RSQ>
 }
 
+// TODO: Make () an operation that applies to any expression, not just variables and functions.
 void Identifier() #Identifier : {Token t; Token p = null;}
 {
     t = <IDENTIFIER> [p = <LRND> [CommaExpression()] <RRND>]

@@ -25,7 +25,8 @@ public class AccessElement extends Function
         int count = l.jjtGetNumChildren ();
 
         operands = new Operator[count+1];
-        operands[0] = new AccessVariable (node.jjtGetValue ().toString ());
+        String value = node.jjtGetValue ().toString ();
+        operands[0] = new AccessVariable (value.substring (0, value.length () - 2));  // Remove "()" from the end of name.
         for (int i = 0; i < count; i++)
         {
             operands[i+1] = Operator.getFrom ((SimpleNode) l.jjtGetChild (i));

@@ -84,6 +84,7 @@ public class AppData
         // Unfortunately, this list must be maintained to match the initial set of models.
         // It is possible to scan the directory, but it requires sifting through the whole jar file.
         // The method used here is more time efficient.
+        // TODO: Switch to a zip file as payload. Expand it blindly in the data dir, then scan the dir like a normal startup
         String[] sourceFiles = new String []
         {
             "Channel",
@@ -91,12 +92,12 @@ public class AppData
             "Channel Na",
             "Coupling Voltage",
             "Example Hodgkin-Huxley Cable",
-            "Neuron",
-            //"Neuron Brette",
-            "Neuron Hodgkin-Huxley",
-            "Neuron Izhikevich",
-            "Neuron Izhikevich 2007",
-            "Neuron LIF",
+            "Cell",
+            //"Cell Brette",
+            "Cell Hodgkin-Huxley",
+            "Cell Izhikevich",
+            "Cell Izhikevich 2007",
+            "Cell LIF",
             "Synapse Alpha",
             "Synapse Conductance",
             "Synapse Exponential",

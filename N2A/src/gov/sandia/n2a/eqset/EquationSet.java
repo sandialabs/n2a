@@ -656,6 +656,25 @@ public class EquationSet implements Comparable<EquationSet>
         return renderer.result.toString ();
     }
 
+    public String dumpVariableAttributes ()
+    {
+        StringBuilder result = new StringBuilder ();
+        dumpVariableAttributes (result);
+        return result.toString ();
+    }
+
+    public void dumpVariableAttributes (StringBuilder result)
+    {
+        result.append (name + "\n");
+        for (Variable v : variables)
+        {
+            String className = "";
+            if (v.type != null) className = " " + v.type.getClass ().getSimpleName ();
+            result.append ("  " + v.nameString () + " " + v.attributeString () + className + "\n");
+        }
+        for (EquationSet s : parts) s.dumpVariableAttributes (result);
+    }
+
     /**
         Determines if this equation set has a fixed size of 1.
     **/
@@ -1616,7 +1635,7 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 if (v.name.equals ("$p"))
                 {
-                    if (! v.hasAny (new String [] {"externalRead", "externalWrite"})  &&  v.derivative == null)
+                    if (! v.hasAny ("externalRead", "externalWrite")  &&  v.derivative == null)
                     {
                         v.addAttribute ("temporary");
                         continue;
@@ -1990,10 +2009,7 @@ public class EquationSet implements Comparable<EquationSet>
                 // All this suggests we should specifically check for direct dynamics rather than storage.
                 // This would be either "externalWrite", in which case we don't need to add an attribute,
                 // or it would be equations in $n itself.
-                if (stored  &&  canGrowOrDie  &&  v.derivative == null)
-                {
-                    v.addAttribute ("externalRead");
-                }
+                if (stored  &&  canGrowOrDie  &&  v.derivative == null) v.addAttribute ("externalRead");
             }
         }
     }

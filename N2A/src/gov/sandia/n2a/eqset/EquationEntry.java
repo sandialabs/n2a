@@ -138,12 +138,27 @@ public class EquationEntry implements Comparable<EquationEntry>
         if (     ifString.isEmpty ())        return  1;
         if (that.ifString.isEmpty ())        return -1;
 
+        boolean thisPreLive =      ifString.contains ("!$live")  ||       ifString.contains ("$live==0");
+        boolean thatPreLive = that.ifString.contains ("!$live")  ||  that.ifString.contains ("$live==0");
+        if (thisPreLive)
+        {
+            if (! thatPreLive)           return -1;
+            if (ifString.length () == 6) return  1;  // ifString is exactly "!$live".  We don't do another string compare here because it is expensive and unnecessary.
+            if (ifString.length () == 8) return  1;  // The only way this might not be "$live==0" is if it is some mangled form of "!$live".
+        }
+        if (thatPreLive)
+        {
+            if (! thisPreLive)                return  1;
+            if (that.ifString.length () == 6) return -1;
+            if (that.ifString.length () == 8) return -1;
+        }
+
         boolean thisInit =      ifString.contains ("$init");
         boolean thatInit = that.ifString.contains ("$init");
         if (thisInit)
         {
             if (! thatInit)              return -1;
-            if (ifString.length () == 5) return  1;  // ifString is exactly "$init"
+            if (ifString.length () == 5) return  1;
         }
         if (thatInit)
         {
@@ -152,8 +167,8 @@ public class EquationEntry implements Comparable<EquationEntry>
         }
 
         int diff = that.ifString.length () - ifString.length ();  // as a heuristic, sort longer ifStrings first
-        if (diff == 0) return ifString.compareTo (that.ifString);  // If they are the same length, use lexical order instead.
-        return diff;
+        if (diff != 0) return diff;
+        return ifString.compareTo (that.ifString);  // If they are the same length, use lexical order instead.
     }
 
     @Override

@@ -2478,7 +2478,7 @@ public class JobC
             else
             {
                 // externalWrite variables already have a default action in the prepare() method, so only deal with cycle and externalRead
-                if (v.reference.variable == v  &&  v.equations.size () > 0  &&  v.hasAny (new String[] {"cycle", "externalRead"})  &&  ! v.hasAttribute ("initOnly"))
+                if (v.reference.variable == v  &&  v.equations.size () > 0  &&  v.hasAny ("cycle", "externalRead")  &&  ! v.hasAttribute ("initOnly"))
                 {
                     if (haveIf) context.result.append (pad + "else\n  ");
                     context.result.append (padIf + resolve (v.reference, context, true) + " = " + resolve (v.reference, context, false) + ";\n");  // copy previous value
@@ -2729,7 +2729,7 @@ public class JobC
         if (name.length () == 0)
         {
             if (   lvalue
-                && (   r.variable.hasAny (new String[] {"cycle", "externalWrite"})
+                && (   r.variable.hasAny ("cycle", "externalWrite")
                     || (r.variable.hasAttribute ("externalRead")  &&  ! r.variable.hasAttribute ("initOnly"))))
             {
                 name = mangle ("next_", r.variable);

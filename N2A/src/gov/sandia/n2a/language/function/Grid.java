@@ -42,8 +42,8 @@ public class Grid extends Function
         int nz = 1;
         boolean raw = false;
         if (operands.length >= 2) nx = (int) Math.floor (((Scalar) operands[1].eval (context)).value);
-        if (operands.length >= 3) nx = (int) Math.floor (((Scalar) operands[2].eval (context)).value);
-        if (operands.length >= 4) nx = (int) Math.floor (((Scalar) operands[3].eval (context)).value);
+        if (operands.length >= 3) ny = (int) Math.floor (((Scalar) operands[2].eval (context)).value);
+        if (operands.length >= 4) nz = (int) Math.floor (((Scalar) operands[3].eval (context)).value);
         if (operands.length >= 5)
         {
             Type mode = operands[4].eval (context);
