@@ -130,6 +130,9 @@ public class ImportJob
                 case "ionChannelKS":
                     ionChannel (child);
                     break;
+                case "blockingPlasticSynapse":
+                    blockingPlasticSynapse (child);
+                    break;
                 case "biophysicalProperties":
                     biophysics.put (getAttribute (child, "id"), child);
                     break;
@@ -343,6 +346,37 @@ public class ImportJob
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
             if (child.getNodeType () == Node.ELEMENT_NODE) genericPart (child, part);
+        }
+    }
+
+    public void blockingPlasticSynapse (Node node)
+    {
+        String id = getAttribute (node, "id");
+        MNode part = models.childOrCreate (modelName, id);
+        part.set ("$inherit", "\"blockingPlasticSynapse\"");
+
+        NamedNodeMap attributes = node.getAttributes ();
+        int count = attributes.getLength ();
+        for (int i = 0; i < count; i++)
+        {
+            Node a = attributes.item (i);
+            String name = a.getNodeName ();
+            if (name.equals ("id")) continue;
+            part.set (name, biophysicalUnits (a.getNodeValue ()));  // biophysicalUnits() will only modify text if there is a numeric value
+        }
+
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+            genericPart (child, part);
+            String name = child.getNodeName ();
+            if (name.endsWith ("Mechanism"))
+            {
+                MNode c = part.child (name);  // retrieve the part we just made
+                String type = c.get ("type");
+                c.clear ("type");
+                c.set ("$inherit", "\"" + type + "\"");
+            }
         }
     }
 
@@ -1305,6 +1339,7 @@ public class ImportJob
         part.set ("spikes", spikes + "]");
     }
 
+    // TODO: There can be multiple network elements in a file. Each should produce an independent model.
     public void network (Node node)
     {
         MNode network = models.childOrCreate (modelName, "$network");
