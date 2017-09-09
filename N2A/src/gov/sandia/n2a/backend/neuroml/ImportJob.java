@@ -41,13 +41,14 @@ import org.xml.sax.SAXException;
 
 public class ImportJob
 {
-    LinkedList<File>          sources      = new LinkedList<File> ();
-    MNode                     models       = new MVolatile ();
-    String                    modelName    = "";
-    List<MNode>               resolve      = new ArrayList<MNode> ();  // Nodes which contain a $inherit that refers to a locally defined part rather than a standard part. The local part must either be copied in or converted into a global model.
-    Map<String,MatrixBoolean> cellSegment  = new HashMap<String,MatrixBoolean> ();  // Map from cell IDs to their associated segment matrix. The matrix itself maps from segment index to group index.
-    Map<String,Node>          morphologies = new HashMap<String,Node> ();  // Map from IDs to top-level morphology blocks.
-    Map<String,Node>          biophysics   = new HashMap<String,Node> ();  // Map from IDs to top-level biophysics blocks.
+    LinkedList<File>          sources        = new LinkedList<File> ();
+    MNode                     models         = new MVolatile ();
+    String                    modelName      = "";
+    List<MNode>               resolve        = new ArrayList<MNode> ();  // Nodes which contain a $inherit that refers to a locally defined part rather than a standard part. The local part must either be copied in or converted into a global model.
+    Map<String,Node>          morphologies   = new HashMap<String,Node> ();  // Map from IDs to top-level morphology blocks.
+    Map<String,Node>          biophysics     = new HashMap<String,Node> ();  // Map from IDs to top-level biophysics blocks.
+    Map<String,Node>          properties     = new HashMap<String,Node> ();  // Map from IDs to top-level intra- or extra-cellular property blocks.
+    Map<String,Cell>          cells          = new HashMap<String,Cell> ();
 
     Pattern floatParser   = Pattern.compile ("[-+]?(NaN|Infinity|([0-9]*\\.?[0-9]*([eE][-+]?[0-9]+)?))");
     Pattern forbiddenUCUM = Pattern.compile ("[.,;><=!&|+\\-*/%\\^~]");
@@ -97,6 +98,7 @@ public class ImportJob
             case "channelml":
             case "networkml":
             case "neuroml":
+            case "Lems":
                 neuroml (node);
                 break;
         }
@@ -112,6 +114,7 @@ public class ImportJob
             // IE: a name collision in the main part implies that sibling parts will also have name collisions.
             modelName = AddDoc.uniqueName (modelName);
         }
+        MNode model = models.childOrCreate (modelName);
 
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
@@ -119,8 +122,13 @@ public class ImportJob
             switch (child.getNodeName ())
             {
                 case "include":
+                    // TODO: what if href actually references a web document?
                     File nextSource = new File (sources.getLast ().getParentFile (), getAttribute (child, "href"));
                     process (nextSource);
+                    break;
+                case "intracellularProperties":
+                case "extracellularProperties":
+                    properties.put (getAttribute (child, "id"), child);
                     break;
                 case "morphology":
                     morphologies.put (getAttribute (child, "id"), child);
@@ -137,7 +145,8 @@ public class ImportJob
                     biophysics.put (getAttribute (child, "id"), child);
                     break;
                 case "cell":
-                    cell (child);
+                    Cell cell = new Cell (child);
+                    cells.put (cell.id, cell);
                     break;
                 case "spikeArray":
                 case "timedSynapticInput":
@@ -147,7 +156,7 @@ public class ImportJob
                     network (child);
                     break;
                 default:
-                    genericPart (child, models.childOrCreate (modelName));  // Assume that any top-level element not captured above is an abstract cell type.
+                    genericPart (child, model);  // Assume that any top-level element not captured above is an abstract cell type.
                     break;
             }
         }
@@ -380,421 +389,778 @@ public class ImportJob
         }
     }
 
-    public void cell (Node node)
+    public class Cell
     {
-        String id   = getAttribute (node, "id", "MISSING_ID");  // MISSING_ID indicates an ill-formed nml file.
-        MNode  cell = models.childOrCreate (modelName, id);
-        cell.set ("$inherit", "\"cell\"");
+        String               id;
+        MNode                cell;
+        List<Node>           cellularProperties = new ArrayList<Node> ();
+        Map<Integer,Segment> segments           = new HashMap<Integer,Segment> ();
+        MatrixBoolean        G                  = new MatrixBoolean ();
+        MatrixBoolean        O                  = new MatrixBoolean ();
+        MatrixBoolean        M                  = new MatrixBoolean ();
 
-        Map<Integer,Segment> segments = new HashMap<Integer,Segment> ();
-        MatrixBoolean        G        = new MatrixBoolean ();
-
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        public Cell (Node node)
         {
-            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-            switch (child.getNodeName ())
+            id   = getAttribute (node, "id", "MISSING_ID");  // MISSING_ID indicates an ill-formed nml file.
+            cell = models.childOrCreate (modelName, id);
+            cell.set ("$inherit", "\"cell\"");
+
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
-                case "morphology"           : morphology (child, cell, segments, G);            break;
-                case "biophysicalProperties": biophysicalProperties (child, cell, G);           break;
-                default                     : genericPart (child, cell);  // Also handles generic metadata elements.
-            }
-        }
-
-        // Alternate attribute-based method for pulling in morphology and biophysics
-        // This only works if such sections appear before this cell node. It seems that the NeuroML spec guarantees this.
-        String include = getAttribute (node, "morphology");
-        if (! include.isEmpty ())
-        {
-            Node child = morphologies.get (include);
-            if (child != null) morphology (child, cell, segments, G);
-        }
-        include = getAttribute (node, "biophysicalProperties");
-        if (! include.isEmpty ())
-        {
-            Node child = biophysics.get (include);
-            if (child != null) biophysicalProperties (child, cell, G);
-        }
-
-
-        // Finish parts
-
-        for (Entry<Integer,Segment> e : segments.entrySet ())
-        {
-            Segment s = e.getValue ();
-            if (s.parentID >= 0  &&  s.parent == null)
-            {
-                s.parent = segments.get (s.parentID);
-                s.parent.children.add (s);
-            }
-        }
-        for (Entry<Integer,Segment> e : segments.entrySet ()) e.getValue ().resolveProximal ();
-        MNode groups = cell.child ("$group");
-        if (groups != null)
-        {
-            for (MNode g : groups) applyPaths (segments, g, G);
-            for (MNode g : groups) includeGroups (groups, g, G);
-        }
-
-        // If no segment groups have been defined, create a single catch-all group.
-        if (groups == null  &&  segments.size () > 0)
-        {
-            int smallestID = Integer.MAX_VALUE;
-            for (Entry<Integer,Segment> e : segments.entrySet ())
-            {
-                int ID = Integer.valueOf (e.getKey ());
-                smallestID = Math.min (ID, smallestID);
-                G.set (ID, 0);
-            }
-            String name = segments.get (smallestID).name;  // Name the group after the first segment, if it has a name.
-            if (name.isEmpty ()) name = "segments";
-            cell.set ("$group", name, "$G", 0);
-            cell.set ("$groupIndex", 0, name);
-        }
-
-        MNode properties = cell.child ("$properties");
-        if (properties != null)
-        {
-            for (MNode p : properties)
-            {
-                String groupName = p.get ();
-                if (groupName.startsWith ("[")  &&  ! groupName.equals ("[all]"))
+                if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+                switch (child.getNodeName ())
                 {
-                    // Determine better name for segment-specific part.
-                    int length = groupName.length ();
-                    int r = Integer.parseInt (groupName.substring (1, length-1));
-                    int currentColumn = cell.getInt ("$group", groupName, "$G");
-                    String newName = segments.get (r).name;
-                    if (newName.isEmpty ()  ||  cell.child ("$group", newName) != null)
-                    {
-                        int bestColumn = currentColumn;
-                        int bestCount  = 1;
-                        for (int c = 0; c < G.columns (); c++)
-                        {
-                            if (c == currentColumn) continue;
-                            if (! G.get (r, c)) continue;
-
-                            int count = G.columnNorm0 (c);
-                            if (count > bestCount)
-                            {
-                                bestColumn = c;
-                                bestCount  = count;
-                            }
-                        }
-                        if (bestColumn == currentColumn) newName = "segment_" + r;
-                        else                             newName = cell.get ("$groupIndex", bestColumn) + "_" + r;
-                    }
-                    cell.child ("$group").move (groupName, newName);
-                    cell.set ("$groupIndex", currentColumn, newName);
-                    p.set (newName);
-                    groupName = newName;
+                    case "morphology"           : morphology            (child); break;
+                    case "biophysicalProperties": biophysicalProperties (child); break;
+                    default                     : genericPart           (child, cell);  // Also handles generic metadata elements.
                 }
+            }
 
-                // Distribute properties to original segment groups
-                if (groupName.equals ("[all]"))
+            // Alternate attribute-based method for pulling in morphology and biophysics
+            // This only works if such sections appear before this cell node. It seems that the NeuroML spec guarantees this.
+            String include = getAttribute (node, "morphology");
+            if (! include.isEmpty ())
+            {
+                Node child = morphologies.get (include);
+                if (child != null) morphology (child);
+            }
+            include = getAttribute (node, "biophysicalProperties");
+            if (! include.isEmpty ())
+            {
+                Node child = biophysics.get (include);
+                if (child != null) biophysicalProperties (child);
+            }
+
+            finish ();  // TODO: move this to postprocess()
+        }
+
+        /**
+            Add the contents of an intracellularProperties or extracellularProperties node.
+        **/
+        public void addCellularProperties (Node node)
+        {
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            {
+                if (child.getNodeType () == Node.ELEMENT_NODE)
                 {
-                    for (MNode part : cell.child ("$group"))
+                    cellularProperties.add (child);
+                }
+            }
+        }
+  
+        public void morphology (Node node)
+        {
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            {
+                if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+                switch (child.getNodeName ())
+                {
+                    case "segment":
+                        Segment s = new Segment (child);
+                        segments.put (s.id, s);
+                        break;
+                    case "segmentGroup":
+                        segmentGroup (child);
+                        break;
+                }
+            }
+        }
+
+        public void segmentGroup (Node node)
+        {
+            MNode groups = cell.childOrCreate ("$group");
+            int c = groups.length ();
+            String groupName = getAttribute (node, "id");
+            MNode part = groups.childOrCreate (groupName);
+            part.set ("$G", c);
+            cell.set ("$groupIndex", c, groupName);
+
+            NamedNodeMap attributes = node.getAttributes ();
+            int count = attributes.getLength ();
+            for (int i = 0; i < count; i++)
+            {
+                Node a = attributes.item (i);
+                String name = a.getNodeName ();
+                if (name.equals ("id")) continue;
+                part.set ("$metadata", name, a.getNodeValue ());
+            }
+
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            {
+                if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+                switch (child.getNodeName ())
+                {
+                    case "member":
+                        G.set (getAttribute (child, "segment", 0), c);
+                        break;
+                    case "include":
+                        String include = part.get ("$include");  // not $inherit
+                        if (! include.isEmpty ()) include += ",";
+                        include += getAttribute (child, "segmentGroup");
+                        part.set ("$include", include);
+                        break;
+                    case "path":
+                    case "subTree":
+                        segmentPath (child, part);
+                        break;
+                    case "inhomogeneousParameter":
+                        inhomogeneousParameter (child, part);
+                        break;
+                }
+            }
+        }
+
+        public void segmentPath (Node node, MNode group)
+        {
+            int from = -1;
+            int to   = -1;
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            {
+                if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+                switch (child.getNodeName ())
+                {
+                    case "from": from = getAttribute (child, "segment", 0); break; 
+                    case "to"  : to   = getAttribute (child, "segment", 0); break; 
+                }
+            }
+            if (from >= 0)
+            {
+                MNode paths = group.childOrCreate ("$paths");
+                int index = paths.length ();
+                if (to >= 0) paths.set (index, from + "," + to);
+                else         paths.set (index, from);
+            }
+        }
+
+        public void applyPaths (MNode group)
+        {
+            MNode paths = group.child ("$paths");
+            if (paths == null) return;
+
+            int c = group.getInt ("$G");
+            for (MNode p : paths)
+            {
+                String[] pieces = p.get ().split (",");
+                if (pieces.length == 1)  // subtree
+                {
+                    int from = Integer.valueOf (pieces[0]);
+                    applyPath (segments.get (from), c);
+                }
+                else  // path
+                {
+                    int from = Integer.valueOf (pieces[0]);
+                    int to   = Integer.valueOf (pieces[1]);
+                    if (from > to)
                     {
-                        part.merge (p);
-                        part.set ("");
+                        for (int r = to; r <= from; r++) G.set (r, c);
                     }
+                    else
+                    {
+                        for (int r = from; r <= to; r++) G.set (r, c);
+                    }
+                }
+            }
+
+            group.clear ("$paths");
+        }
+
+        public void applyPath (Segment s, int c)
+        {
+            G.set (s.id, c);
+            for (Segment t : s.children) applyPath (t, c);
+        }
+
+        public void includeGroups (MNode groups, MNode g)
+        {
+            String include = g.get ("$include");
+            if (include.isEmpty ()) return;
+            g.clear ("$include");
+
+            int columnG = g.getInt ("$G");
+            String[] pieces = include.split (",");
+            for (String i : pieces)
+            {
+                MNode p = groups.child (i);
+                if (p == null) continue;
+                includeGroups (groups, p);
+                // Merge segment members
+                int columnP = p.getInt ("$G");
+                G.OR (columnG, columnP);
+                // Don't merge metadata from included groups, only members.
+                // All metadata will get combined when groups are finalized in cell().
+                // If it is merged here, it gets combined twice, and some items can leak into groups they are not really related to.
+            }
+        }
+
+        public void inhomogeneousParameter (Node node, MNode group)
+        {
+            //String id       = getAttribute (node, "id");
+            String variable = getAttribute (node, "variable");
+
+            String translationStart = "0";
+            String normalizationEnd = "1";
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            {
+                if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+                switch (child.getNodeName ())
+                {
+                    case "proximal": translationStart = getAttribute (child, "translationStart"); break;
+                    case "distal"  : normalizationEnd = getAttribute (child, "normalizationEnd"); break;
+                }
+            }
+
+            // TODO: What is the correct interpretation of translationStart and normalizationEnd?
+            // Here we assume they are a linear transformation of the path length: variable = pathLength * normalizatonEnd + translationStart
+            group.set (variable, "$metadata", "backend.neuroml.param",   "pathLength");
+            group.set (variable, "$metadata", "backend.neuroml.param.a", normalizationEnd);
+            group.set (variable, "$metadata", "backend.neuroml.param.b", translationStart);
+        }
+
+        public void biophysicalProperties (Node node)
+        {
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            {
+                if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+                String name = child.getNodeName ();
+                if (name.startsWith ("membrane"))
+                {
+                    membraneProperties (child);
+                }
+                else if (name.endsWith ("Properties"))
+                {
+                    addCellularProperties (child);
+                }
+            }
+        }
+
+        public void membraneProperties (Node node)
+        {
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            {
+                if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+
+                MNode property = allocateProperty (child);
+                String name = child.getNodeName ();
+                if (name.startsWith ("channel"))
+                {
+                    channel (child, property);
                 }
                 else
                 {
-                    MNode part = cell.child ("$group", groupName);
-                    if (part != null)  // Missing group is a symptom of an ill-formed file.
+                    String value = biophysicalUnits (getAttribute (child, "value"));
+                    switch (name)
                     {
-                        part.merge (p);
-                        part.set ("");
+                        case "spikeThresh":
+                            property.set ("Vpeak", value);
+                            break;
+                        case "specificCapacitance":
+                            property.set ("C", value);
+                            break;
+                        case "initMembPotential":
+                            property.set ("V", "@$init", value);
+                            break;
                     }
                 }
             }
         }
 
-
-        // Create subparts for all combinations of parameters.
-        // Each subpart will hold a set of segments that is mutually exclusive of the other sets.
-        // Ideally, the sets exactly match the segment groups, but in general there may be more sets.
-        // If a set exactly matches an original segment group, it gets that group's name.
-        // Then, the set that has the largest overlap with an unclaimed segment group, without exceeding it, gets its name.
-        // All remaining sets get a name formed from a concatenation of each group it overlaps with.
-
-        MatrixBoolean O = new MatrixBoolean ();
-        MatrixBoolean M = new MatrixBoolean ();
-        G.foldRows (M, O);
-        cellSegment.put (id, M);
-
-        // Scan for exact matches
-        int columnsG = G.columns ();
-        int columnsM = M.columns ();
-        Set<Integer> newIndices = new HashSet<Integer>  (columnsM);
-        Map<Integer,String> finalNames = new HashMap<Integer,String> (columnsM);
-        for (int i = 0; i < columnsM; i++)
+        public MNode allocateProperty (Node node)
         {
-            MatrixBoolean A = M.column (i);
-            boolean found = false;
-            for (int j = 0; j < columnsG; j++)
+            MNode  properties = cell.childOrCreate ("$properties");
+            String id         = getAttribute (node, "id");
+            String group      = getAttribute (node, "segmentGroup");
+            if (group.isEmpty ())
             {
-                if (A.equals (G.column (j)))
+                group = getAttribute (node, "segment");
+                if (group.isEmpty ())
                 {
-                    found = true;
-                    String name = cell.get ("$groupIndex", j);  // maps index to group name
+                    group = "[all]";
+                }
+                else
+                {
+                    int r = Integer.parseInt (group);
+                    group = "[" + group + "]";  // proper name will be assigned later, during post-processing
+                    if (cell.child ("$group", group) == null)
+                    {
+                        MNode groups = cell.childOrCreate ("$group");
+                        int c = groups.length ();
+                        G.set (r, c);
+                        groups.set (group, "$G", c);
+                        cell.set ("$groupIndex", c, group);
+                    }
+                }
+            }
+            MNode result = properties.set (String.valueOf (properties.length ()), group);
+            if (id.isEmpty ()) return result;
+
+            // Create a subpart with the given name
+            MNode subpart = result.set (id, "");  
+            NamedNodeMap attributes = node.getAttributes ();
+            int count = attributes.getLength ();
+            for (int i = 0; i < count; i++)
+            {
+                Node a = attributes.item (i);
+                String name = a.getNodeName ();
+                if (name.equals ("id")) continue;
+                if (name.equals ("segment")) continue;
+                if (name.equals ("segmentGroup")) continue;
+                if (name.equals ("value")) continue;  // Caller will extract this directly from XML node.
+                subpart.set (name, biophysicalUnits (a.getNodeValue ()));  // biophysicalUnits() will only modify text if there is a numeric value
+            }
+            return result;
+        }
+
+        public void channel (Node node, MNode property)
+        {
+            MNode subpart = property.iterator ().next ();  // retrieve the first (and only) subpart
+
+            String name = node.getNodeName ();
+            subpart.set ("$inherit", "\"" + name + "\"");
+
+            String ionChannel = subpart.get ("ionChannel");
+            subpart.clear ("ionChannel");
+            subpart.set ("ionChannel", "$inherit", "\"" + ionChannel + "\"");
+
+            String ion = subpart.get ("ion");
+            subpart.clear ("ion");
+            subpart.set ("$metadata", "ion", ion);
+
+            String parentGroup = property.get ();
+            Map<String,MNode> groupProperty = new TreeMap<String,MNode> ();
+            groupProperty.put (parentGroup, property);
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            {
+                if (child.getNodeType () != Node.ELEMENT_NODE  ||  ! child.getNodeName ().equals ("variableParameter")) continue;
+                String parameter    = getAttribute (child, "parameter");
+                String segmentGroup = getAttribute (child, "segmentGroup");
+
+                MNode clone = property;
+                if (! segmentGroup.equals (parentGroup))
+                {
+                    if (parentGroup.equals ("[all]"))  // segment group was not or should not be assigned at level of channel part
+                    {
+                        groupProperty.remove (parentGroup);
+                        groupProperty.put (segmentGroup, property);
+                        property.set (segmentGroup);  // assumes that the target group will exist when needed
+                        parentGroup = segmentGroup;
+                    }
+                    else  // different than previously assigned group, so may need to clone the property
+                    {
+                        clone = groupProperty.get (segmentGroup);
+                        if (clone == null)
+                        {
+                            MNode properties = cell.child ("$properties");
+                            clone = properties.set (String.valueOf (properties.length ()), segmentGroup);
+                            clone.merge (property);
+                            clone.set (segmentGroup);
+                            groupProperty.put (segmentGroup, clone);
+                        }
+                    }
+                    subpart = clone.iterator ().next ();
+                    subpart.set (parameter, variableParameter (child));
+                }
+            }
+        }
+
+        public String variableParameter (Node node)
+        {
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            {
+                if (child.getNodeType () == Node.ELEMENT_NODE  &&  child.getNodeName ().equals ("inhomogeneousValue")) return getAttribute (child, "value");
+            }
+            return "";
+        }
+
+        public void finish ()
+        {
+            // Add intra- and extra-cellular properties
+            // TODO: Does it matter whether it is intra or extra? It seems all Species have internal and external concentrations.
+            for (Node p : cellularProperties)
+            {
+                MNode property = allocateProperty (p);
+                String name = p.getNodeName ();
+                switch (name)
+                {
+                    case "species":
+                        MNode subpart = property.iterator ().next ();
+                        String concentrationModel = subpart.get ("concentrationModel");
+                        subpart.clear ("concentrationModel");
+                        subpart.set ("$inherit", "\"" + concentrationModel + "\"");
+                        // Dependency will be tagged when this property is added to segments.
+                        break;
+                    case "resistivity":
+                        property.set ("R", biophysicalUnits (getAttribute (p, "value")));
+                        break;
+                }
+            }
+
+            // Finalize segment structures
+            for (Entry<Integer,Segment> e : segments.entrySet ())
+            {
+                Segment s = e.getValue ();
+                if (s.parentID >= 0  &&  s.parent == null)
+                {
+                    s.parent = segments.get (s.parentID);
+                    s.parent.children.add (s);
+                }
+            }
+            for (Entry<Integer,Segment> e : segments.entrySet ()) e.getValue ().resolveProximal ();
+            MNode groups = cell.child ("$group");
+            if (groups != null)
+            {
+                for (MNode g : groups) applyPaths (g);
+                for (MNode g : groups) includeGroups (groups, g);
+            }
+
+            // If no segment groups have been defined, create a single catch-all group.
+            if (groups == null  &&  segments.size () > 0)
+            {
+                int smallestID = Integer.MAX_VALUE;
+                for (Entry<Integer,Segment> e : segments.entrySet ())
+                {
+                    int ID = Integer.valueOf (e.getKey ());
+                    smallestID = Math.min (ID, smallestID);
+                    G.set (ID, 0);
+                }
+                String name = segments.get (smallestID).name;  // Name the group after the first segment, if it has a name.
+                if (name.isEmpty ()) name = "segments";
+                cell.set ("$group", name, "$G", 0);
+                cell.set ("$groupIndex", 0, name);
+            }
+
+            MNode properties = cell.child ("$properties");
+            if (properties != null)
+            {
+                for (MNode p : properties)
+                {
+                    String groupName = p.get ();
+                    if (groupName.startsWith ("[")  &&  ! groupName.equals ("[all]"))
+                    {
+                        // Determine better name for segment-specific part.
+                        int length = groupName.length ();
+                        int r = Integer.parseInt (groupName.substring (1, length-1));
+                        int currentColumn = cell.getInt ("$group", groupName, "$G");
+                        String newName = segments.get (r).name;
+                        if (newName.isEmpty ()  ||  cell.child ("$group", newName) != null)
+                        {
+                            int bestColumn = currentColumn;
+                            int bestCount  = 1;
+                            for (int c = 0; c < G.columns (); c++)
+                            {
+                                if (c == currentColumn) continue;
+                                if (! G.get (r, c)) continue;
+
+                                int count = G.columnNorm0 (c);
+                                if (count > bestCount)
+                                {
+                                    bestColumn = c;
+                                    bestCount  = count;
+                                }
+                            }
+                            if (bestColumn == currentColumn) newName = "segment_" + r;
+                            else                             newName = cell.get ("$groupIndex", bestColumn) + "_" + r;
+                        }
+                        cell.child ("$group").move (groupName, newName);
+                        cell.set ("$groupIndex", currentColumn, newName);
+                        p.set (newName);
+                        groupName = newName;
+                    }
+
+                    // Distribute properties to original segment groups
+                    if (groupName.equals ("[all]"))
+                    {
+                        // If it is a simple variable, then apply it to the containing cell.
+                        MNode subpart = p.iterator ().next ();
+                        if (subpart.length () == 0)
+                        {
+                            cell.set (subpart.key (), subpart.get ());
+                        }
+                        else  // Otherwise, distribute it to all groups
+                        {
+                            for (MNode part : cell.child ("$group"))
+                            {
+                                part.merge (p);
+                                part.set ("");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        MNode part = cell.child ("$group", groupName);
+                        if (part != null)  // Missing group is a symptom of an ill-formed file.
+                        {
+                            part.merge (p);
+                            part.set ("");
+                        }
+                    }
+                }
+            }
+
+
+            // Create subparts for all combinations of parameters.
+            // Each subpart will hold a set of segments that is mutually exclusive of the other sets.
+            // Ideally, the sets exactly match the segment groups, but in general there may be more sets.
+            // If a set exactly matches an original segment group, it gets that group's name.
+            // Then, the set that has the largest overlap with an unclaimed segment group, without exceeding it, gets its name.
+            // All remaining sets get a name formed from a concatenation of each group it overlaps with.
+
+            G.foldRows (M, O);
+
+            // Scan for exact matches
+            int columnsG = G.columns ();
+            int columnsM = M.columns ();
+            Set<Integer> newIndices = new HashSet<Integer>  (columnsM);
+            Map<Integer,String> finalNames = new HashMap<Integer,String> (columnsM);
+            for (int i = 0; i < columnsM; i++)
+            {
+                MatrixBoolean A = M.column (i);
+                boolean found = false;
+                for (int j = 0; j < columnsG; j++)
+                {
+                    if (A.equals (G.column (j)))
+                    {
+                        found = true;
+                        String name = cell.get ("$groupIndex", j);  // maps index to group name
+                        cell.set (name, "");
+                        finalNames.put (i, name);
+                        break;
+                    }
+                }
+                if (! found) newIndices.add (i);
+            }
+
+            // Scan for largest overlaps
+            Iterator<Integer> it = newIndices.iterator ();
+            while (it.hasNext ())
+            {
+                int i = it.next ();
+                boolean[] columnA = M.data.get (i);
+                int bestCount = 0;
+                int bestIndex = -1;
+                for (int j = 0; j < columnsG; j++)
+                {
+                    int count = 0;
+                    boolean subset = true;
+                    boolean[] columnG = G.data.get (j);
+                    int rows = Math.min (columnA.length, columnG.length);
+                    int r = 0;
+                    for (; r < rows; r++)
+                    {
+                        if (columnA[r])
+                        {
+                            if (columnG[r])
+                            {
+                                count++;
+                            }
+                            else
+                            {
+                                subset = false;
+                                break;
+                            }
+                        }
+                    }
+                    for (; r < columnA.length  &&  subset; r++) if (columnA[r]) subset = false;
+                    if (subset  &&  count > bestCount)
+                    {
+                        bestCount = count;
+                        bestIndex = j;
+                    }
+                }
+                if (bestCount > 0)
+                {
+                    it.remove ();
+
+                    String name = cell.get ("$groupIndex", bestIndex);
                     cell.set (name, "");
                     finalNames.put (i, name);
-                    break;
                 }
             }
-            if (! found) newIndices.add (i);
-        }
 
-        // Scan for largest overlaps
-        Iterator<Integer> it = newIndices.iterator ();
-        while (it.hasNext ())
-        {
-            int i = it.next ();
-            boolean[] columnA = M.data.get (i);
-            int bestCount = 0;
-            int bestIndex = -1;
-            for (int j = 0; j < columnsG; j++)
+            // Build concatenated parts
+            for (int i : newIndices)
             {
-                int count = 0;
-                boolean subset = true;
-                boolean[] columnG = G.data.get (j);
-                int rows = Math.min (columnA.length, columnG.length);
-                int r = 0;
-                for (; r < rows; r++)
+                String name = "";
+                for (int j = 0; j < columnsG; j++)
                 {
-                    if (columnA[r])
+                    if (O.get (i, j))
                     {
-                        if (columnG[r])
-                        {
-                            count++;
-                        }
-                        else
-                        {
-                            subset = false;
-                            break;
-                        }
+                        String groupName = cell.get ("$groupIndex", j);
+                        if (! name.isEmpty ()) name = name + "_";
+                        name = name + groupName;
                     }
                 }
-                for (; r < columnA.length  &&  subset; r++) if (columnA[r]) subset = false;
-                if (subset  &&  count > bestCount)
-                {
-                    bestCount = count;
-                    bestIndex = j;
-                }
-            }
-            if (bestCount > 0)
-            {
-                it.remove ();
-
-                String name = cell.get ("$groupIndex", bestIndex);
                 cell.set (name, "");
                 finalNames.put (i, name);
             }
-        }
 
-        // Build concatenated parts
-        for (int i : newIndices)
-        {
-            String name = "";
-            for (int j = 0; j < columnsG; j++)
+            // Add segments and properties to the parts
+            for (Entry<Integer,String> e : finalNames.entrySet ())
             {
-                if (O.get (i, j))
-                {
-                    String groupName = cell.get ("$groupIndex", j);
-                    if (! name.isEmpty ()) name = name + "_";
-                    name = name + groupName;
-                }
-            }
-            cell.set (name, "");
-            finalNames.put (i, name);
-        }
+                int c = e.getKey ();  // column of M, the mapping from segments to new groups
+                String currentName = e.getValue ();
+                MNode part = cell.child (currentName);
 
-        // Add segments and properties to the parts
-        for (Entry<Integer,String> e : finalNames.entrySet ())
-        {
-            int c = e.getKey ();  // column of M, the mapping from segments to new groups
-            String currentName = e.getValue ();
-            MNode part = cell.child (currentName);
-
-            // Rename any part with a single segment to the name of that segment, provided it is unique.
-            if (M.columnNorm0 (c) == 1)
-            {
-                int r = M.firstNonzeroRow (c);
-                String newName = segments.get (r).name;
-                // Note that all named parts have already been added to cell, so we can do a lookup there for uniqueness.
-                if (! newName.isEmpty ()  &&  ! newName.equals (currentName)  &&  cell.child (newName) == null)
+                // Rename any part with a single segment to the name of that segment, provided it is unique.
+                if (M.columnNorm0 (c) == 1)
                 {
-                    cell.move (currentName, newName);
-                    e.setValue (newName);
-                    currentName = newName;
-                }
-            }
-
-            // Merge original groups into new part
-            //   A heuristic is that smaller groups (ones with fewer segments) are more specific, so their metadata should take precedence.
-            //   Thus, we sort the relevant original groups by size and apply them in that order.
-            class ColumnSize implements Comparable<ColumnSize>
-            {
-                public int column;
-                public int size;  // number of rows in column
-                public ColumnSize (int column, int size)
-                {
-                    this.column = column;
-                    this.size   = size;
-                }
-                public int compareTo (ColumnSize o)
-                {
-                    int result = size - o.size;
-                    if (result != 0) return result;
-                    return column - o.column;  // Just a tie breaker. Favors lower-numbered column.
-                }
-            }
-            TreeSet<ColumnSize> sortedColumns = new TreeSet<ColumnSize> ();
-            //   rows of O are new parts (columns of M); columns of O are original segment groups
-            for (int i = 0; i < columnsG; i++) if (O.get (c, i)) sortedColumns.add (new ColumnSize (i, G.columnNorm0 (i)));
-            for (ColumnSize cs : sortedColumns)
-            {
-                String groupName = cell.get ("$groupIndex", cs.column);  // a name from the original set of groups, not the new groups
-                part.mergeUnder (cell.child ("$group", groupName));
-            }
-            for (MNode property : part)
-            {
-                // Any subparts of a membrane property are likely ion channels, so need to tag any top-level definitions they use
-                for (MNode m : property)
-                {
-                    String inherit = m.get ("$inherit").replace ("\"", "");
-                    if (inherit.isEmpty ()) continue;  // $metadata and any parameters are at the same level as subparts, but they will of course lack a $inherit line.
-                    // check for standard part
-                    MNode model = AppData.models.child (inherit);
-                    if (model == null  ||  model.child ("$metadata", "backend.neuroml.part") == null) addDependency (m, inherit);
-                }
-            }
-
-            // Collect inhomogeneous variables
-            String pathLength = "";
-            for (MNode v : part)
-            {
-                if (! v.get ("$metadata", "backend.neuroml.param").equals ("pathLength")) continue;
-                if (pathLength.isEmpty ())
-                {
-                    pathLength = "pathLength";
-                    int count = 2;
-                    while (part.child (pathLength) != null) pathLength = "pathLength" + count++;
-                }
-                double a = v.getDouble ("$metadata", "backend.neuroml.param.a");
-                double b = v.getDouble ("$metadata", "backend.neuroml.param.b");
-                String value = pathLength;
-                if (a != 1) value += "*" + a;
-                if (b != 0) value += "+" + b;
-                v.set (value);
-            }
-
-            // Add segments
-            int n = M.columnNorm0 (c);
-            if (n > 1) part.set ("$n", n);
-            int index = 0;
-            for (int r = 0; r < M.rows (); r++)
-            {
-                if (! M.get (r, c)) continue;
-                Segment s = segments.get (r);
-                
-                if (n > 1)
-                {
-                    if (! s.name.isEmpty ()) part.set ("$metadata", "name" + index, s.name);
-                    if (! pathLength.isEmpty ()) part.set (pathLength, "@$index==" + index, s.pathLength (0.5));  // mid-point method. TODO: add way to subdivide segments for more precise modeling of varying density
-                    s.output (part, index++);
-                }
-                else
-                {
-                    if (! s.name.isEmpty ()  &&  ! s.name.equals (currentName)) part.set ("$metadata", "name", s.name);
-                    if (! pathLength.isEmpty ()) part.set (pathLength, s.pathLength (0.5));
-                    s.output (part, -1);
-                    break;  // Since we've already processed the only segment.
-                }
-            }
-        }
-
-        // Create connections to complete the cables
-        // Note that all connections are explicit, even within the same group.
-        // TODO: Convert these to unary connections directly from child segment to parent segment.
-        for (Entry<Integer,Segment> e : segments.entrySet ())
-        {
-            Segment s = e.getValue ();
-            if (s.parent == null) continue;
-
-            int childN = s.part.getOrDefaultInt ("$n", "1");
-            String connectionName = s.parent.part.key () + "_to_" + s.part.key ();
-            MNode connection = cell.child (connectionName);
-            if (connection == null)
-            {
-                connection = cell.set (connectionName, "");
-                connection.set ("$inherit", "\"Coupling Voltage\"");
-                connection.set ("A", s.parent.part.key ());
-                connection.set ("B", s       .part.key ());
-                connection.set ("R", "$kill");  // Force use of container's value.
-
-                int parentN = s.parent.part.getOrDefaultInt ("$n", "1");
-                if (parentN > 1)
-                {
-                    String parentName = "parent";
-                    int suffix = 2;
-                    while (s.part.child (parentName) != null) parentName = "parent" + suffix++;
-                    connection.set ("$parent", parentName);  // temporary memo
-
-                    connection.set ("$p", "A.$index==B." + parentName);
-                    if (childN > 1)
+                    int r = M.firstNonzeroRow (c);
+                    String newName = segments.get (r).name;
+                    // Note that all named parts have already been added to cell, so we can do a lookup there for uniqueness.
+                    if (! newName.isEmpty ()  &&  ! newName.equals (currentName)  &&  cell.child (newName) == null)
                     {
-                        s.part.set (parentName, ":");
-                        s.part.set (parentName, "@", "-1");
+                        cell.move (currentName, newName);
+                        e.setValue (newName);
+                        currentName = newName;
                     }
                 }
-                else if (childN > 1)
+
+                // Merge original groups into new part
+                //   A heuristic is that smaller groups (ones with fewer segments) are more specific, so their metadata should take precedence.
+                //   Thus, we sort the relevant original groups by size and apply them in that order.
+                class ColumnSize implements Comparable<ColumnSize>
                 {
-                    connection.set ("$p", "B.$index==" + s.index);
+                    public int column;
+                    public int size;  // number of rows in column
+                    public ColumnSize (int column, int size)
+                    {
+                        this.column = column;
+                        this.size   = size;
+                    }
+                    public int compareTo (ColumnSize o)
+                    {
+                        int result = size - o.size;
+                        if (result != 0) return result;
+                        return column - o.column;  // Just a tie breaker. Favors lower-numbered column.
+                    }
+                }
+                TreeSet<ColumnSize> sortedColumns = new TreeSet<ColumnSize> ();
+                //   rows of O are new parts (columns of M); columns of O are original segment groups
+                for (int i = 0; i < columnsG; i++) if (O.get (c, i)) sortedColumns.add (new ColumnSize (i, G.columnNorm0 (i)));
+                for (ColumnSize cs : sortedColumns)
+                {
+                    String groupName = cell.get ("$groupIndex", cs.column);  // a name from the original set of groups, not the new groups
+                    part.mergeUnder (cell.child ("$group", groupName));
+                }
+                for (MNode property : part)
+                {
+                    // Any subparts of a membrane property are likely to be associated with top-level definitions, so tag the dependency.
+                    for (MNode m : property)
+                    {
+                        String inherit = m.get ("$inherit").replace ("\"", "");
+                        if (inherit.isEmpty ()) continue;  // $metadata and any parameters are at the same level as subparts, but they will of course lack a $inherit line.
+                        // check for standard part
+                        MNode model = AppData.models.child (inherit);
+                        if (model == null  ||  model.child ("$metadata", "backend.neuroml.part") == null) addDependency (m, inherit);
+                    }
+                }
+
+                // Collect inhomogeneous variables
+                String pathLength = "";
+                for (MNode v : part)
+                {
+                    if (! v.get ("$metadata", "backend.neuroml.param").equals ("pathLength")) continue;
+                    if (pathLength.isEmpty ())
+                    {
+                        pathLength = "pathLength";
+                        int count = 2;
+                        while (part.child (pathLength) != null) pathLength = "pathLength" + count++;
+                    }
+                    double a = v.getDouble ("$metadata", "backend.neuroml.param.a");
+                    double b = v.getDouble ("$metadata", "backend.neuroml.param.b");
+                    String value = pathLength;
+                    if (a != 1) value += "*" + a;
+                    if (b != 0) value += "+" + b;
+                    v.set (value);
+                }
+
+                // Add segments
+                int n = M.columnNorm0 (c);
+                if (n > 1) part.set ("$n", n);
+                int index = 0;
+                for (int r = 0; r < M.rows (); r++)
+                {
+                    if (! M.get (r, c)) continue;
+                    Segment s = segments.get (r);
+                    
+                    if (n > 1)
+                    {
+                        if (! s.name.isEmpty ()) part.set ("$metadata", "name" + index, s.name);
+                        if (! pathLength.isEmpty ()) part.set (pathLength, "@$index==" + index, s.pathLength (0.5));  // mid-point method. TODO: add way to subdivide segments for more precise modeling of varying density
+                        s.output (part, index++);
+                    }
+                    else
+                    {
+                        if (! s.name.isEmpty ()  &&  ! s.name.equals (currentName)) part.set ("$metadata", "name", s.name);
+                        if (! pathLength.isEmpty ()) part.set (pathLength, s.pathLength (0.5));
+                        s.output (part, -1);
+                        break;  // Since we've already processed the only segment.
+                    }
                 }
             }
 
-            String parentName = connection.get ("$parent");
-            if (! parentName.isEmpty ())
+            // Create connections to complete the cables
+            // Note that all connections are explicit, even within the same group.
+            // TODO: Convert these to unary connections directly from child segment to parent segment.
+            for (Entry<Integer,Segment> e : segments.entrySet ())
             {
-                if (childN > 1) s.part.set (parentName, "@$index==" + s.index, s.parent.index);
-                else            s.part.set (parentName, s.parent.index);
-            }
-        }
+                Segment s = e.getValue ();
+                if (s.parent == null) continue;
 
-        // Clean up temporary nodes.
-        cell.clear ("$properties");
-        cell.clear ("$group");
-        cell.clear ("$groupIndex");
-        for (MNode part : cell)
-        {
-            part.clear ("$parent");
-            part.clear ("$G");
-            for (MNode v : part)
-            {
-                v.clear ("$metadata", "backend.neuroml.param.a");
-                v.clear ("$metadata", "backend.neuroml.param.b");
-            }
-        }
-        for (Entry<Integer,String> e : finalNames.entrySet ()) cell.set ("$groupIndex", e.getKey (), e.getValue ());
-    }
+                int childN = s.part.getOrDefaultInt ("$n", "1");
+                String connectionName = s.parent.part.key () + "_to_" + s.part.key ();
+                MNode connection = cell.child (connectionName);
+                if (connection == null)
+                {
+                    connection = cell.set (connectionName, "");
+                    connection.set ("$inherit", "\"Coupling Voltage\"");
+                    connection.set ("A", s.parent.part.key ());
+                    connection.set ("B", s       .part.key ());
+                    connection.set ("R", "$kill");  // Force use of container's value.
 
-    public void morphology (Node node, MNode cell, Map<Integer,Segment> segments, MatrixBoolean G)
-    {
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-            switch (child.getNodeName ())
-            {
-                case "segment":
-                    Segment s = new Segment (child);
-                    segments.put (s.id, s);
-                    break;
-                case "segmentGroup":
-                    segmentGroup (child, cell, G);
-                    break;
+                    int parentN = s.parent.part.getOrDefaultInt ("$n", "1");
+                    if (parentN > 1)
+                    {
+                        String parentName = "parent";
+                        int suffix = 2;
+                        while (s.part.child (parentName) != null) parentName = "parent" + suffix++;
+                        connection.set ("$parent", parentName);  // temporary memo
+
+                        connection.set ("$p", "A.$index==B." + parentName);
+                        if (childN > 1)
+                        {
+                            s.part.set (parentName, ":");
+                            s.part.set (parentName, "@", "-1");
+                        }
+                    }
+                    else if (childN > 1)
+                    {
+                        connection.set ("$p", "B.$index==" + s.index);
+                    }
+                }
+
+                String parentName = connection.get ("$parent");
+                if (! parentName.isEmpty ())
+                {
+                    if (childN > 1) s.part.set (parentName, "@$index==" + s.index, s.parent.index);
+                    else            s.part.set (parentName, s.parent.index);
+                }
             }
+
+            // Clean up temporary nodes.
+            cell.clear ("$properties");
+            cell.clear ("$group");
+            cell.clear ("$groupIndex");
+            for (MNode part : cell)
+            {
+                part.clear ("$parent");
+                part.clear ("$G");
+                for (MNode v : part)
+                {
+                    v.clear ("$metadata", "backend.neuroml.param.a");
+                    v.clear ("$metadata", "backend.neuroml.param.b");
+                }
+            }
+            for (Entry<Integer,String> e : finalNames.entrySet ()) cell.set ("$groupIndex", e.getKey (), e.getValue ());
         }
     }
 
@@ -925,339 +1291,6 @@ public class ImportJob
         }
     }
 
-    public void segmentGroup (Node node, MNode cell, MatrixBoolean G)
-    {
-        MNode groups = cell.childOrCreate ("$group");
-        int c = groups.length ();
-        String groupName = getAttribute (node, "id");
-        MNode part = groups.childOrCreate (groupName);
-        part.set ("$G", c);
-        cell.set ("$groupIndex", c, groupName);
-
-        NamedNodeMap attributes = node.getAttributes ();
-        int count = attributes.getLength ();
-        for (int i = 0; i < count; i++)
-        {
-            Node a = attributes.item (i);
-            String name = a.getNodeName ();
-            if (name.equals ("id")) continue;
-            part.set ("$metadata", name, a.getNodeValue ());
-        }
-
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-            switch (child.getNodeName ())
-            {
-                case "member":
-                    G.set (getAttribute (child, "segment", 0), c);
-                    break;
-                case "include":
-                    String include = part.get ("$include");  // not $inherit
-                    if (! include.isEmpty ()) include += ",";
-                    include += getAttribute (child, "segmentGroup");
-                    part.set ("$include", include);
-                    break;
-                case "path":
-                case "subTree":
-                    segmentPath (child, part);
-                    break;
-                case "inhomogeneousParameter":
-                    inhomogeneousParameter (child, part);
-                    break;
-            }
-        }
-    }
-
-    public void segmentPath (Node node, MNode group)
-    {
-        int from = -1;
-        int to   = -1;
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-            switch (child.getNodeName ())
-            {
-                case "from": from = getAttribute (child, "segment", 0); break; 
-                case "to"  : to   = getAttribute (child, "segment", 0); break; 
-            }
-        }
-        if (from >= 0)
-        {
-            MNode paths = group.childOrCreate ("$paths");
-            int index = paths.length ();
-            if (to >= 0) paths.set (index, from + "," + to);
-            else         paths.set (index, from);
-        }
-    }
-
-    public void applyPaths (Map<Integer,Segment> segments, MNode group, MatrixBoolean G)
-    {
-        MNode paths = group.child ("$paths");
-        if (paths == null) return;
-
-        int c = group.getInt ("$G");
-        for (MNode p : paths)
-        {
-            String[] pieces = p.get ().split (",");
-            if (pieces.length == 1)  // subtree
-            {
-                int from = Integer.valueOf (pieces[0]);
-                applyPath (segments.get (from), G, c);
-            }
-            else  // path
-            {
-                int from = Integer.valueOf (pieces[0]);
-                int to   = Integer.valueOf (pieces[1]);
-                if (from > to)
-                {
-                    for (int r = to; r <= from; r++) G.set (r, c);
-                }
-                else
-                {
-                    for (int r = from; r <= to; r++) G.set (r, c);
-                }
-            }
-        }
-
-        group.clear ("$paths");
-    }
-
-    public void applyPath (Segment s, MatrixBoolean G, int c)
-    {
-        G.set (s.id, c);
-        for (Segment t : s.children) applyPath (t, G, c);
-    }
-
-    public void includeGroups (MNode groups, MNode g, MatrixBoolean G)
-    {
-        String include = g.get ("$include");
-        if (include.isEmpty ()) return;
-        g.clear ("$include");
-
-        int columnG = g.getInt ("$G");
-        String[] pieces = include.split (",");
-        for (String i : pieces)
-        {
-            MNode p = groups.child (i);
-            if (p == null) continue;
-            includeGroups (groups, p, G);
-            // Merge segment members
-            int columnP = p.getInt ("$G");
-            G.OR (columnG, columnP);
-            // Don't merge metadata from included groups, only members.
-            // All metadata will get combined when groups are finalized in cell().
-            // If it is merged here, it gets combined twice, and some items can leak into groups they are not really related to.
-        }
-    }
-
-    public void inhomogeneousParameter (Node node, MNode group)
-    {
-        //String id       = getAttribute (node, "id");
-        String variable = getAttribute (node, "variable");
-
-        String translationStart = "0";
-        String normalizationEnd = "1";
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-            switch (child.getNodeName ())
-            {
-                case "proximal": translationStart = getAttribute (child, "translationStart"); break;
-                case "distal"  : normalizationEnd = getAttribute (child, "normalizationEnd"); break;
-            }
-        }
-
-        // TODO: What is the correct interpretation of translationStart and normalizationEnd?
-        // Here we assume they are a linear transformation of the path length: variable = pathLength * normalizatonEnd + translationStart
-        group.set (variable, "$metadata", "backend.neuroml.param",   "pathLength");
-        group.set (variable, "$metadata", "backend.neuroml.param.a", normalizationEnd);
-        group.set (variable, "$metadata", "backend.neuroml.param.b", translationStart);
-    }
-
-    public void biophysicalProperties (Node node, MNode cell, MatrixBoolean G)
-    {
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-            String name = child.getNodeName ();
-            if      (name.startsWith ("membrane")) membraneProperties      (child, cell, G);
-            else if (name.startsWith ("intra"   )) intracellularProperties (child, cell);
-            else if (name.startsWith ("extra"   )) extracellularProperties (child, cell);
-        }
-    }
-
-    public void membraneProperties (Node node, MNode cell, MatrixBoolean G)
-    {
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-
-            MNode property = allocateProperty (child, cell, G);
-            String name = child.getNodeName ();
-            if (name.startsWith ("channel"))
-            {
-                channel (child, cell, property);
-            }
-            else
-            {
-                String value = biophysicalUnits (getAttribute (child, "value"));
-                switch (name)
-                {
-                    case "spikeThresh":
-                        property.set ("Vpeak", value);
-                        break;
-                    case "specificCapacitance":
-                        property.set ("C", value);
-                        break;
-                    case "initMembPotential":
-                        property.set ("V", "@$init", value);
-                        break;
-                }
-            }
-        }
-    }
-
-    public MNode allocateProperty (Node node, MNode cell, MatrixBoolean G)
-    {
-        MNode  properties = cell.childOrCreate ("$properties");
-        String id         = getAttribute (node, "id");
-        String group      = getAttribute (node, "segmentGroup");
-        if (group.isEmpty ())
-        {
-            group = getAttribute (node, "segment");
-            if (group.isEmpty ())
-            {
-                group = "[all]";
-            }
-            else
-            {
-                int r = Integer.parseInt (group);
-                group = "[" + group + "]";  // proper name will be assigned later, during post-processing
-                if (cell.child ("$group", group) == null)
-                {
-                    MNode groups = cell.childOrCreate ("$group");
-                    int c = groups.length ();
-                    G.set (r, c);
-                    groups.set (group, "$G", c);
-                    cell.set ("$groupIndex", c, group);
-                }
-            }
-        }
-        MNode result = properties.set (String.valueOf (properties.length ()), group);
-        if (id.isEmpty ()) return result;
-
-        // Create a subpart with the given name
-        MNode subpart = result.set (id, "");  
-        NamedNodeMap attributes = node.getAttributes ();
-        int count = attributes.getLength ();
-        for (int i = 0; i < count; i++)
-        {
-            Node a = attributes.item (i);
-            String name = a.getNodeName ();
-            if (name.equals ("id")) continue;
-            if (name.equals ("segment")) continue;
-            if (name.equals ("segmentGroup")) continue;
-            if (name.equals ("value")) continue;  // Caller will extract this directly from XML node.
-            subpart.set (name, biophysicalUnits (a.getNodeValue ()));  // biophysicalUnits() will only modify text if there is a numeric value
-        }
-        return result;
-    }
-
-    public void channel (Node node, MNode cell, MNode property)
-    {
-        MNode subpart = property.iterator ().next ();  // retrieve the first (and only) subpart
-
-        String name = node.getNodeName ();
-        subpart.set ("$inherit", "\"" + name + "\"");
-
-        String ionChannel = subpart.get ("ionChannel");
-        subpart.clear ("ionChannel");
-        subpart.set ("ionChannel", "$inherit", "\"" + ionChannel + "\"");
-
-        String ion = subpart.get ("ion");
-        subpart.clear ("ion");
-        subpart.set ("$metadata", "ion", ion);
-
-        String parentGroup = property.get ();
-        Map<String,MNode> groupProperty = new TreeMap<String,MNode> ();
-        groupProperty.put (parentGroup, property);
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            if (child.getNodeType () != Node.ELEMENT_NODE  ||  ! child.getNodeName ().equals ("variableParameter")) continue;
-            String parameter    = getAttribute (child, "parameter");
-            String segmentGroup = getAttribute (child, "segmentGroup");
-
-            MNode clone = property;
-            if (! segmentGroup.equals (parentGroup))
-            {
-                if (parentGroup.equals ("[all]"))  // segment group was not or should not be assigned at level of channel part
-                {
-                    groupProperty.remove (parentGroup);
-                    groupProperty.put (segmentGroup, property);
-                    property.set (segmentGroup);  // assumes that the target group will exist when needed
-                    parentGroup = segmentGroup;
-                }
-                else  // different than previously assigned group, so may need to clone the property
-                {
-                    clone = groupProperty.get (segmentGroup);
-                    if (clone == null)
-                    {
-                        MNode properties = cell.child ("$properties");
-                        clone = properties.set (String.valueOf (properties.length ()), segmentGroup);
-                        clone.merge (property);
-                        clone.set (segmentGroup);
-                        groupProperty.put (segmentGroup, clone);
-                    }
-                }
-                subpart = clone.iterator ().next ();
-                subpart.set (parameter, variableParameter (child));
-            }
-        }
-    }
-
-    public String variableParameter (Node node)
-    {
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            if (child.getNodeType () == Node.ELEMENT_NODE  &&  child.getNodeName ().equals ("inhomogeneousValue")) return getAttribute (child, "value");
-        }
-        return "";
-    }
-
-    public void intracellularProperties (Node node, MNode cell)
-    {
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-            String name = child.getNodeName ();
-
-            switch (name)
-            {
-                case "species":
-                    break;
-                case "resistivity":
-                    cell.set ("R", biophysicalUnits (getAttribute (child, "value")));
-                    break;
-            }
-        }
-    }
-
-    public void extracellularProperties (Node node, MNode cell)
-    {
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-            String name = child.getNodeName ();
-
-            switch (name)
-            {
-                case "species":
-                    break;
-            }
-        }
-    }
-
     /**
         Convert the given value to be in appropriate units, in the context of a morphology section.
     **/
@@ -1266,7 +1299,7 @@ public class ImportJob
         value = value.trim ();
         int unitIndex = findUnits (value);
         if (unitIndex == 0) return value;  // no number
-        if (unitIndex >= value.length ()) return value + "um";  // default morphology units are micometers
+        if (unitIndex >= value.length ()) return value + "um";  // default morphology units are micrometers
 
         String units = value.substring (unitIndex).trim ();
         value        = value.substring (0, unitIndex);
@@ -1346,6 +1379,7 @@ public class ImportJob
         String temperature = getAttribute (node, "temperature");
         if (! temperature.isEmpty ()) network.set ("temperature", biophysicalUnits (temperature));
 
+        List<Node> exProps = new ArrayList<Node> ();
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
             if (child.getNodeType () != Node.ELEMENT_NODE) continue;
@@ -1359,10 +1393,10 @@ public class ImportJob
                     network.set ("$region", child.getNodeValue (), spaceID);  // Region is little more than an alias of a space, as of NeuroML 2 beta 4.
                     break;
                 case "extracellularProperties":
-                    // TODO
+                    exProps.add (child);
                     break;
                 case "population":
-                    population (child, network);
+                    population (child, network, exProps);
                     break;
                 case "projection":
                 case "continuousProjection":
@@ -1403,22 +1437,30 @@ public class ImportJob
         }
     }
 
-    public void population (Node node, MNode network)
+    public void population (Node node, MNode network, List<Node> exProps)
     {
         String id        = getAttribute (node, "id");
         int    n         = getAttribute (node, "size", 0);
-        String component = getAttribute (node, "component").trim ();  // Should always be defined.
-        String exID      = getAttribute (node, "extracellularProperties").trim ();
+        String component = getAttribute (node, "component");  // Should always be defined.
 
         MNode part = network.set (id, "");
         part.set ("$inherit", "\"" + component + "\"");
         addDependency (part, component);
         if (n > 1) part.set ("$n", n);
-        if (! exID.isEmpty ())
+
+        // Add intra/extra cellular properties to inherited cell
+        Cell cell = cells.get (component);
+        if (cell != null)
         {
-            MNode ex = part.childOrCreate ("extracellularProperties");
-            ex.set ("$inherit", "\"" + exID + "\"");
-            addDependency (ex, exID);
+            List<Node> localProps = new ArrayList<Node> ();
+            localProps.addAll (exProps);
+            String exID = getAttribute (node, "extracellularProperties");
+            if (! exID.isEmpty ())
+            {
+                Node ex = properties.get (exID);
+                if (ex != null) localProps.add (ex);
+            }
+            for (Node p : localProps) cell.addCellularProperties (p);
         }
 
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
@@ -1713,19 +1755,23 @@ public class ImportJob
             {
                 // preSegment is the ID, effectively the row in the segment*group matrix
                 // We must find the column associated with it, so we can map to a group part.
-                String cell = network.get (A, "$inherit").replace ("\"", "");
-                MatrixBoolean M = cellSegment.get (cell);
-                if (M != null)
+                String cellID = network.get (A, "$inherit").replace ("\"", "");
+                Cell cell = cells.get (cellID);
+                if (cell != null)
                 {
-                    count = M.columns ();
-                    for (int c = 0; c < count; c++)
+                    MatrixBoolean M = cell.M;
+                    if (M != null)
                     {
-                        if (M.get (preSegment, c))
+                        count = M.columns ();
+                        for (int c = 0; c < count; c++)
                         {
-                            connection.preGroup = models.get (modelName, cell, "$groupIndex", c);
-                            preSegmentIndex = M.indexInColumn (preSegment, c);
-                            preSegmentSingleton = models.getOrDefaultInt (modelName, cell, connection.preGroup, "$n", "1") == 1;
-                            break;
+                            if (M.get (preSegment, c))
+                            {
+                                connection.preGroup = models.get (modelName, cellID, "$groupIndex", c);
+                                preSegmentIndex = M.indexInColumn (preSegment, c);
+                                preSegmentSingleton = models.getOrDefaultInt (modelName, cellID, connection.preGroup, "$n", "1") == 1;
+                                break;
+                            }
                         }
                     }
                 }
@@ -1735,19 +1781,23 @@ public class ImportJob
             boolean postSegmentSingleton = false;
             if (postSegment >= 0)
             {
-                String cell = network.get (B, "$inherit").replace ("\"", "");
-                MatrixBoolean M = cellSegment.get (cell);
-                if (M != null)
+                String cellID = network.get (B, "$inherit").replace ("\"", "");
+                Cell cell = cells.get (cellID);
+                if (cell != null)
                 {
-                    count = M.columns ();
-                    for (int c = 0; c < count; c++)
+                    MatrixBoolean M = cell.M;
+                    if (M != null)
                     {
-                        if (M.get (postSegment, c))
+                        count = M.columns ();
+                        for (int c = 0; c < count; c++)
                         {
-                            connection.postGroup = models.get (modelName, cell, "$groupIndex", c);
-                            postSegmentIndex = M.indexInColumn (postSegment, c);
-                            postSegmentSingleton = models.getOrDefaultInt (modelName, cell, connection.postGroup, "$n", "1") == 1;
-                            break;
+                            if (M.get (postSegment, c))
+                            {
+                                connection.postGroup = models.get (modelName, cellID, "$groupIndex", c);
+                                postSegmentIndex = M.indexInColumn (postSegment, c);
+                                postSegmentSingleton = models.getOrDefaultInt (modelName, cellID, connection.postGroup, "$n", "1") == 1;
+                                break;
+                            }
                         }
                     }
                 }
