@@ -49,6 +49,7 @@ public class ImportJob
     Map<String,Node>          biophysics     = new HashMap<String,Node> ();  // Map from IDs to top-level biophysics blocks.
     Map<String,Node>          properties     = new HashMap<String,Node> ();  // Map from IDs to top-level intra- or extra-cellular property blocks.
     Map<String,Cell>          cells          = new HashMap<String,Cell> ();
+    Map<String,Network>       networks       = new HashMap<String,Network> ();
 
     Pattern floatParser   = Pattern.compile ("[-+]?(NaN|Infinity|([0-9]*\\.?[0-9]*([eE][-+]?[0-9]+)?))");
     Pattern forbiddenUCUM = Pattern.compile ("[.,;><=!&|+\\-*/%\\^~]");
@@ -153,7 +154,8 @@ public class ImportJob
                     spikeArray (child);
                     break;
                 case "network":
-                    network (child);
+                    Network network = new Network (child);
+                    networks.put (network.id, network);
                     break;
                 default:
                     genericPart (child, model);  // Assume that any top-level element not captured above is an abstract cell type.
@@ -256,17 +258,7 @@ public class ImportJob
         }
 
         // Move network items up to top level
-        MNode network = models.child (modelName, "$network");
-        if (network != null)
-        {
-            for (MNode p : network)
-            {
-                p.clear ("$instance");
-                MNode dest = models.childOrCreate (modelName, p.key ());
-                dest.merge (p);
-            }
-        }
-        models.clear (modelName, "$network");
+        if (networks.size () == 1) networks.entrySet ().iterator ().next ().getValue ().moveUp ();
     }
 
     public void ionChannel (Node node)
@@ -1372,196 +1364,510 @@ public class ImportJob
         part.set ("spikes", spikes + "]");
     }
 
-    // TODO: There can be multiple network elements in a file. Each should produce an independent model.
-    public void network (Node node)
+    public class Network
     {
-        MNode network = models.childOrCreate (modelName, "$network");
-        String temperature = getAttribute (node, "temperature");
-        if (! temperature.isEmpty ()) network.set ("temperature", biophysicalUnits (temperature));
+        String id;
+        MNode network;
+        List<Node> extracellularProperties = new ArrayList<Node> ();
 
-        List<Node> exProps = new ArrayList<Node> ();
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        public Network (Node node)
         {
-            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-            switch (child.getNodeName ())
+            id                 = getAttribute (node, "id");
+            String temperature = getAttribute (node, "temperature");
+
+            network = models.childOrCreate (modelName, id);
+            if (! temperature.isEmpty ()) network.set ("temperature", biophysicalUnits (temperature));
+
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
-                case "space":
-                    space (child, network);
-                    break;
-                case "region":
-                    String spaceID = getAttribute (child, "space");
-                    network.set ("$region", child.getNodeValue (), spaceID);  // Region is little more than an alias of a space, as of NeuroML 2 beta 4.
-                    break;
-                case "extracellularProperties":
-                    exProps.add (child);
-                    break;
-                case "population":
-                    population (child, network, exProps);
-                    break;
-                case "projection":
-                case "continuousProjection":
-                case "electricalProjection":
-                case "inputList":
-                    projection (child, network);
-                    break;
-                case "explicitInput":
-                    explicitInput (child, network);
-                    break;
-            }
-        }
-
-        network.clear ("$space");
-        network.clear ("$region");
-    }
-
-    public void space (Node node, MNode network)
-    {
-        String id = getAttribute (node, "id");
-
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            // The standard as written allows more than one structure element, but not sure how to make sense of that.
-            // This code simply overwrites the data if more than one such element exists.
-            if (child.getNodeType () == Node.ELEMENT_NODE  &&  child.getNodeName ().equals ("structure"))
-            {
-                double sx = getAttribute (child, "xSpacing", 1.0);
-                double sy = getAttribute (child, "ySpacing", 1.0);
-                double sz = getAttribute (child, "zSpacing", 1.0);
-                double ox = getAttribute (child, "xStart",   0.0);
-                double oy = getAttribute (child, "yStart",   0.0);
-                double oz = getAttribute (child, "zStart",   0.0);
-                MNode p = network.childOrCreate ("$space", id);
-                p.set ("scale",  "[" + sx + ";" + sy + ";" + sz + "]");
-                p.set ("offset", "[" + ox + ";" + oy + ";" + oz + "]");
-            }
-        }
-    }
-
-    public void population (Node node, MNode network, List<Node> exProps)
-    {
-        String id        = getAttribute (node, "id");
-        int    n         = getAttribute (node, "size", 0);
-        String component = getAttribute (node, "component");  // Should always be defined.
-
-        MNode part = network.set (id, "");
-        part.set ("$inherit", "\"" + component + "\"");
-        addDependency (part, component);
-        if (n > 1) part.set ("$n", n);
-
-        // Add intra/extra cellular properties to inherited cell
-        Cell cell = cells.get (component);
-        if (cell != null)
-        {
-            List<Node> localProps = new ArrayList<Node> ();
-            localProps.addAll (exProps);
-            String exID = getAttribute (node, "extracellularProperties");
-            if (! exID.isEmpty ())
-            {
-                Node ex = properties.get (exID);
-                if (ex != null) localProps.add (ex);
-            }
-            for (Node p : localProps) cell.addCellularProperties (p);
-        }
-
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-            switch (child.getNodeName ())
-            {
-                case "layout"  : populationLayout   (child, network, part); break;
-                case "instance": populationInstance (child, network, part); break;
-            }
-        }
-
-        // Post-process instances, hopefully matching their IDs to their $index values.
-        MNode instances = part.child ("$instance");
-        if (instances != null)
-        {
-            int count = instances.length ();
-            if (count > 1) part.set ("$n", count);
-            int index = 0;
-            for (MNode i : instances)
-            {
-                String xyz = i.get ("$xyz");
-                String ijk = i.get ("ijk");
-                if (count == 1)
-                {
-                    if (! xyz.isEmpty ()) part.set ("$xyz", xyz);
-                    if (! ijk.isEmpty ()) part.set ("ijk",  ijk);
-                }
-                else
-                {
-                    if (! xyz.isEmpty ()) part.set ("$xyz", "@$index==" + index, xyz);
-                    if (! ijk.isEmpty ()) part.set ("ijk",  "@$index==" + index, ijk);
-                }
-                i.set ("$index", index++);
-            }
-        }
-    }
-
-    public void populationLayout (Node node, MNode network, MNode part)
-    {
-        String spaceID = getAttribute (node, "space");
-
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            if (child.getNodeType () == Node.ELEMENT_NODE)
-            {
-                String regionID = getAttribute (child, "region");
-                if (! regionID.isEmpty ()) spaceID = network.get ("$region", regionID);
-                MNode space = null;
-                if (! spaceID.isEmpty ()) space = network.child ("$space", spaceID);
-
+                if (child.getNodeType () != Node.ELEMENT_NODE) continue;
                 switch (child.getNodeName ())
                 {
-                    case "random":
-                        part.set ("$n", getAttribute (child, "number", 1));
-                        if (space != null) part.set ("$xyz", "uniform(" + space.get ("scale") + ")+" + space.get ("offset"));
+                    case "space":
+                        space (child);
                         break;
-                    case "grid":
-                        int x = getAttribute (child, "xSize", 1);
-                        int y = getAttribute (child, "ySize", 1);
-                        int z = getAttribute (child, "zSize", 1);
-                        part.set ("$n", x * y * z);
-                        if (space == null) part.set ("$xyz", "grid($index," + x + "," + y + "," + z + ")");
-                        else               part.set ("$xyz", "grid($index," + x + "," + y + "," + z + ",\"raw\")&" + space.get ("scale") + "+" + space.get ("offset"));
+                    case "region":
+                        String spaceID = getAttribute (child, "space");
+                        network.set ("$region", child.getNodeValue (), spaceID);  // Region is little more than an alias of a space, as of NeuroML 2 beta 4.
                         break;
-                    case "unstructured":
-                        part.set ("$n", getAttribute (child, "number", 1));
+                    case "extracellularProperties":
+                        extracellularProperties.add (child);
+                        break;
+                    case "population":
+                        population (child);
+                        break;
+                    case "projection":
+                    case "continuousProjection":
+                    case "electricalProjection":
+                    case "inputList":
+                        projection (child);
+                        break;
+                    case "explicitInput":
+                        explicitInput (child);
                         break;
                 }
             }
-        }
-    }
 
-    public void populationInstance (Node node, MNode network, MNode part)
-    {
-        int id = getAttribute (node, "id", 0);
-        int i  = getAttribute (node, "i", -1);
-        int j  = getAttribute (node, "j", -1);
-        int k  = getAttribute (node, "k", -1);
-        double x = 0;
-        double y = 0;
-        double z = 0;
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            finish ();  // TODO; move this to postprocess()
+        }
+
+        public void space (Node node)
         {
-            // As written, the standard allows multiple xyz positions. Not sure what that means.
-            // This code overwrites the position if more than one are specified.
-            if (child.getNodeType () == Node.ELEMENT_NODE  &&  child.getNodeName ().equals ("location"))
+            String id = getAttribute (node, "id");
+
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
-                x = getAttribute (child, "x", 0.0);
-                y = getAttribute (child, "y", 0.0);
-                z = getAttribute (child, "z", 0.0);
+                // The standard as written allows more than one structure element, but not sure how to make sense of that.
+                // This code simply overwrites the data if more than one such element exists.
+                if (child.getNodeType () == Node.ELEMENT_NODE  &&  child.getNodeName ().equals ("structure"))
+                {
+                    double sx = getAttribute (child, "xSpacing", 1.0);
+                    double sy = getAttribute (child, "ySpacing", 1.0);
+                    double sz = getAttribute (child, "zSpacing", 1.0);
+                    double ox = getAttribute (child, "xStart",   0.0);
+                    double oy = getAttribute (child, "yStart",   0.0);
+                    double oz = getAttribute (child, "zStart",   0.0);
+                    MNode p = network.childOrCreate ("$space", id);
+                    p.set ("scale",  "[" + sx + ";" + sy + ";" + sz + "]");
+                    p.set ("offset", "[" + ox + ";" + oy + ";" + oz + "]");
+                }
             }
         }
 
-        part.set ("$instance", id, "$xyz", "[" + x + ";" + y + ";" + z + "]");
-        if (i >= 0  ||  j >= 0  ||  k >= 0)
+        public void population (Node node)
         {
-            if (i < 0) i = 0;
-            if (j < 0) j = 0;
-            if (k < 0) k = 0;
-            part.set ("$instance", id, "ijk",  "[" + i + ";" + j + ";" + k + "]");
+            String id        = getAttribute (node, "id");
+            int    n         = getAttribute (node, "size", 0);
+            String component = getAttribute (node, "component");  // Should always be defined.
+
+            MNode part = network.set (id, "");
+            part.set ("$inherit", "\"" + component + "\"");
+            addDependency (part, component);
+            if (n > 1) part.set ("$n", n);
+
+            // Add intra/extra cellular properties to inherited cell
+            Cell cell = cells.get (component);
+            if (cell != null)
+            {
+                List<Node> localProps = new ArrayList<Node> ();
+                localProps.addAll (extracellularProperties);
+                String exID = getAttribute (node, "extracellularProperties");
+                if (! exID.isEmpty ())
+                {
+                    Node ex = properties.get (exID);
+                    if (ex != null) localProps.add (ex);
+                }
+                for (Node p : localProps) cell.addCellularProperties (p);
+            }
+
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            {
+                if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+                switch (child.getNodeName ())
+                {
+                    case "layout"  : populationLayout   (child, part); break;
+                    case "instance": populationInstance (child, part); break;
+                }
+            }
+
+            // Post-process instances, hopefully matching their IDs to their $index values.
+            MNode instances = part.child ("$instance");
+            if (instances != null)
+            {
+                int count = instances.length ();
+                if (count > 1) part.set ("$n", count);
+                int index = 0;
+                for (MNode i : instances)
+                {
+                    String xyz = i.get ("$xyz");
+                    String ijk = i.get ("ijk");
+                    if (count == 1)
+                    {
+                        if (! xyz.isEmpty ()) part.set ("$xyz", xyz);
+                        if (! ijk.isEmpty ()) part.set ("ijk",  ijk);
+                    }
+                    else
+                    {
+                        if (! xyz.isEmpty ()) part.set ("$xyz", "@$index==" + index, xyz);
+                        if (! ijk.isEmpty ()) part.set ("ijk",  "@$index==" + index, ijk);
+                    }
+                    i.set ("$index", index++);
+                }
+            }
+        }
+
+        public void populationLayout (Node node, MNode part)
+        {
+            String spaceID = getAttribute (node, "space");
+
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            {
+                if (child.getNodeType () == Node.ELEMENT_NODE)
+                {
+                    String regionID = getAttribute (child, "region");
+                    if (! regionID.isEmpty ()) spaceID = network.get ("$region", regionID);
+                    MNode space = null;
+                    if (! spaceID.isEmpty ()) space = network.child ("$space", spaceID);
+
+                    switch (child.getNodeName ())
+                    {
+                        case "random":
+                            part.set ("$n", getAttribute (child, "number", 1));
+                            if (space != null) part.set ("$xyz", "uniform(" + space.get ("scale") + ")+" + space.get ("offset"));
+                            break;
+                        case "grid":
+                            int x = getAttribute (child, "xSize", 1);
+                            int y = getAttribute (child, "ySize", 1);
+                            int z = getAttribute (child, "zSize", 1);
+                            part.set ("$n", x * y * z);
+                            if (space == null) part.set ("$xyz", "grid($index," + x + "," + y + "," + z + ")");
+                            else               part.set ("$xyz", "grid($index," + x + "," + y + "," + z + ",\"raw\")&" + space.get ("scale") + "+" + space.get ("offset"));
+                            break;
+                        case "unstructured":
+                            part.set ("$n", getAttribute (child, "number", 1));
+                            break;
+                    }
+                }
+            }
+        }
+
+        public void populationInstance (Node node, MNode part)
+        {
+            int id = getAttribute (node, "id", 0);
+            int i  = getAttribute (node, "i", -1);
+            int j  = getAttribute (node, "j", -1);
+            int k  = getAttribute (node, "k", -1);
+            double x = 0;
+            double y = 0;
+            double z = 0;
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            {
+                // As written, the standard allows multiple xyz positions. Not sure what that means.
+                // This code overwrites the position if more than one are specified.
+                if (child.getNodeType () == Node.ELEMENT_NODE  &&  child.getNodeName ().equals ("location"))
+                {
+                    x = getAttribute (child, "x", 0.0);
+                    y = getAttribute (child, "y", 0.0);
+                    z = getAttribute (child, "z", 0.0);
+                }
+            }
+
+            part.set ("$instance", id, "$xyz", "[" + x + ";" + y + ";" + z + "]");
+            if (i >= 0  ||  j >= 0  ||  k >= 0)
+            {
+                if (i < 0) i = 0;
+                if (j < 0) j = 0;
+                if (k < 0) k = 0;
+                part.set ("$instance", id, "ijk",  "[" + i + ";" + j + ";" + k + "]");
+            }
+        }
+
+        /**
+            Contains minor hacks to handle InputList along with the 3 projection types.
+        **/
+        public void projection (Node node)
+        {
+            String id             = getAttribute  (node, "id");
+            String inherit        = getAttribute  (node, "synapse");
+            String A              = getAttributes (node, "presynapticPopulation",  "component");
+            String B              = getAttributes (node, "postsynapticPopulation", "population");
+            String projectionType = node.getNodeName ();
+
+            MNode base = new MVolatile ();
+            base.set ("A", A);
+            base.set ("B", B);
+            if      (projectionType.equals ("continuousProjection")) inherit = "continuousProjection";
+            else if (projectionType.equals ("inputList"))            inherit = "Current Injection";
+
+            NamedNodeMap attributes = node.getAttributes ();
+            int count = attributes.getLength ();
+            for (int i = 0; i < count; i++)
+            {
+                Node a = attributes.item (i);
+                String name = a.getNodeName ();
+                if (name.equals ("id"                    )) continue;
+                if (name.equals ("synapse"               )) continue;
+                if (name.equals ("presynapticPopulation" )) continue;
+                if (name.equals ("postsynapticPopulation")) continue;
+                if (name.equals ("component"             )) continue;
+                if (name.equals ("population"            )) continue;
+                base.set (name, biophysicalUnits (a.getNodeValue ()));  // biophysicalUnits() will only modify text if there is a numeric value
+            }
+
+            // Children are specific connections.
+            // In the case of "continuous" connections, there are pre- and post-synaptic components which can vary
+            // from one entry to the next. These must be made into separate connection objects, so try to fold
+            // them as much as possible.
+            // For other connection types, attributes can be set up as conditional constants.
+
+            MNode instancesA = network.child (A, "$instance");
+            MNode instancesB = network.child (B, "$instance");
+
+            boolean postCellSingleton = network.getOrDefaultInt (B, "$n", "1") == 1;  // This assumes that a population always has $n set if it is anything besides 1.
+            boolean preCellSingleton;  // A requires more testing, because it could be the "component" of an input list.
+            boolean Acomponent = ! getAttribute (node, "component").isEmpty ();
+            if (Acomponent) preCellSingleton = models .getOrDefaultInt (modelName, A, "$n", "1") == 1;
+            else            preCellSingleton = network.getOrDefaultInt (           A, "$n", "1") == 1;
+
+            List<Connection> connections = new ArrayList<Connection> ();
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            {
+                if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+
+                // Collect data and assemble query
+                Connection connection = new Connection ();
+                int childID        = getAttribute (child, "id", 0);
+                connection.inherit = getAttribute (child, "synapse", inherit);
+
+                connection.preComponent  = getAttribute  (child, "preComponent");
+                String preCell           = getAttributes (child, "preCell", "preCellId");
+                String preSegmentString  = getAttributes (child, "preSegment", "preSegmentId");
+                String preFractionString = getAttribute  (child, "preFractionAlong");
+
+                connection.postComponent  = getAttribute  (child, "postComponent");
+                String postCell           = getAttributes (child, "postCell", "postCellId", "target");
+                String postSegmentString  = getAttributes (child, "postSegment", "postSegmentId", "segmentId");
+                String postFractionString = getAttributes (child, "postFractionAlong", "fractionAlong");
+
+                double weight = getAttribute (child, "weight", 1.0);
+                String delay  = getAttribute (child, "delay");
+
+                int preSegment = -1;
+                if (! preSegmentString.isEmpty ()) preSegment = Integer.valueOf (preSegmentString);
+                double preFraction = 0.5;
+                if (! preFractionString.isEmpty ()) preFraction = Double.valueOf (preFractionString);
+
+                int postSegment = -1;
+                if (! postSegmentString.isEmpty ()) postSegment = Integer.valueOf (postSegmentString);
+                double postFraction = 0.5;
+                if (! postFractionString.isEmpty ()) postFraction = Double.valueOf (postFractionString);
+
+                preCell  = extractIDfromPath (preCell);
+                postCell = extractIDfromPath (postCell);
+                if (instancesA != null) preCell  = instancesA.getOrDefault (preCell,  "$index", preCell);  // Map NeuroML ID to assigned N2A $index, falling back on ID if $index has not been assigned.
+                if (instancesB != null) postCell = instancesB.getOrDefault (postCell, "$index", postCell);
+
+                int preSegmentIndex = 0;
+                boolean preSegmentSingleton = false;
+                if (preSegment >= 0)
+                {
+                    // preSegment is the ID, effectively the row in the segment*group matrix
+                    // We must find the column associated with it, so we can map to a group part.
+                    String cellID = network.get (A, "$inherit").replace ("\"", "");
+                    Cell cell = cells.get (cellID);
+                    if (cell != null)
+                    {
+                        MatrixBoolean M = cell.M;
+                        if (M != null)
+                        {
+                            count = M.columns ();
+                            for (int c = 0; c < count; c++)
+                            {
+                                if (M.get (preSegment, c))
+                                {
+                                    connection.preGroup = models.get (modelName, cellID, "$groupIndex", c);
+                                    preSegmentIndex = M.indexInColumn (preSegment, c);
+                                    preSegmentSingleton = models.getOrDefaultInt (modelName, cellID, connection.preGroup, "$n", "1") == 1;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                int postSegmentIndex = 0;
+                boolean postSegmentSingleton = false;
+                if (postSegment >= 0)
+                {
+                    String cellID = network.get (B, "$inherit").replace ("\"", "");
+                    Cell cell = cells.get (cellID);
+                    if (cell != null)
+                    {
+                        MatrixBoolean M = cell.M;
+                        if (M != null)
+                        {
+                            count = M.columns ();
+                            for (int c = 0; c < count; c++)
+                            {
+                                if (M.get (postSegment, c))
+                                {
+                                    connection.postGroup = models.get (modelName, cellID, "$groupIndex", c);
+                                    postSegmentIndex = M.indexInColumn (postSegment, c);
+                                    postSegmentSingleton = models.getOrDefaultInt (modelName, cellID, connection.postGroup, "$n", "1") == 1;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Choose part
+                int match = connections.indexOf (connection);
+                if (match >= 0)  // Use existing part.
+                {
+                    connection = connections.get (match);
+                }
+                else  // Create new part, cloning relevant info.
+                {
+                    connections.add (connection);
+                    if (network.child (id) == null) connection.part = network.set (id,           base);
+                    else                            connection.part = network.set (id + childID, base);  // Another part has already consumed the base name, so augment it with some index. Any index will do, but childID is convenient.
+
+                    if (connection.postGroup.isEmpty ()) connection.part.set ("B", B);
+                    else                                 connection.part.set ("B", B + "." + connection.postGroup);
+                    if (connection.preGroup.isEmpty ())
+                    {
+                        connection.part.set ("A", A);
+                        if (Acomponent) addDependency (connection.part.child ("A"), A);
+                    }
+                    else
+                    {
+                        connection.part.set ("A", A + "." + connection.preGroup);
+                    }
+                    if (! connection.preComponent.isEmpty ())
+                    {
+                        connection.part.set ("preComponent", "$inherit", "\"" + connection.preComponent + "\"");
+                        addDependency (connection.part.child ("preComponent"), connection.preComponent);
+                    }
+                    if (! connection.postComponent.isEmpty ())
+                    {
+                        connection.part.set ("postComponent", "$inherit", "\"" + connection.postComponent + "\"");
+                        addDependency (connection.part.child ("postComponent"), connection.postComponent);
+                    }
+                    if (! connection.inherit.isEmpty ())
+                    {
+                        connection.part.set ("$inherit", "\"" + connection.inherit + "\"");
+                        addDependency (connection.part, connection.inherit);
+                    }
+                }
+               
+                // Add conditional info
+
+                String condition = "";
+                if (! preCellSingleton)
+                {
+                    if (connection.preGroup.isEmpty ()) condition = "A.$index=="     + preCell;
+                    else                                condition = "A.$up.$index==" + preCell;
+                }
+                if (! postCellSingleton)
+                {
+                    if (! condition.isEmpty ()) condition += "&&";
+                    if (connection.postGroup.isEmpty ()) condition += "B.$index=="     + postCell;
+                    else                                 condition += "B.$up.$index==" + postCell;
+                }
+                if (! preSegmentSingleton  &&  ! connection.preGroup.isEmpty ())
+                {
+                    if (! condition.isEmpty ()) condition += "&&";
+                    condition += "A.$index==" + preSegmentIndex;
+                }
+                if (! postSegmentSingleton  &&  ! connection.postGroup.isEmpty ())
+                {
+                    if (! condition.isEmpty ()) condition += "&&";
+                    condition += "B.$index==" + postSegmentIndex;
+                }
+                if (! condition.isEmpty ())
+                {
+                    MNode p = connection.part.child ("$p");
+                    if (p == null)
+                    {
+                        connection.part.set ("$p", condition);
+                    }
+                    else
+                    {
+                        if (p.length () == 0)  // There is exactly one condition already existing, and we transition to multi-part equation.
+                        {
+                            p.set ("@", "0");
+                            p.set ("@" + p.get (), "1");
+                            p.set ("");
+                        }
+                        p.set ("@" + condition, "1");
+                    }
+                }
+
+                if (preFraction  != 0.5) connection.add (connection.preFractions,  preFraction,  condition);
+                if (postFraction != 0.5) connection.add (connection.postFractions, postFraction, condition);
+                if (weight       != 1.0) connection.add (connection.weights,       weight,       condition);
+                if (! delay.isEmpty ())  connection.add (connection.delays,        delay,        condition);
+            }
+            for (Connection c : connections) c.injectConditionalValues ();
+
+            if (connections.size () == 0)  // No connections were added, so add a minimalist projection part.
+            {
+                MNode part = network.set (id, base);
+                if (! inherit.isEmpty ())
+                {
+                    part.set ("$inherit", "\"" + inherit + "\"");
+                    addDependency (part, inherit);
+                }
+            }
+        }
+
+        /**
+            Handle all the random and inconsistent ways that population member IDs are represented.
+        **/
+        public String extractIDfromPath (String path)
+        {
+            if (path.isEmpty ()) return path;
+
+            int i = path.indexOf ('[');
+            if (i >= 0)
+            {
+                String suffix = path.substring (i + 1);
+                i = suffix.indexOf (']');
+                if (i >= 0) suffix = suffix.substring (0, i);
+                return suffix;
+            }
+
+            String[] pieces = path.split ("/");
+            if (pieces.length < 3) return path;
+            return pieces[2];
+        }
+
+        public void explicitInput (Node node)
+        {
+            String input  = getAttribute (node, "input");
+            String target = getAttribute (node, "target");
+            int index = 0;
+            int i = target.indexOf ('[');
+            if (i >= 0)
+            {
+                String suffix = target.substring (i + 1);
+                target = target.substring (0, i);
+                i = suffix.indexOf (']');
+                if (i >= 0) suffix = suffix.substring (0, i);
+                index = Integer.valueOf (suffix);
+            }
+
+            String name = input + "_to_" + target;
+            MNode part = network.childOrCreate (name);
+            part.set ("$inherit", "\"Current Injection\"");
+            MNode d = part.set ("A", input);
+            addDependency (d, input);
+            part.set ("B", target);  // The target could also be folded into this connection part during dependency resolution, but that would actually make the model more ugly.
+
+            MNode targetPart = network.child (target);
+            if (targetPart == null  ||  ! targetPart.getOrDefault ("$n", "1").equals ("1"))  // We only have to explicitly set $p if the target part has more than one instance.
+            {
+                part.set ("$p", "@B.$index==" + index, "1");
+                part.set ("$p", "@",                   "0");
+            }
+        }
+
+        public void finish ()
+        {
+            network.clear ("$space");
+            network.clear ("$region");
+            for (MNode p : network) p.clear ("$instance");
+        }
+
+        public void moveUp ()
+        {
+            for (MNode p : network)
+            {
+                MNode dest = models.childOrCreate (modelName, p.key ());
+                dest.merge (p);
+            }
+            models.clear (modelName, id);
         }
     }
 
@@ -1661,297 +1967,6 @@ public class ImportJob
             if (! preComponent .equals (that.preComponent )) return false;
             if (! postComponent.equals (that.postComponent)) return false;
             return true;
-        }
-    }
-
-    /**
-        Contains minor hacks to handle InputList along with the 3 projection types.
-    **/
-    public void projection (Node node, MNode network)
-    {
-        String id             = getAttribute  (node, "id");
-        String inherit        = getAttribute  (node, "synapse");
-        String A              = getAttributes (node, "presynapticPopulation",  "component");
-        String B              = getAttributes (node, "postsynapticPopulation", "population");
-        String projectionType = node.getNodeName ();
-
-        MNode base = new MVolatile ();
-        base.set ("A", A);
-        base.set ("B", B);
-        if      (projectionType.equals ("continuousProjection")) inherit = "continuousProjection";
-        else if (projectionType.equals ("inputList"))            inherit = "Current Injection";
-
-        NamedNodeMap attributes = node.getAttributes ();
-        int count = attributes.getLength ();
-        for (int i = 0; i < count; i++)
-        {
-            Node a = attributes.item (i);
-            String name = a.getNodeName ();
-            if (name.equals ("id"                    )) continue;
-            if (name.equals ("synapse"               )) continue;
-            if (name.equals ("presynapticPopulation" )) continue;
-            if (name.equals ("postsynapticPopulation")) continue;
-            if (name.equals ("component"             )) continue;
-            if (name.equals ("population"            )) continue;
-            base.set (name, biophysicalUnits (a.getNodeValue ()));  // biophysicalUnits() will only modify text if there is a numeric value
-        }
-
-        // Children are specific connections.
-        // In the case of "continuous" connections, there are pre- and post-synaptic components which can vary
-        // from one entry to the next. These must be made into separate connection objects, so try to fold
-        // them as much as possible.
-        // For other connection types, attributes can be set up as conditional constants.
-
-        MNode instancesA = network.child (A, "$instance");
-        MNode instancesB = network.child (B, "$instance");
-
-        boolean postCellSingleton = network.getOrDefaultInt (B, "$n", "1") == 1;  // This assumes that a population always has $n set if it is anything besides 1.
-        boolean preCellSingleton;  // A requires more testing, because it could be the "component" of an input list.
-        boolean Acomponent = ! getAttribute (node, "component").isEmpty ();
-        if (Acomponent) preCellSingleton = models .getOrDefaultInt (modelName, A, "$n", "1") == 1;
-        else            preCellSingleton = network.getOrDefaultInt (           A, "$n", "1") == 1;
-
-        List<Connection> connections = new ArrayList<Connection> ();
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-
-            // Collect data and assemble query
-            Connection connection = new Connection ();
-            int childID        = getAttribute (child, "id", 0);
-            connection.inherit = getAttribute (child, "synapse", inherit);
-
-            connection.preComponent  = getAttribute  (child, "preComponent");
-            String preCell           = getAttributes (child, "preCell", "preCellId");
-            String preSegmentString  = getAttributes (child, "preSegment", "preSegmentId");
-            String preFractionString = getAttribute  (child, "preFractionAlong");
-
-            connection.postComponent  = getAttribute  (child, "postComponent");
-            String postCell           = getAttributes (child, "postCell", "postCellId", "target");
-            String postSegmentString  = getAttributes (child, "postSegment", "postSegmentId", "segmentId");
-            String postFractionString = getAttributes (child, "postFractionAlong", "fractionAlong");
-
-            double weight = getAttribute (child, "weight", 1.0);
-            String delay  = getAttribute (child, "delay");
-
-            int preSegment = -1;
-            if (! preSegmentString.isEmpty ()) preSegment = Integer.valueOf (preSegmentString);
-            double preFraction = 0.5;
-            if (! preFractionString.isEmpty ()) preFraction = Double.valueOf (preFractionString);
-
-            int postSegment = -1;
-            if (! postSegmentString.isEmpty ()) postSegment = Integer.valueOf (postSegmentString);
-            double postFraction = 0.5;
-            if (! postFractionString.isEmpty ()) postFraction = Double.valueOf (postFractionString);
-
-            preCell  = extractIDfromPath (preCell);
-            postCell = extractIDfromPath (postCell);
-            if (instancesA != null) preCell  = instancesA.getOrDefault (preCell,  "$index", preCell);  // Map NeuroML ID to assigned N2A $index, falling back on ID if $index has not been assigned.
-            if (instancesB != null) postCell = instancesB.getOrDefault (postCell, "$index", postCell);
-
-            int preSegmentIndex = 0;
-            boolean preSegmentSingleton = false;
-            if (preSegment >= 0)
-            {
-                // preSegment is the ID, effectively the row in the segment*group matrix
-                // We must find the column associated with it, so we can map to a group part.
-                String cellID = network.get (A, "$inherit").replace ("\"", "");
-                Cell cell = cells.get (cellID);
-                if (cell != null)
-                {
-                    MatrixBoolean M = cell.M;
-                    if (M != null)
-                    {
-                        count = M.columns ();
-                        for (int c = 0; c < count; c++)
-                        {
-                            if (M.get (preSegment, c))
-                            {
-                                connection.preGroup = models.get (modelName, cellID, "$groupIndex", c);
-                                preSegmentIndex = M.indexInColumn (preSegment, c);
-                                preSegmentSingleton = models.getOrDefaultInt (modelName, cellID, connection.preGroup, "$n", "1") == 1;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-
-            int postSegmentIndex = 0;
-            boolean postSegmentSingleton = false;
-            if (postSegment >= 0)
-            {
-                String cellID = network.get (B, "$inherit").replace ("\"", "");
-                Cell cell = cells.get (cellID);
-                if (cell != null)
-                {
-                    MatrixBoolean M = cell.M;
-                    if (M != null)
-                    {
-                        count = M.columns ();
-                        for (int c = 0; c < count; c++)
-                        {
-                            if (M.get (postSegment, c))
-                            {
-                                connection.postGroup = models.get (modelName, cellID, "$groupIndex", c);
-                                postSegmentIndex = M.indexInColumn (postSegment, c);
-                                postSegmentSingleton = models.getOrDefaultInt (modelName, cellID, connection.postGroup, "$n", "1") == 1;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Choose part
-            int match = connections.indexOf (connection);
-            if (match >= 0)  // Use existing part.
-            {
-                connection = connections.get (match);
-            }
-            else  // Create new part, cloning relevant info.
-            {
-                connections.add (connection);
-                if (network.child (id) == null) connection.part = network.set (id,           base);
-                else                            connection.part = network.set (id + childID, base);  // Another part has already consumed the base name, so augment it with some index. Any index will do, but childID is convenient.
-
-                if (connection.postGroup.isEmpty ()) connection.part.set ("B", B);
-                else                                 connection.part.set ("B", B + "." + connection.postGroup);
-                if (connection.preGroup.isEmpty ())
-                {
-                    connection.part.set ("A", A);
-                    if (Acomponent) addDependency (connection.part.child ("A"), A);
-                }
-                else
-                {
-                    connection.part.set ("A", A + "." + connection.preGroup);
-                }
-                if (! connection.preComponent.isEmpty ())
-                {
-                    connection.part.set ("preComponent", "$inherit", "\"" + connection.preComponent + "\"");
-                    addDependency (connection.part.child ("preComponent"), connection.preComponent);
-                }
-                if (! connection.postComponent.isEmpty ())
-                {
-                    connection.part.set ("postComponent", "$inherit", "\"" + connection.postComponent + "\"");
-                    addDependency (connection.part.child ("postComponent"), connection.postComponent);
-                }
-                if (! connection.inherit.isEmpty ())
-                {
-                    connection.part.set ("$inherit", "\"" + connection.inherit + "\"");
-                    addDependency (connection.part, connection.inherit);
-                }
-            }
-           
-            // Add conditional info
-
-            String condition = "";
-            if (! preCellSingleton)
-            {
-                if (connection.preGroup.isEmpty ()) condition = "A.$index=="     + preCell;
-                else                                condition = "A.$up.$index==" + preCell;
-            }
-            if (! postCellSingleton)
-            {
-                if (! condition.isEmpty ()) condition += "&&";
-                if (connection.postGroup.isEmpty ()) condition += "B.$index=="     + postCell;
-                else                                 condition += "B.$up.$index==" + postCell;
-            }
-            if (! preSegmentSingleton  &&  ! connection.preGroup.isEmpty ())
-            {
-                if (! condition.isEmpty ()) condition += "&&";
-                condition += "A.$index==" + preSegmentIndex;
-            }
-            if (! postSegmentSingleton  &&  ! connection.postGroup.isEmpty ())
-            {
-                if (! condition.isEmpty ()) condition += "&&";
-                condition += "B.$index==" + postSegmentIndex;
-            }
-            if (! condition.isEmpty ())
-            {
-                MNode p = connection.part.child ("$p");
-                if (p == null)
-                {
-                    connection.part.set ("$p", condition);
-                }
-                else
-                {
-                    if (p.length () == 0)  // There is exactly one condition already existing, and we transition to multi-part equation.
-                    {
-                        p.set ("@", "0");
-                        p.set ("@" + p.get (), "1");
-                        p.set ("");
-                    }
-                    p.set ("@" + condition, "1");
-                }
-            }
-
-            if (preFraction  != 0.5) connection.add (connection.preFractions,  preFraction,  condition);
-            if (postFraction != 0.5) connection.add (connection.postFractions, postFraction, condition);
-            if (weight       != 1.0) connection.add (connection.weights,       weight,       condition);
-            if (! delay.isEmpty ())  connection.add (connection.delays,        delay,        condition);
-        }
-        for (Connection c : connections) c.injectConditionalValues ();
-
-        if (connections.size () == 0)  // No connections were added, so add a minimalist projection part.
-        {
-            MNode part = network.set (id, base);
-            if (! inherit.isEmpty ())
-            {
-                part.set ("$inherit", "\"" + inherit + "\"");
-                addDependency (part, inherit);
-            }
-        }
-    }
-
-    /**
-        Handle all the random and inconsistent ways that population member IDs are represented.
-    **/
-    public String extractIDfromPath (String path)
-    {
-        if (path.isEmpty ()) return path;
-
-        int i = path.indexOf ('[');
-        if (i >= 0)
-        {
-            String suffix = path.substring (i + 1);
-            i = suffix.indexOf (']');
-            if (i >= 0) suffix = suffix.substring (0, i);
-            return suffix;
-        }
-
-        String[] pieces = path.split ("/");
-        if (pieces.length < 3) return path;
-        return pieces[2];
-    }
-
-    public void explicitInput (Node node, MNode network)
-    {
-        String input  = getAttribute (node, "input");
-        String target = getAttribute (node, "target");
-        int index = 0;
-        int i = target.indexOf ('[');
-        if (i >= 0)
-        {
-            String suffix = target.substring (i + 1);
-            target = target.substring (0, i);
-            i = suffix.indexOf (']');
-            if (i >= 0) suffix = suffix.substring (0, i);
-            index = Integer.valueOf (suffix);
-        }
-
-        String name = input + "_to_" + target;
-        MNode part = network.childOrCreate (name);
-        part.set ("$inherit", "\"Current Injection\"");
-        MNode d = part.set ("A", input);
-        addDependency (d, input);
-        part.set ("B", target);  // The target could also be folded into this connection part during dependency resolution, but that would actually make the model more ugly.
-
-        MNode targetPart = network.child (target);
-        if (targetPart == null  ||  ! targetPart.getOrDefault ("$n", "1").equals ("1"))  // We only have to explicitly set $p if the target part has more than one instance.
-        {
-            part.set ("$p", "@B.$index==" + index, "1");
-            part.set ("$p", "@",                   "0");
         }
     }
 
