@@ -41,15 +41,15 @@ import org.xml.sax.SAXException;
 
 public class ImportJob
 {
-    LinkedList<File>          sources        = new LinkedList<File> ();
-    MNode                     models         = new MVolatile ();
-    String                    modelName      = "";
-    List<MNode>               resolve        = new ArrayList<MNode> ();  // Nodes which contain a $inherit that refers to a locally defined part rather than a standard part. The local part must either be copied in or converted into a global model.
-    Map<String,Node>          morphologies   = new HashMap<String,Node> ();  // Map from IDs to top-level morphology blocks.
-    Map<String,Node>          biophysics     = new HashMap<String,Node> ();  // Map from IDs to top-level biophysics blocks.
-    Map<String,Node>          properties     = new HashMap<String,Node> ();  // Map from IDs to top-level intra- or extra-cellular property blocks.
-    Map<String,Cell>          cells          = new HashMap<String,Cell> ();
-    Map<String,Network>       networks       = new HashMap<String,Network> ();
+    LinkedList<File>              sources      = new LinkedList<File> ();
+    MNode                         models       = new MVolatile ();
+    String                        modelName    = "";
+    Map<Integer,ArrayList<MNode>> resolve      = new HashMap<Integer,ArrayList<MNode>> ();  // Nodes which contain a $inherit that refers to a locally defined part rather than a standard part. The local part must either be copied in or converted into a global model.
+    Map<String,Node>              morphologies = new HashMap<String,Node> ();  // Map from IDs to top-level morphology blocks.
+    Map<String,Node>              biophysics   = new HashMap<String,Node> ();  // Map from IDs to top-level biophysics blocks.
+    Map<String,Node>              properties   = new HashMap<String,Node> ();  // Map from IDs to top-level intra- or extra-cellular property blocks.
+    Map<String,Cell>              cells        = new HashMap<String,Cell> ();
+    Map<String,Network>           networks     = new HashMap<String,Network> ();
 
     Pattern floatParser   = Pattern.compile ("[-+]?(NaN|Infinity|([0-9]*\\.?[0-9]*([eE][-+]?[0-9]+)?))");
     Pattern forbiddenUCUM = Pattern.compile ("[.,;><=!&|+\\-*/%\\^~]");
@@ -164,9 +164,22 @@ public class ImportJob
         }
     }
 
-    public void addDependency (MNode part, String inherit)
+    /**
+        @param order It is necessary to resolve the children of a part before that part is used in resolving
+        some other reference. Otherwise, the copied content will not contain the resolved children.
+        Manually specifying the order is crude and fragile, but efficient. The alternative is to build
+        a dependency graph.
+    **/
+    public void addDependency (int order, MNode part, String inherit)
     {
-        resolve.add (part);
+        ArrayList<MNode> referents = resolve.get (order);
+        if (referents == null)
+        {
+            referents = new ArrayList<MNode> ();
+            resolve.put (order, referents);
+        }
+        referents.add (part);
+
         MNode component = models.childOrCreate (modelName, inherit);
         int count = component.getInt ("$count");
         component.set ("$count", count + 1);
@@ -178,63 +191,66 @@ public class ImportJob
     **/
     public void postprocess ()
     {
-        // Remove some temporary keys before doing merges.
-        for (MNode c : models.child (modelName)) c.clear ("$groupIndex");
+        for (Entry<String,Cell>    e : cells   .entrySet ()) e.getValue ().finish ();
+        for (Entry<String,Network> e : networks.entrySet ()) e.getValue ().finish ();
 
         // Resolve referenced parts
-        for (MNode r : resolve)
+        for (ArrayList<MNode> referents : resolve.values ())
         {
-            String partName = r.get ("$inherit").replace ("\"", "");
-            if (partName.isEmpty ()) partName = r.get ();  // For connections, the part name might be a direct value.
-            MNode part = models.child (modelName, partName);
-            if (part == null) continue;
+            for (MNode r : referents)
+            {
+                String partName = r.get ("$inherit").replace ("\"", "");
+                if (partName.isEmpty ()) partName = r.get ();  // For connections, the part name might be a direct value.
+                MNode part = models.child (modelName, partName);
+                if (part == null) continue;
 
-            // Triage
-            int count = part.getInt ("$count");
-            boolean connected = part.child ("$connected") != null;
-            if (count > 0)  // triage is necessary
-            {
-                if (count == 1)
+                // Triage
+                int count = part.getInt ("$count");
+                boolean connected = part.child ("$connected") != null;
+                if (count > 0)  // triage is necessary
                 {
-                    count = -1;  // part has only one user, so it should simply be deleted after merging
-                }
-                else  // count > 1, so part could be moved out to its own model
-                {
-                    if (connected)
+                    if (count == 1)
                     {
-                        count = -3;
+                        count = -1;  // part has only one user, so it should simply be deleted after merging
                     }
-                    else
+                    else  // count > 1, so part could be moved out to its own model
                     {
-                        // Criterion: If a part has subparts, then it is heavy-weight and should be moved out.
-                        // A part that merely sets some parameters on an inherited model is light-weight, and should simply be merged everywhere it is used.
-                        boolean heavy = false;
-                        for (MNode s : part)
+                        if (connected)
                         {
-                            if (MPart.isPart (s))
-                            {
-                                heavy = true;
-                                break;
-                            }
+                            count = -3;
                         }
-                        if (heavy) count = -2;  // part should be made into an independent model
-                        else       count = -1;
+                        else
+                        {
+                            // Criterion: If a part has subparts, then it is heavy-weight and should be moved out.
+                            // A part that merely sets some parameters on an inherited model is light-weight, and should simply be merged everywhere it is used.
+                            boolean heavy = false;
+                            for (MNode s : part)
+                            {
+                                if (MPart.isPart (s))
+                                {
+                                    heavy = true;
+                                    break;
+                                }
+                            }
+                            if (heavy) count = -2;  // part should be made into an independent model
+                            else       count = -1;
+                        }
                     }
+                    part.set ("$count", count);
                 }
-                part.set ("$count", count);
+                if (count == -1)
+                {
+                    // TODO: This should really be an underride, not override. However, there don't seem to be any conflicting nodes.
+                    r.merge (part);
+                    r.clear ("$count");
+                    r.clear ("$connected");
+                }
+                else if (count == -2)
+                {
+                    r.set ("$inherit", "\"" + modelName + " " + partName + "\"");
+                }
+                // count == -3 means leave in place as a connection target
             }
-            if (count == -1)
-            {
-                // TODO: This should really be an underride, not override. However, there don't seem to be any conflicting nodes.
-                r.merge (part);
-                r.clear ("$count");
-                r.clear ("$connected");
-            }
-            else if (count == -2)
-            {
-                r.set ("$inherit", "\"" + modelName + " " + partName + "\"");
-            }
-            // count == -3 means leave in place as a connection target
         }
 
         // Move heavy-weight parts into separate models
@@ -263,7 +279,7 @@ public class ImportJob
 
     public void ionChannel (Node node)
     {
-        String id      = getAttribute (node, "id", "MISSING_ID");
+        String id      = getAttribute (node, "id");
         String type    = getAttribute (node, "type");
         String species = getAttribute (node, "species");
         String inherit;
@@ -296,7 +312,7 @@ public class ImportJob
 
     public void gate (Node node, MNode container)
     {
-        String id   = getAttribute (node, "id", "MISSING_ID");
+        String id   = getAttribute (node, "id");
         String type = getAttribute (node, "type");
         String inherit;
         if (type.isEmpty ()) inherit = node.getNodeName ();
@@ -330,7 +346,7 @@ public class ImportJob
 
     public void rate (Node node, MNode container)
     {
-        String type = getAttribute (node, "type", "MISSING_TYPE");
+        String type = getAttribute (node, "type");
         MNode part = container.set (node.getNodeName (), "");
         part.set ("$inherit", "\"" + type + "\"");
 
@@ -390,10 +406,11 @@ public class ImportJob
         MatrixBoolean        G                  = new MatrixBoolean ();
         MatrixBoolean        O                  = new MatrixBoolean ();
         MatrixBoolean        M                  = new MatrixBoolean ();
+        Map<Integer,String>  groupIndex         = new HashMap<Integer,String> ();
 
         public Cell (Node node)
         {
-            id   = getAttribute (node, "id", "MISSING_ID");  // MISSING_ID indicates an ill-formed nml file.
+            id   = getAttribute (node, "id");
             cell = models.childOrCreate (modelName, id);
             cell.set ("$inherit", "\"cell\"");
 
@@ -422,8 +439,6 @@ public class ImportJob
                 Node child = biophysics.get (include);
                 if (child != null) biophysicalProperties (child);
             }
-
-            finish ();  // TODO: move this to postprocess()
         }
 
         /**
@@ -465,7 +480,7 @@ public class ImportJob
             String groupName = getAttribute (node, "id");
             MNode part = groups.childOrCreate (groupName);
             part.set ("$G", c);
-            cell.set ("$groupIndex", c, groupName);
+            groupIndex.put (c, groupName);
 
             NamedNodeMap attributes = node.getAttributes ();
             int count = attributes.getLength ();
@@ -678,7 +693,7 @@ public class ImportJob
                         int c = groups.length ();
                         G.set (r, c);
                         groups.set (group, "$G", c);
-                        cell.set ("$groupIndex", c, group);
+                        groupIndex.put (c, group);
                     }
                 }
             }
@@ -817,7 +832,7 @@ public class ImportJob
                 String name = segments.get (smallestID).name;  // Name the group after the first segment, if it has a name.
                 if (name.isEmpty ()) name = "segments";
                 cell.set ("$group", name, "$G", 0);
-                cell.set ("$groupIndex", 0, name);
+                groupIndex.put (0, name);
             }
 
             MNode properties = cell.child ("$properties");
@@ -850,10 +865,10 @@ public class ImportJob
                                 }
                             }
                             if (bestColumn == currentColumn) newName = "segment_" + r;
-                            else                             newName = cell.get ("$groupIndex", bestColumn) + "_" + r;
+                            else                             newName = groupIndex.get (bestColumn) + "_" + r;
                         }
                         cell.child ("$group").move (groupName, newName);
-                        cell.set ("$groupIndex", currentColumn, newName);
+                        groupIndex.put (currentColumn, newName);
                         p.set (newName);
                         groupName = newName;
                     }
@@ -912,7 +927,7 @@ public class ImportJob
                     if (A.equals (G.column (j)))
                     {
                         found = true;
-                        String name = cell.get ("$groupIndex", j);  // maps index to group name
+                        String name = groupIndex.get (j);  // maps index to group name
                         cell.set (name, "");
                         finalNames.put (i, name);
                         break;
@@ -962,7 +977,7 @@ public class ImportJob
                 {
                     it.remove ();
 
-                    String name = cell.get ("$groupIndex", bestIndex);
+                    String name = groupIndex.get (bestIndex);
                     cell.set (name, "");
                     finalNames.put (i, name);
                 }
@@ -976,7 +991,7 @@ public class ImportJob
                 {
                     if (O.get (i, j))
                     {
-                        String groupName = cell.get ("$groupIndex", j);
+                        String groupName = groupIndex.get (j);
                         if (! name.isEmpty ()) name = name + "_";
                         name = name + groupName;
                     }
@@ -1030,19 +1045,24 @@ public class ImportJob
                 for (int i = 0; i < columnsG; i++) if (O.get (c, i)) sortedColumns.add (new ColumnSize (i, G.columnNorm0 (i)));
                 for (ColumnSize cs : sortedColumns)
                 {
-                    String groupName = cell.get ("$groupIndex", cs.column);  // a name from the original set of groups, not the new groups
+                    String groupName = groupIndex.get (cs.column);  // a name from the original set of groups, not the new groups
                     part.mergeUnder (cell.child ("$group", groupName));
                 }
                 for (MNode property : part)
                 {
-                    // Any subparts of a membrane property are likely to be associated with top-level definitions, so tag the dependency.
+                    String inherit = property.get ("$inherit").replace ("\"", "");
+                    if (! inherit.isEmpty ())
+                    {
+                        // If not a standard part, then it is probably one defined by the import, so tag the dependency.
+                        MNode model = AppData.models.child (inherit);
+                        if (model == null  ||  model.child ("$metadata", "backend.neuroml.part") == null) addDependency (1, property, inherit);
+                    }
                     for (MNode m : property)
                     {
-                        String inherit = m.get ("$inherit").replace ("\"", "");
-                        if (inherit.isEmpty ()) continue;  // $metadata and any parameters are at the same level as subparts, but they will of course lack a $inherit line.
-                        // check for standard part
+                        inherit = m.get ("$inherit").replace ("\"", "");
+                        if (inherit.isEmpty ()) continue;
                         MNode model = AppData.models.child (inherit);
-                        if (model == null  ||  model.child ("$metadata", "backend.neuroml.part") == null) addDependency (m, inherit);
+                        if (model == null  ||  model.child ("$metadata", "backend.neuroml.part") == null) addDependency (0, m, inherit);
                     }
                 }
 
@@ -1141,7 +1161,6 @@ public class ImportJob
             // Clean up temporary nodes.
             cell.clear ("$properties");
             cell.clear ("$group");
-            cell.clear ("$groupIndex");
             for (MNode part : cell)
             {
                 part.clear ("$parent");
@@ -1152,7 +1171,7 @@ public class ImportJob
                     v.clear ("$metadata", "backend.neuroml.param.b");
                 }
             }
-            for (Entry<Integer,String> e : finalNames.entrySet ()) cell.set ("$groupIndex", e.getKey (), e.getValue ());
+            groupIndex = finalNames;
         }
     }
 
@@ -1315,6 +1334,8 @@ public class ImportJob
         units = units.replace ("ohm",   "Ohm");
         units = units.replace ("KOhm",  "kOhm");
         units = units.replace ("degC",  "Cel");
+        if (units.equals ("M" )) units = "mol";
+        if (units.equals ("mM")) units = "mmol";
         if (forbiddenUCUM.matcher (units).find ()) return "(" + units + ")";
         return units;
     }
@@ -1369,6 +1390,7 @@ public class ImportJob
         String id;
         MNode network;
         List<Node> extracellularProperties = new ArrayList<Node> ();
+        List<Node> projections             = new ArrayList<Node> ();
 
         public Network (Node node)
         {
@@ -1400,15 +1422,13 @@ public class ImportJob
                     case "continuousProjection":
                     case "electricalProjection":
                     case "inputList":
-                        projection (child);
+                        projections.add (child);
                         break;
                     case "explicitInput":
                         explicitInput (child);
                         break;
                 }
             }
-
-            finish ();  // TODO; move this to postprocess()
         }
 
         public void space (Node node)
@@ -1442,7 +1462,7 @@ public class ImportJob
 
             MNode part = network.set (id, "");
             part.set ("$inherit", "\"" + component + "\"");
-            addDependency (part, component);
+            addDependency (2, part, component);
             if (n > 1) part.set ("$n", n);
 
             // Add intra/extra cellular properties to inherited cell
@@ -1665,7 +1685,7 @@ public class ImportJob
                             {
                                 if (M.get (preSegment, c))
                                 {
-                                    connection.preGroup = models.get (modelName, cellID, "$groupIndex", c);
+                                    connection.preGroup = cell.groupIndex.get (c);
                                     preSegmentIndex = M.indexInColumn (preSegment, c);
                                     preSegmentSingleton = models.getOrDefaultInt (modelName, cellID, connection.preGroup, "$n", "1") == 1;
                                     break;
@@ -1691,7 +1711,7 @@ public class ImportJob
                             {
                                 if (M.get (postSegment, c))
                                 {
-                                    connection.postGroup = models.get (modelName, cellID, "$groupIndex", c);
+                                    connection.postGroup = cell.groupIndex.get (c);
                                     postSegmentIndex = M.indexInColumn (postSegment, c);
                                     postSegmentSingleton = models.getOrDefaultInt (modelName, cellID, connection.postGroup, "$n", "1") == 1;
                                     break;
@@ -1718,7 +1738,7 @@ public class ImportJob
                     if (connection.preGroup.isEmpty ())
                     {
                         connection.part.set ("A", A);
-                        if (Acomponent) addDependency (connection.part.child ("A"), A);
+                        if (Acomponent) addDependency (0, connection.part.child ("A"), A);
                     }
                     else
                     {
@@ -1727,17 +1747,17 @@ public class ImportJob
                     if (! connection.preComponent.isEmpty ())
                     {
                         connection.part.set ("preComponent", "$inherit", "\"" + connection.preComponent + "\"");
-                        addDependency (connection.part.child ("preComponent"), connection.preComponent);
+                        addDependency (0, connection.part.child ("preComponent"), connection.preComponent);
                     }
                     if (! connection.postComponent.isEmpty ())
                     {
                         connection.part.set ("postComponent", "$inherit", "\"" + connection.postComponent + "\"");
-                        addDependency (connection.part.child ("postComponent"), connection.postComponent);
+                        addDependency (0, connection.part.child ("postComponent"), connection.postComponent);
                     }
                     if (! connection.inherit.isEmpty ())
                     {
                         connection.part.set ("$inherit", "\"" + connection.inherit + "\"");
-                        addDependency (connection.part, connection.inherit);
+                        addDependency (0, connection.part, connection.inherit);
                     }
                 }
                
@@ -1797,7 +1817,7 @@ public class ImportJob
                 if (! inherit.isEmpty ())
                 {
                     part.set ("$inherit", "\"" + inherit + "\"");
-                    addDependency (part, inherit);
+                    addDependency (0, part, inherit);
                 }
             }
         }
@@ -1842,8 +1862,8 @@ public class ImportJob
             MNode part = network.childOrCreate (name);
             part.set ("$inherit", "\"Current Injection\"");
             MNode d = part.set ("A", input);
-            addDependency (d, input);
-            part.set ("B", target);  // The target could also be folded into this connection part during dependency resolution, but that would actually make the model more ugly.
+            addDependency (0, d, input);
+            part.set ("B", target);  // Like the input, the target could be folded into this connection part during dependency resolution, but that would actually make the model more ugly.
 
             MNode targetPart = network.child (target);
             if (targetPart == null  ||  ! targetPart.getOrDefault ("$n", "1").equals ("1"))  // We only have to explicitly set $p if the target part has more than one instance.
@@ -1855,6 +1875,7 @@ public class ImportJob
 
         public void finish ()
         {
+            for (Node p : projections) projection (p);
             network.clear ("$space");
             network.clear ("$region");
             for (MNode p : network) p.clear ("$instance");
