@@ -139,6 +139,11 @@ public class ImportJob
                 case "ionChannelKS":
                     ionChannel (child);
                     break;
+                case "decayingPoolConcentrationModel":
+                case "fixedFactorConcentrationModel":
+                    MNode part = genericPart (child, model);
+                    part.clear ("ion");
+                    break;
                 case "blockingPlasticSynapse":
                     blockingPlasticSynapse (child);
                     break;
@@ -304,9 +309,88 @@ public class ImportJob
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
             if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-            String nodeName = child.getNodeName ();
-            if (nodeName.startsWith ("gate")) gate (child, part);
-            else genericPart (child, part);
+            String name = child.getNodeName ();
+            if      (name.startsWith ("q10"   )) q10ConductanceScaling (child, part);
+            else if (name.equals     ("gateKS")) gateKS                (child, part);
+            else if (name.startsWith ("gate"  )) gate                  (child, part);
+            else                                 genericPart           (child, part);
+        }
+    }
+
+    public void q10ConductanceScaling (Node node, MNode part)
+    {
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () == Node.ELEMENT_NODE) part.set (child.getNodeName (), child.getNodeValue ());
+        }
+    }
+
+    public void gateKS (Node node, MNode container)
+    {
+        String id = getAttribute (node, "id");
+        MNode part = container.set (id, "");
+        part.set ("$inherit", "\"gateKS\"");
+
+        NamedNodeMap attributes = node.getAttributes ();
+        int count = attributes.getLength ();
+        for (int i = 0; i < count; i++)
+        {
+            Node a = attributes.item (i);
+            String name = a.getNodeName ();
+            if (name.equals ("id")) continue;
+            part.set (name, biophysicalUnits (a.getNodeValue ()));
+        }
+
+        int openState   =  1;
+        int closedState = -1;
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+            String name = child.getNodeName ();
+            if      (name.equals   ("openState"  )) part.set (getAttribute (child, "id"), openState++);
+            else if (name.equals   ("closedState")) part.set (getAttribute (child, "id"), closedState--);
+            else if (name.equals   ("notes"      )) part.set ("$metadata", "notes", getText (child));
+            else if (name.endsWith ("Transition" )) transition (child, part);
+            else                                    rate       (child, part);
+        }
+    }
+
+    public void transition (Node node, MNode container)
+    {
+        String id = getAttribute (node, "id");
+        MNode part = container.set (id, "");
+        part.set ("$inherit", "\"" + node.getNodeName () + "\"");
+
+        NamedNodeMap attributes = node.getAttributes ();
+        int count = attributes.getLength ();
+        for (int i = 0; i < count; i++)
+        {
+            Node a = attributes.item (i);
+            String name = a.getNodeName ();
+            if (name.equals ("id")) continue;
+            part.set (name, a.getNodeValue ());
+        }
+
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () == Node.ELEMENT_NODE) rate (child, part);
+        }
+    }
+
+    public void rate (Node node, MNode container)
+    {
+        String type = getAttribute (node, "type");
+        MNode part = container.set (node.getNodeName (), "");
+        part.set ("$inherit", "\"" + type + "\"");
+
+        NamedNodeMap attributes = node.getAttributes ();
+        int count = attributes.getLength ();
+        for (int i = 0; i < count; i++)
+        {
+            Node a = attributes.item (i);
+            String name = a.getNodeName ();
+            if (name.equals ("type")) continue;
+            part.set (name, biophysicalUnits (a.getNodeValue ()));
         }
     }
 
@@ -328,41 +412,16 @@ public class ImportJob
             String name = a.getNodeName ();
             if (name.equals ("id")) continue;
             if (name.equals ("type")) continue;
-            part.set (name, biophysicalUnits (a.getNodeValue ()));  // biophysicalUnits() will only modify text if there is a numeric value
+            part.set (name, biophysicalUnits (a.getNodeValue ()));
         }
 
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
             if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-            switch (child.getNodeName ())
-            {
-                case "forwardRate":
-                case "reverseRate":
-                    rate (child, part);
-                    break;
-            }
-        }
-    }
-
-    public void rate (Node node, MNode container)
-    {
-        String type = getAttribute (node, "type");
-        MNode part = container.set (node.getNodeName (), "");
-        part.set ("$inherit", "\"" + type + "\"");
-
-        NamedNodeMap attributes = node.getAttributes ();
-        int count = attributes.getLength ();
-        for (int i = 0; i < count; i++)
-        {
-            Node a = attributes.item (i);
-            String name = a.getNodeName ();
-            if (name.equals ("type")) continue;
-            part.set (name, biophysicalUnits (a.getNodeValue ()));  // biophysicalUnits() will only modify text if there is a numeric value
-        }
-
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            if (child.getNodeType () == Node.ELEMENT_NODE) genericPart (child, part);
+            String name = child.getNodeName ();
+            if      (name.equals ("subGate")) gate (child, part);
+            else if (name.equals ("notes"))   part.set ("$metadata", "notes", getText (child));
+            else                              rate (child, part);
         }
     }
 
@@ -379,7 +438,7 @@ public class ImportJob
             Node a = attributes.item (i);
             String name = a.getNodeName ();
             if (name.equals ("id")) continue;
-            part.set (name, biophysicalUnits (a.getNodeValue ()));  // biophysicalUnits() will only modify text if there is a numeric value
+            part.set (name, biophysicalUnits (a.getNodeValue ()));
         }
 
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
@@ -712,7 +771,8 @@ public class ImportJob
                 if (name.equals ("segment")) continue;
                 if (name.equals ("segmentGroup")) continue;
                 if (name.equals ("value")) continue;  // Caller will extract this directly from XML node.
-                subpart.set (name, biophysicalUnits (a.getNodeValue ()));  // biophysicalUnits() will only modify text if there is a numeric value
+                if (name.equals ("ion")) continue;  // never used
+                subpart.set (name, biophysicalUnits (a.getNodeValue ()));
             }
             return result;
         }
@@ -727,10 +787,6 @@ public class ImportJob
             String ionChannel = subpart.get ("ionChannel");
             subpart.clear ("ionChannel");
             subpart.set ("ionChannel", "$inherit", "\"" + ionChannel + "\"");
-
-            String ion = subpart.get ("ion");
-            subpart.clear ("ion");
-            subpart.set ("$metadata", "ion", ion);
 
             String parentGroup = property.get ();
             Map<String,MNode> groupProperty = new TreeMap<String,MNode> ();
@@ -1418,6 +1474,8 @@ public class ImportJob
                     case "population":
                         population (child);
                         break;
+                    // TODO: cellSet -- Ignoring. Has one attribute and no elements. Attribute is ill-defined.
+                    // TODO: synapticConnection -- Appears to be deprecated.
                     case "projection":
                     case "continuousProjection":
                     case "electricalProjection":
@@ -1611,7 +1669,7 @@ public class ImportJob
                 if (name.equals ("postsynapticPopulation")) continue;
                 if (name.equals ("component"             )) continue;
                 if (name.equals ("population"            )) continue;
-                base.set (name, biophysicalUnits (a.getNodeValue ()));  // biophysicalUnits() will only modify text if there is a numeric value
+                base.set (name, biophysicalUnits (a.getNodeValue ()));
             }
 
             // Children are specific connections.
@@ -1996,22 +2054,22 @@ public class ImportJob
         Generic elements get processed into parts under the given container.
         Metadata elements get added to the $metadata node the given container.
     **/
-    public void genericPart (Node node, MNode container)
+    public MNode genericPart (Node node, MNode container)
     {
         String name = node.getNodeName ();
         if (name.equals ("notes"))
         {
             container.set ("$metadata", "notes", getText (node));
-            return;
+            return container.child ("$metadata", "notes");
         }
         if (name.equals ("property"))
         {
             String tag   = getAttribute (node, "tag");
             String value = getAttribute (node, "value");
             container.set ("$metadata", tag, value);
-            return;
+            return container.child ("$metadata", tag);
         }
-        if (name.equals ("annotation")) return;
+        if (name.equals ("annotation")) return null;  // TODO: process annotations
 
         String id = getAttribute (node, "id", name);
         String stem = id;
@@ -2027,13 +2085,15 @@ public class ImportJob
             Node a = attributes.item (i);
             name = a.getNodeName ();
             if (name.equals ("id")) continue;
-            part.set (name, biophysicalUnits (a.getNodeValue ()));  // biophysicalUnits() will only modify text if there is a numeric value
+            part.set (name, biophysicalUnits (a.getNodeValue ()));
         }
 
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
             if (child.getNodeType () == Node.ELEMENT_NODE) genericPart (child, part);
         }
+
+        return part;
     }
 
     public String getText (Node node)
