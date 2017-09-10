@@ -288,6 +288,8 @@ public class MDir extends MNode
             String[] fileNames = root.list ();  // This may cost a lot of time in some cases. However, N2A should never have more than about 10,000 models in a dir.
             for (String index : fileNames)
             {
+                if (index.startsWith (".")) continue; // Filter out special files. This allows, for example, a git repo to share the models dir.
+
                 // This is a slightly more compact version of child(index)
                 MDoc doc = null;
                 SoftReference<MDoc> ref = children.get (index);
