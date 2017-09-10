@@ -1,5 +1,5 @@
 /*
-Copyright 2016 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
 /**
@@ -81,42 +82,20 @@ public class AppData
     {
         if (models.length () > 0) return;
 
-        // Unfortunately, this list must be maintained to match the initial set of models.
-        // It is possible to scan the directory, but it requires sifting through the whole jar file.
-        // The method used here is more time efficient.
-        // TODO: Switch to a zip file as payload. Expand it blindly in the data dir, then scan the dir like a normal startup
-        String[] sourceFiles = new String []
+        try (ZipInputStream zip = new ZipInputStream (AppData.class.getResource ("models").openStream ()))
         {
-            "Channel",
-            "Channel K",
-            "Channel Na",
-            "Coupling Voltage",
-            "Example Hodgkin-Huxley Cable",
-            "Cell",
-            //"Cell Brette",
-            "Cell Hodgkin-Huxley",
-            "Cell Izhikevich",
-            "Cell Izhikevich 2007",
-            "Cell LIF",
-            "Synapse Alpha",
-            "Synapse Conductance",
-            "Synapse Exponential",
-            "Synapse Exponential Double",
-            "Synapse Voltage Step"
-        };
-        try
-        {
-            for (String s : sourceFiles)
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry ()) != null)
             {
-                MDoc doc = (MDoc) models.set (s, "");
-                BufferedReader reader = new BufferedReader (new InputStreamReader ((AppData.class.getResource ("init/" + s).openStream ())));
+                MDoc doc = (MDoc) models.set (entry.getName (), "");
+                BufferedReader reader = new BufferedReader (new InputStreamReader (zip));
                 reader.readLine ();  // dispose of schema line
                 doc.read (reader);
-                reader.close ();
             }
         }
-        catch (IOException e)
+        catch (Exception e)
         {
+            e.printStackTrace ();
             System.err.println ("Unable to load some or all of initial DB");
         }
     }
