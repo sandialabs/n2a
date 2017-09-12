@@ -31,6 +31,7 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
 import java.io.StringWriter;
@@ -134,42 +135,60 @@ public class PanelSearch extends JPanel
         {
             public boolean canImport (TransferSupport xfer)
             {
-                return xfer.isDataFlavorSupported (DataFlavor.stringFlavor);
+                return xfer.isDataFlavorSupported (DataFlavor.stringFlavor)  ||  xfer.isDataFlavorSupported (DataFlavor.javaFileListFlavor);
             }
 
             public boolean importData (TransferSupport xfer)
             {
-                Schema schema = new Schema ();
-                MNode data = new MVolatile ();
-                TransferableNode xferNode = null;
-                try
+                Transferable xferable = xfer.getTransferable ();
+                if (xfer.isDataFlavorSupported (DataFlavor.javaFileListFlavor))
                 {
-                    Transferable xferable = xfer.getTransferable ();
-                    StringReader reader = new StringReader ((String) xferable.getTransferData (DataFlavor.stringFlavor));
-                    schema.readAll (reader, data);
-                    if (xferable.isDataFlavorSupported (PanelEquationTree.nodeFlavor)) xferNode = (TransferableNode) xferable.getTransferData (PanelEquationTree.nodeFlavor);
-                }
-                catch (IOException | UnsupportedFlavorException e)
-                {
-                    return false;
-                }
-
-                if (! schema.type.contains ("Part")) return false;
-                PanelModel.instance.undoManager.addEdit (new CompoundEdit ());
-                for (MNode n : data)  // data can contain several parts
-                {
-                    AddDoc add = new AddDoc (n.key (), n);
-                    if (xferNode != null  &&  xferNode.drag)
+                    try
                     {
-                        add.wasShowing = false;  // on the presumption that the sending side will create an Outsource operation, and thus wants to keep the old model in the equation tree
-                        xferNode.newPartName = add.name;
+                        @SuppressWarnings("unchecked")
+                        List<File> files = (List<File>) xferable.getTransferData (DataFlavor.javaFileListFlavor);
+                        for (File path : files) PanelEquationTree.importFile (path);
+                        return true;
                     }
-                    PanelModel.instance.undoManager.add (add);
-                    break;  // For now, we only support transferring a single part. To do more, we need to add collections in TransferableNode for both the node paths and the created part names.
+                    catch (IOException | UnsupportedFlavorException e)
+                    {
+                    }
                 }
-                if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE  ||  xferNode == null) PanelModel.instance.undoManager.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
+                else if (xfer.isDataFlavorSupported (DataFlavor.stringFlavor))
+                {
+                    Schema schema = new Schema ();
+                    MNode data = new MVolatile ();
+                    TransferableNode xferNode = null;
+                    try
+                    {
+                        StringReader reader = new StringReader ((String) xferable.getTransferData (DataFlavor.stringFlavor));
+                        schema.readAll (reader, data);
+                        if (xferable.isDataFlavorSupported (PanelEquationTree.nodeFlavor)) xferNode = (TransferableNode) xferable.getTransferData (PanelEquationTree.nodeFlavor);
+                    }
+                    catch (IOException | UnsupportedFlavorException e)
+                    {
+                        return false;
+                    }
 
-                return true;
+                    if (! schema.type.contains ("Part")) return false;
+                    PanelModel.instance.undoManager.addEdit (new CompoundEdit ());
+                    for (MNode n : data)  // data can contain several parts
+                    {
+                        AddDoc add = new AddDoc (n.key (), n);
+                        if (xferNode != null  &&  xferNode.drag)
+                        {
+                            add.wasShowing = false;  // on the presumption that the sending side will create an Outsource operation, and thus wants to keep the old model in the equation tree
+                            xferNode.newPartName = add.name;
+                        }
+                        PanelModel.instance.undoManager.add (add);
+                        break;  // For now, we only support transferring a single part. To do more, we need to add collections in TransferableNode for both the node paths and the created part names.
+                    }
+                    if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE  ||  xferNode == null) PanelModel.instance.undoManager.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
+
+                    return true;
+                }
+
+                return false;
             }
 
             public int getSourceActions (JComponent comp)

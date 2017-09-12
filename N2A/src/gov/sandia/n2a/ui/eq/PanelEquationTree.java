@@ -1064,21 +1064,26 @@ public class PanelEquationTree extends JPanel
             if (result == JFileChooser.APPROVE_OPTION)
             {
                 File path = fc.getSelectedFile ();
-                Importer bestImporter = null;
-                float    bestP        = 0;
-                for (ExtensionPoint exp : exps)
-                {
-                    float P = ((Importer) exp).isIn (path);
-                    if (P > bestP)
-                    {
-                        bestP        = P;
-                        bestImporter = (Importer) exp;
-                    }
-                }
-                if (bestImporter != null) bestImporter.process (path);
+                importFile (path);
             }
         }
     };
+
+    public static void importFile (File path)
+    {
+        Importer bestImporter = null;
+        float    bestP        = 0;
+        for (ExtensionPoint exp : PluginManager.getExtensionsForPoint (Importer.class))
+        {
+            float P = ((Importer) exp).isIn (path);
+            if (P > bestP)
+            {
+                bestP        = P;
+                bestImporter = (Importer) exp;
+            }
+        }
+        if (bestImporter != null) bestImporter.process (path);
+    }
 
     ActionListener listenerFilter = new ActionListener ()
     {

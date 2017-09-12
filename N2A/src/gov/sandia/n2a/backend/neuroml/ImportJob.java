@@ -41,15 +41,15 @@ import org.xml.sax.SAXException;
 
 public class ImportJob
 {
-    LinkedList<File>              sources      = new LinkedList<File> ();
-    MNode                         models       = new MVolatile ();
-    String                        modelName    = "";
-    Map<Integer,ArrayList<MNode>> resolve      = new HashMap<Integer,ArrayList<MNode>> ();  // Nodes which contain a $inherit that refers to a locally defined part rather than a standard part. The local part must either be copied in or converted into a global model.
-    Map<String,Node>              morphologies = new HashMap<String,Node> ();  // Map from IDs to top-level morphology blocks.
-    Map<String,Node>              biophysics   = new HashMap<String,Node> ();  // Map from IDs to top-level biophysics blocks.
-    Map<String,Node>              properties   = new HashMap<String,Node> ();  // Map from IDs to top-level intra- or extra-cellular property blocks.
-    Map<String,Cell>              cells        = new HashMap<String,Cell> ();
-    Map<String,Network>           networks     = new HashMap<String,Network> ();
+    LinkedList<File>    sources      = new LinkedList<File> ();
+    MNode               models       = new MVolatile ();
+    String              modelName    = "";
+    Set<MNode>          dependents   = new HashSet<MNode> ();        // Nodes which contain a $inherit that refers to a locally defined part rather than a standard part. The local part must either be copied in or converted into a global model.
+    Map<String,Node>    morphologies = new HashMap<String,Node> ();  // Map from IDs to top-level morphology blocks.
+    Map<String,Node>    biophysics   = new HashMap<String,Node> ();  // Map from IDs to top-level biophysics blocks.
+    Map<String,Node>    properties   = new HashMap<String,Node> ();  // Map from IDs to top-level intra- or extra-cellular property blocks.
+    Map<String,Cell>    cells        = new HashMap<String,Cell> ();
+    Map<String,Network> networks     = new HashMap<String,Network> ();
 
     Pattern floatParser   = Pattern.compile ("[-+]?(NaN|Infinity|([0-9]*\\.?[0-9]*([eE][-+]?[0-9]+)?))");
     Pattern forbiddenUCUM = Pattern.compile ("[.,;><=!&|+\\-*/%\\^~]");
@@ -127,6 +127,8 @@ public class ImportJob
                     File nextSource = new File (sources.getLast ().getParentFile (), getAttribute (child, "href"));
                     process (nextSource);
                     break;
+
+                // NeuroML ---------------------------------------------------
                 case "intracellularProperties":
                 case "extracellularProperties":
                     properties.put (getAttribute (child, "id"), child);
@@ -165,30 +167,63 @@ public class ImportJob
                 default:
                     genericPart (child, model);  // Assume that any top-level element not captured above is an abstract cell type.
                     break;
+
+                // LEMS ------------------------------------------------------
+                // Because the default genericPart() above is written for NeuroML, all LEMS tags must be specified, even if we ignore them.
+                case "Target":
+                    target (child);
+                case "Dimension":
+                case "Unit":
+                    // TODO: generate mapping to UCUM units
+                    break;
+                case "Constant":
+                    genericVariable (child, model);
+                    break;
+                case "ComponentType":
+                case "Component":
+                    componentType (child);
+                    break;
             }
         }
     }
 
-    /**
-        @param order It is necessary to resolve the children of a part before that part is used in resolving
-        some other reference. Otherwise, the copied content will not contain the resolved children.
-        Manually specifying the order is crude and fragile, but efficient. The alternative is to build
-        a dependency graph.
-    **/
-    public void addDependency (int order, MNode part, String inherit)
+    public void addDependency (MNode part, String inherit)
     {
-        ArrayList<MNode> referents = resolve.get (order);
-        if (referents == null)
-        {
-            referents = new ArrayList<MNode> ();
-            resolve.put (order, referents);
-        }
-        referents.add (part);
+        dependents.add (part);
 
         MNode component = models.childOrCreate (modelName, inherit);
         int count = component.getInt ("$count");
         component.set ("$count", count + 1);
+
         if (part.get ().equals (inherit)) component.set ("$connected", "");
+    }
+
+    /**
+        If not a standard part, then it is probably one defined by this import, so tag the dependency.
+    **/
+    public void checkDependency (MNode part, String inherit)
+    {
+        MNode model = AppData.models.child (inherit);
+        if (model == null  ||  model.child ("$metadata", "backend.neuroml.part") == null) addDependency (part, inherit);
+    }
+
+    public void removeDependency (MNode part, String inherit)
+    {
+        dependents.remove (part);
+
+        MNode component = models.child (modelName, inherit);
+        if (component == null) return;
+        int count = component.getInt ("$count") - 1;
+        if (count > 0)
+        {
+            component.set ("$count", count);
+        }
+        else
+        {
+            component.clear ("$count");
+            component.clear ("$connected");
+            if (component.length () == 0) models.clear (modelName, inherit);  // This is a shallow part created because a model is missing from the repo.
+        }
     }
 
     /**
@@ -200,62 +235,9 @@ public class ImportJob
         for (Entry<String,Network> e : networks.entrySet ()) e.getValue ().finish ();
 
         // Resolve referenced parts
-        for (ArrayList<MNode> referents : resolve.values ())
+        while (dependents.size () > 0)
         {
-            for (MNode r : referents)
-            {
-                String partName = r.get ("$inherit").replace ("\"", "");
-                if (partName.isEmpty ()) partName = r.get ();  // For connections, the part name might be a direct value.
-                MNode part = models.child (modelName, partName);
-                if (part == null) continue;
-
-                // Triage
-                int count = part.getInt ("$count");
-                boolean connected = part.child ("$connected") != null;
-                if (count > 0)  // triage is necessary
-                {
-                    if (count == 1)
-                    {
-                        count = -1;  // part has only one user, so it should simply be deleted after merging
-                    }
-                    else  // count > 1, so part could be moved out to its own model
-                    {
-                        if (connected)
-                        {
-                            count = -3;
-                        }
-                        else
-                        {
-                            // Criterion: If a part has subparts, then it is heavy-weight and should be moved out.
-                            // A part that merely sets some parameters on an inherited model is light-weight, and should simply be merged everywhere it is used.
-                            boolean heavy = false;
-                            for (MNode s : part)
-                            {
-                                if (MPart.isPart (s))
-                                {
-                                    heavy = true;
-                                    break;
-                                }
-                            }
-                            if (heavy) count = -2;  // part should be made into an independent model
-                            else       count = -1;
-                        }
-                    }
-                    part.set ("$count", count);
-                }
-                if (count == -1)
-                {
-                    // TODO: This should really be an underride, not override. However, there don't seem to be any conflicting nodes.
-                    r.merge (part);
-                    r.clear ("$count");
-                    r.clear ("$connected");
-                }
-                else if (count == -2)
-                {
-                    r.set ("$inherit", "\"" + modelName + " " + partName + "\"");
-                }
-                // count == -3 means leave in place as a connection target
-            }
+            resolve (dependents.iterator ().next ());
         }
 
         // Move heavy-weight parts into separate models
@@ -268,18 +250,104 @@ public class ImportJob
             {
                 part.clear ("$count");
                 part.clear ("$connected");
-                if (count == -2)
+                if (count == -3)
                 {
                     String partName = part.key ();
                     MNode model = models.childOrCreate (modelName + " " + partName);
                     model.merge (part);
                 }
-                if (count > -3) it.remove ();
+                if (count > -4) it.remove ();
             }
         }
 
         // Move network items up to top level
         if (networks.size () == 1) networks.entrySet ().iterator ().next ().getValue ().moveUp ();
+    }
+
+    public void resolve (MNode dependent)
+    {
+        dependents.remove (dependent);
+        String sourceName = dependent.get ("$inherit").replace ("\"", "");
+        if (sourceName.isEmpty ()) sourceName = dependent.get ();  // For connections, the part name might be a direct value.
+        MNode source = models.child (modelName, sourceName);
+        if (source == null) return;
+
+        resolveChildren (source);  // Ensure that the source part has no unresolved dependencies of its own before using it.
+        if (source.length () == 1  ||  (source.length () == 2  &&  source.child ("$connected") != null))  // source contains only special keys, so it is a shallow part, associated with an unresolved external reference.
+        {
+            source.set ("$inherit", "\"" + source.key () + "\"");
+        }
+
+        // Triage
+        // -1 == source has exactly one user. Merge and delete immediately.
+        // -2 == source is lightweight, but has multiple users. Merge and wait to delete.
+        // -3 == source is heavyweight. Keep reference and move out to independent model.
+        // -4 == source is the endpoint of a connection. Leave in place.
+        int count = source.getInt ("$count");
+        boolean connected = source.child ("$connected") != null;
+        if (count > 0)  // triage is necessary
+        {
+            if (count == 1)
+            {
+                count = -1;
+            }
+            else  // count > 1, so part could be moved out to its own model
+            {
+                if (connected)
+                {
+                    count = -4;
+                }
+                else
+                {
+                    // Criterion: If a part has subparts, then it is heavy-weight and should be moved out.
+                    // A part that merely sets some parameters on an inherited model is lightweight, and should simply be merged everywhere it is used.
+                    boolean heavy = false;
+                    for (MNode s : source)
+                    {
+                        if (MPart.isPart (s))
+                        {
+                            heavy = true;
+                            break;
+                        }
+                    }
+                    if (heavy) count = -3;
+                    else       count = -2;
+                }
+            }
+            source.set ("$count", count);
+        }
+        if (count == -1  ||  count == -2)
+        {
+            dependent.set ("");
+            dependent.clear ("$inherit");
+            for (MNode n : source)
+            {
+                String key = n.key ();
+                if (key.equals ("$count"    )) continue;
+                if (key.equals ("$connected")) continue;
+                if (key.equals ("$inherit"))
+                {
+                    dependent.set (key, n.get ());
+                }
+                else
+                {
+                    MNode c = dependent.child (key);
+                    if (c == null) dependent.set (key, n);
+                    else           c.mergeUnder (n);
+                }
+            }
+            if (count == -1) models.clear (modelName, sourceName);
+        }
+        else if (count == -3)
+        {
+            dependent.set ("$inherit", "\"" + modelName + " " + sourceName + "\"");
+        }
+    }
+
+    public void resolveChildren (MNode source)
+    {
+        for (MNode child : source) resolveChildren (child);
+        if (dependents.contains (source)) resolve (source);
     }
 
     public void ionChannel (Node node)
@@ -292,6 +360,7 @@ public class ImportJob
         else                 inherit = type;
         MNode part = models.childOrCreate (modelName, id);  // Expect to always create this part rather than fetch an existing child.
         part.set ("$inherit", "\"" + inherit + "\"");
+        checkDependency (part, inherit);
         if (! species.isEmpty ()) part.set ("$metadata", "species", species);
 
         NamedNodeMap attributes = node.getAttributes ();
@@ -382,6 +451,7 @@ public class ImportJob
         String type = getAttribute (node, "type");
         MNode part = container.set (node.getNodeName (), "");
         part.set ("$inherit", "\"" + type + "\"");
+        checkDependency (part, type);
 
         NamedNodeMap attributes = node.getAttributes ();
         int count = attributes.getLength ();
@@ -403,6 +473,7 @@ public class ImportJob
         else                 inherit = type;
         MNode part = container.set (id, "");
         part.set ("$inherit", "\"" + inherit + "\"");
+        checkDependency (part, inherit);
 
         NamedNodeMap attributes = node.getAttributes ();
         int count = attributes.getLength ();
@@ -449,9 +520,11 @@ public class ImportJob
             if (name.endsWith ("Mechanism"))
             {
                 MNode c = part.child (name);  // retrieve the part we just made
+                removeDependency (c, name);  // We're about to change the $inherit value, so get rid of the dependency created in genericPart().
                 String type = c.get ("type");
                 c.clear ("type");
                 c.set ("$inherit", "\"" + type + "\"");
+                checkDependency (c, type);
             }
         }
     }
@@ -723,7 +796,7 @@ public class ImportJob
                             property.set ("C", value);
                             break;
                         case "initMembPotential":
-                            property.set ("V", "@$init", value);
+                            property.set ("V", value + "@$init");
                             break;
                     }
                 }
@@ -1107,18 +1180,12 @@ public class ImportJob
                 for (MNode property : part)
                 {
                     String inherit = property.get ("$inherit").replace ("\"", "");
-                    if (! inherit.isEmpty ())
-                    {
-                        // If not a standard part, then it is probably one defined by the import, so tag the dependency.
-                        MNode model = AppData.models.child (inherit);
-                        if (model == null  ||  model.child ("$metadata", "backend.neuroml.part") == null) addDependency (1, property, inherit);
-                    }
+                    if (! inherit.isEmpty ()) checkDependency (property, inherit);
                     for (MNode m : property)
                     {
                         inherit = m.get ("$inherit").replace ("\"", "");
                         if (inherit.isEmpty ()) continue;
-                        MNode model = AppData.models.child (inherit);
-                        if (model == null  ||  model.child ("$metadata", "backend.neuroml.part") == null) addDependency (0, m, inherit);
+                        checkDependency (m, inherit);
                     }
                 }
 
@@ -1320,22 +1387,22 @@ public class ImportJob
             if (index < 0)  // only one instance, so make values unconditional
             {
                 this.index = 0;
-                if (distal           != null) part.set ("$xyz",      format (distal));
-                if (proximal         != null) part.set ("xyz0",      format (proximal));
-                if (distalDiameter   >= 0   ) part.set ("diameter",  format (distalDiameter));
-                if (proximalDiameter >= 0   ) part.set ("diameter0", format (proximalDiameter));
+                if (distal           != null) part.set ("$xyz",      format     (distal));
+                if (proximal         != null) part.set ("xyz0",      format     (proximal));
+                if (distalDiameter   >= 0   ) part.set ("diameter",  formatUnit (distalDiameter));
+                if (proximalDiameter >= 0   ) part.set ("diameter0", formatUnit (proximalDiameter));
             }
             else  // multiple instances
             {
                 this.index = index;
-                if (distal           != null) part.set ("$xyz",      "@$index==" + index, format (distal));
-                if (proximal         != null) part.set ("xyz0",      "@$index==" + index, format (proximal));
-                if (distalDiameter   >= 0   ) part.set ("diameter",  "@$index==" + index, format (distalDiameter));
-                if (proximalDiameter >= 0   ) part.set ("diameter0", "@$index==" + index, format (proximalDiameter));
+                if (distal           != null) part.set ("$xyz",      "@$index==" + index, format     (distal));
+                if (proximal         != null) part.set ("xyz0",      "@$index==" + index, format     (proximal));
+                if (distalDiameter   >= 0   ) part.set ("diameter",  "@$index==" + index, formatUnit (distalDiameter));
+                if (proximalDiameter >= 0   ) part.set ("diameter0", "@$index==" + index, formatUnit (proximalDiameter));
             }
         }
 
-        public String format (double a)
+        public String formatUnit (double a)
         {
             a *= 1e6;
             double i = Math.round (a);
@@ -1347,9 +1414,21 @@ public class ImportJob
             return a + "um";
         }
 
+        public String format (double a)
+        {
+            a *= 1e6;
+            double i = Math.round (a);
+            if (Math.abs (i - a) < epsilon) return String.valueOf ((long) i);
+            return String.valueOf (a);
+        }
+
         public String format (Matrix A)
         {
-            return "[" + format (A.getDouble (0)) + ";" + format (A.getDouble (1)) + ";" + format (A.getDouble (2)) + "]";
+            double x = A.getDouble (0);
+            double y = A.getDouble (1);
+            double z = A.getDouble (2);
+            if (x == 0  &&  y == 0  &&  z == 0) return "[0;0;0]";
+            return "[" + format (x) + ";" + format (y) + ";" + format (z) + "]*1um";
         }
 
         public int compareTo (Segment o)
@@ -1520,7 +1599,7 @@ public class ImportJob
 
             MNode part = network.set (id, "");
             part.set ("$inherit", "\"" + component + "\"");
-            addDependency (2, part, component);
+            addDependency (part, component);
             if (n > 1) part.set ("$n", n);
 
             // Add intra/extra cellular properties to inherited cell
@@ -1796,7 +1875,7 @@ public class ImportJob
                     if (connection.preGroup.isEmpty ())
                     {
                         connection.part.set ("A", A);
-                        if (Acomponent) addDependency (0, connection.part.child ("A"), A);
+                        if (Acomponent) addDependency (connection.part.child ("A"), A);
                     }
                     else
                     {
@@ -1805,17 +1884,17 @@ public class ImportJob
                     if (! connection.preComponent.isEmpty ())
                     {
                         connection.part.set ("preComponent", "$inherit", "\"" + connection.preComponent + "\"");
-                        addDependency (0, connection.part.child ("preComponent"), connection.preComponent);
+                        addDependency (connection.part.child ("preComponent"), connection.preComponent);
                     }
                     if (! connection.postComponent.isEmpty ())
                     {
                         connection.part.set ("postComponent", "$inherit", "\"" + connection.postComponent + "\"");
-                        addDependency (0, connection.part.child ("postComponent"), connection.postComponent);
+                        addDependency (connection.part.child ("postComponent"), connection.postComponent);
                     }
                     if (! connection.inherit.isEmpty ())
                     {
                         connection.part.set ("$inherit", "\"" + connection.inherit + "\"");
-                        addDependency (0, connection.part, connection.inherit);
+                        addDependency (connection.part, connection.inherit);
                     }
                 }
                
@@ -1875,7 +1954,7 @@ public class ImportJob
                 if (! inherit.isEmpty ())
                 {
                     part.set ("$inherit", "\"" + inherit + "\"");
-                    addDependency (0, part, inherit);
+                    addDependency (part, inherit);
                 }
             }
         }
@@ -1920,7 +1999,7 @@ public class ImportJob
             MNode part = network.childOrCreate (name);
             part.set ("$inherit", "\"Current Injection\"");
             MNode d = part.set ("A", input);
-            addDependency (0, d, input);
+            addDependency (d, input);
             part.set ("B", target);  // Like the input, the target could be folded into this connection part during dependency resolution, but that would actually make the model more ugly.
 
             MNode targetPart = network.child (target);
@@ -2077,6 +2156,7 @@ public class ImportJob
         while (container.child (id) != null) id = stem + suffix++;
         MNode part = container.set (id, "");
         part.set ("$inherit", "\"" + name + "\"");
+        checkDependency (part, name);
 
         NamedNodeMap attributes = node.getAttributes ();
         int count = attributes.getLength ();
@@ -2094,6 +2174,120 @@ public class ImportJob
         }
 
         return part;
+    }
+
+    public void target (Node node)
+    {
+        String component  = getAttribute (node, "component");
+        String reportFile = getAttribute (node, "reportFile");
+        String timesFile  = getAttribute (node, "timesFile");
+        MNode part = models.set (component, "");  // TODO: the exact mapping of "component" to model is more complex, as several executable models may be generated during an import.
+        if (! reportFile.isEmpty ()) part.set ("$metadata", "backend.neuroml.reportFile", reportFile);
+        if (! timesFile .isEmpty ()) part.set ("$metadata", "backend.neuroml.timesFile",  timesFile);
+    }
+
+    public void componentType (Node node)
+    {
+        String name        = getAttribute (node, "name");
+        String inherit     = getAttribute (node, "extends");
+        String description = getAttribute (node, "description");
+        MNode part = models.childOrCreate (modelName, name);
+        if (! inherit    .isEmpty ()) part.set ("$inherit", "\"" + inherit + "\"");
+        if (! description.isEmpty ()) part.set ("$metadata", "description", description);
+
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+
+            String nodeName = child.getNodeName ();
+            switch (nodeName)
+            {
+                case "Dynamics":
+                    dynamics (child, part);
+                    break;
+                case "Constant":
+                    genericVariable (child, part);
+                    break;
+                case "Parameter":
+                case "Requirement":
+                    // These could be handled by genericVariable(), but that would require complicated logic there to detect a case we already know.
+                    name        = getAttribute (child, "name");
+                    description = getAttribute (child, "description");
+                    if (! description.isEmpty ()) part.set ("$metadata", name, description);
+                case "Simulation":
+                    simulation (child, part);
+                    break;
+            }
+        }
+    }
+
+    public void dynamics (Node node, MNode part)
+    {
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+            switch (child.getNodeName ())
+            {
+                case "DerivedVariable":
+                case "ConditionalDerivedVariable":
+                    genericVariable (child, part);
+                    break;
+            }
+        }
+    }
+
+    public void genericVariable (Node node, MNode part)
+    {
+        String name        =                    getAttribute (node, "name");
+        String value       = cleanupExpression (getAttribute (node, "value"));
+        String select      = cleanupExpression (getAttribute (node, "select"));
+        String exposure    =                    getAttribute (node, "exposure");
+        String description =                    getAttribute (node, "description");
+
+        if (! value      .isEmpty ()                              ) part.set (name, value);
+        if (! select     .isEmpty ()                              ) part.set (name, select);
+        if (! description.isEmpty ()                              ) part.set (name, "$metadata", "description", description);
+        if (! exposure   .isEmpty ()  &&  ! exposure.equals (name)) part.set (name, "$metadata", "exposure",    exposure);
+
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () == Node.ELEMENT_NODE  &&  child.getNodeName ().equals ("Case"))
+            {
+                value            = cleanupExpression (getAttribute (child, "value"));
+                String condition = cleanupExpression (getAttribute (child, "condition"));
+                part.set (name, "@" + condition, value);
+            }
+        }
+    }
+
+    public String cleanupExpression (String expression)
+    {
+        expression = expression.replace (".gt.", ">");
+        expression = expression.replace (".lt.", "<");
+        expression = expression.replace (".eq.", "==");
+        expression = expression.replace (".ne.", "!=");
+        expression = expression.replace (".le.", "<=");
+        expression = expression.replace (".ge",  ">=");
+        expression = expression.replace (" ",    "");
+        return expression;
+    }
+
+    public void simulation (Node node, MNode part)
+    {
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+            switch (child.getNodeName ())
+            {
+                case "Run":
+                    String component = getAttribute (child, "component");
+                    String dt        = getAttribute (child, "increment");
+                    String total     = getAttribute (child, "total");
+                    models.set (component, "$t'", dt);
+                    models.set (component, "$p",  "$t<" + total);
+                    break;
+            }
+        }
     }
 
     public String getText (Node node)
