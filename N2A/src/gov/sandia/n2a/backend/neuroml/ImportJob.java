@@ -177,11 +177,11 @@ public class ImportJob
                     // TODO: generate mapping to UCUM units
                     break;
                 case "Constant":
-                    genericVariable (child, model);
+                    new ComponentType (model).genericVariable (child, "");  // Create a bogus component to wrap the top level, so we can add a LEMS constant to it.
                     break;
                 case "ComponentType":
                 case "Component":
-                    componentType (child);
+                    new ComponentType (child);
                     break;
             }
         }
@@ -2186,106 +2186,313 @@ public class ImportJob
         if (! timesFile .isEmpty ()) part.set ("$metadata", "backend.neuroml.timesFile",  timesFile);
     }
 
-    public void componentType (Node node)
+    public class ComponentType
     {
-        String name        = getAttribute (node, "name");
-        String inherit     = getAttribute (node, "extends");
-        String description = getAttribute (node, "description");
-        MNode part = models.childOrCreate (modelName, name);
-        if (! inherit    .isEmpty ()) part.set ("$inherit", "\"" + inherit + "\"");
-        if (! description.isEmpty ()) part.set ("$metadata", "description", description);
+        MNode part;
 
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        public ComponentType (MNode part)
         {
-            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+            this.part = part;
+        }
 
-            String nodeName = child.getNodeName ();
-            switch (nodeName)
+        public ComponentType (Node node)
+        {
+            String name        = getAttribute (node, "name");
+            String inherit     = getAttribute (node, "extends");
+            String description = getAttribute (node, "description");
+            part = models.childOrCreate (modelName, name);
+            if (! inherit    .isEmpty ()) part.set ("$inherit", "\"" + inherit + "\"");
+            if (! description.isEmpty ()) part.set ("$metadata", "description", description);
+
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
-                case "Dynamics":
-                    dynamics (child, part);
-                    break;
-                case "Constant":
-                    genericVariable (child, part);
-                    break;
-                case "Parameter":
-                case "Requirement":
-                    // These could be handled by genericVariable(), but that would require complicated logic there to detect a case we already know.
-                    name        = getAttribute (child, "name");
-                    description = getAttribute (child, "description");
-                    if (! description.isEmpty ()) part.set ("$metadata", name, description);
-                case "Simulation":
-                    simulation (child, part);
-                    break;
+                if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+
+                String nodeName = child.getNodeName ();
+                switch (nodeName)
+                {
+                    case "Constant":
+                    case "Fixed":
+                        genericVariable (child, "");
+                        break;
+                    case "Parameter":
+                    case "Requirement":
+                        // These could be handled by genericVariable(), but that would require extra testing there for this relatively simple form.
+                        name        = getAttribute (child, "name");
+                        description = getAttribute (child, "description");
+                        if (! description.isEmpty ()) part.set ("$metadata", name, description);
+                    case "Child":
+                    case "Children":
+                    case "ComponentReference":
+                    //case "Attachments":  // Ignore. This is equivalent to noting the name/type of a connection within the part that will be connected.
+                        name       = getAttribute (child, "name");
+                        inherit    = getAttribute (child, "type");
+                        String min = getAttribute (child, "min");
+                        String max = getAttribute (child, "max");
+                        // TODO: How to interpret the "local" field?
+                        part.set (name, "$inherit", inherit);
+                        if (! min.isEmpty ()) part.set (name, "$metadata", "backend.neuroml.min", min);
+                        if (! max.isEmpty ()) part.set (name, "$metadata", "backend.neuroml.max", max);
+                        break;
+                    case "Link":  // The dual of "Attachments". This defines the reference variable in a connection.
+                        name        = getAttribute (child, "name");
+                        inherit     = getAttribute (child, "type");
+                        description = getAttribute (child, "description");
+                        part.set (name, "$connect(" + inherit + ")");
+                        if (! description.isEmpty ()) part.set (name, "$metadata", "description", description);
+                        break;
+                    case "Dynamics":
+                        dynamics (child);
+                        break;
+                    case "Simulation":
+                        simulation (child);
+                        break;
+                }
             }
         }
-    }
 
-    public void dynamics (Node node, MNode part)
-    {
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        public MNode genericVariable (Node node, String condition1)
         {
-            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-            switch (child.getNodeName ())
+            String               name = getAttribute (node, "name");
+            if (name.isEmpty ()) name = getAttribute (node, "parameter");
+            if (name.isEmpty ()) name = getAttribute (node, "variable");
+            if (name.isEmpty ()) name = getAttribute (node, "property");
+            if (node.getNodeName ().equals ("TimeDerivative")) name += "'";
+
+            String exposure    = getAttribute (node, "exposure");
+            String description = getAttribute (node, "description");
+
+            String combiner = "";
+            String nodeName = node.getNodeName ();
+            if (! nodeName.equals ("StateVariable")  &&  exposure.isEmpty ()) combiner = ":";  // Temporary variable. TODO: verify if it's truly necessary to make exposures into state variables. It might not be if every exposure is associated with injected local code that grabs the value.
+
+            String value = cleanupExpression (getAttribute (node, "value"));
+            if (value.isEmpty ())
             {
-                case "DerivedVariable":
-                case "ConditionalDerivedVariable":
-                    genericVariable (child, part);
-                    break;
+                value = getAttribute (node, "select");
+                if (! value.isEmpty ())
+                {
+                    // TODO: analyze "select" string more thoroughly
+                    String[] pieces = value.split ("/");  // TODO: check if forward-slash works without escape
+                    String child    = pieces[0];
+                    String variable = pieces[1];
+
+                    String index = "";
+                    int i = child.indexOf ('[');
+                    if (i >= 0)
+                    {
+                        index = child.substring (i + 1);
+                        child = child.substring (0, i);
+                        i = index.indexOf (']');
+                        if (i >= 0) index = index.substring (0, i);
+                    }
+
+                    String reduce = getAttribute (node, "reduce");
+                    if (! index.isEmpty ()  ||  ! reduce.isEmpty ())
+                    {
+                        value = "";
+
+                        switch (reduce)
+                        {
+                            case "multiply": combiner = "*";
+                            case "add"     : combiner = "+";
+                        }
+
+                        String required = getAttribute (node, "required");
+                        if (required.equals ("true")) part.set (child, "$up." + name, "$metadata", "backend.neuroml.required", "");
+
+                        // TODO: add condition to select specific instances
+                        part.set (child, "$up." + name, combiner + variable);
+                    }
+                    else
+                    {
+                        value = value.replace ("..", "$up");
+                        value = value.replace ("/", ".");
+                    }
+                }
+            }
+
+            MNode result = part.childOrCreate (name);
+
+            if (value.isEmpty ())  // multi-conditional
+            {
+                result.set (combiner);
+            }
+            else  // single condition
+            {
+                if (condition1.isEmpty ()) result.set (combiner + value);
+                else                       result.set (combiner + value + "@" + condition1);
+            }
+            if (! description.isEmpty ())
+            {
+                result.set ("$metadata", "description", description);
+            }
+            if (! exposure.isEmpty ())
+            {
+                if (exposure.equals (name)) result.set ("$metadata", "exposure", "");
+                else                        result.set ("$metadata", "exposure", exposure);
+            }
+
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            {
+                if (child.getNodeType () == Node.ELEMENT_NODE  &&  child.getNodeName ().equals ("Case"))
+                {
+                    value             = cleanupExpression (getAttribute (child, "value"));
+                    String condition2 = cleanupExpression (getAttribute (child, "condition"));
+                    if (condition1.isEmpty ()) result.set ("@" +                     condition2, value);
+                    else                       result.set ("@" + condition1 + "&&" + condition2, value);
+                }
+            }
+
+            return result;
+        }
+
+        public String cleanupExpression (String expression)
+        {
+            expression = expression.replace (".gt.", ">");
+            expression = expression.replace (".lt.", "<");
+            expression = expression.replace (" ",    "");
+            return expression;
+        }
+
+        public void dynamics (Node node)
+        {
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            {
+                if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+                switch (child.getNodeName ())
+                {
+                    case "StateVariable":
+                    case "DerivedVariable":
+                    case "ConditionalDerivedVariable":
+                    case "TimeDerivative":
+                        genericVariable (child, "");
+                        break;
+                    case "OnStart":
+                        onStart (child, "$init");
+                        break;
+                    case "OnEvent":
+                    case "OnCondition":
+                        onCondition (child, "");
+                        break;
+                    case "Regime":
+                        regime (child);
+                        break;
+                    case "KineticScheme":
+                        break;
+                }
             }
         }
-    }
 
-    public void genericVariable (Node node, MNode part)
-    {
-        String name        =                    getAttribute (node, "name");
-        String value       = cleanupExpression (getAttribute (node, "value"));
-        String select      = cleanupExpression (getAttribute (node, "select"));
-        String exposure    =                    getAttribute (node, "exposure");
-        String description =                    getAttribute (node, "description");
-
-        if (! value      .isEmpty ()                              ) part.set (name, value);
-        if (! select     .isEmpty ()                              ) part.set (name, select);
-        if (! description.isEmpty ()                              ) part.set (name, "$metadata", "description", description);
-        if (! exposure   .isEmpty ()  &&  ! exposure.equals (name)) part.set (name, "$metadata", "exposure",    exposure);
-
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        public void onStart (Node node, String condition)
         {
-            if (child.getNodeType () == Node.ELEMENT_NODE  &&  child.getNodeName ().equals ("Case"))
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
-                value            = cleanupExpression (getAttribute (child, "value"));
-                String condition = cleanupExpression (getAttribute (child, "condition"));
-                part.set (name, "@" + condition, value);
+                if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+                genericVariable (child, condition);
             }
         }
-    }
 
-    public String cleanupExpression (String expression)
-    {
-        expression = expression.replace (".gt.", ">");
-        expression = expression.replace (".lt.", "<");
-        expression = expression.replace (".eq.", "==");
-        expression = expression.replace (".ne.", "!=");
-        expression = expression.replace (".le.", "<=");
-        expression = expression.replace (".ge",  ">=");
-        expression = expression.replace (" ",    "");
-        return expression;
-    }
-
-    public void simulation (Node node, MNode part)
-    {
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        public void onCondition (Node node, String condition1)
         {
-            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-            switch (child.getNodeName ())
+            String condition2 = cleanupExpression (getAttribute (node, "test"));
+            if (condition2.isEmpty ())
             {
-                case "Run":
-                    String component = getAttribute (child, "component");
-                    String dt        = getAttribute (child, "increment");
-                    String total     = getAttribute (child, "total");
-                    models.set (component, "$t'", dt);
-                    models.set (component, "$p",  "$t<" + total);
-                    break;
+                condition2 = getAttribute (node, "port");  // TODO: process port to resolve source part
+                condition2 = "$event(" + condition2 + ")";
+            }
+            if (! condition1.isEmpty ()) condition2 = condition1 + "&&" + condition2;
+
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            {
+                if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+                switch (child.getNodeName ())
+                {
+                    case "StateAssignment":
+                        genericVariable (child, condition2);
+                        break;
+                    case "EventOut":
+                        String portName = getAttribute (child, "port");
+                        MNode portNode = part.child (portName);
+                        if (portNode == null)
+                        {
+                            part.set (portName, "@", "0");
+                            part.set (portName, "$metadata", "backend.neuroml.param", "port");
+                        }
+                        part.set (portName, "@" + condition2, "1");
+                        break;
+                    case "Transition":
+                        String regime = getAttribute (child, "regime");
+                        part.set ("regime", regime + "@" + condition2);
+                        break;
+                }
+            }
+        }
+
+        public MNode allocateRegime (String name)
+        {
+            // TODO: postprocess to find non-conflicting names for regime variable and regimes
+            MNode regime = part.child ("regime");
+            if (regime == null)
+            {
+                part.set ("regime", "-1@$init");  // No active regime
+                part.set ("regime", "$metadata", "backend.neuroml.param", "regime");
+            }
+            MNode regimeName = part.child (name);
+            if (regimeName == null)
+            {
+                int regimeCount = part.getInt ("$regime");
+                part.set (name, regimeCount++);
+                part.set ("$regime", regimeCount);
+            }
+            return regime;
+        }
+
+        public void regime (Node node)
+        {
+            String name    = getAttribute (node, "name");
+            String initial = getAttribute (node, "initial");
+
+            MNode regime = allocateRegime (name);
+            if (initial.equals ("true"))
+            {
+                if (regime.length () == 1) part.set ("regime", name + "@$init");  // just the $metadata node, so set single-line value
+                else                       part.set ("regime", "@$init", name);
+            }
+
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            {
+                if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+                switch (child.getNodeName ())
+                {
+                    case "TimeDerivative":
+                        genericVariable (child, "regime==" + name);
+                        break;
+                    case "OnEntry":
+                        onStart (child, "$event(regime==" + name + ")");
+                        break;
+                    case "OnCondition":
+                        onCondition (child, "regime==" + name);
+                        break;
+                }
+            }
+        }
+
+        public void simulation (Node node)
+        {
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            {
+                if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+                switch (child.getNodeName ())
+                {
+                    case "Run":
+                        String component = getAttribute (child, "component");
+                        String dt        = getAttribute (child, "increment");
+                        String total     = getAttribute (child, "total");
+                        models.set (component, "$t'", dt);
+                        models.set (component, "$p",  "$t<" + total);
+                        break;
+                }
             }
         }
     }
