@@ -2189,6 +2189,8 @@ public class ImportJob
     public class ComponentType
     {
         MNode part;
+        MNode regime;
+        int regimeCount;
 
         public ComponentType (MNode part)
         {
@@ -2221,10 +2223,17 @@ public class ImportJob
                         name        = getAttribute (child, "name");
                         description = getAttribute (child, "description");
                         if (! description.isEmpty ()) part.set ("$metadata", name, description);
+                        break;
+                    case "Text":
+                        name        = getAttribute (child, "name");
+                        description = getAttribute (child, "description");
+                        part.set (name, "\"" + getText (child) + "\"");
+                        if (! description.isEmpty ()) part.set ("$metadata", name, description);
+                        break;
                     case "Child":
                     case "Children":
                     case "ComponentReference":
-                    //case "Attachments":  // Ignore. This is equivalent to noting the name/type of a connection within the part that will be connected.
+                    //case "Attachments":  // Ignore. "Attachments" just notes the name/type of a connection within the part that will be connected.
                         name       = getAttribute (child, "name");
                         inherit    = getAttribute (child, "type");
                         String min = getAttribute (child, "min");
@@ -2234,11 +2243,11 @@ public class ImportJob
                         if (! min.isEmpty ()) part.set (name, "$metadata", "backend.neuroml.min", min);
                         if (! max.isEmpty ()) part.set (name, "$metadata", "backend.neuroml.max", max);
                         break;
-                    case "Link":  // The dual of "Attachments". This defines the reference variable in a connection.
+                    case "Link":  // The dual of "Attachments". This defines the reference variable within a connection.
                         name        = getAttribute (child, "name");
                         inherit     = getAttribute (child, "type");
                         description = getAttribute (child, "description");
-                        part.set (name, "$connect(" + inherit + ")");
+                        part.set (name, "$connect(\"" + inherit + "\")");
                         if (! description.isEmpty ()) part.set (name, "$metadata", "description", description);
                         break;
                     case "Dynamics":
@@ -2247,6 +2256,43 @@ public class ImportJob
                     case "Simulation":
                         simulation (child);
                         break;
+                }
+            }
+
+            // Finish
+            if (regime != null)
+            {
+                // Allocate safe name
+                String regimeName = "regime";
+                int suffix = 2;
+                while (part.child (regimeName) != null) regimeName = "regime" + suffix++;
+                renameVariable (part, "$regime", regimeName);
+
+                if (regime.length () == 1)
+                {
+                    MNode c = regime.iterator ().next ();
+                    String key = c.key ();
+                    regime.set (c.get () + key);
+                    regime.clear (key);
+                }
+            }
+        }
+
+        public void renameVariable (MNode node, String before, String after)
+        {
+            List<String> keys = new ArrayList<String> ();
+            for (MNode c : node)
+            {
+                keys.add (c.key ());
+                c.set (c.get ().replace (before, after));
+                renameVariable (c, before, after);
+            }
+            for (String key : keys)
+            {
+                if (key.contains (before))
+                {
+                    String newKey = key.replace (before, after);
+                    node.move (key, newKey);
                 }
             }
         }
@@ -2422,30 +2468,22 @@ public class ImportJob
                         part.set (portName, "@" + condition2, "1");
                         break;
                     case "Transition":
-                        String regime = getAttribute (child, "regime");
-                        part.set ("regime", regime + "@" + condition2);
+                        String regimeName = getAttribute (child, "regime");
+                        regime.set ("@" + condition2, regimeName);
                         break;
                 }
             }
         }
 
-        public MNode allocateRegime (String name)
+        public void allocateRegime (String name)
         {
-            // TODO: postprocess to find non-conflicting names for regime variable and regimes
-            MNode regime = part.child ("regime");
             if (regime == null)
             {
-                part.set ("regime", "-1@$init");  // No active regime
-                part.set ("regime", "$metadata", "backend.neuroml.param", "regime");
+                regime = part.childOrCreate ("$regime");
+                regime.set ("@$init", "-1");  // No active regime at startup
             }
-            MNode regimeName = part.child (name);
-            if (regimeName == null)
-            {
-                int regimeCount = part.getInt ("$regime");
-                part.set (name, regimeCount++);
-                part.set ("$regime", regimeCount);
-            }
-            return regime;
+            MNode regimeValue = part.child (name);
+            if (regimeValue == null) part.set (name, regimeCount++);
         }
 
         public void regime (Node node)
@@ -2453,12 +2491,8 @@ public class ImportJob
             String name    = getAttribute (node, "name");
             String initial = getAttribute (node, "initial");
 
-            MNode regime = allocateRegime (name);
-            if (initial.equals ("true"))
-            {
-                if (regime.length () == 1) part.set ("regime", name + "@$init");  // just the $metadata node, so set single-line value
-                else                       part.set ("regime", "@$init", name);
-            }
+            allocateRegime (name);
+            if (initial.equals ("true")) regime.set ("@$init", name);
 
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
@@ -2466,13 +2500,13 @@ public class ImportJob
                 switch (child.getNodeName ())
                 {
                     case "TimeDerivative":
-                        genericVariable (child, "regime==" + name);
+                        genericVariable (child, "$regime==" + name);
                         break;
                     case "OnEntry":
-                        onStart (child, "$event(regime==" + name + ")");
+                        onStart (child, "$event($regime==" + name + ")");
                         break;
                     case "OnCondition":
-                        onCondition (child, "regime==" + name);
+                        onCondition (child, "$regime==" + name);
                         break;
                 }
             }

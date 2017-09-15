@@ -542,6 +542,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
 
     public synchronized void move (String fromIndex, String toIndex)
     {
+        if (toIndex.equals (fromIndex)) return;
         clear (toIndex);  // By definition, no top-level document nodes are allowed to remain at the destination. However, underrides may exist.
         MPart fromPart = (MPart) child (fromIndex);
         if (fromPart == null) return;

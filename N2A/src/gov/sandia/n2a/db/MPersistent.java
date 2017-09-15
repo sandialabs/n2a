@@ -116,6 +116,7 @@ public class MPersistent extends MVolatile
 
     public synchronized void move (String fromIndex, String toIndex)
     {
+        if (toIndex.equals (fromIndex)) return;
         if (children == null) return;  // Nothing to move
         MNode source = children.get (fromIndex);
         children.remove (toIndex);

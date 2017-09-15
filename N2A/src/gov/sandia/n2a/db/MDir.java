@@ -220,6 +220,7 @@ public class MDir extends MNode
     **/
     public synchronized void move (String fromIndex, String toIndex)
     {
+        if (toIndex.equals (fromIndex)) return;
         save ();  // If this turns out to be too much work, then scan the write queue for fromIndex and save it directly.
 
         // This operation is independent of bookkeeping in children

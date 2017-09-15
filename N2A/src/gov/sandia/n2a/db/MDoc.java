@@ -154,6 +154,7 @@ public class MDoc extends MPersistent
 
     public synchronized void move (String fromIndex, String toIndex)
     {
+        if (toIndex.equals (fromIndex)) return;
         if (children == null) load ();
         super.move (fromIndex, toIndex);
     }

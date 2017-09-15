@@ -440,12 +440,14 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     /**
         Changes the key of a child.
+        A move only happens if the given keys are different (same key is no-op).
         Any previously existing node at the destination key will be completely erased and replaced.
         An entry will no longer exist at the source key.
         If the source does not exist before the move, then neither node will exist afterward.
     **/
     public synchronized void move (String fromIndex, String toIndex)
     {
+        if (toIndex.equals (fromIndex)) return;
         clear (toIndex);
         MNode source = child (fromIndex);
         if (source != null)
