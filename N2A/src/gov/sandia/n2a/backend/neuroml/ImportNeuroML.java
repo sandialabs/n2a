@@ -55,7 +55,8 @@ public class ImportNeuroML implements Importer
         try (BufferedReader reader = new BufferedReader (new FileReader (source)))
         {
             String line = reader.readLine ();
-            if (line.toLowerCase ().startsWith ("<?xml")) return 0.8f;
+            if (line.startsWith ("<Lems")) return 1.0f;
+            if (line.startsWith ("<?xml")) return 0.8f;
             // To be absolutely certain, could check for top-level tags that normally start a NeuroML section.
         }
         catch (IOException e)
@@ -70,7 +71,12 @@ public class ImportNeuroML implements Importer
         if (source.isDirectory ()) return true;
         String name = source.getName ();
         int lastDot = name.lastIndexOf ('.');
-        if (lastDot >= 0  &&  name.substring (lastDot).equalsIgnoreCase (".nml")) return true;
+        if (lastDot >= 0)
+        {
+            String suffix = name.substring (lastDot);
+            if (suffix.equalsIgnoreCase (".nml")) return true;
+            if (suffix.equalsIgnoreCase (".xml")) return true;
+        }
         return false;
     }
 }

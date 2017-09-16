@@ -12,6 +12,7 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
+import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
 
 import java.io.File;
@@ -107,24 +108,38 @@ public class ImportJob
 
     public void neuroml (Node node)
     {
+        File source = sources.getLast ();
         if (modelName.isEmpty ())
         {
             modelName = getAttribute (node, "id");
-            if (modelName.isEmpty ()) modelName = "New Model";
+            if (modelName.isEmpty ())  // then get it from the filename
+            {
+                modelName = source.getName ();
+                int index = modelName.lastIndexOf ('.');
+                if (index > 0) modelName = modelName.substring (0, index);
+            }
+            modelName = NodePart.validIdentifierFrom (modelName);
             // Preemptively scan for unique name, so our references to any sibling parts remain valid.
             // IE: a name collision in the main part implies that sibling parts will also have name collisions.
             modelName = AddDoc.uniqueName (modelName);
         }
         MNode model = models.childOrCreate (modelName);
 
+        String description = getAttribute (node, "description");
+        if (! description.isEmpty ()) model.set ("$metadata", "description", description);
+
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
             if (child.getNodeType () != Node.ELEMENT_NODE) continue;
             switch (child.getNodeName ())
             {
-                case "include":
+                case "include":  // NeuroML include
                     // TODO: what if href actually references a web document?
-                    File nextSource = new File (sources.getLast ().getParentFile (), getAttribute (child, "href"));
+                    File nextSource = new File (source.getParentFile (), getAttribute (child, "href"));
+                    process (nextSource);
+                    break;
+                case "Include":  // LEMS include
+                    nextSource = new File (source.getParentFile (), getAttribute (child, "file"));
                     process (nextSource);
                     break;
 
@@ -246,10 +261,10 @@ public class ImportJob
         {
             MNode part = it.next ();
             int count = part.getInt ("$count");
+            part.clear ("$count");
+            part.clear ("$connected");
             if (count < 0)
             {
-                part.clear ("$count");
-                part.clear ("$connected");
                 if (count == -3)
                 {
                     String partName = part.key ();
@@ -267,8 +282,17 @@ public class ImportJob
     public void resolve (MNode dependent)
     {
         dependents.remove (dependent);
+        boolean lems = dependent.child ("$lems") != null  ||  dependent.get ().startsWith ("$connect");
+        dependent.clear ("$lems");
+
         String sourceName = dependent.get ("$inherit").replace ("\"", "");
         if (sourceName.isEmpty ()) sourceName = dependent.get ();  // For connections, the part name might be a direct value.
+        if (sourceName.startsWith ("$connect"))
+        {
+            sourceName = sourceName.replace ("$connect(", "");
+            sourceName = sourceName.replace (")",         "");
+            sourceName = sourceName.replace ("\"",        "");
+        }
         MNode source = models.child (modelName, sourceName);
         if (source == null) return;
 
@@ -287,32 +311,36 @@ public class ImportJob
         boolean connected = source.child ("$connected") != null;
         if (count > 0)  // triage is necessary
         {
-            if (count == 1)
+            if (lems)  // lems is an attribute of the recipient rather than the source.
+            {
+                // Since LEMS components are abstract models, it is best to move the source out to an independent model.
+                // This is less true if the dependency is due to a connection. However, it is difficult to make finer
+                // distinctions in that case. It is sufficient to always move the parent of a LEMS model out.
+                count = -3;
+            }
+            else if (count == 1)
             {
                 count = -1;
             }
-            else  // count > 1, so part could be moved out to its own model
+            else if (connected)
             {
-                if (connected)
+                count = -4;
+            }
+            else  // count > 1 and not connected, so could be moved out to independent model
+            {
+                // Criterion: If a part has subparts, then it is heavy-weight and should be moved out.
+                // A part that merely sets some parameters on an inherited model is lightweight, and should simply be merged everywhere it is used.
+                boolean heavy = false;
+                for (MNode s : source)
                 {
-                    count = -4;
-                }
-                else
-                {
-                    // Criterion: If a part has subparts, then it is heavy-weight and should be moved out.
-                    // A part that merely sets some parameters on an inherited model is lightweight, and should simply be merged everywhere it is used.
-                    boolean heavy = false;
-                    for (MNode s : source)
+                    if (MPart.isPart (s))
                     {
-                        if (MPart.isPart (s))
-                        {
-                            heavy = true;
-                            break;
-                        }
+                        heavy = true;
+                        break;
                     }
-                    if (heavy) count = -3;
-                    else       count = -2;
                 }
+                if (heavy) count = -3;
+                else       count = -2;
             }
             source.set ("$count", count);
         }
@@ -325,6 +353,7 @@ public class ImportJob
                 String key = n.key ();
                 if (key.equals ("$count"    )) continue;
                 if (key.equals ("$connected")) continue;
+                if (key.equals ("$lems"     )) continue;
                 if (key.equals ("$inherit"))
                 {
                     dependent.set (key, n.get ());
@@ -340,7 +369,9 @@ public class ImportJob
         }
         else if (count == -3)
         {
-            dependent.set ("$inherit", "\"" + modelName + " " + sourceName + "\"");
+            String inherit = "\"" + modelName + " " + sourceName + "\"";
+            if (dependent.get ().contains ("$connect")) dependent.set ("$connect(" + inherit + ")");
+            else                                        dependent.set ("$inherit", inherit);
         }
     }
 
@@ -379,10 +410,9 @@ public class ImportJob
         {
             if (child.getNodeType () != Node.ELEMENT_NODE) continue;
             String name = child.getNodeName ();
-            if      (name.startsWith ("q10"   )) q10ConductanceScaling (child, part);
-            else if (name.equals     ("gateKS")) gateKS                (child, part);
-            else if (name.startsWith ("gate"  )) gate                  (child, part);
-            else                                 genericPart           (child, part);
+            if      (name.startsWith ("q10" )) q10ConductanceScaling (child, part);
+            else if (name.startsWith ("gate")) gate                  (child, part);
+            else                               genericPart           (child, part);
         }
     }
 
@@ -394,11 +424,16 @@ public class ImportJob
         }
     }
 
-    public void gateKS (Node node, MNode container)
+    public void gate (Node node, MNode container)
     {
-        String id = getAttribute (node, "id");
+        String id   = getAttribute (node, "id");
+        String type = getAttribute (node, "type");
+        String inherit;
+        if (type.isEmpty ()) inherit = node.getNodeName ();
+        else                 inherit = type;
         MNode part = container.set (id, "");
-        part.set ("$inherit", "\"gateKS\"");
+        part.set ("$inherit", "\"" + inherit + "\"");
+        checkDependency (part, inherit);
 
         NamedNodeMap attributes = node.getAttributes ();
         int count = attributes.getLength ();
@@ -407,20 +442,35 @@ public class ImportJob
             Node a = attributes.item (i);
             String name = a.getNodeName ();
             if (name.equals ("id")) continue;
+            if (name.equals ("type")) continue;
             part.set (name, biophysicalUnits (a.getNodeValue ()));
         }
 
-        int openState   =  1;
-        int closedState = -1;
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
             if (child.getNodeType () != Node.ELEMENT_NODE) continue;
             String name = child.getNodeName ();
-            if      (name.equals   ("openState"  )) part.set (getAttribute (child, "id"), openState++);
-            else if (name.equals   ("closedState")) part.set (getAttribute (child, "id"), closedState--);
-            else if (name.equals   ("notes"      )) part.set ("$metadata", "notes", getText (child));
-            else if (name.endsWith ("Transition" )) transition (child, part);
-            else                                    rate       (child, part);
+            switch (name)
+            {
+                case "subGate":
+                    gate (child, part);
+                    break;
+                case "notes":
+                    part.set ("$metadata", "notes", getText (child));
+                    break;
+                case "openState":
+                case "closedState":
+                    part.set (getAttribute (child, "id"), "$inherit", "\"" + name + "\"");
+                    break;
+                case "forwardTransition":
+                case "reverseTransition":
+                case "tauInfTransition":
+                case "vHalfTransition":
+                    transition (child, part);
+                    break;
+                default:
+                    rate (child, part);
+            }
         }
     }
 
@@ -461,38 +511,6 @@ public class ImportJob
             String name = a.getNodeName ();
             if (name.equals ("type")) continue;
             part.set (name, biophysicalUnits (a.getNodeValue ()));
-        }
-    }
-
-    public void gate (Node node, MNode container)
-    {
-        String id   = getAttribute (node, "id");
-        String type = getAttribute (node, "type");
-        String inherit;
-        if (type.isEmpty ()) inherit = node.getNodeName ();
-        else                 inherit = type;
-        MNode part = container.set (id, "");
-        part.set ("$inherit", "\"" + inherit + "\"");
-        checkDependency (part, inherit);
-
-        NamedNodeMap attributes = node.getAttributes ();
-        int count = attributes.getLength ();
-        for (int i = 0; i < count; i++)
-        {
-            Node a = attributes.item (i);
-            String name = a.getNodeName ();
-            if (name.equals ("id")) continue;
-            if (name.equals ("type")) continue;
-            part.set (name, biophysicalUnits (a.getNodeValue ()));
-        }
-
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-            String name = child.getNodeName ();
-            if      (name.equals ("subGate")) gate (child, part);
-            else if (name.equals ("notes"))   part.set ("$metadata", "notes", getText (child));
-            else                              rate (child, part);
         }
     }
 
@@ -2203,7 +2221,12 @@ public class ImportJob
             String inherit     = getAttribute (node, "extends");
             String description = getAttribute (node, "description");
             part = models.childOrCreate (modelName, name);
-            if (! inherit    .isEmpty ()) part.set ("$inherit", "\"" + inherit + "\"");
+            if (! inherit.isEmpty ())
+            {
+                part.set ("$inherit", "\"" + inherit + "\"");
+                addDependency (part, inherit);
+                part.set ("$lems", "");  // Prevents parent part from being injected into this one. Effectively forces parent out to a separate model.
+            }
             if (! description.isEmpty ()) part.set ("$metadata", "description", description);
 
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
@@ -2224,30 +2247,31 @@ public class ImportJob
                         description = getAttribute (child, "description");
                         if (! description.isEmpty ()) part.set ("$metadata", name, description);
                         break;
-                    case "Text":
-                        name        = getAttribute (child, "name");
-                        description = getAttribute (child, "description");
-                        part.set (name, "\"" + getText (child) + "\"");
-                        if (! description.isEmpty ()) part.set ("$metadata", name, description);
-                        break;
                     case "Child":
                     case "Children":
                     case "ComponentReference":
-                    //case "Attachments":  // Ignore. "Attachments" just notes the name/type of a connection within the part that will be connected.
-                        name       = getAttribute (child, "name");
-                        inherit    = getAttribute (child, "type");
-                        String min = getAttribute (child, "min");
-                        String max = getAttribute (child, "max");
-                        // TODO: How to interpret the "local" field?
-                        part.set (name, "$inherit", inherit);
-                        if (! min.isEmpty ()) part.set (name, "$metadata", "backend.neuroml.min", min);
-                        if (! max.isEmpty ()) part.set (name, "$metadata", "backend.neuroml.max", max);
+                    //"Attachments" -- merely notes the name/type of a connection within the part targeted by the connection.
+                        inherit = getAttribute (child, "type");
+                        if (! inherit.equals ("notes"))  // type="notes" is a declaration of a notes field, not actual notes. NeuroML predefines this type, but it's not intrinsic to pure LEMS.
+                        {
+                            name       = getAttribute (child, "name");
+                            String min = getAttribute (child, "min");
+                            String max = getAttribute (child, "max");
+                            // TODO: How to interpret the "local" field?
+                            MNode childPart = part.childOrCreate (name);
+                            childPart.set ("$inherit", inherit);
+                            addDependency (childPart, inherit);
+                            childPart.set ("$lems", "");
+                            if (! min.isEmpty ()) part.set (name, "$metadata", "backend.neuroml.min", min);
+                            if (! max.isEmpty ()) part.set (name, "$metadata", "backend.neuroml.max", max);
+                        }
                         break;
                     case "Link":  // The dual of "Attachments". This defines the reference variable within a connection.
                         name        = getAttribute (child, "name");
                         inherit     = getAttribute (child, "type");
                         description = getAttribute (child, "description");
                         part.set (name, "$connect(\"" + inherit + "\")");
+                        addDependency (part.child (name), inherit);
                         if (! description.isEmpty ()) part.set (name, "$metadata", "description", description);
                         break;
                     case "Dynamics":
@@ -2256,6 +2280,7 @@ public class ImportJob
                     case "Simulation":
                         simulation (child);
                         break;
+                    // "Text" -- merely declares an XML string attribute to appear in a part instantiation
                 }
             }
 
@@ -2309,8 +2334,7 @@ public class ImportJob
             String description = getAttribute (node, "description");
 
             String combiner = "";
-            String nodeName = node.getNodeName ();
-            if (! nodeName.equals ("StateVariable")  &&  exposure.isEmpty ()) combiner = ":";  // Temporary variable. TODO: verify if it's truly necessary to make exposures into state variables. It might not be if every exposure is associated with injected local code that grabs the value.
+            if (node.getNodeName ().contains ("DerivedVariable")  &&  exposure.isEmpty ()) combiner = ":";
 
             String value = cleanupExpression (getAttribute (node, "value"));
             if (value.isEmpty ())
@@ -2319,7 +2343,7 @@ public class ImportJob
                 if (! value.isEmpty ())
                 {
                     // TODO: analyze "select" string more thoroughly
-                    String[] pieces = value.split ("/");  // TODO: check if forward-slash works without escape
+                    String[] pieces = value.split ("/");
                     String child    = pieces[0];
                     String variable = pieces[1];
 
@@ -2340,8 +2364,8 @@ public class ImportJob
 
                         switch (reduce)
                         {
-                            case "multiply": combiner = "*";
-                            case "add"     : combiner = "+";
+                            case "multiply": combiner = "*"; break;
+                            case "add"     : combiner = "+"; break;
                         }
 
                         String required = getAttribute (node, "required");
@@ -2390,14 +2414,21 @@ public class ImportJob
                 }
             }
 
+            if (result.length () == 1  &&  result.get ().isEmpty ()) result.set ("0");  // Force metadata-only variable to have a value, so it is not interpreted as a part.
             return result;
         }
 
         public String cleanupExpression (String expression)
         {
-            expression = expression.replace (".gt.", ">");
-            expression = expression.replace (".lt.", "<");
-            expression = expression.replace (" ",    "");
+            expression = expression.replace (".gt.",  ">");
+            expression = expression.replace (".lt.",  "<");
+            expression = expression.replace (".ge.",  ">=");
+            expression = expression.replace (".le.",  "<=");
+            expression = expression.replace (".eq.",  "==");
+            expression = expression.replace (".neq.", "!=");
+            expression = expression.replace (".and.", "&&");
+            expression = expression.replace (".or.",  "||");
+            expression = expression.replace (" ",     "");  // There's really only one place the parser cares about space: between a numeric constant and its units. Everything else could stay as-is.
             return expression;
         }
 
@@ -2425,6 +2456,7 @@ public class ImportJob
                         regime (child);
                         break;
                     case "KineticScheme":
+                        kineticScheme (child);
                         break;
                 }
             }
@@ -2508,6 +2540,36 @@ public class ImportJob
                     case "OnCondition":
                         onCondition (child, "$regime==" + name);
                         break;
+                }
+            }
+        }
+
+        /**
+            Add necessary dynamics to implement a kinetic scheme.
+        **/
+        public void kineticScheme (Node node)
+        {
+            String stateVariable = getAttribute (node, "stateVariable");
+            String edges         = getAttribute (node, "edges");
+            String edgeSource    = getAttribute (node, "edgeSource");
+            String edgeTarget    = getAttribute (node, "edgeTarget");
+            String forwardRate   = getAttribute (node, "forwardRate");
+            String reverseRate   = getAttribute (node, "reverseRate");
+
+            // The comments in the LEMS examples suggest that a kinetic scheme is a Markov model,
+            // so it might make sense to enforce a probability distribution (that is, sum to 1)
+            // across the states. However, nothing in the LEMS models gives an initial state,
+            // so they must all start at 0. That being the case, don't worry about normalization.
+            String inherit = part.get (edges, "$inherit");
+            if (! inherit.isEmpty ())
+            {
+                MNode parent = AppData.models.child (inherit);
+                if (parent == null)  // Imported part, so we can modify it.
+                {
+                    parent = models.childOrCreate (modelName, inherit);
+                    // TODO: Note sure how forward and reverse rates should apply.
+                    parent.set (edgeSource + "." + stateVariable + "'", "+-" + reverseRate);
+                    parent.set (edgeTarget + "." + stateVariable + "'", "+"  + forwardRate);
                 }
             }
         }
