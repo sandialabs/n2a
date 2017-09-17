@@ -10,6 +10,7 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.eqset.Variable.ParsedValue;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
@@ -45,6 +46,7 @@ public class ImportJob
     LinkedList<File>    sources      = new LinkedList<File> ();
     MNode               models       = new MVolatile ();
     String              modelName    = "";
+    String              primaryModel = "";                          // A part tagged to be elevated to main model. When set, all other parts should be pushed out to independent models, and this one raised one level to assume the identity of the prime model.
     Set<MNode>          dependents   = new HashSet<MNode> ();        // Nodes which contain a $inherit that refers to a locally defined part rather than a standard part. The local part must either be copied in or converted into a global model.
     Map<String,Node>    morphologies = new HashMap<String,Node> ();  // Map from IDs to top-level morphology blocks.
     Map<String,Node>    biophysics   = new HashMap<String,Node> ();  // Map from IDs to top-level biophysics blocks.
@@ -198,6 +200,9 @@ public class ImportJob
                 case "Component":
                     new ComponentType (child);
                     break;
+                case "Simulation":
+                    simulation (child);
+                    break;
             }
         }
     }
@@ -249,41 +254,65 @@ public class ImportJob
         for (Entry<String,Cell>    e : cells   .entrySet ()) e.getValue ().finish ();
         for (Entry<String,Network> e : networks.entrySet ()) e.getValue ().finish ();
 
-        // Resolve referenced parts
-        while (dependents.size () > 0)
+        // Select the prime model
+        if (primaryModel.isEmpty ())
         {
-            resolve (dependents.iterator ().next ());
+            if (networks.size () == 1) primaryModel = networks.entrySet ().iterator ().next ().getValue ().id;
+            // Otherwise there is no prime model. Could pick one arbitrarily (with preference for higher-level parts).
+            // It may be cleaner to keep them all bundled as subparts and let the user pull them out as needed.
         }
+
+        // Resolve referenced parts
+        //System.out.println (models);  // Most useful for debugging structure.
+        while (dependents.size () > 0) resolve (dependents.iterator ().next ());
 
         // Move heavy-weight parts into separate models
         Iterator<MNode> it = models.child (modelName).iterator ();
         while (it.hasNext ())
         {
             MNode part = it.next ();
-            int count = part.getInt ("$count");
+            String  key   = part.key ();
+            int     count = part.getInt ("$count");
+            boolean lems  = part.child ("$lems") != null;
             part.clear ("$count");
             part.clear ("$connected");
+            part.clear ("$lems");
+            if (count == 0)
+            {
+                if (lems  &&  ! key.equals (primaryModel)) count = -3;
+            }
             if (count < 0)
             {
                 if (count == -3)
                 {
-                    String partName = part.key ();
-                    MNode model = models.childOrCreate (modelName + " " + partName);
+                    MNode model = models.childOrCreate (modelName + " " + key);
                     model.merge (part);
                 }
                 if (count > -4) it.remove ();
             }
         }
 
-        // Move network items up to top level
-        if (networks.size () == 1) networks.entrySet ().iterator ().next ().getValue ().moveUp ();
+        // Move primary model up to top level
+        if (! primaryModel.isEmpty ())
+        {
+            MNode source = models.child (modelName, primaryModel);
+            if (source == null) return;
+            models.clear (modelName, primaryModel);
+            for (MNode p : source)
+            {
+                MNode dest = models.childOrCreate (modelName, p.key ());
+                dest.merge (p);
+            }
+        }
+
+        if (models.child (modelName).length () == 0) models.clear (modelName);
     }
 
     public void resolve (MNode dependent)
     {
         dependents.remove (dependent);
         boolean lems = dependent.child ("$lems") != null  ||  dependent.get ().startsWith ("$connect");
-        dependent.clear ("$lems");
+        if (models.child (modelName, dependent.key ()) != dependent) dependent.clear ("$lems");  // Remove $lems tag from non-top-level parts. Top-level parts will be cleaned up later in postprocess().
 
         String sourceName = dependent.get ("$inherit").replace ("\"", "");
         if (sourceName.isEmpty ()) sourceName = dependent.get ();  // For connections, the part name might be a direct value.
@@ -313,9 +342,7 @@ public class ImportJob
         {
             if (lems)  // lems is an attribute of the recipient rather than the source.
             {
-                // Since LEMS components are abstract models, it is best to move the source out to an independent model.
-                // This is less true if the dependency is due to a connection. However, it is difficult to make finer
-                // distinctions in that case. It is sufficient to always move the parent of a LEMS model out.
+                // Since LEMS components are abstract models, it is best not to inject other models into them.
                 count = -3;
             }
             else if (count == 1)
@@ -2035,16 +2062,6 @@ public class ImportJob
             network.clear ("$region");
             for (MNode p : network) p.clear ("$instance");
         }
-
-        public void moveUp ()
-        {
-            for (MNode p : network)
-            {
-                MNode dest = models.childOrCreate (modelName, p.key ());
-                dest.merge (p);
-            }
-            models.clear (modelName, id);
-        }
     }
 
     public static class Connection
@@ -2196,12 +2213,11 @@ public class ImportJob
 
     public void target (Node node)
     {
-        String component  = getAttribute (node, "component");
+        primaryModel       = getAttribute (node, "component");
         String reportFile = getAttribute (node, "reportFile");
         String timesFile  = getAttribute (node, "timesFile");
-        MNode part = models.set (component, "");  // TODO: the exact mapping of "component" to model is more complex, as several executable models may be generated during an import.
-        if (! reportFile.isEmpty ()) part.set ("$metadata", "backend.neuroml.reportFile", reportFile);
-        if (! timesFile .isEmpty ()) part.set ("$metadata", "backend.neuroml.timesFile",  timesFile);
+        if (! reportFile.isEmpty ()) models.set (modelName, "$metadata", "backend.neuroml.reportFile", reportFile);
+        if (! timesFile .isEmpty ()) models.set (modelName, "$metadata", "backend.neuroml.timesFile",  timesFile);
     }
 
     public class ComponentType
@@ -2221,11 +2237,11 @@ public class ImportJob
             String inherit     = getAttribute (node, "extends");
             String description = getAttribute (node, "description");
             part = models.childOrCreate (modelName, name);
+            part.set ("$lems", "");
             if (! inherit.isEmpty ())
             {
                 part.set ("$inherit", "\"" + inherit + "\"");
                 addDependency (part, inherit);
-                part.set ("$lems", "");  // Prevents parent part from being injected into this one. Effectively forces parent out to a separate model.
             }
             if (! description.isEmpty ()) part.set ("$metadata", "description", description);
 
@@ -2252,7 +2268,7 @@ public class ImportJob
                     case "ComponentReference":
                     //"Attachments" -- merely notes the name/type of a connection within the part targeted by the connection.
                         inherit = getAttribute (child, "type");
-                        if (! inherit.equals ("notes"))  // type="notes" is a declaration of a notes field, not actual notes. NeuroML predefines this type, but it's not intrinsic to pure LEMS.
+                        if (! inherit.equals ("notes"))  // In the context of NeuroML, type="notes" is a declaration of a notes field, not actual notes.
                         {
                             name       = getAttribute (child, "name");
                             String min = getAttribute (child, "min");
@@ -2277,9 +2293,8 @@ public class ImportJob
                     case "Dynamics":
                         dynamics (child);
                         break;
-                    case "Simulation":
-                        simulation (child);
-                        break;
+                    // "Structure" -- Ill-defined. Seems to support glue-code for jLEMS simulator.
+                    // "Simulation" -- Slightly better defined, but still basically glue-code for jLEMS. Just interpret the elements created by the include file Simulation.xml
                     // "Text" -- merely declares an XML string attribute to appear in a part instantiation
                 }
             }
@@ -2334,7 +2349,7 @@ public class ImportJob
             String description = getAttribute (node, "description");
 
             String combiner = "";
-            if (node.getNodeName ().contains ("DerivedVariable")  &&  exposure.isEmpty ()) combiner = ":";
+            if (node.getNodeName ().contains ("DerivedVariable")  &&  (exposure.isEmpty ()  ||  ! exposure.equals (name))) combiner = ":";
 
             String value = cleanupExpression (getAttribute (node, "value"));
             if (value.isEmpty ())
@@ -2384,24 +2399,27 @@ public class ImportJob
 
             MNode result = part.childOrCreate (name);
 
-            if (value.isEmpty ())  // multi-conditional
+            int equationCount = 0;
+            for (MNode c : result) if (c.key ().startsWith ("@")) equationCount++;
+
+            String existingValue = result.get ();
+            if (existingValue.length () > 1)  // not empty and not merely a combiner
             {
-                result.set (combiner);
+                // Move existing value into multi-conditional list
+                ParsedValue pv = new ParsedValue (existingValue);
+                result.set (pv.combiner);
+                result.set ("@" + pv.condition, pv.expression);
+                equationCount++;
             }
-            else  // single condition
+
+            if (! combiner.isEmpty ()) result.set (combiner);
+            if (! value.isEmpty ())
             {
-                if (condition1.isEmpty ()) result.set (combiner + value);
-                else                       result.set (combiner + value + "@" + condition1);
+                if (equationCount == 0) result.set (result.get () + value + "@" + condition1);
+                else                    result.set ("@" + condition1, value);
             }
-            if (! description.isEmpty ())
-            {
-                result.set ("$metadata", "description", description);
-            }
-            if (! exposure.isEmpty ())
-            {
-                if (exposure.equals (name)) result.set ("$metadata", "exposure", "");
-                else                        result.set ("$metadata", "exposure", exposure);
-            }
+            if (! description.isEmpty ()) result.set ("$metadata", "description", description);
+            if (! exposure.isEmpty ()  &&  ! exposure.equals (name)) result.set (exposure, name);
 
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
@@ -2414,7 +2432,9 @@ public class ImportJob
                 }
             }
 
-            if (result.length () == 1  &&  result.get ().isEmpty ()) result.set ("0");  // Force metadata-only variable to have a value, so it is not interpreted as a part.
+            // TODO: this line is probably not needed anymore, due to changes in logic above
+            //if (result.length () == 1  &&  result.get ().isEmpty ()) result.set ("0");  // Force metadata-only variable to have a value, so it is not interpreted as a part.
+
             return result;
         }
 
@@ -2422,8 +2442,8 @@ public class ImportJob
         {
             expression = expression.replace (".gt.",  ">");
             expression = expression.replace (".lt.",  "<");
-            expression = expression.replace (".ge.",  ">=");
-            expression = expression.replace (".le.",  "<=");
+            expression = expression.replace (".geq.", ">=");
+            expression = expression.replace (".leq.", "<=");
             expression = expression.replace (".eq.",  "==");
             expression = expression.replace (".neq.", "!=");
             expression = expression.replace (".and.", "&&");
@@ -2573,23 +2593,134 @@ public class ImportJob
                 }
             }
         }
+    }
 
-        public void simulation (Node node)
+    public void simulation (Node node)
+    {
+        String id     = getAttribute (node, "id");
+        String length = getAttribute (node, "length");
+        String step   = getAttribute (node, "step");
+        String target = getAttribute (node, "target");
+
+        if (primaryModel.equals (id)) primaryModel = target;  // redirect, since "Simulation" itself is not a proper object.
+
+        MNode part = models.childOrCreate (modelName, target);
+        part.set ("$t'", step);
+        part.set ("$p", "$t<" + length);
+
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
-            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            if (child.getNodeType () == Node.ELEMENT_NODE) output (child, part);
+        }
+    }
+
+    public void output (Node node, MNode part)
+    {
+        //String path     = getAttribute (node, "path");  // TODO: what is the relationship between path and fileName here?
+        String fileName = getAttribute (node, "fileName");
+        //String format   = getAttribute (node, "format");
+
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+
+            String quantity = getAttribute (child, "quantity");
+            String select   = getAttribute (child, "select");
+            String event    = getAttribute (child, "eventPort");
+
+            if (quantity.isEmpty ()  &&  ! select.isEmpty ()) quantity = select + "/ignored";
+            Path variablePath = new Path (quantity);
+            MNode container = variablePath.container (part);
+            if (container == null) continue;
+            String variable = variablePath.target ();
+
+            String dummy = "x0";
+            int index = 1;
+            while (container.child (dummy) != null) dummy = "x" + index++;
+
+            String condition = variablePath.condition ();
+            if (! event.isEmpty ())
             {
-                if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-                switch (child.getNodeName ())
-                {
-                    case "Run":
-                        String component = getAttribute (child, "component");
-                        String dt        = getAttribute (child, "increment");
-                        String total     = getAttribute (child, "total");
-                        models.set (component, "$t'", dt);
-                        models.set (component, "$p",  "$t<" + total);
-                        break;
-                }
+                if (! condition.isEmpty ()) condition += "&&";
+                condition += "$event(" + event + ")";
+                variable = "1";
             }
+
+            if (! condition.isEmpty ()) condition = "@" + condition;
+            if (fileName.isEmpty ()) container.set (dummy, "output("                      + variable + ")" + condition);
+            else                     container.set (dummy, "output(\"" + fileName + "\"," + variable + ")" + condition);
+        }
+    }
+
+    public class PathPart
+    {
+        public String partName;
+        public int    index = -1;  // -1 means no index
+        public MNode  part;
+
+        public PathPart (String part)
+        {
+            String[] pieces = part.split ("\\[", 2);
+            partName = pieces[0];
+            if (pieces.length > 1)
+            {
+                String temp = pieces[1].split ("]")[0];
+                index = Integer.valueOf (temp);
+            }
+        }
+    }
+
+    public class Path
+    {
+        List<PathPart> parts = new ArrayList<PathPart> ();
+
+        public Path (String path)
+        {
+            String[] pieces = path.split ("/");
+            for (String p : pieces) parts.add (new PathPart (p));
+        }
+
+        /**
+            Assembles condition string to filter down to exactly the instance indicated by the path.
+            Depends on side-effects of container(MNode).
+        **/
+        public String condition ()
+        {
+            String result = "";
+            String up = "";
+            for (int i = parts.size () - 2; i >= 0; i--)
+            {
+                PathPart p = parts.get (i);
+                if (p.index >= 0)  // Has an index
+                {
+                    if (p.index != 0  ||  p.part == null  ||  p.part.getOrDefaultInt ("$n", "1") != 1)  // Only add index if this population is not a singleton.
+                    {
+                        if (! result.isEmpty ()) result += "&&";
+                        result += up + "$index==" + p.index;
+                    }
+                }
+                up += "$up.";
+            }
+            return result;
+        }
+
+        public MNode container (MNode root)
+        {
+            for (PathPart p : parts)
+            {
+                root = root.child (p.partName);
+                p.part = root;
+                if (root == null) break;
+            }
+            int size = parts.size ();
+            if (size < 2) return null;
+            return parts.get (size - 2).part;
+        }
+
+        public String target ()
+        {
+            PathPart p = parts.get (parts.size () - 1);
+            return p.partName;
         }
     }
 
