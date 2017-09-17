@@ -1050,9 +1050,9 @@ public class ImportJob
                     // Distribute properties to original segment groups
                     if (groupName.equals ("[all]"))
                     {
-                        // If it is a simple variable, then apply it to the containing cell.
+                        // If it is a simple variable (except V, which must be compartment-specific), then apply it to the containing cell.
                         MNode subpart = p.iterator ().next ();
-                        if (subpart.length () == 0)
+                        if (subpart.length () == 0  &&  ! subpart.key ().equals ("V"))
                         {
                             cell.set (subpart.key (), subpart.get ());
                         }
@@ -2166,41 +2166,54 @@ public class ImportJob
     /**
         Handles elements in a generic manner, including metadata elements.
         Generic elements get processed into parts under the given container.
-        Metadata elements get added to the $metadata node the given container.
+        Metadata elements get added to the $metadata node of the given container.
     **/
     public MNode genericPart (Node node, MNode container)
     {
-        String name = node.getNodeName ();
-        if (name.equals ("notes"))
+        String nodeName = node.getNodeName ();
+        if (nodeName.equals ("notes"))
         {
             container.set ("$metadata", "notes", getText (node));
             return container.child ("$metadata", "notes");
         }
-        if (name.equals ("property"))
+        if (nodeName.equals ("property"))
         {
             String tag   = getAttribute (node, "tag");
             String value = getAttribute (node, "value");
             container.set ("$metadata", tag, value);
             return container.child ("$metadata", tag);
         }
-        if (name.equals ("annotation")) return null;  // TODO: process annotations
+        if (nodeName.equals ("annotation")) return null;  // TODO: process annotations
 
-        String id = getAttribute (node, "id", name);
+        String id = getAttribute (node, "id", nodeName);
         String stem = id;
         int suffix = 2;
         while (container.child (id) != null) id = stem + suffix++;
-        MNode part = container.set (id, "");
-        part.set ("$inherit", "\"" + name + "\"");
-        checkDependency (part, name);
+        MNode part = container.childOrCreate (id);
 
+        List<MNode> parents = collectParents (container);
+        String inherit = typeFor (nodeName, parents);
+        part.set ("$inherit", "\"" + inherit + "\"");
+        checkDependency (part, inherit);
+
+        parents = collectParents (part);  // Now we follow our own inheritance chain, not our container's.
         NamedNodeMap attributes = node.getAttributes ();
         int count = attributes.getLength ();
         for (int i = 0; i < count; i++)
         {
             Node a = attributes.item (i);
-            name = a.getNodeName ();
-            if (name.equals ("id")) continue;
-            part.set (name, biophysicalUnits (a.getNodeValue ()));
+            nodeName = a.getNodeName ();
+            if (nodeName.equals ("id")) continue;
+            if (isPart (nodeName, parents))
+            {
+                inherit = a.getNodeValue ();
+                part.set (nodeName, "$inherit", "\"" + inherit + "\"");
+                checkDependency (part.child (nodeName), inherit);
+            }
+            else
+            {
+                part.set (nodeName, biophysicalUnits (a.getNodeValue ()));
+            }
         }
 
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
@@ -2211,9 +2224,49 @@ public class ImportJob
         return part;
     }
 
+    /**
+        Locates all the accessible parents of the given node, assuming single-inheritance,
+        and lists them in descending order by distance from child. Terminates when a parent
+        can't be found, as well as at a root node, so the list may be incomplete.
+    **/
+    public List<MNode> collectParents (MNode child)
+    {
+        String inherit = child.get ("$inherit").replace ("\"", "");
+        if (inherit.isEmpty ()) return new ArrayList<MNode> ();
+        MNode parent = models.child (modelName, inherit);
+        if (parent == null) parent = AppData.models.child (inherit);
+        if (parent == null) return new ArrayList<MNode> ();
+        List<MNode> result = collectParents (parent);
+        result.add (parent);
+        return result;
+    }
+
+    public String typeFor (String nodeName, List<MNode> parents)
+    {
+        String query = "backend.neuroml.children." + nodeName;
+        for (int i = parents.size () - 1; i >= 0; i--)
+        {
+            MNode parent = parents.get (i);
+            String type = parent.get ("$metadata", query);
+            if (! type.isEmpty ()) return type;
+        }
+        return nodeName;
+    }
+
+    public boolean isPart (String nodeName, List<MNode> parents)
+    {
+        for (int i = parents.size () - 1; i >= 0; i--)
+        {
+            MNode parent = parents.get (i);
+            MNode c = parent.child (nodeName);
+            if (c != null) return MPart.isPart (c);
+        }
+        return false;
+    }
+
     public void target (Node node)
     {
-        primaryModel       = getAttribute (node, "component");
+        primaryModel      = getAttribute (node, "component");
         String reportFile = getAttribute (node, "reportFile");
         String timesFile  = getAttribute (node, "timesFile");
         if (! reportFile.isEmpty ()) models.set (modelName, "$metadata", "backend.neuroml.reportFile", reportFile);
@@ -2264,23 +2317,28 @@ public class ImportJob
                         if (! description.isEmpty ()) part.set ("$metadata", name, description);
                         break;
                     case "Child":
-                    case "Children":
                     case "ComponentReference":
                     //"Attachments" -- merely notes the name/type of a connection within the part targeted by the connection.
                         inherit = getAttribute (child, "type");
                         if (! inherit.equals ("notes"))  // In the context of NeuroML, type="notes" is a declaration of a notes field, not actual notes.
                         {
-                            name       = getAttribute (child, "name");
-                            String min = getAttribute (child, "min");
-                            String max = getAttribute (child, "max");
+                            name = getAttribute (child, "name");
                             // TODO: How to interpret the "local" field?
                             MNode childPart = part.childOrCreate (name);
                             childPart.set ("$inherit", inherit);
                             addDependency (childPart, inherit);
                             childPart.set ("$lems", "");
-                            if (! min.isEmpty ()) part.set (name, "$metadata", "backend.neuroml.min", min);
-                            if (! max.isEmpty ()) part.set (name, "$metadata", "backend.neuroml.max", max);
                         }
+                        break;
+                    case "Children":
+                        name       = getAttribute (child, "name");
+                        inherit    = getAttribute (child, "type");
+                        String min = getAttribute (child, "min");
+                        String max = getAttribute (child, "max");
+                        name = "backend.neuroml.children." + name;
+                        if (! inherit.isEmpty ()) part.set ("$metadata", name, inherit);
+                        if (! min.isEmpty ())     part.set ("$metadata", name + ".min", min);
+                        if (! max.isEmpty ())     part.set ("$metadata", name + ".max", max);
                         break;
                     case "Link":  // The dual of "Attachments". This defines the reference variable within a connection.
                         name        = getAttribute (child, "name");
@@ -2417,24 +2475,39 @@ public class ImportJob
             {
                 if (equationCount == 0) result.set (result.get () + value + "@" + condition1);
                 else                    result.set ("@" + condition1, value);
+                equationCount++;  // Actually unnecessary, because this case is mutually exclusive with "Case" elements below.
             }
             if (! description.isEmpty ()) result.set ("$metadata", "description", description);
             if (! exposure.isEmpty ()  &&  ! exposure.equals (name)) result.set (exposure, name);
 
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
+                if (child.getNodeType () == Node.ELEMENT_NODE  &&  child.getNodeName ().equals ("Case")) equationCount++;
+            }
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            {
                 if (child.getNodeType () == Node.ELEMENT_NODE  &&  child.getNodeName ().equals ("Case"))
                 {
                     value             = cleanupExpression (getAttribute (child, "value"));
                     String condition2 = cleanupExpression (getAttribute (child, "condition"));
-                    if (condition1.isEmpty ()) result.set ("@" +                     condition2, value);
-                    else                       result.set ("@" + condition1 + "&&" + condition2, value);
+                    if (! condition1.isEmpty ())
+                    {
+                        if (condition2.isEmpty ()) condition2 = condition1;
+                        else                       condition2 = condition1 + "&&" + condition2;
+                    }
+                    if (equationCount > 1)
+                    {
+                        result.set ("@" + condition2, value);
+                    }
+                    else
+                    {
+                        if (condition2.isEmpty ()) result.set (result.get () + value);
+                        else                       result.set (result.get () + value + "@" + condition2);
+                    }
                 }
             }
 
-            // TODO: this line is probably not needed anymore, due to changes in logic above
-            //if (result.length () == 1  &&  result.get ().isEmpty ()) result.set ("0");  // Force metadata-only variable to have a value, so it is not interpreted as a part.
-
+            if (result.length () == 1  &&  result.get ().isEmpty ()) result.set ("0");  // Force metadata-only variable to have a value, so it is not interpreted as a part.
             return result;
         }
 
