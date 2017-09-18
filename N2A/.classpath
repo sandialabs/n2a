@@ -6,5 +6,8 @@
 	<classpathentry kind="lib" path="lib/jsch-0.1.48/jsch-0.1.48.jar"/>
 	<classpathentry kind="lib" path="lib/jfreechart/jcommon-1.0.23.jar"/>
 	<classpathentry kind="lib" path="lib/jfreechart/jfreechart-1.0.20.jar"/>
+	<classpathentry kind="lib" path="lib/uom/unit-api-1.0.jar" sourcepath="lib/uom/unit-api-1.0-sources.jar"/>
+	<classpathentry kind="lib" path="lib/uom/uom-se-1.0.9.jar" sourcepath="lib/uom/uom-se-1.0.9-sources.jar"/>
+	<classpathentry kind="lib" path="lib/uom/uom-lib-common-1.0.2.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

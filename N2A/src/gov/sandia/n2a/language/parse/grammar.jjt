@@ -20,12 +20,27 @@ import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 
 import java.io.StringReader;
-import javax.measure.unit.Unit;
+import java.util.ServiceLoader;
+
+import javax.measure.Unit;
+import javax.measure.format.ParserException;
+import javax.measure.format.UnitFormat;
+import javax.measure.spi.ServiceProvider;
+import javax.measure.spi.UnitFormatService;
 
 public class ExpressionParser
 {
+    public static UnitFormat unitFormat;
+
     public static SimpleNode parse (String line) throws gov.sandia.n2a.language.ParseException
     {
+        if (unitFormat == null)
+      	{
+            ServiceLoader<ServiceProvider> loader = ServiceLoader.load (ServiceProvider.class);
+            UnitFormatService ufs = ((ServiceProvider) loader.iterator ().next ()).getUnitFormatService ();
+            unitFormat = ufs.getUnitFormat ("ASCII");
+        }
+
         try
         {
             ExpressionParser parser = new ExpressionParser (new StringReader (line));
@@ -356,13 +371,15 @@ void Constant() #Constant : {Token t; Token u; String UCUM = "";}
         {
             try
             {
-                value = Unit.valueOf (UCUM).toStandardUnit ().convert (value);
+                Unit unit = unitFormat.parse (UCUM);
+                Unit si   = unit.getSystemUnit ();
+                value = unit.getConverterTo (si).convert (value);
             }
-            catch (IllegalArgumentException e)
+            catch (ParserException e)
             {
                 ParseException p = new ParseException ("UCUM syntax error");
                 p.currentToken = t;
-                t.next.beginColumn += ((java.text.ParseException) e.getCause ()).getErrorOffset ();
+                t.next.beginColumn += e.getPosition ();
                 throw p;
             }
         }
