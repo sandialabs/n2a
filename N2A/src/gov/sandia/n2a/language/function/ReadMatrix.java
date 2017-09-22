@@ -54,7 +54,7 @@ public class ReadMatrix extends Function
         Matrix A = simulator.matrices.get (path);
         if (A == null)
         {
-            A = new Matrix (new File (path).getAbsoluteFile ());
+            A = Matrix.factory (new File (path).getAbsoluteFile ());
             simulator.matrices.put (path, A);
         }
 
@@ -83,7 +83,7 @@ public class ReadMatrix extends Function
             else if (r >= rows) r = lastRow;
             if      (c < 0       ) c = 0;
             else if (c >= columns) c = lastColumn;
-            return A.getScalar (r, c);
+            return new Scalar (A.get (r, c));
         }
         else
         {
@@ -93,35 +93,35 @@ public class ReadMatrix extends Function
             int c = (int) Math.floor (column);
             if (r < 0)
             {
-                if      (c <  0         ) return A.getScalar (0, 0         );
-                else if (c >= lastColumn) return A.getScalar (0, lastColumn);
+                if      (c <  0         ) return new Scalar (A.get (0, 0));
+                else if (c >= lastColumn) return new Scalar (A.get (0, lastColumn));
                 else
                 {
                     double b = column - c;
-                    return new Scalar ((1 - b) * A.getDouble (0, c) + b * A.getDouble (0, c+1));
+                    return new Scalar ((1 - b) * A.get (0, c) + b * A.get (0, c+1));
                 }
             }
             else if (r >= lastRow)
             {
-                if      (c <  0         ) return A.getScalar (lastRow, 0         );
-                else if (c >= lastColumn) return A.getScalar (lastRow, lastColumn);
+                if      (c <  0         ) return new Scalar (A.get (lastRow, 0));
+                else if (c >= lastColumn) return new Scalar (A.get (lastRow, lastColumn));
                 else
                 {
                     double b = column - c;
-                    return new Scalar ((1 - b) * A.getDouble (lastRow, c) + b * A.getDouble (lastRow, c+1));
+                    return new Scalar ((1 - b) * A.get (lastRow, c) + b * A.get (lastRow, c+1));
                 }
             }
             else
             {
                 double a = row - r;
                 double a1 = 1 - a;
-                if      (c <  0         ) return new Scalar (a1 * A.getDouble (r, 0         ) + a * A.getDouble (r+1, 0         ));
-                else if (c >= lastColumn) return new Scalar (a1 * A.getDouble (r, lastColumn) + a * A.getDouble (r+1, lastColumn));
+                if      (c <  0         ) return new Scalar (a1 * A.get (r, 0         ) + a * A.get (r+1, 0         ));
+                else if (c >= lastColumn) return new Scalar (a1 * A.get (r, lastColumn) + a * A.get (r+1, lastColumn));
                 else
                 {
                     double b = column - c;
-                    return new Scalar (  (1 - b) * (a1 * A.getDouble (r, c  ) + a * A.getDouble (r+1, c  ))
-                                       +      b  * (a1 * A.getDouble (r, c+1) + a * A.getDouble (r+1, c+1)));
+                    return new Scalar (  (1 - b) * (a1 * A.get (r, c  ) + a * A.get (r+1, c  ))
+                                       +      b  * (a1 * A.get (r, c+1) + a * A.get (r+1, c+1)));
                 }
             }
         }

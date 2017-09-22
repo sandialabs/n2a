@@ -19,6 +19,7 @@ import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
+import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
 
 /**
@@ -551,7 +552,7 @@ public class Part extends Instance
             }
             return (Matrix) get (bed.xyz);
         }
-        return new Matrix (3, 1);  // default is ~[0,0,0]
+        return new MatrixDense (3, 1);  // default is ~[0,0,0]
     }
 
     /**

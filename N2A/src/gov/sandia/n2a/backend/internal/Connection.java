@@ -11,6 +11,7 @@ import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Matrix;
+import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
 
 public class Connection extends Part
@@ -106,7 +107,7 @@ public class Connection extends Part
     public Matrix project (int i, int j)
     {
         // TODO: as part of spatial filtering, implement project()
-        return new Matrix (3, 1);
+        return new MatrixDense (3, 1);
     }
 
     public Part convert (EquationSet other)

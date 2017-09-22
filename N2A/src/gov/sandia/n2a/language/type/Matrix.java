@@ -6,15 +6,12 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.type;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.Reader;
-import java.io.StringReader;
 import java.io.StringWriter;
-import java.util.ArrayList;
-
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Type;
@@ -23,176 +20,26 @@ import gov.sandia.n2a.language.parse.ASTList;
 import gov.sandia.n2a.language.parse.ExpressionParser;
 import gov.sandia.n2a.language.parse.SimpleNode;
 
-/**
-    Matrix type.
-    Many of the functions here are adapted from FL Matrix.
-**/
-public class Matrix extends Type
+public abstract class Matrix extends Type
 {
-    public double[][] value;  // stored in column-major order; that is, an access to A(r,c) is fulfilled as value[c][r]
-
     public interface Visitor
     {
         double apply (double a);
     }
 
-    public Matrix ()
+    public static Matrix factory (File path) throws EvaluationException
     {
-    }
-
-    public Matrix (int rows, int columns)
-    {
-        value = new double[columns][rows];
-    }
-
-    public Matrix (int rows, int columns, double initialValue)
-    {
-        value = new double[columns][rows];
-        for (int c = 0; c < columns; c++)
+        try (BufferedReader reader = new BufferedReader (new InputStreamReader ((new FileInputStream (path)))))
         {
-            for (int r = 0; r < rows; r++)
-            {
-                value[c][r] = initialValue;
-            }
-        }
-    }
-
-    public Matrix (File path) throws EvaluationException
-    {
-        try
-        {
-            load (new InputStreamReader (new FileInputStream (path)));
+            String line = reader.readLine ();
+            if (line.toLowerCase ().contains ("sparse")) return new MatrixSparse (path);
+            // Could do further triage on file format, and call various appropriate versions of MatrixDense.load directly.
+            // TODO: import Matlab format.
+            return new MatrixDense (path);
         }
         catch (IOException exception)
         {
             throw new EvaluationException ("Can't open matrix file");
-        }
-    }
-
-    public Matrix (Text that) throws EvaluationException
-    {
-        load (new StringReader (that.value));
-    }
-
-    public Matrix (String that) throws EvaluationException
-    {
-        load (new StringReader (that));
-    }
-
-    public Matrix (String that, boolean units) throws EvaluationException
-    {
-        load (new StringReader (that), units);
-    }
-
-    public void load (Reader stream) throws EvaluationException
-    {
-        load (stream, false);
-    }
-
-    public void load (Reader stream, boolean units) throws EvaluationException
-    {
-        try
-        {
-            ArrayList<ArrayList<Double>> temp = new ArrayList<ArrayList<Double>> ();
-            ArrayList<Double> row = new ArrayList<Double> ();
-            int columns = 0;
-            boolean transpose = false;
-
-            // Scan for opening "["
-            char token;
-            do
-            {
-                token = (char) stream.read ();
-                if (token == '~') transpose = true;
-            }
-            while (token != '['  &&  stream.ready ());
-
-            // Read rows until closing "]"
-            char[] buffer = new char[1024];  // for one floating-point number, so far more than enough
-            int index = 0;
-            boolean done = false;
-            while (stream.ready ()  &&  ! done)
-            {
-                token = (char) stream.read ();
-                switch (token)
-                {
-                    case '\r':
-                        break;  // ignore CR characters
-                    case ' ':
-                    case '\t':
-                        if (index == 0) break;  // ignore leading whitespace (equivalent to trim)
-                    case ',':
-                        // Process element
-                        if (index == 0)
-                        {
-                            row.add (0.0);
-                        }
-                        else
-                        {
-                            String value = String.valueOf (buffer, 0, index);
-                            index = 0;
-                            if (units) row.add (convert        (value));
-                            else       row.add (Double.valueOf (value));
-                        }
-                        break;
-                    case ']':
-                        done = true;
-                    case ';':
-                    case '\n':
-                        // Process any final element
-                        if (index > 0)
-                        {
-                            String value = String.valueOf (buffer, 0, index);
-                            index = 0;
-                            if (units) row.add (convert        (value));
-                            else       row.add (Double.valueOf (value));
-                        }
-                        // Process line
-                        int c = row.size ();
-                        if (c > 0)
-                        {
-                            temp.add (row);
-                            columns = Math.max (columns, c);
-                            row = new ArrayList<Double> (columns);
-                        }
-                        break;
-                    default:
-                        buffer[index++] = token;  // If we overrun the buffer, we should automatically get an index out of range error.
-                }
-            }
-
-            // Assign elements to "value"
-            int rows = temp.size ();
-            if (transpose)
-            {
-                value = new double[rows][columns];
-                for (int r = 0; r < rows; r++)
-                {
-                    row = temp.get (r);
-                    for (int c = 0; c < row.size (); c++)
-                    {
-                        value[r][c] = row.get (c);
-                    }
-                }
-            }
-            else
-            {
-                value = new double[columns][rows];
-                for (int r = 0; r < rows; r++)
-                {
-                    row = temp.get (r);
-                    for (int c = 0; c < row.size (); c++)
-                    {
-                        value[c][r] = row.get (c);
-                    }
-                }
-            }
-
-            if (value.length == 0  ||  value[1].length == 0) throw new EvaluationException ("Empty matrix");
-        }
-        catch (IOException error)
-        {
-            throw new EvaluationException ("Failed to convert input to matrix");
         }
     }
 
@@ -216,386 +63,99 @@ public class Matrix extends Type
         return 0;
     }
 
-    public int rows ()
+    public abstract int rows ();
+
+    public abstract int columns ();
+
+    public abstract double get (int row, int column);
+
+    public double get (int row)
     {
-        if (value.length < 1) return 0;
-        return value[0].length;
+        return get (row, 0);
     }
 
-    public int columns ()
-    {
-        return value.length;
-    }
-
-    public double getDouble (int row, int column)
-    {
-        return value[column][row];
-    }
-
-    public double getDouble (int row)
-    {
-        return value[0][row];
-    }
-
-    public Scalar getScalar (int row, int column)
-    {
-        return new Scalar (value[column][row]);
-    }
-
-    public void set (int row, int column, double a)
-    {
-        value[column][row] = a;
-    }
+    public abstract void set (int row, int column, double a);
 
     public void set (int row, double a)
     {
-        value[0][row] = a;
+        set (row, 0, a);
     }
 
     public Type clear ()
     {
-        int w = value.length;
-        if (w < 1) return new Matrix ();
-        int h = value[0].length;
-        if (h < 1) return new Matrix ();
-        return new Matrix (h, w);
+        return clear (0);
     }
 
-    public Matrix clear (double initialValue)
-    {
-        int w = value.length;
-        if (w < 1) return new Matrix ();
-        int h = value[0].length;
-        if (h < 1) return new Matrix ();
-        return new Matrix (h, w, initialValue);
-    }
+    public abstract Matrix clear (double initialValue);
 
     /**
         @return A copy of this object, with diagonal elements set to 1 and off-diagonals set to zero.
-     */
-    public Matrix identity ()
-    {
-        int w = value.length;
-        if (w < 1) return new Matrix ();
-        int h = value[0].length;
-        if (h < 1) return new Matrix ();
-
-        Matrix result = new Matrix (h, w);
-        h = Math.min (w, h);
-        for (int r = 0; r < h; r++) result.value[r][r] = 1;
-        return result;
-    }
+    **/
+    public abstract Matrix identity ();
 
     public Type add (Type that) throws EvaluationException
     {
-        if (that instanceof Matrix)
-        {
-            double[][] B = ((Matrix) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            int ow = Math.min (w, B.length);
-            int oh = Math.min (h, B[0].length);
-            Matrix result = new Matrix (h, w);
-            for (int c = 0; c < ow; c++)
-            {
-              for (int r = 0;  r < oh; r++) result.value[c][r] = value[c][r] + B[c][r];
-              for (int r = oh; r < h;  r++) result.value[c][r] = value[c][r];
-            }
-            for (int c = ow; c < w; c++)
-            {
-              for (int r = 0; r < h; r++)   result.value[c][r] = value[c][r];
-            }
-            return result;
-        }
-        if (that instanceof Scalar)
-        {
-            double scalar = ((Scalar) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            Matrix result = new Matrix (h, w);
-            for (int c = 0; c < w; c++)
-            {
-                for (int r = 0; r < h; r++)
-                {
-                    result.value[c][r] = value[c][r] + scalar;
-                }
-            }
-            return result;
-        }
-        if (that instanceof Text) return add (new Matrix ((Text) that));
-        throw new EvaluationException ("type mismatch");
+        return new MatrixDense (this).add (that);
     }
 
     public Type subtract (Type that) throws EvaluationException
     {
-        if (that instanceof Matrix)
-        {
-            double[][] B = ((Matrix) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            int ow = Math.min (w, B.length);
-            int oh = Math.min (h, B[0].length);
-            Matrix result = new Matrix (h, w);
-            for (int c = 0; c < ow; c++)
-            {
-              for (int r = 0;  r < oh; r++) result.value[c][r] = value[c][r] - B[c][r];
-              for (int r = oh; r < h;  r++) result.value[c][r] = value[c][r];
-            }
-            for (int c = ow; c < w; c++)
-            {
-              for (int r = 0; r < h; r++)   result.value[c][r] = value[c][r];
-            }
-            return result;
-        }
-        if (that instanceof Scalar)
-        {
-            double scalar = ((Scalar) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            Matrix result = new Matrix (h, w);
-            for (int c = 0; c < w; c++)
-            {
-                for (int r = 0; r < h; r++)
-                {
-                    result.value[c][r] = value[c][r] - scalar;
-                }
-            }
-            return result;
-        }
-        if (that instanceof Text) return subtract (new Matrix ((Text) that));
-        throw new EvaluationException ("type mismatch");
+        return new MatrixDense (this).subtract (that);
     }
 
     public Type multiply (Type that) throws EvaluationException
     {
-        if (that instanceof Matrix)
-        {
-            double[][] B = ((Matrix) that).value;
-            int h = value[0].length;
-            int w = B.length;
-            int m = Math.min (value.length, B[0].length);
-            Matrix result = new Matrix (h, w);
-            for (int c = 0; c < w; c++)
-            {
-                for (int r = 0; r < h; r++)
-                {
-                    double sum = 0;
-                    for (int j = 0; j < m; j++)
-                    {
-                        sum += value[j][r] * B[c][j];
-                    }
-                    result.value[c][r] = sum;
-                }
-            }
-            return result;
-        }
-        if (that instanceof Scalar)
-        {
-            double scalar = ((Scalar) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            Matrix result = new Matrix (h, w);
-            for (int c = 0; c < w; c++)
-            {
-                for (int r = 0; r < h; r++)
-                {
-                    result.value[c][r] = value[c][r] * scalar;
-                }
-            }
-            return result;
-        }
-        if (that instanceof Text) return multiply (new Matrix ((Text) that));
-        throw new EvaluationException ("type mismatch");
+        return new MatrixDense (this).multiply (that);
     }
 
     public Type multiplyElementwise (Type that) throws EvaluationException
     {
-        if (that instanceof Matrix)
-        {
-            double[][] B = ((Matrix) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            int ow = Math.min (w, B.length);
-            int oh = Math.min (h, B[0].length);
-            Matrix result = new Matrix (h, w);
-            for (int c = 0; c < ow; c++)
-            {
-              for (int r = 0;  r < oh; r++) result.value[c][r] = value[c][r] * B[c][r];
-              for (int r = oh; r < h;  r++) result.value[c][r] = value[c][r];
-            }
-            for (int c = ow; c < w; c++)
-            {
-              for (int r = 0; r < h; r++)   result.value[c][r] = value[c][r];
-            }
-            return result;
-        }
-        if (that instanceof Scalar)
-        {
-            double scalar = ((Scalar) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            Matrix result = new Matrix (h, w);
-            for (int c = 0; c < w; c++)
-            {
-                for (int r = 0; r < h; r++)
-                {
-                    result.value[c][r] = value[c][r] * scalar;
-                }
-            }
-            return result;
-        }
-        if (that instanceof Text) return multiply (new Matrix ((Text) that));
-        throw new EvaluationException ("type mismatch");
+        return new MatrixDense (this).multiplyElementwise (that);
     }
 
     public Type divide (Type that) throws EvaluationException
     {
-        if (that instanceof Matrix)
-        {
-            double[][] B = ((Matrix) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            int ow = Math.min (w, B.length);
-            int oh = Math.min (h, B[0].length);
-            Matrix result = new Matrix (h, w);
-            for (int c = 0; c < ow; c++)
-            {
-              for (int r = 0;  r < oh; r++) result.value[c][r] = value[c][r] / B[c][r];
-              for (int r = oh; r < h;  r++) result.value[c][r] = value[c][r];
-            }
-            for (int c = ow; c < w; c++)
-            {
-              for (int r = 0; r < h; r++)   result.value[c][r] = value[c][r];
-            }
-            return result;
-        }
-        if (that instanceof Scalar)
-        {
-            double scalar = ((Scalar) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            Matrix result = new Matrix (h, w);
-            for (int c = 0; c < w; c++)
-            {
-                for (int r = 0; r < h; r++)
-                {
-                    result.value[c][r] = value[c][r] / scalar;
-                }
-            }
-            return result;
-        }
-        if (that instanceof Text) return divide (new Matrix ((Text) that));
-        throw new EvaluationException ("type mismatch");
+        return new MatrixDense (this).divide (that);
     }
 
     public Type min (Type that)
     {
-        if (that instanceof Matrix)
-        {
-            double[][] B = ((Matrix) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            int ow = Math.min (w, B.length);
-            int oh = Math.min (h, B[0].length);
-            Matrix result = new Matrix (h, w);
-            for (int c = 0; c < ow; c++)
-            {
-              for (int r = 0;  r < oh; r++) result.value[c][r] = Math.min (value[c][r], B[c][r]);
-              for (int r = oh; r < h;  r++) result.value[c][r] = Math.min (value[c][r], 0);
-            }
-            for (int c = ow; c < w; c++)
-            {
-              for (int r = 0; r < h; r++)   result.value[c][r] = Math.min (value[c][r], 0);
-            }
-            return result;
-        }
-        if (that instanceof Scalar)
-        {
-            double scalar = ((Scalar) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            Matrix result = new Matrix (h, w);
-            for (int c = 0; c < w; c++)
-            {
-                for (int r = 0; r < h; r++)
-                {
-                    result.value[c][r] = Math.min (value[c][r], scalar);
-                }
-            }
-            return result;
-        }
-        if (that instanceof Text) return min (new Matrix ((Text) that));
-        throw new EvaluationException ("type mismatch");
+        return new MatrixDense (this).min (that);
     }
 
     public Type max (Type that)
     {
-        if (that instanceof Matrix)
-        {
-            double[][] B = ((Matrix) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            int ow = Math.min (w, B.length);
-            int oh = Math.min (h, B[0].length);
-            Matrix result = new Matrix (h, w);
-            for (int c = 0; c < ow; c++)
-            {
-              for (int r = 0;  r < oh; r++) result.value[c][r] = Math.max (value[c][r], B[c][r]);
-              for (int r = oh; r < h;  r++) result.value[c][r] = Math.max (value[c][r], 0);
-            }
-            for (int c = ow; c < w; c++)
-            {
-              for (int r = 0; r < h; r++)   result.value[c][r] = Math.max (value[c][r], 0);
-            }
-            return result;
-        }
-        if (that instanceof Scalar)
-        {
-            double scalar = ((Scalar) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            Matrix result = new Matrix (h, w);
-            for (int c = 0; c < w; c++)
-            {
-                for (int r = 0; r < h; r++)
-                {
-                    result.value[c][r] = Math.max (value[c][r], scalar);
-                }
-            }
-            return result;
-        }
-        if (that instanceof Text) return max (new Matrix ((Text) that));
-        throw new EvaluationException ("type mismatch");
+        return new MatrixDense (this).max (that);
     }
 
     public double det22 (int r0, int r1, int c0, int c1)
     {
-        return (value[c0][r0] * value[c1][r1] - value[c1][r0] * value[c0][r1]);
+        return (get (r0, c0) * get (r1, c1) - get (r0, c1) * get (r1, c0));
     }
 
     public Type NOT () throws EvaluationException
     {
-        int w = value.length;
-        int h = value[0].length;
+        int w = columns ();
+        int h = rows ();
         if (h != w) throw new EvaluationException ("Can't invert non-square matrix (because we don't know about pseudo-inverse).");  // should create pseudo-inverse
-        if (h == 1) return new Scalar (1 / value[0][0]);
+        if (h == 1) return new Scalar (1 / get (0, 0));
         if (h == 2)
         {
-            Matrix result = new Matrix (2, 2);
+            MatrixDense result = new MatrixDense (2, 2);
 
             double q = determinant ();
             if (q == 0) throw new EvaluationException ("invert: Matrix is singular!");
 
-            result.value[0][0] = value[1][1] /  q;
-            result.value[0][1] = value[0][1] / -q;
-            result.value[1][0] = value[1][0] / -q;
-            result.value[1][1] = value[0][0] /  q;
+            result.value[0][0] = get (1, 1) /  q;
+            result.value[0][1] = get (1, 0) / -q;
+            result.value[1][0] = get (0, 1) / -q;
+            result.value[1][1] = get (0, 0) /  q;
 
             return result;
         }
         if (h == 3)
         {
-            Matrix result = new Matrix (3, 3);
+            MatrixDense result = new MatrixDense (3, 3);
 
             double q = determinant ();
             if (q == 0) throw new EvaluationException ("invert: Matrix is singular!");
@@ -617,14 +177,14 @@ public class Matrix extends Type
 
     public Type negate () throws EvaluationException
     {
-        int w = value.length;
-        int h = value[0].length;
-        Matrix result = new Matrix (h, w);
+        int w = columns ();
+        int h = rows ();
+        MatrixDense result = new MatrixDense (h, w);
         for (int c = 0; c < w; c++)
         {
             for (int r = 0; r < h; r++)
             {
-                result.value[c][r] = -value[c][r];
+                result.value[c][r] = -get (r, c);
             }
         }
         return result;
@@ -632,14 +192,14 @@ public class Matrix extends Type
 
     public Type transpose ()
     {
-        int w = value.length;
-        int h = value[0].length;
-        Matrix result = new Matrix (w, h);
+        int w = columns ();
+        int h = rows ();
+        MatrixDense result = new MatrixDense (w, h);
         for (int c = 0; c < w; c++)
         {
             for (int r = 0; r < h; r++)
             {
-                result.value[r][c] = value[c][r];
+                result.value[r][c] = get (r, c);
             }
         }
         return result;
@@ -647,14 +207,14 @@ public class Matrix extends Type
 
     public Type visit (Visitor visitor)
     {
-        int w = value.length;
-        int h = value[0].length;
-        Matrix result = new Matrix (h, w);
+        int w = columns ();
+        int h = rows ();
+        MatrixDense result = new MatrixDense (h, w);
         for (int c = 0; c < w; c++)
         {
             for (int r = 0; r < h; r++)
             {
-                result.value[c][r] = visitor.apply (value[c][r]);
+                result.value[c][r] = visitor.apply (get (r, c));
             }
         }
         return result;
@@ -662,27 +222,27 @@ public class Matrix extends Type
 
     public double determinant () throws EvaluationException
     {
-        int w = value.length;
-        int h = value[0].length;
+        int w = columns ();
+        int h = rows ();
         if (h != w) throw new EvaluationException ("Can't compute determinant of non-square matrix.");
-        if (h == 1) return value[0][0];
-        if (h == 2) return value[0][0] * value[1][1] - value[0][1] * value[1][0];
+        if (h == 1) return get (0, 0);
+        if (h == 2) return get (0, 0) * get (1, 1) - get (1, 0) * get (0, 1);
         if (h == 3)
         {
-            return   value[0][0] * value[1][1] * value[2][2]
-                   - value[0][0] * value[2][1] * value[1][2]
-                   - value[1][0] * value[0][1] * value[2][2]
-                   + value[1][0] * value[2][1] * value[0][2]
-                   + value[2][0] * value[0][1] * value[1][2]
-                   - value[2][0] * value[1][1] * value[0][2];
+            return   get (0, 0) * get (1, 1) * get (2, 2)
+                   - get (0, 0) * get (1, 2) * get (2, 1)
+                   - get (0, 1) * get (1, 0) * get (2, 2)
+                   + get (0, 1) * get (1, 2) * get (2, 0)
+                   + get (0, 2) * get (1, 0) * get (2, 1)
+                   - get (0, 2) * get (1, 1) * get (2, 0);
         }
         throw new EvaluationException ("Can't compute deteminant of matrices larger then 3x3 (because we are lazy).");
     }
 
     public double norm (double n)
     {
-        int w = value.length;
-        int h = value[0].length;
+        int w = columns ();
+        int h = rows ();
         double result = 0;
         if (n == 0)
         {
@@ -690,7 +250,7 @@ public class Matrix extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    if (value[c][r] != 0) result++;
+                    if (get (r, c) != 0) result++;
                 }
             }
         }
@@ -700,7 +260,7 @@ public class Matrix extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result += Math.abs (value[c][r]);
+                    result += Math.abs (get (r, c));
                 }
             }
         }
@@ -710,7 +270,8 @@ public class Matrix extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result += value[c][r] * value[c][r];
+                    double v = get (r, c);
+                    result += v * v;
                 }
             }
             result = Math.sqrt (result);
@@ -721,7 +282,7 @@ public class Matrix extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result = Math.max (result, Math.abs (value[c][r]));
+                    result = Math.max (result, Math.abs (get (r, c)));
                 }
             }
         }
@@ -731,7 +292,7 @@ public class Matrix extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result += Math.pow (value[c][r], n);
+                    result += Math.pow (get (r, c), n);
                 }
             }
             result = Math.pow (result, 1 / n);
@@ -751,9 +312,9 @@ public class Matrix extends Type
     {
         StringWriter stream = new StringWriter ();
 
-        int columns = value.length;
+        int columns = columns ();
         if (columns == 0) return "[]";
-        int rows    = value[0].length;
+        int rows    = rows ();
         if (rows    == 0) return "[]";
 
         stream.append ("[");
@@ -763,7 +324,7 @@ public class Matrix extends Type
             int c = 0;
             while (true)
             {
-                stream.append (String.valueOf (value[c][r]));
+                stream.append (String.valueOf (get (r, c)));
                 if (++c >= columns) break;
                 stream.append (',');
             }
@@ -778,18 +339,16 @@ public class Matrix extends Type
 
     public int compareTo (Type that)
     {
-        int cols = value.length;
-        int rows = 0;
-        if (cols != 0) rows = value[0].length;
+        int cols = columns ();
+        int rows = rows ();
 
         if (that instanceof Matrix)
         {
-            double[][] B = ((Matrix) that).value;
-            int Bcols = value.length;
+            Matrix B = (Matrix) that;
+            int Bcols = B.columns ();
             int difference = cols - Bcols;
             if (difference != 0) return difference;
-            int Brows = 0;
-            if (Bcols != 0) Brows = B[0].length;
+            int Brows = B.rows ();
             difference = rows - Brows;
             if (difference != 0) return difference;
 
@@ -797,7 +356,7 @@ public class Matrix extends Type
             {
                 for (int r = 0; r < rows; r++)
                 {
-                    double d = value[c][r] - B[c][r];
+                    double d = get (r, c) - B.get (r, c);
                     if (d > 0) return 1;
                     if (d < 0) return -1;
                 }
@@ -808,12 +367,12 @@ public class Matrix extends Type
         {
             if (cols != 1) return 1;
             if (rows != 1) return 1;
-            double d = value[0][0] - ((Scalar) that).value;
+            double d = get (0, 0) - ((Scalar) that).value;
             if (d > 0) return 1;
             if (d < 0) return -1;
             return 0;
         }
-        if (that instanceof Text    ) return compareTo (new Matrix ((Text) that));
+        if (that instanceof Text    ) return compareTo (new MatrixDense ((Text) that));
         if (that instanceof Instance) return -1;
         throw new EvaluationException ("type mismatch");
     }

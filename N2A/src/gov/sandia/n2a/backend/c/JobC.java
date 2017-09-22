@@ -2629,7 +2629,7 @@ public class JobC
         if (v.type instanceof Matrix)
         {
             Matrix m = (Matrix) v.type;
-            if (m.value.length == 1  &&  m.value[0].length == 3) return "Vector3";
+            if (m.columns () == 1  &&  m.rows () == 3) return "Vector3";
             return "Matrix<float>";
         }
         if (v.type instanceof Text) return "string";
