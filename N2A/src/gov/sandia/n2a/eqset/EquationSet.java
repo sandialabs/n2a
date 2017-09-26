@@ -25,7 +25,7 @@ import gov.sandia.n2a.language.operator.GT;
 import gov.sandia.n2a.language.operator.LE;
 import gov.sandia.n2a.language.operator.LT;
 import gov.sandia.n2a.language.type.Instance;
-import gov.sandia.n2a.language.type.Matrix;
+import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -1391,7 +1391,7 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 if (v.name.equals ("$xyz")  ||  v.name.endsWith (".$projectFrom")  ||  v.name.endsWith (".$projectTo"))  // are there always dots before $projectFrom/To?
                 {
-                    v.type = new Matrix (3, 1);
+                    v.type = new MatrixDense (3, 1);
                 }
                 else if (v.name.equals ("$init")  ||  v.name.equals ("$live")  ||  v.name.equals ("$p")  ||  v.name.equals ("$n")  ||  (v.name.equals ("$t")  &&  v.order == 1))
                 {

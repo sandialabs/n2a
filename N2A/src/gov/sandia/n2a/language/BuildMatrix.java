@@ -11,6 +11,7 @@ import gov.sandia.n2a.language.parse.ASTConstant;
 import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
+import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 
@@ -132,7 +133,7 @@ public class BuildMatrix extends Operator
         int rows = operands[0].length;
         if (rows == 0) return this;
 
-        Matrix A = new Matrix (rows, cols);  // potential constant to replace us
+        Matrix A = new MatrixDense (rows, cols);  // potential constant to replace us
         boolean isConstant = true;  // any element that is not constant will change this to false
         for (int c = 0; c < cols; c++)
         {
@@ -140,7 +141,7 @@ public class BuildMatrix extends Operator
             {
                 if (operands[c][r] == null)
                 {
-                    A.value[c][r] = 0;
+                    A.set (r, c, 0);
                 }
                 else
                 {
@@ -150,9 +151,9 @@ public class BuildMatrix extends Operator
                         if (operands[c][r] instanceof Constant)
                         {
                             Type o = ((Constant) operands[c][r]).value;
-                            if      (o instanceof Scalar) A.value[c][r] = ((Scalar) o).value;
-                            else if (o instanceof Text  ) A.value[c][r] = Double.valueOf (((Text) o).value);
-                            else if (o instanceof Matrix) A.value[c][r] = ((Matrix) o).value[0][0];
+                            if      (o instanceof Scalar) A.set (r, c, ((Scalar) o).value);
+                            else if (o instanceof Text  ) A.set (r, c, Double.valueOf (((Text) o).value));
+                            else if (o instanceof Matrix) A.set (r, c, ((Matrix) o).get (0, 0));
                             else throw new EvaluationException ("Can't construct matrix element from the given type.");
                         }
                         else
@@ -211,25 +212,25 @@ public class BuildMatrix extends Operator
     public Type eval (Instance context) throws EvaluationException
     {
         int columns = operands.length;
-        if (columns == 0) return new Matrix ();
+        if (columns == 0) return new MatrixDense ();
         int rows = operands[0].length;
-        if (rows == 0) return new Matrix ();
+        if (rows == 0) return new MatrixDense ();
 
-        Matrix result = new Matrix (rows, columns);
+        Matrix result = new MatrixDense (rows, columns);
         for (int c = 0; c < columns; c++)
         {
             for (int r = 0; r < rows; r++)
             {
                 if (operands[c][r] == null)
                 {
-                    result.value[c][r] = 0;
+                    result.set (r, c, 0);
                 }
                 else
                 {
                     Type o = operands[c][r].eval (context);
-                    if      (o instanceof Scalar) result.value[c][r] = ((Scalar) o).value;
-                    else if (o instanceof Text  ) result.value[c][r] = Double.valueOf (((Text) o).value);
-                    else if (o instanceof Matrix) result.value[c][r] = ((Matrix) o).value[0][0];
+                    if      (o instanceof Scalar) result.set (r, c, ((Scalar) o).value);
+                    else if (o instanceof Text  ) result.set (r, c, Double.valueOf (((Text) o).value));
+                    else if (o instanceof Matrix) result.set (r, c, ((Matrix) o).get (0, 0));
                     else throw new EvaluationException ("Can't construct matrix element from the given type.");
                 }
             }

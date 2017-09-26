@@ -12,6 +12,7 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
+import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 
@@ -51,21 +52,21 @@ public class Grid extends Function
         }
 
         // compute xyz in stride order
-        Matrix result = new Matrix (3, 1);
+        Matrix result = new MatrixDense (3, 1);
         int sx = ny * nz;  // stride x
         if (raw)
         {
-            result.value[0][0] = i / sx;  // (i / sx) is an integer operation, so remainder is truncated.
+            result.set (0, i / sx);  // (i / sx) is an integer operation, so remainder is truncated.
             i %= sx;
-            result.value[0][1] = i / nz;
-            result.value[0][2] = i % nz;
+            result.set (1, i / nz);
+            result.set (2, i % nz);
         }
         else
         {
-            result.value[0][0] = ((i / sx) + 0.5) / nx;
+            result.set (0, ((i / sx) + 0.5) / nx);
             i %= sx;
-            result.value[0][1] = ((i / nz) + 0.5) / ny;
-            result.value[0][2] = ((i % nz) + 0.5) / nz;
+            result.set (1, ((i / nz) + 0.5) / ny);
+            result.set (2, ((i % nz) + 0.5) / nz);
         }
         return result;
     }

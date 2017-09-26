@@ -32,7 +32,7 @@ public class Scalar extends Type
 
     public Scalar (Matrix that)
     {
-        if (that.value.length > 0) value = that.value[0][0];
+        value = that.get (0);
     }
 
     public Type clear ()
@@ -54,15 +54,15 @@ public class Scalar extends Type
         if (that instanceof Text  ) return new Scalar (value - Double.valueOf (((Text) that).value));
         if (that instanceof Matrix)
         {
-            double[][] B = ((Matrix) that).value;
-            int w = B.length;
-            int h = B[0].length;
-            Matrix result = new Matrix (h, w);
+            Matrix B = (Matrix) that;
+            int w = B.columns ();
+            int h = B.rows ();
+            MatrixDense result = new MatrixDense (h, w);
             for (int c = 0; c < w; c++)
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = value - B[c][r];
+                    result.value[c][r] = value - B.get (r, c);
                 }
             }
             return result;
@@ -92,15 +92,15 @@ public class Scalar extends Type
         if (that instanceof Text  ) return new Scalar (value / Double.valueOf (((Text) that).value));
         if (that instanceof Matrix)
         {
-            double[][] B = ((Matrix) that).value;
-            int w = B.length;
-            int h = B[0].length;
-            Matrix result = new Matrix (h, w);
+            Matrix B = (Matrix) that;
+            int w = B.columns ();
+            int h = B.rows ();
+            MatrixDense result = new MatrixDense (h, w);
             for (int c = 0; c < w; c++)
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = value / B[c][r];
+                    result.value[c][r] = value / B.get (r, c);
                 }
             }
             return result;
@@ -114,15 +114,15 @@ public class Scalar extends Type
         if (that instanceof Text  ) return new Scalar (value % Double.valueOf (((Text) that).value));
         if (that instanceof Matrix)
         {
-            double[][] B = ((Matrix) that).value;
-            int w = B.length;
-            int h = B[0].length;
-            Matrix result = new Matrix (h, w);
+            Matrix B = (Matrix) that;
+            int w = B.columns ();
+            int h = B.rows ();
+            MatrixDense result = new MatrixDense (h, w);
             for (int c = 0; c < w; c++)
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = value % B[c][r];
+                    result.value[c][r] = value % B.get (r, c);
                 }
             }
             return result;
@@ -136,15 +136,15 @@ public class Scalar extends Type
         if (that instanceof Text  ) return new Scalar (Math.pow (value, Double.valueOf (((Text) that).value)));
         if (that instanceof Matrix)
         {
-            double[][] B = ((Matrix) that).value;
-            int w = B.length;
-            int h = B[0].length;
-            Matrix result = new Matrix (h, w);
+            Matrix B = (Matrix) that;
+            int w = B.columns ();
+            int h = B.rows ();
+            MatrixDense result = new MatrixDense (h, w);
             for (int c = 0; c < w; c++)
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = Math.pow (value, B[c][r]);
+                    result.value[c][r] = Math.pow (value, B.get (r, c));
                 }
             }
             return result;
@@ -158,15 +158,15 @@ public class Scalar extends Type
         if (that instanceof Text  ) return new Scalar (Math.min (value, Double.valueOf (((Text) that).value)));
         if (that instanceof Matrix)
         {
-            double[][] B = ((Matrix) that).value;
-            int w = B.length;
-            int h = B[0].length;
-            Matrix result = new Matrix (h, w);
+            Matrix B = (Matrix) that;
+            int w = B.columns ();
+            int h = B.rows ();
+            MatrixDense result = new MatrixDense (h, w);
             for (int c = 0; c < w; c++)
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = Math.min (value, B[c][r]);
+                    result.value[c][r] = Math.min (value, B.get (r, c));
                 }
             }
             return result;
@@ -180,15 +180,15 @@ public class Scalar extends Type
         if (that instanceof Text  ) return new Scalar (Math.max (value, Double.valueOf (((Text) that).value)));
         if (that instanceof Matrix)
         {
-            double[][] B = ((Matrix) that).value;
-            int w = B.length;
-            int h = B[0].length;
-            Matrix result = new Matrix (h, w);
+            Matrix B = (Matrix) that;
+            int w = B.columns ();
+            int h = B.rows ();
+            MatrixDense result = new MatrixDense (h, w);
             for (int c = 0; c < w; c++)
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = Math.max (value, B[c][r]);
+                    result.value[c][r] = Math.max (value, B.get (r, c));
                 }
             }
             return result;
@@ -202,15 +202,15 @@ public class Scalar extends Type
         if (that instanceof Text  ) return new Scalar ((value == Double.valueOf (((Text) that).value)) ? 1 : 0);
         if (that instanceof Matrix)
         {
-            double[][] B = ((Matrix) that).value;
-            int w = B.length;
-            int h = B[0].length;
-            Matrix result = new Matrix (h, w);
+            Matrix B = (Matrix) that;
+            int w = B.columns ();
+            int h = B.rows ();
+            MatrixDense result = new MatrixDense (h, w);
             for (int c = 0; c < w; c++)
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (value == B[c][r]) ? 1 : 0;
+                    result.value[c][r] = (value == B.get (r, c)) ? 1 : 0;
                 }
             }
             return result;
@@ -224,15 +224,15 @@ public class Scalar extends Type
         if (that instanceof Text  ) return new Scalar ((value != Double.valueOf (((Text) that).value)) ? 1 : 0);
         if (that instanceof Matrix)
         {
-            double[][] B = ((Matrix) that).value;
-            int w = B.length;
-            int h = B[0].length;
-            Matrix result = new Matrix (h, w);
+            Matrix B = (Matrix) that;
+            int w = B.columns ();
+            int h = B.rows ();
+            MatrixDense result = new MatrixDense (h, w);
             for (int c = 0; c < w; c++)
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (value != B[c][r]) ? 1 : 0;
+                    result.value[c][r] = (value != B.get (r, c)) ? 1 : 0;
                 }
             }
             return result;
@@ -246,15 +246,15 @@ public class Scalar extends Type
         if (that instanceof Text  ) return new Scalar ((value > Double.valueOf (((Text) that).value)) ? 1 : 0);
         if (that instanceof Matrix)
         {
-            double[][] B = ((Matrix) that).value;
-            int w = B.length;
-            int h = B[0].length;
-            Matrix result = new Matrix (h, w);
+            Matrix B = (Matrix) that;
+            int w = B.columns ();
+            int h = B.rows ();
+            MatrixDense result = new MatrixDense (h, w);
             for (int c = 0; c < w; c++)
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (value > B[c][r]) ? 1 : 0;
+                    result.value[c][r] = (value > B.get (r, c)) ? 1 : 0;
                 }
             }
             return result;
@@ -268,15 +268,15 @@ public class Scalar extends Type
         if (that instanceof Text  ) return new Scalar ((value >= Double.valueOf (((Text) that).value)) ? 1 : 0);
         if (that instanceof Matrix)
         {
-            double[][] B = ((Matrix) that).value;
-            int w = B.length;
-            int h = B[0].length;
-            Matrix result = new Matrix (h, w);
+            Matrix B = (Matrix) that;
+            int w = B.columns ();
+            int h = B.rows ();
+            MatrixDense result = new MatrixDense (h, w);
             for (int c = 0; c < w; c++)
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (value >= B[c][r]) ? 1 : 0;
+                    result.value[c][r] = (value >= B.get (r, c)) ? 1 : 0;
                 }
             }
             return result;
@@ -290,15 +290,15 @@ public class Scalar extends Type
         if (that instanceof Text  ) return new Scalar ((value < Double.valueOf (((Text) that).value)) ? 1 : 0);
         if (that instanceof Matrix)
         {
-            double[][] B = ((Matrix) that).value;
-            int w = B.length;
-            int h = B[0].length;
-            Matrix result = new Matrix (h, w);
+            Matrix B = (Matrix) that;
+            int w = B.columns ();
+            int h = B.rows ();
+            MatrixDense result = new MatrixDense (h, w);
             for (int c = 0; c < w; c++)
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (value < B[c][r]) ? 1 : 0;
+                    result.value[c][r] = (value < B.get (r, c)) ? 1 : 0;
                 }
             }
             return result;
@@ -312,15 +312,15 @@ public class Scalar extends Type
         if (that instanceof Text  ) return new Scalar ((value <= Double.valueOf (((Text) that).value)) ? 1 : 0);
         if (that instanceof Matrix)
         {
-            double[][] B = ((Matrix) that).value;
-            int w = B.length;
-            int h = B[0].length;
-            Matrix result = new Matrix (h, w);
+            Matrix B = (Matrix) that;
+            int w = B.columns ();
+            int h = B.rows ();
+            MatrixDense result = new MatrixDense (h, w);
             for (int c = 0; c < w; c++)
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (value <= B[c][r]) ? 1 : 0;
+                    result.value[c][r] = (value <= B.get (r, c)) ? 1 : 0;
                 }
             }
             return result;
@@ -334,15 +334,15 @@ public class Scalar extends Type
         if (that instanceof Text  ) return new Scalar ((value * Double.valueOf (((Text) that).value) != 0) ? 1 : 0);
         if (that instanceof Matrix)
         {
-            double[][] B = ((Matrix) that).value;
-            int w = B.length;
-            int h = B[0].length;
-            Matrix result = new Matrix (h, w);
+            Matrix B = (Matrix) that;
+            int w = B.columns ();
+            int h = B.rows ();
+            MatrixDense result = new MatrixDense (h, w);
             for (int c = 0; c < w; c++)
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (value * B[c][r] != 0) ? 1 : 0;
+                    result.value[c][r] = (value * B.get (r, c) != 0) ? 1 : 0;
                 }
             }
             return result;
@@ -357,15 +357,15 @@ public class Scalar extends Type
         if (that instanceof Matrix)
         {
             double scalar = Math.abs (value);
-            double[][] B = ((Matrix) that).value;
-            int w = B.length;
-            int h = B[0].length;
-            Matrix result = new Matrix (h, w);
+            Matrix B = (Matrix) that;
+            int w = B.columns ();
+            int h = B.rows ();
+            MatrixDense result = new MatrixDense (h, w);
             for (int c = 0; c < w; c++)
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (scalar + Math.abs (B[c][r]) != 0) ? 1 : 0;
+                    result.value[c][r] = (scalar + Math.abs (B.get (r, c)) != 0) ? 1 : 0;
                 }
             }
             return result;
@@ -400,12 +400,12 @@ public class Scalar extends Type
         if (that instanceof Text  ) return new Double (value).compareTo (Double.valueOf (((Text) that).value));
         if (that instanceof Matrix)
         {
-            double[][] B = ((Matrix) that).value;
-            int w = B.length;
+            Matrix B = (Matrix) that;
+            int w = B.columns ();
             if (w != 1) return -1;
-            int h = B[0].length;
+            int h = B.rows ();
             if (h != 1) return -1;
-            return new Double (value).compareTo (new Double (B[0][0]));
+            return new Double (value).compareTo (new Double (B.get (0)));
         }
         if (that instanceof Instance) return -1;
         throw new EvaluationException ("type mismatch");

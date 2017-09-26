@@ -18,6 +18,7 @@ import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.parse.ExpressionParser;
 import gov.sandia.n2a.language.type.Matrix;
+import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
@@ -1404,14 +1405,14 @@ public class ImportJob
                         fractionAlong = getAttribute (child, "fractionAlong", 1.0);
                         break;
                     case "proximal":
-                        proximal = new Matrix (3, 1);
+                        proximal = new MatrixDense (3, 1);
                         proximal.set   (0, Matrix.convert (morphologyUnits (getAttribute (child, "x"))));
                         proximal.set   (1, Matrix.convert (morphologyUnits (getAttribute (child, "y"))));
                         proximal.set   (2, Matrix.convert (morphologyUnits (getAttribute (child, "z"))));
                         proximalDiameter = Matrix.convert (morphologyUnits (getAttribute (child, "diameter")));
                         break;
                     case "distal":
-                        distal = new Matrix (3, 1);
+                        distal = new MatrixDense (3, 1);
                         distal.set   (0, Matrix.convert (morphologyUnits (getAttribute (child, "x"))));
                         distal.set   (1, Matrix.convert (morphologyUnits (getAttribute (child, "y"))));
                         distal.set   (2, Matrix.convert (morphologyUnits (getAttribute (child, "z"))));
@@ -1498,9 +1499,9 @@ public class ImportJob
 
         public String format (Matrix A)
         {
-            double x = A.getDouble (0);
-            double y = A.getDouble (1);
-            double z = A.getDouble (2);
+            double x = A.get (0);
+            double y = A.get (1);
+            double z = A.get (2);
             if (x == 0  &&  y == 0  &&  z == 0) return "[0;0;0]";
             return "[" + format (x) + ";" + format (y) + ";" + format (z) + "]*1um";
         }

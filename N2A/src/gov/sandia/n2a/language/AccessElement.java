@@ -68,7 +68,7 @@ public class AccessElement extends Function
             if (c.value instanceof Matrix)
             {
                 from.changed = true;
-                return new Constant (new Scalar (((Matrix) c.value).getDouble (row, col)));
+                return new Constant (new Scalar (((Matrix) c.value).get (row, col)));
             }
         }
         else
@@ -122,6 +122,6 @@ public class AccessElement extends Function
         int row = (int) ((Scalar) operands[1].eval (instance)).value;
         int column = 0;
         if (operands.length > 2) column = (int) ((Scalar) operands[2].eval (instance)).value;
-        return A.getScalar (row, column);
+        return new Scalar (A.get (row, column));
     }
 }

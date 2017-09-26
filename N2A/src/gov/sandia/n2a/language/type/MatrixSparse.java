@@ -1,0 +1,320 @@
+/*
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Under the terms of Contract DE-NA0003525 with NTESS,
+the U.S. Government retains certain rights in this software.
+*/
+
+package gov.sandia.n2a.language.type;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map.Entry;
+
+import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.Type;
+
+public class MatrixSparse extends Matrix
+{
+    List<HashMap<Integer,Double>> data = new ArrayList<HashMap<Integer,Double>> ();
+    int    rowCount;  // Largest index seen in any column.
+    double emptyValue;
+
+    public MatrixSparse ()
+    {
+    }
+
+    public MatrixSparse (int rows, int columns)
+    {
+        rowCount = rows;
+        for (int c = 0; c < columns; c++) data.add (null);
+    }
+
+    public MatrixSparse (int rows, int columns, double initialValue)
+    {
+        rowCount   = rows;
+        emptyValue = initialValue;
+        for (int c = 0; c < columns; c++) data.add (null);
+    }
+
+    public MatrixSparse (File path) throws EvaluationException
+    {
+        try
+        {
+            load (new InputStreamReader (new FileInputStream (path)));
+        }
+        catch (IOException exception)
+        {
+            throw new EvaluationException ("Can't open matrix file");
+        }
+    }
+
+    public void load (Reader stream) throws EvaluationException
+    {
+        load (stream, false);
+    }
+
+    public void load (Reader stream, boolean units) throws EvaluationException
+    {
+        try (BufferedReader reader = new BufferedReader (stream))
+        {
+            String line = reader.readLine ();  // Throw away "Sparse" line
+            while (true)
+            {
+                line = reader.readLine ();
+                if (line == null) break;
+                line = line.trim ();
+                String[] pieces = line.split (",");
+                if (pieces.length < 3) continue;
+                int    r = Integer.valueOf (pieces[0].trim ());
+                int    c = Integer.valueOf (pieces[1].trim ());
+                double v = Double .valueOf (pieces[2].trim ());
+                set (r, c, v);
+            }
+        }
+        catch (IOException error)
+        {
+            throw new EvaluationException ("Failed to convert input to matrix");
+        }
+    }
+
+    public int rows ()
+    {
+        return rowCount;
+    }
+
+    public int columns ()
+    {
+        return data.size ();
+    }
+
+    public double get (int row, int column)
+    {
+        if (column >= data.size ()) return 0;
+        HashMap<Integer,Double> rows = data.get (column);
+        if (rows == null) return 0;
+        Double result = rows.get (row);
+        if (result == null) return 0;
+        return result;
+    }
+
+    public void set (int row, int column, double a)
+    {
+        for (int c = data.size (); c <= column; c++) data.add (null);
+        HashMap<Integer,Double> rows = data.get (column);
+        if (rows == null)
+        {
+            rows = new HashMap<Integer,Double> ();
+            data.set (column, rows);
+        }
+        if (a == emptyValue)
+        {
+            rows.remove (row);
+        }
+        else
+        {
+            rows.put (row, a);
+            rowCount = Math.max (rowCount, row + 1);
+        }
+    }
+
+    public MatrixSparse clear (double initialValue)
+    {
+        return new MatrixSparse (rows (), columns (), initialValue);
+    }
+
+    /**
+        @return A copy of this object, with diagonal elements set to 1 and off-diagonals set to zero.
+     */
+    public MatrixSparse identity ()
+    {
+        int w = columns ();
+        int h = rows ();
+        MatrixSparse result = new MatrixSparse (h, w);
+        h = Math.min (h, w);
+        for (int r = 0; r < h; r++) result.set (r, r, 1);
+        return result;
+    }
+
+    public Type add (Type that) throws EvaluationException
+    {
+        if (that instanceof MatrixSparse)
+        {
+            MatrixSparse B = (MatrixSparse) that;
+            int w  = columns ();
+            int h  = rows ();
+            int Bw = B.columns ();
+            MatrixSparse result = new MatrixSparse (h, w);
+            for (int c = 0; c < w; c++)
+            {
+                HashMap<Integer,Double> rows = data.get (c);
+                if (rows == null) continue;
+                for (Entry<Integer,Double> row : rows.entrySet ()) result.set (row.getKey (), c, row.getValue ());
+            }
+            for (int c = 0; c < Bw; c++)
+            {
+                HashMap<Integer,Double> rows = B.data.get (c);
+                if (rows == null) continue;
+                for (Entry<Integer,Double> row : rows.entrySet ())
+                {
+                    int r = row.getKey ();
+                    result.set (r, c, result.get (r, c) + row.getValue ());
+                }
+            }
+            return result;
+        }
+        if (that instanceof Matrix)
+        {
+            Matrix B = (Matrix) that;
+            int w = columns ();
+            int h = rows ();
+            int ow = Math.min (w, B.columns ());
+            int oh = Math.min (h, B.rows ());
+            MatrixDense result;
+            if (emptyValue == 0) result = new MatrixDense (h, w);
+            else                 result = new MatrixDense (h, w, emptyValue);
+            for (int c = 0; c < w; c++)
+            {
+                HashMap<Integer,Double> rows = data.get (c);
+                if (rows == null) continue;
+                for (Entry<Integer,Double> row : rows.entrySet ()) result.set (row.getKey (), c, row.getValue ());
+            }
+            for (int c = 0; c < ow; c++)
+            {
+              for (int r = 0; r < oh; r++) result.value[c][r] += B.get (r, c);
+            }
+            return result;
+        }
+        if (that instanceof Scalar)
+        {
+            double scalar = ((Scalar) that).value;
+            int w = columns ();
+            int h = rows ();
+            MatrixSparse result = new MatrixSparse (h, w, emptyValue + scalar);
+            for (int c = 0; c < w; c++)
+            {
+                HashMap<Integer,Double> rows = data.get (c);
+                if (rows == null) continue;
+                for (Entry<Integer,Double> row : rows.entrySet ()) result.set (row.getKey (), c, row.getValue () + scalar);
+            }
+            return result;
+        }
+        if (that instanceof Text) return add (new MatrixDense ((Text) that));
+        throw new EvaluationException ("type mismatch");
+    }
+
+    // TODO: Fill in other binary operations
+
+    public Type negate () throws EvaluationException
+    {
+        int w = columns ();
+        int h = rows ();
+        MatrixSparse result = new MatrixSparse (h, w, -emptyValue);
+        for (int c = 0; c < w; c++)
+        {
+            HashMap<Integer,Double> rows = data.get (c);
+            if (rows == null) continue;
+            for (Entry<Integer,Double> row : rows.entrySet ()) result.set (row.getKey (), c, -row.getValue ());
+        }
+        return result;
+    }
+
+    public Type transpose ()
+    {
+        int w = columns ();
+        int h = rows ();
+        MatrixSparse result = new MatrixSparse (w, h, emptyValue);
+        for (int c = 0; c < w; c++)
+        {
+            HashMap<Integer,Double> rows = data.get (c);
+            if (rows == null) continue;
+            for (Entry<Integer,Double> row : rows.entrySet ()) result.set (c, row.getKey (), row.getValue ());
+        }
+        return result;
+    }
+
+    public Type visit (Visitor visitor)
+    {
+        int w = columns ();
+        int h = rows ();
+        MatrixSparse result = new MatrixSparse (h, w, visitor.apply (emptyValue));
+        for (int c = 0; c < w; c++)
+        {
+            HashMap<Integer,Double> rows = data.get (c);
+            if (rows == null) continue;
+            for (Entry<Integer,Double> row : rows.entrySet ()) result.set (row.getKey (), c, visitor.apply (row.getValue ()));
+        }
+        return result;
+    }
+
+    public double norm (double n)
+    {
+        int w = columns ();
+        int h = rows ();
+        double result = 0;
+        int emptyCount = w * h;
+        if (n == 0)
+        {
+            for (int c = 0; c < w; c++)
+            {
+                HashMap<Integer,Double> rows = data.get (c);
+                if (rows == null) continue;
+                emptyCount -= rows.size ();
+                for (Double v : rows.values ()) if (v != 0) result++;
+            }
+            result += emptyCount * emptyValue;
+        }
+        else if (n == 1)
+        {
+            for (int c = 0; c < w; c++)
+            {
+                HashMap<Integer,Double> rows = data.get (c);
+                if (rows == null) continue;
+                emptyCount -= rows.size ();
+                for (Double v : rows.values ()) result += Math.abs (v);
+            }
+            result += emptyCount * Math.abs (emptyValue);
+        }
+        else if (n == 2)
+        {
+            for (int c = 0; c < w; c++)
+            {
+                HashMap<Integer,Double> rows = data.get (c);
+                if (rows == null) continue;
+                emptyCount -= rows.size ();
+                for (Double v : rows.values ()) result += v * v;
+            }
+            result += emptyCount * emptyValue * emptyValue;
+            result = Math.sqrt (result);
+        }
+        else if (n == Double.POSITIVE_INFINITY)
+        {
+            for (int c = 0; c < w; c++)
+            {
+                HashMap<Integer,Double> rows = data.get (c);
+                if (rows == null) continue;
+                for (Double v : rows.values ()) result = Math.max (result, Math.abs (v));
+            }
+            result = Math.max (result, Math.abs (emptyValue));
+        }
+        else
+        {
+            for (int c = 0; c < w; c++)
+            {
+                HashMap<Integer,Double> rows = data.get (c);
+                if (rows == null) continue;
+                emptyCount -= rows.size ();
+                for (Double v : rows.values ()) result += Math.pow (v, n);
+            }
+            result += emptyCount * Math.pow (emptyValue, n);
+            result = Math.pow (result, 1 / n);
+        }
+        return result;
+    }
+}

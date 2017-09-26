@@ -15,6 +15,7 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
+import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;;
 
 public class Gaussian extends Function
@@ -54,8 +55,8 @@ public class Gaussian extends Function
             int dimension = (int) Math.round (((Scalar) operands[0].eval (context)).value);
             if (dimension > 1)
             {
-                Matrix result = new Matrix (dimension, 1);
-                for (int i = 0; i < dimension; i++) result.value[0][i] = random.nextGaussian ();
+                Matrix result = new MatrixDense (dimension, 1);
+                for (int i = 0; i < dimension; i++) result.set (i, random.nextGaussian ());
                 return result;
             }
         }
