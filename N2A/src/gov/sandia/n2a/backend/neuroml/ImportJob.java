@@ -11,13 +11,22 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable.ParsedValue;
+import gov.sandia.n2a.language.AccessVariable;
+import gov.sandia.n2a.language.Constant;
+import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.ParseException;
+import gov.sandia.n2a.language.Renderer;
+import gov.sandia.n2a.language.parse.ExpressionParser;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
+import systems.uom.ucum.internal.format.TokenException;
 
 import java.io.File;
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -32,6 +41,11 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import javax.measure.Unit;
+import javax.measure.format.ParserException;
+import javax.measure.format.UnitFormat;
+import javax.measure.spi.ServiceProvider;
+import javax.measure.spi.SystemOfUnits;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -40,6 +54,11 @@ import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.xml.sax.SAXException;
+
+import tec.uom.se.AbstractUnit;
+import tec.uom.se.function.RationalConverter;
+import tec.uom.se.unit.TransformedUnit;
+import tec.uom.se.unit.Units;;
 
 public class ImportJob
 {
@@ -56,6 +75,11 @@ public class ImportJob
 
     Pattern floatParser   = Pattern.compile ("[-+]?(NaN|Infinity|([0-9]*\\.?[0-9]*([eE][-+]?[0-9]+)?))");
     Pattern forbiddenUCUM = Pattern.compile ("[.,;><=!&|+\\-*/%\\^~]");
+
+    SystemOfUnits       systemOfUnits = ServiceProvider.current ().getSystemOfUnitsService ().getSystemOfUnits ("UCUM");
+    UnitFormat          UCUM          = ServiceProvider.current ().getUnitFormatService ().getUnitFormat ("UCUM");
+    Map<String,Unit<?>> dimensions    = new TreeMap<String,Unit<?>> ();  // Declared dimension names
+
     static final double epsilon = Math.ulp (1);
 
     public void process (File source)
@@ -189,9 +213,12 @@ public class ImportJob
                 // Because the default genericPart() above is written for NeuroML, all LEMS tags must be specified, even if we ignore them.
                 case "Target":
                     target (child);
+                    break;
                 case "Dimension":
+                    dimension (child);
+                    break;
                 case "Unit":
-                    // TODO: generate mapping to UCUM units
+                    unit (child);
                     break;
                 case "Constant":
                     new ComponentType (model).genericVariable (child, "");  // Create a bogus component to wrap the top level, so we can add a LEMS constant to it.
@@ -306,6 +333,8 @@ public class ImportJob
         }
 
         if (models.child (modelName).length () == 0) models.clear (modelName);
+
+        ExpressionParser.namedUnits = null;
     }
 
     public void resolve (MNode dependent)
@@ -1483,6 +1512,22 @@ public class ImportJob
     }
 
     /**
+        Convert the given value to be in appropriate units, in the context of a physiology section.
+    **/
+    public String biophysicalUnits (String value)
+    {
+        value = value.trim ();
+        int unitIndex = findUnits (value);
+        if (unitIndex == 0) return value;  // no number
+        if (unitIndex >= value.length ()) return value;  // no units; need to apply defaults here
+
+        String units = value.substring (unitIndex).trim ();
+        value        = value.substring (0, unitIndex);
+
+        return value + cleanupUnits (units);
+    }
+
+    /**
         Convert the given value to be in appropriate units, in the context of a morphology section.
     **/
     public String morphologyUnits (String value)
@@ -1518,22 +1563,6 @@ public class ImportJob
         if (units.equals ("mM")) units = "mmol";
         if (forbiddenUCUM.matcher (units).find ()) return "(" + units + ")";
         return units;
-    }
-
-    /**
-        Convert the given value to be in appropriate units, in the context of a physiology section.
-    **/
-    public String biophysicalUnits (String value)
-    {
-        value = value.trim ();
-        int unitIndex = findUnits (value);
-        if (unitIndex == 0) return value;  // no number
-        if (unitIndex >= value.length ()) return value;  // no units; need to apply defaults here
-
-        String units = value.substring (unitIndex).trim ();
-        value        = value.substring (0, unitIndex);
-
-        return value + cleanupUnits (units);
     }
 
     public void spikeArray (Node node)
@@ -2273,6 +2302,136 @@ public class ImportJob
         if (! timesFile .isEmpty ()) models.set (modelName, "$metadata", "backend.neuroml.timesFile",  timesFile);
     }
 
+    public void dimension (Node node)
+    {
+        String name = getAttribute (node, "name");
+        int    m    = getAttribute (node, "m", 0);
+        int    l    = getAttribute (node, "l", 0);
+        int    t    = getAttribute (node, "t", 0);
+        int    i    = getAttribute (node, "i", 0);
+        int    k    = getAttribute (node, "k", 0);
+        int    n    = getAttribute (node, "n", 0);
+        int    j    = getAttribute (node, "j", 0);
+
+        // We construct a new unit out of concrete SI units, rather than simply constructing a dimension,
+        // because the described dimension may not have a predefined entry in the default system of units.
+        // The dimension will of course be available as a property of the unit.
+        Unit<?> result = AbstractUnit.ONE;
+        if (m != 0) result = result.multiply (Units.KILOGRAM.pow (m));
+        if (l != 0) result = result.multiply (Units.METRE   .pow (l));
+        if (t != 0) result = result.multiply (Units.SECOND  .pow (t));
+        if (i != 0) result = result.multiply (Units.AMPERE  .pow (i));
+        if (k != 0) result = result.multiply (Units.KELVIN  .pow (k));
+        if (n != 0) result = result.multiply (Units.MOLE    .pow (n));
+        if (j != 0) result = result.multiply (Units.CANDELA .pow (j));
+
+        // Find an existing match in the unit system, if possible
+        for (Unit<?> u : systemOfUnits.getUnits (result.getDimension ()))
+        {
+            result = u.getSystemUnit ();
+            break;
+        }
+        int symbolLength = UCUM.format (result).length ();
+        for (Unit<?> u : systemOfUnits.getUnits (result.inverse ().getDimension ()))
+        {
+            Unit<?> temp = u.getSystemUnit ().inverse ();
+            int tempLength = UCUM.format (temp).length ();
+            if (tempLength < symbolLength)
+            {
+                result = u.getSystemUnit ().inverse ();
+                break;
+            }
+        }
+        // TODO: factor out units by repeatedly scanning for system units with greatest dimensional match
+
+        dimensions.put (name, result);
+    }
+
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    public void unit (Node node)
+    {
+        String symbol    = getAttribute (node, "symbol");
+        String dimension = getAttribute (node, "dimension");
+        int    power     = getAttribute (node, "power", 0);
+        double scale     = getAttribute (node, "scale", 1.0);
+        double offset    = getAttribute (node, "offset", 0.0);
+
+        Unit unit = dimensions.get (dimension);
+        if (unit == null) unit = AbstractUnit.ONE;  // fall back, but in general something is broken about the file
+        if      (power > 0) unit = unit.transform (new RationalConverter (BigInteger.TEN.pow (power), BigInteger.ONE));
+        else if (power < 0) unit = unit.transform (new RationalConverter (BigInteger.ONE,             BigInteger.TEN.pow (-power)));
+        else
+        {
+            if (scale == 1.0)
+            {
+                unit = unit.shift (offset);
+            }
+            else
+            {
+                // UCUM only allows rational numbers, so convert scale
+                RationalConverter ratio = null;
+                if (scale < 1.0)
+                {
+                    // Attempt to find a simple ratio of 1/integer
+                    double inverse = 1.0 / scale;
+                    long integer = Math.round (inverse);
+                    if (Math.abs (inverse - integer) < epsilon) ratio = new RationalConverter (1, integer);
+                }
+                if (ratio == null)
+                {
+                    String s = getAttribute (node, "scale").toLowerCase ();
+                    String[] pieces = s.split ("e");
+                    int shift = 0;
+                    if (pieces.length > 1) shift = Integer.valueOf (pieces[1]);
+                    pieces = pieces[0].split (".");
+                    if (pieces.length > 1)
+                    {
+                        shift -= pieces[1].length ();
+                        s = pieces[0] + pieces[1];
+                    }
+                    BigInteger numerator   = new BigInteger (s);
+                    BigInteger denominator = new BigDecimal (10).pow (shift).toBigInteger ();
+                    ratio = new RationalConverter (numerator, denominator);
+                }
+
+                unit = unit.transform (ratio).shift (offset);
+            }
+        }
+
+        // Since LEMS and NeuroML tend to follow certain naming practices, we may be able to retrieve
+        // a more parsimonious unit based on direct name translation.
+        String tempName = symbol;
+        tempName = tempName.replace ("_per_", "/");
+        tempName = tempName.replace ("per_",  "/");
+        tempName = tempName.replace ("_",     ".");
+        tempName = tempName.replace ("ohm",   "Ohm");
+        tempName = tempName.replace ("hour",  "h");
+        Unit temp = null;
+        try {temp = UCUM.parse (tempName);}
+        catch (ParserException | TokenException e) {}
+        if (temp != null  &&  temp.isCompatible (unit))  // found a unit with matching dimension
+        {
+            Number tempScale = temp.getConverterTo (temp.getSystemUnit ()).convert (new Integer (1));
+            Number unitScale = temp.getConverterTo (unit.getSystemUnit ()).convert (new Integer (1));
+            if (tempScale.equals (unitScale))  // and matching scale
+            {
+                int unitLength = UCUM.format (unit).length ();
+                int tempLength = UCUM.format (temp).length ();
+                if (tempLength <= unitLength) unit = temp;  // and at least as parsimonious
+            }
+        }
+
+        System.out.println (symbol + " -> " + UCUM.format (unit));
+        if (unit instanceof TransformedUnit)
+        {
+            TransformedUnit tu = (TransformedUnit) unit;
+            Number tScale = tu.getConverter ().convert (new Integer (1));
+            System.out.println ("  " + tScale);
+        }
+        if (ExpressionParser.namedUnits == null) ExpressionParser.namedUnits = new HashMap<String,Unit<?>> ();
+        ExpressionParser.namedUnits.put (symbol, unit);
+    }
+
     public class ComponentType
     {
         MNode part;
@@ -2366,7 +2525,7 @@ public class ImportJob
                 while (part.child (regimeName) != null) regimeName = "regime" + suffix++;
                 renameVariable (part, "$regime", regimeName);
 
-                if (regime.length () == 1)
+                if (regime.length () == 1)  // One conditional entry, so convert to single-line.
                 {
                     MNode c = regime.iterator ().next ();
                     String key = c.key ();
@@ -2851,6 +3010,60 @@ public class ImportJob
         catch (NumberFormatException e)
         {
             return defaultValue;
+        }
+    }
+
+    public class PrettyPrinter extends Renderer
+    {
+        Map<String,String> rename = new TreeMap<String,String> ();
+
+        public boolean render (Operator op)
+        {
+            if (op instanceof Constant)
+            {
+                Constant c = (Constant) op;
+                if (c.value instanceof Scalar)
+                {
+                    Scalar s = (Scalar) c.value;
+                    if (c.unit == null)
+                    {
+                        result.append (s.value);
+                    }
+                    else
+                    {
+                        // TODO: also check if this is an imported unit. If so, stick with SI and pick the nearest suitable order of magnitude.
+                        Unit si = c.unit.getSystemUnit ();
+                        result.append (c.unit.getConverterTo (si).convert (s.value));
+                        String u = c.unit.toString ();
+                        if (forbiddenUCUM.matcher (u).find ()) u = "(" + u + ")";
+                        result.append (u);
+                    }
+                    return true;
+                }
+            }
+            else if (op instanceof AccessVariable)
+            {
+                AccessVariable av = (AccessVariable) op;
+                String name = rename.get (av.name);
+                if (name == null) name = av.name;
+                result.append (name);
+                return true;
+            }
+            return false;
+        }
+
+        public String print (String line)
+        {
+            try
+            {
+                result.setLength (0);  // clear any previous output
+                Operator.parse (line).render (this);
+                return result.toString ();
+            }
+            catch (ParseException e)
+            {
+                return line;
+            }
         }
     }
 }

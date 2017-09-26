@@ -16,33 +16,27 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.parse;
 
-import gov.sandia.n2a.language.type.Scalar;
+import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.type.Text;
 
 import java.io.StringReader;
-import java.util.ServiceLoader;
+import java.util.Map;
 
 import javax.measure.Unit;
 import javax.measure.format.ParserException;
 import javax.measure.format.UnitFormat;
 import javax.measure.spi.ServiceProvider;
-import javax.measure.spi.UnitFormatService;
 
 public class ExpressionParser
 {
-    public static UnitFormat unitFormat;
+    public static UnitFormat          UCUM;
+    public static Map<String,Unit<?>> namedUnits;  // Alternate unit names which should not go through the UCUM parser. null if none are active.
 
     public static SimpleNode parse (String line) throws gov.sandia.n2a.language.ParseException
     {
-        if (unitFormat == null)
-      	{
-            ServiceLoader<ServiceProvider> loader = ServiceLoader.load (ServiceProvider.class);
-            UnitFormatService ufs = ((ServiceProvider) loader.iterator ().next ()).getUnitFormatService ();
-            unitFormat = ufs.getUnitFormat ("ASCII");
-        }
-
         try
         {
+            if (UCUM == null) UCUM = ServiceProvider.current ().getUnitFormatService ().getUnitFormat ("UCUM");
             ExpressionParser parser = new ExpressionParser (new StringReader (line));
             Node startNode = parser.Start ();
             SimpleNode result = (SimpleNode) startNode.jjtGetChild (0);
@@ -355,7 +349,7 @@ void Identifier() #Identifier : {Token t; Token p = null;}
     }
 }
 
-void Constant() #Constant : {Token t; Token u; String UCUM = "";}
+void Constant() #Constant : {Token t; Token u; String unitName = "";}
 {
     t = <STRING>
     {
@@ -364,16 +358,16 @@ void Constant() #Constant : {Token t; Token u; String UCUM = "";}
         jjtThis.jjtSetValue (text);
     }
       |
-    t = <NUMBER> (u = <UNIT> {UCUM += u.image;})*
+    t = <NUMBER> (u = <UNIT> {unitName += u.image;})*
     {
-        double value = Double.parseDouble (t.image);
-        if (! UCUM.isEmpty ())
+        UnitValue result = new UnitValue ();  // Should really use Quantity, but not clear how to get a QuantityFactory from a Unit when type is unknown.
+        result.value = Double.parseDouble (t.image);
+        if (! unitName.isEmpty ())
         {
             try
             {
-                Unit unit = unitFormat.parse (UCUM);
-                Unit si   = unit.getSystemUnit ();
-                value = unit.getConverterTo (si).convert (value);
+                if (namedUnits  != null) result.unit = namedUnits.get   (unitName);
+                if (result.unit == null) result.unit = UCUM      .parse (unitName);
             }
             catch (ParserException e)
             {
@@ -383,6 +377,6 @@ void Constant() #Constant : {Token t; Token u; String UCUM = "";}
                 throw p;
             }
         }
-        jjtThis.jjtSetValue (new Scalar (value));
+        jjtThis.jjtSetValue (result);
     }
 }

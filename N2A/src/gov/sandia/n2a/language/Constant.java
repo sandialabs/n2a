@@ -1,18 +1,22 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.language;
 
+import javax.measure.Unit;
+
 import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.type.Instance;
+import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 
 public class Constant extends Operator
 {
-    public Type value;
+    public Type    value;
+    public Unit<?> unit;  // If value is a scalar, then this is the original unit when it was parsed, or null if no unit was given. Note that value has already been scaled to SI, so this is merely a memo.
 
     public Constant ()
     {
@@ -23,9 +27,21 @@ public class Constant extends Operator
         this.value = value;
     }
 
+    @SuppressWarnings("unchecked")
     public void getOperandsFrom (SimpleNode node)
     {
-        value = (Type) node.jjtGetValue ();
+        UnitValue uv = (UnitValue) node.jjtGetValue ();
+        unit = uv.unit;
+        if (unit == null)  // naked number, so assume already in SI
+        {
+            value = new Scalar (uv.value);
+        }
+        else  // there was a unit given, so convert
+        {
+            @SuppressWarnings("rawtypes")
+            Unit si = unit.getSystemUnit ();
+            value = new Scalar (unit.getConverterTo (si).convert (uv.value));
+        }
     }
 
     public void render (Renderer renderer)
