@@ -30,17 +30,25 @@ public class Constant extends Operator
     @SuppressWarnings("unchecked")
     public void getOperandsFrom (SimpleNode node)
     {
-        UnitValue uv = (UnitValue) node.jjtGetValue ();
-        unit = uv.unit;
-        if (unit == null)  // naked number, so assume already in SI
+        Object o = node.jjtGetValue ();
+        if (o instanceof UnitValue)
         {
-            value = new Scalar (uv.value);
+            UnitValue uv = (UnitValue) node.jjtGetValue ();
+            unit = uv.unit;
+            if (unit == null)  // naked number, so assume already in SI
+            {
+                value = new Scalar (uv.value);
+            }
+            else  // there was a unit given, so convert
+            {
+                @SuppressWarnings("rawtypes")
+                Unit si = unit.getSystemUnit ();
+                value = new Scalar (unit.getConverterTo (si).convert (uv.value));
+            }
         }
-        else  // there was a unit given, so convert
+        else
         {
-            @SuppressWarnings("rawtypes")
-            Unit si = unit.getSystemUnit ();
-            value = new Scalar (unit.getConverterTo (si).convert (uv.value));
+            value = (Type) o;
         }
     }
 

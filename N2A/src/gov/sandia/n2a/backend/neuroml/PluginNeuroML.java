@@ -13,7 +13,9 @@ import gov.sandia.n2a.plugins.ExtensionPoint;
 
 public class PluginNeuroML extends Plugin
 {
-	@Override
+    public static PartMap partMap;  // initialize the first time an import or export runs
+
+    @Override
 	public String getName ()
 	{
 		return "NeuroML Backend";

@@ -29,6 +29,8 @@ public class ImportNeuroML implements Importer
     @Override
     public void process (File source)
     {
+        if (PluginNeuroML.partMap == null) PluginNeuroML.partMap = new PartMap ();
+
         ImportJob job = new ImportJob ();
         job.process (source);
         job.postprocess ();

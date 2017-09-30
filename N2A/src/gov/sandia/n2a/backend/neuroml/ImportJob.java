@@ -8,9 +8,12 @@ package gov.sandia.n2a.backend.neuroml;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.Variable.ParsedValue;
+import gov.sandia.n2a.language.AccessElement;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
@@ -255,6 +258,23 @@ public class ImportJob
         if (model == null  ||  model.child ("$metadata", "backend.neuroml.part") == null) addDependency (part, inherit);
     }
 
+    /**
+        Locate the first parent in the inheritance hierarchy that resides in the models database rather than
+        the current import.
+    **/
+    public MNode findParent (MNode part)
+    {
+        String inherit = part.get ("$inherit").replace ("\"", "");
+
+        // If the same model exists both in the import and the database, then prefer the database entry.
+        MNode result = AppData.models.child (inherit);
+        if (result != null) return result;
+
+        result = models.child (modelName, inherit);
+        if (result == null) return null;
+        return findParent (result);
+    }
+
     public void removeDependency (MNode part, String inherit)
     {
         dependents.remove (part);
@@ -373,6 +393,7 @@ public class ImportJob
             if (lems)  // lems is an attribute of the recipient rather than the source.
             {
                 // Since LEMS components are abstract models, it is best not to inject other models into them.
+                // Anything a LEMS component depends on must be even more abstract, and thus should be an independent model.
                 count = -3;
             }
             else if (count == 1)
@@ -400,6 +421,11 @@ public class ImportJob
                 else       count = -2;
             }
             source.set ("$count", count);
+            if (count == -3)
+            {
+                MNode id = source.childOrCreate ("$metadata", "id");
+                if (id.get ().isEmpty ()) id.set (AddDoc.generateID ());
+            }
         }
         if (count == -1  ||  count == -2)
         {
@@ -427,8 +453,17 @@ public class ImportJob
         else if (count == -3)
         {
             String inherit = "\"" + modelName + " " + sourceName + "\"";
-            if (dependent.get ().contains ("$connect")) dependent.set ("$connect(" + inherit + ")");
-            else                                        dependent.set ("$inherit", inherit);
+            String id      = source.get ("$metadata", "id");
+            if (dependent.get ().contains ("$connect"))
+            {
+                dependent.set ("$connect(" + inherit + ")");
+                //dependent.set ("0", id);  // TODO: Store ID with $connect() ?
+            }
+            else
+            {
+                dependent.set ("$inherit", inherit);
+                dependent.set ("$inherit", "0", id);
+            }
         }
     }
 
@@ -2422,13 +2457,6 @@ public class ImportJob
             }
         }
 
-        System.out.println (symbol + " -> " + UCUM.format (unit));
-        if (unit instanceof TransformedUnit)
-        {
-            TransformedUnit tu = (TransformedUnit) unit;
-            Number tScale = tu.getConverter ().convert (new Integer (1));
-            System.out.println ("  " + tScale);
-        }
         if (ExpressionParser.namedUnits == null) ExpressionParser.namedUnits = new HashMap<String,Unit<?>> ();
         ExpressionParser.namedUnits.put (symbol, unit);
     }
@@ -2474,21 +2502,22 @@ public class ImportJob
                         // These could be handled by genericVariable(), but that would require extra testing there for this relatively simple form.
                         name        = getAttribute (child, "name");
                         description = getAttribute (child, "description");
-                        if (! description.isEmpty ()) part.set ("$metadata", name, description);
+                        if (! description.isEmpty ())
+                        {
+                            part.set (name, "0");
+                            part.set (name, "$metadata", "description", description);
+                        }
                         break;
                     case "Child":
                     case "ComponentReference":
                     //"Attachments" -- merely notes the name/type of a connection within the part targeted by the connection.
                         inherit = getAttribute (child, "type");
-                        if (! inherit.equals ("notes"))  // In the context of NeuroML, type="notes" is a declaration of a notes field, not actual notes.
-                        {
-                            name = getAttribute (child, "name");
-                            // TODO: How to interpret the "local" field?
-                            MNode childPart = part.childOrCreate (name);
-                            childPart.set ("$inherit", inherit);
-                            addDependency (childPart, inherit);
-                            childPart.set ("$lems", "");
-                        }
+                        name    = getAttribute (child, "name");
+                        // TODO: How to interpret the "local" field?
+                        MNode childPart = part.childOrCreate (name);
+                        childPart.set ("$inherit", inherit);
+                        addDependency (childPart, inherit);
+                        childPart.set ("$lems", "");
                         break;
                     case "Children":
                         name       = getAttribute (child, "name");
@@ -2517,42 +2546,7 @@ public class ImportJob
                 }
             }
 
-            // Finish
-            if (regime != null)
-            {
-                // Allocate safe name
-                String regimeName = "regime";
-                int suffix = 2;
-                while (part.child (regimeName) != null) regimeName = "regime" + suffix++;
-                renameVariable (part, "$regime", regimeName);
-
-                if (regime.length () == 1)  // One conditional entry, so convert to single-line.
-                {
-                    MNode c = regime.iterator ().next ();
-                    String key = c.key ();
-                    regime.set (c.get () + key);
-                    regime.clear (key);
-                }
-            }
-        }
-
-        public void renameVariable (MNode node, String before, String after)
-        {
-            List<String> keys = new ArrayList<String> ();
-            for (MNode c : node)
-            {
-                keys.add (c.key ());
-                c.set (c.get ().replace (before, after));
-                renameVariable (c, before, after);
-            }
-            for (String key : keys)
-            {
-                if (key.contains (before))
-                {
-                    String newKey = key.replace (before, after);
-                    node.move (key, newKey);
-                }
-            }
+            finish ();
         }
 
         public MNode genericVariable (Node node, String condition1)
@@ -2826,6 +2820,53 @@ public class ImportJob
                 }
             }
         }
+
+        public void finish ()
+        {
+            PrettyPrinter pp = new PrettyPrinter ();
+
+            if (regime != null)
+            {
+                if (regime.length () == 1)  // One conditional entry, so convert to single-line.
+                {
+                    MNode c = regime.iterator ().next ();
+                    String key = c.key ();
+                    regime.set (c.get () + key);
+                    regime.clear (key);
+                }
+
+                // Allocate safe name
+                String regimeName = "regime";
+                int suffix = 2;
+                while (part.child (regimeName) != null) regimeName = "regime" + suffix++;
+                if (! regimeName.equals ("regime")) regime.set ("$metadata", "backend.neuroml.regime", "");
+                pp.rename.put ("$regime", regimeName);
+            }
+
+            // Inject name mappings from parent part into pretty printer
+            MNode parent = findParent (part);
+            if (parent != null)
+            {
+                MPart mparent = new MPart ((MPersistent) parent);
+                PartMap.NameMap nameMap = new PartMap.NameMap (mparent);
+                pp.rename.putAll (nameMap.inward);
+            }
+
+            // If any name mappings conflict with existing names, add new mappings to shift those names away
+            Set<String> targets = new TreeSet<String> (pp.rename.values ());
+            for (MNode c : part)
+            {
+                String key = c.key ();
+                if (! targets.contains (key)) continue;
+                int suffix = 2;
+                String newName = key + suffix++;
+                while (targets.contains (newName)  ||  part.child (newName) != null) newName = key + suffix++;
+                pp.rename.put (key, newName);
+                targets.add (newName);
+            }
+
+            pp.process (part);
+        }
     }
 
     public void simulation (Node node)
@@ -2957,6 +2998,122 @@ public class ImportJob
         }
     }
 
+    public class PrettyPrinter extends Renderer
+    {
+        Map<String,String> rename = new TreeMap<String,String> ();
+
+        public boolean render (Operator op)
+        {
+            if (op instanceof Constant)
+            {
+                Constant c = (Constant) op;
+                if (c.value instanceof Scalar)
+                {
+                    double value = ((Scalar) c.value).value;
+                    if (c.unit == null)
+                    {
+                        result.append (value);
+                    }
+                    else
+                    {
+                        Unit unit = c.unit;
+                        if (unit instanceof TransformedUnit)
+                        {
+                            TransformedUnit tu = (TransformedUnit) unit;
+                            Unit parent = tu.getParentUnit ();
+                            String parentString = UCUM.format (parent);
+                            if (parentString.contains (".")  ||  parentString.contains ("/"))
+                            {
+                                unit  = parent;
+                                value = tu.getConverter ().convert (value);
+                            }
+                        }
+
+                        result.append (value);
+                        String u = UCUM.format (unit);
+                        if (forbiddenUCUM.matcher (u).find ()) u = "(" + u + ")";
+                        result.append (u);
+                    }
+                    return true;
+                }
+            }
+            else if (op instanceof AccessVariable)
+            {
+                AccessVariable av = (AccessVariable) op;
+                String name = rename.get (av.name);
+                if (name == null) name = av.name;
+                result.append (name);
+                return true;
+            }
+            else if (op instanceof AccessElement)  // This is how an unknown function shows up.
+            {
+                AccessElement ae = (AccessElement) op;
+                String name = ((AccessVariable) ae.operands[0]).name;
+                if (name.equals ("random"))
+                {
+                    result.append ("uniform(");
+                    ae.operands[1].render (this);
+                    result.append (")");
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public String print (String line)
+        {
+            try
+            {
+                result.setLength (0);  // clear any previous output
+                Operator.parse (line).render (this);
+                return result.toString ().replace (" ", "");
+            }
+            catch (ParseException e)
+            {
+                return line;
+            }
+        }
+
+        public void process (MNode node)
+        {
+            List<String> keys = new ArrayList<String> ();
+            for (MNode c : node)
+            {
+                String key = c.key ();
+                keys.add (key);
+                Variable.ParsedValue pv = new Variable.ParsedValue (c.get ());
+                if (! pv.expression.isEmpty ()) pv.expression = print (pv.expression);
+                if (! pv.condition .isEmpty ()) pv.condition  = print (pv.expression);
+                c.set (pv);
+
+                if (key.equals ("$metadata" )) continue;
+                if (key.equals ("$reference")) continue;
+                process (c);
+            }
+            for (String key : keys)
+            {
+                String newKey = key;
+                if (key.startsWith ("@"))
+                {
+                    newKey = "@" + print (key.substring (1));
+                }
+                else
+                {
+                    newKey = "";
+                    String[] pieces = key.split ("\\.");
+                    for (String p : pieces)
+                    {
+                        String name = rename.get (p);
+                        if (name != null) p = name;
+                        if (! newKey.isEmpty ()) newKey += ".";
+                        newKey += p;
+                    }
+                }
+                if (! newKey.equals (key)) node.move (key, newKey);
+            }
+        }
+    }
+
     public String getText (Node node)
     {
         String result = "";
@@ -3011,60 +3168,6 @@ public class ImportJob
         catch (NumberFormatException e)
         {
             return defaultValue;
-        }
-    }
-
-    public class PrettyPrinter extends Renderer
-    {
-        Map<String,String> rename = new TreeMap<String,String> ();
-
-        public boolean render (Operator op)
-        {
-            if (op instanceof Constant)
-            {
-                Constant c = (Constant) op;
-                if (c.value instanceof Scalar)
-                {
-                    Scalar s = (Scalar) c.value;
-                    if (c.unit == null)
-                    {
-                        result.append (s.value);
-                    }
-                    else
-                    {
-                        // TODO: also check if this is an imported unit. If so, stick with SI and pick the nearest suitable order of magnitude.
-                        Unit si = c.unit.getSystemUnit ();
-                        result.append (c.unit.getConverterTo (si).convert (s.value));
-                        String u = c.unit.toString ();
-                        if (forbiddenUCUM.matcher (u).find ()) u = "(" + u + ")";
-                        result.append (u);
-                    }
-                    return true;
-                }
-            }
-            else if (op instanceof AccessVariable)
-            {
-                AccessVariable av = (AccessVariable) op;
-                String name = rename.get (av.name);
-                if (name == null) name = av.name;
-                result.append (name);
-                return true;
-            }
-            return false;
-        }
-
-        public String print (String line)
-        {
-            try
-            {
-                result.setLength (0);  // clear any previous output
-                Operator.parse (line).render (this);
-                return result.toString ();
-            }
-            catch (ParseException e)
-            {
-                return line;
-            }
         }
     }
 }
