@@ -931,8 +931,7 @@ public class PanelEquationTree extends JPanel
             final Backend simulator = Backend.getBackend (simulatorName);
             MNode runs = AppData.runs;
             String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + jobCount++;
-            runs.set (jobKey, "");  // Create the dir and model doc
-            final MNode job = runs.child (jobKey);
+            final MNode job = runs.set (jobKey, "");  // Create the dir and model doc
             job.merge (root.source);
             job.set ("$inherit", "\"" + record.key () + "\"");
             ((MDoc) job).save ();  // Force directory (and job file) to exist, so Backends can work with the dir.

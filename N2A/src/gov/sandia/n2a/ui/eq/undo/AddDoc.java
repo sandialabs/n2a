@@ -105,8 +105,8 @@ public class AddDoc extends Undoable
     public static int create (String name, MNode saved, int index, boolean fromSearchPanel, boolean wasShowing)
     {
         MDoc doc = (MDoc) AppData.models.set (name, "");
-        MPart fold = new MPart (doc);
-        fold.merge (saved);  // By merging indirectly, through MPart, we get rid of nodes which duplicate inherited values.
+        doc.merge (saved);
+        new MPart (doc).clearRedundantOverrides ();
         AppData.set (doc.get ("$metadata", "id"), doc);
 
         PanelModel mep = PanelModel.instance;
@@ -130,14 +130,12 @@ public class AddDoc extends Undoable
  
     // ID generation -------------------------------------------------------
 
-    protected static long userHash;
-    static
-    {
-        userHash = ((long) System.getProperty ("user.name").hashCode ()) << 48 & 0x7FFFFFFFFFFFFFFFl;
-    }
+    protected static long userHash = ((long) System.getProperty ("user.name").hashCode ()) << 48 & 0x7FFFFFFFFFFFFFFFl;
+    protected static long IDcount;
 
     public static synchronized String generateID ()
     {
-        return Long.toHexString (userHash | System.currentTimeMillis ());
+        long time = System.currentTimeMillis () << 8 & 0x7FFFFFFFFFFFFFFFl;
+        return Long.toHexString (userHash | time | IDcount++);
     }
 }

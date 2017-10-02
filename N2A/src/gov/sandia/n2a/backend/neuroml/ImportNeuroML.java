@@ -41,7 +41,9 @@ public class ImportNeuroML implements Importer
         {
             String key = m.key ();
             if (key.equals (job.modelName)) continue;  // Save the best for last. That is, ensure that the main model is the one selected after all add operations are applied.
-            um.add (new AddDoc (key, m));
+            AddDoc add = new AddDoc (key, m);
+            add.wasShowing = false;
+            um.add (add);
         }
         MNode mainModel = job.models.child (job.modelName);
         if (mainModel != null) um.add (new AddDoc (job.modelName, mainModel));

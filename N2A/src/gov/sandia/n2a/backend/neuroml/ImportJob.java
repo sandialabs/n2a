@@ -2495,9 +2495,11 @@ public class ImportJob
                 {
                     case "Constant":
                     case "Fixed":
+                    case "DerivedParameter":
                         genericVariable (child, "");
                         break;
                     case "Parameter":
+                    case "IndexParameter":
                     case "Requirement":
                         // These could be handled by genericVariable(), but that would require extra testing there for this relatively simple form.
                         name        = getAttribute (child, "name");

@@ -164,7 +164,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
             StringBuilder value = new StringBuilder ();
             value.append (parentNames[0]);
             for (int i = 1; i < parentNames.length; i++) value.append ("," + parentNames[i]);
-            root.set (value.toString ());
+            root.source.set (value.toString ());
         }
     }
 
@@ -472,7 +472,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     **/
     protected synchronized void getIDs ()
     {
-        clear ();  // Remove children. This will have to change if we ever store other metadata under $inherit (such as a comment).
+        if (children != null) releaseOverrideChildren ();  // Remove children. This will have to change if we ever store other metadata under $inherit (such as a comment).
         String[] parentNames = get ().split (",");
         for (int i = 0; i < parentNames.length; i++)
         {
@@ -538,6 +538,28 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
             if (c == null) c = set (index, "");  // ensure a target child node exists
             c.merge (thatChild);
         }
+    }
+
+    /**
+        Clears all top-level document nodes which exactly match the value they override.
+        This is a utility function to support import and copy/paste. In general, internal
+        models are kept in a clean state by set().
+        @return true if the entire tree from this node down is free of top-level nodes.
+    **/
+    public synchronized boolean clearRedundantOverrides ()
+    {
+        boolean overrideNecessary = false;
+        for (MNode c : this)
+        {
+            if (! ((MPart) c).clearRedundantOverrides ()) overrideNecessary = true;
+        }
+        if (overrideNecessary) return false;
+        if (source != original  &&  source.get ().equals (original.get ()))
+        {
+            source.getParent ().clear (source.key ());
+            source = original;
+        }
+        return ! isFromTopDocument ();
     }
 
     public synchronized void move (String fromIndex, String toIndex)
