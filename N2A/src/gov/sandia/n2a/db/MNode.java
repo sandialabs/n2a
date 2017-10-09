@@ -13,7 +13,6 @@ import java.io.StringWriter;
 import java.io.Writer;
 import java.util.Comparator;
 import java.util.Iterator;
-import java.util.List;
 
 /**
     A hierarchical key-value storage system, with subclasses that provide persistence.
@@ -53,20 +52,6 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
             c = c.child (deeperIndices[i]);
         }
         return c;
-    }
-
-    /**
-        Returns a child node from arbitrary depth, or null if any part of the path doesn't exist.
-    **/
-    public synchronized MNode child (List<String> indices)
-    {
-        MNode result = this;
-        for (String index : indices)
-        {
-            result = result.child (index);
-            if (result == null) break;
-        }
-        return result;
     }
 
     /**
@@ -117,7 +102,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     /**
         @return The number of children we have.
     **/
-    public int length ()
+    public int size ()
     {
         return 0;
     }

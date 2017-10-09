@@ -140,6 +140,6 @@ public class RunEnsemble
         runs.add (run);
         runDocs.add (run.getSource ());
         MNode runsNode = source.childOrCreate ("runs");
-        runsNode.childOrCreate (String.valueOf (runsNode.length ())).merge (run.getSource ());
+        runsNode.childOrCreate (String.valueOf (runsNode.size ())).merge (run.getSource ());
     }
 }

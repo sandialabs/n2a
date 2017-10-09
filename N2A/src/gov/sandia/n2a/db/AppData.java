@@ -80,7 +80,7 @@ public class AppData
 
     public static void checkInitialDB ()
     {
-        if (models.length () > 0) return;
+        if (models.size () > 0) return;
 
         try (ZipInputStream zip = new ZipInputStream (AppData.class.getResource ("models").openStream ()))
         {

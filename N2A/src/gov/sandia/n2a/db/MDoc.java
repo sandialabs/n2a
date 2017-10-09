@@ -122,7 +122,7 @@ public class MDoc extends MPersistent
         super.clear (index);
     }
 
-    public synchronized int length ()
+    public synchronized int size ()
     {
         if (children == null) load ();
         return children.size ();

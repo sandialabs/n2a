@@ -136,7 +136,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
                     parentSource = AppData.getModel (id);
                     if (parentSource != null  &&  maintainable)  // relink
                     {
-                        parentNames[i] = parentSource.key ();
+                        parentNames[i] = "\"" + parentSource.key () + "\"";
                         changedName = true;
                     }
                 }
@@ -193,7 +193,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     **/
     public synchronized void underrideChildren (MPart from, MPersistent newSource)
     {
-        if (newSource.length () == 0) return;
+        if (newSource.size () == 0) return;
         if (children == null) children = new TreeMap<String,MNode> (comparator);
         for (MNode n : newSource)
         {
@@ -310,7 +310,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
         return source.key ();  // could also use original.key(), as they should always match
     }
 
-    public synchronized int length ()
+    public synchronized int size ()
     {
         if (children == null) return 0;
         return children.size ();

@@ -55,7 +55,7 @@ public class MVolatile extends MNode
         children.remove (index);
     }
 
-	public synchronized int length ()
+	public synchronized int size ()
 	{
 	    if (children == null) return 0;
 	    return children.size ();

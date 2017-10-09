@@ -166,7 +166,7 @@ public class MDir extends MNode
         fireChanged ();
     }
 
-    public synchronized int length ()
+    public synchronized int size ()
 	{
         if (writeQueue.isEmpty ()) return root.list ().length;
 

@@ -59,7 +59,7 @@ public class AddDoc extends Undoable
         int suffix = 2;
         while (true)
         {
-            if (existing.length () == 0) return result;  // no children, so still a virgin
+            if (existing.size () == 0) return result;  // no children, so still a virgin
             result = name + suffix;
             existing = models.child (result);
             if (existing == null) return result;

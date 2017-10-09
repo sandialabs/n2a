@@ -103,7 +103,7 @@ public class AddAnnotation extends Undoable
         if (block.child (name) == null)  // There is no overridden value, so this node goes away completely.
         {
             model.removeNodeFromParent (createdNode);
-            if (block.length () == 0)
+            if (block.size () == 0)
             {
                 parent.source.clear (blockName);  // commit suicide
                 if (parent instanceof NodePart)
@@ -168,7 +168,7 @@ public class AddAnnotation extends Undoable
         NodeBase container = parent;  // If this is a variable, then mix metadata with equations and references
         if (parent instanceof NodePart)  // If this is a part, then display special block
         {
-            if (block.length () == 0)  // empty implies the node is absent
+            if (block.size () == 0)  // empty implies the node is absent
             {
                 container = factoryBlock.create (block);
                 model.insertNodeIntoUnfiltered (container, parent, index);

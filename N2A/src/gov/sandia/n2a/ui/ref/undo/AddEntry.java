@@ -50,7 +50,7 @@ public class AddEntry extends Undoable
             int suffix = 0;
             while (true)
             {
-                if (existing.length () == 0) break;  // no children, so still a virgin
+                if (existing.size () == 0) break;  // no children, so still a virgin
                 this.id = id + suffix;
                 existing = references.child (this.id);
                 if (existing == null) break;
