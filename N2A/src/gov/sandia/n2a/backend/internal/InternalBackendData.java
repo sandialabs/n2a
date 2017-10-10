@@ -414,19 +414,18 @@ public class InternalBackendData
                                 AccessVariable av = (AccessVariable) de.operands[0];
                                 VariableReference reference = av.reference;
                                 Variable v = reference.variable;
-                                if (v.hasAttribute ("temporary"))
+
+                                // If this is a temporary in the monitored part, and the monitored part is not the home part,
+                                // then the user has broken the rule that we can't see temporaries in other parts.
+                                if (v.hasAttribute ("temporary")  &&  v.container != s)
                                 {
-                                    // Treat temporaries like expressions (ie: create an auxiliary variable to track changes in its value),
-                                    // so fall through to the !trackOne case below.
-                                    // However, if this is a temporary in the monitored part, and the monitored part is not the home part,
-                                    // then the user has broken the rule that we can't see temporaries in other parts.
-                                    if (v.container != s)
-                                    {
-                                        Backend.err.get ().println ("ERROR: Attempt to reference a temporary in an external part: " + v.container.name + "." + v.nameString () + " from " + s.name);
-                                        throw new Backend.AbortRun ();
-                                    }
+                                    Backend.err.get ().println ("WARNING: Cannot be temporary due to event monitor: " + v.container.name + "." + v.nameString () + " from " + s.name);
+                                    v.removeAttribute ("temporary");
                                 }
-                                else
+
+                                // Treat temporaries like expressions (ie: create an auxiliary variable to track changes in its value),
+                                // so fall through to the !trackOne case below.
+                                if (! v.hasAttribute ("temporary"))
                                 {
                                     v.addAttribute ("externalRead");  // ensure it's buffered, so we can detect change
                                     et.trackOne = true;

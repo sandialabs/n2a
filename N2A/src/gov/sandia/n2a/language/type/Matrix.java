@@ -12,7 +12,10 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.StringWriter;
+
+import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.parse.ASTConstant;
@@ -50,11 +53,9 @@ public abstract class Matrix extends Type
     {
         try
         {
-            SimpleNode ast = ExpressionParser.parse (expression);
-            if (! (ast instanceof ASTList)  ||  ast.jjtGetNumChildren () != 1) return 0;
-            ast = (SimpleNode) ast.jjtGetChild (0);
-            if (! (ast instanceof ASTConstant)) return 0;
-            Object result = ((ASTConstant) ast).jjtGetValue ();
+            Operator op = Operator.parse (expression);
+            if (! (op instanceof Constant)) return 0;
+            Type result = ((Constant) op).value;
             if (result instanceof Scalar) return ((Scalar) result).value;
         }
         catch (ParseException e)

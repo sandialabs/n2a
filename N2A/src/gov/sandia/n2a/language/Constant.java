@@ -15,8 +15,8 @@ import gov.sandia.n2a.language.type.Text;
 
 public class Constant extends Operator
 {
-    public Type    value;
-    public Unit<?> unit;  // If value is a scalar, then this is the original unit when it was parsed, or null if no unit was given. Note that value has already been scaled to SI, so this is merely a memo.
+    public Type      value;
+    public UnitValue unitValue;  // Used for pretty printing. If value is a scalar, then this is the original object returned by the parser. Note that value has already been scaled to SI, so this is merely a memo.
 
     public Constant ()
     {
@@ -33,17 +33,17 @@ public class Constant extends Operator
         Object o = node.jjtGetValue ();
         if (o instanceof UnitValue)
         {
-            UnitValue uv = (UnitValue) node.jjtGetValue ();
-            unit = uv.unit;
+            unitValue = (UnitValue) node.jjtGetValue ();
+            Unit<?> unit = unitValue.unit;
             if (unit == null)  // naked number, so assume already in SI
             {
-                value = new Scalar (uv.value);
+                value = new Scalar (unitValue.value);
             }
             else  // there was a unit given, so convert
             {
                 @SuppressWarnings("rawtypes")
                 Unit si = unit.getSystemUnit ();
-                value = new Scalar (unit.getConverterTo (si).convert (uv.value));
+                value = new Scalar (unit.getConverterTo (si).convert (unitValue.value));
             }
         }
         else

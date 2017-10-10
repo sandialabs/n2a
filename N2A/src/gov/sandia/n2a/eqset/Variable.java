@@ -167,6 +167,12 @@ public class Variable implements Comparable<Variable>
         return rhs;
     }
 
+    public static boolean isCombiner (String value)
+    {
+        if (value.length () != 1) return false;
+        return "+*/<>:".contains (value);
+    }
+
     /**
         Utility class for separating the RHS of an equation, as it might appear in a document line,
         into its respective components.
@@ -192,7 +198,7 @@ public class Variable implements Comparable<Variable>
             // Extract the combiner string, if any
             value = value.trim ();
             combiner = value.substring (0, 1);
-            if ("+*/<>:".contains (combiner)) value = value.substring (1).trim ();
+            if (isCombiner (combiner)) value = value.substring (1).trim ();
             else combiner = "";
 
             // Extract the conditional expression, if any

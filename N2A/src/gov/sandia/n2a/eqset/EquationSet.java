@@ -427,17 +427,22 @@ public class EquationSet implements Comparable<EquationSet>
             EquationSet dest = resolveEquationSet (query, true);
             if (dest != null) query.reference.variable = dest.find (query);
             v.reference = query.reference;
-            if (v.reference.variable != v  &&  v.reference.variable != null)
+            Variable target = v.reference.variable;
+            if (target != v  &&  target != null)
             {
                 v.addAttribute ("reference");
-                v.reference.variable.addAttribute ("externalWrite");
-                v.reference.variable.addDependencyOn (v);  // v.reference.variable receives an external write from v, and therefore its value depends on v
-                v.reference.variable.container.referenced = true;
-                if (   v.reference.variable.assignment != v.assignment
-                    && ! (   (v.reference.variable.assignment == Variable.MULTIPLY  &&  v.assignment == Variable.DIVIDE)  // This line and the next say that * and / are compatible with each other, so ignore that case.
-                          || (v.reference.variable.assignment == Variable.DIVIDE    &&  v.assignment == Variable.MULTIPLY)))
+                target.addAttribute ("externalWrite");
+                if (target.hasAttribute ("temporary"))
                 {
-                    Variable target = v.reference.variable;
+                    Backend.err.get ().println ("WARNING: Variable " + target.container.prefix () + "." + target.nameString () + " receives an external write, so cannot be temporary.");
+                    target.removeAttribute ("temporary");
+                }
+                target.addDependencyOn (v);  // v.reference.variable receives an external write from v, and therefore its value depends on v
+                target.container.referenced = true;
+                if (   target.assignment != v.assignment
+                    && ! (   (target.assignment == Variable.MULTIPLY  &&  v.assignment == Variable.DIVIDE)  // This line and the next say that * and / are compatible with each other, so ignore that case.
+                          || (target.assignment == Variable.DIVIDE    &&  v.assignment == Variable.MULTIPLY)))
+                {
                     Backend.err.get ().println ("WARNING: Reference " + prefix () + "." + v.nameString () + " has different combining operator than target variable (" + target.container.prefix () + "." + target.nameString () + "). Resolving in favor of higher-precedence operator.");
                     v.assignment = target.assignment = Math.max (v.assignment, target.assignment);
                 }
@@ -504,10 +509,16 @@ public class EquationSet implements Comparable<EquationSet>
                         }
                         else
                         {
-                            from.addDependencyOn (query.reference.variable);
-                            if (from.container != query.reference.variable.container)
+                            Variable target = query.reference.variable;
+                            from.addDependencyOn (target);
+                            if (from.container != target.container)
                             {
-                                query.reference.variable.addAttribute ("externalRead");
+                                target.addAttribute ("externalRead");
+                                if (target.hasAttribute ("temporary"))
+                                {
+                                    Backend.err.get ().println ("WARNING: Variable " + target.container.prefix () + "." + target.nameString () + " has an external read, so cannot be temporary.");
+                                    target.removeAttribute ("temporary");
+                                }
                             }
                         }
                     }

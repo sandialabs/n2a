@@ -19,6 +19,7 @@ import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Renderer;
+import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.parse.ExpressionParser;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.MatrixDense;
@@ -66,16 +67,18 @@ import tec.uom.se.unit.Units;;
 
 public class ImportJob
 {
-    LinkedList<File>    sources      = new LinkedList<File> ();
-    MNode               models       = new MVolatile ();
-    String              modelName    = "";
-    String              primaryModel = "";                          // A part tagged to be elevated to main model. When set, all other parts should be pushed out to independent models, and this one raised one level to assume the identity of the prime model.
-    Set<MNode>          dependents   = new HashSet<MNode> ();        // Nodes which contain a $inherit that refers to a locally defined part rather than a standard part. The local part must either be copied in or converted into a global model.
-    Map<String,Node>    morphologies = new HashMap<String,Node> ();  // Map from IDs to top-level morphology blocks.
-    Map<String,Node>    biophysics   = new HashMap<String,Node> ();  // Map from IDs to top-level biophysics blocks.
-    Map<String,Node>    properties   = new HashMap<String,Node> ();  // Map from IDs to top-level intra- or extra-cellular property blocks.
-    Map<String,Cell>    cells        = new HashMap<String,Cell> ();
-    Map<String,Network> networks     = new HashMap<String,Network> ();
+    LinkedList<File>          sources         = new LinkedList<File> ();
+    Set<File>                 alreadyIncluded = new HashSet<File> ();         // Similar to "sources", but keeps all history.
+    MNode                     models          = new MVolatile ();
+    String                    modelName       = "";
+    String                    primaryModel    = "";                           // A part tagged to be elevated to main model. When set, all other parts should be pushed out to independent models, and this one raised one level to assume the identity of the prime model.
+    Set<MNode>                dependents      = new HashSet<MNode> ();        // Nodes which contain a $inherit that refers to a locally defined part rather than a standard part. The local part must either be copied in or converted into a global model.
+    Map<String,Node>          morphologies    = new HashMap<String,Node> ();  // Map from IDs to top-level morphology blocks.
+    Map<String,Node>          biophysics      = new HashMap<String,Node> ();  // Map from IDs to top-level biophysics blocks.
+    Map<String,Node>          properties      = new HashMap<String,Node> ();  // Map from IDs to top-level intra- or extra-cellular property blocks.
+    Map<String,Cell>          cells           = new HashMap<String,Cell> ();
+    Map<String,Network>       networks        = new HashMap<String,Network> ();
+    Map<String,ComponentType> components      = new HashMap<String,ComponentType> ();
 
     Pattern floatParser   = Pattern.compile ("[-+]?(NaN|Infinity|([0-9]*\\.?[0-9]*([eE][-+]?[0-9]+)?))");
     Pattern forbiddenUCUM = Pattern.compile ("[.,;><=!&|+\\-*/%\\^~]");
@@ -88,6 +91,10 @@ public class ImportJob
 
     public void process (File source)
     {
+        // Guard against repeat include
+        if (alreadyIncluded.contains (source)) return;
+        alreadyIncluded.add (source);
+
         sources.push (source);
         try
         {
@@ -229,7 +236,8 @@ public class ImportJob
                     break;
                 case "ComponentType":
                 case "Component":
-                    new ComponentType (child);
+                    ComponentType component = new ComponentType (child);
+                    components.put (component.part.key (), component);
                     break;
                 case "Simulation":
                     simulation (child);
@@ -249,32 +257,6 @@ public class ImportJob
         if (part.get ().equals (inherit)) component.set ("$connected", "");
     }
 
-    /**
-        If not a standard part, then it is probably one defined by this import, so tag the dependency.
-    **/
-    public void checkDependency (MNode part, String inherit)
-    {
-        MNode model = AppData.models.child (inherit);
-        if (model == null  ||  model.child ("$metadata", "backend.neuroml.part") == null) addDependency (part, inherit);
-    }
-
-    /**
-        Locate the first parent in the inheritance hierarchy that resides in the models database rather than
-        the current import.
-    **/
-    public MNode findParent (MNode part)
-    {
-        String inherit = part.get ("$inherit").replace ("\"", "");
-
-        // If the same model exists both in the import and the database, then prefer the database entry.
-        MNode result = AppData.models.child (inherit);
-        if (result != null) return result;
-
-        result = models.child (modelName, inherit);
-        if (result == null) return null;
-        return findParent (result);
-    }
-
     public void removeDependency (MNode part, String inherit)
     {
         dependents.remove (part);
@@ -290,7 +272,7 @@ public class ImportJob
         {
             component.clear ("$count");
             component.clear ("$connected");
-            if (component.length () == 0) models.clear (modelName, inherit);  // This is a shallow part created because a model is missing from the repo.
+            if (component.size () == 0) models.clear (modelName, inherit);  // This is a shallow part created because a model is missing from the repo.
         }
     }
 
@@ -299,8 +281,10 @@ public class ImportJob
     **/
     public void postprocess ()
     {
-        for (Entry<String,Cell>    e : cells   .entrySet ()) e.getValue ().finish ();
-        for (Entry<String,Network> e : networks.entrySet ()) e.getValue ().finish ();
+        for (Entry<String,ComponentType> e : components.entrySet ()) e.getValue ().finish1 ();
+        for (Entry<String,ComponentType> e : components.entrySet ()) e.getValue ().finish2 ();
+        for (Entry<String,Cell>          e : cells     .entrySet ()) e.getValue ().finish ();
+        for (Entry<String,Network>       e : networks  .entrySet ()) e.getValue ().finish ();
 
         // Select the prime model
         if (primaryModel.isEmpty ())
@@ -353,7 +337,7 @@ public class ImportJob
             }
         }
 
-        if (models.child (modelName).length () == 0) models.clear (modelName);
+        if (models.child (modelName).size () == 0) models.clear (modelName);
 
         ExpressionParser.namedUnits = null;
     }
@@ -361,24 +345,33 @@ public class ImportJob
     public void resolve (MNode dependent)
     {
         dependents.remove (dependent);
-        boolean lems = dependent.child ("$lems") != null  ||  dependent.get ().startsWith ("$connect");
+        boolean isChildrenType = dependent.key ().startsWith ("backend.lems.children");
+        boolean lems = dependent.child ("$lems") != null  ||  dependent.get ().startsWith ("$connect")  ||  isChildrenType;  // Only ComponentType declarations actually use $connect(), but it is not possible to add the $lems tag to an equation.
         if (models.child (modelName, dependent.key ()) != dependent) dependent.clear ("$lems");  // Remove $lems tag from non-top-level parts. Top-level parts will be cleaned up later in postprocess().
 
-        String sourceName = dependent.get ("$inherit").replace ("\"", "");
+        String sourceName = dependent.get ("$inherit");
         if (sourceName.isEmpty ()) sourceName = dependent.get ();  // For connections, the part name might be a direct value.
         if (sourceName.startsWith ("$connect"))
         {
             sourceName = sourceName.replace ("$connect(", "");
             sourceName = sourceName.replace (")",         "");
-            sourceName = sourceName.replace ("\"",        "");
         }
+        sourceName = sourceName.replace ("\"", "");
         MNode source = models.child (modelName, sourceName);
         if (source == null) return;
 
         resolveChildren (source);  // Ensure that the source part has no unresolved dependencies of its own before using it.
-        if (source.length () == 1  ||  (source.length () == 2  &&  source.child ("$connected") != null))  // source contains only special keys, so it is a shallow part, associated with an unresolved external reference.
+
+        if (source.size () == 1  ||  (source.size () == 2  &&  source.child ("$connected") != null))  // source contains only special keys, so it is a shallow part, associated with an external reference.
         {
-            source.set ("$inherit", "\"" + source.key () + "\"");
+            String inherit = source.key ();
+            source.set ("$inherit", "\"" + inherit + "\"");
+            MNode parent = AppData.models.child (inherit);
+            if (parent != null)
+            {
+                String id = parent.get ("$metadata", "id");
+                if (! id.isEmpty ()) source.set ("$inherit", "0", id);
+            }
         }
 
         // Triage
@@ -386,6 +379,9 @@ public class ImportJob
         // -2 == source is lightweight, but has multiple users. Merge and wait to delete.
         // -3 == source is heavyweight. Keep reference and move out to independent model.
         // -4 == source is the endpoint of a connection. Leave in place.
+        // Note that a "lightweight" part could also be shallow, in which case it is an external reference.
+        // A shallow part is configured (above) to inherit the external model, so when the part is merged,
+        // the dependent will end up referring directly to the external model.
         int count = source.getInt ("$count");
         boolean connected = source.child ("$connected") != null;
         if (count > 0)  // triage is necessary
@@ -437,9 +433,9 @@ public class ImportJob
                 if (key.equals ("$count"    )) continue;
                 if (key.equals ("$connected")) continue;
                 if (key.equals ("$lems"     )) continue;
-                if (key.equals ("$inherit"))
+                if (key.equals ("$inherit"))  // Handle $inherit separately because it must override the existing $inherit, but mergeUnder() will not override.
                 {
-                    dependent.set (key, n.get ());
+                    dependent.set (key, n.get ()).mergeUnder (n);  // Still use mergeUnder() to bring in ID.
                 }
                 else
                 {
@@ -452,16 +448,20 @@ public class ImportJob
         }
         else if (count == -3)
         {
-            String inherit = "\"" + modelName + " " + sourceName + "\"";
+            String inherit = modelName + " " + sourceName;
             String id      = source.get ("$metadata", "id");
-            if (dependent.get ().contains ("$connect"))
+            if (isChildrenType)
             {
-                dependent.set ("$connect(" + inherit + ")");
+                dependent.set (inherit);  // TODO: Can't store ID under metadata node, but could tack it on the end as a comma-separated value.
+            }
+            else if (dependent.get ().contains ("$connect"))
+            {
+                dependent.set ("$connect(\"" + inherit + "\")");
                 //dependent.set ("0", id);  // TODO: Store ID with $connect() ?
             }
             else
             {
-                dependent.set ("$inherit", inherit);
+                dependent.set ("$inherit", "\"" + inherit + "\"");
                 dependent.set ("$inherit", "0", id);
             }
         }
@@ -483,7 +483,7 @@ public class ImportJob
         else                 inherit = type;
         MNode part = models.childOrCreate (modelName, id);  // Expect to always create this part rather than fetch an existing child.
         part.set ("$inherit", "\"" + inherit + "\"");
-        checkDependency (part, inherit);
+        addDependency (part, inherit);
         if (! species.isEmpty ()) part.set ("$metadata", "species", species);
 
         NamedNodeMap attributes = node.getAttributes ();
@@ -525,7 +525,7 @@ public class ImportJob
         else                 inherit = type;
         MNode part = container.set (id, "");
         part.set ("$inherit", "\"" + inherit + "\"");
-        checkDependency (part, inherit);
+        addDependency (part, inherit);
 
         NamedNodeMap attributes = node.getAttributes ();
         int count = attributes.getLength ();
@@ -593,7 +593,7 @@ public class ImportJob
         String type = getAttribute (node, "type");
         MNode part = container.set (node.getNodeName (), "");
         part.set ("$inherit", "\"" + type + "\"");
-        checkDependency (part, type);
+        addDependency (part, type);
 
         NamedNodeMap attributes = node.getAttributes ();
         int count = attributes.getLength ();
@@ -634,7 +634,7 @@ public class ImportJob
                 String type = c.get ("type");
                 c.clear ("type");
                 c.set ("$inherit", "\"" + type + "\"");
-                checkDependency (c, type);
+                addDependency (c, type);
             }
         }
     }
@@ -718,7 +718,7 @@ public class ImportJob
         public void segmentGroup (Node node)
         {
             MNode groups = cell.childOrCreate ("$group");
-            int c = groups.length ();
+            int c = groups.size ();
             String groupName = getAttribute (node, "id");
             MNode part = groups.childOrCreate (groupName);
             part.set ("$G", c);
@@ -775,7 +775,7 @@ public class ImportJob
             if (from >= 0)
             {
                 MNode paths = group.childOrCreate ("$paths");
-                int index = paths.length ();
+                int index = paths.size ();
                 if (to >= 0) paths.set (index, from + "," + to);
                 else         paths.set (index, from);
             }
@@ -932,14 +932,14 @@ public class ImportJob
                     if (cell.child ("$group", group) == null)
                     {
                         MNode groups = cell.childOrCreate ("$group");
-                        int c = groups.length ();
+                        int c = groups.size ();
                         G.set (r, c);
                         groups.set (group, "$G", c);
                         groupIndex.put (c, group);
                     }
                 }
             }
-            MNode result = properties.set (String.valueOf (properties.length ()), group);
+            MNode result = properties.set (String.valueOf (properties.size ()), group);
             if (id.isEmpty ()) return result;
 
             // Create a subpart with the given name
@@ -996,7 +996,7 @@ public class ImportJob
                         if (clone == null)
                         {
                             MNode properties = cell.child ("$properties");
-                            clone = properties.set (String.valueOf (properties.length ()), segmentGroup);
+                            clone = properties.set (String.valueOf (properties.size ()), segmentGroup);
                             clone.merge (property);
                             clone.set (segmentGroup);
                             groupProperty.put (segmentGroup, clone);
@@ -1117,7 +1117,7 @@ public class ImportJob
                     {
                         // If it is a simple variable (except V, which must be compartment-specific), then apply it to the containing cell.
                         MNode subpart = p.iterator ().next ();
-                        if (subpart.length () == 0  &&  ! subpart.key ().equals ("V"))
+                        if (subpart.size () == 0  &&  ! subpart.key ().equals ("V"))
                         {
                             cell.set (subpart.key (), subpart.get ());
                         }
@@ -1290,12 +1290,12 @@ public class ImportJob
                 for (MNode property : part)
                 {
                     String inherit = property.get ("$inherit").replace ("\"", "");
-                    if (! inherit.isEmpty ()) checkDependency (property, inherit);
+                    if (! inherit.isEmpty ()) addDependency (property, inherit);
                     for (MNode m : property)
                     {
                         inherit = m.get ("$inherit").replace ("\"", "");
                         if (inherit.isEmpty ()) continue;
-                        checkDependency (m, inherit);
+                        addDependency (m, inherit);
                     }
                 }
 
@@ -1512,24 +1512,16 @@ public class ImportJob
             }
         }
 
-        public String formatUnit (double a)
+        public String formatUnit (double d)
         {
-            a *= 1e6;
-            double i = Math.round (a);
-            if (Math.abs (i - a) < epsilon)  // This is an integer
+            d *= 1e6;
+            long l = Math.round (d);
+            if (Math.abs (l - d) < epsilon)  // This is an integer
             {
-                if (i == 0) return "0";
-                return ((long) i) + "um";
+                if (l == 0) return "0";
+                return l + "um";
             }
-            return a + "um";
-        }
-
-        public String format (double a)
-        {
-            a *= 1e6;
-            double i = Math.round (a);
-            if (Math.abs (i - a) < epsilon) return String.valueOf ((long) i);
-            return String.valueOf (a);
+            return d + "um";
         }
 
         public String format (Matrix A)
@@ -1538,7 +1530,7 @@ public class ImportJob
             double y = A.get (1);
             double z = A.get (2);
             if (x == 0  &&  y == 0  &&  z == 0) return "[0;0;0]";
-            return "[" + format (x) + ";" + format (y) + ";" + format (z) + "]*1um";
+            return "[" + print (x * 1e6) + ";" + print (y * 1e6) + ";" + print (z * 1e6) + "]*1um";
         }
 
         public int compareTo (Segment o)
@@ -1597,8 +1589,7 @@ public class ImportJob
         units = units.replace ("degC",  "Cel");
         if (units.equals ("M" )) units = "mol";
         if (units.equals ("mM")) units = "mmol";
-        if (forbiddenUCUM.matcher (units).find ()) return "(" + units + ")";
-        return units;
+        return safeUnit (units);
     }
 
     public void spikeArray (Node node)
@@ -1741,7 +1732,7 @@ public class ImportJob
             MNode instances = part.child ("$instance");
             if (instances != null)
             {
-                int count = instances.length ();
+                int count = instances.size ();
                 if (count > 1) part.set ("$n", count);
                 int index = 0;
                 for (MNode i : instances)
@@ -1819,7 +1810,9 @@ public class ImportJob
                 }
             }
 
-            part.set ("$instance", id, "$xyz", "[" + x + ";" + y + ";" + z + "]");
+            String suffix = "*1um";
+            if (x == 0  &&  y == 0  &&  z == 0) suffix = "";
+            part.set ("$instance", id, "$xyz", "[" + print (x) + ";" + print (y) + ";" + print (z) + "]" + suffix);
             if (i >= 0  ||  j >= 0  ||  k >= 0)
             {
                 if (i < 0) i = 0;
@@ -2041,7 +2034,7 @@ public class ImportJob
                     }
                     else
                     {
-                        if (p.length () == 0)  // There is exactly one condition already existing, and we transition to multi-part equation.
+                        if (p.size () == 0)  // There is exactly one condition already existing, and we transition to multi-part equation.
                         {
                             p.set ("@", "0");
                             p.set ("@" + p.get (), "1");
@@ -2259,7 +2252,7 @@ public class ImportJob
         List<MNode> parents = collectParents (container);
         String inherit = typeFor (nodeName, parents);
         part.set ("$inherit", "\"" + inherit + "\"");
-        checkDependency (part, inherit);
+        addDependency (part, inherit);
 
         parents = collectParents (part);  // Now we follow our own inheritance chain, not our container's.
         NamedNodeMap attributes = node.getAttributes ();
@@ -2273,7 +2266,7 @@ public class ImportJob
             {
                 inherit = a.getNodeValue ();
                 part.set (nodeName, "$inherit", "\"" + inherit + "\"");
-                checkDependency (part.child (nodeName), inherit);
+                addDependency (part.child (nodeName), inherit);
             }
             else
             {
@@ -2291,8 +2284,9 @@ public class ImportJob
 
     /**
         Locates all the accessible parents of the given node, assuming single-inheritance,
-        and lists them in descending order by distance from child. Terminates when a parent
-        can't be found, as well as at a root node, so the list may be incomplete.
+        and lists them in descending order by distance from child. That is, most direct
+        ancestor comes last in the list. In addition to terminating at the root parent,
+        also terminates when a parent can't be found, so the list may be incomplete.
     **/
     public List<MNode> collectParents (MNode child)
     {
@@ -2308,7 +2302,7 @@ public class ImportJob
 
     public String typeFor (String nodeName, List<MNode> parents)
     {
-        String query = "backend.neuroml.children." + nodeName;
+        String query = "backend.lems.children." + nodeName;
         for (int i = parents.size () - 1; i >= 0; i--)
         {
             MNode parent = parents.get (i);
@@ -2316,6 +2310,17 @@ public class ImportJob
             if (! type.isEmpty ()) return type;
         }
         return nodeName;
+    }
+
+    public MNode definitionFor (String name, List<MNode> parents)
+    {
+        for (int i = parents.size () - 1; i >= 0; i--)
+        {
+            MNode parent = parents.get (i);
+            MNode result = parent.child (name);
+            if (result != null) return result;
+        }
+        return null;
     }
 
     public boolean isPart (String nodeName, List<MNode> parents)
@@ -2329,13 +2334,32 @@ public class ImportJob
         return false;
     }
 
+    /**
+        Locate the first parent in the inheritance hierarchy that resides in the models database rather than
+        the current import.
+    **/
+    public MNode findParent (MNode part)
+    {
+        String inherit = part.get ("$inherit").replace ("\"", "");
+
+        MNode result = models.child (modelName, inherit);
+        if (result != null) return findParent (result);
+
+        if (inherit.isEmpty ())
+        {
+            String key = part.key ();
+            if (models.child (modelName, key) == part) inherit = key;  // Could be a shallow part, in which case the key should be the same as the external model.
+        }
+        return AppData.models.child (inherit);  // could be null
+    }
+
     public void target (Node node)
     {
         primaryModel      = getAttribute (node, "component");
         String reportFile = getAttribute (node, "reportFile");
         String timesFile  = getAttribute (node, "timesFile");
-        if (! reportFile.isEmpty ()) models.set (modelName, "$metadata", "backend.neuroml.reportFile", reportFile);
-        if (! timesFile .isEmpty ()) models.set (modelName, "$metadata", "backend.neuroml.timesFile",  timesFile);
+        if (! reportFile.isEmpty ()) models.set (modelName, "$metadata", "backend.lems.reportFile", reportFile);
+        if (! timesFile .isEmpty ()) models.set (modelName, "$metadata", "backend.lems.timesFile",  timesFile);
     }
 
     public void dimension (Node node)
@@ -2463,9 +2487,12 @@ public class ImportJob
 
     public class ComponentType
     {
-        MNode part;
-        MNode regime;
-        int regimeCount;
+        MNode            part;
+        MNode            regime;
+        int              nextRegimeIndex = 1;  // Never allocate regime 0, because that is the default initila value for all variables. We only want to enter an inital regime explicitly.
+        Set<EventChild>  eventChildren  = new HashSet<EventChild> ();   // Events that try to reference a parent port. Attempt to resolve these in postprocessing.
+        Map<String,Path> directPaths    = new HashMap<String,Path> ();
+        Set<String>      childInstances = new HashSet<String> ();
 
         public ComponentType (MNode part)
         {
@@ -2496,118 +2523,137 @@ public class ImportJob
                     case "Constant":
                     case "Fixed":
                     case "DerivedParameter":
-                        genericVariable (child, "");
-                        break;
                     case "Parameter":
                     case "IndexParameter":
-                    case "Requirement":
-                        // These could be handled by genericVariable(), but that would require extra testing there for this relatively simple form.
+                    case "Property":
+                    case "Exposure":
+                        genericVariable (child, "");
+                        break;
+                    case "Text":
                         name        = getAttribute (child, "name");
                         description = getAttribute (child, "description");
+                        part.set (name, "\"\"");
+                        if (! description.isEmpty ()) part.set (name, "$metadata", "description", description);
+                        break;
+                    case "Requirement":
+                        name             = getAttribute (child, "name");
+                        description      = getAttribute (child, "description");
+                        String dimension = getAttribute (child, "dimension");
+                        String value = "";
+                        if (! dimension.isEmpty ())
+                        {
+                            Unit<?> unit = dimensions.get (dimension);
+                            if (unit == null) value = "(" + dimension + ")";
+                            else              value = "(" + UCUM.format (unit) + ")";
+                        }
                         if (! description.isEmpty ())
                         {
-                            part.set (name, "0");
-                            part.set (name, "$metadata", "description", description);
+                            if (! value.isEmpty ()) value += " ";
+                            value += description;
                         }
+                        part.set ("$metadata", "backend.lems.requirement." + name, value);
+                        break;
+                    case "EventPort":
+                        name             = getAttribute (child, "name");
+                        description      = getAttribute (child, "description");
+                        String direction = getAttribute (child, "direction");
+                        if (direction.equals ("in")) part.set (name, ":0@" + name);  // This should be overridden by a proper event() expression.
+                        else                         part.set (name, "0");   // This should be replaced by a multi-conditional expression
+                        part.set (name, "$metadata", "backend.lems.port", direction);
+                        if (! description.isEmpty ()) part.set (name, "$metadata", "description", description);
                         break;
                     case "Child":
-                    case "ComponentReference":
-                    //"Attachments" -- merely notes the name/type of a connection within the part targeted by the connection.
-                        inherit = getAttribute (child, "type");
                         name    = getAttribute (child, "name");
-                        // TODO: How to interpret the "local" field?
+                        inherit = getAttribute (child, "type");
                         MNode childPart = part.childOrCreate (name);
                         childPart.set ("$inherit", inherit);
                         addDependency (childPart, inherit);
                         childPart.set ("$lems", "");
                         break;
                     case "Children":
+                    case "Attachments":  // Similar to "Children" but added at runtime. N2A does not add subparts dynamically. Instead, they access their "parent" via a pointer. Like children, attached components must be modified to push any value that is mentioned by the parent as a reduction.
                         name       = getAttribute (child, "name");
                         inherit    = getAttribute (child, "type");
                         String min = getAttribute (child, "min");
                         String max = getAttribute (child, "max");
-                        name = "backend.neuroml.children." + name;
-                        if (! inherit.isEmpty ()) part.set ("$metadata", name, inherit);
-                        if (! min.isEmpty ())     part.set ("$metadata", name + ".min", min);
-                        if (! max.isEmpty ())     part.set ("$metadata", name + ".max", max);
+                        name = "backend.lems.children." + name;  // This tag is used to determine type ($inherit) when adding the subpart.
+                        if (! min.isEmpty ()) part.set ("$metadata", name + ".min", min);
+                        if (! max.isEmpty ()) part.set ("$metadata", name + ".max", max);
+                        if (! inherit.isEmpty ())
+                        {
+                            part.set ("$metadata", name, inherit);
+                            addDependency (part.child ("$metadata", name), inherit);
+                        }
                         break;
-                    case "Link":  // The dual of "Attachments". This defines the reference variable within a connection.
+                    case "ComponentReference":    // alias of a referenced part; jLEMS does resolution; "local" means the referenced part is a sibling, otherwise resolution includes the entire hierarchy
+                    case "Link":                  // equivalent to "ComponentReference" with local flag set to true
+                    case "InstanceRequirement":   // Only existing example is the peer of a gap junction. Seems to be unary connection that gets resolved by Tunnel.
+                    case "Path":
                         name        = getAttribute (child, "name");
                         inherit     = getAttribute (child, "type");
                         description = getAttribute (child, "description");
                         part.set (name, "$connect(\"" + inherit + "\")");
-                        addDependency (part.child (name), inherit);
+                        if (! inherit    .isEmpty ()) addDependency (part.child (name), inherit);
                         if (! description.isEmpty ()) part.set (name, "$metadata", "description", description);
                         break;
                     case "Dynamics":
                         dynamics (child);
                         break;
-                    // "Structure" -- Ill-defined. Seems to support glue-code for jLEMS simulator.
-                    // "Simulation" -- Slightly better defined, but still basically glue-code for jLEMS. Just interpret the elements created by the include file Simulation.xml
-                    // "Text" -- merely declares an XML string attribute to appear in a part instantiation
+                    // "ComponentRequirement" -- Based on examples, seems to name a ComponentReference declared in container of this part, for use by Tunnel to create a continuous (non-event) connection.
+                    // Note: "Tunnel" and associated terms would translate to some ugly structures, just to support a fairly specific use-case. Instead, construct a nicer structure in the NeuroML network handler above.
+                    case "Structure":
+                        structure (child);
+                        break;
+                    // "Simulation" -- Supports glue-code for jLEMS, much of which appears in the include file Simulation.xml
                 }
             }
-
-            finish ();
         }
 
         public MNode genericVariable (Node node, String condition1)
         {
-            String               name = getAttribute (node, "name");
-            if (name.isEmpty ()) name = getAttribute (node, "parameter");
-            if (name.isEmpty ()) name = getAttribute (node, "variable");
-            if (name.isEmpty ()) name = getAttribute (node, "property");
-            if (node.getNodeName ().equals ("TimeDerivative")) name += "'";
+            String name = getAttributes (node, "name", "parameter", "variable");
+            String nodeName = node.getNodeName ();
+            if (nodeName.equals ("TimeDerivative")) name += "'";
 
             String exposure    = getAttribute (node, "exposure");
             String description = getAttribute (node, "description");
+            String dimension   = getAttribute (node, "dimension");
+            String reduce      = getAttribute (node, "reduce");
+            String required    = getAttribute (node, "required");
+            String select      = getAttribute (node, "select");
 
             String combiner = "";
-            if (node.getNodeName ().contains ("DerivedVariable")  &&  (exposure.isEmpty ()  ||  ! exposure.equals (name))) combiner = ":";
+            if (nodeName.contains ("DerivedVariable")  &&  (exposure.isEmpty ()  ||  ! exposure.equals (name))) combiner = ":";
 
-            String value = cleanupExpression (getAttribute (node, "value"));
-            if (value.isEmpty ())
+            String value = cleanupExpression (getAttributes (node, "value", "defaultValue"));
+            if (value.isEmpty ()  &&  ! select.isEmpty ())
             {
-                value = getAttribute (node, "select");
-                if (! value.isEmpty ())
+                Path variablePath = new Path (select);
+                variablePath.resolveComponent (part);
+                MNode container = variablePath.container ();
+
+                switch (reduce)
                 {
-                    // TODO: analyze "select" string more thoroughly
-                    String[] pieces = value.split ("/");
-                    String child    = pieces[0];
-                    String variable = pieces[1];
+                    case "multiply": combiner = "*"; break;
+                    case "add"     : combiner = "+"; break;
+                }
 
-                    String index = "";
-                    int i = child.indexOf ('[');
-                    if (i >= 0)
-                    {
-                        index = child.substring (i + 1);
-                        child = child.substring (0, i);
-                        i = index.indexOf (']');
-                        if (i >= 0) index = index.substring (0, i);
-                    }
-
-                    String reduce = getAttribute (node, "reduce");
-                    if (! index.isEmpty ()  ||  ! reduce.isEmpty ())
-                    {
-                        value = "";
-
-                        switch (reduce)
-                        {
-                            case "multiply": combiner = "*"; break;
-                            case "add"     : combiner = "+"; break;
-                        }
-
-                        String required = getAttribute (node, "required");
-                        if (required.equals ("true")) part.set (child, "$up." + name, "$metadata", "backend.neuroml.required", "");
-
-                        // TODO: add condition to select specific instances
-                        part.set (child, "$up." + name, combiner + variable);
-                    }
-                    else
-                    {
-                        value = value.replace ("..", "$up");
-                        value = value.replace ("/", ".");
-                    }
+                if (variablePath.isDirect  ||  container == null)
+                {
+                    // At this point we don't know enough about the path, because some requisite parts may
+                    // not be defined yet. Re-evaluate during postprocessing.
+                    value = variablePath.directName ();
+                    directPaths.put (name, variablePath);
+                }
+                else
+                {
+                    // TODO: if path specifies which instances, then add a condition to select them
+                    String up        = variablePath.up ();
+                    String target    = variablePath.target ();
+                    String condition = variablePath.condition ();
+                    if (condition.isEmpty ()) container.set (up + name, combiner + target);
+                    else                      container.set (up + name, combiner + target + "@" + condition);
+                    if (required.equals ("true")) container.set (up + name, "$metadata", "backend.lems.required", "");
                 }
             }
 
@@ -2617,24 +2663,43 @@ public class ImportJob
             for (MNode c : result) if (c.key ().startsWith ("@")) equationCount++;
 
             String existingValue = result.get ();
-            if (existingValue.length () > 1)  // not empty and not merely a combiner
+            if (! existingValue.isEmpty ()  &&  ! Variable.isCombiner (existingValue))
             {
                 // Move existing value into multi-conditional list
                 ParsedValue pv = new ParsedValue (existingValue);
                 result.set (pv.combiner);
-                result.set ("@" + pv.condition, pv.expression);
-                equationCount++;
+                if (! pv.condition.isEmpty ()  ||  ! pv.expression.startsWith ("0"))  // Only add the equation if not a placeholder
+                {
+                    result.set ("@" + pv.condition, pv.expression);
+                    equationCount++;
+                }
             }
 
             if (! combiner.isEmpty ()) result.set (combiner);
             if (! value.isEmpty ())
             {
-                if (equationCount == 0) result.set (result.get () + value + "@" + condition1);
-                else                    result.set ("@" + condition1, value);
-                equationCount++;  // Actually unnecessary, because this case is mutually exclusive with "Case" elements below.
+                if (equationCount == 0)
+                {
+                    String newValue = result.get () + value;
+                    if (! condition1.isEmpty ()) newValue += "@" + condition1;
+                    result.set (newValue);
+                }
+                else
+                {
+                    result.set ("@" + condition1, value);
+                }
+                equationCount++;
             }
             if (! description.isEmpty ()) result.set ("$metadata", "description", description);
             if (! exposure.isEmpty ()  &&  ! exposure.equals (name)) result.set (exposure, name);
+
+            if (   nodeName.equals ("Parameter")
+                || nodeName.equals ("IndexParameter")
+                || nodeName.equals ("Path")
+                || nodeName.equals ("Text"))
+            {
+                result.set ("$metadata", "public", "");  // Intended as public interface to this component
+            }
 
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
@@ -2657,13 +2722,25 @@ public class ImportJob
                     }
                     else
                     {
-                        if (condition2.isEmpty ()) result.set (result.get () + value);
-                        else                       result.set (result.get () + value + "@" + condition2);
+                        String newValue = result.get () + value;
+                        if (! condition2.isEmpty ()) newValue += "@" + condition2;
+                        result.set (newValue);
                     }
                 }
             }
 
-            if (result.length () == 1  &&  result.get ().isEmpty ()) result.set ("0");  // Force metadata-only variable to have a value, so it is not interpreted as a part.
+            // Force metadata-only variable to have a value, so it is not interpreted as a part.
+            if (equationCount == 0  &&  result.get ().isEmpty ())
+            {
+                value = "0";
+                if (! dimension.isEmpty ())
+                {
+                    Unit<?> unit = dimensions.get (dimension);
+                    if (unit != null) value += safeUnit (unit);
+                }
+                result.set (value);
+            }
+
             return result;
         }
 
@@ -2723,11 +2800,7 @@ public class ImportJob
         public void onCondition (Node node, String condition1)
         {
             String condition2 = cleanupExpression (getAttribute (node, "test"));
-            if (condition2.isEmpty ())
-            {
-                condition2 = getAttribute (node, "port");  // TODO: process port to resolve source part
-                condition2 = "$event(" + condition2 + ")";
-            }
+            if (condition2.isEmpty ()) condition2 = getAttribute (node, "port");  // TODO: process port to resolve source part
             if (! condition1.isEmpty ()) condition2 = condition1 + "&&" + condition2;
 
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
@@ -2740,13 +2813,11 @@ public class ImportJob
                         break;
                     case "EventOut":
                         String portName = getAttribute (child, "port");
-                        MNode portNode = part.child (portName);
-                        if (portNode == null)
-                        {
-                            part.set (portName, "@", "0");
-                            part.set (portName, "$metadata", "backend.neuroml.param", "port");
-                        }
                         part.set (portName, "@" + condition2, "1");
+                        // The following lines will likely be redundant, if the port variable has already been set up.
+                        part.set (portName, "");  // Clear any placeholder value from "EventPort" declaration.
+                        part.set (portName, "@", "0");
+                        part.set (portName, "$metadata", "backend.lems.port", "out");
                         break;
                     case "Transition":
                         String regimeName = getAttribute (child, "regime");
@@ -2764,7 +2835,7 @@ public class ImportJob
                 regime.set ("@$init", "-1");  // No active regime at startup
             }
             MNode regimeValue = part.child (name);
-            if (regimeValue == null) part.set (name, regimeCount++);
+            if (regimeValue == null) part.set (name, nextRegimeIndex++);
         }
 
         public void regime (Node node)
@@ -2823,13 +2894,294 @@ public class ImportJob
             }
         }
 
-        public void finish ()
+        public void structure (Node node)
         {
+            Map<String,String> with = new HashMap<String,String> ();
+
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            {
+                if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+                switch (child.getNodeName ())
+                {
+                    case "ChildInstance":
+                        String component = getAttribute (child, "component");
+                        childInstances.add (component);
+                        break;
+                    case "With":  // Can be a Path, "this" or "parent"
+                        String instance = getAttribute (child, "instance");
+                        String as       = getAttribute (child, "as");
+                        // Prepare the value to be used directly in an event expression.
+                        if      (instance.equals ("this"  )) instance = "";
+                        else if (instance.equals ("parent")) instance = "$up.";
+                        else                                 instance += ".";
+                        with.put (as, instance);
+                        break;
+                    case "EventConnection":
+                        eventConnection (child, with);
+                        break;
+                    // "MultiInstantiate" -- Turns this part into a population. In practice, only used to define the Population component type.
+                    // "Tunnel" -- Seems to establish a continuous (non-event) connection, similar to a regular connection in N2A. Also injects a child instance on each side of the connection. Child instances may be of different types.
+                }
+            }
+        }
+
+        public void eventConnection (Node node, Map<String,String> with)
+        {
+            String from       = getAttribute (node, "from");
+            String to         = getAttribute (node, "to");
+            String sourcePort = getAttribute (node, "sourcePort");
+            String targetPort = getAttribute (node, "targetPort");
+            String delay      = getAttribute (node, "delay");
+
+            String property = "";
+            String value    = "";
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+            {
+                if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+                if (child.getNodeName ().equals ("Assign"))
+                {
+                    property = getAttribute (child, "property");
+                    value    = getAttribute (child, "value");
+                }
+            }
+
+            // LEMS resolves EventConnection at runtime.
+            // The best we can do now is leave a hint for the user to resolve it by hand.
+            // However, in some special cases it is possible to fully translate.
+
+            from = with.get (from); 
+            to   = with.get (to);
+
+            boolean portsKnown = true;
+            if (sourcePort.isEmpty ())
+            {
+                if (from.isEmpty ())
+                {
+                    for (MNode c : part)
+                    {
+                        if (c.get ("$metadata", "backend.lems.port").equals ("out"))
+                        {
+                            sourcePort = c.key ();
+                            portsKnown = true;
+                            break;
+                        }
+                    }
+                }
+                if (sourcePort.isEmpty ())
+                {
+                    sourcePort = "out";
+                    portsKnown = false;
+                }
+            }
+            if (targetPort.isEmpty ())
+            {
+                if (to.isEmpty ())
+                {
+                    for (MNode c : part)
+                    {
+                        if (c.get ("$metadata", "backend.lems.port").equals ("in"))
+                        {
+                            targetPort = c.key ();
+                            break;
+                        }
+                    }
+                }
+                if (targetPort.isEmpty ())
+                {
+                    targetPort = "in";
+                    portsKnown = false;
+                }
+            }
+
+            String event = "";
+            if (delay.isEmpty ())
+            {
+                event = from + sourcePort;
+            }
+            else
+            {
+                event = "$event(" + from + sourcePort + "," + delay + ")";
+            }
+
+            MNode v = part.childOrCreate (to + targetPort);
+            if (to.isEmpty ())
+            {
+                v.set (":" + event);  // Let local port be a temporary
+            }
+            else
+            {
+                v.set ("1@" + event);  // Connection port must be a regular variable.
+                v.set ("$metadata", "warning1", "Consider moving this event into the target part, where the port variable can be temporary.");
+            }
+            v.set ("$metadata", "backend.lems.event", "");
+            if (! portsKnown)
+            {
+                v.set ("$metadata", "warning2", "The identity of the source or target port could not be fully determined.");
+                if (to  .startsWith ("$up")) eventChildren.add (new EventChild (part, v, targetPort));
+                if (from.startsWith ("$up")) eventChildren.add (new EventChild (part, v, sourcePort));
+            }
+            if (! property.isEmpty ()) part.set (to + property, value);
+        }
+
+        public class EventChild
+        {
+            public MNode  part;      // that contains the event
+            public MNode  event;
+            public String portName;  // Should be "in" or "out", which also indicates direction.
+
+            public EventChild (MNode part, MNode event, String portName)
+            {
+                this.part     = part;
+                this.event    = event;
+                this.portName = portName;
+            }
+
+            public void process ()
+            {
+                // Collect list of component names
+                Set<String> componentNames = new HashSet<String> ();
+                List<MNode> parents = collectParents (part);
+                for (MNode p : parents) componentNames.add (p.key ());
+                componentNames.add (part.key ());
+
+                // Scan all components for match
+                for (MNode component : models.child (modelName))
+                {
+                    if (! containsChild (component, componentNames)) continue;
+
+                    for (MNode c : component)
+                    {
+                        if (c.get ("$metadata", "backend.lems.port").equals (portName))
+                        {
+                            String newPortName = c.key ();
+                            if (portName.equals ("in"))
+                            {
+                                part.move (event.key (), "$up." + newPortName);
+                            }
+                            else  // "out"
+                            {
+                                event.set (event.get ().replace (portName, newPortName));
+                            }
+                            return;  // As soon as we find any port of the correct direction, we're done.
+                        }
+                    }
+                }
+            }
+
+            public boolean containsChild (MNode container, Set<String> componentNames)
+            {
+                MNode metadata = container.child ("$metadata");
+                if (metadata == null) return false;
+
+                for (MNode m : metadata)
+                {
+                    if (m.key ().startsWith ("backend.lems.children."))
+                    {
+                        if (componentNames.contains (m.get ())) return true;
+                    }
+                }
+
+                return false;
+            }
+        }
+
+        public void finish1 ()
+        {
+            for (String component : childInstances)
+            {
+                MNode sourceNode = part.child (component);
+                if (sourceNode == null)
+                {
+                    // Search for definition in some parent
+                    List<MNode> parents = collectParents (part);
+                    sourceNode = definitionFor (component, parents);
+                    if (sourceNode == null) sourceNode = part.set (component, "");
+                }
+                MNode targetNode = part.childOrCreate (component);
+                String inherit = sourceNode.get ();  // Will either be blank or a $connect line
+                if (inherit.startsWith ("$connect"))
+                {
+                    inherit = inherit.replace ("$connect(\"", "");
+                    inherit = inherit.replace ("\")",         "");
+                    targetNode.set ("");
+                    targetNode.set ("$inherit", "\"" + inherit + "\"");
+                    targetNode.set ("$lems", "");
+                    if (sourceNode != targetNode) addDependency (targetNode, inherit);
+                    // No need to call addDependency() if sourcePart is local, because it was already called when the $connect line was created.
+                }
+            }
+        }
+
+        public void finish2 ()
+        {
+            for (Entry<String,Path> e : directPaths.entrySet ())
+            {
+                Path   path = e.getValue ();
+                String name = e.getKey ();
+                path.resolveComponent (part);
+                if (path.isDirect)
+                {
+                    path.finishDirectPath (part, name);
+                }
+                else
+                {
+                    String combiner = part.get (name);
+                    if (combiner.length () > 1) combiner = combiner.substring (0, 1);
+                    if (! Variable.isCombiner (combiner)  ||  combiner.equals (":")) combiner = "";
+                    part.set (name, combiner);
+
+                    MNode  container = path.container ();
+                    String up        = path.up ();
+                    String target    = path.target ();
+                    String condition = path.condition ();
+                    if (condition.isEmpty ()) container.set (up + name, combiner + target);
+                    else                      container.set (up + name, combiner + target + "@" + condition);
+                }
+            }
+
+            for (EventChild ec : eventChildren) ec.process ();
+
+            // Prevent inherited conditions from defeating regime-specific conditions in child part
+            List<MNode> parents = collectParents (part);
+            for (MNode v : part)
+            {
+                List<String> kill = new ArrayList<String> ();
+                for (MNode e : v)
+                {
+                    String condition = e.key ();
+                    if (condition.startsWith ("@")  &&  condition.contains ("$regime"))
+                    {
+                        // Scan parents for matching sub-condition
+                        condition = condition.substring (1);
+                        for (MNode p : parents)
+                        {
+                            MNode pv = p.child (v.key ());
+                            if (pv == null) continue;
+                            for (MNode pe : pv)
+                            {
+                                String pc = pe.key ();
+                                if (pc.equals ("@")) continue;  // Retain the default equation
+                                if (! pc.startsWith ("@")) continue;
+                                pc = pc.substring (1);
+                                System.out.println ("comparing: " + pc + " with " + condition);
+                                if (pc.length () < condition.length ()  &&  condition.contains (pc))
+                                {
+                                    kill.add (pc);
+                                }
+                            }
+                        }
+                    }
+                }
+                for (String pc : kill) v.set ("@" + pc, "");  // For conditional equations, used "" rather than "$kill".
+            }
+
+            // Pretty print
+
             PrettyPrinter pp = new PrettyPrinter ();
 
             if (regime != null)
             {
-                if (regime.length () == 1)  // One conditional entry, so convert to single-line.
+                if (regime.size () == 1)  // One conditional entry, so convert to single-line.
                 {
                     MNode c = regime.iterator ().next ();
                     String key = c.key ();
@@ -2841,7 +3193,7 @@ public class ImportJob
                 String regimeName = "regime";
                 int suffix = 2;
                 while (part.child (regimeName) != null) regimeName = "regime" + suffix++;
-                if (! regimeName.equals ("regime")) regime.set ("$metadata", "backend.neuroml.regime", "");
+                if (! regimeName.equals ("regime")) regime.set ("$metadata", "backend.lems.regime", "");
                 pp.rename.put ("$regime", regimeName);
             }
 
@@ -2906,7 +3258,8 @@ public class ImportJob
 
             if (quantity.isEmpty ()  &&  ! select.isEmpty ()) quantity = select + "/ignored";
             Path variablePath = new Path (quantity);
-            MNode container = variablePath.container (part);
+            variablePath.resolveSimulation (part);
+            MNode container = variablePath.container ();
             if (container == null) continue;
             String variable = variablePath.target ();
 
@@ -2931,7 +3284,7 @@ public class ImportJob
     public class PathPart
     {
         public String partName;
-        public int    index = -1;  // -1 means no index
+        public String condition = "";
         public MNode  part;
 
         public PathPart (String part)
@@ -2941,14 +3294,30 @@ public class ImportJob
             if (pieces.length > 1)
             {
                 String temp = pieces[1].split ("]")[0];
-                index = Integer.valueOf (temp);
+                if (! temp.equals ("*"))
+                {
+                    // LEMS strives to follow the XPath standard. The following is a very crude and limited parser.
+                    if (temp.contains ("="))
+                    {
+                        condition = temp.replace ("=", "==");
+                        condition = condition.replace ("'", "\"");
+                    }
+                    else
+                    {
+                        int index = 0;
+                        try {index = Integer.valueOf (temp);}
+                        catch (NumberFormatException e) {}
+                        condition = "$index==" + index;
+                    }
+                }
             }
         }
     }
 
     public class Path
     {
-        List<PathPart> parts = new ArrayList<PathPart> ();
+        public List<PathPart> parts    = new ArrayList<PathPart> ();
+        public boolean        isDirect = true;  // Indicates that a direct reference is possible. Each element of the path must be a single subpart of the one above it.
 
         public Path (String path)
         {
@@ -2957,8 +3326,64 @@ public class ImportJob
         }
 
         /**
+            Determine the parts along the path when assembling a ComponentType.
+            This method takes into account "Children" and "Attachments".
+        **/
+        public void resolveComponent (MNode root)
+        {
+            for (PathPart p : parts)
+            {
+                if (! p.condition.isEmpty ()) isDirect = false;
+
+                String childrenName    = "backend.lems.children." + p.partName;
+                String childrenInherit = findChildrenType (root, childrenName);
+                if (childrenInherit.isEmpty ())
+                {
+                    root = root.child (p.partName);
+                }
+                else
+                {
+                    root = models.child (modelName, childrenInherit);
+                    isDirect = false;
+                }
+
+                p.part = root;
+                if (root == null) break;
+            }
+        }
+
+        public String findChildrenType (MNode part, String childrenName)
+        {
+            String result = part.get ("$metadata", childrenName).replace ("\"", "");
+            if (! result.isEmpty ()) return result;
+            String inherit = part.get ("$inherit").replace ("\"", "");
+
+            MNode parent = models.child (modelName, inherit);
+            if (parent != null) return findChildrenType (parent, childrenName);
+
+            parent = AppData.models.child (inherit);
+            if (parent != null) return findChildrenType (parent, childrenName);
+
+            return "";
+        }
+
+        /**
+            Determine the parts along the path when preparing a simulation.
+            This method assumes that all subparts have been properly inserted under root.
+        **/
+        public void resolveSimulation (MNode root)
+        {
+            for (PathPart p : parts)
+            {
+                root = root.child (p.partName);
+                p.part = root;
+                if (root == null) break;
+            }
+        }
+
+        /**
             Assembles condition string to filter down to exactly the instance indicated by the path.
-            Depends on side-effects of container(MNode).
+            Depends on resolveComponent(MNode) or resolveSimulation(MNode).
         **/
         public String condition ()
         {
@@ -2967,12 +3392,18 @@ public class ImportJob
             for (int i = parts.size () - 2; i >= 0; i--)
             {
                 PathPart p = parts.get (i);
-                if (p.index >= 0)  // Has an index
+                String condition = p.condition;
+                if (! condition.isEmpty ())
                 {
-                    if (p.index != 0  ||  p.part == null  ||  p.part.getOrDefaultInt ("$n", "1") != 1)  // Only add index if this population is not a singleton.
+                    // Only add index if this population is not a singleton.
+                    if (condition.equals ("$index==0")  &&  (p.part == null  ||  p.part.getOrDefaultInt ("$n", "1") == 1))
+                    {
+                        condition = "";
+                    }
+                    if (! condition.isEmpty ())
                     {
                         if (! result.isEmpty ()) result += "&&";
-                        result += up + "$index==" + p.index;
+                        result += up + condition;
                     }
                 }
                 up += "$up.";
@@ -2980,23 +3411,66 @@ public class ImportJob
             return result;
         }
 
-        public MNode container (MNode root)
+        public MNode container ()
         {
-            for (PathPart p : parts)
-            {
-                root = root.child (p.partName);
-                p.part = root;
-                if (root == null) break;
-            }
             int size = parts.size ();
             if (size < 2) return null;
             return parts.get (size - 2).part;
+        }
+
+        public String up ()
+        {
+            String result = "";
+            for (int i = 0; i < parts.size () - 1; i++) result = "$up." + result;
+            return result;
         }
 
         public String target ()
         {
             PathPart p = parts.get (parts.size () - 1);
             return p.partName;
+        }
+
+        public String directName ()
+        {
+            String result = "";
+            for (PathPart p : parts)
+            {
+                if (! result.isEmpty ()) result += ".";
+                if      (  p.partName.equals ("..")) result += "$up";
+                else if (! p.partName.equals ("." )) result += p.partName;
+            }
+            return result;
+        }
+
+        public void finishDirectPath (MNode root, String name)
+        {
+            MNode source = root;
+            for (int i = 0; i < parts.size () - 1; i++)
+            {
+                PathPart p = parts.get (i);
+                if (source.get (p.partName).startsWith ("$connect")) return;  // We only modify the variable if it does not go through a connection, that is, only if the variable is fully contained under us.
+
+                name = "$up." + name;
+                MNode child = source.child (p.partName);
+                if (child == null)
+                {
+                    List<MNode> parents = collectParents (source);
+                    child = definitionFor (p.partName, parents);
+                }
+                root = root.childOrCreate (p.partName);
+                if (child == null) source = root;
+                else               source = child;
+            }
+
+            // Check if variable exists in final source part
+            MNode child = source.child (name);
+            if (child == null)
+            {
+                List<MNode> parents = collectParents (source);
+                child = definitionFor (name, parents);
+            }
+            if (child != null) root.set (name, "$kill");
         }
     }
 
@@ -3011,14 +3485,15 @@ public class ImportJob
                 Constant c = (Constant) op;
                 if (c.value instanceof Scalar)
                 {
-                    double value = ((Scalar) c.value).value;
-                    if (c.unit == null)
+                    UnitValue uv    = c.unitValue;
+                    Unit<?>   unit  = uv.unit;
+                    double    value = uv.value;  // The original given value, without scaling.
+                    if (unit == null)
                     {
-                        result.append (value);
+                        result.append (ImportJob.print (value));
                     }
                     else
                     {
-                        Unit unit = c.unit;
                         if (unit instanceof TransformedUnit)
                         {
                             TransformedUnit tu = (TransformedUnit) unit;
@@ -3031,10 +3506,8 @@ public class ImportJob
                             }
                         }
 
-                        result.append (value);
-                        String u = UCUM.format (unit);
-                        if (forbiddenUCUM.matcher (u).find ()) u = "(" + u + ")";
-                        result.append (u);
+                        result.append (ImportJob.print (value));
+                        result.append (safeUnit (unit));
                     }
                     return true;
                 }
@@ -3085,7 +3558,7 @@ public class ImportJob
                 keys.add (key);
                 Variable.ParsedValue pv = new Variable.ParsedValue (c.get ());
                 if (! pv.expression.isEmpty ()) pv.expression = print (pv.expression);
-                if (! pv.condition .isEmpty ()) pv.condition  = print (pv.expression);
+                if (! pv.condition .isEmpty ()) pv.condition  = print (pv.condition);
                 c.set (pv);
 
                 if (key.equals ("$metadata" )) continue;
@@ -3097,7 +3570,7 @@ public class ImportJob
                 String newKey = key;
                 if (key.startsWith ("@"))
                 {
-                    newKey = "@" + print (key.substring (1));
+                    if (key.length () > 1) newKey = "@" + print (key.substring (1));
                 }
                 else
                 {
@@ -3114,6 +3587,28 @@ public class ImportJob
                 if (! newKey.equals (key)) node.move (key, newKey);
             }
         }
+    }
+
+    public static String print (double d)
+    {
+        long l = Math.round (d);
+        if (l != 0  &&  Math.abs (d - l) < epsilon) return String.valueOf (l);
+        String result = String.valueOf (d).toLowerCase ();  // get rid of upper-case E
+        // Don't add ugly and useless ".0"
+        result = result.replace (".0e", "e");
+        if (result.endsWith (".0")) result = result.substring (0, result.length () - 2);
+        return result;
+    }
+
+    public String safeUnit (String unit)
+    {
+        if (forbiddenUCUM.matcher (unit).find ()) return "(" + unit + ")";
+        return unit;
+    }
+
+    public String safeUnit (Unit<?> unit)
+    {
+        return safeUnit (UCUM.format (unit));
     }
 
     public String getText (Node node)
