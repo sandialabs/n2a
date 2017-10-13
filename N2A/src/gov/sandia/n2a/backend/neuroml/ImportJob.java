@@ -246,15 +246,44 @@ public class ImportJob
         }
     }
 
+    public void addDependencyFromConnection (MNode part, String inherit)
+    {
+        addDependency (part, inherit);
+        models.set (modelName, inherit, "$connected", "1");
+    }
+
+    public void addDependencyFromLEMS (MNode part, String inherit)
+    {
+        addDependency (part, inherit);
+        models.set (modelName, inherit, "$lemsUses", "1");
+    }
+
     public void addDependency (MNode part, String inherit)
     {
         dependents.add (part);
 
-        MNode component = models.childOrCreate (modelName, inherit);
-        int count = component.getInt ("$count");
-        component.set ("$count", count + 1);
+        MNode component = models.child (modelName, inherit);
+        if (component == null)
+        {
+            component = models.childOrCreate (modelName, inherit);
+            component.set ("$count", "1");
 
-        if (part.get ().equals (inherit)) component.set ("$connected", "");
+            // Assume that local part names don't duplicate repo part names.
+            // Thus, if there is a match in the repo that is also tagged as a NeuroML/LEMS part,
+            // we are probably a proxy.
+            // TODO: map name to neuroml parts
+            if (AppData.models.child (inherit) != null)
+            {
+                // Setting our inherit line supports analysis in genericPart().
+                component.set ("$inherit", inherit);
+                // IDs will be filled during postprocessing.
+            }
+        }
+        else
+        {
+            int count = component.getInt ("$count");
+            component.set ("$count", count + 1);
+        }
     }
 
     public void removeDependency (MNode part, String inherit)
@@ -272,7 +301,9 @@ public class ImportJob
         {
             component.clear ("$count");
             component.clear ("$connected");
-            if (component.size () == 0) models.clear (modelName, inherit);  // This is a shallow part created because a model is missing from the repo.
+            component.clear ("$lemsUses");
+            // Don't clear $lems, as it indicates the type of part regardless of dependencies.
+            if (component.size () == 0) models.clear (modelName, inherit);  // This is a proxy part created because a model is missing from the repo.
         }
     }
 
@@ -303,19 +334,19 @@ public class ImportJob
         while (it.hasNext ())
         {
             MNode part = it.next ();
-            String  key   = part.key ();
-            int     count = part.getInt ("$count");
-            boolean lems  = part.child ("$lems") != null;
+            String  key        = part.key ();
+            int     count      = part.getInt ("$count");
+            boolean lems       = part.child ("$lems") != null;
+            boolean proxyFound = part.get ("$proxy").equals ("found");
             part.clear ("$count");
             part.clear ("$connected");
             part.clear ("$lems");
-            if (count == 0)
-            {
-                if (lems  &&  ! key.equals (primaryModel)) count = -3;
-            }
+            part.clear ("$lemsUses");
+            part.clear ("$proxy");
+            if (count == 0  &&  lems  &&  ! key.equals (primaryModel)) count = -3;
             if (count < 0)
             {
-                if (count == -3)
+                if (count == -3  &&  ! proxyFound)
                 {
                     MNode model = models.childOrCreate (modelName + " " + key);
                     model.merge (part);
@@ -346,8 +377,7 @@ public class ImportJob
     {
         dependents.remove (dependent);
         boolean isChildrenType = dependent.key ().startsWith ("backend.lems.children");
-        boolean lems = dependent.child ("$lems") != null  ||  dependent.get ().startsWith ("$connect")  ||  isChildrenType;  // Only ComponentType declarations actually use $connect(), but it is not possible to add the $lems tag to an equation.
-        if (models.child (modelName, dependent.key ()) != dependent) dependent.clear ("$lems");  // Remove $lems tag from non-top-level parts. Top-level parts will be cleaned up later in postprocess().
+        boolean isConnect      = dependent.get ().contains ("$connect");
 
         String sourceName = dependent.get ("$inherit");
         if (sourceName.isEmpty ()) sourceName = dependent.get ();  // For connections, the part name might be a direct value.
@@ -362,16 +392,45 @@ public class ImportJob
 
         resolveChildren (source);  // Ensure that the source part has no unresolved dependencies of its own before using it.
 
-        if (source.size () == 1  ||  (source.size () == 2  &&  source.child ("$connected") != null))  // source contains only special keys, so it is a shallow part, associated with an external reference.
+        boolean proxy;
+        if (source.child ("$proxy") == null)
         {
+            proxy = true;
             String inherit = source.key ();
-            source.set ("$inherit", "\"" + inherit + "\"");
-            MNode parent = AppData.models.child (inherit);
-            if (parent != null)
+            for (MNode c : source)
             {
-                String id = parent.get ("$metadata", "id");
-                if (! id.isEmpty ()) source.set ("$inherit", "0", id);
+                String key = c.key ();
+                if (key.equals ("$count"    )) continue;
+                if (key.equals ("$connected")) continue;
+                if (key.equals ("$lems"     )) continue;
+                if (key.equals ("$lemsUses" )) continue;
+                if (key.equals ("$inherit")  &&  c.get ().replace ("\"", "").equals (inherit)) continue;  // Inheriting our own name is characteristic of being a proxy.
+                proxy = false;  // key is something other than our temporary special keys, so not shallow
+                break;
             }
+            if (proxy)
+            {
+                source.set ("$inherit", "\"" + inherit + "\"");
+                MNode parent = AppData.models.child (inherit);
+                if (parent == null)
+                {
+                    source.set ("$proxy", "1");
+                }
+                else
+                {
+                    source.set ("$proxy", "found");
+                    String id = parent.get ("$metadata", "id");
+                    if (! id.isEmpty ()) source.set ("$inherit", "0", id);
+                }
+            }
+            else
+            {
+                source.set ("$proxy", "0");
+            }
+        }
+        else
+        {
+            proxy = ! source.get ("$proxy").equals ("0");
         }
 
         // Triage
@@ -379,16 +438,16 @@ public class ImportJob
         // -2 == source is lightweight, but has multiple users. Merge and wait to delete.
         // -3 == source is heavyweight. Keep reference and move out to independent model.
         // -4 == source is the endpoint of a connection. Leave in place.
-        // Note that a "lightweight" part could also be shallow, in which case it is an external reference.
-        // A shallow part is configured (above) to inherit the external model, so when the part is merged,
+        // Note that a "lightweight" part could also be a proxy, in which case it is an external reference.
+        // A proxy is configured (above) to inherit the external model, so when the part is merged,
         // the dependent will end up referring directly to the external model.
         int count = source.getInt ("$count");
         boolean connected = source.child ("$connected") != null;
+        boolean lemsUses  = source.child ("$lemsUses" ) != null;
         if (count > 0)  // triage is necessary
         {
-            if (lems)  // lems is an attribute of the recipient rather than the source.
+            if (lemsUses  &&  ! proxy)
             {
-                // Since LEMS components are abstract models, it is best not to inject other models into them.
                 // Anything a LEMS component depends on must be even more abstract, and thus should be an independent model.
                 count = -3;
             }
@@ -425,23 +484,28 @@ public class ImportJob
         }
         if (count == -1  ||  count == -2)
         {
-            dependent.set ("");
-            dependent.clear ("$inherit");
-            for (MNode n : source)
+            if (! isChildrenType  &&  ! isConnect)  // Those two node types don't receive part injection, and don't change the name they use to reference the part.
             {
-                String key = n.key ();
-                if (key.equals ("$count"    )) continue;
-                if (key.equals ("$connected")) continue;
-                if (key.equals ("$lems"     )) continue;
-                if (key.equals ("$inherit"))  // Handle $inherit separately because it must override the existing $inherit, but mergeUnder() will not override.
+                dependent.set ("");
+                dependent.clear ("$inherit");
+                for (MNode n : source)
                 {
-                    dependent.set (key, n.get ()).mergeUnder (n);  // Still use mergeUnder() to bring in ID.
-                }
-                else
-                {
-                    MNode c = dependent.child (key);
-                    if (c == null) dependent.set (key, n);
-                    else           c.mergeUnder (n);
+                    String key = n.key ();
+                    if (key.equals ("$count"    )) continue;
+                    if (key.equals ("$connected")) continue;
+                    if (key.equals ("$lems"     )) continue;
+                    if (key.equals ("$lemsUses" )) continue;
+                    if (key.equals ("$proxy"    )) continue;
+                    if (key.equals ("$inherit"))  // Handle $inherit separately because it must override the existing $inherit, but mergeUnder() will not override.
+                    {
+                        dependent.set (key, n.get ()).mergeUnder (n);  // Still use mergeUnder() to bring in ID.
+                    }
+                    else
+                    {
+                        MNode c = dependent.child (key);
+                        if (c == null) dependent.set (key, n);
+                        else           c.mergeUnder (n);
+                    }
                 }
             }
             if (count == -1) models.clear (modelName, sourceName);
@@ -454,7 +518,7 @@ public class ImportJob
             {
                 dependent.set (inherit);  // TODO: Can't store ID under metadata node, but could tack it on the end as a comma-separated value.
             }
-            else if (dependent.get ().contains ("$connect"))
+            else if (isConnect)
             {
                 dependent.set ("$connect(\"" + inherit + "\")");
                 //dependent.set ("0", id);  // TODO: Store ID with $connect() ?
@@ -1978,7 +2042,7 @@ public class ImportJob
                     if (connection.preGroup.isEmpty ())
                     {
                         connection.part.set ("A", A);
-                        if (Acomponent) addDependency (connection.part.child ("A"), A);
+                        if (Acomponent) addDependencyFromConnection (connection.part.child ("A"), A);
                     }
                     else
                     {
@@ -2102,7 +2166,7 @@ public class ImportJob
             MNode part = network.childOrCreate (name);
             part.set ("$inherit", "\"Current Injection\"");
             MNode d = part.set ("A", input);
-            addDependency (d, input);
+            addDependencyFromConnection (d, input);
             part.set ("B", target);  // Like the input, the target could be folded into this connection part during dependency resolution, but that would actually make the model more ugly.
 
             MNode targetPart = network.child (target);
@@ -2293,6 +2357,8 @@ public class ImportJob
         String inherit = child.get ("$inherit").replace ("\"", "");
         if (inherit.isEmpty ()) return new ArrayList<MNode> ();
         MNode parent = models.child (modelName, inherit);
+        if (parent == child) parent = null;  // Prevent infinite loop on proxies.
+        // TODO: map names to neuroml parts
         if (parent == null) parent = AppData.models.child (inherit);
         if (parent == null) return new ArrayList<MNode> ();
         List<MNode> result = collectParents (parent);
@@ -2306,7 +2372,9 @@ public class ImportJob
         for (int i = parents.size () - 1; i >= 0; i--)
         {
             MNode parent = parents.get (i);
-            String type = parent.get ("$metadata", query);
+            String type = parent.get (nodeName, "$inherit").replace ("\"", "");  // Assumes single inheritance
+            if (! type.isEmpty ()) return type;
+            type = parent.get ("$metadata", query);
             if (! type.isEmpty ()) return type;
         }
         return nodeName;
@@ -2505,11 +2573,11 @@ public class ImportJob
             String inherit     = getAttribute (node, "extends");
             String description = getAttribute (node, "description");
             part = models.childOrCreate (modelName, name);
-            part.set ("$lems", "");
+            part.set ("$lems", "1");
             if (! inherit.isEmpty ())
             {
                 part.set ("$inherit", "\"" + inherit + "\"");
-                addDependency (part, inherit);
+                addDependencyFromLEMS (part, inherit);
             }
             if (! description.isEmpty ()) part.set ("$metadata", "description", description);
 
@@ -2567,8 +2635,7 @@ public class ImportJob
                         inherit = getAttribute (child, "type");
                         MNode childPart = part.childOrCreate (name);
                         childPart.set ("$inherit", inherit);
-                        addDependency (childPart, inherit);
-                        childPart.set ("$lems", "");
+                        addDependencyFromLEMS (childPart, inherit);
                         break;
                     case "Children":
                     case "Attachments":  // Similar to "Children" but added at runtime. N2A does not add subparts dynamically. Instead, they access their "parent" via a pointer. Like children, attached components must be modified to push any value that is mentioned by the parent as a reduction.
@@ -2582,7 +2649,7 @@ public class ImportJob
                         if (! inherit.isEmpty ())
                         {
                             part.set ("$metadata", name, inherit);
-                            addDependency (part.child ("$metadata", name), inherit);
+                            addDependencyFromLEMS (part.child ("$metadata", name), inherit);
                         }
                         break;
                     case "ComponentReference":    // alias of a referenced part; jLEMS does resolution; "local" means the referenced part is a sibling, otherwise resolution includes the entire hierarchy
@@ -2593,7 +2660,7 @@ public class ImportJob
                         inherit     = getAttribute (child, "type");
                         description = getAttribute (child, "description");
                         part.set (name, "$connect(\"" + inherit + "\")");
-                        if (! inherit    .isEmpty ()) addDependency (part.child (name), inherit);
+                        if (! inherit    .isEmpty ()) addDependencyFromLEMS (part.child (name), inherit);
                         if (! description.isEmpty ()) part.set (name, "$metadata", "description", description);
                         break;
                     case "Dynamics":
@@ -3105,8 +3172,7 @@ public class ImportJob
                     inherit = inherit.replace ("\")",         "");
                     targetNode.set ("");
                     targetNode.set ("$inherit", "\"" + inherit + "\"");
-                    targetNode.set ("$lems", "");
-                    if (sourceNode != targetNode) addDependency (targetNode, inherit);
+                    if (sourceNode != targetNode) addDependencyFromLEMS (targetNode, inherit);
                     // No need to call addDependency() if sourcePart is local, because it was already called when the $connect line was created.
                 }
             }
@@ -3163,7 +3229,6 @@ public class ImportJob
                                 if (pc.equals ("@")) continue;  // Retain the default equation
                                 if (! pc.startsWith ("@")) continue;
                                 pc = pc.substring (1);
-                                System.out.println ("comparing: " + pc + " with " + condition);
                                 if (pc.length () < condition.length ()  &&  condition.contains (pc))
                                 {
                                     kill.add (pc);

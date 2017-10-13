@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.tree;
 
+import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
@@ -29,11 +30,50 @@ public class NodeInherit extends NodeBase
 {
     protected static ImageIcon icon = ImageUtil.getImage ("inherit.png");
     protected List<Integer> columnWidths;
+    protected boolean       showID;
 
     public NodeInherit (MPart source)
     {
         this.source = source;
-        setUserObject (source.key () + "=" + source.get ());
+
+        // Check if all IDs match
+        String value = source.get ();
+        String pieces[] = value.split (",");
+        for (int i = 0; i < pieces.length; i++)
+        {
+            String parentName = pieces[i].replace ("\"", "");
+            MNode  parent     = AppData.models.child (parentName);
+            if (parent == null)
+            {
+                showID = true;
+                break;
+            }
+            else
+            {
+                String parentID = parent.get ("$metadata", "id");
+                String childID  = source.get (i);
+                if (! parentID.equals (childID))
+                {
+                    showID = true;
+                    break;
+                }
+            }
+        }
+
+        String result = source.key () + "=" + value;
+        if (showID) result = result + " (" + IDs () + ")";
+        setUserObject (result);
+    }
+
+    public String IDs ()
+    {
+        String IDs = "";
+        for (MNode i : source)
+        {
+            if (! IDs.isEmpty ()) IDs += ",";
+            IDs += i.get ();
+        }
+        return IDs;
     }
 
     @Override
@@ -94,6 +134,8 @@ public class NodeInherit extends NodeBase
 
         offset = tabs.get (1) - fm.stringWidth (result);
         result = result + pad (offset, fm) + source.get ();
+
+        if (showID) result = result + " (" + IDs () + ")";
 
         setUserObject (result);
     }
