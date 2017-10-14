@@ -35,19 +35,44 @@ public class ImportNeuroML implements Importer
         job.process (source);
         job.postprocess ();
 
+        MNode mainModel = job.models.child (job.modelName);
+        job.models.clear (job.modelName);
+
         UndoManager um = PanelModel.instance.undoManager;
         um.addEdit (new CompoundEdit ());
-        for (MNode m : job.models)
-        {
-            String key = m.key ();
-            if (key.equals (job.modelName)) continue;  // Save the best for last. That is, ensure that the main model is the one selected after all add operations are applied.
-            AddDoc add = new AddDoc (key, m);
-            add.wasShowing = false;
-            um.add (add);
-        }
-        MNode mainModel = job.models.child (job.modelName);
+        while (job.models.size () > 0) addModel (job.models.iterator ().next (), job.models, um);
+        // Save the best for last. That is, ensure that the main model is the one selected in the UI
+        // after all add operations are completed.
         if (mainModel != null) um.add (new AddDoc (job.modelName, mainModel));
         um.endCompoundEdit ();
+    }
+
+    public void addModel (MNode m, MNode models, UndoManager um)
+    {
+        String key = m.key ();
+        models.clear (key);
+
+        // Scan for any models we may depend on, and add them first.
+        // This minimizes redundant equations. For example, the NeuroML core
+        // model files frequently repeat equations that should be inherited.
+        for (MNode c : m)
+        {
+            String inherit = "";
+            if (c.key ().equals ("$inherit"))
+            {
+                inherit = c.get ().replace ("\"", "");
+            }
+            else if (c.child ("$inherit") != null)
+            {
+                inherit = c.get ("$inherit").replace ("\"", "");
+            }
+            MNode d = models.child (inherit);
+            if (d != null) addModel (d, models, um);
+        }
+
+        AddDoc add = new AddDoc (key, m);
+        add.wasShowing = false;
+        um.add (add);
     }
 
     @Override
