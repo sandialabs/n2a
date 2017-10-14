@@ -15,7 +15,7 @@ import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
-import gov.sandia.n2a.language.function.DollarEvent;
+import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
@@ -142,7 +142,7 @@ public class InternalBackendData
 
     public class EventTarget
     {
-        public DollarEvent event;          // For evaluating whether the event should be triggered. There may be several equivalent $event() calls in the part, so this is just one representative of the group.
+        public Event event;          // For evaluating whether the event should be triggered. There may be several equivalent event() calls in the part, so this is just one representative of the group.
         public int         valueIndex;     // position of bit array in valuesFloat
         public int         mask;           // an unsigned AND between this and the (int cast) entry from valuesFloat will indicate event active
         public int         edge  = RISE;
@@ -152,10 +152,10 @@ public class InternalBackendData
         public List<Variable> dependencies = new ArrayList<Variable> ();
 
         /**
-            Every $event() function has a trigger expression as its first parameter.
+            Every event() function has a trigger expression as its first parameter.
             This expression is tested during the finish phase of any monitored parts,
-            which are generally different from $event()'s home part. The home part
-            will keep an auxiliary variable which $event() updates each time it is
+            which are generally different from event()'s home part. The home part
+            will keep an auxiliary variable which event() updates each time it is
             tested. However, if the expression is a simple variable, then we compare the
             variable's buffered value instead. The variable is likely to be a reference
             to the monitored part (in which case the buffered value is stored there).
@@ -171,7 +171,7 @@ public class InternalBackendData
         public static final int CHANGE   = 2;
         public static final int NONZERO  = 3;
 
-        public EventTarget (DollarEvent event)
+        public EventTarget (Event event)
         {
             this.event = event;
         }
@@ -194,14 +194,14 @@ public class InternalBackendData
         /**
             Determine if this event should be triggered.
             Must be called during the finish phase, before buffered values are written to their primary storage.
-            @param targetPart Must be an instance of the part where the $event() function appears,
+            @param targetPart Must be an instance of the part where the event() function appears,
             even if it is called during update of another part.
             @return -2 if this event did not fire. -1 if it fired with no-care delivery.
             0 or greater if it fired and we specify the delay until delivery.
         **/
         public double test (Instance targetPart, Simulator simulator)
         {
-            // Evaluate any temporaries needed by operands in $event()
+            // Evaluate any temporaries needed by operands in event()
             InstanceTemporaries temp = new InstanceTemporaries (targetPart, simulator, false);
             for (Variable v : dependencies)
             {
@@ -332,7 +332,7 @@ public class InternalBackendData
     }
 
     /**
-        Find $event() calls and collate them (in case the same signature appears several different places
+        Find event() calls and collate them (in case the same signature appears several different places
         in the equation set).
         This must be done before the variables are sorted into sets according to attributes, because we
         may need to add the "externalRead" attribute to some of them.
@@ -347,11 +347,11 @@ public class InternalBackendData
 
             public boolean visit (Operator op)
             {
-                if (op instanceof DollarEvent)
+                if (op instanceof Event)
                 {
                     found = true;
-                    DollarEvent de = (DollarEvent) op;
-                    if (de.eventType == null)  // this $event has not yet been analyzed
+                    Event de = (Event) op;
+                    if (de.eventType == null)  // this event has not yet been analyzed
                     {
                         final EventTarget et = new EventTarget (de);
                         int targetIndex = eventTargets.indexOf (et);
@@ -369,7 +369,7 @@ public class InternalBackendData
                             if (valueIndex == -1)
                             {
                                 valueIndex = countLocalFloat++;
-                                namesLocalFloat.add ("$event_latch" + valueIndex);
+                                namesLocalFloat.add ("event_latch" + valueIndex);
                                 eventLatches.add (valueIndex);
                                 mask = 1;
                             }
@@ -379,7 +379,7 @@ public class InternalBackendData
                             if (mask > 0x20000000) valueIndex = -1;  // Allocate another float when we declare over 30 events ... but who would ever need that?
 
                             
-                            // Analyze the $event ...
+                            // Analyze the event ...
 
                             // Determine edge type
                             if (de.operands.length < 3)
@@ -399,7 +399,7 @@ public class InternalBackendData
                                 }
                                 else
                                 {
-                                    Backend.err.get ().println ("ERROR: Edge type for $event() must be specified with a string.");
+                                    Backend.err.get ().println ("ERROR: Edge type for event() must be specified with a string.");
                                     throw new Backend.AbortRun ();
                                 }
                             }
@@ -435,7 +435,7 @@ public class InternalBackendData
                             }
                             if (! et.trackOne  &&  et.edge != EventTarget.NONZERO)  // Expression, so create auxiliary variable. Aux not needed for NONZERO, because no change detection.
                             {
-                                et.track = new Variable ("$event_aux" + eventTargets.size (), 0);
+                                et.track = new Variable ("event_aux" + eventTargets.size (), 0);
                                 et.track.type = new Scalar (0);
                                 et.track.reference = new VariableReference ();
                                 et.track.reference.variable = et.track;
@@ -445,7 +445,7 @@ public class InternalBackendData
 
                             // Locate any temporaries for evaluation. TODO: for more efficiency, we could have separate lists of temporaries for the condition and delay operands
                             //   Tie into the dependency graph using a phantom variable (which can go away afterward without damaging the graph).
-                            final Variable phantom = new Variable ("$event");
+                            final Variable phantom = new Variable ("event");
                             phantom.uses = new IdentityHashMap<Variable,Integer> ();
                             for (int i = 0; i < et.event.operands.length; i++) et.event.operands[i].visit (new Visitor ()
                             {
@@ -520,7 +520,7 @@ public class InternalBackendData
                                             es.target       = et;
                                             es.monitorIndex = sourceBed.countLocalObject++;
                                             if (sourceContainer != s) es.reference = av.reference;  // null means self-reference, a special case handled in Part
-                                            sourceBed.namesLocalObject.add ("$event_monitor_" + s.prefix ());  // TODO: Consolidate monitors that share the same trigger condition.
+                                            sourceBed.namesLocalObject.add ("event_monitor_" + s.prefix ());  // TODO: Consolidate monitors that share the same trigger condition.
                                             sourceBed.eventSources.add (es);
                                             et.sources.put (sourceContainer, es);
                                         }
@@ -548,7 +548,7 @@ public class InternalBackendData
                                         }
                                         else
                                         {
-                                            Backend.err.get ().println ("ERROR: Condition for $event() must resolve to a number.");
+                                            Backend.err.get ().println ("ERROR: Condition for event() must resolve to a number.");
                                             throw new Backend.AbortRun ();
                                         }
                                     }
@@ -564,7 +564,7 @@ public class InternalBackendData
                                     es.target       = et;
                                     es.monitorIndex = countLocalObject++;
                                     // es.reference should be null for self
-                                    namesLocalObject.add ("$event_monitor_" + s.prefix ());
+                                    namesLocalObject.add ("event_monitor_" + s.prefix ());
                                     eventSources.add (es);
                                     et.sources.put (s, es);
                                 }
@@ -588,7 +588,7 @@ public class InternalBackendData
                             if (et.sources.size () > 1  &&  et.edge == EventTarget.NONZERO)
                             {
                                 et.timeIndex = countLocalFloat++;
-                                namesLocalFloat.add ("$event_time" + eventTargets.size ());
+                                namesLocalFloat.add ("event_time" + eventTargets.size ());
                             }
                         }
                     }

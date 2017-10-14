@@ -14,9 +14,9 @@ import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 
-public class DollarEvent extends Function
+public class Event extends Function
 {
-    public EventTarget eventType;  // If another $event in the same part shares the same parameters, it will have the same EventTarget.
+    public EventTarget eventType;  // If another event in the same part shares the same parameters, it will have the same EventTarget.
 
     public static Factory factory ()
     {
@@ -24,12 +24,12 @@ public class DollarEvent extends Function
         {
             public String name ()
             {
-                return "$event";
+                return "event";
             }
 
             public Operator createInstance ()
             {
-                return new DollarEvent ();
+                return new Event ();
             }
         };
     }
@@ -51,6 +51,6 @@ public class DollarEvent extends Function
 
     public String toString ()
     {
-        return "$event";
+        return "event";
     }
 }

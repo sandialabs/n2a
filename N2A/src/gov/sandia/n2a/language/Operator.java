@@ -9,7 +9,7 @@ package gov.sandia.n2a.language;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.function.AbsoluteValue;
 import gov.sandia.n2a.language.function.Cosine;
-import gov.sandia.n2a.language.function.DollarEvent;
+import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Exp;
 import gov.sandia.n2a.language.function.Floor;
 import gov.sandia.n2a.language.function.Gaussian;
@@ -216,7 +216,7 @@ public class Operator implements Cloneable, Comparable<Operator>
         // Functions
         register (AbsoluteValue.factory ());
         register (Cosine       .factory ());
-        register (DollarEvent  .factory ());
+        register (Event        .factory ());
         register (Exp          .factory ());
         register (Gaussian     .factory ());
         register (Floor        .factory ());

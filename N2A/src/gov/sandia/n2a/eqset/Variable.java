@@ -16,7 +16,7 @@ import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
-import gov.sandia.n2a.language.function.DollarEvent;
+import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Max;
 import gov.sandia.n2a.language.function.Min;
 import gov.sandia.n2a.language.operator.Add;
@@ -552,7 +552,7 @@ public class Variable implements Comparable<Variable>
 
     /**
         Scans the expressions in this variable, and the expression in any temporary variables they reference,
-        for any instance of $event(). Only analyzes within the current equation set.
+        for any instance of event(). Only analyzes within the current equation set.
     **/
     public boolean dependsOnEvent ()
     {
@@ -586,7 +586,7 @@ public class Variable implements Comparable<Variable>
             boolean found;
             public boolean visit (Operator op)
             {
-                if (op instanceof DollarEvent) found = true;
+                if (op instanceof Event) found = true;
                 return ! found;
             }
         }
