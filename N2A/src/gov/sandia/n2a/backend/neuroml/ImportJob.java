@@ -67,18 +67,19 @@ import tec.uom.se.unit.Units;;
 
 public class ImportJob
 {
-    LinkedList<File>          sources         = new LinkedList<File> ();
-    Set<File>                 alreadyIncluded = new HashSet<File> ();         // Similar to "sources", but keeps all history.
-    MNode                     models          = new MVolatile ();
-    String                    modelName       = "";
-    String                    primaryModel    = "";                           // A part tagged to be elevated to main model. When set, all other parts should be pushed out to independent models, and this one raised one level to assume the identity of the prime model.
-    Set<MNode>                dependents      = new HashSet<MNode> ();        // Nodes which contain a $inherit that refers to a locally defined part rather than a standard part. The local part must either be copied in or converted into a global model.
-    Map<String,Node>          morphologies    = new HashMap<String,Node> ();  // Map from IDs to top-level morphology blocks.
-    Map<String,Node>          biophysics      = new HashMap<String,Node> ();  // Map from IDs to top-level biophysics blocks.
-    Map<String,Node>          properties      = new HashMap<String,Node> ();  // Map from IDs to top-level intra- or extra-cellular property blocks.
-    Map<String,Cell>          cells           = new HashMap<String,Cell> ();
-    Map<String,Network>       networks        = new HashMap<String,Network> ();
-    Map<String,ComponentType> components      = new HashMap<String,ComponentType> ();
+    LinkedList<File>            sources         = new LinkedList<File> ();
+    Set<File>                   alreadyIncluded = new HashSet<File> ();         // Similar to "sources", but keeps all history.
+    MNode                       models          = new MVolatile ();
+    String                      modelName       = "";
+    String                      primaryModel    = "";                           // A part tagged to be elevated to main model. When set, all other parts should be pushed out to independent models, and this one raised one level to assume the identity of the prime model.
+    Set<MNode>                  dependents      = new HashSet<MNode> ();        // Nodes which contain a $inherit that refers to a locally defined part rather than a standard part. The local part must either be copied in or converted into a global model.
+    Map<String,Node>            morphologies    = new HashMap<String,Node> ();  // Map from IDs to top-level morphology blocks.
+    Map<String,Node>            biophysics      = new HashMap<String,Node> ();  // Map from IDs to top-level biophysics blocks.
+    Map<String,Node>            properties      = new HashMap<String,Node> ();  // Map from IDs to top-level intra- or extra-cellular property blocks.
+    Map<String,Cell>            cells           = new HashMap<String,Cell> ();
+    Map<String,Network>         networks        = new HashMap<String,Network> ();
+    Map<String,ComponentType>   components      = new HashMap<String,ComponentType> ();
+    Map<String,TreeSet<String>> aliases         = new HashMap<String,TreeSet<String>> ();
 
     Pattern floatParser   = Pattern.compile ("[-+]?(NaN|Infinity|([0-9]*\\.?[0-9]*([eE][-+]?[0-9]+)?))");
     Pattern forbiddenUCUM = Pattern.compile ("[.,;><=!&|+\\-*/%\\^~]");
@@ -533,7 +534,9 @@ public class ImportJob
 
     public void resolveChildren (MNode source)
     {
-        for (MNode child : source) resolveChildren (child);
+        List<MNode> children = new ArrayList<MNode> (source.size ());
+        for (MNode c : source) children.add (c);  // This level of indirection is necessary because the resolution process can change the contents of source while we are iterating over it.
+        for (MNode c : children) resolveChildren (c);
         if (dependents.contains (source)) resolve (source);
     }
 
@@ -2315,6 +2318,7 @@ public class ImportJob
 
         List<MNode> parents = collectParents (container);
         String inherit = typeFor (nodeName, parents);
+        if (inherit.isEmpty ()) inherit = nodeName;
         part.set ("$inherit", "\"" + inherit + "\"");
         addDependency (part, inherit);
 
@@ -2331,6 +2335,7 @@ public class ImportJob
                 inherit = a.getNodeValue ();
                 part.set (nodeName, "$inherit", "\"" + inherit + "\"");
                 addDependency (part.child (nodeName), inherit);
+                addAlias (inherit, nodeName);
             }
             else
             {
@@ -2344,6 +2349,17 @@ public class ImportJob
         }
 
         return part;
+    }
+
+    public void addAlias (String from, String to)
+    {
+        TreeSet<String> alternates = aliases.get (from);
+        if (alternates == null)
+        {
+            alternates = new TreeSet<String> ();
+            aliases.put (from, alternates);
+        }
+        alternates.add (to);
     }
 
     /**
@@ -2377,7 +2393,7 @@ public class ImportJob
             type = parent.get ("$metadata", query);
             if (! type.isEmpty ()) return type;
         }
-        return nodeName;
+        return "";
     }
 
     public MNode definitionFor (String name, List<MNode> parents)
@@ -2391,27 +2407,23 @@ public class ImportJob
         return null;
     }
 
-    public boolean isPart (String nodeName, List<MNode> parents)
+    public boolean isPart (String name, List<MNode> parents)
     {
-        for (int i = parents.size () - 1; i >= 0; i--)
-        {
-            MNode parent = parents.get (i);
-            MNode c = parent.child (nodeName);
-            if (c != null) return MPart.isPart (c);
-        }
-        return false;
+        MNode result = definitionFor (name, parents);
+        if (result == null) return false;
+        return MPart.isPart (result);
     }
 
     /**
         Locate the first parent in the inheritance hierarchy that resides in the models database rather than
         the current import.
     **/
-    public MNode findParent (MNode part)
+    public MNode findBasePart (MNode part)
     {
         String inherit = part.get ("$inherit").replace ("\"", "");
 
         MNode result = models.child (modelName, inherit);
-        if (result != null) return findParent (result);
+        if (result != null) return findBasePart (result);
 
         if (inherit.isEmpty ())
         {
@@ -2696,7 +2708,7 @@ public class ImportJob
             if (value.isEmpty ()  &&  ! select.isEmpty ())
             {
                 Path variablePath = new Path (select);
-                variablePath.resolveComponent (part);
+                variablePath.resolve (part);
                 MNode container = variablePath.container ();
 
                 switch (reduce)
@@ -3184,7 +3196,7 @@ public class ImportJob
             {
                 Path   path = e.getValue ();
                 String name = e.getKey ();
-                path.resolveComponent (part);
+                path.resolve (part);
                 if (path.isDirect)
                 {
                     path.finishDirectPath (part, name);
@@ -3263,7 +3275,7 @@ public class ImportJob
             }
 
             // Inject name mappings from parent part into pretty printer
-            MNode parent = findParent (part);
+            MNode parent = findBasePart (part);
             if (parent != null)
             {
                 MPart mparent = new MPart ((MPersistent) parent);
@@ -3323,7 +3335,7 @@ public class ImportJob
 
             if (quantity.isEmpty ()  &&  ! select.isEmpty ()) quantity = select + "/ignored";
             Path variablePath = new Path (quantity);
-            variablePath.resolveSimulation (part);
+            variablePath.resolve (part);
             MNode container = variablePath.container ();
             if (container == null) continue;
             String variable = variablePath.target ();
@@ -3391,57 +3403,52 @@ public class ImportJob
         }
 
         /**
-            Determine the parts along the path when assembling a ComponentType.
-            This method takes into account "Children" and "Attachments".
+            Determine the parts along the path.
         **/
-        public void resolveComponent (MNode root)
+        public void resolve (MNode root)
         {
             for (PathPart p : parts)
             {
                 if (! p.condition.isEmpty ()) isDirect = false;
 
-                String childrenName    = "backend.lems.children." + p.partName;
-                String childrenInherit = findChildrenType (root, childrenName);
-                if (childrenInherit.isEmpty ())
+                List<MNode> lineage = collectParents (root);
+                lineage.add (root);
+
+                MNode next = definitionFor (p.partName, lineage);
+                if (next == null)
                 {
-                    root = root.child (p.partName);
+                    Set<String> names = aliases.get (p.partName);
+                    if (names != null)
+                    {
+                        for (String n : names)
+                        {
+                            next = definitionFor (n, lineage);
+                            if (next != null) break;
+                        }
+                    }
                 }
-                else
+                if (next == null)
                 {
-                    root = models.child (modelName, childrenInherit);
-                    isDirect = false;
+                    String typeName = typeFor (p.partName, lineage);
+                    if (! typeName.isEmpty ())
+                    {
+                        next = models.child (modelName, typeName);
+                        isDirect = false;
+                    }
+                }
+                if (next != null)
+                {
+                    String connection = next.get ();
+                    if (connection.startsWith ("$connect"))
+                    {
+                        connection = connection.replace ("$connect(\"", "");
+                        connection = connection.replace ("\")",         "");
+                        if (! connection.isEmpty ()) next = models.child (modelName, connection);
+                    }
                 }
 
-                p.part = root;
-                if (root == null) break;
-            }
-        }
-
-        public String findChildrenType (MNode part, String childrenName)
-        {
-            String result = part.get ("$metadata", childrenName).replace ("\"", "");
-            if (! result.isEmpty ()) return result;
-            String inherit = part.get ("$inherit").replace ("\"", "");
-
-            MNode parent = models.child (modelName, inherit);
-            if (parent != null) return findChildrenType (parent, childrenName);
-
-            parent = AppData.models.child (inherit);
-            if (parent != null) return findChildrenType (parent, childrenName);
-
-            return "";
-        }
-
-        /**
-            Determine the parts along the path when preparing a simulation.
-            This method assumes that all subparts have been properly inserted under root.
-        **/
-        public void resolveSimulation (MNode root)
-        {
-            for (PathPart p : parts)
-            {
-                root = root.child (p.partName);
-                p.part = root;
+                root   = next;
+                p.part = next;
                 if (root == null) break;
             }
         }
