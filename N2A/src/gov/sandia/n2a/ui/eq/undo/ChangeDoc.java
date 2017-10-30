@@ -53,7 +53,7 @@ public class ChangeDoc extends Undoable
         mep.panelEquations.tree.requestFocusInWindow ();  // likewise, focus only moves if it is not already on equation tree
         mep.panelEquations.tree.setSelectionRow (0);
         mep.panelEquations.model.nodeChanged (root);
-        mep.panelMRU.list.repaint ();  // Because the change in document name does not directly notify the list model.
+        mep.panelMRU.renamed ();  // Because the change in document name does not directly notify the list model.
         mep.panelSearch.list.repaint ();
     }
 }

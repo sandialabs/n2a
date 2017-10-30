@@ -121,4 +121,10 @@ public class PanelMRU extends JPanel
         model.add (0, h);
         saveMRU ();
     }
+
+    public void renamed ()  // No need to specify doc, because it should already be at top of list
+    {
+        list.repaint ();
+        saveMRU ();
+    }
 }
