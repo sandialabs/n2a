@@ -47,7 +47,9 @@ public class Plot extends OutputParser
         	XYSeries series = new XYSeries (c.header);
             for (int r = 0; r < c.values.size (); r++)
             {
-                series.add (time.values.get (r + c.startRow), c.values.get (r));
+                Double value = c.values.get (r);
+                if (value.isInfinite ()) value = 0.0;  // JFreeChart chokes on infinity (how to determine a vertical scale for that?)
+                series.add (time.values.get (r + c.startRow), value);
             }
             dataset.addSeries (series);
         }
