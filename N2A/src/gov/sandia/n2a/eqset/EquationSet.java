@@ -141,7 +141,8 @@ public class EquationSet implements Comparable<EquationSet>
                 else
                 {
                     Variable v = new Variable (this, e);
-                    if (v.equations.size () > 0) variables.add (v);  // A variable with no equations has no meaning for simulation, and is most likely a revocation.
+                    // A variable with no equations and no accumulating combiner is likely to be a revocation.
+                    if (v.equations.size () > 0  ||  v.assignment != Variable.REPLACE) variables.add (v);
                 }
             }
             catch (ParseException pe)
@@ -221,7 +222,7 @@ public class EquationSet implements Comparable<EquationSet>
         // * Only one equation on the variable.
         // * Unconditional (conditional bindings are not permitted)
         // * No operators, only a name on RHS that appears like a variable name.
-        // * Both LHS and RHS are order 0 (not a derivatives)
+        // * Both LHS and RHS are order 0 (not derivatives)
         // * No variable in the current equation set matches the name.
         // $up is permitted. The explicit name of a higher container may also be used,
         // provided nothing matches the name on the way up.

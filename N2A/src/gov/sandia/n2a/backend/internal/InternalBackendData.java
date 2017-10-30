@@ -681,7 +681,7 @@ public class InternalBackendData
                             if (! v.hasAttribute ("preexistent")) globalMembers.add (v);
 
                             boolean external = false;
-                            if (v.hasAttribute ("externalWrite"))
+                            if (v.hasAttribute ("externalWrite")  ||  v.assignment != Variable.REPLACE)
                             {
                                 external = true;
                                 globalBufferedExternalWrite.add (v);
@@ -766,7 +766,7 @@ public class InternalBackendData
                             if (! v.hasAttribute ("preexistent")) localMembers.add (v);
 
                             boolean external = false;
-                            if (v.hasAttribute ("externalWrite"))
+                            if (v.hasAttribute ("externalWrite")  ||  v.assignment != Variable.REPLACE)
                             {
                                 external = true;
                                 localBufferedExternalWrite.add (v);
