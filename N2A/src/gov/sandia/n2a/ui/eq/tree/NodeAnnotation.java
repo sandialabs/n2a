@@ -91,14 +91,30 @@ public class NodeAnnotation extends NodeBase
         String value  = source.get ();
         if (! value.isEmpty ())
         {
-            String[] pieces = value.split ("\n", 2);
-            if (pieces.length > 1) value = pieces[0] + " ...";
-
             int offset = tabs.get (0).intValue ();
             if (! (getParent () instanceof NodeAnnotations))  // not in a $metadata block, so may share tab stops with equations
             {
                 offset = tabs.get (1).intValue () - offset;
             }
+            int width = PanelModel.instance.panelEquations.tree.getWidth () - offset;  // Available width for displaying value (not including key).
+
+            boolean addEllipsis = false;
+            String[] pieces = value.split ("\n", 2);
+            if (pieces.length > 1)
+            {
+                value = pieces[0];
+                addEllipsis = true;
+            }
+            int valueWidth = fm.stringWidth (value);
+            if (valueWidth > width)
+            {
+                width -= fm.getMaxAdvance () * 2;  // allow 2em for ellipsis
+                int characters = (int) Math.floor ((double) value.length () * width / valueWidth);  // A crude estimate. Just take a ratio of the number of characters, rather then measuring them exactly.
+                value = value.substring (0, characters);
+                addEllipsis = true;
+            }
+            if (addEllipsis) value += " ...";
+
             offset -= fm.stringWidth (result);
             result = result + pad (offset, fm) + "= " + value;
         }

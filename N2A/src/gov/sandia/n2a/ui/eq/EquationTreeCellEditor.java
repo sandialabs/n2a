@@ -11,6 +11,7 @@ import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -19,7 +20,6 @@ import java.awt.event.FocusListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
-import java.util.Arrays;
 import java.util.EventObject;
 
 import javax.swing.AbstractAction;
@@ -190,8 +190,8 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
 
         multiLineEditor.getDocument ().addUndoableEditListener (undoManager);
         inputMap = multiLineEditor.getInputMap ();
-        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),           "none");
-        inputMap.put (KeyStroke.getKeyStroke ("control ENTER"),   "insert-break");
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),           "insert-break");
+        inputMap.put (KeyStroke.getKeyStroke ("control ENTER"),   "none");
         inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
         inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
         inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
@@ -233,7 +233,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         {
             public void keyPressed (KeyEvent e)
             {
-                if (e.getKeyCode () == KeyEvent.VK_ENTER  &&  ! e.isControlDown ()) stopCellEditing ();
+                if (e.getKeyCode () == KeyEvent.VK_ENTER  &&  e.isControlDown ()) stopCellEditing ();
             }
         });
     }
@@ -246,8 +246,12 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         Font font   = renderer.getFontFor (editingNode);
         String text = editingNode.getText (expanded, true);
 
+        FontMetrics fm = tree.getFontMetrics (font);
+        int textWidth = fm.stringWidth (text);
+        int width     = tree.getWidth ();
+
         if (editingComponent != null) editingContainer.remove (editingComponent);
-        if (text.contains ("\n")  ||  multiLineRequested)
+        if (text.contains ("\n")  ||  textWidth > width  ||  multiLineRequested)
         {
             editingComponent = multiLinePane;
             multiLineEditor.setText (text);
