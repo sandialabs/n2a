@@ -222,6 +222,13 @@ public class Variable implements Comparable<Variable>
         }
     }
 
+    public static int equationCount (MNode v)
+    {
+        int result = 0;
+        for (MNode e : v) if (e.key ().startsWith ("@")) result++;
+        return result;
+    }
+
     public EquationEntry find (EquationEntry query)
     {
         EquationEntry result = equations.floor (query);

@@ -196,8 +196,8 @@ public class ImportJob
                     break;
                 case "decayingPoolConcentrationModel":
                 case "fixedFactorConcentrationModel":
-                    MNode part = genericPart (child, model);
-                    part.clear ("ion");
+                case "fixedFactorConcentrationModelTraub":
+                    concentrationModel (child);
                     break;
                 case "blockingPlasticSynapse":
                     blockingPlasticSynapse (child);
@@ -209,9 +209,14 @@ public class ImportJob
                     Cell cell = new Cell (child);
                     cells.put (cell.id, cell);
                     break;
+                case "poissonFiringSynapse":
+                case "transientPoissonFiringSynapse":
                 case "spikeArray":
                 case "timedSynapticInput":
-                    spikeArray (child);
+                    spikingSynapse (child);
+                    break;
+                case "compoundInput":
+                    compoundInput (child);
                     break;
                 case "network":
                     Network network = new Network (child);
@@ -380,154 +385,171 @@ public class ImportJob
         boolean isChildrenType = dependent.key ().startsWith ("backend.lems.children");
         boolean isConnect      = dependent.get ().contains ("$connect");
 
-        String sourceName = dependent.get ("$inherit");
-        if (sourceName.isEmpty ()) sourceName = dependent.get ();  // For connections, the part name might be a direct value.
-        if (sourceName.startsWith ("$connect"))
+        String dependentInherit = dependent.get ("$inherit");
+        if (dependentInherit.isEmpty ()) dependentInherit = dependent.get ();  // For connections, the part name might be a direct value.
+        if (dependentInherit.startsWith ("$connect"))
         {
-            sourceName = sourceName.replace ("$connect(", "");
-            sourceName = sourceName.replace (")",         "");
-        }
-        sourceName = sourceName.replace ("\"", "");
-        MNode source = models.child (modelName, sourceName);
-        if (source == null) return;
-
-        resolveChildren (source);  // Ensure that the source part has no unresolved dependencies of its own before using it.
-
-        boolean proxy;
-        if (source.child ("$proxy") == null)
-        {
-            proxy = true;
-            String inherit = source.key ();
-            for (MNode c : source)
-            {
-                String key = c.key ();
-                if (key.equals ("$count"    )) continue;
-                if (key.equals ("$connected")) continue;
-                if (key.equals ("$lems"     )) continue;
-                if (key.equals ("$lemsUses" )) continue;
-                if (key.equals ("$inherit")  &&  c.get ().replace ("\"", "").equals (inherit)) continue;  // Inheriting our own name is characteristic of being a proxy.
-                proxy = false;  // key is something other than our temporary special keys, so not shallow
-                break;
-            }
-            if (proxy)
-            {
-                source.set ("$inherit", "\"" + inherit + "\"");
-                MNode parent = AppData.models.child (inherit);
-                if (parent == null)
-                {
-                    source.set ("$proxy", "1");
-                }
-                else
-                {
-                    source.set ("$proxy", "found");
-                    String id = parent.get ("$metadata", "id");
-                    if (! id.isEmpty ()) source.set ("$inherit", "0", id);
-                }
-            }
-            else
-            {
-                source.set ("$proxy", "0");
-            }
-        }
-        else
-        {
-            proxy = ! source.get ("$proxy").equals ("0");
+            dependentInherit = dependentInherit.replace ("$connect(", "");
+            dependentInherit = dependentInherit.replace (")",         "");
         }
 
-        // Triage
-        // -1 == source has exactly one user. Merge and delete immediately.
-        // -2 == source is lightweight, but has multiple users. Merge and wait to delete.
-        // -3 == source is heavyweight. Keep reference and move out to independent model.
-        // -4 == source is the endpoint of a connection. Leave in place.
-        // Note that a "lightweight" part could also be a proxy, in which case it is an external reference.
-        // A proxy is configured (above) to inherit the external model, so when the part is merged,
-        // the dependent will end up referring directly to the external model.
-        int count = source.getInt ("$count");
-        boolean connected = source.child ("$connected") != null;
-        boolean lemsUses  = source.child ("$lemsUses" ) != null;
-        if (count > 0)  // triage is necessary
+        String[] sourceNames = dependentInherit.split (",");
+        for (int sourceIndex = 0; sourceIndex < sourceNames.length; sourceIndex++)
         {
-            if (lemsUses  &&  ! proxy)
+            String sourceName = sourceNames[sourceIndex].replace ("\"", "");
+            MNode source = models.child (modelName, sourceName);
+            if (source == null) continue;
+
+            resolveChildren (source);  // Ensure that the source part has no unresolved dependencies of its own before using it.
+
+            boolean proxy;
+            if (source.child ("$proxy") == null)
             {
-                // Anything a LEMS component depends on must be even more abstract, and thus should be an independent model.
-                count = -3;
-            }
-            else if (count == 1)
-            {
-                count = -1;
-            }
-            else if (connected)
-            {
-                count = -4;
-            }
-            else  // count > 1 and not connected, so could be moved out to independent model
-            {
-                // Criterion: If a part has subparts, then it is heavy-weight and should be moved out.
-                // A part that merely sets some parameters on an inherited model is lightweight, and should simply be merged everywhere it is used.
-                boolean heavy = false;
-                for (MNode s : source)
+                proxy = true;
+                String inherit = source.key ();
+                for (MNode c : source)
                 {
-                    if (MPart.isPart (s))
-                    {
-                        heavy = true;
-                        break;
-                    }
-                }
-                if (heavy) count = -3;
-                else       count = -2;
-            }
-            source.set ("$count", count);
-            if (count == -3)
-            {
-                MNode id = source.childOrCreate ("$metadata", "id");
-                if (id.get ().isEmpty ()) id.set (AddDoc.generateID ());
-            }
-        }
-        if (count == -1  ||  count == -2)
-        {
-            if (! isChildrenType  &&  ! isConnect)  // Those two node types don't receive part injection, and don't change the name they use to reference the part.
-            {
-                dependent.set ("");
-                dependent.clear ("$inherit");
-                for (MNode n : source)
-                {
-                    String key = n.key ();
+                    String key = c.key ();
                     if (key.equals ("$count"    )) continue;
                     if (key.equals ("$connected")) continue;
                     if (key.equals ("$lems"     )) continue;
                     if (key.equals ("$lemsUses" )) continue;
-                    if (key.equals ("$proxy"    )) continue;
-                    if (key.equals ("$inherit"))  // Handle $inherit separately because it must override the existing $inherit, but mergeUnder() will not override.
+                    if (key.equals ("$inherit")  &&  c.get ().replace ("\"", "").equals (inherit)) continue;  // Inheriting our own name is characteristic of being a proxy.
+                    proxy = false;  // key is something other than our temporary special keys, so not shallow
+                    break;
+                }
+                if (proxy)
+                {
+                    source.set ("$inherit", "\"" + inherit + "\"");  // proxies only have single inheritance
+                    MNode parent = AppData.models.child (inherit);
+                    if (parent == null)
                     {
-                        dependent.set (key, n.get ()).mergeUnder (n);  // Still use mergeUnder() to bring in ID.
+                        source.set ("$proxy", "1");
                     }
                     else
                     {
+                        source.set ("$proxy", "found");
+                        String id = parent.get ("$metadata", "id");
+                        if (! id.isEmpty ()) source.set ("$inherit", "0", id);
+                    }
+                }
+                else
+                {
+                    source.set ("$proxy", "0");
+                }
+            }
+            else
+            {
+                proxy = ! source.get ("$proxy").equals ("0");
+            }
+
+            // Triage
+            // -1 == source has exactly one user. Merge and delete immediately.
+            // -2 == source is lightweight, but has multiple users. Merge and wait to delete.
+            // -3 == source is heavyweight. Keep reference and move out to independent model.
+            // -4 == source is the endpoint of a connection. Leave in place.
+            // Note that a "lightweight" part could also be a proxy, in which case it is an external reference.
+            // A proxy is configured (above) to inherit the external model, so when the part is merged,
+            // the dependent will end up referring directly to the external model.
+            int count = source.getInt ("$count");
+            boolean connected = source.child ("$connected") != null;
+            boolean lemsUses  = source.child ("$lemsUses" ) != null;
+            if (count > 0)  // triage is necessary
+            {
+                if (lemsUses  &&  ! proxy)
+                {
+                    // Anything a LEMS component depends on must be even more abstract, and thus should be an independent model.
+                    count = -3;
+                }
+                else if (count == 1)
+                {
+                    count = -1;
+                }
+                else if (connected)
+                {
+                    count = -4;
+                }
+                else  // count > 1 and not connected, so could be moved out to independent model
+                {
+                    // Criterion: If a part has subparts, then it is heavy-weight and should be moved out.
+                    // A part that merely sets some parameters on an inherited model is lightweight, and should simply be merged everywhere it is used.
+                    boolean heavy = false;
+                    for (MNode s : source)
+                    {
+                        if (MPart.isPart (s))
+                        {
+                            heavy = true;
+                            break;
+                        }
+                    }
+                    if (heavy) count = -3;
+                    else       count = -2;
+                }
+                source.set ("$count", count);
+                if (count == -3)
+                {
+                    MNode id = source.childOrCreate ("$metadata", "id");
+                    if (id.get ().isEmpty ()) id.set (AddDoc.generateID ());
+                }
+            }
+            if (count == -1  ||  count == -2)
+            {
+                if (! isChildrenType  &&  ! isConnect)  // Those two node types don't receive part injection, and don't change the name they use to reference the part.
+                {
+                    dependent.set ("");
+
+                    sourceNames[sourceIndex] = source.get ("$inherit");
+                    String inherit = "";
+                    for (int i = 0; i < sourceNames.length; i++) inherit += "," + sourceNames[i];
+                    inherit = inherit.substring (1);
+                    if (inherit.isEmpty ())  // This can happen if source is a Cell, which currently lacks a base class since it is merely a container for segments.
+                    {
+                        dependent.clear ("$inherit");
+                    }
+                    else
+                    {
+                        dependent.set ("$inherit", inherit);
+                        dependent.set ("$inherit", sourceIndex, source.get ("$inherit", "0"));  // Assume single-inheritance in sources
+                    }
+
+                    for (MNode n : source)
+                    {
+                        String key = n.key ();
+                        if (key.equals ("$count"    )) continue;
+                        if (key.equals ("$connected")) continue;
+                        if (key.equals ("$lems"     )) continue;
+                        if (key.equals ("$lemsUses" )) continue;
+                        if (key.equals ("$proxy"    )) continue;
+                        if (key.equals ("$inherit"  )) continue;  // already handled above
+
                         MNode c = dependent.child (key);
                         if (c == null) dependent.set (key, n);
                         else           c.mergeUnder (n);
                     }
                 }
+                if (count == -1) models.clear (modelName, sourceName);
             }
-            if (count == -1) models.clear (modelName, sourceName);
-        }
-        else if (count == -3)
-        {
-            String inherit = modelName + " " + sourceName;
-            String id      = source.get ("$metadata", "id");
-            if (isChildrenType)
+            else if (count == -3)
             {
-                dependent.set (inherit);  // TODO: Can't store ID under metadata node, but could tack it on the end as a comma-separated value.
-            }
-            else if (isConnect)
-            {
-                dependent.set ("$connect(\"" + inherit + "\")");
-                //dependent.set ("0", id);  // TODO: Store ID with $connect() ?
-            }
-            else
-            {
-                dependent.set ("$inherit", "\"" + inherit + "\"");
-                dependent.set ("$inherit", "0", id);
+                String inherit = modelName + " " + sourceName;
+                String id      = source.get ("$metadata", "id");
+                if (isChildrenType)
+                {
+                    dependent.set (inherit);  // TODO: Can't store ID under metadata node, but could tack it on the end as a comma-separated value.
+                }
+                else if (isConnect)
+                {
+                    dependent.set ("$connect(\"" + inherit + "\")");
+                    //dependent.set ("0", id);  // TODO: Store ID with $connect() ?
+                }
+                else
+                {
+                    sourceNames[sourceIndex] = "\"" + inherit + "\"";
+                    inherit = "";
+                    for (int i = 0; i < sourceNames.length; i++) inherit += "," + sourceNames[i];
+                    dependent.set ("$inherit", inherit.substring (1));
+                    dependent.set ("$inherit", sourceIndex, id);
+                }
             }
         }
     }
@@ -569,18 +591,28 @@ public class ImportJob
         {
             if (child.getNodeType () != Node.ELEMENT_NODE) continue;
             String name = child.getNodeName ();
-            if      (name.startsWith ("q10" )) q10ConductanceScaling (child, part);
-            else if (name.startsWith ("gate")) gate                  (child, part);
-            else                               genericPart           (child, part);
+            if      (name.startsWith ("q10" )) q10         (child, part);
+            else if (name.startsWith ("gate")) gate        (child, part);
+            else                               genericPart (child, part);
         }
     }
 
-    public void q10ConductanceScaling (Node node, MNode part)
+    public void q10 (Node node, MNode container)
     {
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            if (child.getNodeType () == Node.ELEMENT_NODE) part.set (child.getNodeName (), child.getNodeValue ());
-        }
+        // "type" probably switches between fixed and exponential, but there is no example/guidance on its use
+        String fixedQ10         = getAttribute (node, "fixedQ10");
+        String q10Factor        = getAttribute (node, "q10Factor");
+        String experimentalTemp = getAttribute (node, "experimentalTemp");
+
+        String id = "Q10Parameters";
+        int suffix = 2;
+        while (container.child (id) != null) id = "Q10Parameters" + suffix++;
+
+        MNode part = container.set (id, "");
+        part.set ("$inherit", "Q10");
+        if (! fixedQ10        .isEmpty ()) part.set ("$up.Q10Scaling", "*" + fixedQ10);
+        if (! q10Factor       .isEmpty ()) part.set ("root",           q10Factor);
+        if (! experimentalTemp.isEmpty ()) part.set ("temperature0",   experimentalTemp);
     }
 
     public void gate (Node node, MNode container)
@@ -617,9 +649,14 @@ public class ImportJob
                 case "notes":
                     part.set ("$metadata", "notes", getText (child));
                     break;
+                case "q10Settings":
+                    q10 (child, part);
+                    break;
                 case "openState":
                 case "closedState":
-                    part.set (getAttribute (child, "id"), "$inherit", "\"" + name + "\"");
+                    id = getAttribute (child, "id");
+                    part.set (id, "$inherit", "\"Kinetic State\"");
+                    part.set (id, "relativeConductance", name.equals ("openState") ? "1" : "0");
                     break;
                 case "forwardTransition":
                 case "reverseTransition":
@@ -659,7 +696,7 @@ public class ImportJob
     {
         String type = getAttribute (node, "type");
         MNode part = container.set (node.getNodeName (), "");
-        part.set ("$inherit", "\"" + type + "\"");
+        part.set ("$inherit", "\"" + type + "\"");  // TODO: name should map to one of the simplified part names (that don't distinguish dimension)
         addDependency (part, type);
 
         NamedNodeMap attributes = node.getAttributes ();
@@ -706,6 +743,24 @@ public class ImportJob
         }
     }
 
+    public void concentrationModel (Node node)
+    {
+        MNode part = genericPart (node, models.child (modelName));
+        part.clear ("ion");  // According to comment in NeuroML.xsd, this field should be the same as id.
+        String inherit = node.getNodeName ();
+        if (inherit.endsWith ("Traub"))  // Get rid of vacuous Traub part
+        {
+            inherit.replace ("Traub", "");
+            part.set ("$inherit", "\"" + inherit + "\"");
+            String beta = part.get ("beta");
+            String phi  = part.get ("phi");
+            part.clear ("beta");
+            part.clear ("phi");
+            part.set ("tau", "1/" + beta);
+            part.set ("rho", phi + "*1e-9");
+        }
+    }
+
     public class Cell
     {
         String               id;
@@ -721,7 +776,9 @@ public class ImportJob
         {
             id   = getAttribute (node, "id");
             cell = models.childOrCreate (modelName, id);
-            cell.set ("$inherit", "\"cell\"");
+            cell.set ("$metadata", "backend.neuroml.part", "cell");
+            // At present, cell is merely a container. It inherits nothing.
+            // Every cell must have at least one segment to be useful.
 
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
@@ -970,7 +1027,7 @@ public class ImportJob
                             property.set ("Vpeak", value);
                             break;
                         case "specificCapacitance":
-                            property.set ("C", value);
+                            property.set ("Cspecific", value);
                             break;
                         case "initMembPotential":
                             property.set ("V", value + "@$init");
@@ -1031,12 +1088,59 @@ public class ImportJob
         {
             MNode subpart = property.iterator ().next ();  // retrieve the first (and only) subpart
 
-            String name = node.getNodeName ();
-            subpart.set ("$inherit", "\"" + name + "\"");
+            String name        = node.getNodeName ();
+            String ionChannel  = subpart.get ("ionChannel");
+            String erev        = subpart.get ("erev");
+            String number      = subpart.get ("number");
+            String condDensity = subpart.get ("condDensity");
 
-            String ionChannel = subpart.get ("ionChannel");
+            String two = "";
+            if (name.endsWith ("Ca2"))
+            {
+                two = "2";
+                name = name.replace ("Ca2", "");
+            }
+
+            name = name.replace ("NonUniform", "");  // The varying parameter is handled elsewhere.
+
+            // TODO: deal with GHK variants
+
+            // multiple inheritance, combining the ion channel with the given mix-in
+            String potential = "";
+            if      (name.endsWith ("Nernst")) potential = "Nernst";
+            else if (name.contains ("GHK2"  )) potential = "GHK 2";
+            else if (name.contains ("GHK"   )) potential = "GHK";
+            if (! potential.isEmpty ())
+            {
+                // For now, assume that ion channel is already defined
+                String species = models.getOrDefault (modelName, ionChannel, "$metadata", "species", "ca");
+                subpart.set ("c", species + two);  // connect to species/concentration model, which the user is responsible to create 
+                subpart.set ("$inherit", "\"Potential " + potential + "\",\"" + ionChannel + "\"");
+            }
+            else
+            {
+                subpart.set ("$inherit", "\"" + ionChannel + "\"");
+            }
+
             subpart.clear ("ionChannel");
-            subpart.set ("ionChannel", "$inherit", "\"" + ionChannel + "\"");
+            subpart.clear ("erev");
+            subpart.clear ("number");
+            subpart.clear ("condDensity");
+            if (! erev.isEmpty ()) subpart.set ("E", erev);
+            if (! number.isEmpty ())
+            {
+                subpart.set ("population", number);
+                subpart.set ("population", "$metadata", "public", "");
+                subpart.set ("population", "$metadata", "backend.neuroml.param", "number");
+                subpart.set ("Gall", "G1*population");
+            }
+            if (! condDensity.isEmpty ())
+            {
+                subpart.set ("Gdensity", condDensity);
+                subpart.set ("Gdensity", "$metadata", "public", "");
+                subpart.set ("Gdensity", "$metadata", "backend.neuroml.param", "condDensity");
+                if (! name.contains ("GHK")) subpart.set ("Gall", "Gdensity*surfaceArea");
+            }
 
             String parentGroup = property.get ();
             Map<String,MNode> groupProperty = new TreeMap<String,MNode> ();
@@ -1098,8 +1202,24 @@ public class ImportJob
                         MNode subpart = property.iterator ().next ();
                         String concentrationModel = subpart.get ("concentrationModel");
                         subpart.clear ("concentrationModel");
-                        subpart.set ("$inherit", "\"" + concentrationModel + "\"");
-                        // Dependency will be tagged when this property is added to segments.
+                        subpart.set ("$inherit", "\"" + concentrationModel + "\"");  // Dependency will be tagged when this property is added to segments.
+                        if (subpart.child ("z") == null)
+                        {
+                            int z = 1;  // The most common charge on an ion.
+                            String ion = subpart.key ();
+                            switch (ion)
+                            {
+                                case "ca":
+                                case "ca2":
+                                case "mg":
+                                    z = 2;
+                                    break;
+                                case "cl":
+                                    z = -1;
+                                    break;
+                            }
+                            subpart.set ("z", z);
+                        }
                         break;
                     case "resistivity":
                         property.set ("R", biophysicalUnits (getAttribute (p, "value")));
@@ -1354,6 +1474,8 @@ public class ImportJob
                     String groupName = groupIndex.get (cs.column);  // a name from the original set of groups, not the new groups
                     part.mergeUnder (cell.child ("$group", groupName));
                 }
+                part.set ("$inherit", "\"Segment\"");
+                addDependency (part, "Segment");
                 for (MNode property : part)
                 {
                     String inherit = property.get ("$inherit").replace ("\"", "");
@@ -1383,6 +1505,17 @@ public class ImportJob
                     if (a != 1) value += "*" + a;
                     if (b != 0) value += "+" + b;
                     v.set (value);
+                }
+
+                // Link ion currents to concentration models
+                for (MNode v : part)
+                {
+                    String inherit = v.get ("$inherit").replace ("\"", "");
+                    String species = models.get (modelName, inherit, "$metadata", "species");
+                    if (species.isEmpty ()) continue;
+                    if (part.child (species) == null) continue;  // Don't add connection if the user has not provided the concentration model.
+                    v.set ("c", species);  // connection to peer object, generally singleton to singleton
+                    v.set ("c.I", "+I");
                 }
 
                 // Add segments
@@ -1424,7 +1557,7 @@ public class ImportJob
                 if (connection == null)
                 {
                     connection = cell.set (connectionName, "");
-                    connection.set ("$inherit", "\"Coupling Voltage\"");
+                    connection.set ("$inherit", "\"Coupling\"");
                     connection.set ("A", s.parent.part.key ());
                     connection.set ("B", s       .part.key ());
                     connection.set ("R", "$kill");  // Force use of container's value.
@@ -1659,11 +1792,30 @@ public class ImportJob
         return safeUnit (units);
     }
 
-    public void spikeArray (Node node)
+    /**
+        Use multiple-inheritance to implement synapse with built-in spike generator.
+    **/
+    public void spikingSynapse (Node node)
     {
-        String id = getAttribute (node, "id");
+        String id      = getAttribute (node, "id");
+        String inherit = getAttribute (node, "synapse");
+        // "spikeTarget" appears to be redundant with "synapse". Probably exists due to some oddity in LEMS.
+
         MNode part = models.childOrCreate (modelName, id);
-        part.set ("$inherit", "\"" + node.getNodeName () + "\"");
+
+        if (! inherit.isEmpty ())
+        {
+            addDependency (part, inherit);
+            inherit = "\"" + inherit + "\"";
+        }
+        String nodeName = node.getNodeName ();
+        if (nodeName.contains ("FiringSynapse"))  // For "spikeArray" (with no synapse) there is no part in the repository. It is all generated at the end of this function.
+        {                
+            addDependency (part, nodeName);
+            if (! inherit.isEmpty ()) inherit += ",";
+            inherit += "\"" + nodeName + "\"";
+        }
+        if (! inherit.isEmpty ()) part.set ("$inherit", inherit);
 
         NamedNodeMap attributes = node.getAttributes ();
         int count = attributes.getLength ();
@@ -1671,21 +1823,49 @@ public class ImportJob
         {
             Node a = attributes.item (i);
             String name = a.getNodeName ();
-            if (name.equals ("id")) continue;
+            if (name.equals ("id"         )) continue;
+            if (name.equals ("synapse"    )) continue;
+            if (name.equals ("spikeTarget")) continue;
             part.set (name, biophysicalUnits (a.getNodeValue ()));
         }
 
-        // TODO: sort the spikes, to guarantee monotonicity
-        String spikes = "[";
+        Map<Double,String> sorted = new TreeMap<Double,String> ();
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
             if (child.getNodeType () == Node.ELEMENT_NODE  &&  child.getNodeName ().equals ("spike"))
             {
-                if (spikes.length () > 1) spikes += ";";
-                spikes += biophysicalUnits (getAttribute (child, "time"));
+                String time = biophysicalUnits (getAttribute (child, "time"));
+                sorted.put (Matrix.convert (time), time);
             }
         }
-        part.set ("spikes", spikes + "]");
+        if (sorted.size () > 0)  // generate spikeArray-like code
+        {
+            String spikes = "";
+            for (String s : sorted.values ()) spikes += ";" + s;
+            spikes += ";inf";  // This shuts down spiking after last specified time.
+            spikes = "[" + spikes.substring (1) + "]";
+            part.set ("spikes", spikes);
+
+            part.set ("spike", "$t>=spikes(spikeIndex)");
+            part.set ("spikeIndex", "@$init", "0");
+            part.set ("spikeIndex", "@spike", "spikeIndex+1");
+        }
+
+        part.set ("in", ":spike");  // bind event ports
+    }
+
+    public void compoundInput (Node node)
+    {
+        MNode part = genericPart (node, models.child (modelName));
+        String inherit = part.get ("$inherit").replace ("\"", "");
+        part.clear ("$inherit");
+        if (! inherit.isEmpty ()) removeDependency (part, inherit);
+        part.set ("$metadata", "backend.neuroml.part", "compoundInput");
+        for (MNode c : part)
+        {
+            if (c.child ("$inherit") == null) continue;  // not a sub-part
+            c.set ("B", "$kill");  // force sub-part to get its connection binding from us
+        }
     }
 
     public class Network
@@ -1694,6 +1874,7 @@ public class ImportJob
         MNode network;
         List<Node> extracellularProperties = new ArrayList<Node> ();
         List<Node> projections             = new ArrayList<Node> ();
+        List<Node> explicitInputs          = new ArrayList<Node> ();
 
         public Network (Node node)
         {
@@ -1730,7 +1911,7 @@ public class ImportJob
                         projections.add (child);
                         break;
                     case "explicitInput":
-                        explicitInput (child);
+                        explicitInputs.add (child);
                         break;
                 }
             }
@@ -1903,7 +2084,7 @@ public class ImportJob
             MNode base = new MVolatile ();
             base.set ("A", A);
             base.set ("B", B);
-            if      (projectionType.equals ("continuousProjection")) inherit = "continuousProjection";
+            if      (projectionType.equals ("continuousProjection")) inherit = "continuousConnection";  // TODO: map this name
             else if (projectionType.equals ("inputList"))            inherit = "Current Injection";
 
             NamedNodeMap attributes = node.getAttributes ();
@@ -1975,7 +2156,7 @@ public class ImportJob
                 if (instancesB != null) postCell = instancesB.getOrDefault (postCell, "$index", postCell);
 
                 int preSegmentIndex = 0;
-                boolean preSegmentSingleton = false;
+                boolean preSegmentSingleton = true;
                 if (preSegment >= 0)
                 {
                     // preSegment is the ID, effectively the row in the segment*group matrix
@@ -2003,7 +2184,7 @@ public class ImportJob
                 }
 
                 int postSegmentIndex = 0;
-                boolean postSegmentSingleton = false;
+                boolean postSegmentSingleton = true;
                 if (postSegment >= 0)
                 {
                     String cellID = network.get (B, "$inherit").replace ("\"", "");
@@ -2167,22 +2348,45 @@ public class ImportJob
 
             String name = input + "_to_" + target;
             MNode part = network.childOrCreate (name);
-            part.set ("$inherit", "\"Current Injection\"");
-            MNode d = part.set ("A", input);
-            addDependencyFromConnection (d, input);
+            part.set ("$inherit", "\"" + input + "\"");
+            addDependency (part, input);
+
+            // A cell cannot be the direct target of a connection, so find the first segment and use it instead.
+            MNode segment = null;
+            MNode cell = models.child (modelName, target);
+            if (cell != null)
+            {
+                for (MNode p : cell)
+                {
+                    if (p.get ("$inherit").contains ("Segment"))
+                    {
+                        if (segment == null  ||  p.get ().toLowerCase ().equals ("soma")) segment = p;
+                    }
+                }
+            }
+            if (segment != null) target += "." + segment.key ();
+
             part.set ("B", target);  // Like the input, the target could be folded into this connection part during dependency resolution, but that would actually make the model more ugly.
 
+            String p = "";
             MNode targetPart = network.child (target);
-            if (targetPart == null  ||  ! targetPart.getOrDefault ("$n", "1").equals ("1"))  // We only have to explicitly set $p if the target part has more than one instance.
+            if (targetPart == null  ||  targetPart.getOrDefaultInt ("$n", "1") != 1)  // We only have to explicitly set $p if the target part has more than one instance.
             {
-                part.set ("$p", "@B.$index==" + index, "1");
-                part.set ("$p", "@",                   "0");
+                if (segment == null) p = "B.$index=="     + index;
+                else                 p = "B.$up.$index==" + index;
             }
+            if (segment != null  &&  segment.getOrDefaultInt ("$n", "1") != 1)
+            {
+                if (! p.isEmpty ()) p += "&&";
+                p += "B.$index==0";
+            }
+            if (! p.isEmpty ()) part.set ("$p", p);
         }
 
         public void finish ()
         {
-            for (Node p : projections) projection (p);
+            for (Node p : projections)    projection (p);
+            for (Node e : explicitInputs) explicitInput (e);
             network.clear ("$space");
             network.clear ("$region");
             for (MNode p : network) p.clear ("$instance");
@@ -2364,43 +2568,48 @@ public class ImportJob
 
     /**
         Locates all the accessible parents of the given node, assuming single-inheritance,
-        and lists them in descending order by distance from child. That is, most direct
-        ancestor comes last in the list. In addition to terminating at the root parent,
+        and lists them in ascending order by distance from child. That is, most direct
+        ancestor comes first in the list. In addition to terminating at the root parent,
         also terminates when a parent can't be found, so the list may be incomplete.
     **/
     public List<MNode> collectParents (MNode child)
     {
-        String inherit = child.get ("$inherit").replace ("\"", "");
-        if (inherit.isEmpty ()) return new ArrayList<MNode> ();
-        MNode parent = models.child (modelName, inherit);
-        if (parent == child) parent = null;  // Prevent infinite loop on proxies.
-        // TODO: map names to neuroml parts
-        if (parent == null) parent = AppData.models.child (inherit);
-        if (parent == null) return new ArrayList<MNode> ();
-        List<MNode> result = collectParents (parent);
-        result.add (parent);
+        List<MNode> result = new ArrayList<MNode> ();
+
+        String childInherit = child.get ("$inherit");
+        String[] inherits = childInherit.split (",");
+        for (String inherit : inherits)
+        {
+            inherit = inherit.replace ("\"", "");
+            if (inherit.isEmpty ()) continue;
+            MNode parent = models.child (modelName, inherit);
+            if (parent == child) parent = null;  // Prevent infinite loop on proxies.
+            // TODO: map names to neuroml parts
+            if (parent == null) parent = AppData.models.child (inherit);
+            if (parent == null) continue;
+            result.add (parent);
+            result.addAll (collectParents (parent));
+        }
         return result;
     }
 
     public String typeFor (String nodeName, List<MNode> parents)
     {
         String query = "backend.lems.children." + nodeName;
-        for (int i = parents.size () - 1; i >= 0; i--)
+        for (MNode parent : parents)
         {
-            MNode parent = parents.get (i);
             String type = parent.get (nodeName, "$inherit").replace ("\"", "");  // Assumes single inheritance
             if (! type.isEmpty ()) return type;
-            type = parent.get ("$metadata", query);
-            if (! type.isEmpty ()) return type;
+            MNode c = parent.child ("$metadata", query);
+            if (c != null) return c.getOrDefault (nodeName);
         }
         return "";
     }
 
     public MNode definitionFor (String name, List<MNode> parents)
     {
-        for (int i = parents.size () - 1; i >= 0; i--)
+        for (MNode parent : parents)
         {
-            MNode parent = parents.get (i);
             MNode result = parent.child (name);
             if (result != null) return result;
         }
@@ -2428,7 +2637,7 @@ public class ImportJob
         if (inherit.isEmpty ())
         {
             String key = part.key ();
-            if (models.child (modelName, key) == part) inherit = key;  // Could be a shallow part, in which case the key should be the same as the external model.
+            if (models.child (modelName, key) == part) inherit = key;  // Could be a proxy, in which case the key should be the same as the external model.
         }
         return AppData.models.child (inherit);  // could be null
     }
@@ -2482,7 +2691,6 @@ public class ImportJob
                 break;
             }
         }
-        // TODO: factor out units by repeatedly scanning for system units with greatest dimensional match
 
         dimensions.put (name, result);
     }
@@ -2492,8 +2700,8 @@ public class ImportJob
     {
         String symbol    = getAttribute (node, "symbol");
         String dimension = getAttribute (node, "dimension");
-        int    power     = getAttribute (node, "power", 0);
-        double scale     = getAttribute (node, "scale", 1.0);
+        int    power     = getAttribute (node, "power",  0);
+        double scale     = getAttribute (node, "scale",  1.0);
         double offset    = getAttribute (node, "offset", 0.0);
 
         Unit unit = dimensions.get (dimension);
@@ -2549,15 +2757,23 @@ public class ImportJob
         Unit temp = null;
         try {temp = UCUM.parse (tempName);}
         catch (ParserException | TokenException e) {}
-        if (temp != null  &&  temp.isCompatible (unit))  // found a unit with matching dimension
+        if (temp != null  &&  temp.isCompatible (unit))  // found a unit with matching dimension ...
         {
             Number tempScale = temp.getConverterTo (temp.getSystemUnit ()).convert (new Integer (1));
             Number unitScale = temp.getConverterTo (unit.getSystemUnit ()).convert (new Integer (1));
-            if (tempScale.equals (unitScale))  // and matching scale
+            if (tempScale.equals (unitScale))  // ... and matching scale ...
             {
                 int unitLength = UCUM.format (unit).length ();
                 int tempLength = UCUM.format (temp).length ();
-                if (tempLength <= unitLength) unit = temp;  // and at least as parsimonious
+                if (tempLength <= unitLength)  // ... and at least as parsimonious
+                {
+                    unit = temp;
+                    // Update dimension if this is directly equivalent, but strictly more parsimonious
+                    if (power == 0  &&  scale == 1  &&  offset == 0  &&  tempLength < unitLength)
+                    {
+                        dimensions.put (dimension, temp);
+                    }
+                }
             }
         }
 
@@ -2637,7 +2853,7 @@ public class ImportJob
                         name             = getAttribute (child, "name");
                         description      = getAttribute (child, "description");
                         String direction = getAttribute (child, "direction");
-                        if (direction.equals ("in")) part.set (name, ":0@" + name);  // This should be overridden by a proper event() expression.
+                        if (direction.equals ("in")) part.set (name, "0@" + name);  // This should be overridden by a proper event() expression.
                         else                         part.set (name, "0");   // This should be replaced by a multi-conditional expression
                         part.set (name, "$metadata", "backend.lems.port", direction);
                         if (! description.isEmpty ()) part.set (name, "$metadata", "description", description);
@@ -2660,6 +2876,8 @@ public class ImportJob
                         if (! max.isEmpty ()) part.set ("$metadata", name + ".max", max);
                         if (! inherit.isEmpty ())
                         {
+                            // TODO: may decide to keep original LEMS names, in which case addDependency should not be called
+                            // Also, it will be possible to omit the inherit value if it exactly matches the name. Note that typeFor() has already been modified to handle this case.
                             part.set ("$metadata", name, inherit);
                             addDependencyFromLEMS (part.child ("$metadata", name), inherit);
                         }
@@ -2737,9 +2955,7 @@ public class ImportJob
             }
 
             MNode result = part.childOrCreate (name);
-
-            int equationCount = 0;
-            for (MNode c : result) if (c.key ().startsWith ("@")) equationCount++;
+            int equationCount = Variable.equationCount (result);
 
             String existingValue = result.get ();
             if (! existingValue.isEmpty ()  &&  ! Variable.isCombiner (existingValue))
@@ -2931,10 +3147,18 @@ public class ImportJob
                 switch (child.getNodeName ())
                 {
                     case "TimeDerivative":
-                        genericVariable (child, "$regime==" + name);
+                        MNode d = genericVariable (child, "$regime==" + name);
+                        // Ensure that a default of zero is created
+                        if (Variable.equationCount (d) == 0)
+                        {
+                            Variable.ParsedValue pv = new Variable.ParsedValue (d.get ());
+                            d.set (pv.combiner);  // This is unlikely to contain any value.
+                            d.set ("@" + pv.condition, pv.expression);
+                            d.set ("@", 0);
+                        }
                         break;
                     case "OnEntry":
-                        onStart (child, "$event($regime==" + name + ")");
+                        onStart (child, "event($regime==" + name + ")");
                         break;
                     case "OnCondition":
                         onCondition (child, "$regime==" + name);
@@ -2949,6 +3173,7 @@ public class ImportJob
         public void kineticScheme (Node node)
         {
             String stateVariable = getAttribute (node, "stateVariable");
+            String nodes         = getAttribute (node, "nodes");
             String edges         = getAttribute (node, "edges");
             String edgeSource    = getAttribute (node, "edgeSource");
             String edgeTarget    = getAttribute (node, "edgeTarget");
@@ -2959,16 +3184,36 @@ public class ImportJob
             // so it might make sense to enforce a probability distribution (that is, sum to 1)
             // across the states. However, nothing in the LEMS models gives an initial state,
             // so they must all start at 0. That being the case, don't worry about normalization.
-            String inherit = part.get (edges, "$inherit");
+
+            String inherit = part.get ("$metadata", "backend.lems.children." + nodes);
             if (! inherit.isEmpty ())
             {
                 MNode parent = AppData.models.child (inherit);
                 if (parent == null)  // Imported part, so we can modify it.
                 {
                     parent = models.childOrCreate (modelName, inherit);
-                    // TODO: Note sure how forward and reverse rates should apply.
-                    parent.set (edgeSource + "." + stateVariable + "'", "+-" + reverseRate);
-                    parent.set (edgeTarget + "." + stateVariable + "'", "+"  + forwardRate);
+                    if (parent != null)
+                    {
+                        Variable.ParsedValue pv = new Variable.ParsedValue (parent.get (stateVariable));
+                        if (pv.expression.isEmpty ()) pv.expression = "0";
+                        if (pv.condition .isEmpty ()) pv.condition  = "$init";
+                        parent.set (stateVariable, pv);
+                    }
+                }
+            }
+
+            inherit = part.get ("$metadata", "backend.lems.children." + edges);
+            if (! inherit.isEmpty ())
+            {
+                MNode parent = AppData.models.child (inherit);
+                if (parent == null)
+                {
+                    parent = models.childOrCreate (modelName, inherit);
+                    if (parent != null)
+                    {
+                        parent.set (edgeSource + "." + stateVariable + "'", "+-" + reverseRate);
+                        parent.set (edgeTarget + "." + stateVariable + "'", "+"  + forwardRate);
+                    }
                 }
             }
         }
@@ -3079,7 +3324,7 @@ public class ImportJob
             }
             else
             {
-                event = "$event(" + from + sourcePort + "," + delay + ")";
+                event = "event(" + from + sourcePort + "," + delay + ")";
             }
 
             MNode v = part.childOrCreate (to + targetPort);
@@ -3219,10 +3464,35 @@ public class ImportJob
 
             for (EventChild ec : eventChildren) ec.process ();
 
-            // Prevent inherited conditions from defeating regime-specific conditions in child part
+            // Clean ups:
+            // * Prevent placeholder from overriding its time derivative. (LEMS doesn't appear to support higher derivatives.)
+            // * Prevent inherited conditions from defeating regime-specific conditions in child part
             List<MNode> parents = collectParents (part);
-            for (MNode v : part)
+            Iterator<MNode> it = part.iterator ();
+            while (it.hasNext ())
             {
+                MNode v = it.next ();
+                MNode vprime = part.child (v.key () + "'");  // retrieve associated time derivative, if it exists
+                if (vprime != null)
+                {
+                    String value = v.get ();
+                    if (! value.isEmpty ()  &&  ! Variable.isCombiner (value))
+                    {
+                        ParsedValue pv = new ParsedValue (value);
+                        if (pv.condition.isEmpty ()  &&  pv.expression.startsWith ("0"))  // v is a placeholder
+                        {
+                            // If v has no children, and only a local definition, it can be removed.
+                            if (v.size () == 0  &&  definitionFor (v.key (), parents) == null)
+                            {
+                                it.remove ();
+                                continue;
+                            }
+                            pv.condition = "$init";
+                            v.set (pv);
+                        }
+                    }
+                }
+
                 List<String> kill = new ArrayList<String> ();
                 for (MNode e : v)
                 {
@@ -3282,6 +3552,7 @@ public class ImportJob
                 PartMap.NameMap nameMap = new PartMap.NameMap (mparent);
                 pp.rename.putAll (nameMap.inward);
             }
+            pp.rename.put ("t", "$t");
 
             // If any name mappings conflict with existing names, add new mappings to shift those names away
             Set<String> targets = new TreeSet<String> (pp.rename.values ());
@@ -3348,7 +3619,7 @@ public class ImportJob
             if (! event.isEmpty ())
             {
                 if (! condition.isEmpty ()) condition += "&&";
-                condition += "$event(" + event + ")";
+                condition += "event(" + event + ")";
                 variable = "1";
             }
 
