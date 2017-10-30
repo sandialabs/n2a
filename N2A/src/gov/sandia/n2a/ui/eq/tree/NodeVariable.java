@@ -121,8 +121,10 @@ public class NodeVariable extends NodeFilter
             else if (equationCount == 1)
             {
                 // Collapse
-                source.clear (equation.key ());
-                source.set (pieces.combiner + equation.get () + equation.key ());
+                String key = equation.key ();
+                source.clear (key);
+                if (key.equals ("@")) source.set (pieces.combiner + equation.get ());
+                else                  source.set (pieces.combiner + equation.get () + key);
             }
         }
     }
@@ -184,9 +186,9 @@ public class NodeVariable extends NodeFilter
         String result = toString ();
         if (result.isEmpty ()) return result;  // Allow user object to be "" for new nodes.
         if (editing) return source.key () + "=" + getValue ();  // We're about to go into edit, so remove tabs.
-        if (! expanded  &&  children != null)  // show "..." when multi-line equation is collapsed
+        if (! expanded  &&  children != null)  // show special mark when multi-line equation is collapsed
         {
-            for (Object o : children) if (o instanceof NodeEquation) return result + "...";
+            for (Object o : children) if (o instanceof NodeEquation) return result + "🡰";
         }
         return result;
     }
