@@ -150,10 +150,6 @@ public class EquationSet implements Comparable<EquationSet>
                 exception = true;
                 pe.print (Backend.err.get ());
             }
-            catch (Exception ee)
-            {
-                exception = true;
-            }
         }
         if (exception) throw new Backend.AbortRun ();
     }

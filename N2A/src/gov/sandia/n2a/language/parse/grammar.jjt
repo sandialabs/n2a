@@ -99,15 +99,17 @@ TOKEN_MGR_DECLS:
     | <LRND:    "(" >
     | <RRND:    ")" >
 
-    | <IDENTIFIER: <LETTER>(<LETTER>|<DIGIT>)*(<PRIME>)*>
-    | <#LETTER: ["$", ".", "A"-"Z", "_", "a"-"z", "\u0080"-"\uffff"]>  // Past lower-ASCII we don't care about character class.
+    | <IDENTIFIER: <LETTER>(<LETTER>|<DIGIT>|".")*("'")*>
+    | <#LETTER: ["$", "A"-"Z", "_", "a"-"z", "\u0080"-"\uffff"]>  // Past lower-ASCII we don't care about character class.
     | <#DIGIT:  ["0"-"9"]>
-    | <#PRIME:  "'">
 
     | <NUMBER:
           (<DIGIT>)+ "." (<DIGIT>)* (<EXPONENT>)?
         |            "." (<DIGIT>)+ (<EXPONENT>)?
-        | (<DIGIT>)+                (<EXPONENT>)?> : PossibleUnit
+        | (<DIGIT>)+                (<EXPONENT>)?
+        | "." ("i"|"I") ("n"|"N") ("f"|"F")
+        | "." ("n"|"N") ("a"|"A") ("n"|"N")
+        > : PossibleUnit
     | <#EXPONENT: ["e","E"] (["+","-"])? (<DIGIT>)+>
 
     | <STRING: "\"" ((~["\"","\\"]) | ("\\" ["n","t","b","r","f","\\","'","\""]))* "\"">
@@ -361,7 +363,20 @@ void Constant() #Constant : {Token t; Token u; String unitName = "";}
     t = <NUMBER> (u = <UNIT> {unitName += u.image;})*
     {
         UnitValue result = new UnitValue ();  // Should really use Quantity, but not clear how to get a QuantityFactory from a Unit when type is unknown.
-        result.value = Double.parseDouble (t.image);
+        try
+        {
+            String image = t.image.toLowerCase ();
+            if      (image.equals (".inf")) result.value = Double.POSITIVE_INFINITY;
+            else if (image.equals (".nan")) result.value = Double.NaN;
+            else                            result.value = Double.parseDouble (t.image);
+        }
+        catch (NumberFormatException e)
+        {
+            ParseException p = new ParseException ("Malformed number");
+            t.next = t;  // A hack to force error reporting to find the correct column.
+            p.currentToken = t;
+            throw p;
+        }
         if (! unitName.isEmpty ())
         {
             try
