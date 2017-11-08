@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.backend.neuroml;
 
+import gov.sandia.n2a.backend.neuroml.PartMap.NameMap;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MPersistent;
@@ -67,6 +68,7 @@ import tec.uom.se.unit.Units;;
 
 public class ImportJob
 {
+    PartMap                     partMap;
     LinkedList<File>            sources         = new LinkedList<File> ();
     Set<File>                   alreadyIncluded = new HashSet<File> ();         // Similar to "sources", but keeps all history.
     MNode                       models          = new MVolatile ();
@@ -81,14 +83,19 @@ public class ImportJob
     Map<String,ComponentType>   components      = new HashMap<String,ComponentType> ();
     Map<String,TreeSet<String>> aliases         = new HashMap<String,TreeSet<String>> ();
 
-    Pattern floatParser   = Pattern.compile ("[-+]?(NaN|Infinity|([0-9]*\\.?[0-9]*([eE][-+]?[0-9]+)?))");
-    Pattern forbiddenUCUM = Pattern.compile ("[.,;><=!&|+\\-*/%\\^~]");
+    static Pattern floatParser   = Pattern.compile ("[-+]?(NaN|Infinity|([0-9]*\\.?[0-9]*([eE][-+]?[0-9]+)?))");
+    static Pattern forbiddenUCUM = Pattern.compile ("[.,;><=!&|+\\-*/%\\^~]");
 
     SystemOfUnits       systemOfUnits = ServiceProvider.current ().getSystemOfUnitsService ().getSystemOfUnits ("UCUM");
     UnitFormat          UCUM          = ServiceProvider.current ().getUnitFormatService ().getUnitFormat ("UCUM");
     Map<String,Unit<?>> dimensions    = new TreeMap<String,Unit<?>> ();  // Declared dimension names
 
     static final double epsilon = Math.ulp (1);
+
+    public ImportJob (PartMap partMap)
+    {
+        this.partMap = partMap;
+    }
 
     public void process (File source)
     {
@@ -321,7 +328,8 @@ public class ImportJob
         for (Entry<String,ComponentType> e : components.entrySet ()) e.getValue ().finish1 ();
         for (Entry<String,ComponentType> e : components.entrySet ()) e.getValue ().finish2 ();
         for (Entry<String,Cell>          e : cells     .entrySet ()) e.getValue ().finish ();
-        for (Entry<String,Network>       e : networks  .entrySet ()) e.getValue ().finish ();
+        for (Entry<String,Network>       e : networks  .entrySet ()) e.getValue ().finish1 ();
+        for (Entry<String,Network>       e : networks  .entrySet ()) e.getValue ().finish2 ();
 
         // Select the prime model
         if (primaryModel.isEmpty ())
@@ -461,13 +469,14 @@ public class ImportJob
                     // Anything a LEMS component depends on must be even more abstract, and thus should be an independent model.
                     count = -3;
                 }
+                else if (connected)
+                {
+                    if (dependent.getOrDefaultInt ("$n", "1") == 1  &&  count == 1) count = -1;  // One dependent, with only one connection target, so OK to embed.
+                    else                                                            count = -4;  // Otherwise, the source should be separate from the connection part.
+                }
                 else if (count == 1)
                 {
                     count = -1;
-                }
-                else if (connected)
-                {
-                    count = -4;
                 }
                 else  // count > 1 and not connected, so could be moved out to independent model
                 {
@@ -567,25 +576,19 @@ public class ImportJob
         String id      = getAttribute (node, "id");
         String type    = getAttribute (node, "type");
         String species = getAttribute (node, "species");
+
         String inherit;
         if (type.isEmpty ()) inherit = node.getNodeName ();
         else                 inherit = type;
+        NameMap nameMap = partMap.importMap (inherit);
+        inherit = nameMap.internal;
+
         MNode part = models.childOrCreate (modelName, id);  // Expect to always create this part rather than fetch an existing child.
         part.set ("$inherit", "\"" + inherit + "\"");
         addDependency (part, inherit);
         if (! species.isEmpty ()) part.set ("$metadata", "species", species);
 
-        NamedNodeMap attributes = node.getAttributes ();
-        int count = attributes.getLength ();
-        for (int i = 0; i < count; i++)
-        {
-            Node a = attributes.item (i);
-            String name = a.getNodeName ();
-            if (name.equals ("id")) continue;
-            if (name.equals ("type")) continue;
-            if (name.equals ("species")) continue;
-            part.set (name, biophysicalUnits (a.getNodeValue ()));  // biophysicalUnits() will only modify text if there is a numeric value
-        }
+        addAttributes (node, part, nameMap, "id", "type", "species");
 
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
@@ -599,30 +602,13 @@ public class ImportJob
 
     public void q10 (Node node, MNode container)
     {
-        // "type" probably switches between fixed and exponential, but there is no example/guidance on its use
-        String fixedQ10         = getAttribute (node, "fixedQ10");
-        String q10Factor        = getAttribute (node, "q10Factor");
-        String experimentalTemp = getAttribute (node, "experimentalTemp");
-
         String id = "Q10Parameters";
         int suffix = 2;
         while (container.child (id) != null) id = "Q10Parameters" + suffix++;
 
         MNode part = container.set (id, "");
-        part.set ("$inherit", "Q10");
-        if (! fixedQ10        .isEmpty ()) part.set ("$up.Q10Scaling", "*" + fixedQ10);
-        if (! q10Factor       .isEmpty ()) part.set ("root",           q10Factor);
-        if (! experimentalTemp.isEmpty ()) part.set ("temperature0",   experimentalTemp);
-    }
-
-    public void gate (Node node, MNode container)
-    {
-        String id   = getAttribute (node, "id");
-        String type = getAttribute (node, "type");
-        String inherit;
-        if (type.isEmpty ()) inherit = node.getNodeName ();
-        else                 inherit = type;
-        MNode part = container.set (id, "");
+        NameMap nameMap = partMap.importMap ("baseQ10Settings");  // This isn't the correct name for use with ion channel, but it will still work.
+        String inherit = nameMap.internal;
         part.set ("$inherit", "\"" + inherit + "\"");
         addDependency (part, inherit);
 
@@ -632,10 +618,30 @@ public class ImportJob
         {
             Node a = attributes.item (i);
             String name = a.getNodeName ();
-            if (name.equals ("id")) continue;
-            if (name.equals ("type")) continue;
-            part.set (name, biophysicalUnits (a.getNodeValue ()));
+            if (name.equals ("type")) continue;  // probably switches between fixed and exponential, but there is no example/guidance on its use
+
+            String value = biophysicalUnits (a.getNodeValue ());
+            if (name.equals ("fixedQ10")) value = "*" + value;
+
+            name = nameMap.importName (name);
+            part.set (name, value);
         }
+    }
+
+    public void gate (Node node, MNode container)
+    {
+        String id   = getAttribute (node, "id");
+        String type = getAttribute (node, "type");
+        String inherit;
+        if (type.isEmpty ()) inherit = node.getNodeName ();
+        else                 inherit = type;
+        NameMap nameMap = partMap.importMap (inherit);
+        inherit = nameMap.internal;
+        MNode part = container.set (id, "");
+        part.set ("$inherit", "\"" + inherit + "\"");
+        addDependency (part, inherit);
+
+        addAttributes (node, part, nameMap, "id", "type");
 
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
@@ -674,17 +680,10 @@ public class ImportJob
     {
         String id = getAttribute (node, "id");
         MNode part = container.set (id, "");
-        part.set ("$inherit", "\"" + node.getNodeName () + "\"");
+        NameMap nameMap = partMap.importMap (node.getNodeName ());
+        part.set ("$inherit", "\"" + nameMap.internal + "\"");
 
-        NamedNodeMap attributes = node.getAttributes ();
-        int count = attributes.getLength ();
-        for (int i = 0; i < count; i++)
-        {
-            Node a = attributes.item (i);
-            String name = a.getNodeName ();
-            if (name.equals ("id")) continue;
-            part.set (name, a.getNodeValue ());
-        }
+        addAttributes (node, part, nameMap, "id");
 
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
@@ -694,49 +693,37 @@ public class ImportJob
 
     public void rate (Node node, MNode container)
     {
-        String type = getAttribute (node, "type");
+        String inherit = getAttribute (node, "type");
         MNode part = container.set (node.getNodeName (), "");
-        part.set ("$inherit", "\"" + type + "\"");  // TODO: name should map to one of the simplified part names (that don't distinguish dimension)
-        addDependency (part, type);
+        NameMap nameMap = partMap.importMap (inherit);
+        inherit = nameMap.internal;
+        part.set ("$inherit", "\"" + inherit + "\"");  // TODO: name should map to one of the simplified part names (that don't distinguish dimension)
+        addDependency (part, inherit);
 
-        NamedNodeMap attributes = node.getAttributes ();
-        int count = attributes.getLength ();
-        for (int i = 0; i < count; i++)
-        {
-            Node a = attributes.item (i);
-            String name = a.getNodeName ();
-            if (name.equals ("type")) continue;
-            part.set (name, biophysicalUnits (a.getNodeValue ()));
-        }
+        addAttributes (node, part, nameMap, "type");
     }
 
     public void blockingPlasticSynapse (Node node)
     {
         String id = getAttribute (node, "id");
         MNode part = models.childOrCreate (modelName, id);
-        part.set ("$inherit", "\"blockingPlasticSynapse\"");
+        NameMap nameMap = partMap.importMap (node.getNodeName ());
+        part.set ("$inherit", "\"" + nameMap.internal + "\"");
 
-        NamedNodeMap attributes = node.getAttributes ();
-        int count = attributes.getLength ();
-        for (int i = 0; i < count; i++)
-        {
-            Node a = attributes.item (i);
-            String name = a.getNodeName ();
-            if (name.equals ("id")) continue;
-            part.set (name, biophysicalUnits (a.getNodeValue ()));
-        }
+        addAttributes (node, part, nameMap, "id");
 
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
             if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-            genericPart (child, part);
+            MNode c = genericPart (child, part);
             String name = child.getNodeName ();
             if (name.endsWith ("Mechanism"))
             {
-                MNode c = part.child (name);  // retrieve the part we just made
                 removeDependency (c, name);  // We're about to change the $inherit value, so get rid of the dependency created in genericPart().
                 String type = c.get ("type");
                 c.clear ("type");
+                nameMap = partMap.importMap (type);
+                type = nameMap.internal;
                 c.set ("$inherit", "\"" + type + "\"");
                 addDependency (c, type);
             }
@@ -748,10 +735,8 @@ public class ImportJob
         MNode part = genericPart (node, models.child (modelName));
         part.clear ("ion");  // According to comment in NeuroML.xsd, this field should be the same as id.
         String inherit = node.getNodeName ();
-        if (inherit.endsWith ("Traub"))  // Get rid of vacuous Traub part
+        if (inherit.endsWith ("Traub"))  // Gets mapped into base concentration model. Here, we fix up the parameters so it will work.
         {
-            inherit.replace ("Traub", "");
-            part.set ("$inherit", "\"" + inherit + "\"");
             String beta = part.get ("beta");
             String phi  = part.get ("phi");
             part.clear ("beta");
@@ -960,7 +945,7 @@ public class ImportJob
                 int columnP = p.getInt ("$G");
                 G.OR (columnG, columnP);
                 // Don't merge metadata from included groups, only members.
-                // All metadata will get combined when groups are finalized in cell().
+                // All metadata will get combined when groups are finalized.
                 // If it is merged here, it gets combined twice, and some items can leak into groups they are not really related to.
             }
         }
@@ -1024,7 +1009,7 @@ public class ImportJob
                     switch (name)
                     {
                         case "spikeThresh":
-                            property.set ("Vpeak", value);
+                            property.set ("Vspike", value);
                             break;
                         case "specificCapacitance":
                             property.set ("Cspecific", value);
@@ -1067,20 +1052,8 @@ public class ImportJob
             if (id.isEmpty ()) return result;
 
             // Create a subpart with the given name
-            MNode subpart = result.set (id, "");  
-            NamedNodeMap attributes = node.getAttributes ();
-            int count = attributes.getLength ();
-            for (int i = 0; i < count; i++)
-            {
-                Node a = attributes.item (i);
-                String name = a.getNodeName ();
-                if (name.equals ("id")) continue;
-                if (name.equals ("segment")) continue;
-                if (name.equals ("segmentGroup")) continue;
-                if (name.equals ("value")) continue;  // Caller will extract this directly from XML node.
-                if (name.equals ("ion")) continue;  // never used
-                subpart.set (name, biophysicalUnits (a.getNodeValue ()));
-            }
+            MNode subpart = result.set (id, "");
+            addAttributes (node, subpart, new NameMap (""), "id", "segment", "segmentGroup", "value", "ion");
             return result;
         }
 
@@ -1090,31 +1063,27 @@ public class ImportJob
 
             String name        = node.getNodeName ();
             String ionChannel  = subpart.get ("ionChannel");
-            String erev        = subpart.get ("erev");
             String number      = subpart.get ("number");
             String condDensity = subpart.get ("condDensity");
 
-            String two = "";
-            if (name.endsWith ("Ca2"))
-            {
-                two = "2";
-                name = name.replace ("Ca2", "");
-            }
-
-            name = name.replace ("NonUniform", "");  // The varying parameter is handled elsewhere.
-
-            // TODO: deal with GHK variants
+            subpart.clear ("ionChannel");
+            subpart.clear ("number");
+            subpart.clear ("condDensity");
+            NameMap nameMap = partMap.importMap ("ionChannel");  // There is only one internal part for all ion-channel-related components in NeuroML. It includes both individual channels and populations/densities.
+            remap (subpart, nameMap);
 
             // multiple inheritance, combining the ion channel with the given mix-in
             String potential = "";
-            if      (name.endsWith ("Nernst")) potential = "Nernst";
+            if      (name.contains ("Nernst")) potential = "Nernst";
             else if (name.contains ("GHK2"  )) potential = "GHK 2";
             else if (name.contains ("GHK"   )) potential = "GHK";
             if (! potential.isEmpty ())
             {
                 // For now, assume that ion channel is already defined
-                String species = models.getOrDefault (modelName, ionChannel, "$metadata", "species", "ca");
-                subpart.set ("c", species + two);  // connect to species/concentration model, which the user is responsible to create 
+                String species = "ca";
+                if (name.contains ("Ca2")) species = "ca2";
+                species = models.getOrDefault (modelName, ionChannel, "$metadata", "species", species);
+                subpart.set ("c", species);  // connect to species/concentration model, which the user is responsible to create 
                 subpart.set ("$inherit", "\"Potential " + potential + "\",\"" + ionChannel + "\"");
             }
             else
@@ -1122,11 +1091,6 @@ public class ImportJob
                 subpart.set ("$inherit", "\"" + ionChannel + "\"");
             }
 
-            subpart.clear ("ionChannel");
-            subpart.clear ("erev");
-            subpart.clear ("number");
-            subpart.clear ("condDensity");
-            if (! erev.isEmpty ()) subpart.set ("E", erev);
             if (! number.isEmpty ())
             {
                 subpart.set ("population", number);
@@ -1202,7 +1166,9 @@ public class ImportJob
                         MNode subpart = property.iterator ().next ();
                         String concentrationModel = subpart.get ("concentrationModel");
                         subpart.clear ("concentrationModel");
-                        subpart.set ("$inherit", "\"" + concentrationModel + "\"");  // Dependency will be tagged when this property is added to segments.
+                        NameMap nameMap = partMap.importMap (concentrationModel);
+                        remap (subpart, nameMap);
+                        subpart.set ("$inherit", "\"" + nameMap.internal + "\"");  // Dependency will be tagged when this property is added to segments.
                         if (subpart.child ("z") == null)
                         {
                             int z = 1;  // The most common charge on an ion.
@@ -1302,19 +1268,10 @@ public class ImportJob
                     // Distribute properties to original segment groups
                     if (groupName.equals ("[all]"))
                     {
-                        // If it is a simple variable (except V, which must be compartment-specific), then apply it to the containing cell.
-                        MNode subpart = p.iterator ().next ();
-                        if (subpart.size () == 0  &&  ! subpart.key ().equals ("V"))
+                        for (MNode part : cell.child ("$group"))
                         {
-                            cell.set (subpart.key (), subpart.get ());
-                        }
-                        else  // Otherwise, distribute it to all groups
-                        {
-                            for (MNode part : cell.child ("$group"))
-                            {
-                                part.merge (p);
-                                part.set ("");
-                            }
+                            part.merge (p);
+                            part.set ("");
                         }
                     }
                     else
@@ -1427,6 +1384,7 @@ public class ImportJob
             }
 
             // Add segments and properties to the parts
+            String inheritSegment = partMap.importName ("segment");
             for (Entry<Integer,String> e : finalNames.entrySet ())
             {
                 int c = e.getKey ();  // column of M, the mapping from segments to new groups
@@ -1474,8 +1432,8 @@ public class ImportJob
                     String groupName = groupIndex.get (cs.column);  // a name from the original set of groups, not the new groups
                     part.mergeUnder (cell.child ("$group", groupName));
                 }
-                part.set ("$inherit", "\"Segment\"");
-                addDependency (part, "Segment");
+                part.set ("$inherit", "\"" + inheritSegment + "\"");
+                addDependency (part, inheritSegment);
                 for (MNode property : part)
                 {
                     String inherit = property.get ("$inherit").replace ("\"", "");
@@ -1557,7 +1515,7 @@ public class ImportJob
                 if (connection == null)
                 {
                     connection = cell.set (connectionName, "");
-                    connection.set ("$inherit", "\"Coupling\"");
+                    connection.set ("$inherit", "\"Coupling\"");  // Explicit non-NeuroML part, so no need for mapping
                     connection.set ("A", s.parent.part.key ());
                     connection.set ("B", s       .part.key ());
                     connection.set ("R", "$kill");  // Force use of container's value.
@@ -1739,15 +1697,20 @@ public class ImportJob
         }
     }
 
+    public String biophysicalUnits (String value)
+    {
+        return biophysicalUnits (value, "");
+    }
+
     /**
         Convert the given value to be in appropriate units, in the context of a physiology section.
     **/
-    public String biophysicalUnits (String value)
+    public String biophysicalUnits (String value, String defaultUnit)
     {
         value = value.trim ();
         int unitIndex = findUnits (value);
         if (unitIndex == 0) return value;  // no number
-        if (unitIndex >= value.length ()) return value;  // no units; need to apply defaults here
+        if (unitIndex >= value.length ()) return value + defaultUnit;  // no unit, so use default (which may be empty)
 
         String units = value.substring (unitIndex).trim ();
         value        = value.substring (0, unitIndex);
@@ -1771,7 +1734,7 @@ public class ImportJob
         return value + cleanupUnits (units);
     }
 
-    public int findUnits (String value)
+    public static int findUnits (String value)
     {
         Matcher m = floatParser.matcher (value);
         m.find ();
@@ -1793,41 +1756,30 @@ public class ImportJob
     }
 
     /**
-        Use multiple-inheritance to implement synapse with built-in spike generator.
+        Create a spike generator, which may be associated with its intended synapse.
     **/
     public void spikingSynapse (Node node)
     {
         String id      = getAttribute (node, "id");
-        String inherit = getAttribute (node, "synapse");
+        String synapse = getAttribute (node, "synapse");
         // "spikeTarget" appears to be redundant with "synapse". Probably exists due to some oddity in LEMS.
 
         MNode part = models.childOrCreate (modelName, id);
 
+        String inherit = node.getNodeName ();
+        NameMap nameMap = partMap.importMap (inherit);
+        inherit = nameMap.internal;
         if (! inherit.isEmpty ())
         {
+            part.set ("$inherit", inherit);
             addDependency (part, inherit);
-            inherit = "\"" + inherit + "\"";
         }
-        String nodeName = node.getNodeName ();
-        if (nodeName.contains ("FiringSynapse"))  // For "spikeArray" (with no synapse) there is no part in the repository. It is all generated at the end of this function.
-        {                
-            addDependency (part, nodeName);
-            if (! inherit.isEmpty ()) inherit += ",";
-            inherit += "\"" + nodeName + "\"";
-        }
-        if (! inherit.isEmpty ()) part.set ("$inherit", inherit);
 
-        NamedNodeMap attributes = node.getAttributes ();
-        int count = attributes.getLength ();
-        for (int i = 0; i < count; i++)
-        {
-            Node a = attributes.item (i);
-            String name = a.getNodeName ();
-            if (name.equals ("id"         )) continue;
-            if (name.equals ("synapse"    )) continue;
-            if (name.equals ("spikeTarget")) continue;
-            part.set (name, biophysicalUnits (a.getNodeValue ()));
-        }
+        // Leave a hint that this spike generator should be the source side of the given synapse.
+        // "spikeArray" does not have an associated synapse.
+        if (! synapse.isEmpty ()) part.set ("$metadata", "backend.neuroml.synapse", synapse);
+
+        addAttributes (node, part, nameMap, "id", "synapse", "spikeTarget");
 
         Map<Double,String> sorted = new TreeMap<Double,String> ();
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
@@ -1840,18 +1792,12 @@ public class ImportJob
         }
         if (sorted.size () > 0)  // generate spikeArray-like code
         {
-            String spikes = "";
-            for (String s : sorted.values ()) spikes += ";" + s;
-            spikes += ";inf";  // This shuts down spiking after last specified time.
-            spikes = "[" + spikes.substring (1) + "]";
-            part.set ("spikes", spikes);
-
-            part.set ("spike", "$t>=spikes(spikeIndex)");
-            part.set ("spikeIndex", "@$init", "0");
-            part.set ("spikeIndex", "@spike", "spikeIndex+1");
+            String times = "";
+            for (String s : sorted.values ()) times += ";" + s;
+            times += ";.inf";  // This shuts down spiking after last specified time.
+            times = "[" + times.substring (1) + "]";
+            part.set ("times", times);
         }
-
-        part.set ("in", ":spike");  // bind event ports
     }
 
     public void compoundInput (Node node)
@@ -1872,9 +1818,10 @@ public class ImportJob
     {
         String id;
         MNode network;
-        List<Node> extracellularProperties = new ArrayList<Node> ();
-        List<Node> projections             = new ArrayList<Node> ();
-        List<Node> explicitInputs          = new ArrayList<Node> ();
+        List<Node>   extracellularProperties = new ArrayList<Node> ();
+        List<Node>   projections             = new ArrayList<Node> ();
+        List<Node>   explicitInputs          = new ArrayList<Node> ();
+        List<String> explicitInputRecheck    = new ArrayList<String> ();
 
         public Network (Node node)
         {
@@ -2071,36 +2018,68 @@ public class ImportJob
         }
 
         /**
-            Contains minor hacks to handle InputList along with the 3 projection types.
+            Handles the 3 projection types, and also contains minor hacks to handle inputList.
         **/
         public void projection (Node node)
         {
-            String id             = getAttribute  (node, "id");
-            String inherit        = getAttribute  (node, "synapse");
-            String A              = getAttributes (node, "presynapticPopulation",  "component");
-            String B              = getAttributes (node, "postsynapticPopulation", "population");
-            String projectionType = node.getNodeName ();
+            String id        = getAttribute  (node, "id");
+            String inherit   = getAttribute  (node, "synapse");
+            String component = getAttribute  (node, "component");
+            String A         = getAttribute  (node, "presynapticPopulation");
+            String B         = getAttributes (node, "postsynapticPopulation", "population");
 
             MNode base = new MVolatile ();
-            base.set ("A", A);
-            base.set ("B", B);
-            if      (projectionType.equals ("continuousProjection")) inherit = "continuousConnection";  // TODO: map this name
-            else if (projectionType.equals ("inputList"))            inherit = "Current Injection";
-
-            NamedNodeMap attributes = node.getAttributes ();
-            int count = attributes.getLength ();
-            for (int i = 0; i < count; i++)
+            if (inherit.isEmpty ()) inherit = node.getNodeName ();
+            boolean inputList = ! component.isEmpty ();
+            if (inputList)
             {
-                Node a = attributes.item (i);
-                String name = a.getNodeName ();
-                if (name.equals ("id"                    )) continue;
-                if (name.equals ("synapse"               )) continue;
-                if (name.equals ("presynapticPopulation" )) continue;
-                if (name.equals ("postsynapticPopulation")) continue;
-                if (name.equals ("component"             )) continue;
-                if (name.equals ("population"            )) continue;
-                base.set (name, biophysicalUnits (a.getNodeValue ()));
+                // There are several different modes in which an inputList makes connections:
+                // * A current-pattern generator connects to a single target. The pattern generator works
+                //   in its normal mode, which is a unary connection directly to the target part.
+                // * A current-pattern generator connects to multiple targets. The pattern generator must be
+                //   modified to act as a source part for a connection part.
+                // * A spike source with associated synapse. The synapse becomes the connection part,
+                //   and the spike source simply acts as an endpoint for it.
+                String synapse = models.get (modelName, component, "$metadata", "backend.neuroml.synapse");
+                if (synapse.isEmpty ())  // assume a current-pattern generator
+                {
+                    int childCount = 0;
+                    for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+                    {
+                        if (child.getNodeType () == Node.ELEMENT_NODE) childCount++;
+                    }
+
+                    if (childCount == 1)  // single direct connection
+                    {
+                        inherit = component;
+                        // A remains empty
+                    }
+                    else  // multiple connections
+                    {
+                        // Create modified part
+                        MNode c = models.childOrCreate (modelName, component);
+                        c.set ("B",   "$kill");
+                        c.set ("B.I", "$kill");
+
+                        // Create connection
+                        base.set ("B.I", "+A.I");
+                        inherit = "";
+                        A = component;
+                    }
+                }
+                else  // spike source with associated synapse
+                {
+                    inherit = synapse;
+                    A = component;
+                }
             }
+            if (! A.isEmpty()) base.set ("A", A);
+            base.set ("B", B);
+
+            NameMap nameMap = partMap.importMap (inherit);
+            inherit = nameMap.internal;
+
+            addAttributes (node, base, nameMap, "id", "synapse", "presynapticPopulation", "postsynapticPopulation", "component", "population");
 
             // Children are specific connections.
             // In the case of "continuous" connections, there are pre- and post-synaptic components which can vary
@@ -2111,11 +2090,8 @@ public class ImportJob
             MNode instancesA = network.child (A, "$instance");
             MNode instancesB = network.child (B, "$instance");
 
-            boolean postCellSingleton = network.getOrDefaultInt (B, "$n", "1") == 1;  // This assumes that a population always has $n set if it is anything besides 1.
-            boolean preCellSingleton;  // A requires more testing, because it could be the "component" of an input list.
-            boolean Acomponent = ! getAttribute (node, "component").isEmpty ();
-            if (Acomponent) preCellSingleton = models .getOrDefaultInt (modelName, A, "$n", "1") == 1;
-            else            preCellSingleton = network.getOrDefaultInt (           A, "$n", "1") == 1;
+            boolean preCellSingleton  = network.getOrDefaultInt (A, "$n", "1") == 1;  // For inputList, A might not be a network node, but the answer (true) will still be correct.
+            boolean postCellSingleton = network.getOrDefaultInt (B, "$n", "1") == 1;
 
             List<Connection> connections = new ArrayList<Connection> ();
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
@@ -2124,15 +2100,14 @@ public class ImportJob
 
                 // Collect data and assemble query
                 Connection connection = new Connection ();
-                int childID        = getAttribute (child, "id", 0);
-                connection.inherit = getAttribute (child, "synapse", inherit);
+                int childID = getAttribute (child, "id", 0);
 
-                connection.preComponent  = getAttribute  (child, "preComponent");
+                connection.preComponent  = getAttributes (child, "preComponent", "synapse");
                 String preCell           = getAttributes (child, "preCell", "preCellId");
                 String preSegmentString  = getAttributes (child, "preSegment", "preSegmentId");
                 String preFractionString = getAttribute  (child, "preFractionAlong");
 
-                connection.postComponent  = getAttribute  (child, "postComponent");
+                connection.postComponent  = getAttributes (child, "postComponent", "synapse");  // Notice that "synapse" occurs twice, specifically for electrical (gap) connection, since pre and post component are the same in that case.
                 String postCell           = getAttributes (child, "postCell", "postCellId", "target");
                 String postSegmentString  = getAttributes (child, "postSegment", "postSegmentId", "segmentId");
                 String postFractionString = getAttributes (child, "postFractionAlong", "fractionAlong");
@@ -2140,74 +2115,26 @@ public class ImportJob
                 double weight = getAttribute (child, "weight", 1.0);
                 String delay  = getAttribute (child, "delay");
 
-                int preSegment = -1;
-                if (! preSegmentString.isEmpty ()) preSegment = Integer.valueOf (preSegmentString);
-                double preFraction = 0.5;
-                if (! preFractionString.isEmpty ()) preFraction = Double.valueOf (preFractionString);
+                String[] pieces = preCell.split ("/");
+                if (pieces.length >= 3) preCell = pieces[2];
+                pieces = postCell.split ("/");
+                if (pieces.length >= 3) postCell = pieces[2];
 
-                int postSegment = -1;
-                if (! postSegmentString.isEmpty ()) postSegment = Integer.valueOf (postSegmentString);
-                double postFraction = 0.5;
-                if (! postFractionString.isEmpty ()) postFraction = Double.valueOf (postFractionString);
-
-                preCell  = extractIDfromPath (preCell);
-                postCell = extractIDfromPath (postCell);
                 if (instancesA != null) preCell  = instancesA.getOrDefault (preCell,  "$index", preCell);  // Map NeuroML ID to assigned N2A $index, falling back on ID if $index has not been assigned.
                 if (instancesB != null) postCell = instancesB.getOrDefault (postCell, "$index", postCell);
 
-                int preSegmentIndex = 0;
-                boolean preSegmentSingleton = true;
-                if (preSegment >= 0)
-                {
-                    // preSegment is the ID, effectively the row in the segment*group matrix
-                    // We must find the column associated with it, so we can map to a group part.
-                    String cellID = network.get (A, "$inherit").replace ("\"", "");
-                    Cell cell = cells.get (cellID);
-                    if (cell != null)
-                    {
-                        MatrixBoolean M = cell.M;
-                        if (M != null)
-                        {
-                            count = M.columns ();
-                            for (int c = 0; c < count; c++)
-                            {
-                                if (M.get (preSegment, c))
-                                {
-                                    connection.preGroup = cell.groupIndex.get (c);
-                                    preSegmentIndex = M.indexInColumn (preSegment, c);
-                                    preSegmentSingleton = models.getOrDefaultInt (modelName, cellID, connection.preGroup, "$n", "1") == 1;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
+                SegmentFinder finder = new SegmentFinder ();
+                if (! inputList) finder.find (preSegmentString, A);
+                int preSegmentIndex = finder.index;
+                connection.preGroup = finder.group;
+                finder.find (postSegmentString, B);
+                int postSegmentIndex = finder.index;
+                connection.postGroup = finder.group;
 
-                int postSegmentIndex = 0;
-                boolean postSegmentSingleton = true;
-                if (postSegment >= 0)
-                {
-                    String cellID = network.get (B, "$inherit").replace ("\"", "");
-                    Cell cell = cells.get (cellID);
-                    if (cell != null)
-                    {
-                        MatrixBoolean M = cell.M;
-                        if (M != null)
-                        {
-                            count = M.columns ();
-                            for (int c = 0; c < count; c++)
-                            {
-                                if (M.get (postSegment, c))
-                                {
-                                    connection.postGroup = cell.groupIndex.get (c);
-                                    postSegmentIndex = M.indexInColumn (postSegment, c);
-                                    postSegmentSingleton = models.getOrDefaultInt (modelName, cellID, connection.postGroup, "$n", "1") == 1;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
+                double preFraction = 0.5;
+                if (! preFractionString.isEmpty ()) preFraction = Double.valueOf (preFractionString);
+                double postFraction = 0.5;
+                if (! postFractionString.isEmpty ()) postFraction = Double.valueOf (postFractionString);
 
                 // Choose part
                 int match = connections.indexOf (connection);
@@ -2221,17 +2148,15 @@ public class ImportJob
                     if (network.child (id) == null) connection.part = network.set (id,           base);
                     else                            connection.part = network.set (id + childID, base);  // Another part has already consumed the base name, so augment it with some index. Any index will do, but childID is convenient.
 
-                    if (connection.postGroup.isEmpty ()) connection.part.set ("B", B);
-                    else                                 connection.part.set ("B", B + "." + connection.postGroup);
-                    if (connection.preGroup.isEmpty ())
+                    if (! inherit.isEmpty ())
                     {
-                        connection.part.set ("A", A);
-                        if (Acomponent) addDependencyFromConnection (connection.part.child ("A"), A);
+                        connection.part.set ("$inherit", "\"" + inherit + "\"");
+                        addDependency (connection.part, inherit);
                     }
-                    else
-                    {
-                        connection.part.set ("A", A + "." + connection.preGroup);
-                    }
+                    if (! component.isEmpty()  &&  ! A.isEmpty()) addDependencyFromConnection (connection.part.child ("A"), A);
+
+                    if (! connection.preGroup .isEmpty ()) connection.part.set ("A", A + "." + connection.preGroup);
+                    if (! connection.postGroup.isEmpty ()) connection.part.set ("B", B + "." + connection.postGroup);
                     if (! connection.preComponent.isEmpty ())
                     {
                         connection.part.set ("preComponent", "$inherit", "\"" + connection.preComponent + "\"");
@@ -2241,11 +2166,6 @@ public class ImportJob
                     {
                         connection.part.set ("postComponent", "$inherit", "\"" + connection.postComponent + "\"");
                         addDependency (connection.part.child ("postComponent"), connection.postComponent);
-                    }
-                    if (! connection.inherit.isEmpty ())
-                    {
-                        connection.part.set ("$inherit", "\"" + connection.inherit + "\"");
-                        addDependency (connection.part, connection.inherit);
                     }
                 }
                
@@ -2263,12 +2183,12 @@ public class ImportJob
                     if (connection.postGroup.isEmpty ()) condition += "B.$index=="     + postCell;
                     else                                 condition += "B.$up.$index==" + postCell;
                 }
-                if (! preSegmentSingleton  &&  ! connection.preGroup.isEmpty ())
+                if (preSegmentIndex >= 0  &&  ! connection.preGroup.isEmpty ())
                 {
                     if (! condition.isEmpty ()) condition += "&&";
                     condition += "A.$index==" + preSegmentIndex;
                 }
-                if (! postSegmentSingleton  &&  ! connection.postGroup.isEmpty ())
+                if (postSegmentIndex >= 0  &&  ! connection.postGroup.isEmpty ())
                 {
                     if (! condition.isEmpty ()) condition += "&&";
                     condition += "B.$index==" + postSegmentIndex;
@@ -2310,31 +2230,46 @@ public class ImportJob
             }
         }
 
-        /**
-            Handle all the random and inconsistent ways that population member IDs are represented.
-        **/
-        public String extractIDfromPath (String path)
+        class SegmentFinder
         {
-            if (path.isEmpty ()) return path;
+            public String group = "";
+            public int    index = -1;
+            public MNode  segment;
 
-            int i = path.indexOf ('[');
-            if (i >= 0)
+            public void find (String ID, String endpoint)
             {
-                String suffix = path.substring (i + 1);
-                i = suffix.indexOf (']');
-                if (i >= 0) suffix = suffix.substring (0, i);
-                return suffix;
-            }
+                group = "";
+                index = -1;
 
-            String[] pieces = path.split ("/");
-            if (pieces.length < 3) return path;
-            return pieces[2];
+                int id = 0;  // By convention, 0 is closest to (or actually is) the soma.
+                if (! ID.isEmpty ()) id = Integer.valueOf (ID);
+
+                // ID is the row in the segment*group matrix.
+                // We must find the column associated with it, so we can map to a group part.
+                String cellID = network.get (endpoint, "$inherit").replace ("\"", "");
+                Cell cell = cells.get (cellID);
+                if (cell == null) return;  // This could be a point cell, rather than multi-compartment.
+                MatrixBoolean M = cell.M;
+                if (M == null) return;
+                int count = M.columns ();
+                for (int c = 0; c < count; c++)
+                {
+                    if (M.get (id, c))
+                    {
+                        group = cell.groupIndex.get (c);
+                        segment = models.child (modelName, cellID, group);
+                        if (segment != null  &&  segment.getOrDefaultInt ("$n", "1") > 1) index = M.indexInColumn (id, c);
+                        break;
+                    }
+                }
+            }
         }
 
         public void explicitInput (Node node)
         {
             String input  = getAttribute (node, "input");
             String target = getAttribute (node, "target");
+
             int index = 0;
             int i = target.indexOf ('[');
             if (i >= 0)
@@ -2345,45 +2280,54 @@ public class ImportJob
                 if (i >= 0) suffix = suffix.substring (0, i);
                 index = Integer.valueOf (suffix);
             }
+            MNode targetPart = network.child (target);
+            MNode sourcePart = models.child (modelName, input);
 
             String name = input + "_to_" + target;
             MNode part = network.childOrCreate (name);
-            part.set ("$inherit", "\"" + input + "\"");
-            addDependency (part, input);
 
-            // A cell cannot be the direct target of a connection, so find the first segment and use it instead.
-            MNode segment = null;
-            MNode cell = models.child (modelName, target);
-            if (cell != null)
+            String synapse = sourcePart.get ("$metadata", "backend.neuroml.synapse");
+            if (synapse.isEmpty ())
             {
-                for (MNode p : cell)
-                {
-                    if (p.get ("$inherit").contains ("Segment"))
-                    {
-                        if (segment == null  ||  p.get ().toLowerCase ().equals ("soma")) segment = p;
-                    }
-                }
+                part.set ("$inherit", "\"" + input + "\"");
+                addDependency (part, input);
+                // The unresolved question here is whether sourcePart is shared with any other input.
+                // The only way to be certain is to check after all inputs have been created.
+                // If this is the case, then sourcePart should be changed into a connection endpoint,
+                // and this connection object get some added equations to move the values.
+                explicitInputRecheck.add (name);
             }
-            if (segment != null) target += "." + segment.key ();
+            else
+            {
+                part.set ("$inherit", "\"" + synapse + "\"");
+                addDependency (part, synapse);
+                MNode connection = part.set ("A", input);
+                addDependencyFromConnection (connection, input);
+            }
 
-            part.set ("B", target);  // Like the input, the target could be folded into this connection part during dependency resolution, but that would actually make the model more ugly.
+            // If this is a multi-compartment cell, it cannot be the direct target of a connection.
+            // Find the first segment and use that instead.
+            SegmentFinder finder = new SegmentFinder ();
+            finder.find ("0", target);
+            if (finder.segment != null) target += "." + finder.segment.key ();
+
+            part.set ("B", target);
 
             String p = "";
-            MNode targetPart = network.child (target);
-            if (targetPart == null  ||  targetPart.getOrDefaultInt ("$n", "1") != 1)  // We only have to explicitly set $p if the target part has more than one instance.
+            if (targetPart == null  ||  targetPart.getOrDefaultInt ("$n", "1") != 1)  // We only have to set $p explicitly if the target part has more than one instance.
             {
-                if (segment == null) p = "B.$index=="     + index;
-                else                 p = "B.$up.$index==" + index;
+                if (finder.segment == null) p = "B.$index=="     + index;
+                else                        p = "B.$up.$index==" + index;
             }
-            if (segment != null  &&  segment.getOrDefaultInt ("$n", "1") != 1)
+            if (finder.index >= 0)
             {
                 if (! p.isEmpty ()) p += "&&";
-                p += "B.$index==0";
+                p += "B.$index==" + finder.index;
             }
             if (! p.isEmpty ()) part.set ("$p", p);
         }
 
-        public void finish ()
+        public void finish1 ()
         {
             for (Node p : projections)    projection (p);
             for (Node e : explicitInputs) explicitInput (e);
@@ -2391,13 +2335,33 @@ public class ImportJob
             network.clear ("$region");
             for (MNode p : network) p.clear ("$instance");
         }
+
+        public void finish2 ()
+        {
+            for (String name : explicitInputRecheck)
+            {
+                MNode part = network.child (name);
+                String inherit = part.get ("$inherit").replace ("\"", "");
+                MNode sourcePart = models.child (modelName, inherit);
+                String synapse = sourcePart.get ("$metadata", "backend.neuroml.synapse");
+                if (! synapse.isEmpty ()) continue;  // We are only concerned about current-pattern generators, not synapses.
+                if (sourcePart.getInt ("$count") <= 1) continue;  // We are the only user, so can directly embed input. That's the current arrangement, so nothing to do.
+
+                removeDependency (part, inherit);
+                part.clear ("$inherit");
+                MNode connection = part.set ("A", inherit);
+                addDependencyFromConnection (connection, inherit);
+                sourcePart.set ("B",   "$kill");
+                sourcePart.set ("B.I", "$kill");
+                part.set ("B.I", "+A.I");
+            }
+        }
     }
 
     public static class Connection
     {
         public String preGroup      = "";
         public String postGroup     = "";
-        public String inherit       = "";
         public String preComponent  = "";
         public String postComponent = "";
         public MNode  part;
@@ -2485,7 +2449,6 @@ public class ImportJob
 
             if (! preGroup     .equals (that.preGroup     )) return false;
             if (! postGroup    .equals (that.postGroup    )) return false;
-            if (! inherit      .equals (that.inherit      )) return false;
             if (! preComponent .equals (that.preComponent )) return false;
             if (! postComponent.equals (that.postComponent)) return false;
             return true;
@@ -2522,7 +2485,18 @@ public class ImportJob
 
         List<MNode> parents = collectParents (container);
         String inherit = typeFor (nodeName, parents);
-        if (inherit.isEmpty ()) inherit = nodeName;
+        NameMap nameMap;
+        if (inherit.isEmpty ())
+        {
+            nameMap = partMap.importMap (nodeName);
+            inherit = nameMap.internal;
+        }
+        else
+        {
+            // Because typeFor() finds internal names, we need to retrieve a map from the opposite direction.
+            // It will still map parameter names correctly for import.
+            nameMap = partMap.exportMap (inherit);
+        }
         part.set ("$inherit", "\"" + inherit + "\"");
         addDependency (part, inherit);
 
@@ -2532,18 +2506,20 @@ public class ImportJob
         for (int i = 0; i < count; i++)
         {
             Node a = attributes.item (i);
-            nodeName = a.getNodeName ();
-            if (nodeName.equals ("id")) continue;
-            if (isPart (nodeName, parents))
+            String name = a.getNodeName ();
+            if (name.equals ("id")) continue;
+            name = nameMap.importName (name);
+            if (isPart (name, parents))
             {
                 inherit = a.getNodeValue ();
-                part.set (nodeName, "$inherit", "\"" + inherit + "\"");
-                addDependency (part.child (nodeName), inherit);
-                addAlias (inherit, nodeName);
+                part.set (name, "$inherit", "\"" + inherit + "\"");
+                addDependency (part.child (name), inherit);
+                addAlias (inherit, name);
             }
             else
             {
-                part.set (nodeName, biophysicalUnits (a.getNodeValue ()));
+                String defaultUnit = nameMap.defaultUnit (name);
+                part.set (name, biophysicalUnits (a.getNodeValue (), defaultUnit));
             }
         }
 
@@ -2553,6 +2529,42 @@ public class ImportJob
         }
 
         return part;
+    }
+
+    public void remap (MNode part, NameMap nameMap)
+    {
+        MNode temp = new MVolatile ();
+        temp.merge (part);
+        part.clear ();
+        for (MNode v : temp)
+        {
+            String key = nameMap.importName (v.key ());
+            part.set (key, v);
+        }
+    }
+
+    public void addAttributes (Node node, MNode part, NameMap nameMap, String... forbidden)
+    {
+        NamedNodeMap attributes = node.getAttributes ();
+        int count = attributes.getLength ();
+        for (int i = 0; i < count; i++)
+        {
+            Node a = attributes.item (i);
+            String name = a.getNodeName ();
+            boolean isForbidden = false;
+            for (String f : forbidden)
+            {
+                if (f.equals (name))
+                {
+                    isForbidden = true;
+                    break;
+                }
+            }
+            if (isForbidden) continue;
+            name = nameMap.importName (name);
+            String defaultUnit = nameMap.defaultUnit (name);
+            part.set (name, biophysicalUnits (a.getNodeValue (), defaultUnit));  // biophysicalUnits() will only modify text if there is a numeric value
+        }
     }
 
     public void addAlias (String from, String to)
@@ -2567,10 +2579,10 @@ public class ImportJob
     }
 
     /**
-        Locates all the accessible parents of the given node, assuming single-inheritance,
-        and lists them in ascending order by distance from child. That is, most direct
-        ancestor comes first in the list. In addition to terminating at the root parent,
-        also terminates when a parent can't be found, so the list may be incomplete.
+        Locates all the accessible parents of the given node and lists them in ascending
+        order by distance from child. That is, most direct ancestor comes first in the list.
+        In addition to terminating at the root parent, also terminates when a parent can't
+        be found, so the list may be incomplete.
     **/
     public List<MNode> collectParents (MNode child)
     {
@@ -2584,7 +2596,6 @@ public class ImportJob
             if (inherit.isEmpty ()) continue;
             MNode parent = models.child (modelName, inherit);
             if (parent == child) parent = null;  // Prevent infinite loop on proxies.
-            // TODO: map names to neuroml parts
             if (parent == null) parent = AppData.models.child (inherit);
             if (parent == null) continue;
             result.add (parent);
@@ -2593,11 +2604,31 @@ public class ImportJob
         return result;
     }
 
+    /**
+        Locate the first parent in the inheritance hierarchy that resides in the models database rather than
+        the current import.
+     **/
+    public MNode findBasePart (MNode part)
+    {
+        String inherit = part.get ("$inherit").replace ("\"", "");
+
+        MNode result = models.child (modelName, inherit);
+        if (result == part) result = null;  // Prevent infinite loop on proxies.
+        if (result != null) return findBasePart (result);
+
+        return AppData.models.child (inherit);  // could be null
+    }
+
+    /**
+        Converts an element name to an internal part name, if one is available.
+    **/
     public String typeFor (String nodeName, List<MNode> parents)
     {
         String query = "backend.lems.children." + nodeName;
         for (MNode parent : parents)
         {
+            // TODO: for lookup of direct child, may need to map node name in context of parent.
+            // This is only necessary if the subpart has a different internal name.
             String type = parent.get (nodeName, "$inherit").replace ("\"", "");  // Assumes single inheritance
             if (! type.isEmpty ()) return type;
             MNode c = parent.child ("$metadata", query);
@@ -2621,25 +2652,6 @@ public class ImportJob
         MNode result = definitionFor (name, parents);
         if (result == null) return false;
         return MPart.isPart (result);
-    }
-
-    /**
-        Locate the first parent in the inheritance hierarchy that resides in the models database rather than
-        the current import.
-    **/
-    public MNode findBasePart (MNode part)
-    {
-        String inherit = part.get ("$inherit").replace ("\"", "");
-
-        MNode result = models.child (modelName, inherit);
-        if (result != null) return findBasePart (result);
-
-        if (inherit.isEmpty ())
-        {
-            String key = part.key ();
-            if (models.child (modelName, key) == part) inherit = key;  // Could be a proxy, in which case the key should be the same as the external model.
-        }
-        return AppData.models.child (inherit);  // could be null
     }
 
     public void target (Node node)
@@ -2804,6 +2816,12 @@ public class ImportJob
             part.set ("$lems", "1");
             if (! inherit.isEmpty ())
             {
+                // In general, we want to give priority to newly defined parts over db parts.
+                // Also, in general, they should never overlap.
+                // Here we make one feeble attempt to check new part definitions first, but this may
+                // fail because parts may not appear in the file in dependency order.
+                // Similar comments apply to other name mapping below.
+                if (models.child (modelName, inherit) == null) inherit = partMap.importName (inherit);
                 part.set ("$inherit", "\"" + inherit + "\"");
                 addDependencyFromLEMS (part, inherit);
             }
@@ -2862,6 +2880,7 @@ public class ImportJob
                         name    = getAttribute (child, "name");
                         inherit = getAttribute (child, "type");
                         MNode childPart = part.childOrCreate (name);
+                        if (models.child (modelName, inherit) == null) inherit = partMap.importName (inherit);
                         childPart.set ("$inherit", inherit);
                         addDependencyFromLEMS (childPart, inherit);
                         break;
@@ -2871,16 +2890,13 @@ public class ImportJob
                         inherit    = getAttribute (child, "type");
                         String min = getAttribute (child, "min");
                         String max = getAttribute (child, "max");
+                        if (inherit.isEmpty ()) inherit = name;
+                        if (models.child (modelName, inherit) == null) inherit = partMap.importName (inherit);
                         name = "backend.lems.children." + name;  // This tag is used to determine type ($inherit) when adding the subpart.
+                        part.set ("$metadata", name, inherit);
+                        addDependencyFromLEMS (part.child ("$metadata", name), inherit);
                         if (! min.isEmpty ()) part.set ("$metadata", name + ".min", min);
                         if (! max.isEmpty ()) part.set ("$metadata", name + ".max", max);
-                        if (! inherit.isEmpty ())
-                        {
-                            // TODO: may decide to keep original LEMS names, in which case addDependency should not be called
-                            // Also, it will be possible to omit the inherit value if it exactly matches the name. Note that typeFor() has already been modified to handle this case.
-                            part.set ("$metadata", name, inherit);
-                            addDependencyFromLEMS (part.child ("$metadata", name), inherit);
-                        }
                         break;
                     case "ComponentReference":    // alias of a referenced part; jLEMS does resolution; "local" means the referenced part is a sibling, otherwise resolution includes the entire hierarchy
                     case "Link":                  // equivalent to "ComponentReference" with local flag set to true
@@ -2889,6 +2905,7 @@ public class ImportJob
                         name        = getAttribute (child, "name");
                         inherit     = getAttribute (child, "type");
                         description = getAttribute (child, "description");
+                        if (models.child (modelName, inherit) == null) inherit = partMap.importName (inherit);
                         part.set (name, "$connect(\"" + inherit + "\")");
                         if (! inherit    .isEmpty ()) addDependencyFromLEMS (part.child (name), inherit);
                         if (! description.isEmpty ()) part.set (name, "$metadata", "description", description);
@@ -3189,7 +3206,7 @@ public class ImportJob
             if (! inherit.isEmpty ())
             {
                 MNode parent = AppData.models.child (inherit);
-                if (parent == null)  // Imported part, so we can modify it.
+                if (parent == null)  // Newly imported part, so we can modify it.
                 {
                     parent = models.childOrCreate (modelName, inherit);
                     if (parent != null)
@@ -3286,7 +3303,6 @@ public class ImportJob
                         if (c.get ("$metadata", "backend.lems.port").equals ("out"))
                         {
                             sourcePort = c.key ();
-                            portsKnown = true;
                             break;
                         }
                     }
@@ -3341,16 +3357,22 @@ public class ImportJob
             if (! portsKnown)
             {
                 v.set ("$metadata", "warning2", "The identity of the source or target port could not be fully determined.");
+                // For events that references ports in their prospective container, check during post-processing
+                // to see if they have been inserted in a container.
                 if (to  .startsWith ("$up")) eventChildren.add (new EventChild (part, v, targetPort));
                 if (from.startsWith ("$up")) eventChildren.add (new EventChild (part, v, sourcePort));
             }
             if (! property.isEmpty ()) part.set (to + property, value);
         }
 
+        /**
+            Store events to be post-processed for possible resolution of port in container.
+            This is an expensive and desperate measure.
+        **/
         public class EventChild
         {
-            public MNode  part;      // that contains the event
-            public MNode  event;
+            public MNode  part;      // that directly contains the event
+            public MNode  event;     // The variable that processes the event.
             public String portName;  // Should be "in" or "out", which also indicates direction.
 
             public EventChild (MNode part, MNode event, String portName)
@@ -3362,18 +3384,22 @@ public class ImportJob
 
             public void process ()
             {
-                // Collect list of component names
-                Set<String> componentNames = new HashSet<String> ();
+                // Collect the entire parent hierarchy for the part.
+                // Anything that contains the part, or even an ancestor of the part, counts as a container
+                // and should be searched for a candidate port.
+                Set<String> family = new HashSet<String> ();
                 List<MNode> parents = collectParents (part);
-                for (MNode p : parents) componentNames.add (p.key ());
-                componentNames.add (part.key ());
+                for (MNode p : parents) family.add (p.key ());
+                family.add (part.key ());  // The part itself also belongs in the family, as we are most interested in a direct container.
 
-                // Scan all components for match
-                for (MNode component : models.child (modelName))
+                // Scan all imported models to see if they contain any member of the family.
+                // TODO: should also scan existing models in main db.
+                for (MNode potentialContainer : models.child (modelName))
                 {
-                    if (! containsChild (component, componentNames)) continue;
+                    if (! containsChild (potentialContainer, family)) continue;
 
-                    for (MNode c : component)
+                    // Search container for a port of the given direction.
+                    for (MNode c : potentialContainer)
                     {
                         if (c.get ("$metadata", "backend.lems.port").equals (portName))
                         {
@@ -3392,7 +3418,7 @@ public class ImportJob
                 }
             }
 
-            public boolean containsChild (MNode container, Set<String> componentNames)
+            public boolean containsChild (MNode container, Set<String> family)
             {
                 MNode metadata = container.child ("$metadata");
                 if (metadata == null) return false;
@@ -3401,7 +3427,9 @@ public class ImportJob
                 {
                     if (m.key ().startsWith ("backend.lems.children."))
                     {
-                        if (componentNames.contains (m.get ())) return true;
+                        // If the child type happens to be any member of the family,
+                        // then the candidate container is indeed the kind we are seeking.
+                        if (family.contains (m.get ())) return true;
                     }
                 }
 
@@ -3411,6 +3439,8 @@ public class ImportJob
 
         public void finish1 ()
         {
+            // Parts that were explicitly instantiated by a structure element should be
+            // converted from connections into subparts (if they were in fact created as connections).
             for (String component : childInstances)
             {
                 MNode sourceNode = part.child (component);
@@ -3549,7 +3579,7 @@ public class ImportJob
             if (parent != null)
             {
                 MPart mparent = new MPart ((MPersistent) parent);
-                PartMap.NameMap nameMap = new PartMap.NameMap (mparent);
+                NameMap nameMap = new NameMap (mparent);
                 pp.rename.putAll (nameMap.inward);
             }
             pp.rename.put ("t", "$t");
@@ -3821,6 +3851,7 @@ public class ImportJob
     {
         Map<String,String> rename = new TreeMap<String,String> ();
 
+        @SuppressWarnings("rawtypes")
         public boolean render (Operator op)
         {
             if (op instanceof Constant)
@@ -3943,7 +3974,7 @@ public class ImportJob
         return result;
     }
 
-    public String safeUnit (String unit)
+    public static String safeUnit (String unit)
     {
         if (forbiddenUCUM.matcher (unit).find ()) return "(" + unit + ")";
         return unit;

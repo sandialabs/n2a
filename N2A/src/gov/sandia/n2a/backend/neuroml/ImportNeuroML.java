@@ -31,7 +31,7 @@ public class ImportNeuroML implements Importer
     {
         if (PluginNeuroML.partMap == null) PluginNeuroML.partMap = new PartMap ();
 
-        ImportJob job = new ImportJob ();
+        ImportJob job = new ImportJob (PluginNeuroML.partMap);
         job.process (source);
         job.postprocess ();
 

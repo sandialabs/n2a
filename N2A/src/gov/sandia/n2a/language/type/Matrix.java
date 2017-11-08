@@ -18,10 +18,6 @@ import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Type;
-import gov.sandia.n2a.language.parse.ASTConstant;
-import gov.sandia.n2a.language.parse.ASTList;
-import gov.sandia.n2a.language.parse.ExpressionParser;
-import gov.sandia.n2a.language.parse.SimpleNode;
 
 public abstract class Matrix extends Type
 {
