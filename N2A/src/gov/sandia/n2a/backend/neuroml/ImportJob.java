@@ -229,12 +229,8 @@ public class ImportJob
                     Network network = new Network (child);
                     networks.put (network.id, network);
                     break;
-                default:
-                    genericPart (child, model);  // Assume that any top-level element not captured above is an abstract cell type.
-                    break;
 
                 // LEMS ------------------------------------------------------
-                // Because the default genericPart() above is written for NeuroML, all LEMS tags must be specified, even if we ignore them.
                 case "Target":
                     target (child);
                     break;
@@ -248,12 +244,15 @@ public class ImportJob
                     new ComponentType (model).genericVariable (child, "");  // Create a bogus component to wrap the top level, so we can add a LEMS constant to it.
                     break;
                 case "ComponentType":
-                case "Component":
                     ComponentType component = new ComponentType (child);
                     components.put (component.part.key (), component);
                     break;
                 case "Simulation":
                     simulation (child);
+                    break;
+                case "Component":
+                default:
+                    genericPart (child, model);  // Any NeuroML part not specifically processed above will fall through to here.
                     break;
             }
         }
@@ -697,7 +696,7 @@ public class ImportJob
         MNode part = container.set (node.getNodeName (), "");
         NameMap nameMap = partMap.importMap (inherit);
         inherit = nameMap.internal;
-        part.set ("$inherit", "\"" + inherit + "\"");  // TODO: name should map to one of the simplified part names (that don't distinguish dimension)
+        part.set ("$inherit", "\"" + inherit + "\"");
         addDependency (part, inherit);
 
         addAttributes (node, part, nameMap, "type");
@@ -720,12 +719,15 @@ public class ImportJob
             if (name.endsWith ("Mechanism"))
             {
                 removeDependency (c, name);  // We're about to change the $inherit value, so get rid of the dependency created in genericPart().
-                String type = c.get ("type");
+                String type    = c.get ("type");
+                String species = c.get ("species");
                 c.clear ("type");
+                c.clear ("species");
                 nameMap = partMap.importMap (type);
                 type = nameMap.internal;
                 c.set ("$inherit", "\"" + type + "\"");
                 addDependency (c, type);
+                if (! species.isEmpty ()) c.set ("$metadata", "species", species);
             }
         }
     }
@@ -1060,51 +1062,7 @@ public class ImportJob
         public void channel (Node node, MNode property)
         {
             MNode subpart = property.iterator ().next ();  // retrieve the first (and only) subpart
-
-            String name        = node.getNodeName ();
-            String ionChannel  = subpart.get ("ionChannel");
-            String number      = subpart.get ("number");
-            String condDensity = subpart.get ("condDensity");
-
-            subpart.clear ("ionChannel");
-            subpart.clear ("number");
-            subpart.clear ("condDensity");
-            NameMap nameMap = partMap.importMap ("ionChannel");  // There is only one internal part for all ion-channel-related components in NeuroML. It includes both individual channels and populations/densities.
-            remap (subpart, nameMap);
-
-            // multiple inheritance, combining the ion channel with the given mix-in
-            String potential = "";
-            if      (name.contains ("Nernst")) potential = "Nernst";
-            else if (name.contains ("GHK2"  )) potential = "GHK 2";
-            else if (name.contains ("GHK"   )) potential = "GHK";
-            if (! potential.isEmpty ())
-            {
-                // For now, assume that ion channel is already defined
-                String species = "ca";
-                if (name.contains ("Ca2")) species = "ca2";
-                species = models.getOrDefault (modelName, ionChannel, "$metadata", "species", species);
-                subpart.set ("c", species);  // connect to species/concentration model, which the user is responsible to create 
-                subpart.set ("$inherit", "\"Potential " + potential + "\",\"" + ionChannel + "\"");
-            }
-            else
-            {
-                subpart.set ("$inherit", "\"" + ionChannel + "\"");
-            }
-
-            if (! number.isEmpty ())
-            {
-                subpart.set ("population", number);
-                subpart.set ("population", "$metadata", "public", "");
-                subpart.set ("population", "$metadata", "backend.neuroml.param", "number");
-                subpart.set ("Gall", "G1*population");
-            }
-            if (! condDensity.isEmpty ())
-            {
-                subpart.set ("Gdensity", condDensity);
-                subpart.set ("Gdensity", "$metadata", "public", "");
-                subpart.set ("Gdensity", "$metadata", "backend.neuroml.param", "condDensity");
-                if (! name.contains ("GHK")) subpart.set ("Gall", "Gdensity*surfaceArea");
-            }
+            ImportJob.this.channel (node, subpart, false);
 
             String parentGroup = property.get ();
             Map<String,MNode> groupProperty = new TreeMap<String,MNode> ();
@@ -1166,9 +1124,9 @@ public class ImportJob
                         MNode subpart = property.iterator ().next ();
                         String concentrationModel = subpart.get ("concentrationModel");
                         subpart.clear ("concentrationModel");
-                        NameMap nameMap = partMap.importMap (concentrationModel);
+                        subpart.set ("$inherit", "\"" + concentrationModel + "\"");  // Dependency will be tagged when this property is added to segments.
+                        NameMap nameMap = exportMap (concentrationModel);
                         remap (subpart, nameMap);
-                        subpart.set ("$inherit", "\"" + nameMap.internal + "\"");  // Dependency will be tagged when this property is added to segments.
                         if (subpart.child ("z") == null)
                         {
                             int z = 1;  // The most common charge on an ion.
@@ -1188,7 +1146,7 @@ public class ImportJob
                         }
                         break;
                     case "resistivity":
-                        property.set ("R", biophysicalUnits (getAttribute (p, "value")));
+                        property.set ("resistivity", biophysicalUnits (getAttribute (p, "value")));
                         break;
                 }
             }
@@ -1518,7 +1476,6 @@ public class ImportJob
                     connection.set ("$inherit", "\"Coupling\"");  // Explicit non-NeuroML part, so no need for mapping
                     connection.set ("A", s.parent.part.key ());
                     connection.set ("B", s       .part.key ());
-                    connection.set ("R", "$kill");  // Force use of container's value.
 
                     int parentN = s.parent.part.getOrDefaultInt ("$n", "1");
                     if (parentN > 1)
@@ -1694,6 +1651,56 @@ public class ImportJob
         public int compareTo (Segment o)
         {
             return id - o.id;
+        }
+    }
+
+    public void channel (Node node, MNode part, boolean doDependency)
+    {
+        String name        = node.getNodeName ();
+        String ionChannel  = part.get ("ionChannel");
+        String number      = part.get ("number");
+        String condDensity = part.get ("condDensity");
+
+        part.clear ("ionChannel");
+        part.clear ("number");
+        part.clear ("condDensity");
+        NameMap nameMap = partMap.importMap ("ionChannel");  // There is only one internal part for all ion-channel-related components in NeuroML. It includes both individual channels and populations/densities.
+        remap (part, nameMap);
+
+        // multiple inheritance, combining the ion channel with the given mix-in
+        String potential = "";
+        if      (name.contains ("Nernst")) potential = "Potential Nernst";
+        else if (name.contains ("GHK2"  )) potential = "Potential GHK 2";
+        else if (name.contains ("GHK"   )) potential = "Potential GHK";
+        if (! potential.isEmpty ())
+        {
+            // For now, assume that ion channel is already defined
+            String species = "ca";
+            if (name.contains ("Ca2")) species = "ca2";
+            species = models.getOrDefault (modelName, ionChannel, "$metadata", "species", species);
+            part.set ("c", species);  // connect to species/concentration model, which the user is responsible to create 
+            part.set ("$inherit", "\"" + potential + "\",\"" + ionChannel + "\"");
+            if (doDependency) addDependency (part, potential);
+        }
+        else
+        {
+            part.set ("$inherit", "\"" + ionChannel + "\"");
+        }
+        if (doDependency) addDependency (part, ionChannel);
+
+        if (! number.isEmpty ())
+        {
+            part.set ("population", number);
+            part.set ("population", "$metadata", "public", "");
+            part.set ("population", "$metadata", "backend.neuroml.param", "number");
+            part.set ("Gall", "G1*population");
+        }
+        if (! condDensity.isEmpty ())
+        {
+            part.set ("Gdensity", condDensity);
+            part.set ("Gdensity", "$metadata", "public", "");
+            part.set ("Gdensity", "$metadata", "backend.neuroml.param", "condDensity");
+            if (! name.contains ("GHK")) part.set ("Gall", "Gdensity*surfaceArea");
         }
     }
 
@@ -2483,6 +2490,13 @@ public class ImportJob
         while (container.child (id) != null) id = stem + suffix++;
         MNode part = container.childOrCreate (id);
 
+        boolean skipType = false;
+        if (nodeName.equals ("Component"))
+        {
+            skipType = true;
+            nodeName = getAttribute (node, "type", nodeName);
+        }
+
         List<MNode> parents = collectParents (container);
         String inherit = typeFor (nodeName, parents);
         NameMap nameMap;
@@ -2507,7 +2521,8 @@ public class ImportJob
         {
             Node a = attributes.item (i);
             String name = a.getNodeName ();
-            if (name.equals ("id")) continue;
+            if (              name.equals ("id"  )) continue;
+            if (skipType  &&  name.equals ("type")) continue;
             name = nameMap.importName (name);
             if (isPart (name, parents))
             {
@@ -2522,6 +2537,14 @@ public class ImportJob
                 part.set (name, biophysicalUnits (a.getNodeValue (), defaultUnit));
             }
         }
+
+        // Some components require special processing, either because they are extensions
+        // of component types that require special processing, or because they are standard
+        // component types that appear as child nodes. IE: every child under a generic instantiation
+        // also gets processed via genericPart(), but not every child is necessarily generic.
+        // Thus, we add hacks here to detect these special cases and do the extra processing.
+        if (nodeName.startsWith ("channel")) channel (node, part, true);
+
 
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
@@ -2617,6 +2640,19 @@ public class ImportJob
         if (result != null) return findBasePart (result);
 
         return AppData.models.child (inherit);  // could be null
+    }
+
+    /**
+        Similar to PartMap.exportMap(MNode), but looks for parent in the current import
+        before referring up to the main database.
+    **/
+    public NameMap exportMap (String name)
+    {
+        MNode base = models.child (modelName, name);
+        if (base == null) base = AppData.models.child (name);
+        else              base = findBasePart (base);
+        if (base == null) return new NameMap (name);
+        return partMap.exportMap (base);
     }
 
     /**
@@ -3467,6 +3503,7 @@ public class ImportJob
 
         public void finish2 ()
         {
+            // Paths
             for (Entry<String,Path> e : directPaths.entrySet ())
             {
                 Path   path = e.getValue ();
@@ -3552,7 +3589,7 @@ public class ImportJob
                 for (String pc : kill) v.set ("@" + pc, "");  // For conditional equations, used "" rather than "$kill".
             }
 
-            // Pretty print
+            // Pretty print and name mapping
 
             PrettyPrinter pp = new PrettyPrinter ();
 
@@ -3579,23 +3616,33 @@ public class ImportJob
             if (parent != null)
             {
                 MPart mparent = new MPart ((MPersistent) parent);
-                NameMap nameMap = new NameMap (mparent);
-                pp.rename.putAll (nameMap.inward);
-            }
-            pp.rename.put ("t", "$t");
 
-            // If any name mappings conflict with existing names, add new mappings to shift those names away
-            Set<String> targets = new TreeSet<String> (pp.rename.values ());
-            for (MNode c : part)
-            {
-                String key = c.key ();
-                if (! targets.contains (key)) continue;
-                int suffix = 2;
-                String newName = key + suffix++;
-                while (targets.contains (newName)  ||  part.child (newName) != null) newName = key + suffix++;
-                pp.rename.put (key, newName);
-                targets.add (newName);
+                NameMap nameMap = partMap.outward.get (parent.key ());
+                if (nameMap == null)
+                {
+                    nameMap = new NameMap (mparent);
+                    nameMap.inheritContainers (partMap);
+                    nameMap.buildContainerMappings ();
+                }
+                nameMap.dump ();
+                pp.rename.putAll (nameMap.inward);
+
+                // Avoid hiding names from containers
+                Set<String> targets = new TreeSet<String> (pp.rename.values ());
+                for (MNode c : part)
+                {
+                    String key = c.key ();
+                    if (mparent.child (key) != null) continue;  // If the new part declares a variable with the same name as one in the part it is extending, then the intent is probably to override.
+                    if (! targets.contains (key)) continue;
+
+                    int suffix = 2;
+                    String newName = key + suffix++;
+                    while (targets.contains (newName)  ||  part.child (newName) != null  ||  mparent.child (newName) != null) newName = key + suffix++;
+                    pp.rename.put (key, newName);
+                    targets.add (newName);
+                }
             }
+            if (part.child ("t") == null) pp.rename.put ("t", "$t");  // If t is locally defined, then it is not the same as $t.
 
             pp.process (part);
         }
@@ -3708,6 +3755,7 @@ public class ImportJob
         **/
         public void resolve (MNode root)
         {
+            int i = 0;
             for (PathPart p : parts)
             {
                 if (! p.condition.isEmpty ()) isDirect = false;
@@ -3715,7 +3763,20 @@ public class ImportJob
                 List<MNode> lineage = collectParents (root);
                 lineage.add (root);
 
+                // Name-map the last path entry (the variable)
+                if (i == parts.size () - 1)
+                {
+                    MNode base = findBasePart (root);
+                    if (base != null)
+                    {
+                        NameMap nameMap = partMap.exportMap (base);
+                        p.partName = nameMap.importName (p.partName);
+                    }
+                }
+
+                // Try direct lookup
                 MNode next = definitionFor (p.partName, lineage);
+                // If that fails, try aliases
                 if (next == null)
                 {
                     Set<String> names = aliases.get (p.partName);
@@ -3728,6 +3789,7 @@ public class ImportJob
                         }
                     }
                 }
+                // If that fails, try child part
                 if (next == null)
                 {
                     String typeName = typeFor (p.partName, lineage);
@@ -3737,6 +3799,8 @@ public class ImportJob
                         isDirect = false;
                     }
                 }
+
+                // Check if connection
                 if (next != null)
                 {
                     String connection = next.get ();
@@ -3751,6 +3815,7 @@ public class ImportJob
                 root   = next;
                 p.part = next;
                 if (root == null) break;
+                i++;
             }
         }
 
