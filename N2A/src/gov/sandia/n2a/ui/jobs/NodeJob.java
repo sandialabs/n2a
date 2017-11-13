@@ -160,6 +160,8 @@ public class NodeJob extends NodeBase
             if (fileName.equals     ("model"   )) continue;  // This is the file associated with our own "source"
             if (fileName.equals     ("started" )) continue;
             if (fileName.equals     ("finished")) continue;
+            if (fileName.endsWith   (".bin"    )) continue;  // Don't show generated binaries
+            if (fileName.endsWith   (".aplx"   )) continue;
 
             if      (fileName.endsWith ("out"    )) newNode = new NodeFile (NodeFile.Type.Output,  file);
             else if (fileName.endsWith ("err"    )) newNode = new NodeFile (NodeFile.Type.Error,   file);
