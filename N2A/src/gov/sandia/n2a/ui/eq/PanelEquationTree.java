@@ -326,10 +326,20 @@ public class PanelEquationTree extends JPanel
         {
             public void mouseClicked (MouseEvent e)
             {
-                if (SwingUtilities.isLeftMouseButton (e)  &&  e.getClickCount () == 2)
+                if (! locked  &&  SwingUtilities.isLeftMouseButton (e)  &&  e.getClickCount () == 2)
                 {
-                    TreePath path = tree.getClosestPathForLocation (e.getX (), e.getY ());
-                    if (path != null  &&  ! locked) tree.startEditingAtPath (path);
+                    int x = e.getX ();
+                    int y = e.getY ();
+                    TreePath path = tree.getClosestPathForLocation (x, y);
+                    if (path != null)
+                    {
+                        Rectangle r = tree.getPathBounds (path);
+                        if (r.contains (x, y))
+                        {
+                            tree.setSelectionPath (path);
+                            tree.startEditingAtPath (path);
+                        }
+                    }
                 }
                 else if (SwingUtilities.isRightMouseButton (e)  &&   e.getClickCount () == 1)
                 {
