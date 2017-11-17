@@ -121,6 +121,28 @@ public class Variable implements Comparable<Variable>
                 }
                 // Ignore references, as they have no function in simulation.
             }
+
+            if (equations.isEmpty ())
+            {
+                EquationEntry e = null;
+                switch (assignment)
+                {
+                    case ADD:
+                        e = new EquationEntry ("0");
+                        break;
+                    case MULTIPLY:
+                    case DIVIDE:
+                        e = new EquationEntry ("1");
+                        break;
+                    case MIN:
+                        e = new EquationEntry ("inf");
+                        break;
+                    case MAX:
+                        e = new EquationEntry ("-inf");
+                        break;
+                }
+                if (e != null) add (e);
+            }
         }
         catch (ParseException e)
         {
