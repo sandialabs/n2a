@@ -66,6 +66,7 @@ PARSER_END(ExpressionParser)
 TOKEN_MGR_DECLS:
 {
     int parenDepth;  // For counting parentheses nesting in PossibleUnit mode
+    int squareDepth;  // Ditto for square bracket.
 }
 
 <*> SKIP:
@@ -117,7 +118,7 @@ TOKEN_MGR_DECLS:
 
 <PossibleUnit> TOKEN:
 {
-      <UNIT: (["\"","#","'","0"-":","?"-"]","_"-"{","}"])+>  // Everything in ASCII 33-126, except forbidden start characters. Notice that square brackets are allowed at this level.
+      <UNIT: (["\"","#","'","0"-":","?"-"Z","\\","_"-"{","}"])+>  // Everything in ASCII 33-126, except forbidden start characters.
     | <UCOMMA:   ","  > {matchedToken.kind = ExpressionParserConstants.COMMA;  }: DEFAULT
     | <USEMI:    ";"  > {matchedToken.kind = ExpressionParserConstants.SEMI;   }: DEFAULT
     | <UGT:      ">"  > {matchedToken.kind = ExpressionParserConstants.GT;     }: DEFAULT
@@ -137,16 +138,20 @@ TOKEN_MGR_DECLS:
     | <UNOT:     "!"  > {matchedToken.kind = ExpressionParserConstants.NOT;    }: DEFAULT
     | <UPOWER:   "^"  > {matchedToken.kind = ExpressionParserConstants.POWER;  }: DEFAULT
     | <UTILDE:   "~"  > {matchedToken.kind = ExpressionParserConstants.TILDE;  }: DEFAULT
+    | <PULSQ:    "["  > {matchedToken.kind = ExpressionParserConstants.UNIT; squareDepth = 1;}: FullUCUM
+    | <PURSQ:    "]"  > {matchedToken.kind = ExpressionParserConstants.RSQ;    }: DEFAULT
+    | <PULRND:   "("  > {matchedToken.kind = ExpressionParserConstants.UNIT; parenDepth  = 1;}: FullUCUM
     | <PURRND:   ")"  > {matchedToken.kind = ExpressionParserConstants.RRND;   }: DEFAULT
-    | <PULRND:   "("  > {matchedToken.kind = ExpressionParserConstants.UNIT; parenDepth = 1;}: FullUCUM
 }
 
 <FullUCUM> TOKEN:
 {
-      <UUNIT: (["!"-"'","*"-"~"])+>  // Everything in ASCII 33-126, except parentheses
+      <UUNIT: (["!"-"'","*"-"Z","\\","^"-"~"])+>  // Everything in ASCII 33-126, except parentheses and square brackets
                    {matchedToken.kind = ExpressionParserConstants.UNIT;}
     | <ULRND: "("> {matchedToken.kind = ExpressionParserConstants.UNIT; parenDepth++;}
-    | <URRND: ")"> {matchedToken.kind = ExpressionParserConstants.UNIT; parenDepth--; if (parenDepth <= 0) SwitchTo (PossibleUnit);}
+    | <URRND: ")"> {matchedToken.kind = ExpressionParserConstants.UNIT; parenDepth--;  if (parenDepth <= 0  &&  squareDepth <= 0) SwitchTo (PossibleUnit);}
+    | <ULSQ:  "["> {matchedToken.kind = ExpressionParserConstants.UNIT; squareDepth++;}
+    | <URSQ:  "]"> {matchedToken.kind = ExpressionParserConstants.UNIT; squareDepth--; if (parenDepth <= 0  &&  squareDepth <= 0) SwitchTo (PossibleUnit);}
 }
 
 
