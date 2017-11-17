@@ -1098,16 +1098,47 @@ public class InternalBackendData
         }
     }
 
+    public static class ResolveContainer implements Instance.Resolver
+    {
+        public Instance resolve (Instance from)
+        {
+            if (from instanceof Population) return from.container;
+            else                            return from.container.container;  // Parts must dereference their Population to get to their true container.
+        }
+    }
+
+    public static class ResolveConnection implements Instance.Resolver
+    {
+        public int i;
+
+        public ResolveConnection (int i)
+        {
+            this.i = i;
+        }
+
+        public Instance resolve (Instance from)
+        {
+            return ((Connection) from).endpoints[i];
+        }
+    }
+
+    public static class ResolvePopulation implements Instance.Resolver
+    {
+        public int i;
+
+        public ResolvePopulation (int i)
+        {
+            this.i = i;
+        }
+
+        public Instance resolve (Instance from)
+        {
+            return ((Part) from).populations[i];
+        }
+    }
+
     /**
          Convert resolutions to a form that can be processed quickly at runtime.
-         There are 3 ways to leave a part
-         1) Ascend to its container
-         2) Descend into a contained population -- need the index of population
-         3) Go to a connected part -- need the index of the endpoint
-         For simplicity, we only store a single integer.
-         i <  0 -- select endpoint index -i-1
-         i == 0 -- ascend to container
-         i >  0 -- select population index i-1
     **/
     public void translateReferences (EquationSet s, TreeSet<VariableReference> references)
     {
@@ -1124,18 +1155,18 @@ public class InternalBackendData
                     EquationSet next = (EquationSet) o;
                     if (next == current.container)  // ascend to our container
                     {
-                        newResolution.add (0);
+                        newResolution.add (new ResolveContainer ());
                     }
                     else  // descend into one of our contained populations
                     {
                         if (! it.hasNext ()  &&  r.variable.hasAttribute ("global"))  // descend to the population object itself
                         {
-                            int i = 1;
+                            int i = 0;
                             for (EquationSet p : current.parts)
                             {
                                 if (p == next)
                                 {
-                                    newResolution.add (i);
+                                    newResolution.add (new ResolvePopulation (i));
                                     break;
                                 }
                                 i++;
@@ -1144,19 +1175,19 @@ public class InternalBackendData
                         }
                         else  // descend to an instance of the population.
                         {
-                            throw new EvaluationException ("Can't reference into specific instance of a population.");
+                            throw new EvaluationException ("Can't reference specific instance of a contained population.");
                         }
                     }
                     current = next;
                 }
                 else if (o instanceof Entry<?,?>)  // We are following a part reference (which means we are a connection)
                 {
-                    int i = 1;
+                    int i = 0;
                     for (Entry<String,EquationSet> c : current.connectionBindings.entrySet ())
                     {
                         if (c.equals (o))
                         {
-                            newResolution.add (-i);
+                            newResolution.add (new ResolveConnection (i));
                             break;
                         }
                         i++;

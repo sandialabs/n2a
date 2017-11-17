@@ -10,9 +10,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.TreeSet;
 
-import gov.sandia.n2a.backend.internal.Connection;
 import gov.sandia.n2a.backend.internal.InternalBackendData;
-import gov.sandia.n2a.backend.internal.Part;
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.backend.internal.Population;
 import gov.sandia.n2a.backend.internal.Wrapper;
@@ -38,23 +36,21 @@ public class Instance extends Type
         if (countObject > 0) valuesObject = new Object[countObject];
     }
 
+    public interface Resolver
+    {
+        /**
+            Given the current instance, determine the next instance in the resolution chain.
+        **/
+        public Instance resolve (Instance from);
+    }
+
     public void resolve (TreeSet<VariableReference> references)
     {
         for (VariableReference r : references)
         {
             Instance result = this;
             Iterator<Object> it = r.resolution.iterator ();
-            while (it.hasNext ())
-            {
-                int i = ((Integer) it.next ()).intValue ();
-                if      (i > 0) result = ((Part)       result).populations[i-1];
-                else if (i < 0) result = ((Connection) result).endpoints [-i-1];
-                else  // i == 0
-                {
-                    if (result instanceof Population) result = result.container;
-                    else                              result = result.container.container;  // Parts must dereference their Population to get to their true container.
-                }
-            }
+            while (it.hasNext ()) result = ((Resolver) it.next ()).resolve (result);
             valuesObject[r.index] = result;
         }
     }
