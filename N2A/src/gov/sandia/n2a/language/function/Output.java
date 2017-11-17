@@ -223,18 +223,26 @@ public class Output extends Function
         return result;
     }
 
+    public Operator simplify (Variable from)
+    {
+        // Even if our variable is about to be replaced by a constant, we want to present its name in the output column.
+        if (variableName == null)
+        {
+            if (operands[0] instanceof AccessVariable)
+            {
+                variableName = ((AccessVariable) operands[0]).name;  // the raw name, including prime marks for derivatives
+            }
+            else
+            {
+                variableName = from.name;
+            }
+        }
+        return super.simplify (from);
+    }
+
     // This method should be called by analysis, with v set to the variable that holds this equation.
     public void determineVariableName (Variable v)
     {
-        if (operands[0] instanceof AccessVariable)
-        {
-            variableName = ((AccessVariable) operands[0]).name;  // the raw name, including prime marks for derivatives
-        }
-        else
-        {
-            variableName = v.name;
-        }
-
         boolean needIndex = false;  // Do we need $index to auto-generate names?
         if (operands.length == 1) needIndex = true;
         else if (operands.length == 2)
