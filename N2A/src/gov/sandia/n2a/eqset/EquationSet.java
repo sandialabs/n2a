@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.eqset;
 
+import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
@@ -142,7 +143,7 @@ public class EquationSet implements Comparable<EquationSet>
                 {
                     Variable v = new Variable (this, e);
                     // A variable with no equations and no accumulating combiner is likely to be a revocation.
-                    if (v.equations.size () > 0  ||  v.assignment != Variable.REPLACE) variables.add (v);
+                    if (v.equations.size () > 0) variables.add (v);
                 }
             }
             catch (ParseException pe)
@@ -723,9 +724,9 @@ public class EquationSet implements Comparable<EquationSet>
 
     /**
         Convert this equation list into an equivalent object where every included
-        part with $n==1 is merged into its containing part.  Append (+=) equations
-        are joined together into one long equation.
-        flatten() is kind of like a dual of pushDown().
+        part with $n==1 is merged into its containing part. Equations with combiners
+        (=+, =*, and so on) are joined together into one long equation with the appropriate
+        operator.
     **/
     public void flatten ()
     {
@@ -876,6 +877,26 @@ public class EquationSet implements Comparable<EquationSet>
         }
 
         return result;
+    }
+
+    public void addGlobalConstants () throws ParseException
+    {
+        String key = AppData.state.get ("General", "constants");
+        MNode constants = AppData.models.child (key);
+        if (constants == null) return;
+        for (MNode c : constants)
+        {
+            String value = c.get ();
+            if (value.isEmpty ()) continue;
+            Variable v = new Variable (c.key (), 0);
+            if (add (v))
+            {
+                v.addAttribute ("constant");
+                EquationEntry e = new EquationEntry (v, "");
+                e.expression = Operator.parse (value);
+                v.add (e);
+            }
+        }
     }
 
     /**

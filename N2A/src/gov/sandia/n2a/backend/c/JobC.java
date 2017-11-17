@@ -111,6 +111,7 @@ public class JobC
         EquationSet e = new EquationSet (job);
         e.resolveConnectionBindings ();
         e.flatten ();
+        e.addGlobalConstants ();
         e.addSpecials ();  // $dt, $index, $init, $live, $n, $t, $type
         e.fillIntegratedVariables ();
         e.findIntegrated ();

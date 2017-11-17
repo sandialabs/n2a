@@ -220,6 +220,7 @@ public class InternalBackend extends Backend
 
         e.resolveConnectionBindings ();
         e.flatten ();
+        e.addGlobalConstants ();
         e.addSpecials ();  // $index, $init, $live, $n, $t, $t', $type
         e.fillIntegratedVariables ();
         e.findIntegrated ();
