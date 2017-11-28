@@ -19,7 +19,6 @@ import gov.sandia.n2a.language.function.Log;
 import gov.sandia.n2a.language.function.Max;
 import gov.sandia.n2a.language.function.Min;
 import gov.sandia.n2a.language.function.Norm;
-import gov.sandia.n2a.language.function.Pulse;
 import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.function.Round;
 import gov.sandia.n2a.language.function.Signum;
@@ -226,7 +225,6 @@ public class Operator implements Cloneable, Comparable<Operator>
         register (Max          .factory ());
         register (Min          .factory ());
         register (Norm         .factory ());
-        register (Pulse        .factory ());
         register (ReadMatrix   .factory ());
         register (Round        .factory ());
         register (Signum       .factory ());
