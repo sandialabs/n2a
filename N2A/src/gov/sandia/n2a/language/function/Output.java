@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import gov.sandia.n2a.backend.internal.InstanceTemporaries;
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
@@ -30,7 +31,8 @@ import gov.sandia.n2a.language.type.Text;
 
 public class Output extends Function
 {
-    String variableName;  // Trace needs to know its target variable in order to auto-generate a column name. This value is set by an analysis process.
+    public String variableName;  // Trace needs to know its target variable in order to auto-generate a column name. This value is set by an analysis process.
+    public int    index;  // of column name in valuesObject array
 
     public static Factory factory ()
     {
@@ -174,51 +176,58 @@ public class Output extends Function
         }
 
         Simulator simulator = Simulator.getSimulator (context);
-        if (simulator != null)
+        if (simulator == null) return result;
+
+        Holder H = simulator.outputs.get (path);
+        if (H == null)
         {
-            Holder H = simulator.outputs.get (path);
-            if (H == null)
+            H = new Holder ();
+            H.simulator = simulator;
+            if (path.isEmpty ())
             {
-                H = new Holder ();
-                H.simulator = simulator;
-                if (path.isEmpty ())
+                H.out = simulator.out;
+            }
+            else
+            {
+                try
+                {
+                    H.out = new PrintStream (new File (path).getAbsoluteFile ());
+                }
+                catch (FileNotFoundException e)
                 {
                     H.out = simulator.out;
                 }
-                else
-                {
-                    try
-                    {
-                        H.out = new PrintStream (new File (path).getAbsoluteFile ());
-                    }
-                    catch (FileNotFoundException e)
-                    {
-                        H.out = simulator.out;
-                    }
-                }
-
-                if (operands.length > columnParameter + 1)
-                {
-                    H.raw = operands[columnParameter+1].eval (context).toString ().contains ("raw");
-                }
-
-                simulator.outputs.put (path, H);
             }
 
-            String column;
+            if (operands.length > columnParameter + 1)
+            {
+                H.raw = operands[columnParameter+1].eval (context).toString ().contains ("raw");
+            }
+
+            simulator.outputs.put (path, H);
+        }
+
+        // Determine column name
+        Instance instance;
+        if (context instanceof InstanceTemporaries) instance = ((InstanceTemporaries) context).wrapped;
+        else                                        instance = context;
+        String column = (String) instance.valuesObject[index];
+        if (column == null)
+        {
             if (operands.length > columnParameter)  // column name is specified
             {
-                column = operands[columnParameter].eval (context).toString ();  // evaluate every time, because it could change
+                column = operands[columnParameter].eval (context).toString ();
             }
             else  // auto-generate column name
             {
-                String prefix = context.path ();
+                String prefix = instance.path ();
                 if (prefix.isEmpty ()) column =                variableName;
                 else                   column = prefix + "." + variableName;
             }
-
-            H.trace (column, (float) ((Scalar) result).value);
+            instance.valuesObject[index] = column;
         }
+
+        H.trace (column, (float) ((Scalar) result).value);
 
         return result;
     }

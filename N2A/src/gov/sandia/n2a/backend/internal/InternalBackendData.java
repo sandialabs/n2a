@@ -16,6 +16,7 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Event;
+import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
@@ -652,6 +653,13 @@ public class InternalBackendData
                             }
                             return false;
                         }
+                        if (op instanceof Output)
+                        {
+                            Output o = (Output) op;
+                            o.index = countGlobalObject++;
+                            namesGlobalObject.add ("column name " + o.index);
+                            return true;  // Continue descent, because parameters of output() may contain variable references
+                        }
                         return true;
                     }
                 });
@@ -726,6 +734,13 @@ public class InternalBackendData
                                 }
                             }
                             return false;
+                        }
+                        if (op instanceof Output)
+                        {
+                            Output o = (Output) op;
+                            o.index = countLocalObject++;
+                            namesLocalObject.add ("column name " + o.index);
+                            return true;  // Continue descent, because parameters of output() may contain variable references
                         }
                         return true;
                     }
