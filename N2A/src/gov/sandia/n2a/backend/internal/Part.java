@@ -188,8 +188,12 @@ public class Part extends Instance
                     continue;
                 }
 
-                // Variable is buffered, so we must copy its value to ensure it gets copied back
-                result = temp.get (v);  // and fall through to store value ...
+                // Variable is buffered
+                if (v.assignment == Variable.REPLACE)  // not an accumulator
+                {
+                    temp.set (v, temp.get (v));  // so copy its value
+                }
+                continue;
             }
             // Note: $type is explicitly evaluated to 0 in Variable.eval(), so it never returns null, even when no conditions match.
 
@@ -392,7 +396,7 @@ public class Part extends Instance
                     if (v.type instanceof Matrix) set (v, ((Matrix) v.type).clear (Double.NEGATIVE_INFINITY));
                     else                          set (v, new Scalar (Double.NEGATIVE_INFINITY));
                     break;
-                // For all other assignment types, do nothing. Effectively, buffered value is initialized to current value
+                // Must handle every assignment type. If any new ones are developed, add appropriate action here.
             }
         }
 
