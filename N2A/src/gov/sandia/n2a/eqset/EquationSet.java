@@ -723,17 +723,18 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
-        Convert this equation list into an equivalent object where every included
+        Convert this equation set into an equivalent object where every included
         part with $n==1 is merged into its containing part. Equations with combiners
         (=+, =*, and so on) are joined together into one long equation with the appropriate
         operator.
+        @param backend Prefix for metadata keys specific to the engine selected to execute this model.
     **/
-    public void flatten ()
+    public void flatten (String backend)
     {
         TreeSet<EquationSet> temp = new TreeSet<EquationSet> (parts);
         for (final EquationSet s : temp)
         {
-            s.flatten ();
+            s.flatten (backend);
 
             // Check if connection. They must remain a separate equation set for code-generation purposes.
             if (s.connectionBindings != null) continue;
@@ -743,7 +744,7 @@ public class EquationSet implements Comparable<EquationSet>
             boolean hasBackendMetadata = false;
             for (Entry<String,String> m : s.metadata.entrySet ())
             {
-                if (m.getKey ().startsWith ("backend"))  // this is only a convention, but one that should be followed
+                if (m.getKey ().startsWith (backend))
                 {
                     hasBackendMetadata = true;
                     break;
@@ -753,8 +754,7 @@ public class EquationSet implements Comparable<EquationSet>
 
             // Check if $n==1
             if (! s.isSingleton ()) continue;
-            Variable n = s.find (new Variable ("$n", 0));
-            if (n != null) s.variables.remove (n);  // We don't want $n in the merged set.
+            s.variables.remove (new Variable ("$n", 0));  // We don't want $n in the merged set.
 
             // Don't merge if there are any conflicting $variables.
             boolean conflict = false;
@@ -777,10 +777,7 @@ public class EquationSet implements Comparable<EquationSet>
 
             //   Variables
             final TreeSet<String> names = new TreeSet<String> ();
-            for (Variable v : s.variables)
-            {
-                names.add (v.name);
-            }
+            for (Variable v : s.variables) names.add (v.name);
 
             class Prefixer extends Transformer
             {
@@ -988,9 +985,15 @@ public class EquationSet implements Comparable<EquationSet>
     **/
     public void removeUnused ()
     {
+        while (removeUnusedEval ());
+    }
+
+    public boolean removeUnusedEval ()
+    {
+        boolean changed = false;
         for (EquationSet s : parts)
         {
-            s.removeUnused ();
+            if (s.removeUnusedEval ()) changed = true;
         }
 
         TreeSet<Variable> temp = new TreeSet<Variable> (variables);
@@ -1015,12 +1018,12 @@ public class EquationSet implements Comparable<EquationSet>
                 continue;
             }
 
+            v.removeDependencies ();
             variables.remove (v);
-            // In theory, removing variables may reduce the dependencies on some other variable to 0.
-            // Then we could remove that variable as well. This would require multiple passes or some
-            // other scheme to recheck everything affected. We don't really need that much accounting
-            // because most unused variables will be $variables we added preemptively.
+            changed = true;
         }
+
+        return changed;
     }
 
     /**

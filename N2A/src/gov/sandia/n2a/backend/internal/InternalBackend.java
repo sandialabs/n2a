@@ -219,7 +219,7 @@ public class InternalBackend extends Backend
         System.setProperty ("user.dir", new File (jobDir).getAbsolutePath ());  // Make paths relative to job directory
 
         e.resolveConnectionBindings ();
-        e.flatten ();
+        e.flatten ("backend." + e.getNamedValue ("backend", "internal"));
         e.addGlobalConstants ();
         e.addSpecials ();  // $index, $init, $live, $n, $t, $t', $type
         e.fillIntegratedVariables ();

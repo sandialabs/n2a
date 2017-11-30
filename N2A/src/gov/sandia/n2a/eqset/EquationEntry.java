@@ -76,6 +76,8 @@ public class EquationEntry implements Comparable<EquationEntry>
     **/
     public EquationEntry (String rhs) throws ParseException
     {
+        ifString = "";
+
         String[] parts = rhs.split ("@");
         if (parts[0].isEmpty ()  ||  parts[0].startsWith ("$kill")) return;
         try
@@ -88,7 +90,6 @@ public class EquationEntry implements Comparable<EquationEntry>
             throw e;
         }
 
-        ifString = "";
         if (parts.length > 1)
         {
             try

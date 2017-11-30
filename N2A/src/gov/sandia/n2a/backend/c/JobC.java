@@ -110,7 +110,7 @@ public class JobC
 
         EquationSet e = new EquationSet (job);
         e.resolveConnectionBindings ();
-        e.flatten ();
+        e.flatten ("backend.c");
         e.addGlobalConstants ();
         e.addSpecials ();  // $dt, $index, $init, $live, $n, $t, $type
         e.fillIntegratedVariables ();

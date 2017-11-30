@@ -8,6 +8,7 @@ package gov.sandia.n2a.eqset;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.language.AccessVariable;
+import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -19,11 +20,13 @@ import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Max;
 import gov.sandia.n2a.language.function.Min;
+import gov.sandia.n2a.language.operator.AND;
 import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.operator.Divide;
 import gov.sandia.n2a.language.operator.Multiply;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -268,70 +271,108 @@ public class Variable implements Comparable<Variable>
         e.variable = this;
     }
 
-    /**
-        Combine equations from given variable with this, where that takes precedence.
-        All equations will be detached from given variable, whether or not they are added to this.
-        TODO: Revoke conditional forms.
-            variable=@condition  -- revokes the given condition on the given variable
-            variable=@           -- revokes all conditions
-            variabel=expression@ -- revples all conditions, and replaces them with a single new unconditional expression
-    **/
-    public void merge (Variable that)
-    {
-        if (equations == null) equations = new TreeSet<EquationEntry> ();
-        for (EquationEntry e : that.equations) e.variable = this;
-        that.equations.addAll (equations);  // Set.addAll() keeps pre-existing entries
-        equations = that.equations;
-        that.equations = new TreeSet<EquationEntry> ();
-
-        // Merge $metadata
-        if (that.metadata != null)
-        {
-            if (metadata == null) metadata = new TreeMap<String,String> ();
-            metadata.putAll (that.metadata);
-        }
-
-        // TODO: merge references
-    }
-
     public void flattenExpressions (Variable v)
     {
-        if (equations == null) equations = new TreeSet<EquationEntry> ();
-        for (EquationEntry e : v.equations)
+        if (   assignment != v.assignment
+            && ! (   (assignment == MULTIPLY  &&  v.assignment == DIVIDE)  // This line and the next say that * and / are compatible with each other, so ignore that case.
+                  || (assignment == DIVIDE    &&  v.assignment == MULTIPLY)))
         {
-            if (v.assignment > REPLACE)  // assuming all other constants are greater 
-            {
-                EquationEntry e2 = equations.floor (e);
-                if (e.compareTo (e2) == 0)  // conditionals are exactly the same
-                {
-                    // merge expressions
-                    OperatorBinary op = null;
-                    if      (v.assignment == ADD)      op = new Add ();
-                    else if (v.assignment == MULTIPLY) op = new Multiply ();
-                    else if (v.assignment == DIVIDE)   op = new Divide ();
-                    if (op != null)
-                    {
-                        op.operand0 = e2.expression;
-                        op.operand1 = e .expression;
-                        e2.expression = op;
-                        continue;
-                    }
+            Backend.err.get ().println ("WARNING: Flattened variable " + v.container.prefix () + "." + v.nameString () + " has different combining operator than target (" + container.prefix () + "." + nameString () + "). Resolving in favor of higher-precedence operator.");
+            v.assignment = assignment = Math.max (v.assignment, assignment);
+        }
 
-                    Function f = null;
-                    if      (v.assignment == MIN) f = new Min ();
-                    else if (v.assignment == MAX) f = new Max ();
-                    if (f != null)
+        if (v.assignment == REPLACE) 
+        {
+            for (EquationEntry e2 : v.equations) add (e2);  // Any pre-existing equation takes precedence over this one.
+        }
+        else
+        {
+            // For combiners, it is necessary to create new equations for every combination of conditions.
+            // Of course, unconditional equations and equations with matching conditions can be combined more directly.
+
+            // First step is to augment both equation sets with an unconditional form, if they lack it.
+            EquationEntry query = new EquationEntry (this, "");
+            EquationEntry e = find (query);
+            if (e == null) add (query);  // expression and condition are null; we deal with this below
+            query = new EquationEntry (v, "");
+            e = v.find (query);
+            if (e == null) v.add (query);
+
+            NavigableSet<EquationEntry> equations0 = equations;
+            equations = new TreeSet<EquationEntry> ();
+            for (EquationEntry e0 : equations0)
+            {
+                for (EquationEntry e1 : v.equations)
+                {
+                    if (e0.compareTo (e1) == 0)  // Condition strings are exactly the same. TODO: compare ASTs for actual logic equivalence.
                     {
-                        f.operands[0] = e2.expression;
-                        f.operands[1] = e .expression;
-                        e2.expression = f;
-                        continue;
+                        e = new EquationEntry (this, "");
+                        e.condition = e0.condition;
                     }
+                    else if (e0.condition == null)
+                    {
+                        // Check if e1.condition exists in this.equations
+                        // If so, then only those equations should be merged, so skip this one.
+                        if (find (e1) != null) continue;
+                        e = new EquationEntry (this, "");
+                        e.condition = e1.condition;
+                    }
+                    else if (e1.condition == null)
+                    {
+                        // Check if e0.condition exists in v.equations
+                        if (v.find (e0) != null) continue;
+                        e = new EquationEntry (this, "");
+                        e.condition = e0.condition;
+                    }
+                    else
+                    {
+                        e = new EquationEntry (this, "");
+                        AND and = new AND ();
+                        e.condition = and;
+                        and.operand0 = e0.condition;
+                        and.operand1 = e1.condition;
+                    }
+                    if (e.condition != null) e.ifString = e.condition.render ();
+
+                    // merge expressions
+                    if (e0.expression == null)
+                    {
+                        e.expression = e1.expression;  // which could also be null
+                    }
+                    else if (e1.expression == null)
+                    {
+                        e.expression = e0.expression;
+                    }
+                    else  // Both expressions exist
+                    {
+                        OperatorBinary op = null;
+                        Function       f  = null;
+                        switch (v.assignment)
+                        {
+                            case ADD:      op = new Add ();      break;
+                            case MULTIPLY: op = new Multiply (); break;
+                            case DIVIDE:   op = new Divide ();   break;
+                            case MIN:      f  = new Min ();      break;
+                            case MAX:      f  = new Max ();      break;
+                        }
+                        if (op != null)
+                        {
+                            op.operand0 = e0.expression;
+                            op.operand1 = e1.expression;
+                            e.expression = op;
+                        }
+                        else if (f != null)
+                        {
+                            f.operands[0] = e0.expression;
+                            f.operands[1] = e1.expression;
+                            e.expression = f;
+                        }
+                    }
+                    if (e.expression != null) equations.add (e);
                 }
             }
-            e.variable = this;
-            equations.add (e);  // Any pre-existing equation takes precedence over this one. Note also that the merged e2 above does not need to be added for the changes to become effective.
         }
+
         v.equations.clear ();
     }
 
@@ -376,25 +417,29 @@ public class Variable implements Comparable<Variable>
                 e.ifString  = e.condition.render ();
             }
 
-            if (e.ifString.equals ("0"))
+            if (e.condition instanceof Constant)
             {
-                // Drop equation because it will never fire.
-                changed = true;
-            }
-            else if (e.ifString.equals ("1"))
-            {
-                alwaysTrue.add (e);
-                nextEquations.add (e);
+                Constant c = (Constant) e.condition;
+                if (c.value instanceof Scalar)
+                {
+                    double value = ((Scalar) c.value).value;
+                    if (value == 0)
+                    {
+                        // Drop equation because it will never fire.
+                        changed = true;
+                        continue;
+                    }
+                    alwaysTrue.add (e);
+                }
             }
             else if (e.ifString.isEmpty ()  &&  e.expression instanceof AccessVariable  &&  ((AccessVariable) e.expression).reference.variable == this)
             {
                 // Drop this default equation because it is redundant. Simulator always copies value to next cycle when no equation fires.
                 changed = true;
+                continue;
             }
-            else
-            {
-                nextEquations.add (e);
-            }
+
+            nextEquations.add (e);
         }
         if (alwaysTrue.size () == 1)
         {
@@ -474,6 +519,19 @@ public class Variable implements Comparable<Variable>
                 whatWeDontNeedAnymore.removeUser (this);
             }
         }
+    }
+
+    /**
+        Releases all our dependencies, usually as a prelude to removing this variable from an equation set.
+    **/
+    public void removeDependencies ()
+    {
+        if (uses == null) return;
+        for (Variable whatWeDontNeedAnymore : uses.keySet ())
+        {
+            whatWeDontNeedAnymore.removeUser (this);
+        }
+        uses = null;
     }
 
     /**
