@@ -2,4 +2,6 @@ Replete
 **/lib
 **/bin
 .metadata
+.recommenders
 **/gov/sandia/n2a/language/parse
+**/gov/sandia/n2a/db/models
