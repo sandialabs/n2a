@@ -98,8 +98,8 @@ public class InternalBackendData
     public List<EventSource> eventSources    = new ArrayList<EventSource> ();
     public List<Variable>    eventReferences = new ArrayList<Variable> ();  // Variables in referenced parts that need to be finalized when this part executes due to a zero-delay event.
 
-    public boolean populationCanGrowOrDie;
-    public boolean populationCanResize;
+    public boolean populationCanGrowOrDie;  // by structural dynamics other than $n
+    public boolean populationCanResize;     // by manipulating $n
     public int     populationIndex;  // in container.populations
 
     public int liveStorage;
@@ -1014,10 +1014,18 @@ public class InternalBackendData
         if (n != null)
         {
             populationCanResize = globalMembers.contains (n);
-            if (populationCanGrowOrDie  &&  ! populationCanResize  &&  n.hasUsers ())
+
+            // TODO: correctly detect whether $n is constant before running analyze()
+            // The problem is that we need information about lethality to know if $n is constant.
+            // However, we need to process constants to detect lethality. This is a circular dependency.
+            // The solution may be to:
+            //   assume $n is not constant
+            //   determine lethality as early as possible
+            //   rerun constant elimination (EquationSet.findConstants()) as soon as we are certain about $n
+            // See EquationSet.forceTemporaryStorageForSpecials() for a related issue.
+            if (! populationCanResize  &&  populationCanGrowOrDie  &&  n.hasUsers ())
             {
-                // TODO: if $n has users and populationCanGrowOrDie, then $n should not be tagged "constant"
-                System.err.println ("WARNING: $n can change (due to structural dynamics) but it was detected as a constant. Equations that depend on $n may give incorrect results.");
+                Backend.err.get ().println ("WARNING: $n can change (due to structural dynamics) but it was detected as a constant. Equations that depend on $n may give incorrect results.");
             }
         }
 
@@ -1133,7 +1141,7 @@ public class InternalBackendData
 
         public Instance resolve (Instance from)
         {
-            return ((Connection) from).endpoints[i];
+            return ((Part) from).endpoints[i];
         }
     }
 

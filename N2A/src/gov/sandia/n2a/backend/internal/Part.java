@@ -15,7 +15,6 @@ import gov.sandia.n2a.backend.internal.InternalBackendData.EventSource;
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventTarget;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
@@ -29,9 +28,12 @@ import gov.sandia.n2a.language.type.Scalar;
 public class Part extends Instance
 {
     public Population[] populations;
+    public Part[]       endpoints; /// Parts connected by this object
     public EventStep    event;     ///< Every Part lives on some simulation queue, held by an EventStep object.
     public Part         next;      // simulation queue
     public Part         previous;  // simulation queue
+    public Part         before;    // population management
+    public Part         after;     // population management
 
     /**
         Empty constructor, specifically for use by Wrapper and EventStep.
@@ -50,12 +52,9 @@ public class Part extends Instance
         {
             populations = new Population[equations.parts.size ()];
             int i = 0;
-            for (EquationSet s : equations.parts)
-            {
-                if (s.connectionBindings == null) populations[i++] = new PopulationCompartment (s, this);
-                else                              populations[i++] = new PopulationConnection  (s, this);
-            }
+            for (EquationSet s : equations.parts) populations[i++] = new Population (s, this);
         }
+        if (equations.connectionBindings != null) endpoints = new Part[equations.connectionBindings.size ()];
         for (EventSource es : bed.eventSources)
         {
             valuesObject[es.monitorIndex] = new ArrayList<Instance> ();
@@ -80,6 +79,25 @@ public class Part extends Instance
         {
             set (bed.live, new Scalar (0));
         }
+
+        // update accountable endpoints
+        if (bed.accountableEndpoints != null)
+        {
+            int count = bed.accountableEndpoints.length;
+            for (int i = 0; i < count; i++)
+            {
+                Variable ae = bed.accountableEndpoints[i];
+                if (ae != null)
+                {
+                    Part p = endpoints[i];
+                    Scalar m = (Scalar) p.get (ae);
+                    m.value--;
+                    p.set (ae, m);
+                }
+            }
+        }
+
+        ((Population) container).remove (this);
     }
 
     public void resolve ()
@@ -100,6 +118,24 @@ public class Part extends Instance
     public void init (Simulator simulator)
     {
         InstanceTemporaries temp = new InstanceTemporaries (this, simulator, true);
+
+        // update accountable endpoints
+        // Note: these do not require resolve(). Instead, they access their target directly through the endpoints array.
+        if (temp.bed.accountableEndpoints != null)
+        {
+            int count = temp.bed.accountableEndpoints.length;
+            for (int i = 0; i < count; i++)
+            {
+                Variable ae = temp.bed.accountableEndpoints[i];
+                if (ae != null)
+                {
+                    Part p = endpoints[i];
+                    Scalar m = (Scalar) p.get (ae);
+                    m.value++;
+                    p.set (ae, m);
+                }
+            }
+        }
 
         // $variables
         if (temp.bed.liveStorage == InternalBackendData.LIVE_STORED) set (temp.bed.live, new Scalar (1));  // force $live to be set before anything else
@@ -129,8 +165,6 @@ public class Part extends Instance
 
         // zero external buffered variables that may be written before first finish()
         for (Variable v : temp.bed.localBufferedExternalWrite) set (v, v.type);  // v.type should be pre-loaded with zero-equivalent values
-
-        // Note: instance counting is handled directly by PopulationCompartment.add()
 
         // Request event monitors
         for (EventTarget et : temp.bed.eventTargets)
@@ -421,14 +455,26 @@ public class Part extends Instance
                         }
                         else
                         {
-                            Part p = convert (other);
+                            InternalBackendData otherBed = (InternalBackendData) other.backendData;
+                            Population otherPopulation = ((Part) container.container).populations[otherBed.populationIndex];
+                            Part p = new Part (other, otherPopulation);
+                            otherPopulation.insert (p);
+
+                            // If this is a connection, keep the same bindings
+                            Conversion conversion = bed.conversions.get (other);
+                            if (conversion.bindings != null)
+                            {
+                                for (int j = 0; j < conversion.bindings.length; j++)
+                                {
+                                    p.endpoints[conversion.bindings[j]] = endpoints[j];
+                                }
+                            }
 
                             event.enqueue (p);
                             p.resolve ();
                             p.init (simulator);  // accountable connections are updated here
 
                             // Copy over variables
-                            Conversion conversion = bed.conversions.get (other);
                             int count = conversion.from.size ();
                             for (int v = 0; v < count; v++)
                             {
@@ -438,7 +484,6 @@ public class Part extends Instance
                             }
 
                             // Set $type to be our position in the split
-                            InternalBackendData otherBed = (InternalBackendData) other.backendData;
                             p.setFinal (otherBed.type, splitPosition);
                         }
                     }
@@ -502,12 +547,22 @@ public class Part extends Instance
         return true;
     }
 
-    /**
-        Hack to allow testing of lethalConnection at this level of the class hierarchy.
-    **/
+    public void setPart (int i, Part p)
+    {
+        endpoints[i] = p;
+    }
+
     public Part getPart (int i)
     {
-        throw new EvaluationException ("Internal error: only Connections can hold references to other Parts.");
+        return endpoints[i];
+    }
+
+    public int getCount (int i)
+    {
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
+        Variable ae = bed.accountableEndpoints[i];
+        if (ae == null) return 0;
+        return (int) ((Scalar) endpoints[i].get (ae)).value;
     }
 
     public boolean getLive ()
@@ -544,6 +599,20 @@ public class Part extends Instance
         return true;
     }
 
+    public double getP (Simulator simulator)
+    {
+        InstancePreLive temp = new InstancePreLive (this, simulator);
+        if (temp.bed.p == null) return 1;  // N2A language defines default to be 1 (always create)
+        for (Variable v : temp.bed.Pdependencies)
+        {
+            Type result = v.eval (temp);
+            if (result != null  &&  v.writeIndex >= 0) temp.set (v, result);
+        }
+        Type result = temp.bed.p.eval (temp);
+        if (result == null) return 1;
+        return ((Scalar) result).value;
+    }
+
     public Matrix getXYZ (Simulator simulator)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
@@ -559,12 +628,19 @@ public class Part extends Instance
         return new MatrixDense (3, 1);  // default is ~[0,0,0]
     }
 
-    /**
-        Create a new part based on a different equation set (or perhaps even the same one)
-        and copy over all matching variables. Places result directly onto sim queue.
-    **/
-    public Part convert (EquationSet other)
+    public Matrix project (int i, int j)
     {
-        throw new EvaluationException ("Internal error: convert() must be implemented by a specific subclass of Part");
+        // TODO: as part of spatial filtering, implement project()
+        return new MatrixDense (3, 1);
+    }
+
+    public String path ()
+    {
+        if (equations.connectionBindings == null) return super.path ();
+
+        // For connections, it is more understandable to show our endpoints rather than our own name.
+        String result = endpoints[0].path ();
+        for (int i = 1; i < endpoints.length; i++) result += "-" + endpoints[i].path ();
+        return result;
     }
 }

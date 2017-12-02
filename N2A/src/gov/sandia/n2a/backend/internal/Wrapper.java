@@ -17,7 +17,7 @@ public class Wrapper extends Part
     {
         if (model.connectionBindings != null) throw new EvaluationException ("Only compartments may be top-level models.");  // What are you going to connect, anyway?
         populations = new Population[1];
-        populations[0] = new PopulationCompartment (model, this);
+        populations[0] = new Population (model, this);
     }
 
     public void init (Simulator simulator)
@@ -38,6 +38,6 @@ public class Wrapper extends Part
     public boolean finish (Simulator simulator)
     {
         populations[0].finish (simulator);
-        return ((PopulationCompartment) populations[0]).n > 0;
+        return populations[0].n > 0;
     }
 }

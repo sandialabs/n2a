@@ -1199,7 +1199,7 @@ public class EquationSet implements Comparable<EquationSet>
         </ul>
         Each of these may call for different processing in the simulator, so various
         flags are set to indicate the causes.
-        Depends on results of: addSpecials(), findConstants(), collectSplits(), findInitOnly()
+        Depends on results of: addSpecials(), findConstants(), collectSplits()
     **/
     public void findDeath ()
     {
@@ -1316,11 +1316,8 @@ public class EquationSet implements Comparable<EquationSet>
                 {
                     Variable live = s.find (new Variable ("$live"));
                     if (live != null) live.addUser (this);
-                    if (! lethalConnection)
-                    {
-                        lethalConnection = true;
-                        somethingChanged = true;
-                    }
+                    if (! lethalConnection) somethingChanged = true;
+                    lethalConnection = true;
                 }
             }
         }

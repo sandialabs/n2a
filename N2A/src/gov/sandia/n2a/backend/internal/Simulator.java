@@ -38,7 +38,7 @@ public class Simulator implements Iterable<Part>
     public EventFactory                eventFactory;
     public Queue<Event>                eventQueue   = new PriorityQueue<Event> ();
     public List<ResizeRequest>         resizeQueue  = new LinkedList<ResizeRequest> ();
-    public List<PopulationConnection>  connectQueue = new LinkedList<PopulationConnection> ();
+    public List<Population>            connectQueue = new LinkedList<Population> ();
     public TreeMap<Double,EventStep>   periods      = new TreeMap<Double,EventStep> ();
     public Random                      random;
 
@@ -59,12 +59,12 @@ public class Simulator implements Iterable<Part>
 
     public class ResizeRequest
     {
-        public PopulationCompartment compartment;
-        public int                   size;
-        public ResizeRequest (PopulationCompartment compartment, int size)
+        public Population population;
+        public int        size;
+        public ResizeRequest (Population population, int size)
         {
-            this.compartment = compartment;
-            this.size        = size;
+            this.population = population;
+            this.size       = size;
         }
     }
 
@@ -147,11 +147,11 @@ public class Simulator implements Iterable<Part>
     public void updatePopulations ()
     {
         // Resize populations that have requested it
-        for (ResizeRequest r : resizeQueue) r.compartment.resize (this, r.size);
+        for (ResizeRequest r : resizeQueue) r.population.resize (this, r.size);
         resizeQueue.clear ();
 
         // Evaluate connection populations that have requested it
-        for (PopulationConnection p : connectQueue) p.connect (this);
+        for (Population p : connectQueue) p.connect (this);
         connectQueue.clear ();
     }
 
@@ -188,12 +188,12 @@ public class Simulator implements Iterable<Part>
         return 1e-4;
     }
 
-    public void resize (PopulationCompartment p, int n)
+    public void resize (Population p, int n)
     {
         resizeQueue.add (new ResizeRequest (p, n));
     }
 
-    public void connect (PopulationConnection p)
+    public void connect (Population p)
     {
         connectQueue.add (p);
     }
