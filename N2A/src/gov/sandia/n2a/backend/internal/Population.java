@@ -1,5 +1,5 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -27,10 +27,8 @@ public class Population extends Instance
     // extra storage for the head object.
     public Part head; ///< List of all instances of this population. Mainly used for creating connections.
     public Part tail; ///< Last member in list. Used for reverse iteration.
-    public Part old;  ///< First old part in list. All parts before this were added during current cycle. If old == null, then all parts are new.
+    public Part old;  ///< First old part in list. All parts before this were added during current cycle. If old == head, then all parts are new.
     public int  n;  /// current number of live members
-    public int  nextIndex;
-    public LinkedList<Integer> availableIndex;
 
     protected Population (EquationSet equations, Part container)
     {
@@ -63,6 +61,14 @@ public class Population extends Instance
         // zero external buffered variables that may be written before first finish()
         for (Variable v : temp.bed.globalBufferedExternalWrite) set (v, v.type);  // v.type should be pre-loaded with zero-equivalent values
 
+        if (temp.bed.index != null)
+        {
+            valuesFloat[temp.bed.indexNext] = 0;  // Using floats directly as index counter limits us to 24 bits, or about 16 million. Internal is not intended for large simulations, so this limitation is acceptable.
+            // indexAvailable is initially null
+        }
+
+        // TODO: A self-connection will have to do both resize() and connect().
+        // It's just coincidental that these are mutually exclusive in the current code.
         if (equations.connectionBindings == null)
         {
             InternalBackendData bed = (InternalBackendData) equations.backendData;
@@ -354,14 +360,16 @@ public class Population extends Instance
         if (bed.index != null)
         {
             int index;
-            if (availableIndex == null)
+            if (valuesObject[bed.indexAvailable] == null)
             {
-                index = nextIndex++;
+                index = (int) valuesFloat[bed.indexNext]++;
             }
             else
             {
+                @SuppressWarnings("unchecked")
+                LinkedList<Integer> availableIndex = (LinkedList<Integer>) valuesObject[bed.indexAvailable];
                 index = availableIndex.remove ();
-                if (availableIndex.size () < 1) availableIndex = null;
+                if (availableIndex.size () < 1) valuesObject[bed.indexAvailable] = null;
             }
             p.set (bed.index, new Scalar (index));
         }
@@ -383,7 +391,13 @@ public class Population extends Instance
         InternalBackendData bed = (InternalBackendData) equations.backendData;
         if (bed.index != null)
         {
-            if (availableIndex == null) availableIndex = new LinkedList<Integer> ();
+            @SuppressWarnings("unchecked")
+            LinkedList<Integer> availableIndex = (LinkedList<Integer>) valuesObject[bed.indexAvailable];
+            if (availableIndex == null)
+            {
+                availableIndex = new LinkedList<Integer> ();
+                valuesObject[bed.indexAvailable] = availableIndex;
+            }
             availableIndex.add ((int) ((Scalar) p.get (bed.index)).value);
         }
 
@@ -412,7 +426,6 @@ public class Population extends Instance
         while (n < requestedN)
         {
             Part p = new Part (equations, this);
-            insert (p);  // sets $index; increments n
             ((Part) container).event.enqueue (p);
             p.resolve ();
             p.init (simulator);

@@ -1,5 +1,5 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -28,8 +28,7 @@ import gov.sandia.n2a.language.type.Scalar;
 public class Part extends Instance
 {
     public Population[] populations;
-    public Part[]       endpoints; /// Parts connected by this object
-    public EventStep    event;     ///< Every Part lives on some simulation queue, held by an EventStep object.
+    public EventStep    event;     // Every Part lives on some simulation queue, held by an EventStep object.
     public Part         next;      // simulation queue
     public Part         previous;  // simulation queue
     public Part         before;    // population management
@@ -54,7 +53,6 @@ public class Part extends Instance
             int i = 0;
             for (EquationSet s : equations.parts) populations[i++] = new Population (s, this);
         }
-        if (equations.connectionBindings != null) endpoints = new Part[equations.connectionBindings.size ()];
         for (EventSource es : bed.eventSources)
         {
             valuesObject[es.monitorIndex] = new ArrayList<Instance> ();
@@ -89,7 +87,7 @@ public class Part extends Instance
                 Variable ae = bed.accountableEndpoints[i];
                 if (ae != null)
                 {
-                    Part p = endpoints[i];
+                    Part p = (Part) valuesObject[bed.endpoints+i];
                     Scalar m = (Scalar) p.get (ae);
                     m.value--;
                     p.set (ae, m);
@@ -117,6 +115,7 @@ public class Part extends Instance
     **/
     public void init (Simulator simulator)
     {
+        ((Population) container).insert (this);  // update $n and assign $index
         InstanceTemporaries temp = new InstanceTemporaries (this, simulator, true);
 
         // update accountable endpoints
@@ -129,7 +128,7 @@ public class Part extends Instance
                 Variable ae = temp.bed.accountableEndpoints[i];
                 if (ae != null)
                 {
-                    Part p = endpoints[i];
+                    Part p = (Part) valuesObject[temp.bed.endpoints+i];
                     Scalar m = (Scalar) p.get (ae);
                     m.value++;
                     p.set (ae, m);
@@ -260,6 +259,13 @@ public class Part extends Instance
     public boolean finish (Simulator simulator)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
+
+        if (populations != null) for (Population p : populations) p.finish (simulator);
+
+        if (bed.liveStorage == InternalBackendData.LIVE_STORED)
+        {
+            if (((Scalar) get (bed.live)).value == 0) return false;  // early-out if we are already dead, to avoid another call to die()
+        }
 
         // Events
         for (EventSource es : bed.eventSources)
@@ -399,13 +405,6 @@ public class Part extends Instance
         }
 
         // Other stuff
-        if (populations != null) for (Population p : populations) p.finish (simulator);
-
-        if (bed.liveStorage == InternalBackendData.LIVE_STORED)
-        {
-            if (((Scalar) get (bed.live)).value == 0) return false;  // early-out if we are already dead, to avoid another call to die()
-        }
-
         if (bed.lastT != null) setFinal (bed.lastT, new Scalar (simulator.currentEvent.t));
         for (Variable v : bed.localBufferedExternal) setFinal (v, getFinal (v));
         for (Integer i : bed.eventLatches) valuesFloat[i] = 0;
@@ -458,7 +457,6 @@ public class Part extends Instance
                             InternalBackendData otherBed = (InternalBackendData) other.backendData;
                             Population otherPopulation = ((Part) container.container).populations[otherBed.populationIndex];
                             Part p = new Part (other, otherPopulation);
-                            otherPopulation.insert (p);
 
                             // If this is a connection, keep the same bindings
                             Conversion conversion = bed.conversions.get (other);
@@ -466,7 +464,7 @@ public class Part extends Instance
                             {
                                 for (int j = 0; j < conversion.bindings.length; j++)
                                 {
-                                    p.endpoints[conversion.bindings[j]] = endpoints[j];
+                                    p.valuesObject[otherBed.endpoints+conversion.bindings[j]] = valuesObject[bed.endpoints+j];
                                 }
                             }
 
@@ -549,12 +547,14 @@ public class Part extends Instance
 
     public void setPart (int i, Part p)
     {
-        endpoints[i] = p;
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
+        valuesObject[bed.endpoints+i] = p;
     }
 
     public Part getPart (int i)
     {
-        return endpoints[i];
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
+        return (Part) valuesObject[bed.endpoints+i];
     }
 
     public int getCount (int i)
@@ -562,7 +562,7 @@ public class Part extends Instance
         InternalBackendData bed = (InternalBackendData) equations.backendData;
         Variable ae = bed.accountableEndpoints[i];
         if (ae == null) return 0;
-        return (int) ((Scalar) endpoints[i].get (ae)).value;
+        return (int) ((Scalar) ((Part) valuesObject[bed.endpoints+i]).get (ae)).value;
     }
 
     public boolean getLive ()
@@ -577,23 +577,12 @@ public class Part extends Instance
         if (equations.lethalConnection)
         {
             int count = equations.connectionBindings.size ();
-            for (int i = 0; i < count; i++)
-            {
-                if (! getPart (i).getLive ())
-                {
-                    die ();
-                    return false;
-                }
-            }
+            for (int i = 0; i < count; i++) if (! getPart (i).getLive ()) return false;
         }
 
         if (equations.lethalContainer)
         {
-            if (! ((Part) container.container).getLive ())
-            {
-                die ();
-                return false;
-            }
+            if (! ((Part) container.container).getLive ()) return false;
         }
 
         return true;
@@ -639,8 +628,10 @@ public class Part extends Instance
         if (equations.connectionBindings == null) return super.path ();
 
         // For connections, it is more understandable to show our endpoints rather than our own name.
-        String result = endpoints[0].path ();
-        for (int i = 1; i < endpoints.length; i++) result += "-" + endpoints[i].path ();
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
+        String result = ((Part) valuesObject[bed.endpoints]).path ();
+        int count = equations.connectionBindings.size ();
+        for (int i = 1; i < count; i++) result += "-" + ((Part) valuesObject[bed.endpoints+i]).path ();
         return result;
     }
 }

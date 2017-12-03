@@ -62,11 +62,12 @@ public class InternalBackendData
     public TreeSet<VariableReference> globalReference  = new TreeSet<VariableReference> (new ReferenceComparator ());
 
     // The following arrays have exactly the same order as EquationSet.connectionBindings
-    // This includes the array $variables in the next group below.
-    // In all cases, there may be null entries if they are not applicable.
-    public int[]      connectionTargets;
-    public Variable[] accountableEndpoints;  ///< These are structured as direct members of the endpoint. No resolution. Instead, we use the Connection.endpoint array.
+    public int        endpoints;            // Position in valuesObject of first reference to a connected instance. References are allocated as a contiguous block.
+    public int[]      connectionTargets;    // Position in container.populations of each target
+    public Variable[] accountableEndpoints; // Member variable in each connected instance which keeps count of the number of connections. null if not applicable
 
+    // Ready-to-use handles for common $variables
+    // Arrays are associated with connectionBindings, as above. Elements may be null if not applicable.
     public Variable   index;
     public Variable   init;
     public Variable[] k;
@@ -100,7 +101,10 @@ public class InternalBackendData
 
     public boolean populationCanGrowOrDie;  // by structural dynamics other than $n
     public boolean populationCanResize;     // by manipulating $n
-    public int     populationIndex;  // in container.populations
+    public int     populationIndex;         // in container.populations
+
+    public int indexNext;      // position in population valuesFloat of index counter
+    public int indexAvailable; // position in population valuesObject of list of dead indices
 
     public int liveStorage;
     public static final int LIVE_STORED   = 0;
@@ -815,6 +819,14 @@ public class InternalBackendData
             }
         }
 
+        if (index != null)
+        {
+            indexNext = countGlobalFloat++;
+            namesGlobalFloat.add ("indexNext");
+            indexAvailable = countGlobalObject++;
+            namesGlobalObject.add ("indexAvailable");
+        }
+
         if (p != null)
         {
             Pdependencies = new ArrayList<Variable> ();
@@ -827,7 +839,7 @@ public class InternalBackendData
             }
         }
 
-        if (s.connectionBindings == null)  // compartment-specific stuff
+        if (s.connected)  // compartment-specific stuff
         {
             populationIndex = 0;
             if (s.container != null  &&  s.container.parts != null)  // check for null specifically to guard against the Wrapper equation set (which is not fully constructed)
@@ -839,15 +851,21 @@ public class InternalBackendData
                 }
             }
         }
-        else  // connection-specific stuff
+
+        if (s.connectionBindings != null)  // connection-specific stuff
         {
             int count = s.connectionBindings.size ();
+
+            endpoints = countLocalObject;
+            countLocalObject += count;
+            connectionTargets    = new int[count];
+            accountableEndpoints = new Variable[count];
+
             k      = new Variable[count];
             max    = new Variable[count];
             min    = new Variable[count];
             radius = new Variable[count];
-            connectionTargets = new int[count];
-            accountableEndpoints = new Variable[count];
+
             int i = 0;
             for (Entry<String, EquationSet> c : s.connectionBindings.entrySet ())
             {
@@ -871,6 +889,8 @@ public class InternalBackendData
                     namesLocalFloat.add ("$count");
                     accountableEndpoints[i] = ae;
                 }
+
+                namesLocalObject.add (alias);  // Note that countLocalObject has already been incremented above
 
                 int j = 0;
                 for (EquationSet peer : s.container.parts)  // TODO: this assumes that all connections to peer populations under same container; need a more flexible way of locating target populations
@@ -1130,7 +1150,7 @@ public class InternalBackendData
         }
     }
 
-    public static class ResolveConnection implements Instance.Resolver
+    public class ResolveConnection implements Instance.Resolver
     {
         public int i;
 
@@ -1141,7 +1161,8 @@ public class InternalBackendData
 
         public Instance resolve (Instance from)
         {
-            return ((Part) from).endpoints[i];
+            // Notice that this inner class is not static, so we have access to the value of endpoints.
+            return (Instance) from.valuesObject[endpoints+i];
         }
     }
 

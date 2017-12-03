@@ -66,7 +66,7 @@ public class EquationSet implements Comparable<EquationSet>
     public boolean                             lethalN;                // our population could shrink
     public boolean                             lethalP;                // we could have a non-zero probability of dying in some cycle 
     public boolean                             lethalType;             // we can be killed by a part split
-    public boolean                             lethalConnection;       // indicate we are a connection, and one of the parts we connect can die
+    public boolean                             lethalConnection;       // indicates we are a connection, and one of the parts we connect to can die
     public boolean                             lethalContainer;        // our parent could die
     public boolean                             referenced;             // Some other equation set writes to one of our variables. If we can die, then exercise care not to reuse this part while other parts are still writing to it. Otherwise our reincarnated part might get written with values from our previous life.
     public Object                              backendData;            // holder for extra data associated with each equation set by a given backend
