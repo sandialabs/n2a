@@ -27,10 +27,9 @@ import gov.sandia.n2a.language.type.Scalar;
 **/
 public class Part extends Instance
 {
-    public Population[] populations;
-    public EventStep    event;          // Every Part lives on some simulation queue, held by an EventStep object.
-    public Part         next;           // simulation queue
-    public Part         previous;       // simulation queue
+    public EventStep event;    // Every Part lives on some simulation queue, held by an EventStep object.
+    public Part      next;     // simulation queue
+    public Part      previous; // simulation queue
 
     /**
         Empty constructor, specifically for use by Wrapper and EventStep.
@@ -47,9 +46,8 @@ public class Part extends Instance
         allocate (bed.countLocalFloat, bed.countLocalObject);
         if (equations.parts.size () > 0)
         {
-            populations = new Population[equations.parts.size ()];
             int i = 0;
-            for (EquationSet s : equations.parts) populations[i++] = new Population (s, this);
+            for (EquationSet s : equations.parts) valuesObject[i++] = new Population (s, this);
         }
         for (EventSource es : bed.eventSources)
         {
@@ -178,13 +176,15 @@ public class Part extends Instance
             }
         }
 
-        if (populations != null) for (Population p : populations) p.init (simulator);
+        int populations = equations.parts.size ();
+        for (int i = 0; i < populations; i++) ((Population) valuesObject[i]).init (simulator);
     }
 
     public void integrate (Simulator simulator)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
-        if (bed.localIntegrated.isEmpty ()  &&  populations == null) return;  // nothing to do
+        int populations = equations.parts.size ();
+        if (bed.localIntegrated.isEmpty ()  &&  populations == 0) return;  // nothing to do
 
         double dt;
         if (bed.lastT == null) dt = ((EventStep) simulator.currentEvent).dt;
@@ -199,7 +199,7 @@ public class Part extends Instance
             setFinal (v, new Scalar (a + aa * dt));
         }
 
-        if (populations != null) for (Population p : populations) p.integrate (simulator, dt);
+        for (int i = 0; i < populations; i++) ((Population) valuesObject[i]).integrate (simulator, dt);
     }
 
     public void update (Simulator simulator)
@@ -251,14 +251,16 @@ public class Part extends Instance
             temp.setFinal (v, temp.getFinal (v));
         }
 
-        if (populations != null) for (Population p : populations) p.update (simulator);
+        int populations = equations.parts.size ();
+        for (int i = 0; i < populations; i++) ((Population) valuesObject[i]).update (simulator);
     }
 
     public boolean finish (Simulator simulator)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
 
-        if (populations != null) for (Population p : populations) p.finish (simulator);
+        int populations = equations.parts.size ();
+        for (int i = 0; i < populations; i++) ((Population) valuesObject[i]).finish (simulator);
 
         if (bed.liveStorage == InternalBackendData.LIVE_STORED)
         {
@@ -453,7 +455,7 @@ public class Part extends Instance
                         else
                         {
                             InternalBackendData otherBed = (InternalBackendData) other.backendData;
-                            Population otherPopulation = ((Part) container.container).populations[otherBed.populationIndex];
+                            Population otherPopulation = (Population) ((Part) container.container).valuesObject[otherBed.populationIndex];
                             Part p = new Part (other, otherPopulation);
 
                             // If this is a connection, keep the same bindings

@@ -35,7 +35,7 @@ public class Population extends Instance
     public Population getTarget (int i)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
-        return ((Part) container).populations[bed.connectionTargets[i]];
+        return (Population) ((Part) container).valuesObject[bed.connectionTargets[i]];
     }
 
     public void init (Simulator simulator)

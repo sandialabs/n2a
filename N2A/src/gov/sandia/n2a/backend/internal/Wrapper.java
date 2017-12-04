@@ -16,28 +16,29 @@ public class Wrapper extends Part
     public Wrapper (EquationSet model)
     {
         if (model.connectionBindings != null) throw new EvaluationException ("Only compartments may be top-level models.");  // What are you going to connect, anyway?
-        populations = new Population[1];
-        populations[0] = new Population (model, this);
+        valuesObject = new Object[1];
+        valuesObject[0] = new Population (model, this);
     }
 
     public void init (Simulator simulator)
     {
-        populations[0].init (simulator);
+        ((Population) valuesObject[0]).init (simulator);
     }
 
     public void integrate (Simulator simulator)
     {
-        populations[0].integrate (simulator);
+        ((Population) valuesObject[0]).integrate (simulator);
     }
 
     public void update (Simulator simulator)
     {
-        populations[0].update (simulator);
+        ((Population) valuesObject[0]).update (simulator);
     }
 
     public boolean finish (Simulator simulator)
     {
-        populations[0].finish (simulator);
-        return populations[0].n > 0;
+        Population p = (Population) valuesObject[0];
+        p.finish (simulator);
+        return p.n > 0;
     }
 }

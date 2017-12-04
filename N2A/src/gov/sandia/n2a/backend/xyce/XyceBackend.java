@@ -240,7 +240,7 @@ class XyceBackend extends Backend
 
     public void generateNetlist (MNode job, Simulator simulator, FileWriter writer) throws Exception
     {
-        Population toplevel = simulator.wrapper.populations[0];
+        Population toplevel = (Population) simulator.wrapper.valuesObject[0];
         XyceRenderer renderer = new XyceRenderer (simulator);
 
         // Header

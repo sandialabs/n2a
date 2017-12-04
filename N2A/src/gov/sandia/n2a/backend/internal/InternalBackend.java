@@ -255,7 +255,7 @@ public class InternalBackend extends Backend
 
     public static void createBackendData (EquationSet s)
     {
-        if (! (s.backendData instanceof InternalBackendData)) s.backendData = new InternalBackendData ();
+        if (! (s.backendData instanceof InternalBackendData)) s.backendData = new InternalBackendData (s);
         for (EquationSet p : s.parts) createBackendData (p);
     }
 

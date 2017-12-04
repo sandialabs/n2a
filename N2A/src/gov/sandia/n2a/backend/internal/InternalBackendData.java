@@ -339,6 +339,17 @@ public class InternalBackendData
         }
     }
 
+    public InternalBackendData (EquationSet s)
+    {
+        // Allocate space for populations before anything else has a chance.
+        // All other code assumes populations are the first entries in valuesObject.
+        for (EquationSet p : s.parts)
+        {
+            countLocalObject++;
+            namesLocalObject.add (p.name);
+        }
+    }
+
     /**
         Find event() calls and collate them (in case the same signature appears several different places
         in the equation set).
@@ -1191,7 +1202,7 @@ public class InternalBackendData
 
         public Instance resolve (Instance from)
         {
-            return ((Part) from).populations[i];
+            return (Instance) ((Part) from).valuesObject[i];
         }
     }
 
