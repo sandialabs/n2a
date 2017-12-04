@@ -28,11 +28,9 @@ import gov.sandia.n2a.language.type.Scalar;
 public class Part extends Instance
 {
     public Population[] populations;
-    public EventStep    event;     // Every Part lives on some simulation queue, held by an EventStep object.
-    public Part         next;      // simulation queue
-    public Part         previous;  // simulation queue
-    public Part         before;    // population management
-    public Part         after;     // population management
+    public EventStep    event;          // Every Part lives on some simulation queue, held by an EventStep object.
+    public Part         next;           // simulation queue
+    public Part         previous;       // simulation queue
 
     /**
         Empty constructor, specifically for use by Wrapper and EventStep.

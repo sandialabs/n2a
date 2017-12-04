@@ -6,11 +6,10 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.backend.internal;
 
-import java.util.LinkedList;
-
+import java.util.ArrayList;
+import java.util.Iterator;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
@@ -22,13 +21,7 @@ import gov.sandia.n2a.language.type.Scalar;
 **/
 public class Population extends Instance
 {
-    // We create a null-terminated doubly-linked list. This is little more complicated
-    // to manage than a fully-circular list, but it is worth the complexity to avoid
-    // extra storage for the head object.
-    public Part head; ///< List of all instances of this population. Mainly used for creating connections.
-    public Part tail; ///< Last member in list. Used for reverse iteration.
-    public Part old;  ///< First old part in list. All parts before this were added during current cycle. If old == head, then all parts are new.
-    public int  n;  /// current number of live members
+    public int n;  // current number of live members
 
     protected Population (EquationSet equations, Part container)
     {
@@ -129,8 +122,6 @@ public class Population extends Instance
         {
             temp.setFinal (v, temp.getFinal (v));
         }
-
-        if (equations.connected) old = head;
     }
 
     public boolean finish (Simulator simulator)
@@ -193,6 +184,7 @@ public class Population extends Instance
         return true;
     }
 
+    @SuppressWarnings("unchecked")
     public void connect (Simulator simulator)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
@@ -201,157 +193,113 @@ public class Population extends Instance
         Population B = getTarget (1);
         if (A == null  ||  B == null) return;  // Nothing to connect. This should never happen, though we might have a unary connection.
         if (A.n == 0  ||  B.n == 0) return;
-        if (A.old == A.head  &&  B.old == B.head) return;  // Only proceed if there are some new parts.
+
+        InternalBackendData Abed = (InternalBackendData) A.equations.backendData;
+        InternalBackendData Bbed = (InternalBackendData) B.equations.backendData;
+        ArrayList<Part> Ainstances = (ArrayList<Part>) A.valuesObject[Abed.instances];
+        ArrayList<Part> Binstances = (ArrayList<Part>) B.valuesObject[Bbed.instances];
+        if (Ainstances == null  ||  Binstances == null) return;
+
+        int Afirstborn = (int) A.valuesFloat[Abed.firstborn];
+        int Bfirstborn = (int) B.valuesFloat[Bbed.firstborn];
+        if (Afirstborn >= Ainstances.size ()  &&  Bfirstborn >= Binstances.size ()) return;  // Only proceed if there are some new parts.
+        simulator.clearNew (A);
+        simulator.clearNew (B);
+
+        int Asize = Ainstances.size ();
+        int Bsize = Binstances.size ();
 
         // TODO: implement nearest-neighbor filtering
 
         int Amax = 0;
-        int Amin = 0;
         int Bmax = 0;
-        int Bmin = 0;
         if (bed.max[0] != null) Amax = (int) ((Scalar) get (bed.max[0])).value;
-        if (bed.min[0] != null) Amin = (int) ((Scalar) get (bed.min[0])).value;
         if (bed.max[1] != null) Bmax = (int) ((Scalar) get (bed.max[1])).value;
-        if (bed.min[1] != null) Bmin = (int) ((Scalar) get (bed.min[1])).value;
-
-        Part c = new Part (equations, this);
+        // TODO: implement $min, or consider eliminating it from the language
+        // $max is easy, but $min requires one or more forms of expensive accounting to do correctly.
+        // Problems include:
+        // 1) need to prevent duplicate connections
+        // 2) should pick the highest probability connections
+        // A list of connections held by each target could solve #1.
+        // Such an approach may be necessary for ongoing maintenance of connections, beyond just this new-connection process.
+        // A temporary list of connections that were rejected, sorted by probability, could solve issue #2.
+        // However, this is more difficult to implement for any but the outer loop. Could implement an
+        // outer loop for each of the other populations, just for fulfilling $min.
 
         // Scan AxB
-        Part Alast = A.old;
-        Part Blast = B.head;
-        boolean minSatisfied = false;
-        while (! minSatisfied)
+        Part c = new Part (equations, this);
+        for (int i = 0; i < Asize; i++)
         {
-            minSatisfied = true;
+            Part a = Ainstances.get (i);
+            if (a == null) continue;
+            boolean Aold = a.valuesFloat[Abed.newborn] == 0;
 
-            // New A with all of B
-            Part a = A.head;
-            while (a != A.old)
+            c.setPart (0, a);
+            int Acount = 0;
+            if (Amax != 0)
             {
+                Acount = c.getCount (0);
+                if (Acount >= Amax) continue;  // early out: this part is already full, so skip
+            }
+
+            // iterate over B, with some shuffling each time
+            int count;
+            int offset;
+            if (Aold)  // focus on portion of B more likely to contain new parts
+            {
+                count  = Bsize - Bfirstborn;
+                offset = Bfirstborn;
+            }
+            else   // a is new, so process all of B
+            {
+                count  = Bsize;
+                offset = 0;
+            }
+            int j    = (int) Math.round (Math.random () * (count - 1));
+            int stop = j + count;
+            for (; j < stop; j++)
+            {
+                Part b = Binstances.get (j % count + offset);
+                if (b == null) continue;
+                boolean Bold = b.valuesFloat[Bbed.newborn] == 0;
+                if (Aold  &&  Bold) continue;  // Both parts are old, so don't process
+
+                c.setPart (1, b);
+                if (Bmax != 0  &&  c.getCount (1) >= Bmax) continue;  // no room in this B
+
+                c.resolve ();
+                double create = c.getP (simulator);
+                if (create <= 0  ||  create < 1  &&  create < simulator.random.nextDouble ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
+                ((Part) container).event.enqueue (c);
+                c.init (simulator);
+                c = new Part (equations, this);
                 c.setPart (0, a);
-                int Acount = 0;
-                if (Amax != 0  ||  Amin != 0) Acount = c.getCount (0);
-                if (Amax != 0  &&  Acount >= Amax)  // early out: this part is already full, so skip
+
+                if (Amax != 0)
                 {
-                    a = a.after;
-                    continue;
-                }
-
-                // iterate over B, with some shuffling each time
-                Part Bnext = Blast.before;  // will change if we make some connections
-                if (Bnext == null) Bnext = B.tail;
-                Part b = Blast;
-                do
-                {
-                    b = b.after;
-                    if (b == null) b = B.head;
-
-                    c.setPart (1, b);
-                    if (Bmax != 0  &&  c.getCount (1) >= Bmax) continue;  // no room in this B
-                    c.resolve ();
-                    double create = c.getP (simulator);
-                    if (create <= 0  ||  create < 1  &&  create < simulator.random.nextDouble ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
-                    ((Part) container).event.enqueue (c);
-                    c.init (simulator);
-                    c = new Part (equations, this);
-                    c.setPart (0, a);
-                    Bnext = b;
-
-                    if (Amax != 0)
-                    {
-                        if (++Acount >= Amax) break;  // stop scanning B once this A is full
-                    }
-                }
-                while (b != Blast);
-                Blast = Bnext;
-
-                if (Amin != 0  &&  Acount < Amin) minSatisfied = false;
-                a = a.after;
-            }
-
-            // New B with old A (new A x new B is already covered in case above)
-            if (A.old != null)  // There exist some old A
-            {
-                Part b = B.head;
-                while (b != B.old)
-                {
-                    c.setPart (1, b);
-                    int Bcount = 0;
-                    if (Bmax != 0  ||  Bmin != 0) Bcount = c.getCount (1);
-                    if (Bmax != 0  &&  Bcount >= Bmax)
-                    {
-                        b = b.after;
-                        continue;
-                    }
-
-                    // TODO: the projection from A to B could be inverted, and another spatial search structure built.
-                    // For now, we don't use spatial constraints.
-
-                    Part Anext;
-                    if (Alast == A.old) Anext = A.tail;
-                    else                Anext = Alast.before;
-                    a = Alast;
-                    do
-                    {
-                        a = a.after;
-                        if (a == null) a = A.old;
-
-                        c.setPart (0, a);
-                        if (Amax != 0  &&  c.getCount (0) >= Amax) continue;
-                        c.resolve ();
-                        double create = c.getP (simulator);
-                        if (create <= 0  ||  create < 1  &&  create < simulator.random.nextDouble ()) continue;
-                        ((Part) container).event.enqueue (c);
-                        c.init (simulator);
-                        c = new Part (equations, this);
-                        c.setPart (1, b);
-                        Anext = a;
-
-                        if (Bmax != 0)
-                        {
-                            if (++Bcount >= Bmax) break;
-                        }
-                    }
-                    while (a != Alast);
-                    Alast = Anext;
-
-                    if (Bmin != 0  &&  Bcount < Bmin) minSatisfied = false;
-                    b = b.after;
-                }
-            }
-
-            // Check if minimums have been satisfied for old parts. New parts in both A and B were checked above.
-            if (Amin != 0  &&  minSatisfied)
-            {
-                a = A.old;
-                while (a != null)
-                {
-                    c.setPart (0, a);
-                    if (c.getCount (0) < Amin)
-                    {
-                        minSatisfied = false;
-                        break;
-                    }
-                    a = a.after;
-                }
-            }
-            if (Bmin != 0  &&  minSatisfied)
-            {
-                Part b = B.old;
-                while (b != null)
-                {
-                    c.setPart (1, b);
-                    if (c.getCount (1) < Bmin)
-                    {
-                        minSatisfied = false;
-                        break;
-                    }
-                    b = b.after;
+                    if (++Acount >= Amax) break;  // stop scanning B once this A is full
                 }
             }
         }
     }
 
+    @SuppressWarnings("unchecked")
+    public void clearNew ()
+    {
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
+        ArrayList<Part> instances = (ArrayList<Part>) valuesObject[bed.instances];
+        int count     = instances.size ();
+        int firstborn = (int) valuesFloat[bed.firstborn];
+        for (int i = firstborn; i < count; i++)
+        {
+            Part p = instances.get (i);
+            if (p == null) continue;
+            p.valuesFloat[bed.newborn] = 0;
+        }
+        valuesFloat[bed.firstborn] = count;
+    }
+
+    @SuppressWarnings("unchecked")
     public void insert (Part p)
     {
         n++;
@@ -366,24 +314,33 @@ public class Population extends Instance
             }
             else
             {
-                @SuppressWarnings("unchecked")
-                LinkedList<Integer> availableIndex = (LinkedList<Integer>) valuesObject[bed.indexAvailable];
-                index = availableIndex.remove ();
+                ArrayList<Integer> availableIndex = (ArrayList<Integer>) valuesObject[bed.indexAvailable];
+                index = availableIndex.remove (availableIndex.size () - 1);
                 if (availableIndex.size () < 1) valuesObject[bed.indexAvailable] = null;
             }
             p.set (bed.index, new Scalar (index));
-        }
 
-        if (equations.connected)
-        {
-            if (tail == null) tail = p;
-            if (head != null) head.before = p;
-            p.after  = head;
-            p.before = null;
-            head     = p;
+            if (bed.instances >= 0)
+            {
+                ArrayList<Part> instances = (ArrayList<Part>) valuesObject[bed.instances];
+                if (instances == null)
+                {
+                    instances = new ArrayList<Part> (index + 1);
+                    valuesObject[bed.instances] = instances;
+                }
+                for (int size = instances.size (); size <= index; size++) instances.add (null);
+                instances.set (index, p);
+
+                if (equations.connected)
+                {
+                    p.valuesFloat[bed.newborn] = 1;
+                    valuesFloat[bed.firstborn] = Math.min (valuesFloat[bed.firstborn], index);
+                }
+            }
         }
     }
 
+    @SuppressWarnings("unchecked")
     public void remove (Part p)
     {
         n--;  // presuming that p is actually here
@@ -391,31 +348,31 @@ public class Population extends Instance
         InternalBackendData bed = (InternalBackendData) equations.backendData;
         if (bed.index != null)
         {
-            @SuppressWarnings("unchecked")
-            LinkedList<Integer> availableIndex = (LinkedList<Integer>) valuesObject[bed.indexAvailable];
+            int index = (int) ((Scalar) p.get (bed.index)).value;
+
+            ArrayList<Integer> availableIndex = (ArrayList<Integer>) valuesObject[bed.indexAvailable];
             if (availableIndex == null)
             {
-                availableIndex = new LinkedList<Integer> ();
+                availableIndex = new ArrayList<Integer> ();
                 valuesObject[bed.indexAvailable] = availableIndex;
             }
-            availableIndex.add ((int) ((Scalar) p.get (bed.index)).value);
-        }
+            availableIndex.add (index);
 
-        if (equations.connected)
-        {
-            if (p == tail) tail = p.before;
-            if (p == head) head = p.after;
-            if (p == old ) old  = p.after;
-            if (p.after  != null) p.after.before = p.before;
-            if (p.before != null) p.before.after = p.after;
+            if (bed.instances >= 0)
+            {
+                ArrayList<Part> instances = (ArrayList<Part>) valuesObject[bed.instances];
+                instances.set (index, null);
+            }
         }
     }
 
+    @SuppressWarnings("unchecked")
     public void resize (Simulator simulator, int requestedN)
     {
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
+
         if (requestedN < 0)  // indicates to update $n from actual part count
         {
-            InternalBackendData bed = (InternalBackendData) equations.backendData;
             int currentN = (int) ((Scalar) get (bed.n)).value;
             // In general, $n can be fractional, which allows gradual growth over many cycles.
             // Only change $n if it does not truncate to same as actual n.
@@ -433,13 +390,12 @@ public class Population extends Instance
 
         if (n > requestedN)
         {
-            Part r = tail;  // reverse iterator
-            while (n > requestedN)
+            ArrayList<Part> instances = (ArrayList<Part>) valuesObject[bed.instances];
+            for (int i = instances.size () - 1; i >= 0  &&  n > requestedN; i--)
             {
-                if (r == null) throw new EvaluationException ("Internal inconsistency in population count.");
-                Part p = r;
-                r = r.before;
-                p.die ();  // Part.die() is responsible to call remove(). p itself won't dequeue until next simulator cycle.
+                Part p = instances.get (i);
+                if (p == null) continue;
+                p.die ();  // Part.die() is responsible to call remove(), which decreases n. p itself won't dequeue until next simulator cycle.
             }
         }
     }

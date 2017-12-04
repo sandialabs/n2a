@@ -105,6 +105,9 @@ public class InternalBackendData
 
     public int indexNext;      // position in population valuesFloat of index counter
     public int indexAvailable; // position in population valuesObject of list of dead indices
+    public int instances = -1; // position in population valuesObject of instances list; -1 means don't track instances
+    public int firstborn;      // position in population valuesFloat of index of first newborn instance for current cycle
+    public int newborn;        // position in instance valuesFloat of newborn flag
 
     public int liveStorage;
     public static final int LIVE_STORED   = 0;
@@ -381,7 +384,7 @@ public class InternalBackendData
                             et.valueIndex = valueIndex;
                             et.mask       = mask;
                             mask <<= 1;
-                            if (mask > 0x20000000) valueIndex = -1;  // Allocate another float when we declare over 30 events ... but who would ever need that?
+                            if (mask > 0x400000) valueIndex = -1;  // Due to limitations of float-int conversion, only 23 bits are available. Allocate another float.
 
                             
                             // Analyze the event ...
@@ -819,12 +822,45 @@ public class InternalBackendData
             }
         }
 
+        populationCanGrowOrDie =  s.lethalP  ||  s.lethalType  ||  s.canGrow ();
+        if (n != null)
+        {
+            populationCanResize = globalMembers.contains (n);
+
+            // TODO: correctly detect whether $n is constant before running analyze()
+            // The problem is that we need information about lethality to know if $n is constant.
+            // However, we need to process constants to detect lethality. This is a circular dependency.
+            // The solution may be to:
+            //   assume $n is not constant
+            //   determine lethality as early as possible
+            //   rerun constant elimination (EquationSet.findConstants()) as soon as we are certain about $n
+            // See EquationSet.forceTemporaryStorageForSpecials() for a related issue.
+            if (! populationCanResize  &&  populationCanGrowOrDie  &&  n.hasUsers ())
+            {
+                Backend.err.get ().println ("WARNING: $n can change (due to structural dynamics) but it was detected as a constant. Equations that depend on $n may give incorrect results.");
+            }
+        }
+
         if (index != null)
         {
             indexNext = countGlobalFloat++;
             namesGlobalFloat.add ("indexNext");
             indexAvailable = countGlobalObject++;
             namesGlobalObject.add ("indexAvailable");
+        }
+
+        if (s.connected  ||  populationCanResize)  // track instances
+        {
+            instances = countGlobalObject++;
+            namesGlobalObject.add ("instances");
+
+            if (s.connected)  // in addition, track newly created instances
+            {
+                firstborn = countGlobalFloat++;
+                namesGlobalFloat.add ("firstborn");
+                newborn = countLocalFloat++;
+                namesLocalFloat.add ("newborn");
+            }
         }
 
         if (p != null)
@@ -839,16 +875,13 @@ public class InternalBackendData
             }
         }
 
-        if (s.connected)  // compartment-specific stuff
+        populationIndex = 0;
+        if (s.container != null  &&  s.container.parts != null)  // check for null specifically to guard against the Wrapper equation set (which is not fully constructed)
         {
-            populationIndex = 0;
-            if (s.container != null  &&  s.container.parts != null)  // check for null specifically to guard against the Wrapper equation set (which is not fully constructed)
+            for (EquationSet p : s.container.parts)
             {
-                for (EquationSet p : s.container.parts)
-                {
-                    if (p == s) break;
-                    populationIndex++;
-                }
+                if (p == s) break;
+                populationIndex++;
             }
         }
 
@@ -1027,25 +1060,6 @@ public class InternalBackendData
                     v.readIndex = v.writeIndex = countLocalTempObject++;
                     namesLocalTempObject.add (v.nameString ());
                 }
-            }
-        }
-
-        populationCanGrowOrDie =  s.lethalP  ||  s.lethalType  ||  s.canGrow ();
-        if (n != null)
-        {
-            populationCanResize = globalMembers.contains (n);
-
-            // TODO: correctly detect whether $n is constant before running analyze()
-            // The problem is that we need information about lethality to know if $n is constant.
-            // However, we need to process constants to detect lethality. This is a circular dependency.
-            // The solution may be to:
-            //   assume $n is not constant
-            //   determine lethality as early as possible
-            //   rerun constant elimination (EquationSet.findConstants()) as soon as we are certain about $n
-            // See EquationSet.forceTemporaryStorageForSpecials() for a related issue.
-            if (! populationCanResize  &&  populationCanGrowOrDie  &&  n.hasUsers ())
-            {
-                Backend.err.get ().println ("WARNING: $n can change (due to structural dynamics) but it was detected as a constant. Equations that depend on $n may give incorrect results.");
             }
         }
 

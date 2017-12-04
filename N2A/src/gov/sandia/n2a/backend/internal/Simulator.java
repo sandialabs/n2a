@@ -23,8 +23,10 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Random;
+import java.util.Set;
 import java.util.Map.Entry;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 /**
     The integrator for the Internal simulator.
@@ -36,10 +38,11 @@ public class Simulator implements Iterable<Part>
 {
     public Wrapper                     wrapper;  // reference to top-level model, which is also in the simulation queue
     public EventFactory                eventFactory;
-    public Queue<Event>                eventQueue   = new PriorityQueue<Event> ();
-    public List<ResizeRequest>         resizeQueue  = new LinkedList<ResizeRequest> ();
-    public List<Population>            connectQueue = new LinkedList<Population> ();
-    public TreeMap<Double,EventStep>   periods      = new TreeMap<Double,EventStep> ();
+    public Queue<Event>                eventQueue    = new PriorityQueue<Event> ();
+    public List<ResizeRequest>         resizeQueue   = new LinkedList<ResizeRequest> ();
+    public List<Population>            connectQueue  = new LinkedList<Population> ();
+    public Set<Population>             clearNewQueue = new TreeSet<Population> ();
+    public TreeMap<Double,EventStep>   periods       = new TreeMap<Double,EventStep> ();
     public Random                      random;
 
     // Global shared data
@@ -153,6 +156,10 @@ public class Simulator implements Iterable<Part>
         // Evaluate connection populations that have requested it
         for (Population p : connectQueue) p.connect (this);
         connectQueue.clear ();
+
+        // Clear new flag from populations that have requested it
+        for (Population p : clearNewQueue) p.clearNew ();
+        clearNewQueue.clear ();
     }
 
     public void move (Part i, double dt)
@@ -196,6 +203,11 @@ public class Simulator implements Iterable<Part>
     public void connect (Population p)
     {
         connectQueue.add (p);
+    }
+
+    public void clearNew (Population p)
+    {
+        clearNewQueue.add (p);
     }
 
     public class PartIterator implements Iterator<Part>

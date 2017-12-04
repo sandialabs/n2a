@@ -954,7 +954,7 @@ public class EquationSet implements Comparable<EquationSet>
             v.equations = new TreeSet<EquationEntry> ();
         }
 
-        if (connectionBindings == null)  // Compartment
+        if (connected)
         {
             v = new Variable ("$index", 0);
             if (add (v))
@@ -962,7 +962,15 @@ public class EquationSet implements Comparable<EquationSet>
                 v.addAttribute ("initOnly");  // most backends will set $index before processing init equations
                 v.equations = new TreeSet<EquationEntry> ();
             }
+            else
+            {
+                v = find (v);
+            }
+            v.addUser (this);  // Force $index to exist for connection targets. Used for anti-indexing into list of instances.
+        }
 
+        if (connected  ||  connectionBindings == null)
+        {
             v = new Variable ("$n", 0);
             if (add (v))
             {
