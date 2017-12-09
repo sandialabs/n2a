@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.backend.internal;
 
 import gov.sandia.n2a.eqset.EquationSet;
+import gov.sandia.n2a.eqset.EquationSet.AccountableConnection;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.AccessVariable;
@@ -62,9 +63,9 @@ public class InternalBackendData
     public TreeSet<VariableReference> globalReference  = new TreeSet<VariableReference> (new ReferenceComparator ());
 
     // The following arrays have exactly the same order as EquationSet.connectionBindings
-    public int        endpoints;            // Position in valuesObject of first reference to a connected instance. References are allocated as a contiguous block.
-    public int[]      connectionTargets;    // Position in container.populations of each target
-    public Variable[] accountableEndpoints; // Member variable in each connected instance which keeps count of the number of connections. null if not applicable
+    public int   endpoints;            // Position in valuesObject of first reference to a connected instance. References are allocated as a contiguous block.
+    public int[] connectionTargets;    // Position in container.populations of each target
+    public int[] count;                // Position in endpoint.valuesFloat of count value for this connection
 
     // Ready-to-use handles for common $variables
     // Arrays are associated with connectionBindings, as above. Elements may be null if not applicable.
@@ -898,40 +899,44 @@ public class InternalBackendData
 
         if (s.connectionBindings != null)  // connection-specific stuff
         {
-            int count = s.connectionBindings.size ();
+            int size = s.connectionBindings.size ();
 
             endpoints = countLocalObject;
-            countLocalObject += count;
-            connectionTargets    = new int[count];
-            accountableEndpoints = new Variable[count];
+            countLocalObject += size;
+            connectionTargets = new int[size];
 
-            k      = new Variable[count];
-            max    = new Variable[count];
-            min    = new Variable[count];
-            radius = new Variable[count];
+            count  = new int     [size];
+            k      = new Variable[size];
+            max    = new Variable[size];
+            min    = new Variable[size];
+            radius = new Variable[size];
 
             int i = 0;
             for (Entry<String, EquationSet> c : s.connectionBindings.entrySet ())
             {
                 String alias = c.getKey ();
+                count [i] = -1;
                 k     [i] = s.find (new Variable (alias + ".$k"     ));
                 max   [i] = s.find (new Variable (alias + ".$max"   ));
                 min   [i] = s.find (new Variable (alias + ".$min"   ));
                 radius[i] = s.find (new Variable (alias + ".$radius"));
 
-                if (min[i] != null  ||  max[i] != null)
+                EquationSet endpoint = c.getValue ();
+                if (endpoint.accountableConnections != null)
                 {
-                    // Create a variable to wrap the count field in the target part
-                    // The target part does not add this to its formal variables,
-                    // nor do we resolve the variable in the target part. Rather, we
-                    // keep a pointer to the target in the connection part and know how
-                    // to directly access the count field.
-                    InternalBackendData endpointBed = (InternalBackendData) c.getValue ().backendData;
-                    Variable ae = new Variable ("");  // identity doesn't matter at this point
-                    ae.type = new Scalar (0);
-                    ae.readIndex = ae.writeIndex = endpointBed.countLocalFloat++;
-                    namesLocalFloat.add ("$count");
-                    accountableEndpoints[i] = ae;
+                    AccountableConnection query = new AccountableConnection (s, alias);
+                    AccountableConnection ac = endpoint.accountableConnections.floor (query);
+                    if (ac.equals (query))  // Only true if this endpoint is accountable.
+                    {
+                        // Allocate space for counter in target part
+                        InternalBackendData endpointBed = (InternalBackendData) endpoint.backendData;
+                        count[i] = endpointBed.countLocalFloat++;
+                        endpointBed.namesLocalFloat.add (s.prefix () + ".$count");
+                        if (ac.count != null)  // $count is referenced explicitly, so need to finish setting it up
+                        {
+                            ac.count.readIndex = ac.count.writeIndex = count[i];
+                        }
+                    }
                 }
 
                 namesLocalObject.add (alias);  // Note that countLocalObject has already been incremented above

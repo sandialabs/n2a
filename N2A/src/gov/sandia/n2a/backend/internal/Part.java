@@ -75,18 +75,15 @@ public class Part extends Instance
         }
 
         // update accountable endpoints
-        if (bed.accountableEndpoints != null)
+        if (bed.count != null)
         {
-            int count = bed.accountableEndpoints.length;
-            for (int i = 0; i < count; i++)
+            int length = bed.count.length;
+            for (int i = 0; i < length; i++)
             {
-                Variable ae = bed.accountableEndpoints[i];
-                if (ae != null)
+                if (bed.count[i] >= 0)
                 {
                     Part p = (Part) valuesObject[bed.endpoints+i];
-                    Scalar m = (Scalar) p.get (ae);
-                    m.value--;
-                    p.set (ae, m);
+                    p.valuesFloat[bed.count[i]]--;
                 }
             }
         }
@@ -116,18 +113,15 @@ public class Part extends Instance
 
         // update accountable endpoints
         // Note: these do not require resolve(). Instead, they access their target directly through the endpoints array.
-        if (temp.bed.accountableEndpoints != null)
+        if (temp.bed.count != null)
         {
-            int count = temp.bed.accountableEndpoints.length;
-            for (int i = 0; i < count; i++)
+            int length = temp.bed.count.length;
+            for (int i = 0; i < length; i++)
             {
-                Variable ae = temp.bed.accountableEndpoints[i];
-                if (ae != null)
+                if (temp.bed.count[i] >= 0)
                 {
                     Part p = (Part) valuesObject[temp.bed.endpoints+i];
-                    Scalar m = (Scalar) p.get (ae);
-                    m.value++;
-                    p.set (ae, m);
+                    p.valuesFloat[temp.bed.count[i]]++;
                 }
             }
         }
@@ -555,14 +549,6 @@ public class Part extends Instance
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
         return (Part) valuesObject[bed.endpoints+i];
-    }
-
-    public int getCount (int i)
-    {
-        InternalBackendData bed = (InternalBackendData) equations.backendData;
-        Variable ae = bed.accountableEndpoints[i];
-        if (ae == null) return 0;
-        return (int) ((Scalar) ((Part) valuesObject[bed.endpoints+i]).get (ae)).value;
     }
 
     public boolean getLive ()

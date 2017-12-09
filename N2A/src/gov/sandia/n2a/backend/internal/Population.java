@@ -7,7 +7,6 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.backend.internal;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Type;
@@ -184,37 +183,190 @@ public class Population extends Instance
         return true;
     }
 
-    @SuppressWarnings("unchecked")
+    public class ConnectIterator
+    {
+        public int                 index;
+        public boolean             newOnly;  // Filter out old instances. Only an iterator with index==0 can set this true.
+        public ConnectIterator     permute;
+        public boolean             contained;  // Another iterator holds us in its permute reference.
+        public Population          population;
+        public int                 max;
+        public int                 connectedCount;  // position in p.valuesFloat of $count for this connection
+        public InternalBackendData bed;
+        public int                 firstborn;
+        public ArrayList<Part>     instances;
+        public Part                probe;  // The connection instance being built.
+        public Part                p;  // Our current part, contributed as an endpoint of probe. 
+
+        public int size;   // Cached value of instances.size(). Does not change.
+        public int count;  // Size of current subset of instances we are iterating through.
+        public int offset;
+        public int i;
+        public int stop;
+
+        // TODO: implement nearest-neighbor filtering
+
+        @SuppressWarnings("unchecked")
+        public ConnectIterator (int index, Population population, int max, int connectedCount)
+        {
+            this.index          = index;
+            this.population     = population;
+            this.max            = max;
+            this.connectedCount = connectedCount;
+            bed                 = (InternalBackendData) population.equations.backendData;
+            firstborn           = (int)             population.valuesFloat [bed.firstborn];
+            instances           = (ArrayList<Part>) population.valuesObject[bed.instances];
+            size                = instances.size ();
+        }
+
+        /**
+            @return true If we need to advance to the next instance. This happens when p
+            has reached its max number of connections.
+        **/
+        public boolean setProbe (Part probe)
+        {
+            this.probe = probe;
+            boolean result = false;
+            if (p != null)
+            {
+                // A new connection was just made, so counts (if they are used) have been updated.
+                // Step to next endpoint instance if current instance is full.
+                if (max > 0  &&  p.valuesFloat[connectedCount] >= max) result = true;
+                else probe.setPart (index, p);
+            }
+            if (permute != null  &&  permute.setProbe (probe))
+            {
+                i = stop;  // next() will trigger a reset
+                result = true;
+            }
+            return result;
+        }
+
+        /**
+            Restarts this iterator at a random point.
+            Called multiple times, depending on how many times permute.next() returns true.
+            Only called internally.
+            TODO: Spatial filtering.
+        **/
+        public void reset (boolean newOnly)
+        {
+            this.newOnly = newOnly;
+            if (newOnly) count = size - firstborn;
+            else         count = size;
+            if (count > 1) i = (int) Math.round (Math.random () * (count - 1));
+            else           i = 0;
+            stop = i + count;
+        }
+
+        /**
+            Indicates that all iterators from this level down returned a part that is old.
+        **/
+        public boolean old ()
+        {
+            if (p.valuesFloat[bed.newborn] != 0) return false;
+            if (permute != null) return permute.old ();
+            return true;
+        }
+
+        /**
+            Advances to next part that meets criteria, and sets the appropriate endpoint in probe.
+            @return false If no more parts are available.
+        **/
+        public boolean next ()
+        {
+            while (true)
+            {
+                if (i >= stop)  // Need to either reset or terminate, depending on whether we have something left to permute with.
+                {
+                    if (permute == null)
+                    {
+                        if (stop > 0) return false;  // We already reset once, so done.
+                        // A unary connection should only iterate over new instances.
+                        // The innermost (slowest) iterator of a multi-way connection should iterate over all instances.
+                        reset (! contained);
+                    }
+                    else
+                    {
+                        if (! permute.next ()) return false;
+                        if (contained) reset (false);
+                        else           reset (permute.old ());
+                    }
+                }
+
+                if (newOnly)
+                {
+                    for (; i < stop; i++)
+                    {
+                        p = instances.get (i % count + firstborn);
+                        if (p != null  &&  p.valuesFloat[bed.newborn] != 0)
+                        {
+                            if (max == 0) break;
+                            if (p.valuesFloat[connectedCount] < max) break;
+                        }
+                    }
+                }
+                else
+                {
+                    // This version of the loop is slightly more efficient.
+                    for (; i < stop; i++)
+                    {
+                        p = instances.get (i % count);
+                        if (p != null)
+                        {
+                            if (max == 0) break;
+                            if (p.valuesFloat[connectedCount] < max) break;
+                        }
+                    }
+                }
+
+                i++;
+                if (p != null  &&  i <= stop)
+                {
+                    probe.setPart (index, p);
+                    return true;
+                }
+            }
+        }
+    }
+
     public void connect (Simulator simulator)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
 
-        Population A = getTarget (0);
-        Population B = getTarget (1);
-        if (A == null  ||  B == null) return;  // Nothing to connect. This should never happen, though we might have a unary connection.
-        if (A.n == 0  ||  B.n == 0) return;
+        int count = equations.connectionBindings.size ();
+        ArrayList<ConnectIterator> iterators = new ArrayList<ConnectIterator> (count);
+        boolean nothingNew = true;
+        for (int i = 0; i < count; i++)
+        {
+            Population population = getTarget (i);
+            if (population == null  ||  population.n == 0) return;  // Nothing to connect. This should never happen.
 
-        InternalBackendData Abed = (InternalBackendData) A.equations.backendData;
-        InternalBackendData Bbed = (InternalBackendData) B.equations.backendData;
-        ArrayList<Part> Ainstances = (ArrayList<Part>) A.valuesObject[Abed.instances];
-        ArrayList<Part> Binstances = (ArrayList<Part>) B.valuesObject[Bbed.instances];
-        if (Ainstances == null  ||  Binstances == null) return;
+            int max = 0;
+            int connectedCount = 0;
+            if (bed.max[i] != null)
+            {
+                max = (int) ((Scalar) get (bed.max[i])).value;
+                connectedCount = bed.count[i];
+            }
 
-        int Afirstborn = (int) A.valuesFloat[Abed.firstborn];
-        int Bfirstborn = (int) B.valuesFloat[Bbed.firstborn];
-        if (Afirstborn >= Ainstances.size ()  &&  Bfirstborn >= Binstances.size ()) return;  // Only proceed if there are some new parts.
-        simulator.clearNew (A);
-        simulator.clearNew (B);
+            ConnectIterator it = new ConnectIterator (i, population, max, connectedCount);
+            iterators.add (it);
+            if (it.firstborn < it.instances.size ()) nothingNew = false;
+            simulator.clearNew (population);
+        }
+        if (nothingNew) return;
 
-        int Asize = Ainstances.size ();
-        int Bsize = Binstances.size ();
+        // TODO: sort these so the one with the most old entries is the outermost iterator
+        // That allows the most number of old entries to be skipped.
+        // TODO: For spatial filtering, make the innermost iterator be the one that best defines C.$xyz
+        for (int i = 1; i < count; i++)
+        {
+            ConnectIterator A = iterators.get (i-1);
+            ConnectIterator B = iterators.get (i);
+            A.permute   = B;
+            B.contained = true;
+        }
 
-        // TODO: implement nearest-neighbor filtering
-
-        int Amax = 0;
-        int Bmax = 0;
-        if (bed.max[0] != null) Amax = (int) ((Scalar) get (bed.max[0])).value;
-        if (bed.max[1] != null) Bmax = (int) ((Scalar) get (bed.max[1])).value;
         // TODO: implement $min, or consider eliminating it from the language
         // $max is easy, but $min requires one or more forms of expensive accounting to do correctly.
         // Problems include:
@@ -226,60 +378,18 @@ public class Population extends Instance
         // However, this is more difficult to implement for any but the outer loop. Could implement an
         // outer loop for each of the other populations, just for fulfilling $min.
 
-        // Scan AxB
+        ConnectIterator outer = iterators.get (0);
         Part c = new Part (equations, this);
-        for (int i = 0; i < Asize; i++)
+        outer.setProbe (c);
+        while (outer.next ())
         {
-            Part a = Ainstances.get (i);
-            if (a == null) continue;
-            boolean Aold = a.valuesFloat[Abed.newborn] == 0;
-
-            c.setPart (0, a);
-            int Acount = 0;
-            if (Amax != 0)
-            {
-                Acount = c.getCount (0);
-                if (Acount >= Amax) continue;  // early out: this part is already full, so skip
-            }
-
-            // iterate over B, with some shuffling each time
-            int count;
-            int offset;
-            if (Aold)  // focus on portion of B more likely to contain new parts
-            {
-                count  = Bsize - Bfirstborn;
-                offset = Bfirstborn;
-            }
-            else   // a is new, so process all of B
-            {
-                count  = Bsize;
-                offset = 0;
-            }
-            int j    = (int) Math.round (Math.random () * (count - 1));
-            int stop = j + count;
-            for (; j < stop; j++)
-            {
-                Part b = Binstances.get (j % count + offset);
-                if (b == null) continue;
-                boolean Bold = b.valuesFloat[Bbed.newborn] == 0;
-                if (Aold  &&  Bold) continue;  // Both parts are old, so don't process
-
-                c.setPart (1, b);
-                if (Bmax != 0  &&  c.getCount (1) >= Bmax) continue;  // no room in this B
-
-                c.resolve ();
-                double create = c.getP (simulator);
-                if (create <= 0  ||  create < 1  &&  create < simulator.random.nextDouble ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
-                ((Part) container).event.enqueue (c);
-                c.init (simulator);
-                c = new Part (equations, this);
-                c.setPart (0, a);
-
-                if (Amax != 0)
-                {
-                    if (++Acount >= Amax) break;  // stop scanning B once this A is full
-                }
-            }
+            c.resolve ();
+            double create = c.getP (simulator);
+            if (create <= 0  ||  create < 1  &&  create < simulator.random.nextDouble ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
+            ((Part) container).event.enqueue (c);
+            c.init (simulator);
+            c = new Part (equations, this);
+            outer.setProbe (c);
         }
     }
 

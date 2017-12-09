@@ -75,6 +75,7 @@ public class EquationSet implements Comparable<EquationSet>
     {
         public EquationSet connection; // the connection, that is, the thing being accounted (the endpoint is the thing doing the accounting)
         public String      alias;      // name within the connection that refers to the endpoint
+        public Variable    count;      // Phantom variable to satisfy RHS references to $count for this endpoint. May be null if there are no such references.
         public AccountableConnection (EquationSet connection, String alias)
         {
             this.connection = connection;
@@ -85,6 +86,11 @@ public class EquationSet implements Comparable<EquationSet>
             int result = connection.compareTo (that.connection);
             if (result != 0) return result;
             return alias.compareTo (that.alias);
+        }
+        public boolean equals (Object that)
+        {
+            if (that instanceof AccountableConnection) return compareTo ((AccountableConnection) that) == 0;
+            return false;
         }
     }
 
@@ -173,13 +179,11 @@ public class EquationSet implements Comparable<EquationSet>
 
     /**
         Compute the fully-qualified name of this equation set.
+        Used mainly in error reporting and other cosmetic purposes.
     **/
     public String prefix ()
     {
-        if (container == null)
-        {
-            return name;
-        }
+        if (container == null) return "";  // Omit the top-level model name, as it just clutters outputs.
         String temp = container.prefix ();
         if (temp.length () > 0)
         {
@@ -325,8 +329,7 @@ public class EquationSet implements Comparable<EquationSet>
         if (   v.name.endsWith (".$k")
             || v.name.endsWith (".$max")
             || v.name.endsWith (".$min")
-            || v.name.endsWith (".$projectFrom")
-            || v.name.endsWith (".$projectTo")
+            || v.name.endsWith (".$project")
             || v.name.endsWith (".$radius"))
         {
             return this;
@@ -499,6 +502,29 @@ public class EquationSet implements Comparable<EquationSet>
                                 query.reference.variable.container = dest;  // the container itself is really the target
                                 query.reference.variable.addAttribute ("initOnly"); // because instance variables are bound before the part is put into service, and remain constant for its entire life
                                 query.reference.variable.reference = query.reference;  // TODO: when $connect() is implemented, instances should become first class variables in the equation set, and this circular reference will be created by resolveLHS()
+                            }
+                            else if (query.name.equals ("$count"))  // accountable endpoint
+                            {
+                                if (dest.accountableConnections == null) dest.accountableConnections = new TreeSet<AccountableConnection> ();
+                                String alias = av.name.split ("\\.", 2)[0];
+                                AccountableConnection ac = new AccountableConnection (EquationSet.this, alias);
+                                if (! dest.accountableConnections.add (ac)) ac = dest.accountableConnections.floor (ac);
+                                if (ac.count == null)
+                                {
+                                    // Create a fully-functional variable.
+                                    // However, it never gets formally added to dest, because dest should never evaluate it.
+                                    // Rather, it is maintained by the backend's connection system.
+                                    ac.count = new Variable (prefix () + ".$count");
+                                    ac.count.type = new Scalar (0);
+                                    ac.count.container = dest;
+                                    ac.count.equations = new TreeSet<EquationEntry> ();
+                                    query.reference.variable = ac.count;
+                                    query.reference.variable.reference = query.reference;
+                                }
+                                else
+                                {
+                                    query.reference.variable = ac.count;
+                                }
                             }
                             else
                             {
@@ -1424,9 +1450,13 @@ public class EquationSet implements Comparable<EquationSet>
 
         for (Variable v : variables)
         {
-            if (v.name.contains ("$")  &&  ! v.name.startsWith ("$up."))
+            if (v.hasAttribute ("constant"))
             {
-                if (v.name.equals ("$xyz")  ||  v.name.endsWith (".$projectFrom")  ||  v.name.endsWith (".$projectTo"))  // are there always dots before $projectFrom/To?
+                v.type = ((Constant) v.equations.first ().expression).value;
+            }
+            else if (v.name.contains ("$")  &&  ! v.name.startsWith ("$up."))
+            {
+                if (v.name.equals ("$xyz")  ||  v.name.endsWith (".$project")  ||  v.name.endsWith (".$project"))  // are there always dots before $project?
                 {
                     v.type = new MatrixDense (3, 1);
                 }
@@ -1438,10 +1468,6 @@ public class EquationSet implements Comparable<EquationSet>
                 {
                     v.type = new Scalar (0);
                 }
-            }
-            else if (v.hasAttribute ("constant"))
-            {
-                v.type = ((Constant) v.equations.first ().expression).value;
             }
             else
             {
@@ -2053,6 +2079,7 @@ public class EquationSet implements Comparable<EquationSet>
 
     /**
         Provide each part with a list of connections which access it and which define a $min or $max on the number of connections.
+        Note that resolveRHS() handles any accesses to $count
     **/
     public void findAccountableConnections ()
     {
@@ -2070,7 +2097,7 @@ public class EquationSet implements Comparable<EquationSet>
             if (max == null  &&  min == null) continue;
             EquationSet endpoint = c.getValue ();
             if (endpoint.accountableConnections == null) endpoint.accountableConnections = new TreeSet<AccountableConnection> ();
-            endpoint.accountableConnections.add (new AccountableConnection (this, alias));
+            endpoint.accountableConnections.add (new AccountableConnection (this, alias));  // Only adds if it is not already there.
         }
     }
 
