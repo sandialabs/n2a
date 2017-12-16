@@ -220,6 +220,11 @@ public class MatrixDense extends Matrix
         return value[0][row];
     }
 
+    public double[] getRawColumn (int column)
+    {
+        return value[column];
+    }
+
     public void set (int row, int column, double a)
     {
         value[column][row] = a;

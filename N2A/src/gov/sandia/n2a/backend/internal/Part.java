@@ -603,12 +603,6 @@ public class Part extends Instance
         return new MatrixDense (3, 1);  // default is ~[0,0,0]
     }
 
-    public Matrix project (int i, int j)
-    {
-        // TODO: as part of spatial filtering, implement project()
-        return new MatrixDense (3, 1);
-    }
-
     public String path ()
     {
         if (equations.connectionBindings == null) return super.path ();

@@ -59,13 +59,16 @@ public class InternalBackendData
     public List<Variable> globalBufferedExternalWrite  = new ArrayList<Variable> ();
     public List<Variable> globalIntegrated             = new ArrayList<Variable> ();
 
-    public TreeSet<VariableReference> localReference   = new TreeSet<VariableReference> (new ReferenceComparator ());
-    public TreeSet<VariableReference> globalReference  = new TreeSet<VariableReference> (new ReferenceComparator ());
+    public ReferenceComparator referenceComparator = new ReferenceComparator ();
+    public TreeSet<VariableReference> localReference   = new TreeSet<VariableReference> (referenceComparator);
+    public TreeSet<VariableReference> globalReference  = new TreeSet<VariableReference> (referenceComparator);
 
     // The following arrays have exactly the same order as EquationSet.connectionBindings
-    public int   endpoints;            // Position in valuesObject of first reference to a connected instance. References are allocated as a contiguous block.
-    public int[] connectionTargets;    // Position in container.populations of each target
-    public int[] count;                // Position in endpoint.valuesFloat of count value for this connection
+    public int      endpoints;           // Position in valuesObject of first reference to a connected instance. References are allocated as a contiguous block.
+    public int[]    connectionTargets;   // Position in container.populations of each target
+    public int[]    count;               // Position in endpoint.valuesFloat of count value for this connection
+    public Object[] projectDependencies; // References used within a $project expression
+    public Object[] projectReferences;   // References used within a $project expression
 
     // Ready-to-use handles for common $variables
     // Arrays are associated with connectionBindings, as above. Elements may be null if not applicable.
@@ -77,6 +80,7 @@ public class InternalBackendData
     public Variable[] min;
     public Variable   n;
     public Variable   p;
+    public Variable[] project;
     public Variable[] radius;
     public Variable   t;
     public Variable   dt;  // $t'
@@ -903,23 +907,27 @@ public class InternalBackendData
 
             endpoints = countLocalObject;
             countLocalObject += size;
-            connectionTargets = new int[size];
+            connectionTargets   = new int   [size];
+            projectDependencies = new Object[size];
+            projectReferences   = new Object[size];
 
-            count  = new int     [size];
-            k      = new Variable[size];
-            max    = new Variable[size];
-            min    = new Variable[size];
-            radius = new Variable[size];
+            count   = new int     [size];
+            k       = new Variable[size];
+            max     = new Variable[size];
+            min     = new Variable[size];
+            project = new Variable[size];
+            radius  = new Variable[size];
 
             int i = 0;
             for (Entry<String, EquationSet> c : s.connectionBindings.entrySet ())
             {
                 String alias = c.getKey ();
-                count [i] = -1;
-                k     [i] = s.find (new Variable (alias + ".$k"     ));
-                max   [i] = s.find (new Variable (alias + ".$max"   ));
-                min   [i] = s.find (new Variable (alias + ".$min"   ));
-                radius[i] = s.find (new Variable (alias + ".$radius"));
+                count  [i] = -1;
+                k      [i] = s.find (new Variable (alias + ".$k"      ));
+                max    [i] = s.find (new Variable (alias + ".$max"    ));
+                min    [i] = s.find (new Variable (alias + ".$min"    ));
+                project[i] = s.find (new Variable (alias + ".$project"));
+                radius [i] = s.find (new Variable (alias + ".$radius" ));
 
                 EquationSet endpoint = c.getValue ();
                 if (endpoint.accountableConnections != null)
@@ -941,8 +949,40 @@ public class InternalBackendData
 
                 namesLocalObject.add (alias);  // Note that countLocalObject has already been incremented above
 
+                if (project[i] != null)
+                {
+                    ArrayList<Variable> dependencies = new ArrayList<Variable> ();
+                    projectDependencies[i] = dependencies;  // Always assign, even if empty.
+                    for (Variable t : s.ordered)
+                    {
+                        if (t.hasAttribute ("temporary")  &&  project[i].dependsOn (t) != null)
+                        {
+                            dependencies.add (t);
+                        }
+                    }
+
+                    TreeSet<VariableReference> references = new TreeSet<VariableReference> (referenceComparator);
+                    class ProjectVisitor extends Visitor
+                    {
+                        public boolean visit (Operator op)
+                        {
+                            if (op instanceof AccessVariable)
+                            {
+                                AccessVariable av = (AccessVariable) op;
+                                if (av.reference.resolution.size () > 0) references.add (av.reference);
+                                return false;
+                            }
+                            return true;
+                        }
+                    }
+                    ProjectVisitor visitor = new ProjectVisitor ();
+                    project[i].visit (visitor);
+                    for (Variable v : dependencies) v.visit (visitor);
+                    if (references.size () > 0) projectReferences[i] = references;
+                }
+
                 int j = 0;
-                for (EquationSet peer : s.container.parts)  // TODO: this assumes that all connections to peer populations under same container; need a more flexible way of locating target populations
+                for (EquationSet peer : s.container.parts)  // TODO: this assumes that all connections are to peer populations under the same container; need a more flexible way of locating target populations
                 {
                     if (peer == c.getValue ())
                     {

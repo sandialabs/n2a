@@ -19,41 +19,42 @@ import java.util.TreeSet;
 **/
 public class KDTree
 {
-    public Node    root;
-    public float[] lo;
-    public float[] hi;
+    public Node     root;
+    public double[] lo;
+    public double[] hi;
 
-    public int   bucketSize;
-    public int   k;
-    public float radius;   // Maximum distance between query point and any result point. Initially set to INFINITY by constructor.
-    public float epsilon;  // Nodes must have at least this much overlap with the current radius (which is always the lesser of the initial radius and the kth nearest neighbor).
-    public int   maxNodes; // Expand no more than this number of nodes. Forces a search to be approximate rather than exhaustive.
+    public int    bucketSize;
+    public int    k;
+    public double radius;   // Maximum distance between query point and any result point. Initially set to INFINITY by constructor.
+    public double epsilon;  // Nodes must have at least this much overlap with the current radius (which is always the lesser of the initial radius and the kth nearest neighbor).
+    public int    maxNodes; // Expand no more than this number of nodes. Forces a search to be approximate rather than exhaustive.
 
     public KDTree ()
     {
         bucketSize = 5;
         k          = 5;  // it doesn't make sense for k to be less than bucketSize
-        radius     = Float.POSITIVE_INFINITY;
-        epsilon    = 1e-4f;
+        radius     = Double.POSITIVE_INFINITY;
+        epsilon    = 1e-4;
         maxNodes   = Integer.MAX_VALUE;
     }
 
     /**
         @param data Must not be changed by the caller during the lifetime of this KDTree.
     **/
-    public void set (List<float[]> data)
+    public void set (List<Entry> data)
     {
-        int dimensions = data.get (0).length;
-        lo = new float[dimensions];
-        hi = new float[dimensions];
+        int dimensions = data.get (0).point.length;
+        lo = new double[dimensions];
+        hi = new double[dimensions];
         for (int i = 0; i < dimensions; i++)
         {
-            lo[i] = Float.POSITIVE_INFINITY;
-            hi[i] = Float.NEGATIVE_INFINITY;
+            lo[i] = Double.POSITIVE_INFINITY;
+            hi[i] = Double.NEGATIVE_INFINITY;
         }
 
-        for (float[] t : data)
+        for (Entry e : data)
         {
+            double[] t = e.point;
             for (int i = 0; i < dimensions; i++)
             {
                 lo[i] = Math.min (lo[i], t[i]);
@@ -64,14 +65,14 @@ public class KDTree
         root = construct (data);
     }
 
-    public void find (float[] query, List<float[]> result)
+    public List<Entry> find (double[] query)
     {
         // Determine distance of query from bounding rectangle for entire tree
         int dimensions = query.length;
-        float distance = 0;
+        double distance = 0;
         for (int i = 0; i < dimensions; i++)
         {
-            float d = Math.max (0.0f, lo[i] - query[i]) + Math.max (0.0f, query[i] - hi[i]);
+            double d = Math.max (0, lo[i] - query[i]) + Math.max (0, query[i] - hi[i]);
             distance += d * d;
         }
 
@@ -81,7 +82,7 @@ public class KDTree
         q.radius = radius * radius;  // this may shrink monotonically once we find enough neighbors
         q.point  = query;
 
-        float oneEpsilon = (1 + epsilon) * (1 + epsilon);
+        double oneEpsilon = (1 + epsilon) * (1 + epsilon);
         q.queue.add (new Sortable<Node> (distance, root));
         int visited = 0;
         while (true)
@@ -94,13 +95,11 @@ public class KDTree
             if (++visited >= maxNodes) break;
         }
 
-        // Transfer results to vector. No need to limit number of results, becaus this has
+        // Transfer results to vector. No need to limit number of results, because this has
         // already been done by Leaf::search().
-        result = new ArrayList<float[]> (q.sorted.size ());
-        for (Sortable<float[]> sit : q.sorted)
-        {
-            result.add (sit.value);
-        }
+        List<Entry> result = new ArrayList<Entry> (q.sorted.size ());
+        for (Sortable<Entry> sit : q.sorted) result.add (sit.value);
+        return result;
     }
 
     public void dump (String pad)
@@ -115,7 +114,7 @@ public class KDTree
         }
     }
 
-    public Node construct (List<float[]> points)
+    public Node construct (List<Entry> points)
     {
         int count = points.size ();
         if (count == 0) return null;
@@ -130,10 +129,10 @@ public class KDTree
             // TODO: accept the split method as a parameter
             int dimensions = lo.length;
             int d = 0;
-            float longest = 0;
+            double longest = 0;
             for (int i = 0; i < dimensions; i++)
             {
-                float length = hi[i] - lo[i];
+                double length = hi[i] - lo[i];
                 if (length > longest)
                 {
                     d = i;
@@ -147,7 +146,7 @@ public class KDTree
             result.dimension = d;
             result.lo = lo[d];
             result.hi = hi[d];
-            result.mid = points.get (cut)[d];
+            result.mid = points.get (cut).point[d];
 
             hi[d] = result.mid;
             result.lowNode = construct (points.subList (0, cut));
@@ -161,16 +160,16 @@ public class KDTree
         }
     }
 
-    public void sort (List<float[]> points, int dimension)
+    public void sort (List<Entry> points, int dimension)
     {
-        TreeSet<Sortable<float[]>> sorted = new TreeSet<Sortable<float[]>> ();
-        for (float[] it : points)
+        TreeSet<Sortable<Entry>> sorted = new TreeSet<Sortable<Entry>> ();
+        for (Entry it : points)
         {
-            sorted.add (new Sortable<float[]> (it[dimension], it));
+            sorted.add (new Sortable<Entry> (it.point[dimension], it));
         }
 
         int i = 0;
-        for (Sortable<float[]> sit : sorted)
+        for (Sortable<Entry> sit : sorted)
         {
             points.set (i++, sit.value);
         }
@@ -185,19 +184,19 @@ public class KDTree
     /// Internal helper class for passing search-related info down the tree.
     public static class Query
     {
-        public int     k;
-        public float   radius;
-        public float[] point;
-        public TreeSet<Sortable<float[]>> sorted = new TreeSet<Sortable<float[]>> ();  // points
-        public PriorityQueue<Sortable<Node>> queue = new PriorityQueue<Sortable<Node>> ();
+        public int      k;
+        public double   radius;
+        public double[] point;
+        public TreeSet<Sortable<Entry>>      sorted = new TreeSet<Sortable<Entry>> ();
+        public PriorityQueue<Sortable<Node>> queue  = new PriorityQueue<Sortable<Node>> ();
     }
 
     public static class Sortable<T> implements Comparable<Sortable<T>>
     {
-        public float  key;
+        public double  key;
         public T      value;
 
-        public Sortable (float key, T value)
+        public Sortable (double key, T value)
         {
             this.key   = key;
             this.value = value;
@@ -221,23 +220,23 @@ public class KDTree
 
     public static interface Node
     {
-        public void search (float distance, Query q);
+        public void search (double distance, Query q);
         public void dump (String pad);
     }
 
     public static class Branch implements Node
     {
-        public int   dimension;
-        public float lo;       // Lowest value along the dimension
-        public float hi;       // Highest value along the dimension
-        public float mid;      // The cut point along the dimension
-        public Node  lowNode;  // below mid
-        public Node  highNode; // above mid
+        public int    dimension;
+        public double lo;       // Lowest value along the dimension
+        public double hi;       // Highest value along the dimension
+        public double mid;      // The cut point along the dimension
+        public Node   lowNode;  // below mid
+        public Node   highNode; // above mid
 
-        public void search (float distance, Query q)
+        public void search (double distance, Query q)
         {
-            float qmid = q.point[dimension];
-            float newOffset = qmid - mid;
+            double qmid = q.point[dimension];
+            double newOffset = qmid - mid;
             if (newOffset < 0)  // lowNode is closer
             {
                 // We don't do any special testing on nearer node, because it has already been
@@ -245,7 +244,7 @@ public class KDTree
                 if (lowNode != null) lowNode.search (distance, q);
                 if (highNode != null)
                 {
-                    float oldOffset = Math.max (lo - qmid, 0.0f);
+                    double oldOffset = Math.max (lo - qmid, 0.0f);
                     distance += newOffset * newOffset - oldOffset * oldOffset;
                     q.queue.add (new Sortable<Node> (distance, highNode));
                 }
@@ -255,7 +254,7 @@ public class KDTree
                 if (highNode != null) highNode.search (distance, q);
                 if (lowNode != null)
                 {
-                    float oldOffset = Math.max (qmid - hi, 0.0f);
+                    double oldOffset = Math.max (qmid - hi, 0.0f);
                     distance += newOffset * newOffset - oldOffset * oldOffset;
                     q.queue.add (new Sortable<Node> (distance, lowNode));
                 }
@@ -280,28 +279,28 @@ public class KDTree
 
     public static class Leaf implements Node
     {
-        public List<float[]> points;
+        public List<Entry> points;
 
-        public void search (float distance, Query q)
+        public void search (double distance, Query q)
         {
-            int dimensions = points.get (0).length;
-            for (float[] p : points)
+            int dimensions = points.get (0).point.length;
+            for (Entry p : points)
             {
                 // Measure distance using early-out method. Might save operations in
                 // high-dimensional spaces.
-                float total = 0;
+                double total = 0;
                 for (int i = 0; i < dimensions  &&  total < q.radius; i++)
                 {
-                    float t = p[i] - q.point[i];
+                    double t = p.point[i] - q.point[i];
                     total += t * t;
                 }
 
                 if (total >= q.radius) continue;
-                q.sorted.add (new Sortable<float[]> (total, p));
+                q.sorted.add (new Sortable<Entry> (total, p));
                 if (q.sorted.size () > q.k)
                 {
                     // Remove the last (most distant) entry.
-                    Iterator<Sortable<float[]>> it = q.sorted.descendingIterator ();
+                    Iterator<Sortable<Entry>> it = q.sorted.descendingIterator ();
                     it.next ();
                     it.remove ();
                 }

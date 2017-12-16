@@ -125,6 +125,16 @@ public abstract class Matrix extends Type
         return new MatrixDense (this).max (that);
     }
 
+    public Type EQ (Type that) throws EvaluationException
+    {
+        return new Scalar (compareTo (that) == 0 ? 1 : 0);
+    }
+
+    public Type NE (Type that) throws EvaluationException
+    {
+        return new Scalar (compareTo (that) == 0 ? 0 : 1);
+    }
+
     public double det22 (int r0, int r1, int c0, int c1)
     {
         return (get (r0, c0) * get (r1, c1) - get (r0, c1) * get (r1, c0));

@@ -7,12 +7,18 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.backend.internal;
 
 import java.util.ArrayList;
+import java.util.List;
+import java.util.TreeSet;
+
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
+import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 
 /**
     An Instance which contains the global variables for a given kind of part,
@@ -192,11 +198,13 @@ public class Population extends Instance
         public Population          population;
         public int                 max;
         public int                 connectedCount;  // position in p.valuesFloat of $count for this connection
-        public InternalBackendData bed;
+        public InternalBackendData pbed;
         public int                 firstborn;
         public ArrayList<Part>     instances;
-        public Part                probe;  // The connection instance being built.
-        public Part                p;  // Our current part, contributed as an endpoint of probe. 
+        public ArrayList<Part>     filtered;  // A subset of instances selected by spatial filtering.
+        public Part                c;  // The connection instance being built.
+        public Part                p;  // Our current part, contributed as an endpoint of c.
+        public Simulator           simulator;  // For evaluating equations
 
         public int size;   // Cached value of instances.size(). Does not change.
         public int count;  // Size of current subset of instances we are iterating through.
@@ -204,19 +212,86 @@ public class Population extends Instance
         public int i;
         public int stop;
 
-        // TODO: implement nearest-neighbor filtering
+        public KDTree              NN;
+        public List<KDTree.Entry>  entries;
+        public Variable            project;
+        public double[]            xyz;  // query value, shared across all iterators
+        public InternalBackendData cbed;
+        public double              rank;  // heuristic value indicating how good a candidate this endpoint is to determine C.$xyz
 
         @SuppressWarnings("unchecked")
-        public ConnectIterator (int index, Population population, int max, int connectedCount)
+        public ConnectIterator (int index, Population population, InternalBackendData cbed, Simulator simulator)
         {
-            this.index          = index;
-            this.population     = population;
-            this.max            = max;
-            this.connectedCount = connectedCount;
-            bed                 = (InternalBackendData) population.equations.backendData;
-            firstborn           = (int)             population.valuesFloat [bed.firstborn];
-            instances           = (ArrayList<Part>) population.valuesObject[bed.instances];
-            size                = instances.size ();
+            this.index      = index;
+            this.population = population;
+            this.cbed       = cbed;
+            this.simulator  = simulator;
+            pbed            = (InternalBackendData) population.equations.backendData;
+            firstborn       = (int)             population.valuesFloat [pbed.firstborn];
+            instances       = (ArrayList<Part>) population.valuesObject[pbed.instances];
+            size            = instances.size ();
+
+            if (cbed.max[index] != null)
+            {
+                max = (int) ((Scalar) get (cbed.max[index])).value;
+                connectedCount = cbed.count[index];
+            }
+
+            if (cbed.project[index] != null) rank += 1;
+
+            // Prepare nearest neighbor search structure
+            int    k      = 0;
+            double radius = 0;
+            if (cbed.k     [index] != null) k      = (int) ((Scalar) get (cbed.k     [index])).value;
+            if (cbed.radius[index] != null) radius =       ((Scalar) get (cbed.radius[index])).value;
+            if (k > 0  ||  radius > 0)
+            {
+                rank -= 2;
+                NN = new KDTree ();
+                NN.k      = k      > 0 ? k      : Integer.MAX_VALUE;
+                NN.radius = radius > 0 ? radius : Double.POSITIVE_INFINITY;
+
+                entries = new ArrayList<KDTree.Entry> (size);
+                project = cbed.project[index];
+                c = new Part (equations, Population.this);
+                for (int i = 0; i < size; i++)
+                {
+                    p = instances.get (i);
+                    if (p == null) continue;
+
+                    KDTree.Entry e = new KDTree.Entry ();
+                    if (project == null)
+                    {
+                        e.point = ((MatrixDense) p.getXYZ (simulator)).getRawColumn (0);
+                    }
+                    else
+                    {
+                        c.setPart (index, p);
+                        e.point = getProject ();
+                    }
+                    e.item = p;
+                    entries.add (e);
+                }
+                NN.set (entries);
+            }
+        }
+
+        @SuppressWarnings("unchecked")
+        public double[] getProject ()
+        {
+            if (cbed.projectReferences[index] != null)
+            {
+                c.resolve ((TreeSet<VariableReference>) cbed.projectReferences[index]);
+            }
+
+            InstanceTemporaries temp = new InstanceTemporaries (c, simulator, true);  // $project is evaluated during the init cycle. TODO: change flag to $connect, and let $init be false.
+            for (Object o : (ArrayList<Variable>) cbed.projectDependencies[index])
+            {
+                Variable v = (Variable) o;
+                Type result = v.eval (temp);
+                if (result != null  &&  v.writeIndex >= 0) temp.set (v, result);
+            }
+            return ((MatrixDense) project.eval (temp)).getRawColumn (0);
         }
 
         /**
@@ -225,7 +300,7 @@ public class Population extends Instance
         **/
         public boolean setProbe (Part probe)
         {
-            this.probe = probe;
+            c = probe;
             boolean result = false;
             if (p != null)
             {
@@ -245,16 +320,26 @@ public class Population extends Instance
         /**
             Restarts this iterator at a random point.
             Called multiple times, depending on how many times permute.next() returns true.
-            Only called internally.
-            TODO: Spatial filtering.
         **/
         public void reset (boolean newOnly)
         {
             this.newOnly = newOnly;
-            if (newOnly) count = size - firstborn;
-            else         count = size;
-            if (count > 1) i = (int) Math.round (Math.random () * (count - 1));
-            else           i = 0;
+            if (NN != null  &&  permute != null)
+            {
+                double[] query = ((MatrixDense) c.getXYZ (simulator)).getRawColumn (0);
+                List<KDTree.Entry> result = NN.find (query);
+                count = result.size ();
+                filtered = new ArrayList<Part> (count);
+                for (KDTree.Entry e : result) filtered.add ((Part) e.item);
+                i = 0;
+            }
+            else
+            {
+                if (newOnly) count = size - firstborn;
+                else         count = size;
+                if (count > 1) i = (int) Math.round (Math.random () * (count - 1));
+                else           i = 0;
+            }
             stop = i + count;
         }
 
@@ -263,7 +348,7 @@ public class Population extends Instance
         **/
         public boolean old ()
         {
-            if (p.valuesFloat[bed.newborn] != 0) return false;
+            if (p.valuesFloat[pbed.newborn] != 0) return false;
             if (permute != null) return permute.old ();
             return true;
         }
@@ -293,12 +378,24 @@ public class Population extends Instance
                     }
                 }
 
-                if (newOnly)
+                if (NN != null  &&  permute != null)  // Note: One endpoint must must act as anchor for spatial constraints.
+                {
+                    for (; i < stop; i++)
+                    {
+                        p = filtered.get (i);
+                        if (p.valuesFloat[pbed.newborn] != 0)
+                        {
+                            if (max == 0) break;
+                            if (p.valuesFloat[connectedCount] < max) break;
+                        }
+                    }
+                }
+                else if (newOnly)
                 {
                     for (; i < stop; i++)
                     {
                         p = instances.get (i % count + firstborn);
-                        if (p != null  &&  p.valuesFloat[bed.newborn] != 0)
+                        if (p != null  &&  p.valuesFloat[pbed.newborn] != 0)
                         {
                             if (max == 0) break;
                             if (p.valuesFloat[connectedCount] < max) break;
@@ -307,7 +404,6 @@ public class Population extends Instance
                 }
                 else
                 {
-                    // This version of the loop is slightly more efficient.
                     for (; i < stop; i++)
                     {
                         p = instances.get (i % count);
@@ -322,7 +418,27 @@ public class Population extends Instance
                 i++;
                 if (p != null  &&  i <= stop)
                 {
-                    probe.setPart (index, p);
+                    c.setPart (index, p);
+                    if (permute == null  &&  xyz != null)  // Spatial filtering is on, and we are the endpoint that determines the query
+                    {
+                        // Obtain C.$xyz, the best way we can
+                        if (cbed.xyz != null)  // C explicitly defines $xyz
+                        {
+                            // This is a very minimal evaluation. No reference resolution. No temporaries. TODO: deeper eval of C.$xyz ?
+                            xyz = ((MatrixDense) c.getXYZ (simulator)).getRawColumn (0);
+                        }
+                        // TODO: if (NN != null) we could look up the previously calculated value
+                        // That would require sorting them in a way that can be indexed.
+                        // Could make an ArrayList<double[]> with exactly the same structure as instances.
+                        else if (project == null)
+                        {
+                            xyz = ((MatrixDense) p.getXYZ (simulator)).getRawColumn (0);
+                        }
+                        else
+                        {
+                            xyz = getProject ();
+                        }
+                    }
                     return true;
                 }
             }
@@ -336,29 +452,64 @@ public class Population extends Instance
         int count = equations.connectionBindings.size ();
         ArrayList<ConnectIterator> iterators = new ArrayList<ConnectIterator> (count);
         boolean nothingNew = true;
+        boolean spatialFiltering = false;
         for (int i = 0; i < count; i++)
         {
             Population population = getTarget (i);
             if (population == null  ||  population.n == 0) return;  // Nothing to connect. This should never happen.
 
-            int max = 0;
-            int connectedCount = 0;
-            if (bed.max[i] != null)
-            {
-                max = (int) ((Scalar) get (bed.max[i])).value;
-                connectedCount = bed.count[i];
-            }
-
-            ConnectIterator it = new ConnectIterator (i, population, max, connectedCount);
+            ConnectIterator it = new ConnectIterator (i, population, bed, simulator);
             iterators.add (it);
             if (it.firstborn < it.instances.size ()) nothingNew = false;
+            if (it.NN != null) spatialFiltering = true;
             simulator.clearNew (population);
         }
         if (nothingNew) return;
 
-        // TODO: sort these so the one with the most old entries is the outermost iterator
+        // Sort so that population with the most old entries is the outermost iterator.
         // That allows the most number of old entries to be skipped.
-        // TODO: For spatial filtering, make the innermost iterator be the one that best defines C.$xyz
+        // This is a simple insertion sort ...
+        for (int i = 1; i < count; i++)
+        {
+            for (int j = i; j > 0; j--)
+            {
+                ConnectIterator A = iterators.get (j-1);
+                ConnectIterator B = iterators.get (j);
+                if (A.firstborn >= B.firstborn) break;
+                iterators.set (j-1, B);
+                iterators.set (j,   A);
+            }
+        }
+
+        // For spatial filtering, make the innermost iterator be the one that best defines C.$xyz
+        if (spatialFiltering)
+        {
+            double[] xyz = new double[3];
+            for (int i = 0; i < count; i++) iterators.get (i).xyz = xyz;
+
+            if (bed.xyz == null  ||  bed.xyz.equations.size () == 0)  // connection's own $xyz is not defined, so must get it from some $project
+            {
+                int last = count - 1;
+                ConnectIterator A = iterators.get (last);
+                int    bestIndex = last;
+                double bestRank  = A.rank;
+                for (int i = 0; i < last; i++)
+                {
+                    A = iterators.get (i);
+                    if (A.rank > bestRank)
+                    {
+                        bestIndex = i;
+                        bestRank  = A.rank;
+                    }
+                }
+                if (bestIndex != last)
+                {
+                    A = iterators.remove (bestIndex);
+                    iterators.add (A);
+                }
+            }
+        }
+
         for (int i = 1; i < count; i++)
         {
             ConnectIterator A = iterators.get (i-1);
