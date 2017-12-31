@@ -588,7 +588,7 @@ public class Part extends Instance
         return ((Scalar) result).value;
     }
 
-    public Matrix getXYZ (Simulator simulator)
+    public double[] getXYZ (Simulator simulator)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
         if (bed.xyz != null)
@@ -596,11 +596,11 @@ public class Part extends Instance
             if (bed.xyz.hasAny (new String[] {"constant", "temporary"}))
             {
                 InstanceTemporaries temp = new InstanceTemporaries (this, simulator, true);  // getXYZ() calls occur only during the init cycle, specifically when testing a connection
-                return (Matrix) bed.xyz.eval (temp);
+                return ((MatrixDense) bed.xyz.eval (temp)).getRawColumn (0);
             }
-            return (Matrix) get (bed.xyz);
+            return ((MatrixDense) get (bed.xyz)).getRawColumn (0);
         }
-        return new MatrixDense (3, 1);  // default is ~[0,0,0]
+        return new double[3];  // default is ~[0,0,0]
     }
 
     public String path ()

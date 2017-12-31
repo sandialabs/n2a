@@ -289,13 +289,13 @@ public class KDTree
                 // Measure distance using early-out method. Might save operations in
                 // high-dimensional spaces.
                 double total = 0;
-                for (int i = 0; i < dimensions  &&  total < q.radius; i++)
+                for (int i = 0; i < dimensions  &&  total <= q.radius; i++)
                 {
                     double t = p.point[i] - q.point[i];
                     total += t * t;
                 }
 
-                if (total >= q.radius) continue;
+                if (total > q.radius) continue;
                 q.sorted.add (new Sortable<Entry> (total, p));
                 if (q.sorted.size () > q.k)
                 {

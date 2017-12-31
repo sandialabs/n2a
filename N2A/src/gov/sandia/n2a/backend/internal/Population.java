@@ -18,7 +18,6 @@ import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
-import gov.sandia.n2a.plugins.extpoints.Backend;
 
 /**
     An Instance which contains the global variables for a given kind of part,
@@ -212,6 +211,8 @@ public class Population extends Instance
         public int i;
         public int stop;
 
+        public int                 k;
+        public double              radius;
         public KDTree              NN;
         public List<KDTree.Entry>  entries;
         public Variable            project;
@@ -237,11 +238,10 @@ public class Population extends Instance
                 connectedCount = cbed.count[index];
             }
 
-            if (cbed.project[index] != null) rank += 1;
+            project = cbed.project[index];
+            if (project != null) rank += 1;
 
             // Prepare nearest neighbor search structure
-            int    k      = 0;
-            double radius = 0;
             if (cbed.k     [index] != null) k      = (int) ((Scalar) get (cbed.k     [index])).value;
             if (cbed.radius[index] != null) radius =       ((Scalar) get (cbed.radius[index])).value;
             if (k > 0  ||  radius > 0)
@@ -252,7 +252,6 @@ public class Population extends Instance
                 NN.radius = radius > 0 ? radius : Double.POSITIVE_INFINITY;
 
                 entries = new ArrayList<KDTree.Entry> (size);
-                project = cbed.project[index];
                 c = new Part (equations, Population.this);
                 for (int i = 0; i < size; i++)
                 {
@@ -262,7 +261,7 @@ public class Population extends Instance
                     KDTree.Entry e = new KDTree.Entry ();
                     if (project == null)
                     {
-                        e.point = ((MatrixDense) p.getXYZ (simulator)).getRawColumn (0);
+                        e.point = p.getXYZ (simulator);
                     }
                     else
                     {
@@ -307,9 +306,9 @@ public class Population extends Instance
                 // A new connection was just made, so counts (if they are used) have been updated.
                 // Step to next endpoint instance if current instance is full.
                 if (max > 0  &&  p.valuesFloat[connectedCount] >= max) result = true;
-                else probe.setPart (index, p);
+                else c.setPart (index, p);
             }
-            if (permute != null  &&  permute.setProbe (probe))
+            if (permute != null  &&  permute.setProbe (c))
             {
                 i = stop;  // next() will trigger a reset
                 result = true;
@@ -326,8 +325,7 @@ public class Population extends Instance
             this.newOnly = newOnly;
             if (NN != null  &&  permute != null)
             {
-                double[] query = ((MatrixDense) c.getXYZ (simulator)).getRawColumn (0);
-                List<KDTree.Entry> result = NN.find (query);
+                List<KDTree.Entry> result = NN.find (xyz);
                 count = result.size ();
                 filtered = new ArrayList<Part> (count);
                 for (KDTree.Entry e : result) filtered.add ((Part) e.item);
@@ -378,7 +376,7 @@ public class Population extends Instance
                     }
                 }
 
-                if (NN != null  &&  permute != null)  // Note: One endpoint must must act as anchor for spatial constraints.
+                if (NN != null  &&  permute != null)  // Note: One endpoint must act as anchor for spatial constraints.
                 {
                     for (; i < stop; i++)
                     {
@@ -422,22 +420,21 @@ public class Population extends Instance
                     if (permute == null  &&  xyz != null)  // Spatial filtering is on, and we are the endpoint that determines the query
                     {
                         // Obtain C.$xyz, the best way we can
+                        double[] t;
                         if (cbed.xyz != null)  // C explicitly defines $xyz
                         {
-                            // This is a very minimal evaluation. No reference resolution. No temporaries. TODO: deeper eval of C.$xyz ?
-                            xyz = ((MatrixDense) c.getXYZ (simulator)).getRawColumn (0);
+                            // This is a minimal evaluation. No reference resolution. No temporaries. TODO: deeper eval of C.$xyz ?
+                            t = c.getXYZ (simulator);
                         }
-                        // TODO: if (NN != null) we could look up the previously calculated value
-                        // That would require sorting them in a way that can be indexed.
-                        // Could make an ArrayList<double[]> with exactly the same structure as instances.
                         else if (project == null)
                         {
-                            xyz = ((MatrixDense) p.getXYZ (simulator)).getRawColumn (0);
+                            t = p.getXYZ (simulator);
                         }
                         else
                         {
-                            xyz = getProject ();
+                            t = getProject ();
                         }
+                        for (int j = 0; j < 3; j++) xyz[j] = t[j];  // Necessary to copy values, so that xyz can be shared across all iterators.
                     }
                     return true;
                 }
@@ -461,7 +458,7 @@ public class Population extends Instance
             ConnectIterator it = new ConnectIterator (i, population, bed, simulator);
             iterators.add (it);
             if (it.firstborn < it.instances.size ()) nothingNew = false;
-            if (it.NN != null) spatialFiltering = true;
+            if (it.k > 0  ||  it.radius > 0) spatialFiltering = true;
             simulator.clearNew (population);
         }
         if (nothingNew) return;
