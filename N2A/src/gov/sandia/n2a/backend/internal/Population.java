@@ -241,38 +241,38 @@ public class Population extends Instance
             project = cbed.project[index];
             if (project != null) rank += 1;
 
-            // Prepare nearest neighbor search structure
             if (cbed.k     [index] != null) k      = (int) ((Scalar) get (cbed.k     [index])).value;
             if (cbed.radius[index] != null) radius =       ((Scalar) get (cbed.radius[index])).value;
-            if (k > 0  ||  radius > 0)
+            if (k > 0  ||  radius > 0) rank -= 2;
+        }
+
+        public void prepareNN ()
+        {
+            NN = new KDTree ();
+            NN.k      = k      > 0 ? k      : Integer.MAX_VALUE;
+            NN.radius = radius > 0 ? radius : Double.POSITIVE_INFINITY;
+
+            entries = new ArrayList<KDTree.Entry> (size);
+            c = new Part (equations, Population.this);  // Necessary to use c for getProject(). However, this function should be called before first call to setProbe(), so should produce no side-effects.
+            for (int i = 0; i < size; i++)
             {
-                rank -= 2;
-                NN = new KDTree ();
-                NN.k      = k      > 0 ? k      : Integer.MAX_VALUE;
-                NN.radius = radius > 0 ? radius : Double.POSITIVE_INFINITY;
+                p = instances.get (i);
+                if (p == null) continue;
 
-                entries = new ArrayList<KDTree.Entry> (size);
-                c = new Part (equations, Population.this);
-                for (int i = 0; i < size; i++)
+                KDTree.Entry e = new KDTree.Entry ();
+                if (project == null)
                 {
-                    p = instances.get (i);
-                    if (p == null) continue;
-
-                    KDTree.Entry e = new KDTree.Entry ();
-                    if (project == null)
-                    {
-                        e.point = p.getXYZ (simulator);
-                    }
-                    else
-                    {
-                        c.setPart (index, p);
-                        e.point = getProject ();
-                    }
-                    e.item = p;
-                    entries.add (e);
+                    e.point = p.getXYZ (simulator);
                 }
-                NN.set (entries);
+                else
+                {
+                    c.setPart (index, p);
+                    e.point = getProject ();
+                }
+                e.item = p;
+                entries.add (e);
             }
+            NN.set (entries);
         }
 
         @SuppressWarnings("unchecked")
@@ -323,7 +323,7 @@ public class Population extends Instance
         public void reset (boolean newOnly)
         {
             this.newOnly = newOnly;
-            if (NN != null  &&  permute != null)
+            if (NN != null)
             {
                 List<KDTree.Entry> result = NN.find (xyz);
                 count = result.size ();
@@ -376,7 +376,7 @@ public class Population extends Instance
                     }
                 }
 
-                if (NN != null  &&  permute != null)  // Note: One endpoint must act as anchor for spatial constraints.
+                if (NN != null)
                 {
                     for (; i < stop; i++)
                     {
@@ -513,6 +513,7 @@ public class Population extends Instance
             ConnectIterator B = iterators.get (i);
             A.permute   = B;
             B.contained = true;
+            if (A.k > 0  ||  A.radius > 0) A.prepareNN ();
         }
 
         // TODO: implement $min, or consider eliminating it from the language
