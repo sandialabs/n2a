@@ -1015,7 +1015,7 @@ public class EquationSet implements Comparable<EquationSet>
             v.equations = new TreeSet<EquationEntry> ();
         }
 
-        if (connected)
+        if (connected  ||  connectionBindings == null)
         {
             v = new Variable ("$index", 0);
             if (add (v))
@@ -1027,11 +1027,8 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 v = find (v);
             }
-            v.addUser (this);  // Force $index to exist for connection targets. Used for anti-indexing into list of instances.
-        }
+            if (connected) v.addUser (this);  // Force $index to exist for connection targets. Used for anti-indexing into list of instances.
 
-        if (connected  ||  connectionBindings == null)
-        {
             v = new Variable ("$n", 0);
             if (add (v))
             {
