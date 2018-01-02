@@ -57,7 +57,7 @@ public class EquationSet implements Comparable<EquationSet>
     public EquationSet                         container;
     public NavigableSet<Variable>              variables;
     public NavigableSet<EquationSet>           parts;
-    public NavigableMap<String, EquationSet>   connectionBindings;     // non-null iff this is a connection
+    public NavigableMap<String,EquationSet>    connectionBindings;     // non-null iff this is a connection
     public boolean                             connected;
     public NavigableSet<AccountableConnection> accountableConnections; // Connections which declare a $min or $max w.r.t. this part. Note: connected can be true even if accountableConnections is null.
     public Map<String, String>                 metadata;
@@ -185,11 +185,31 @@ public class EquationSet implements Comparable<EquationSet>
     {
         if (container == null) return "";  // Omit the top-level model name, as it just clutters outputs.
         String temp = container.prefix ();
-        if (temp.length () > 0)
-        {
-            return temp + "." + name;
-        }
+        if (temp.length () > 0) return temp + "." + name;
         return name;
+    }
+
+    /**
+        Finds the part whose name matches the longest prefix of the given query string, if such a part exists.
+        Otherwise, returns null. The matched prefix must be a proper name path, that is, either the full query
+        string or else a portion delimited by dot.
+    **/
+    public EquationSet findPart (String query)
+    {
+        EquationSet result = null;
+        int queryLength = query.length ();
+        for (EquationSet p : parts)
+        {
+            if (query.startsWith (p.name))  // prefix matches
+            {
+                int length = p.name.length ();
+                if (length == queryLength  ||  query.charAt (length) == '.')  // This is a legitimate name path.
+                {
+                    if (result == null  ||  length > result.name.length ()) result = p;
+                }
+            }
+        }
+        return result;
     }
 
     /**
@@ -225,8 +245,7 @@ public class EquationSet implements Comparable<EquationSet>
         // * No operators, only a name on RHS that appears like a variable name.
         // * Both LHS and RHS are order 0 (not derivatives)
         // * No variable in the current equation set matches the name.
-        // $up is permitted. The explicit name of a higher container may also be used,
-        // provided nothing matches the name on the way up.
+        // $up is permitted. The explicit name of a higher container may also be used.
         // $connect should not appear. It should have been overwritten during construction.
         // If $connect does appear, bindings are incomplete, which is an error.
         Iterator<Variable> i = variables.iterator ();  // need to use an iterator here, so we can remove variables from the set
@@ -265,6 +284,7 @@ public class EquationSet implements Comparable<EquationSet>
     /**
         Returns reference to the named equation set, based on a search starting in the
         current equation set and applying all the N2A name-resolution rules.
+        This is a simplified form of resolveEquationSet() customized for connection names.
         @return null if the search fails. EquationSet if the connection target is found.
         String if a prefix of the query matches an already-known connection.
     **/
@@ -273,18 +293,21 @@ public class EquationSet implements Comparable<EquationSet>
         if (query.isEmpty ()) return this;
         String[] pieces = query.split ("\\.", 2);
         String ns = pieces[0];
-        String nextName;
-        if (pieces.length > 1) nextName = pieces[1];
-        else                   nextName = "";
 
         if (ns.equals ("$up"))  // Don't bother with local checks if we know we are going up
         {
             if (container == null) return null;
-            return container.resolveConnectionBinding (nextName);
+            if (pieces.length > 1) container.resolveConnectionBinding (pieces[1]);
+            return container;
         }
 
-        EquationSet p = parts.floor (new EquationSet (ns));
-        if (p != null  &&  p.name.equals (ns)) return p.resolveConnectionBinding (nextName);
+        EquationSet p = findPart (query);
+        if (p != null)
+        {
+            int length = p.name.length ();
+            if (length == query.length ()) return p;
+            return p.resolveConnectionBinding (query.substring (length + 1));
+        }
 
         if (connectionBindings != null)
         {
@@ -349,10 +372,14 @@ public class EquationSet implements Comparable<EquationSet>
                     return alias.resolveEquationSet (v, create);
                 }
             }
-            EquationSet down = parts.floor (new EquationSet (ns[0]));
-            if (down != null  &&  down.name.equals (ns[0]))
+
+            EquationSet down = findPart (v.name);
+            if (down != null)
             {
-                v.name = ns[1];
+                int length = down.name.length ();
+                if (length == v.name.length ()) return null;  // This is a bare reference to a child part which has been flattened. Bare references are forbidden (see below for similar trap when dot is absent).
+
+                v.name = v.name.substring (length + 1);
                 v.reference.resolution.add (down);
                 return down.resolveEquationSet (v, create);
             }
@@ -463,6 +490,7 @@ public class EquationSet implements Comparable<EquationSet>
         {
             PrintStream ps = Backend.err.get ();
             ps.println ("Unresolved variables:");
+            ps.println ("  (name)\t(referenced by)");
             for (String v : unresolved) ps.println ("  " + v);
             throw new Backend.AbortRun ();
         }
@@ -604,6 +632,11 @@ public class EquationSet implements Comparable<EquationSet>
         }
     }
 
+    /**
+        Render the equation set.
+        Depends on results of: resolveConnectionBindings(), resolveLHS(), resolveRHS()
+        @param showNamespace Indicates to add a prefix in front of each variable, showing where it resolves.
+    **/
     public String dump (boolean showNamespace)
     {
         return dump (showNamespace, "");
@@ -727,7 +760,7 @@ public class EquationSet implements Comparable<EquationSet>
         if (n.equations.size () != 1) return false;
 
         EquationEntry ne = n.equations.first ();
-        if (ne.expression == null) return true;  // If we can't evaluate $n as a number, then we treat it as 1
+        if (ne.expression == null) return true;  // If we can't evaluate $n, then we treat it as 1
 
         Instance bypass = new Instance ()
         {
@@ -754,6 +787,7 @@ public class EquationSet implements Comparable<EquationSet>
         (=+, =*, and so on) are joined together into one long equation with the appropriate
         operator.
         @param backend Prefix for metadata keys specific to the engine selected to execute this model.
+        Where such keys exists, the parts should not be flattened.
     **/
     public void flatten (String backend)
     {
@@ -857,6 +891,7 @@ public class EquationSet implements Comparable<EquationSet>
             //   Parts
             for (EquationSet sp : s.parts)
             {
+                sp.container = this;  // s was our former container, but it is going away
                 sp.name = prefix + "." + sp.name;
                 parts.add (sp);
             }
