@@ -205,7 +205,7 @@ public class MatrixSparse extends Matrix
             }
             return result;
         }
-        if (that instanceof Text) return add (new MatrixDense ((Text) that));
+        if (that instanceof Text) return new Text (toString ()).add (that);
         throw new EvaluationException ("type mismatch");
     }
 

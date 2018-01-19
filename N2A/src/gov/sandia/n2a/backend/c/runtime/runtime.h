@@ -5,37 +5,86 @@
 #include "fl/matrix.h"
 
 #include <vector>
+#include <unordered_map>
 
 typedef fl::MatrixFixed<float,3,1> Vector3;
 
 
-// Random number in [0, 1]
-inline float
-uniform1 ()
+// General functions. See the N2A language reference for details.
+
+extern float                   uniform ();
+extern float                   uniform (float sigma);
+extern fl::MatrixResult<float> uniform (const fl::MatrixAbstract<float> & sigma);
+
+extern float                   gaussian ();
+extern float                   gaussian (float sigma);
+extern fl::MatrixResult<float> gaussian (const fl::MatrixAbstract<float> & sigma);
+
+extern fl::MatrixResult<float> grid (int i, int nx, int ny = 1, int nz = 1);
+
+// Matrix input
+class MatrixInput : public fl::Matrix<float>
 {
-  return (float) rand () / RAND_MAX;
-}
+public:
+    std::string fileName;
 
-// See the N2A language reference for details on the interface of these functions.
-extern float                   gaussian1    ();
-extern fl::MatrixResult<float> gaussian     (int dimension);
-extern fl::MatrixResult<float> grid         (int i, int nx, int ny = 1, int nz = 1);
-extern float                   matrix       (fl::Matrix<float> * handle, float row, float column);
-extern float                   matrixRaw    (fl::Matrix<float> * handle, float row, float column);
-extern fl::Matrix<float> *     matrixHelper (const std::string & fileName, fl::Matrix<float> * oldHandle = 0);
-extern float                   pulse        (float t, float width, float period = 0, float rise = 0, float fall = 0);
-extern fl::MatrixResult<float> uniform      (int dimension);
+    float get    (float row, float column);
+    float getRaw (float row, float column);
+};
+extern MatrixInput * matrixHelper (const std::string & fileName, MatrixInput * oldHandle = 0);
 
+// Input
+class InputHolder
+{
+public:
+    std::string                         fileName;
+    std::istream *                      in;
+    float                               currentLine;
+    float *                             currentValues;
+    int                                 currentCount;
+    float                               nextLine;
+    float *                             nextValues;
+    int                                 nextCount;
+    int                                 columnCount;
+    std::unordered_map<std::string,int> columnMap;
+    int                                 timeColumn;
+    bool                                timeColumnSet;
+    float                               epsilon;  ///< for time values
 
-/**
-    Logs values to be written to stdout at end of cycle.
-    @param value The numeric value to save.
-    @param column Label for the value. Once allocated, it never goes away for the remainder of the simulation.
-    @return The value provide as input. Thus, trace() can be inserted into any expression.
-**/
-extern float output       (float value, const std::string & column);
-extern void  writeTrace   ();  ///< called only by top-level Population::finalize()
-extern void  writeHeaders ();  ///< called only by main() on termination of simulation
+    InputHolder (const std::string & fileName);
+    ~InputHolder ();
+
+    void  getRow     (float row, bool time);  ///< subroutine of get() and getRaw()
+    int   getColumns (           bool time);  ///< Returns number of columns seen so far.
+    float get        (float row, bool time, const std::string & column);
+    float get        (float row, bool time, float column);
+    float getRaw     (float row, bool time, float column);
+};
+extern InputHolder * inputHelper (const std::string & fileName, InputHolder * oldHandle = 0);
+
+// Output
+class OutputHolder
+{
+public:
+    std::unordered_map<std::string,int> columnMap;
+    std::vector<float>                  columnValues;
+    int                                 columnsPrevious; ///< Number of columns written in previous cycle.
+    bool                                traceReceived;   ///< Indicates that at least one column was touched during the current cycle.
+    float                               t;
+    std::string                         fileName;
+    std::ostream *                      out;
+    bool                                raw;             ///< Indicates that column is an exact index.
+
+    OutputHolder (const std::string & fileName);
+    ~OutputHolder ();
+
+    void trace (float now);  ///< Subroutine for other trace() functions.
+    void trace (float now, const std::string & column, float value);
+    void trace (float now, float               column, float value);
+    void writeTrace ();
+};
+extern OutputHolder * outputHelper (const std::string & fileName, OutputHolder * oldHandle = 0);
+extern void           outputClose ();  ///< Close all OutputHolders
 
 
 class Simulatable;
@@ -95,6 +144,7 @@ public:
     virtual void addToMembers       ();                  ///< members += D0; pop D0
 
     // Generic metadata
+    virtual void path (std::string & result);
     virtual void getNamedValue (const std::string & name, std::string & value);
 };
 

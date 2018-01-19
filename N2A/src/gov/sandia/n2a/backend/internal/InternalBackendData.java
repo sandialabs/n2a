@@ -679,8 +679,11 @@ public class InternalBackendData
                         if (op instanceof Output)
                         {
                             Output o = (Output) op;
-                            o.index = countGlobalObject++;
-                            namesGlobalObject.add ("column name " + o.index);
+                            if (o.operands.length < 3)
+                            {
+                                o.index = countGlobalObject++;
+                                namesGlobalObject.add ("columnName" + o.index);
+                            }
                             return true;  // Continue descent, because parameters of output() may contain variable references
                         }
                         return true;
@@ -761,8 +764,11 @@ public class InternalBackendData
                         if (op instanceof Output)
                         {
                             Output o = (Output) op;
-                            o.index = countLocalObject++;
-                            namesLocalObject.add ("column name " + o.index);
+                            if (o.operands.length < 3)
+                            {
+                                o.index = countLocalObject++;
+                                namesLocalObject.add ("columnName" + o.index);
+                            }
                             return true;  // Continue descent, because parameters of output() may contain variable references
                         }
                         return true;
@@ -961,7 +967,7 @@ public class InternalBackendData
                         }
                     }
 
-                    TreeSet<VariableReference> references = new TreeSet<VariableReference> (referenceComparator);
+                    final TreeSet<VariableReference> references = new TreeSet<VariableReference> (referenceComparator);
                     class ProjectVisitor extends Visitor
                     {
                         public boolean visit (Operator op)

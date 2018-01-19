@@ -61,8 +61,9 @@ public class Input extends Function
         public double[]            currentValues = empty;
         public double              nextLine      = -1;
         public double[]            nextValues    = empty;
-        public Map<String,Integer> columnMap = new TreeMap<String,Integer> ();
-        public int                 timeColumn = 0;
+        public Map<String,Integer> columnMap     = new TreeMap<String,Integer> ();
+        public int                 columnCount;
+        public int                 timeColumn;
         public boolean             timeColumnSet;
         public double              epsilon;
 
@@ -77,6 +78,7 @@ public class Input extends Function
                     if (line != null  &&  ! line.isEmpty ())
                     {
                         String[] columns = line.split ("\\s");
+                        columnCount = Math.max (columnCount, columns.length);
 
                         // Decide whether this is a header row or a value row
                         if (! columns[0].isEmpty ())
@@ -114,7 +116,7 @@ public class Input extends Function
                             }
                         }
 
-                        nextValues = new double[columns.length];
+                        nextValues = new double[columnCount];
                         for (int i = 0; i < columns.length; i++)
                         {
                             String c = columns[i];
@@ -186,7 +188,7 @@ public class Input extends Function
 
         if (mode.contains ("columns"))
         {
-            int result = Math.max (H.currentValues.length, H.columnMap.size ());
+            int result = H.columnCount;
             if (time) result = Math.max (0, result - 1);
             return new Scalar (result);
         }
@@ -197,7 +199,7 @@ public class Input extends Function
         {
             Integer columnMapping = H.columnMap.get (((Text) columnSpec).value);
             if (columnMapping == null) return new Scalar (0);
-            column = columnMapping;
+            return new Scalar (H.currentValues[columnMapping]);  // If it's in the column map, we can safely assume that the index is in range.
         }
         else  // just assume it is a Scalar
         {

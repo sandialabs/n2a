@@ -45,12 +45,18 @@ public class Windows extends LocalMachineEnv
     {
         String jobDir = new File (job.get ()).getParent ();
 
-        File out = new File (jobDir, "out");
-        File err = new File (jobDir, "err");
-
         File script = new File (jobDir, "n2a_job.bat");
-        File finished = new File (jobDir, "finished");
-        stringToFile (script, command + " > " + quotePath (out.getAbsolutePath ()) + " 2>> " + quotePath (err.getAbsolutePath ()) + "\r\ntype nul >> " + quotePath (finished.getAbsolutePath()) + "\r\n");
+        stringToFile
+        (
+            script,
+            "cd " + jobDir + "\r\n"
+            + command + " > out 2>> err\r\n"
+            + "if errorlevel 0 (\r\n"
+            + "  echo success > finished\r\n"
+            + ") else (\r\n"
+            + "  echo failure > finished\r\n"
+            + ")\r\n"
+        );
         String [] commandParm = new String[] {"cmd", "/c", "start", "/b", script.getAbsolutePath ()};
         Process p = Runtime.getRuntime ().exec (commandParm);
         p.waitFor ();

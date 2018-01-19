@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -17,6 +17,7 @@ import gov.sandia.n2a.language.AccessElement;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.BuildMatrix;
 import gov.sandia.n2a.language.Constant;
+import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Renderer;
@@ -24,10 +25,14 @@ import gov.sandia.n2a.language.Split;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Gaussian;
+import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Norm;
+import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.function.Uniform;
+import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.operator.Power;
+import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
@@ -53,7 +58,13 @@ import java.util.stream.Collectors;
 public class JobC
 {
     static boolean rebuildRuntime = true;  // always rebuild runtime once per session
-    public HashMap<Operator,String> matrixNames;  // TODO: this is not thread-safe. Should have a C-run-specific object to carry this during generation.
+
+    // These values are unique across the whole simulation, so they go here rather than BackendData.
+    // Where possible, the key is a String. Otherwise, it is an Operator which is specific to one expression.
+    public HashMap<Object,String> matrixNames = new HashMap<Object,String> ();
+    public HashMap<Object,String> inputNames  = new HashMap<Object,String> ();
+    public HashMap<Object,String> outputNames = new HashMap<Object,String> ();
+    public HashMap<Object,String> stringNames = new HashMap<Object,String> ();
 
     public void execute (MNode job) throws Exception
     {
@@ -118,6 +129,7 @@ public class JobC
         e.resolveLHS ();
         e.resolveRHS ();
         e.findConstants ();
+        e.determineTraceVariableName ();
         e.removeUnused ();  // especially get rid of unneeded $variables created by addSpecials()
         e.collectSplits ();
         findPathToContainer (e);
@@ -143,8 +155,6 @@ public class JobC
 
         e.setInit (0);
         System.out.println (e.dump (false));
-
-        matrixNames = new HashMap<Operator,String> ();
 
         StringBuilder s = new StringBuilder ();
 
@@ -183,7 +193,6 @@ public class JobC
         s.append ("void Wrapper::init (Simulator & simulator)\n");
         s.append ("{\n");
         s.append ("  " + mangle (e.name) + ".init (simulator);\n");
-        s.append ("  writeTrace ();\n");  // After the above init() call will create all initial parts. There may be some calls to trace() in the init() functions, so we dump time step 0 now.
         s.append ("}\n");
         s.append ("\n");
         s.append ("void Wrapper::integrate (Simulator & simulator)\n");
@@ -199,7 +208,6 @@ public class JobC
         s.append ("bool Wrapper::finalize (Simulator & simulator)\n");
         s.append ("{\n");
         s.append ("  " + mangle (e.name) + ".finalize (simulator);\n");
-        s.append ("  writeTrace ();\n");
         s.append ("  return " + mangle (e.name) + ".n;\n");  // The simulation stops when the last model instance dies.
         s.append ("}\n");
         s.append ("\n");
@@ -258,7 +266,7 @@ public class JobC
         s.append ("    simulator.enqueue (&wrapper);\n");
         s.append ("    wrapper.init (simulator);\n");
         s.append ("    simulator.run ();\n");
-        s.append ("    writeHeaders ();\n");
+        s.append ("    outputClose ();\n");
         s.append ("  }\n");
         s.append ("  catch (const char * message)\n");
         s.append ("  {\n");
@@ -269,7 +277,7 @@ public class JobC
         s.append ("}\n");
 
         env.setFileContents (sourceFileName, s.toString ());
-        String command = env.quotePath (env.build (sourceFileName, runtime));  // TODO: route build errors to Backend.err
+        String command = env.quotePath (env.build (sourceFileName, runtime));
 
         PrintStream ps = Backend.err.get ();
         if (ps != System.err)
@@ -301,20 +309,129 @@ public class JobC
         beginning.
         Note that the analysis is cached in s.backendData for later use when generating function
         definitions.
+
+        TODO: Move analysis code + BackendData into separate class.
     **/
-    public void generateDeclarations (EquationSet s, StringBuilder result)
+    public void generateDeclarations (final EquationSet s, final StringBuilder result)
     {
         // Analyze variables
         if (! (s.backendData instanceof BackendData)) s.backendData = new BackendData ();
-        BackendData bed = (BackendData) s.backendData;
+        final BackendData bed = (BackendData) s.backendData;
+
+        class CheckStatic extends Visitor
+        {
+            public boolean global;
+            public boolean visit (Operator op)
+            {
+                if (op instanceof Constant)
+                {
+                    Type m = ((Constant) op).value;
+                    if (m instanceof Matrix)
+                    {
+                        Matrix A = (Matrix) m;
+                        int rows = A.rows ();
+                        int cols = A.columns ();
+                        String matrixName = "Matrix" + matrixNames.size ();
+                        matrixNames.put (op, matrixName);
+                        if (rows == 3  &&  cols == 1) result.append ("Vector3 " + matrixName + " = Matrix<float>");
+                        else                          result.append ("Matrix<float> " + matrixName);
+                        result.append (" (\"" + A + "\");\n");
+                    }
+                    return false;  // Don't try to descend tree from here
+                }
+                if (op instanceof Function)
+                {
+                    Function f = (Function) op;
+                    if (f instanceof Output  &&  f.operands.length < 3)  // We need to auto-generate the column name.
+                    {
+                        String stringName = "columnName" + stringNames.size ();
+                        stringNames.put (op, stringName);
+                        if (global)
+                        {
+                            bed.setGlobalNeedPath (s);
+                            bed.globalColumns.add (stringName);
+                        }
+                        else
+                        {
+                            bed.setLocalNeedPath  (s);
+                            bed.localColumns.add (stringName);
+                        }
+                    }
+                    // Detect functions that need static handles
+                    if (f.operands.length > 0)
+                    {
+                        Operator operand0 = f.operands[0];
+                        if (operand0 instanceof Constant)
+                        {
+                            Constant c = (Constant) operand0;
+                            Type o = c.value;
+                            if (o instanceof Text)
+                            {
+                                String fileName = ((Text) o).value;
+                                if (op instanceof ReadMatrix)
+                                {
+                                    if (! matrixNames.containsKey (fileName))
+                                    {
+                                        String matrixName = "Matrix" + matrixNames.size ();
+                                        matrixNames.put (fileName, matrixName);
+                                        result.append ("MatrixInput * " + matrixName + " = matrixHelper (\"" + fileName + "\");\n");
+                                    }
+                                }
+                                else if (f instanceof Input)
+                                {
+                                    if (! inputNames.containsKey (fileName))
+                                    {
+                                        String inputName = "Input" + inputNames.size ();
+                                        inputNames.put (fileName, inputName);
+                                        result.append ("InputHolder * " + inputName + " = inputHelper (\"" + fileName + "\");\n");
+                                    }
+                                }
+                                else if (f instanceof Output)
+                                {
+                                    if (! outputNames.containsKey (fileName))
+                                    {
+                                        String outputName = "Output" + outputNames.size ();
+                                        outputNames.put (fileName, outputName);
+                                        result.append ("OutputHolder * " + outputName + " = outputHelper (\"" + fileName + "\");\n");
+                                    }
+                                }
+                            }
+                        }
+                        else  // Dynamic file name (no static handle)
+                        {
+                            if (f instanceof ReadMatrix)
+                            {
+                                matrixNames.put (op,       "Matrix"   + matrixNames.size ());
+                                stringNames.put (operand0, "fileName" + stringNames.size ());
+                            }
+                            else if (f instanceof Input)
+                            {
+                                inputNames .put (op,       "Input"    + inputNames .size ());
+                                stringNames.put (operand0, "fileName" + stringNames.size ());
+                            }
+                            else if (f instanceof Output)
+                            {
+                                outputNames.put (op,       "Output"   + outputNames.size ());
+                                stringNames.put (operand0, "fileName" + stringNames.size ());
+                            }
+                        }
+                    }
+                    return true;   // Functions could be nested, so continue descent.
+                }
+                return true;
+            }
+        }
+        CheckStatic checkStatic = new CheckStatic ();
 
         System.out.println (s.name);
         for (Variable v : s.ordered)  // we want the sub-lists to be ordered correctly
         {
             System.out.println ("  " + v.nameString () + " " + v.attributeString ());
-            generateStatic (v, result);
+            boolean global = v.hasAttribute ("global");
+            checkStatic.global = global;
+            v.visit (checkStatic);
             if (v.name.equals ("$type")) bed.type = v;
-            if (v.hasAttribute ("global"))
+            if (global)
             {
                 if (! v.hasAny (new String[] {"constant", "accessor"}))
                 {
@@ -556,6 +673,10 @@ public class JobC
         {
             result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
         }
+        for (String columnName : bed.globalColumns)
+        {
+            result.append ("  string " + columnName + ";\n");
+        }
         result.append ("\n");
 
         // Population functions
@@ -576,11 +697,11 @@ public class JobC
         }
         bed.n = s.find (new Variable ("$n", 0));
         if (bed.n != null  &&  ! bed.globalMembers.contains (bed.n)) bed.n = null;  // force bed.n to null if $n is not a stored member; used as an indicator
-        if (bed.globalBufferedExternal.size () > 0  ||  bed.n != null)
+        bed.canGrowOrDie =  s.lethalP  ||  s.lethalType  ||  s.canGrow ();
+        if (bed.globalBufferedExternal.size () > 0  ||  (bed.n != null  &&  (bed.canGrowOrDie  ||  ! bed.n.hasAttribute ("initOnly"))))
         {
             result.append ("  virtual bool finalize (Simulator & simulator);\n");
         }
-        bed.canGrowOrDie =  s.lethalP  ||  s.lethalType  ||  s.canGrow ();
         if (bed.n != null  &&  bed.n.derivative == null  &&  bed.canGrowOrDie)
         {
             result.append ("  virtual void resize (Simulator & simulator, int n);\n");
@@ -673,6 +794,10 @@ public class JobC
                 result.append ("  virtual int getRadius (int i);\n");
             }
         }
+        if (bed.globalNeedPath)
+        {
+            result.append ("  virtual void path (string & result);\n");
+        }
 
         // Population class trailer
         result.append ("};\n");
@@ -761,6 +886,14 @@ public class JobC
         for (Variable v : bed.localBufferedExternal)
         {
             result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
+        }
+        for (EquationSet p : s.parts)
+        {
+            result.append ("  " + prefix (p) + "_Population " + mangle (p.name) + ";\n");
+        }
+        for (String columnName : bed.localColumns)
+        {
+            result.append ("  string " + columnName + ";\n");
         }
         result.append ("\n");
 
@@ -865,6 +998,10 @@ public class JobC
         {
             result.append ("  virtual int getCount (int i);\n");
         }
+        if (bed.localNeedPath)
+        {
+            result.append ("  virtual void path (string & result);\n");
+        }
 
         // Conversions
         Set<Conversion> conversions = s.getConversions ();
@@ -875,68 +1012,9 @@ public class JobC
             result.append ("  void " + mangle (source.name) + "_2_" + mangle (dest.name) + " (" + mangle (source.name) + " * from, Simulator & simulator, int " + mangle ("$type") + ");\n");
         }
 
-        // Sub-parts
-        for (EquationSet p : s.parts) result.append ("  " + prefix (p) + "_Population " + mangle (p.name) + ";\n");
-
         // Unit class trailer
         result.append ("};\n");
         result.append ("\n");
-    }
-
-    public void generateStatic (Variable v, final StringBuilder result)
-    {
-        Visitor visitor = new Visitor ()
-        {
-            public boolean visit (Operator op)
-            {
-                if (op instanceof Constant)
-                {
-                    Type m = ((Constant) op).value;
-                    if (m instanceof Matrix)
-                    {
-                        Matrix A = (Matrix) m;
-                        int rows = A.rows ();
-                        int cols = A.columns ();
-                        String matrixName = "Matrix" + matrixNames.size ();
-                        matrixNames.put (op, matrixName);
-                        if (rows == 3  &&  cols == 1) result.append ("Vector3 " + matrixName + " = Matrix<float>");
-                        else                          result.append ("Matrix<float> " + matrixName);
-                        result.append (" (\"" + A + "\");\n");
-                    }
-                    return false;  // Don't try to descend tree from here
-                }
-                if (op instanceof Function)
-                {
-                    // Handle all functions that need static handles
-                    Function f = (Function) op;
-                    if (f instanceof ReadMatrix)
-                    {
-                        if (f.operands.length > 0)
-                        {
-                            Operator c = f.operands[0];
-                            if (c instanceof Constant)
-                            {
-                                Type o = ((Constant) c).value;
-                                if (o instanceof Text)
-                                {
-                                    String matrixName = "Matrix" + matrixNames.size ();
-                                    matrixNames.put (c, matrixName);
-                                    result.append ("Matrix<float> * " + matrixName + " = matrixHelper (\"" + o + "\");\n");
-                                }
-                            }
-                        }
-                        return false;
-                    }
-                }
-                return true;
-            }
-        };
-
-        for (EquationEntry e : v.equations)
-        {
-            if (e.expression  != null) e.expression .visit (visitor);
-            if (e.condition != null) e.condition.visit (visitor);
-        }
     }
 
     public void generateDefinitions (EquationSet s, StringBuilder result) throws Exception
@@ -1121,15 +1199,22 @@ public class JobC
         }
 
         // Population finalize
-        if (bed.globalBufferedExternal.size () > 0  ||  bed.n != null)
+        if (bed.globalBufferedExternal.size () > 0  ||  (bed.n != null  &&  (bed.canGrowOrDie  ||  ! bed.n.hasAttribute ("initOnly"))))
         {
             result.append ("bool " + ns + "finalize (Simulator & simulator)\n");
             result.append ("{\n");
 
-            if (bed.n != null  &&  bed.n.derivative == null  &&  bed.canGrowOrDie)  // $n shares control with other specials, so must coordinate them
+            if (bed.n != null  &&  bed.n.derivative == null  &&  bed.canGrowOrDie)  // $n shares control with other specials, so must coordinate with them
             {
-                result.append ("  if (" + mangle ("$n") + " != " + mangle ("next_", "$n") + ") simulator.resize (this, " + mangle ("next_", "$n") + ");\n");
-                result.append ("  else simulator.resize (this, -1);\n");  // -1 means to update $n from n. This can only be done after other parts are finalized, as they may impose structural dynamics via $p or $type.
+                if (bed.n.hasAttribute ("initOnly"))  // $n is explicitly assigned only once, so no need to monitor it for assigned values.
+                {
+                    result.append ("  simulator.resize (this, -1);\n");  // -1 means to update $n from n. This can only be done after other parts are finalized, as they may impose structural dynamics via $p or $type.
+                }
+                else  // $n may be assigned during the regular update cycle, so we need to monitor it.
+                {
+                    result.append ("  if (" + mangle ("$n") + " != " + mangle ("next_", "$n") + ") simulator.resize (this, " + mangle ("next_", "$n") + ");\n");
+                    result.append ("  else simulator.resize (this, -1);\n");
+                }
             }
 
             for (Variable v : bed.globalBufferedExternal)
@@ -1153,7 +1238,10 @@ public class JobC
                 }
                 else  // $n is the only kind of structural dynamics, so simply do a resize() when needed
                 {
-                    result.append ("  if (n != (int) " + mangle ("$n") + ") simulator.resize (this, " + mangle ("$n") + ");\n");
+                    if (! bed.n.hasAttribute ("initOnly"))
+                    {
+                        result.append ("  if (n != (int) " + mangle ("$n") + ") simulator.resize (this, " + mangle ("$n") + ");\n");
+                    }
                 }
             }
 
@@ -1165,10 +1253,10 @@ public class JobC
         // Population resize()
         if (bed.n != null  &&  bed.n.derivative == null  &&  bed.canGrowOrDie)
         {
-            result.append ("virtual void " + ns + "resize (Simulator & simulator, int n)\n");
+            result.append ("void " + ns + "resize (Simulator & simulator, int n)\n");
             result.append ("{\n");
             result.append ("  if (n >= 0) PopulationCompartment::resize (simulator, n);\n");
-            result.append ("  else " + mangle ("$n") + " = this.n;\n");
+            result.append ("  else " + mangle ("$n") + " = this->n;\n");
             result.append ("};\n");
             result.append ("\n");
         }
@@ -1403,6 +1491,23 @@ public class JobC
             }
             result.append ("  }\n");
             result.append ("  return 0;\n");
+            result.append ("}\n");
+            result.append ("\n");
+        }
+
+        if (bed.globalNeedPath)
+        {
+            result.append ("void " + ns + "path (string & result)\n");
+            result.append ("{\n");
+            if (((BackendData) s.container.backendData).localNeedPath)  // Will our container provide a non-empty path?
+            {
+                result.append ("  container->path (result);\n");
+                result.append ("  result += \"." + s.name + "\";\n");
+            }
+            else
+            {
+                result.append ("  result = \"" + s.name + "\";\n");
+            }
             result.append ("}\n");
             result.append ("\n");
         }
@@ -1789,11 +1894,11 @@ public class JobC
                 if (p.hasAttribute ("constant"))
                 {
                     double pvalue = ((Scalar) ((Constant) p.equations.first ().expression).value).value;
-                    if (pvalue != 0) result.append ("  if (" + resolve (p.reference, context, false) + " < uniform1 ())\n");
+                    if (pvalue != 0) result.append ("  if (" + resolve (p.reference, context, false) + " < uniform ())\n");
                 }
                 else
                 {
-                    result.append ("  if (" + mangle ("$p") + " == 0  ||  " + mangle ("$p") + " < 1  &&  " + mangle ("$p") + " < uniform1 ())\n");
+                    result.append ("  if (" + mangle ("$p") + " == 0  ||  " + mangle ("$p") + " < 1  &&  " + mangle ("$p") + " < uniform ())\n");
                 }
                 result.append ("  {\n");
                 result.append ("    die ();\n");
@@ -2314,6 +2419,51 @@ public class JobC
             result.append ("\n");
         }
 
+        if (bed.localNeedPath)
+        {
+            result.append ("void " + ns + "path (string & result)\n");
+            result.append ("{\n");
+            if (s.connectionBindings == null)
+            {
+                // We assume that result is passed in as the empty string.
+                if (s.container != null)
+                {
+                    if (((BackendData) s.container.backendData).localNeedPath)  // Will our container provide a non-empty path?
+                    {
+                        result.append ("  container->path (result);\n");
+                        result.append ("  result += \"." + s.name + "\";\n");
+                    }
+                    else
+                    {
+                        result.append ("  result = \"" + s.name + "\";\n");
+                    }
+                }
+                result.append ("  char index[32];\n");
+                result.append ("  sprintf (index, \"%i\", __24index);\n");
+                result.append ("  result += index;\n");
+            }
+            else
+            {
+                boolean first = true;
+                for (Entry<String,EquationSet> e : s.connectionBindings.entrySet ())
+                {
+                    if (first)
+                    {
+                        result.append ("  " + mangle (e.getKey ()) + ".path (result);\n");
+                        result.append ("  string temp;\n");
+                        first = false;
+                    }
+                    else
+                    {
+                        result.append ("  " + mangle (e.getKey ()) + ".path (temp);\n");
+                        result.append ("  result += \"-\" + temp;\n");
+                    }
+                }
+            }
+            result.append ("}\n");
+            result.append ("\n");
+        }
+
         // Unit conversions
         Set<Conversion> conversions = s.getConversions ();
         for (Conversion pair : conversions)
@@ -2410,7 +2560,7 @@ public class JobC
         // Dump matrices needed by conditions
         for (EquationEntry e : v.equations)
         {
-            if (e.condition != null) prepareMatrices (e.condition, context, pad);
+            if (e.condition != null) prepareMatrices (e.condition, context, init, pad);
         }
 
         // Write the conditional equations
@@ -2461,7 +2611,7 @@ public class JobC
             }
             else
             {
-                prepareMatrices (e.expression, context, pad);
+                prepareMatrices (e.expression, context, init, pad);
                 context.result.append (padIf);
                 renderEquation (context, e);
             }
@@ -2501,7 +2651,7 @@ public class JobC
             }
             else
             {
-                prepareMatrices (defaultEquation.expression, context, pad);
+                prepareMatrices (defaultEquation.expression, context, init, pad);
                 context.result.append (padIf);
                 renderEquation (context, defaultEquation);
             }
@@ -2545,9 +2695,13 @@ public class JobC
         context.result.append (";\n");
     }
 
-    public void prepareMatrices (Operator op, final CRenderer context, final String pad) throws Exception
+    /**
+        Build complex sub-expressions into a single local variable that can be referenced by the equation.
+    **/
+    public void prepareMatrices (Operator op, final CRenderer context, final boolean init, final String pad) throws Exception
     {
-        Visitor visitor = new Visitor ()
+        // Pass 1 -- Strings and matrix expressions
+        Visitor visitor1 = new Visitor ()
         {
             public boolean visit (Operator op)
             {
@@ -2581,10 +2735,130 @@ public class JobC
                     }
                     return false;
                 }
+                if (op instanceof Add)
+                {
+                    Add a = (Add) op;
+                    String stringName = stringNames.get (a);
+                    if (stringName != null)
+                    {
+                        context.result.append (pad + "ostringstream " + stringName + ";\n");
+                        context.result.append (pad + stringName);
+                        for (Operator o : flattenAdd (a))
+                        {
+                            boolean needParen = ! (o instanceof Constant);
+                            context.result.append (" << ");
+                            if (needParen) context.result.append ("(");
+                            o.render (context);
+                            if (needParen) context.result.append (")");
+                        }
+                        context.result.append (";\n");
+                        return false;
+                    }
+                }
+                if (op instanceof Output)
+                {
+                    Output o = (Output) op;
+                    if (o.operands.length < 3  &&  init)  // column name is generated; only generate during init phase
+                    {
+                        String stringName = stringNames.get (op);
+                        BackendData bed = (BackendData) context.part.backendData;
+                        if (context.global ? bed.globalNeedPath : bed.localNeedPath)
+                        {
+                            context.result.append (pad + "path (" + stringName + ");\n");
+                            context.result.append (pad + stringName + " += \"." + o.variableName + "\";\n");
+                        }
+                        else
+                        {
+                            context.result.append (pad + stringName + " = \"" + o.variableName + "\";\n");
+                        }
+                    }
+                    // Fall through to return true, because we also want to visit all the operands of Output.
+                }
                 return true;
             }
         };
-        op.visit (visitor);
+        op.visit (visitor1);
+
+        // Pass 2 -- Input functions
+        Visitor visitor2 = new Visitor ()
+        {
+            public boolean visit (Operator op)
+            {
+                if (op instanceof ReadMatrix)
+                {
+                    ReadMatrix r = (ReadMatrix) op;
+                    if (! (r.operands[0] instanceof Constant))
+                    {
+                        String matrixName = matrixNames.get (r);
+                        context.result.append (pad + "MatrixInput * " + matrixName + " = matrixHelper (");
+                        String stringName = stringNames.get (r.operands[0]);
+                        context.result.append (stringName + ".str ()");
+                        context.result.append (");\n");
+                    }
+                    return false;
+                }
+                if (op instanceof Input)
+                {
+                    Input i = (Input) op;
+                    if (! (i.operands[0] instanceof Constant))
+                    {
+                        String inputName = inputNames.get (i);
+                        context.result.append (pad + "InputHolder * " + inputName + " = inputHelper (");
+                        String stringName = stringNames.get (i.operands[0]);
+                        context.result.append (stringName + ".str ()");
+                        context.result.append (");\n");
+                    }
+                    return false;
+                }
+                if (op instanceof Output)
+                {
+                    Output o = (Output) op;
+                    String outputName;
+                    if (o.operands[0] instanceof Constant)
+                    {
+                        outputName = outputNames.get (o.operands[0].render ());
+                    }
+                    else
+                    {
+                        outputName = outputNames.get (o);
+                        context.result.append (pad + "OutputHolder * " + outputName + " = outputHelper (");
+                        String stringName = stringNames.get (o.operands[0]);
+                        context.result.append (stringName + ".str ()");
+                        context.result.append (");\n");
+                    }
+
+                    // Detect raw flag
+                    if (o.operands.length > 3)
+                    {
+                        Instance bypass = new Instance ()
+                        {
+                            public Type get (VariableReference r) throws EvaluationException
+                            {
+                                return r.variable.type;
+                            }
+                        };
+                        if (o.operands[3].eval (bypass).toString ().contains ("raw"))
+                        {
+                            context.result.append (pad + outputName + "->raw = true;\n");
+                        }
+                    }
+
+                    return false;
+                }
+                return true;
+            }
+        };
+        op.visit (visitor2);
+    }
+
+    public List<Operator> flattenAdd (Add add)
+    {
+        ArrayList<Operator> result = new ArrayList<Operator> ();
+        if (add.operand0 instanceof Add) result.addAll (flattenAdd ((Add) add.operand0));
+        else                             result.add (add.operand0);
+        if (add.operand1 instanceof Add) result.addAll (flattenAdd ((Add) add.operand1));
+        else                             result.add (add.operand1);
+        return result;
     }
 
     public static String mangle (Variable v)
@@ -2686,10 +2960,6 @@ public class JobC
             context.result = temp;
             return result.toString ();
         }
-        if (r.variable.name.equals ("$t")  &&  r.variable.order == 1  &&  ! lvalue  &&  context.part.getInit ())  // force $t'==0 during init phase
-        {
-            return "0";
-        }
 
         String containers = resolveContainer (r, context, base);
 
@@ -2709,7 +2979,7 @@ public class JobC
             if (containers.length () > 0) return "unresolved";
             if (! lvalue)
             {
-                if (r.variable.name.equals ("$t'")) return "simulator.dt";
+                if (r.variable.name.equals ("$t")  &&  r.variable.order == 1) return "simulator.dt";
                 return "simulator." + r.variable.name.substring (1);  // strip the $ and expect it to be a member of simulator, which must be passed into the current function
             }
             // if lvalue, then fall through to the main case below 
@@ -2931,6 +3201,43 @@ public class JobC
         public boolean needMax;
         public boolean needMin;
         public boolean needRadius;
+
+        public boolean globalNeedPath;  // need the path() function, which returns a unique string identifying the current instance
+        public boolean localNeedPath;
+        public List<String> globalColumns = new ArrayList<String> ();
+        public List<String> localColumns  = new ArrayList<String> ();
+
+        /**
+            @param s The equation set directly associated with this backend data.
+        **/
+        public void setGlobalNeedPath (EquationSet s)
+        {
+            EquationSet c = s.container;
+            if (c == null) return;  // Don't set flag, because we know that path() will return "".
+            globalNeedPath = true;
+            setParentNeedPath (s);
+        }
+
+        public void setLocalNeedPath (EquationSet s)
+        {
+            EquationSet c = s.container;
+            if (c == null  &&  s.isSingleton ()) return;  // Don't set flag, because we know that path() will return "".
+            localNeedPath = true;
+            setParentNeedPath (s);
+        }
+
+        public void setParentNeedPath (EquationSet s)
+        {
+            if (s.connectionBindings == null)
+            {
+                EquationSet c = s.container;
+                if (c != null) ((BackendData) c.backendData).setLocalNeedPath (c);
+            }
+            else
+            {
+                for (EquationSet p : s.connectionBindings.values ()) ((BackendData) p.backendData).setLocalNeedPath (p);
+            }
+        }
     }
 
     class CRenderer extends Renderer
@@ -2946,6 +3253,7 @@ public class JobC
 
         public boolean render (Operator op)
         {
+            // TODO: for "3 letter" functions (sin, cos, pow, etc) on matrices, render as visitor which produces a matrix result
             if (op instanceof AccessVariable)
             {
                 AccessVariable av = (AccessVariable) op;
@@ -2995,71 +3303,130 @@ public class JobC
             if (op instanceof Gaussian)
             {
                 Gaussian g = (Gaussian) op;
-                if (g.operands.length >= 1)
+                result.append ("gaussian (");
+                if (g.operands.length > 0)
                 {
-                    int dimension = 3;  // We don't render this number directly. It is merely an indicator.
-                    Operator o = g.operands[0];
-                    if (o instanceof Constant)
-                    {
-                        Type d = ((Constant) o).value;
-                        if (d instanceof Scalar) dimension = (int) ((Scalar) d).value;
-                    }
-                    if (dimension > 1)
-                    {
-                        result.append ("gaussian (");
-                        o.render (this);
-                        result.append (")");
-                        return true;
-                    }
+                    g.operands[0].render (this);
                 }
-                result.append ("gaussian1 ()");
+                result.append (")");
                 return true;
             }
             if (op instanceof Uniform)
             {
                 Uniform u = (Uniform) op;
-                if (u.operands.length >= 1)
+                result.append ("gaussian (");
+                if (u.operands.length > 0)
                 {
-                    int dimension = 3;
-                    Operator o = u.operands[0];
-                    if (o instanceof Constant)
-                    {
-                        Type d = ((Constant) o).value;
-                        if (d instanceof Scalar) dimension = (int) ((Scalar) d).value;
-                    }
-                    if (dimension > 1)
-                    {
-                        result.append ("uniform (");
-                        o.render (this);
-                        result.append (")");
-                        return true;
-                    }
+                    u.operands[0].render (this);
                 }
-                result.append ("uniform1 ()");
+                result.append (")");
                 return true;
             }
             if (op instanceof ReadMatrix)
             {
                 ReadMatrix r = (ReadMatrix) op;
-                boolean raw = false;
-                if (r.operands.length > 3)
+
+                String mode = "";
+                int lastParm = r.operands.length - 1;
+                if (lastParm > 0)
                 {
-                    if (r.operands[3] instanceof Constant)
+                    if (r.operands[lastParm] instanceof Constant)
                     {
-                        Constant c = (Constant) r.operands[3];
+                        Constant c = (Constant) r.operands[lastParm];
                         if (c.value instanceof Text)
                         {
-                            String method = ((Text) c.value).value;
-                            if (method.equals ("raw")) raw = true;
+                            mode = ((Text) c.value).value;
                         }
                     }
                 }
-                if (raw) result.append ("matrixRaw (" + matrixNames.get (r.operands[0]) + ", ");
-                else     result.append ("matrix ("    + matrixNames.get (r.operands[0]) + ", ");
-                r.operands[1].render (this);
+
+                String matrixName;
+                if (r.operands[0] instanceof Constant) matrixName = matrixNames.get (r.operands[0].toString ());
+                else                                   matrixName = matrixNames.get (r);
+                result.append (matrixName + "->");
+                if (mode.equals ("rows"))
+                {
+                    result.append ("rows ()");
+                }
+                else if (mode.equals ("columns"))
+                {
+                    result.append ("columns ()");
+                }
+                else
+                {
+                    result.append ("get");
+                    if (mode.equals ("raw")) result.append ("Raw");
+                    result.append (" (");
+                    r.operands[1].render (this);
+                    result.append (", ");
+                    r.operands[2].render (this);
+                    result.append (")");
+                }
+                return true;
+            }
+            if (op instanceof Output)
+            {
+                Output o = (Output) op;
+                String outputName;
+                if (o.operands[0] instanceof Constant) outputName = outputNames.get (o.operands[0].toString ());
+                else                                   outputName = outputNames.get (o);
+                result.append (outputName + "->trace (simulator.t, ");
+
+                if (o.operands.length > 2)  // column name is explicit
+                {
+                    o.operands[2].render (this);
+                }
+                else  // column name is generated, so use prepared string value
+                {
+                    String stringName = stringNames.get (op);  // generated column name is associated with Output function itself, rather than one of its operands
+                    result.append (stringName);
+                }
                 result.append (", ");
-                r.operands[2].render (this);
+
+                o.operands[1].render (this);
                 result.append (")");
+                return true;
+            }
+            if (op instanceof Input)
+            {
+                Input i = (Input) op;
+                String inputName;
+                if (i.operands[0] instanceof Constant) inputName = inputNames.get (i.operands[0].toString ());
+                else                                   inputName = inputNames.get (i);
+
+                String mode = "";
+                if (i.operands.length > 3)
+                {
+                    mode = i.operands[3].toString ();  // just assuming it's a constant string
+                }
+                else if (i.operands[1] instanceof Constant)
+                {
+                    Constant c = (Constant) i.operands[1];
+                    if (c.value instanceof Text) mode = c.toString ();
+                }
+                boolean time = mode.contains ("time");
+
+                if (mode.contains ("columns"))
+                {
+                    result.append (inputName + "->getColumns (" + time + ")");
+                }
+                else
+                {
+                    Operator op2 = i.operands[2];
+                    result.append (inputName + "->get");
+                    if (   mode.contains ("raw")   // select raw mode, but only if column is not identified by a string
+                        && !stringNames.containsKey (op2)
+                        && !(op2 instanceof Constant  &&  ((Constant) op2).value instanceof Text))
+                    {
+                        result.append ("Raw");
+                    }
+                    result.append (" (");
+                    i.operands[1].render (this);
+                    result.append (", " + time + ", ");
+                    op2.render (this);
+                    result.append (")");
+                }
+
                 return true;
             }
             if (op instanceof Constant)
@@ -3081,6 +3448,17 @@ public class JobC
                 if (o instanceof Matrix)
                 {
                     result.append (matrixNames.get (op));
+                    return true;
+                }
+                return false;
+            }
+            if (op instanceof Add)
+            {
+                // Check if this is a string expression
+                String stringName = stringNames.get (op);
+                if (stringName != null)
+                {
+                    result.append (stringName + ".str ()");
                     return true;
                 }
                 return false;

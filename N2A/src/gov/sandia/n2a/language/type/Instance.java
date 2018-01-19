@@ -316,7 +316,7 @@ public class Instance extends Type
     public String path ()
     {
         Instance nextLevel = container.container;
-        boolean top = nextLevel instanceof Wrapper  ||  nextLevel == null;
+        boolean top = nextLevel instanceof Wrapper  ||  nextLevel == null;  // In general, nextLevel is never null, as that would only happen if this is an instance of Wrapper.
 
         String result;
         if (top) result = "";

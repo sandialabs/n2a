@@ -14,12 +14,50 @@ template class Matrix<float>;
 template class MatrixFixed<float,3,1>;
 
 
-// Functions -----------------------------------------------------------------
+// General functions ---------------------------------------------------------
+
+float
+uniform ()
+{
+    return (float) rand () / RAND_MAX;
+}
+
+float
+uniform (float sigma)
+{
+    return sigma * rand () / RAND_MAX;
+}
+
+MatrixResult<float>
+uniform (const MatrixAbstract<float> & sigma)
+{
+    int rows = sigma.rows ();
+    int cols = sigma.columns ();
+    if (cols == 1)
+    {
+        Vector<float> * result = new Vector<float> (rows);
+        for (int i = 0; i < rows; i++) (*result)[i] = uniform (sigma(i,0));
+        return result;
+    }
+    else if (rows == 1)
+    {
+        Vector<float> * result = new Vector<float> (cols);
+        for (int i = 0; i < cols; i++) (*result)[i] = uniform (sigma(0,i));
+        return result;
+    }
+    else
+    {
+        Vector<float> temp (cols);
+        for (int i = 0; i < cols; i++) temp[i] = uniform ();
+        return sigma * temp;
+    }
+}
 
 // Box-Muller method (polar variant) for Gaussian random numbers.
 static bool haveNextGaussian = false;
 static float nextGaussian;
-float gaussian1 ()
+float
+gaussian ()
 {
     if (haveNextGaussian)
     {
@@ -31,8 +69,8 @@ float gaussian1 ()
         float v1, v2, s;
         do
         {
-            v1 = uniform1 () * 2 - 1;   // between -1.0 and 1.0
-            v2 = uniform1 () * 2 - 1;
+            v1 = uniform () * 2 - 1;   // between -1.0 and 1.0
+            v2 = uniform () * 2 - 1;
             s = v1 * v1 + v2 * v2;
         }
         while (s >= 1 || s == 0);
@@ -43,14 +81,39 @@ float gaussian1 ()
     }
 }
 
-MatrixResult<float> gaussian (int dimension)
+float
+gaussian (float sigma)
 {
-    Vector<float> * result = new Vector<float> (dimension);
-    for (int i = 0; i < dimension; i++) (*result)[i] = gaussian1 ();
-    return result;
+    return sigma * gaussian ();
 }
 
-MatrixResult<float> grid (int i, int nx, int ny, int nz)
+MatrixResult<float>
+gaussian (const MatrixAbstract<float> & sigma)
+{
+    int rows = sigma.rows ();
+    int cols = sigma.columns ();
+    if (cols == 1)
+    {
+        Vector<float> * result = new Vector<float> (rows);
+        for (int i = 0; i < rows; i++) (*result)[i] = gaussian (sigma(i,0));
+        return result;
+    }
+    else if (rows == 1)
+    {
+        Vector<float> * result = new Vector<float> (cols);
+        for (int i = 0; i < cols; i++) (*result)[i] = gaussian (sigma(0,i));
+        return result;
+    }
+    else
+    {
+        Vector<float> temp (cols);
+        for (int i = 0; i < cols; i++) temp[i] = gaussian ();
+        return sigma * temp;
+    }
+}
+
+MatrixResult<float>
+grid (int i, int nx, int ny, int nz)
 {
     int sx = ny * nz;  // stride x
 
@@ -63,81 +126,101 @@ MatrixResult<float> grid (int i, int nx, int ny, int nz)
     return result;
 }
 
-float matrix (Matrix<float> * handle, float row, float column)
+MatrixResult<float>
+gridRaw (int i, int nx, int ny, int nz)
+{
+    int sx = ny * nz;  // stride x
+
+    // compute xyz in stride order
+    Vector3 * result = new Vector3;
+    (*result)[0] = i / sx;
+    i %= sx;
+    (*result)[1] = i / nz;
+    (*result)[2] = i % nz;
+    return result;
+}
+
+
+// MatrixInput ---------------------------------------------------------------
+
+float
+MatrixInput::get (float row, float column)
 {
     // Just assume handle is good.
-    row    = row    * handle->rows_    - 0.5;
-    column = column * handle->columns_ - 0.5;
-    int lastRow    = handle->rows_    - 1;
-    int lastColumn = handle->columns_ - 1;
+    int lastRow    = rows_    - 1;
+    int lastColumn = columns_ - 1;
+    row    *= lastRow;
+    column *= lastColumn;
     int r = (int) floor (row);
     int c = (int) floor (column);
     if (r < 0)
     {
-        if      (c <  0         ) return (*handle)(0,0         );
-        else if (c >= lastColumn) return (*handle)(0,lastColumn);
+        if      (c <  0         ) return (*this)(0,0         );
+        else if (c >= lastColumn) return (*this)(0,lastColumn);
         else
         {
             float b = column - c;
-            return (1 - b) * (*handle)(0,c) + b * (*handle)(0,c+1);
+            return (1 - b) * (*this)(0,c) + b * (*this)(0,c+1);
         }
     }
     else if (r >= lastRow)
     {
-        if      (c <  0         ) return (*handle)(lastRow,0         );
-        else if (c >= lastColumn) return (*handle)(lastRow,lastColumn);
+        if      (c <  0         ) return (*this)(lastRow,0         );
+        else if (c >= lastColumn) return (*this)(lastRow,lastColumn);
         else
         {
             float b = column - c;
-            return (1 - b) * (*handle)(lastRow,c) + b * (*handle)(lastRow,c+1);
+            return (1 - b) * (*this)(lastRow,c) + b * (*this)(lastRow,c+1);
         }
     }
     else
     {
         float a = row - r;
         float a1 = 1 - a;
-        if      (c <  0         ) return a1 * (*handle)(r,0         ) + a * (*handle)(r+1,0         );
-        else if (c >= lastColumn) return a1 * (*handle)(r,lastColumn) + a * (*handle)(r+1,lastColumn);
+        if      (c <  0         ) return a1 * (*this)(r,0         ) + a * (*this)(r+1,0         );
+        else if (c >= lastColumn) return a1 * (*this)(r,lastColumn) + a * (*this)(r+1,lastColumn);
         else
         {
             float b = column - c;
-            return   (1 - b) * (a1 * (*handle)(r,c  ) + a * (*handle)(r+1,c  ))
-                   +      b  * (a1 * (*handle)(r,c+1) + a * (*handle)(r+1,c+1));
+            return   (1 - b) * (a1 * (*this)(r,c  ) + a * (*this)(r+1,c  ))
+                   +      b  * (a1 * (*this)(r,c+1) + a * (*this)(r+1,c+1));
         }
     }
 }
 
-float matrixRaw (Matrix<float> * handle, float row, float column)
+float
+MatrixInput::getRaw (float row, float column)
 {
     int r = (int) row;
     int c = (int) column;
-    if      (r <  0               ) r = 0;
-    else if (r >= handle->rows_   ) r = handle->rows_    - 1;
-    if      (c <  0               ) c = 0;
-    else if (c >= handle->columns_) c = handle->columns_ - 1;
-    return (*handle)(r,c);
+    if      (r <  0       ) r = 0;
+    else if (r >= rows_   ) r = rows_    - 1;
+    if      (c <  0       ) c = 0;
+    else if (c >= columns_) c = columns_ - 1;
+    return (*this)(r,c);
 }
 
-map<string, Matrix<float> *> matrixMap;
-map<Matrix<float> *, string> matrixMapReverse;
-Matrix<float> * matrixHelper (const string & fileName, Matrix<float> * oldHandle)
+map<string, MatrixInput *> matrixMap;
+
+MatrixInput *
+matrixHelper (const string & fileName, MatrixInput * oldHandle)
 {
     if (oldHandle)
     {
-        map<Matrix<float> *, string>::iterator r = matrixMapReverse.find (oldHandle);
-        if (r != matrixMapReverse.end ())
+        if (oldHandle->fileName == fileName) return oldHandle;
+        map<string, MatrixInput *>::iterator i = matrixMap.find (oldHandle->fileName);
+        if (i != matrixMap.end ())
         {
-            if (r->second == fileName) return oldHandle;
-            delete oldHandle;
-            matrixMap       .erase (r->second);
-            matrixMapReverse.erase (r);
+            delete i->second;
+            matrixMap.erase (i);
         }
     }
 
-    map<string, Matrix<float> *>::iterator i = matrixMap.find (fileName);
+    map<string, MatrixInput *>::iterator i = matrixMap.find (fileName);
     if (i != matrixMap.end ()) return i->second;
 
-    Matrix<float> * handle = new Matrix<float> ();
+    MatrixInput * handle = new MatrixInput;
+    handle->fileName = fileName;
     matrixMap.insert (make_pair (fileName, handle));
     ifstream ifs (fileName.c_str ());
     ifs >> (*handle);
@@ -151,78 +234,391 @@ Matrix<float> * matrixHelper (const string & fileName, Matrix<float> * oldHandle
     return handle;
 }
 
-float pulse (float t, float width, float period, float rise, float fall)
+
+// InputHolder ---------------------------------------------------------------
+
+InputHolder::InputHolder (const string & fileName)
+:   fileName (fileName)
 {
-    if (period == 0.0)
+    currentLine   = -1;
+    currentValues = 0;
+    currentCount  = 0;
+    nextLine      = -1;
+    nextValues    = 0;
+    nextCount     = 0;
+    columnCount   = 0;
+    timeColumn    = 0;
+    timeColumnSet = false;
+    epsilon       = 0;
+
+    if (fileName.empty ())
     {
-        if (t < 0) return 0.0;
+        in = &cin;
     }
-    else t = fmod (t, period);
-    if (t < rise) return t / rise;
-    t -= rise;
-    if (t < width) return 1.0;
-    t -= width;
-    if (t < fall) return 1.0 - t / fall;
-    return 0.0;
+    else
+    {
+        in = new ifstream (fileName.c_str ());
+    }
 }
 
-MatrixResult<float> uniform (int dimension)
+InputHolder::~InputHolder ()
 {
-    Vector<float> * result = new Vector<float> (dimension);
-    for (int i = 0; i < dimension; i++) (*result)[i] = uniform1 ();
-    return result;
+    if (in  &&  in != &cin) delete in;
+    if (currentValues) delete[] currentValues;
+    if (nextValues   ) delete[] nextValues;
+}
+
+void
+InputHolder::getRow (float row, bool time)
+{
+    while (true)
+    {
+        // Read and process next line
+        if (nextLine < 0  &&  in->good ())
+        {
+            string line;
+            getline (*in, line);
+            if (! line.empty ())
+            {
+                int tempCount = 1;
+                for (auto it : line) if (it == ' '  ||  it == '\t') tempCount++;
+                columnCount = max (columnCount, tempCount);
+
+                // Decide whether this is a header row or a value row
+                char firstCharacter = line[0];
+                if (firstCharacter < '-'  ||  firstCharacter == '/'  ||  firstCharacter > '9')  // not a number, so must be column header
+                {
+                    // Add any column headers. Generally, these will only be new headers as of this cycle.
+                    int index = 0;
+                    int i = 0;
+                    int end = line.size ();
+                    while (i < end)
+                    {
+                        int j = line.find_first_of (" \t", i);
+                        if (j == string::npos) j = end;
+                        if (j > i) columnMap.emplace (line.substr (i, j - i), index);
+                        i = j + 1;
+                        index++;
+                    }
+
+                    // Select time column
+                    if (time  &&  ! timeColumnSet)
+                    {
+                        int timeMatch = 0;
+                        for (auto it : columnMap)
+                        {
+                            int potentialMatch = 0;
+                            if      (it.first == "t"   ) potentialMatch = 1;
+                            else if (it.first == "TIME") potentialMatch = 2;
+                            else if (it.first == "$t"  ) potentialMatch = 3;
+                            if (potentialMatch > timeMatch)
+                            {
+                                timeMatch = potentialMatch;
+                                timeColumn = it.second;
+                            }
+                        }
+                        timeColumnSet = true;
+                    }
+
+                    continue;  // back to top of outer while loop, skipping any other processing below
+                }
+
+                if (nextCount < columnCount)
+                {
+                    if (nextValues) delete[] nextValues;
+                    nextValues = new float[columnCount];
+                    nextCount = columnCount;
+                }
+                int index = 0;
+                int i = 0;
+                for (; index < tempCount; index++)
+                {
+                    int j = line.find_first_of (" \t", i);
+                    if (j == string::npos) j = line.size ();
+                    if (j > i) nextValues[index] = atof (line.substr (i, j - i).c_str ());
+                    else       nextValues[index] = 0;
+                    i = j + 1;
+                }
+                for (; index < columnCount; index++) nextValues[index] = 0;
+
+                if (time) nextLine = nextValues[timeColumn];
+                else      nextLine = currentLine + 1;
+            }
+        }
+
+        // Determine if we have the requested data
+        if (row <= currentLine) break;
+        if (nextLine < 0) break;  // Return the current line, because another is not (yet) available. In general, we don't stall the simulator to wait for data.
+        if (row < nextLine - epsilon) break;
+
+        float * tempValues = currentValues;
+        int     tempCount  = currentCount;
+        currentLine   = nextLine;
+        currentValues = nextValues;
+        currentCount  = nextCount;
+        nextLine   = -1;
+        nextValues = tempValues;
+        nextCount  = tempCount;
+    }
+}
+
+int
+InputHolder::getColumns (bool time)
+{
+    getRow (0, time);
+    if (time) return max (0, columnCount - 1);
+    return columnCount;
+}
+
+float
+InputHolder::get (float row, bool time, const string & column)
+{
+    getRow (row, time);
+    try
+    {
+        return currentValues[columnMap.at (column)];
+    }
+    catch (const out_of_range & e)
+    {
+        return 0;
+    }
+}
+
+float
+InputHolder::get (float row, bool time, float column)
+{
+    getRow (row, time);
+    int lastColumn = currentCount - 1;
+    if (time) column *= (lastColumn - 1);  // time column is not included in interpolation
+    else      column *=  lastColumn;
+    int c = (int) floor (column);
+    float b = column - c;
+    int d = c + 1;
+    if (time)
+    {
+        if (c >= timeColumn) c++;  // Implicitly, d will also be >= timeColumn.
+        if (d >= timeColumn) d++;
+    }
+    if (c < 0)
+    {
+        if (time  &&  timeColumn == 0  &&  currentCount > 1) return currentValues[1];
+        return currentValues[0];
+    }
+    if (c >= lastColumn)
+    {
+        if (time  &&  timeColumn == lastColumn  &&  currentCount > 1) return currentValues[lastColumn-1];
+        return currentValues[lastColumn];
+    }
+    return (1 - b) * currentValues[c] + b * currentValues[d];
+}
+
+float
+InputHolder::getRaw (float row, bool time, float column)
+{
+    getRow (row, time);
+    int c = (int) round (column);
+    if (time  &&  c >= timeColumn) c++;  // time column is not included in raw index
+    if      (c < 0            ) c = 0;
+    else if (c >= currentCount) c = currentCount - 1;
+    return currentValues[c];
+}
+
+map<string,InputHolder *> inputMap;
+
+InputHolder *
+inputHelper (const string & fileName, InputHolder * oldHandle)
+{
+    if (oldHandle)
+    {
+        if (oldHandle->fileName == fileName) return oldHandle;
+        map<string,InputHolder *>::iterator i = inputMap.find (oldHandle->fileName);
+        if (i != inputMap.end ())
+        {
+            delete i->second;
+            inputMap.erase (i);
+        }
+    }
+
+    map<string,InputHolder *>::iterator i = inputMap.find (fileName);
+    if (i != inputMap.end ()) return i->second;
+
+    InputHolder * handle = new InputHolder (fileName);
+    inputMap.emplace (fileName, handle);
+    return handle;
 }
 
 
-// trace ---------------------------------------------------------------------
+// OutputHolder --------------------------------------------------------------
 
-map<string, int> columnMap;  // TODO: should use unordered_map and a C11 compiler
-vector<float>    columnValues;
-
-float output (float value, const string & column)
+OutputHolder::OutputHolder (const string & fileName)
+:   fileName (fileName)
 {
-    map<string, int>::iterator result = columnMap.find (column);
+    columnsPrevious = 0;
+    traceReceived   = false;
+    t               = 0;
+    raw             = false;
+
+    if (fileName.empty ())
+    {
+        out = &cout;
+    }
+    else
+    {
+        out = new ofstream (fileName.c_str ());
+    }
+}
+
+OutputHolder::~OutputHolder ()
+{
+    if (out)
+    {
+        writeTrace ();
+        out->flush ();
+        if (out != &cout) delete out;
+    }
+}
+
+void
+OutputHolder::trace (float now)
+{
+    // Detect when time changes and dump any previously traced values.
+    if (now > t)
+    {
+        writeTrace ();
+        t = now;
+    }
+
+    if (! traceReceived)  // First trace for this cycle
+    {
+        if (columnValues.empty ())  // slip $t into first column
+        {
+            columnMap["$t"] = 0;
+            columnValues.push_back (t);
+        }
+        else
+        {
+            columnValues[0] = t;
+        }
+        traceReceived = true;
+    }
+}
+
+void
+OutputHolder::trace (float now, const string & column, float value)
+{
+    trace (now);
+
+    unordered_map<string, int>::iterator result = columnMap.find (column);
     if (result == columnMap.end ())
     {
-        columnMap.insert (make_pair (column, columnValues.size ()));
+        columnMap[column] = columnValues.size ();
         columnValues.push_back (value);
     }
     else
     {
         columnValues[result->second] = value;
     }
-    return value;
 }
 
-void writeTrace ()
+void
+OutputHolder::trace (float now, float column, float value)
 {
-    const int last = columnValues.size () - 1;
+    trace (now);
+
+    char buffer[32];
+    int index = (int) round (column);  // "raw" is the most likely case, so preemptively convert to int
+    if (raw) sprintf (buffer, "%i", index);
+    else     sprintf (buffer, "%g", column);
+    string columnName = buffer;
+
+    unordered_map<string, int>::iterator result = columnMap.find (columnName);
+    if (result == columnMap.end ())
+    {
+        if (raw)
+        {
+            index++;  // column index + offset for time column
+            columnValues.resize (index, NAN);  // add any missing columns before the one we are about to create
+        }
+        columnMap[columnName] = columnValues.size ();
+        columnValues.push_back (value);
+    }
+    else
+    {
+        columnValues[result->second] = value;
+    }
+}
+
+void
+OutputHolder::writeTrace ()
+{
+    if (! traceReceived  ||  ! out) return;  // Don't output anything unless at least one value was set.
+
+    const int count = columnValues.size ();
+    const int last  = count - 1;
+
+    // Write headers if new columns have been added
+    if (! raw  &&  count > columnsPrevious)
+    {
+        vector<string> headers (count);
+        for (auto it : columnMap) headers[it.second] = it.first;
+
+        (*out) << headers[0];  // Should be $t
+        int i = 1;
+        for (; i < columnsPrevious; i++)
+        {
+            (*out) << "\t";
+        }
+        for (; i < count; i++)
+        {
+            (*out) << "\t";
+            (*out) << headers[i];
+        }
+        (*out) << endl;
+        columnsPrevious = count;
+    }
+
+    // Write values
     for (int i = 0; i <= last; i++)
     {
         float & c = columnValues[i];
-        if (! isnan (c)) cout << c;
-        if (i < last) cout << "\t";
+        if (! isnan (c)) (*out) << c;
+        if (i < last) (*out) << "\t";
         c = NAN;
     }
-    if (last >= 0) cout << endl;
+    (*out) << endl;
+
+    traceReceived = false;
 }
 
-void writeHeaders ()
+map<string,OutputHolder *> outputMap;
+
+OutputHolder *
+outputHelper (const string & fileName, OutputHolder * oldHandle)
 {
-    const int count = columnMap.size ();
-    const int last = count - 1;
-    vector<string> headers (count);
-    map<string, int>::iterator it;
-    for (it = columnMap.begin (); it != columnMap.end (); it++)
+    if (oldHandle)
     {
-        headers[it->second] = it->first;
+        if (oldHandle->fileName == fileName) return oldHandle;
+        map<string,OutputHolder *>::iterator i = outputMap.find (oldHandle->fileName);
+        if (i != outputMap.end ())
+        {
+            delete i->second;
+            outputMap.erase (i);
+        }
     }
-    for (int i = 0; i < count; i++)
-    {
-        cout << headers[i];
-        if (i < last) cout << "\t";
-    }
-    if (last >= 0) cout << endl;
+
+    map<string, OutputHolder *>::iterator i = outputMap.find (fileName);
+    if (i != outputMap.end ()) return i->second;
+
+    OutputHolder * handle = new OutputHolder (fileName);
+    outputMap.emplace (fileName, handle);
+    return handle;
+}
+
+void
+outputClose ()
+{
+    for (auto it : outputMap) delete it.second;
+    // No need to clear collection, because this function is only called during shutdown.
 }
 
 
@@ -296,6 +692,12 @@ Simulatable::multiply (float scalar)
 void
 Simulatable::addToMembers ()
 {
+}
+
+void
+Simulatable::path (string & result)
+{
+    result = "";
 }
 
 void
@@ -582,7 +984,7 @@ PopulationConnection::connect (Simulator & simulator)
                     c->setPart (1, b);
                     if (Bmax  &&  c->getCount (1) >= Bmax) continue;  // no room in this B
                     float create = c->getP (simulator);
-                    if (create <= 0  ||  create < 1  &&  create < uniform1 ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
+                    if (create <= 0  ||  create < 1  &&  create < uniform ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
                     simulator.enqueue (c);
                     c->init (simulator);
                     Acount++;
@@ -605,7 +1007,7 @@ PopulationConnection::connect (Simulator & simulator)
                     c->setPart (1, b);
                     if (Bmax  &&  c->getCount (1) >= Bmax) continue;  // no room in this B
                     float create = c->getP (simulator);
-                    if (create <= 0  ||  create < 1  &&  create < uniform1 ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
+                    if (create <= 0  ||  create < 1  &&  create < uniform ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
                     simulator.enqueue (c);
                     c->init (simulator);
                     c = (Connection *) this->create ();
@@ -655,7 +1057,7 @@ PopulationConnection::connect (Simulator & simulator)
                     c->setPart (0, a);
                     if (Amax  &&  c->getCount (0) >= Amax) continue;
                     float create = c->getP (simulator);
-                    if (create <= 0  ||  create < 1  &&  create < uniform1 ()) continue;
+                    if (create <= 0  ||  create < 1  &&  create < uniform ()) continue;
                     c->init (simulator);
                     simulator.enqueue (c);
                     c = (Connection *) this->create ();

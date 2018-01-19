@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.execenvs;
 
+import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 
@@ -17,6 +18,8 @@ import java.util.TreeSet;
 
 public class Linux extends LocalMachineEnv
 {
+    static boolean writeBackgroundScript = true;  // always write the script on first use in a given session
+
     @Override
     public Set<Long> getActiveProcs () throws Exception
     {
@@ -62,13 +65,42 @@ public class Linux extends LocalMachineEnv
     @Override
     public long submitJob (MNode job, String command) throws Exception
     {
+        File binDir     = new File (AppData.properties.get ("resourceDir"), "bin");
+        File background = new File (binDir, "background");
+        if (writeBackgroundScript)
+        {
+            writeBackgroundScript = false;
+            binDir.mkdirs ();
+            stringToFile
+            (
+                background,
+                "#!/bin/bash\n"
+                + "$1 &\n"
+            );
+
+            String [] commandParm = {"chmod", "u+x", background.getAbsolutePath ()};
+            Process p = Runtime.getRuntime ().exec (commandParm);
+            p.waitFor ();
+            if (p.exitValue () != 0)
+            {
+                Backend.err.get ().println ("Failed to change permissions on background script:\n" + streamToString (p.getErrorStream ()));
+                throw new Backend.AbortRun ();
+            }
+        }
+
         String jobDir = new File (job.get ()).getParent ();
-
-        File out = new File (jobDir, "out");
-        File err = new File (jobDir, "err");
-
         File script = new File (jobDir, "n2a_job");
-        stringToFile (script, "#!/bin/bash\n" + command + " > '" + out.getAbsolutePath () + "' 2>> '" + err.getAbsolutePath () + "' &\ntouch finished\n");
+        stringToFile
+        (
+            script,
+            "#!/bin/bash\n"
+            + "cd " + jobDir + "\n"
+            + "if " + command + " > out 2>> err; then\n"   // removed "&" so we wait for process to finish, assuming we can background it directly with sh
+            + "  echo success > finished\n"
+            + "else\n"
+            + "  echo failure > finished\n"
+            + "fi"
+        );
 
         String [] commandParm = {"chmod", "u+x", script.getAbsolutePath ()};
         Process p = Runtime.getRuntime ().exec (commandParm);
@@ -79,7 +111,7 @@ public class Linux extends LocalMachineEnv
             throw new Backend.AbortRun ();
         }
 
-        commandParm = new String[] {script.getAbsolutePath ()};
+        commandParm = new String[] {background.getAbsolutePath (), script.getAbsolutePath ()};
         p = Runtime.getRuntime ().exec (commandParm);
         p.waitFor ();
         if (p.exitValue () != 0)

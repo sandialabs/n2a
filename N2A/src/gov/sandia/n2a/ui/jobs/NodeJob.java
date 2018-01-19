@@ -95,7 +95,7 @@ public class NodeJob extends NodeBase
             if (finished.exists ())
             {
                 dateFinished = new Date (finished.lastModified ());
-                String line = "";
+                String line = null;
                 try
                 {
                     BufferedReader reader = new BufferedReader (new FileReader (finished));
@@ -103,12 +103,13 @@ public class NodeJob extends NodeBase
                     reader.close ();
                 }
                 catch (IOException e) {}
+                if (line == null) line = "";
 
                 if (line.length () >= 6  ||  Duration.between (dateFinished.toInstant (), Instant.now ()).abs ().getSeconds () > 10)
                 {
                     if      (line.equals ("success")) complete = 1;
                     else if (line.equals ("killed" )) complete = 3;
-                    else                              complete = 2;
+                    else                              complete = 2;  // includes "failure", "", and any other unknown string
                 }
             }
         }

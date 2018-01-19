@@ -43,7 +43,7 @@ public class Scalar extends Type
     public Type add (Type that) throws EvaluationException
     {
         if (that instanceof Scalar) return new Scalar (value + ((Scalar) that).value);
-        if (that instanceof Text  ) return new Text   (value + ((Text)   that).value);  // Although inconsistent with all other operations where scalar is on left, this is more useful as it allows arbitrary string construction.
+        if (that instanceof Text  ) return new Text   (value + ((Text)   that).value);
         if (that instanceof Matrix) return that.add (this);
         throw new EvaluationException ("type mismatch");
     }
@@ -51,7 +51,6 @@ public class Scalar extends Type
     public Type subtract (Type that) throws EvaluationException
     {
         if (that instanceof Scalar) return new Scalar (value - ((Scalar) that).value);
-        if (that instanceof Text  ) return new Scalar (value - Double.valueOf (((Text) that).value));
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
@@ -73,7 +72,6 @@ public class Scalar extends Type
     public Type multiply (Type that) throws EvaluationException
     {
         if (that instanceof Scalar) return new Scalar (value * ((Scalar) that).value);
-        if (that instanceof Text  ) return new Scalar (value * Double.valueOf (((Text) that).value));
         if (that instanceof Matrix) return that.multiply (this);
         throw new EvaluationException ("type mismatch");
     }
@@ -82,14 +80,12 @@ public class Scalar extends Type
     {
         if (that instanceof Matrix) return that.multiplyElementwise (this);
         if (that instanceof Scalar) return new Scalar (value * ((Scalar) that).value);
-        if (that instanceof Text  ) return new Scalar (value * Double.valueOf (((Text) that).value));
         throw new EvaluationException ("type mismatch");
     }
 
     public Type divide (Type that) throws EvaluationException
     {
         if (that instanceof Scalar) return new Scalar (value / ((Scalar) that).value);
-        if (that instanceof Text  ) return new Scalar (value / Double.valueOf (((Text) that).value));
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
@@ -111,7 +107,6 @@ public class Scalar extends Type
     public Type modulo (Type that) throws EvaluationException
     {
         if (that instanceof Scalar) return new Scalar (value % ((Scalar) that).value);
-        if (that instanceof Text  ) return new Scalar (value % Double.valueOf (((Text) that).value));
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
@@ -133,7 +128,6 @@ public class Scalar extends Type
     public Type power (Type that) throws EvaluationException
     {
         if (that instanceof Scalar) return new Scalar (Math.pow (value, ((Scalar) that).value));
-        if (that instanceof Text  ) return new Scalar (Math.pow (value, Double.valueOf (((Text) that).value)));
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
@@ -155,7 +149,6 @@ public class Scalar extends Type
     public Type min (Type that)
     {
         if (that instanceof Scalar) return new Scalar (Math.min (value, ((Scalar) that).value));
-        if (that instanceof Text  ) return new Scalar (Math.min (value, Double.valueOf (((Text) that).value)));
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
@@ -177,7 +170,6 @@ public class Scalar extends Type
     public Type max (Type that)
     {
         if (that instanceof Scalar) return new Scalar (Math.max (value, ((Scalar) that).value));
-        if (that instanceof Text  ) return new Scalar (Math.max (value, Double.valueOf (((Text) that).value)));
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
@@ -198,8 +190,7 @@ public class Scalar extends Type
 
     public Type EQ (Type that) throws EvaluationException
     {
-        if (that instanceof Scalar) return new Scalar ((value == ((Scalar) that).value               ) ? 1 : 0);
-        if (that instanceof Text  ) return new Scalar ((value == Double.valueOf (((Text) that).value)) ? 1 : 0);
+        if (that instanceof Scalar) return new Scalar ((value == ((Scalar) that).value) ? 1 : 0);
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
@@ -220,8 +211,7 @@ public class Scalar extends Type
 
     public Type NE (Type that) throws EvaluationException
     {
-        if (that instanceof Scalar) return new Scalar ((value != ((Scalar) that).value               ) ? 1 : 0);
-        if (that instanceof Text  ) return new Scalar ((value != Double.valueOf (((Text) that).value)) ? 1 : 0);
+        if (that instanceof Scalar) return new Scalar ((value != ((Scalar) that).value) ? 1 : 0);
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
@@ -242,8 +232,7 @@ public class Scalar extends Type
 
     public Type GT (Type that) throws EvaluationException
     {
-        if (that instanceof Scalar) return new Scalar ((value > ((Scalar) that).value               ) ? 1 : 0);
-        if (that instanceof Text  ) return new Scalar ((value > Double.valueOf (((Text) that).value)) ? 1 : 0);
+        if (that instanceof Scalar) return new Scalar ((value > ((Scalar) that).value) ? 1 : 0);
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
@@ -264,8 +253,7 @@ public class Scalar extends Type
 
     public Type GE (Type that) throws EvaluationException
     {
-        if (that instanceof Scalar) return new Scalar ((value >= ((Scalar) that).value               ) ? 1 : 0);
-        if (that instanceof Text  ) return new Scalar ((value >= Double.valueOf (((Text) that).value)) ? 1 : 0);
+        if (that instanceof Scalar) return new Scalar ((value >= ((Scalar) that).value) ? 1 : 0);
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
@@ -286,8 +274,7 @@ public class Scalar extends Type
 
     public Type LT (Type that) throws EvaluationException
     {
-        if (that instanceof Scalar) return new Scalar ((value < ((Scalar) that).value               ) ? 1 : 0);
-        if (that instanceof Text  ) return new Scalar ((value < Double.valueOf (((Text) that).value)) ? 1 : 0);
+        if (that instanceof Scalar) return new Scalar ((value < ((Scalar) that).value) ? 1 : 0);
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
@@ -308,8 +295,7 @@ public class Scalar extends Type
 
     public Type LE (Type that) throws EvaluationException
     {
-        if (that instanceof Scalar) return new Scalar ((value <= ((Scalar) that).value               ) ? 1 : 0);
-        if (that instanceof Text  ) return new Scalar ((value <= Double.valueOf (((Text) that).value)) ? 1 : 0);
+        if (that instanceof Scalar) return new Scalar ((value <= ((Scalar) that).value) ? 1 : 0);
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
@@ -330,8 +316,7 @@ public class Scalar extends Type
 
     public Type AND (Type that) throws EvaluationException
     {
-        if (that instanceof Scalar) return new Scalar ((value * ((Scalar) that).value                != 0) ? 1 : 0);
-        if (that instanceof Text  ) return new Scalar ((value * Double.valueOf (((Text) that).value) != 0) ? 1 : 0);
+        if (that instanceof Scalar) return new Scalar ((value * ((Scalar) that).value != 0) ? 1 : 0);
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
@@ -352,8 +337,7 @@ public class Scalar extends Type
 
     public Type OR (Type that) throws EvaluationException
     {
-        if (that instanceof Scalar) return new Scalar ((Math.abs (value) + Math.abs (((Scalar) that).value)                != 0) ? 1 : 0);
-        if (that instanceof Text  ) return new Scalar ((Math.abs (value) + Math.abs (Double.valueOf (((Text) that).value)) != 0) ? 1 : 0);
+        if (that instanceof Scalar) return new Scalar ((Math.abs (value) + Math.abs (((Scalar) that).value) != 0) ? 1 : 0);
         if (that instanceof Matrix)
         {
             double scalar = Math.abs (value);
@@ -397,7 +381,6 @@ public class Scalar extends Type
     public int compareTo (Type that)
     {
         if (that instanceof Scalar) return new Double (value).compareTo (new Double (((Scalar) that).value));
-        if (that instanceof Text  ) return new Double (value).compareTo (Double.valueOf (((Text) that).value));
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;

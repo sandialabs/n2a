@@ -23,11 +23,11 @@ import javax.swing.JTextField;
 
 public class SettingsGeneral extends JPanel implements Settings
 {
-    public JPanel addField (String key, String description, int width, String defaultValue)
+    public JPanel addField (final String key, String description, int width, String defaultValue)
     {
         JLabel label = new JLabel (description);
         String value = AppData.state.getOrDefault ("General", key, defaultValue);
-        JTextField field = new JTextField (value, width);
+        final JTextField field = new JTextField (value, width);
         field.addActionListener (new ActionListener ()
         {
             public void actionPerformed (ActionEvent arg0)

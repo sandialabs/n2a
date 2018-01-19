@@ -25,6 +25,7 @@ import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
+import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
@@ -32,7 +33,9 @@ import gov.sandia.n2a.language.type.Text;
 public class Output extends Function
 {
     public String variableName;  // Trace needs to know its target variable in order to auto-generate a column name. This value is set by an analysis process.
-    public int    index;  // of column name in valuesObject array
+    public String variableName0; // As found in operand[0]
+    public String variableName1; // As found in operand[1]
+    public int    index;  // of generated column name in valuesObject array
 
     public static Factory factory ()
     {
@@ -165,19 +168,11 @@ public class Output extends Function
 
     public Type eval (Instance context)
     {
-        int columnParameter = 1;
-        Type result = operands[0].eval (context);  // This will be either the expression itself, or the destination file, depending on form.
-        String path = "";
-        if (result instanceof Text)
-        {
-            path = ((Text) result).value;
-            result = operands[1].eval (context);  // If the first operand is a string (pathname) then the second operand must evaluate to a number.
-            columnParameter = 2;
-        }
-
+        Type result = operands[1].eval (context);
         Simulator simulator = Simulator.getSimulator (context);
         if (simulator == null) return result;
 
+        String path = ((Text) operands[0].eval (context)).value;
         Holder H = simulator.outputs.get (path);
         if (H == null)
         {
@@ -199,32 +194,28 @@ public class Output extends Function
                 }
             }
 
-            if (operands.length > columnParameter + 1)
-            {
-                H.raw = operands[columnParameter+1].eval (context).toString ().contains ("raw");
-            }
+            if (operands.length > 3) H.raw = operands[3].eval (context).toString ().contains ("raw");
 
             simulator.outputs.put (path, H);
         }
 
         // Determine column name
-        Instance instance;
-        if (context instanceof InstanceTemporaries) instance = ((InstanceTemporaries) context).wrapped;
-        else                                        instance = context;
-        String column = (String) instance.valuesObject[index];
-        if (column == null)
+        String column;
+        if (operands.length > 2)  // column name is specified
         {
-            if (operands.length > columnParameter)  // column name is specified
+            column = operands[2].eval (context).toString ();
+        }
+        else  // auto-generate column name
+        {
+            if (context instanceof InstanceTemporaries) context = ((InstanceTemporaries) context).wrapped;
+            column = (String) context.valuesObject[index];
+            if (column == null)
             {
-                column = operands[columnParameter].eval (context).toString ();
-            }
-            else  // auto-generate column name
-            {
-                String prefix = instance.path ();
+                String prefix = context.path ();
                 if (prefix.isEmpty ()) column =                variableName;
                 else                   column = prefix + "." + variableName;
+                context.valuesObject[index] = column;
             }
-            instance.valuesObject[index] = column;
         }
 
         H.trace (column, (float) ((Scalar) result).value);
@@ -235,52 +226,43 @@ public class Output extends Function
     public Operator simplify (Variable from)
     {
         // Even if our variable is about to be replaced by a constant, we want to present its name in the output column.
-        if (variableName == null)
+        if (variableName0 == null  &&  operands.length > 0  &&  operands[0] instanceof AccessVariable)
         {
-            if (operands[0] instanceof AccessVariable)
-            {
-                variableName = ((AccessVariable) operands[0]).name;  // the raw name, including prime marks for derivatives
-            }
-            else
-            {
-                variableName = from.name;
-            }
+            variableName0 = ((AccessVariable) operands[0]).name;  // the raw name, including prime marks for derivatives
         }
+        if (variableName1 == null  &&  operands.length > 1  &&  operands[1] instanceof AccessVariable)
+        {
+            variableName1 = ((AccessVariable) operands[1]).name;
+        }
+
         return super.simplify (from);
     }
 
     // This method should be called by analysis, with v set to the variable that holds this equation.
     public void determineVariableName (Variable v)
     {
-        boolean needIndex = false;  // Do we need $index to auto-generate names?
-        if (operands.length == 1) needIndex = true;
-        else if (operands.length == 2)
+        // Ensure that the first operand is a file name.
+        // If no file name is specified, stdout is used. We get the same effect by specifying the empty string, so insert it here.
+        // This makes parameter processing much simpler elsewhere.
+        int length = operands.length;
+        if (length > 0  &&  ! isStringExpression (v, operands[0]))
         {
-            // Determine if first parm is a file name.
-            class StringVisitor extends Visitor
-            {
-                boolean foundString;
-                public boolean visit (Operator op)
-                {
-                    if (op instanceof Constant)
-                    {
-                        Constant c = (Constant) op;
-                        if (c.value instanceof Text)
-                        {
-                            foundString = true;
-                            return false;
-                        }
-                    }
-                    return true;
-                }
-            }
-            StringVisitor visitor = new StringVisitor ();
-            operands[0].visit (visitor);
-            needIndex = visitor.foundString;
+            variableName = variableName0;
+
+            Operator[] newOperands = new Operator[length+1];
+            for (int i = 0; i < length; i++) newOperands[i+1] = operands[i];
+            newOperands[0] = new Constant (new Text ());
+            operands = newOperands;
+        }
+        else
+        {
+            variableName = variableName1;
         }
 
-        if (needIndex)
+        if (length < 3)  // Column name not specified
         {
+            if (variableName == null) variableName = v.nameString ();
+
             EquationSet container = v.container;
             if (container.connectionBindings == null)  // regular part
             {
@@ -295,6 +277,58 @@ public class Output extends Function
                 }
             }
         }
+    }
+
+    /**
+        Determines if the given operator is a string expression.
+        This is the case if any operator it depends on is a string.
+        If an operand is a variable, then its equations must contain a string.
+    **/
+    public static boolean isStringExpression (Variable v, Operator op)
+    {
+        class StringVisitor extends Visitor
+        {
+            boolean foundString;
+            Variable from;
+            public StringVisitor (Variable from)
+            {
+                this.from = from;
+                from.visited = null;
+            }
+            public boolean visit (Operator op)
+            {
+                if (op instanceof Constant)
+                {
+                    Constant c = (Constant) op;
+                    if (c.value instanceof Text) foundString = true;
+                    return false;
+                }
+                if (op instanceof AccessVariable)
+                {
+                    AccessVariable av = (AccessVariable) op;
+                    Variable v = av.reference.variable;
+
+                    // Prevent infinite recursion
+                    Variable p = from;
+                    while (p != null)
+                    {
+                        if (p == v) return false;
+                        p = p.visited;
+                    }
+
+                    v.visited = from;
+                    from = v;
+                    v.visit (this);
+                    from = v.visited;
+                    return false;
+                }
+                if (foundString) return false;  // no reason to dig any further
+                return op instanceof Add;  // Add is the only operator that can propagate string values. All other operators and functions return scalars or matrices.
+            }
+        }
+        StringVisitor visitor = new StringVisitor (v);
+        op.visit (visitor);
+        return visitor.foundString;
     }
 
     public void dependOnIndex (Variable v, EquationSet container)

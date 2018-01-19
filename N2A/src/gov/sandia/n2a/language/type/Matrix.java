@@ -379,8 +379,6 @@ public abstract class Matrix extends Type
             if (d < 0) return -1;
             return 0;
         }
-        if (that instanceof Text    ) return compareTo (new MatrixDense ((Text) that));
-        if (that instanceof Instance) return -1;
         throw new EvaluationException ("type mismatch");
     }
 }

@@ -47,10 +47,10 @@ public class ReadMatrix extends Function
 
     public Type eval (Instance context)
     {
-        String path = ((Text) operands[0].eval (context)).value;
         Simulator simulator = Simulator.getSimulator (context);
         if (simulator == null) return new Scalar (0);  // absence of simulator indicates analysis phase, so opening files is unnecessary
 
+        String path = ((Text) operands[0].eval (context)).value;
         Matrix A = simulator.matrices.get (path);
         if (A == null)
         {
@@ -58,15 +58,15 @@ public class ReadMatrix extends Function
             simulator.matrices.put (path, A);
         }
 
-        String method = "";
+        String mode = "";
         int lastParm = operands.length - 1;
         if (lastParm > 0)
         {
             Type parmValue = operands[lastParm].eval (context);
-            if (parmValue instanceof Text) method = ((Text) parmValue).value;
+            if (parmValue instanceof Text) mode = ((Text) parmValue).value;
         }
-        if (method.equals ("columns")) return new Scalar (A.columns ());
-        if (method.equals ("rows"   )) return new Scalar (A.rows    ());
+        if (mode.equals ("columns")) return new Scalar (A.columns ());
+        if (mode.equals ("rows"   )) return new Scalar (A.rows    ());
 
         int rows    = A.rows ();
         int columns = A.columns ();
@@ -75,7 +75,7 @@ public class ReadMatrix extends Function
         double row    = ((Scalar) operands[1].eval (context)).value;
         double column = ((Scalar) operands[2].eval (context)).value;
 
-        if (method.equals ("raw"))
+        if (mode.equals ("raw"))
         {
             int r = (int) Math.floor (row);
             int c = (int) Math.floor (column);

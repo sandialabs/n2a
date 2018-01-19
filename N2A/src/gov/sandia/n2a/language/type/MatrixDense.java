@@ -324,7 +324,7 @@ public class MatrixDense extends Matrix
             }
             return result;
         }
-        if (that instanceof Text) return add (new MatrixDense ((Text) that));
+        if (that instanceof Text) return new Text (toString ()).add (that);
         throw new EvaluationException ("type mismatch");
     }
 
@@ -383,7 +383,6 @@ public class MatrixDense extends Matrix
             }
             return result;
         }
-        if (that instanceof Text) return subtract (new MatrixDense ((Text) that));
         throw new EvaluationException ("type mismatch");
     }
 
@@ -446,7 +445,6 @@ public class MatrixDense extends Matrix
             }
             return result;
         }
-        if (that instanceof Text) return multiply (new MatrixDense ((Text) that));
         throw new EvaluationException ("type mismatch");
     }
 
@@ -505,7 +503,6 @@ public class MatrixDense extends Matrix
             }
             return result;
         }
-        if (that instanceof Text) return multiply (new MatrixDense ((Text) that));
         throw new EvaluationException ("type mismatch");
     }
 
@@ -564,7 +561,6 @@ public class MatrixDense extends Matrix
             }
             return result;
         }
-        if (that instanceof Text) return divide (new MatrixDense ((Text) that));
         throw new EvaluationException ("type mismatch");
     }
 
@@ -623,7 +619,6 @@ public class MatrixDense extends Matrix
             }
             return result;
         }
-        if (that instanceof Text) return min (new MatrixDense ((Text) that));
         throw new EvaluationException ("type mismatch");
     }
 
@@ -682,7 +677,6 @@ public class MatrixDense extends Matrix
             }
             return result;
         }
-        if (that instanceof Text) return max (new MatrixDense ((Text) that));
         throw new EvaluationException ("type mismatch");
     }
 
@@ -847,8 +841,6 @@ public class MatrixDense extends Matrix
             if (d < 0) return -1;
             return 0;
         }
-        if (that instanceof Text    ) return compareTo (new MatrixDense ((Text) that));
-        if (that instanceof Instance) return -1;
         throw new EvaluationException ("type mismatch");
     }
 }
