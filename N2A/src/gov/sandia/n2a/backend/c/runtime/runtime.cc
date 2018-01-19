@@ -736,6 +736,82 @@ Part::getLive ()
 }
 
 
+// Wrapper -------------------------------------------------------------------
+
+void
+WrapperBase::init (Simulator & simulator)
+{
+    population->init (simulator);
+}
+
+void
+WrapperBase::integrate (Simulator & simulator)
+{
+    population->integrate (simulator);
+}
+
+void
+WrapperBase::update (Simulator & simulator)
+{
+    population->update (simulator);
+}
+
+bool
+WrapperBase::finalize (Simulator & simulator)
+{
+    population->finalize (simulator);
+    return population->n;  // The simulation stops when the last model instance dies.
+}
+
+void
+WrapperBase::updateDerivative (Simulator & simulator)
+{
+    population->updateDerivative (simulator);
+}
+
+void
+WrapperBase::finalizeDerivative ()
+{
+    population->finalizeDerivative ();
+}
+
+void
+WrapperBase::snapshot ()
+{
+    population->snapshot ();
+}
+
+void
+WrapperBase::restore ()
+{
+    population->restore ();
+}
+
+void
+WrapperBase::pushDerivative ()
+{
+    population->pushDerivative ();
+}
+
+void
+WrapperBase::multiplyAddToStack (float scalar)
+{
+    population->multiplyAddToStack (scalar);
+}
+
+void
+WrapperBase::multiply (float scalar)
+{
+    population->multiply (scalar);
+}
+
+void
+WrapperBase::addToMembers ()
+{
+    population->addToMembers ();
+}
+
+
 // class Population ----------------------------------------------------------
 
 Population::Population ()

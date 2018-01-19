@@ -89,6 +89,7 @@ extern void           outputClose ();  ///< Close all OutputHolders
 
 class Simulatable;
 class Part;
+class Wrapper;
 class Compartment;
 class Connection;
 class Population;
@@ -151,6 +152,9 @@ public:
 class Part : public Simulatable
 {
 public:
+    // Memory management
+    Part * next;  ///< All parts exist on one primary linked list, either in the simulator or the population's dead list.
+
     // Lifespan management
     virtual void die             (); ///< Set $live=0 (in some form) and decrement $n of our population. If a connection with $min or $max, decrement connection counts in respective target compartments.
     virtual void enterSimulation (); ///< Tells us we are going onto the simulator queue. Increment refcount on parts we directly access.
@@ -159,19 +163,36 @@ public:
 
     // Accessors for $variables
     virtual float getLive (); ///< @return 1 if we are in normal simulation. 0 if we have died. Default is 1.
+};
 
-    // Memory management
-    Part * next;  ///< All parts exist on one primary linked list, either in the simulator or the population's dead list.
+class WrapperBase : public Part
+{
+public:
+    PopulationCompartment * population;  // The top-level population can never be a connection, only a compartment.
+
+    virtual void init               (Simulator & simulator);
+    virtual void integrate          (Simulator & simulator);
+    virtual void update             (Simulator & simulator);
+    virtual bool finalize           (Simulator & simulator);
+    virtual void updateDerivative   (Simulator & simulator);
+    virtual void finalizeDerivative ();
+
+    virtual void snapshot           ();
+    virtual void restore            ();
+    virtual void pushDerivative     ();
+    virtual void multiplyAddToStack (float scalar);
+    virtual void multiply           (float scalar);
+    virtual void addToMembers       ();
 };
 
 class Compartment : public Part
 {
 public:
-    virtual void getXYZ (Vector3 & xyz); ///< Default is [0;0;0].
-
     int __24index; ///< Unique ID of this part.
     Compartment * before;
     Compartment * after;
+
+    virtual void getXYZ (Vector3 & xyz); ///< Default is [0;0;0].
 };
 
 class Connection : public Part
@@ -198,6 +219,8 @@ public:
 class Population : public Simulatable
 {
 public:
+    Part * dead;  ///< Head of linked list of available parts, using Part::next.
+
     Population ();
     virtual ~Population ();  ///< Deletes all parts on our dead list.
 
@@ -205,8 +228,6 @@ public:
     virtual void   add      (Part * part); ///< The given part is going onto a simulator queue, but we may also account for it in other ways.
     virtual void   remove   (Part * part); ///< Move part to dead list, and update any other accounting for the part.
     virtual Part * allocate ();            ///< If a dead part is available, re-use it. Otherwise, create and add a new part.
-
-    Part * dead;  ///< Head of linked list of available parts, using Part::next.
 };
 
 /**
@@ -215,17 +236,17 @@ public:
 class PopulationCompartment : public Population
 {
 public:
+    Compartment   live;      ///< Parts currently on simulator queue (regardless of $live), linked via Compartment::before and after. Used for crossing populations to make connections.
+    Compartment * old;       ///< Position in parts linked list of first old part. All parts before this were added in the current simulation cycle. If old==&live, then all parts are new.
+    int           n;         ///< Actual number of parts with $live==1. Maintained directly by parts as they are born or die.
+    int           nextIndex; ///< Next available $index value. Indices are consumed only when add() is called. With garbage collection, there could be gaps in the set of used indices.
+
     PopulationCompartment ();
 
     virtual void   add      (Part * part); ///< Assign an index to part and put it on our live list (ahead of old).
     virtual void   remove   (Part * part); ///< Remove part from live.
     virtual Part * allocate ();            ///< New part is inserted at head of live list (before old).
     virtual void   resize   (Simulator & simulator, int n); ///< Add or kill instances until $n matches given n.
-
-    Compartment   live;      ///< Parts currently on simulator queue (regardless of $live), linked via Compartment::before and after. Used for crossing populations to make connections.
-    Compartment * old;       ///< Position in parts linked list of first old part. All parts before this were added in the current simulation cycle. If old==&live, then all parts are new.
-    int           n;         ///< Actual number of parts with $live==1. Maintained directly by parts as they are born or die.
-    int           nextIndex; ///< Next available $index value. Indices are consumed only when add() is called. With garbage collection, there could be gaps in the set of used indices.
 };
 
 class PopulationConnection : public Population
@@ -247,6 +268,13 @@ public:
 class Simulator
 {
 public:
+    float t;
+    float dt;
+    Part *  queue; ///< All parts currently being simulated, regardless of type.
+    Part ** p;     ///< Current position of simulation in queue. Needed to implement move().
+    std::vector<std::pair<PopulationCompartment *, int> > resizeQueue;  ///< Populations that need to change $n after the current cycle completes.
+    std::vector<PopulationConnection *>                   connectQueue; ///< Connection populations that want to construct or recheck their instances after all populations are resized in current cycle.
+
     Simulator ();
     virtual ~Simulator ();
 
@@ -258,13 +286,6 @@ public:
     virtual void move    (float dt);                                  ///< Change simulation period for the part that makes the call. We know which part is currently executing, so no need to pass it as a parameter.
     virtual void resize  (PopulationCompartment * population, int n); ///< Schedule compartment to be resized at end of current cycle.
     virtual void connect (PopulationConnection * population);         ///< Schedule connection population to be evaluated at end of current cycle, after all resizing is done.
-
-    float t;
-    float dt;
-    Part *  queue; ///< All parts currently being simulated, regardless of type.
-    Part ** p;     ///< Current position of simulation in queue. Needed to implement move().
-    std::vector<std::pair<PopulationCompartment *, int> > resizeQueue;  ///< Populations that need to change $n after the current cycle completes.
-    std::vector<PopulationConnection *>                   connectQueue; ///< Connection populations that want to construct or recheck their instances after all populations are resized in current cycle.
 };
 
 class Euler : public Simulator
