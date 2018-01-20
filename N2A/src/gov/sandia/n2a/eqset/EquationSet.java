@@ -274,6 +274,7 @@ public class EquationSet implements Comparable<EquationSet>
             // Detect instance variables
             if (v.order > 0) continue;
             if (v.equations.size () != 1) continue;
+            if (v.assignment != Variable.REPLACE) continue;
             EquationEntry ee = v.equations.first ();
             if (ee.condition != null) continue;
             if (! (ee.expression instanceof AccessVariable)) continue;
