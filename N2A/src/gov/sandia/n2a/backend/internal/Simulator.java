@@ -27,6 +27,7 @@ import java.util.Set;
 import java.util.Map.Entry;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
     The integrator for the Internal simulator.
@@ -38,10 +39,10 @@ public class Simulator implements Iterable<Part>
 {
     public Wrapper                     wrapper;  // reference to top-level model, which is also in the simulation queue
     public EventFactory                eventFactory;
-    public Queue<Event>                eventQueue    = new PriorityQueue<Event> ();
-    public List<ResizeRequest>         resizeQueue   = new LinkedList<ResizeRequest> ();
-    public List<Population>            connectQueue  = new LinkedList<Population> ();
-    public Set<Population>             clearNewQueue = new TreeSet<Population> ();
+    public Queue<Event>                queueEvent    = new PriorityQueue<Event> ();
+    public List<ResizeRequest>         queueResize   = new LinkedList<ResizeRequest> ();
+    public Queue<Population>           queueConnect  = new ConcurrentLinkedQueue<Population> ();
+    public Set<Population>             queueClearNew = new TreeSet<Population> ();
     public TreeMap<Double,EventStep>   periods       = new TreeMap<Double,EventStep> ();
     public Random                      random;
 
@@ -98,7 +99,7 @@ public class Simulator implements Iterable<Part>
         if (e.head.next != e.head)  // if event is not empty (that is, if model did not move itself to a different period)
         {
             e.t = e.dt;
-            eventQueue.add (e);
+            queueEvent.add (e);
         }
     }
 
@@ -121,9 +122,9 @@ public class Simulator implements Iterable<Part>
     public void run ()
     {
         // This is the core simulation loop.
-        while (! eventQueue.isEmpty ()  &&  ! stop)
+        while (! queueEvent.isEmpty ()  &&  ! stop)
         {
-            currentEvent = eventQueue.remove ();
+            currentEvent = queueEvent.remove ();
             currentEvent.run (this);
         }
         // Simulation is done.
@@ -150,16 +151,20 @@ public class Simulator implements Iterable<Part>
     public void updatePopulations ()
     {
         // Resize populations that have requested it
-        for (ResizeRequest r : resizeQueue) r.population.resize (this, r.size);
-        resizeQueue.clear ();
+        for (ResizeRequest r : queueResize) r.population.resize (this, r.size);
+        queueResize.clear ();
 
         // Evaluate connection populations that have requested it
-        for (Population p : connectQueue) p.connect (this);
-        connectQueue.clear ();
+        // To support nested connections, this is structured as an actual queue.
+        // Note: The creation of nested connections, or even populations within a connection instance, should not touch the resize queue.
+        while (! queueConnect.isEmpty ())
+        {
+            queueConnect.remove ().connect (this);
+        }
 
         // Clear new flag from populations that have requested it
-        for (Population p : clearNewQueue) p.clearNew ();
-        clearNewQueue.clear ();
+        for (Population p : queueClearNew) p.clearNew ();
+        queueClearNew.clear ();
     }
 
     public void move (Part i, double dt)
@@ -172,7 +177,7 @@ public class Simulator implements Iterable<Part>
         {
             e = eventFactory.create (currentEvent.t + dt, dt);
             periods.put (dt, e);
-            eventQueue.add (e);
+            queueEvent.add (e);
         }
 
         // transfer to new event's queue
@@ -188,7 +193,7 @@ public class Simulator implements Iterable<Part>
 
     public double getNextDt ()
     {
-        for (Event e : eventQueue)
+        for (Event e : queueEvent)
         {
             if (e instanceof EventStep) return ((EventStep) e).dt;
         }
@@ -197,17 +202,17 @@ public class Simulator implements Iterable<Part>
 
     public void resize (Population p, int n)
     {
-        resizeQueue.add (new ResizeRequest (p, n));
+        queueResize.add (new ResizeRequest (p, n));
     }
 
     public void connect (Population p)
     {
-        connectQueue.add (p);
+        queueConnect.add (p);
     }
 
     public void clearNew (Population p)
     {
-        clearNewQueue.add (p);
+        queueClearNew.add (p);
     }
 
     public class PartIterator implements Iterator<Part>
@@ -218,7 +223,7 @@ public class Simulator implements Iterable<Part>
 
         public PartIterator ()
         {
-            eventIterator = eventQueue.iterator ();
+            eventIterator = queueEvent.iterator ();
             nextEvent ();
         }
 

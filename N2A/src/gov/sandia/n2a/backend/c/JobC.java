@@ -10,6 +10,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.EquationSet.Conversion;
+import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.execenvs.ExecutionEnv;
@@ -529,12 +530,11 @@ public class JobC
 
         if (s.connectionBindings != null)
         {
-            for (Entry<String, EquationSet> n : s.connectionBindings.entrySet ())
+            for (ConnectionBinding c : s.connectionBindings)
             {
-                String alias = n.getKey ();
-                Variable       v = s.find (new Variable (alias + ".$max"));
-                if (v == null) v = s.find (new Variable (alias + ".$min"));
-                if (v != null) bed.accountableEndpoints.add (alias);
+                Variable       v = s.find (new Variable (c.alias + ".$max"));
+                if (v == null) v = s.find (new Variable (c.alias + ".$min"));
+                if (v != null) bed.accountableEndpoints.add (c.alias);
             }
         }
 
@@ -662,9 +662,9 @@ public class JobC
         {
             result.append ("  virtual Population * getTarget (int i);\n");
 
-            for (Entry<String, EquationSet> cb : s.connectionBindings.entrySet ())
+            for (ConnectionBinding c : s.connectionBindings)
             {
-                Variable v = s.find (new Variable (cb.getKey () + ".$k"));
+                Variable v = s.find (new Variable (c.alias + ".$k"));
                 EquationEntry e = null;
                 if (v != null) e = v.equations.first ();
                 if (e != null)
@@ -678,9 +678,9 @@ public class JobC
                 result.append ("  virtual int getK (int i);\n");
             }
 
-            for (Entry<String, EquationSet> cb : s.connectionBindings.entrySet ())
+            for (ConnectionBinding c : s.connectionBindings)
             {
-                Variable v = s.find (new Variable (cb.getKey () + ".$max"));
+                Variable v = s.find (new Variable (c.alias + ".$max"));
                 EquationEntry e = null;
                 if (v != null) e = v.equations.first ();
                 if (e != null)
@@ -694,9 +694,9 @@ public class JobC
                 result.append ("  virtual int getMax (int i);\n");
             }
 
-            for (Entry<String, EquationSet> cb : s.connectionBindings.entrySet ())
+            for (ConnectionBinding c : s.connectionBindings)
             {
-                Variable v = s.find (new Variable (cb.getKey () + ".$min"));
+                Variable v = s.find (new Variable (c.alias + ".$min"));
                 EquationEntry e = null;
                 if (v != null) e = v.equations.first ();
                 if (e != null)
@@ -710,9 +710,9 @@ public class JobC
                 result.append ("  virtual int getMin (int i);\n");
             }
 
-            for (Entry<String, EquationSet> cb : s.connectionBindings.entrySet ())
+            for (ConnectionBinding c : s.connectionBindings)
             {
-                Variable v = s.find (new Variable (cb.getKey () + ".$radius"));
+                Variable v = s.find (new Variable (c.alias + ".$radius"));
                 EquationEntry e = null;
                 if (v != null) e = v.equations.first ();
                 if (e != null)
@@ -794,10 +794,10 @@ public class JobC
         }
         if (s.connectionBindings != null)
         {
-            for (Entry<String, EquationSet> e : s.connectionBindings.entrySet ())
+            for (ConnectionBinding c : s.connectionBindings)
             {
                 // we should be able to assume that s.container is non-null; ie: a connection should always operate in some larger container
-                result.append ("  " + prefix (e.getValue ()) + " * " + mangle (e.getKey ()) + ";\n");
+                result.append ("  " + prefix (c.endpoint) + " * " + mangle (c.alias) + ";\n");
             }
         }
         if (s.accountableConnections != null)
@@ -912,10 +912,10 @@ public class JobC
                 result.append ("  virtual float getP (Simulator & simulator);\n");
             }
 
-            for (Entry<String, EquationSet> e : s.connectionBindings.entrySet ())
+            for (ConnectionBinding c : s.connectionBindings)
             {
-                if (s.find (new Variable (e.getKey () + ".$projectFrom")) != null) bed.hasProjectFrom = true;
-                if (s.find (new Variable (e.getKey () + ".$projectTo"  )) != null) bed.hasProjectTo   = true;
+                if (s.find (new Variable (c.alias + ".$projectFrom")) != null) bed.hasProjectFrom = true;
+                if (s.find (new Variable (c.alias + ".$projectTo"  )) != null) bed.hasProjectTo   = true;
                 // TODO: if only one of a pair of projections is present, create the other using point sampling
             }
             if (bed.hasProjectFrom  ||  bed.hasProjectTo)
@@ -1012,11 +1012,11 @@ public class JobC
             result.append ("  switch (i)\n");
             result.append ("  {\n");
             int i = 0;
-            for (Entry<String, EquationSet> e : s.connectionBindings.entrySet ())
+            for (ConnectionBinding c : s.connectionBindings)
             {
                 // TODO: Need a function to permute all descending paths to a class of populations.
                 // In the simplest form, it is a peer in our current container, so no iteration at all.
-                result.append ("    case " + i++ + ": return & container->" + mangle (e.getValue ().name) + ";\n");
+                result.append ("    case " + i++ + ": return & container->" + mangle (c.endpoint.name) + ";\n");
             }
             result.append ("    default: return 0;\n");
             result.append ("  }\n");
@@ -1326,19 +1326,17 @@ public class JobC
             result.append ("{\n");
             result.append ("  switch (i)\n");
             result.append ("  {\n");
-            int i = 0;
-            for (Entry<String, EquationSet> n : s.connectionBindings.entrySet ())
+            for (ConnectionBinding c : s.connectionBindings)
             {
-                Variable v = s.find (new Variable (n.getKey () + ".$k"));
+                Variable v = s.find (new Variable (c.alias + ".$k"));
                 EquationEntry e = null;
                 if (v != null) e = v.equations.first ();
                 if (e != null)
                 {
-                    result.append ("    case " + i + ": return ");
+                    result.append ("    case " + c.index + ": return ");
                     e.expression.render (context);
                     result.append (";\n");
                 }
-                i++;
             }
             result.append ("  }\n");
             result.append ("  return 0;\n");
@@ -1353,19 +1351,17 @@ public class JobC
             result.append ("{\n");
             result.append ("  switch (i)\n");
             result.append ("  {\n");
-            int i = 0;
-            for (Entry<String, EquationSet> n : s.connectionBindings.entrySet ())
+            for (ConnectionBinding c : s.connectionBindings)
             {
-                Variable v = s.find (new Variable (n.getKey () + ".$max"));
+                Variable v = s.find (new Variable (c.alias + ".$max"));
                 EquationEntry e = null;
                 if (v != null) e = v.equations.first ();
                 if (e != null)
                 {
-                    result.append ("    case " + i + ": return ");
+                    result.append ("    case " + c.index + ": return ");
                     e.expression.render (context);
                     result.append (";\n");
                 }
-                i++;
             }
             result.append ("  }\n");
             result.append ("  return 0;\n");
@@ -1380,19 +1376,17 @@ public class JobC
             result.append ("{\n");
             result.append ("  switch (i)\n");
             result.append ("  {\n");
-            int i = 0;
-            for (Entry<String, EquationSet> n : s.connectionBindings.entrySet ())
+            for (ConnectionBinding c : s.connectionBindings)
             {
-                Variable v = s.find (new Variable (n.getKey () + ".$min"));
+                Variable v = s.find (new Variable (c.alias + ".$min"));
                 EquationEntry e = null;
                 if (v != null) e = v.equations.first ();
                 if (e != null)
                 {
-                    result.append ("    case " + i + ": return ");
+                    result.append ("    case " + c.index + ": return ");
                     e.expression.render (context);
                     result.append (";\n");
                 }
-                i++;
             }
             result.append ("  }\n");
             result.append ("  return 0;\n");
@@ -1407,19 +1401,17 @@ public class JobC
             result.append ("{\n");
             result.append ("  switch (i)\n");
             result.append ("  {\n");
-            int i = 0;
-            for (Entry<String, EquationSet> n : s.connectionBindings.entrySet ())
+            for (ConnectionBinding c : s.connectionBindings)
             {
-                Variable v = s.find (new Variable (n.getKey () + ".$radius"));
+                Variable v = s.find (new Variable (c.alias + ".$radius"));
                 EquationEntry e = null;
                 if (v != null) e = v.equations.first ();
                 if (e != null)
                 {
-                    result.append ("    case " + i + ": return ");
+                    result.append ("    case " + c.index + ": return ");
                     e.expression.render (context);
                     result.append (";\n");
                 }
-                i++;
             }
             result.append ("  }\n");
             result.append ("  return 0;\n");
@@ -1840,9 +1832,9 @@ public class JobC
 
             if (s.lethalConnection)
             {
-                for (Entry<String, EquationSet> c : s.connectionBindings.entrySet ())
+                for (ConnectionBinding c : s.connectionBindings)
                 {
-                	VariableReference r = s.resolveReference (c.getKey () + ".$live");
+                	VariableReference r = s.resolveReference (c.alias + ".$live");
                 	if (! r.variable.hasAttribute ("constant"))
                 	{
                         result.append ("  if (" + resolve (r, context, false) + " == 0)\n");
@@ -2066,9 +2058,9 @@ public class JobC
                 }
                 if (s.lethalConnection)
                 {
-                    for (Entry<String, EquationSet> c : s.connectionBindings.entrySet ())
+                    for (ConnectionBinding c : s.connectionBindings)
                     {
-                        VariableReference r = s.resolveReference (c.getKey () + ".$live");
+                        VariableReference r = s.resolveReference (c.alias + ".$live");
                         if (! r.variable.hasAttribute ("constant"))
                         {
                             result.append ("  if (" + resolve (r, context, false) + " == 0) return 0;\n");
@@ -2192,25 +2184,24 @@ public class JobC
             result.append ("  switch (i)\n");
             result.append ("  {\n");
             boolean needDefault = false;
-            int i = 0;
-            for (Entry<String, EquationSet> e : s.connectionBindings.entrySet ())
+            for (ConnectionBinding c : s.connectionBindings)
             {
-                Variable projectFrom = s.find (new Variable (e.getKey () + ".$projectFrom"));
+                Variable projectFrom = s.find (new Variable (c.alias + ".$projectFrom"));
                 if (projectFrom == null)
                 {
-                    VariableReference fromXYZ = s.resolveReference (e.getKey () + ".$xyz");
+                    VariableReference fromXYZ = s.resolveReference (c.alias + ".$xyz");
                     if (fromXYZ.variable == null)
                     {
                         needDefault = true;
                     }
                     else
                     {
-                        result.append ("    case " + i + ": " + localXYZ + " = " + resolve (fromXYZ, context, false) + "; break;\n");
+                        result.append ("    case " + c.index + ": " + localXYZ + " = " + resolve (fromXYZ, context, false) + "; break;\n");
                     }
                 }
                 else
                 {
-                    result.append ("    case " + i + ":\n");
+                    result.append ("    case " + c.index + ":\n");
                     result.append ("    {\n");
                     if (projectFrom.hasAttribute ("temporary"))  // it could also be "constant", but no other type
                     {
@@ -2227,7 +2218,6 @@ public class JobC
                     result.append ("      break;\n");
                     result.append ("    }\n");
                 }
-                i++;
             }
             if (needDefault)
             {
@@ -2250,17 +2240,16 @@ public class JobC
                 result.append ("  switch (j)\n");
                 result.append ("  {\n");
                 needDefault = false;
-                int j = 0;
-                for (Entry<String, EquationSet> e : s.connectionBindings.entrySet ())
+                for (ConnectionBinding c : s.connectionBindings)
                 {
-                    Variable projectTo = s.find (new Variable (e.getKey () + ".$projectTo"));
+                    Variable projectTo = s.find (new Variable (c.alias + ".$projectTo"));
                     if (projectTo == null)
                     {
                         needDefault = true;
                     }
                     else
                     {
-                        result.append ("    case " + j + ":\n");
+                        result.append ("    case " + c.index + ":\n");
                         result.append ("    {\n");
                         if (projectTo.hasAttribute ("temporary"))
                         {
@@ -2277,7 +2266,6 @@ public class JobC
                         result.append ("      break;\n");
                         result.append ("    }\n");
                     }
-                    j++;
                 }
                 if (needDefault)
                 {
@@ -2299,15 +2287,12 @@ public class JobC
             result.append ("{\n");
             result.append ("  switch (i)\n");
             result.append ("  {\n");
-            int i = 0;
-            for (Entry<String, EquationSet> n : s.connectionBindings.entrySet ())
+            for (ConnectionBinding c : s.connectionBindings)
             {
-                String alias = n.getKey ();
-                if (bed.accountableEndpoints.contains (alias))
+                if (bed.accountableEndpoints.contains (c.alias))
                 {
-                    result.append ("    case " + i + ": return " + mangle (alias) + "->" + prefix (s) + "_" + mangle (alias) + "_count;\n");
+                    result.append ("    case " + c.index + ": return " + mangle (c.alias) + "->" + prefix (s) + "_" + mangle (c.alias) + "_count;\n");
                 }
-                i++;
             }
             result.append ("  }\n");
             result.append ("  return 0;\n");
@@ -2322,11 +2307,10 @@ public class JobC
             result.append ("{\n");
             result.append ("  switch (i)\n");
             result.append ("  {\n");
-            int i = 0;
-            for (Entry<String, EquationSet> e : s.connectionBindings.entrySet ())
+            for (ConnectionBinding c : s.connectionBindings)
             {
                 // TODO: This assumes that all the parts are children of the same container as the connection. Need to generalize so connections can cross branches of the containment hierarchy.
-                result.append ("    case " + i++ + ": " + mangle (e.getKey ()) + " = (" + prefix (e.getValue ()) + " *) part; return;\n");
+                result.append ("    case " + c.index + ": " + mangle (c.alias) + " = (" + prefix (c.endpoint) + " *) part; return;\n");
             }
             result.append ("  }\n");
             result.append ("}\n");
@@ -2340,10 +2324,9 @@ public class JobC
             result.append ("{\n");
             result.append ("  switch (i)\n");
             result.append ("  {\n");
-            int i = 0;
-            for (Entry<String, EquationSet> e : s.connectionBindings.entrySet ())
+            for (ConnectionBinding c : s.connectionBindings)
             {
-                result.append ("    case " + i++ + ": return " + mangle (e.getKey ()) + ";\n");
+                result.append ("    case " + c.index + ": return " + mangle (c.alias) + ";\n");
             }
             result.append ("  }\n");
             result.append ("  return 0;\n");
@@ -2377,17 +2360,17 @@ public class JobC
             else
             {
                 boolean first = true;
-                for (Entry<String,EquationSet> e : s.connectionBindings.entrySet ())
+                for (ConnectionBinding c : s.connectionBindings)
                 {
                     if (first)
                     {
-                        result.append ("  " + mangle (e.getKey ()) + ".path (result);\n");
+                        result.append ("  " + mangle (c.alias) + ".path (result);\n");
                         result.append ("  string temp;\n");
                         first = false;
                     }
                     else
                     {
-                        result.append ("  " + mangle (e.getKey ()) + ".path (temp);\n");
+                        result.append ("  " + mangle (c.alias) + ".path (temp);\n");
                         result.append ("  result += \"-\" + temp;\n");
                     }
                 }
@@ -2425,16 +2408,15 @@ public class JobC
             if (connectionDest)
             {
                 // Match connection bindings
-                for (Entry<String, EquationSet> c : dest.connectionBindings.entrySet ())
+                for (ConnectionBinding c : dest.connectionBindings)
                 {
-                    String name = c.getKey ();
-                    Entry<String, EquationSet> d = source.connectionBindings.floorEntry (name);
-                    if (d == null  ||  ! d.getKey ().equals (name))
+                    ConnectionBinding d = source.find (c.alias);
+                    if (d == null)
                     {
                         Backend.err.get ().println ("Unfulfilled connection binding during $type change.");
                         throw new Backend.AbortRun ();
                     }
-                    result.append ("  to->" + mangle (name) + " = from->" + mangle (name) + ";\n");
+                    result.append ("  to->" + mangle (c.alias) + " = from->" + mangle (c.alias) + ";\n");
                 }
             }
             result.append ("  simulator.enqueue (to);\n");
@@ -3017,12 +2999,12 @@ public class JobC
 
         if (s.connectionBindings != null  &&  s.lethalContainer)  // and therefore needs to check its container
         {
-            for (Entry<String, EquationSet> c : s.connectionBindings.entrySet ())
+            for (ConnectionBinding c : s.connectionBindings)
             {
-                if (c.getValue ().container == s.container)
+                if (c.endpoint.container == s.container)
                 {
                     if (! (s.backendData instanceof BackendData)) s.backendData = new BackendData ();
-                    ((BackendData) s.backendData).pathToContainer = c.getKey ();
+                    ((BackendData) s.backendData).pathToContainer = c.alias;
                     break;
                 }
             }
@@ -3078,10 +3060,10 @@ public class JobC
         // Recurse into connections
         if (s.lethalConnection)
         {
-            for (Entry<String, EquationSet> e : s.connectionBindings.entrySet ())
+            for (ConnectionBinding c : s.connectionBindings)
             {
-                resolution.add (e);
-                findLiveReferences (e.getValue (), resolution, touched, localReference, true);
+                resolution.add (c);
+                findLiveReferences (c.endpoint, resolution, touched, localReference, true);
                 resolution.removeLast ();
             }
         }
@@ -3167,7 +3149,7 @@ public class JobC
             }
             else
             {
-                for (EquationSet p : s.connectionBindings.values ()) ((BackendData) p.backendData).setLocalNeedPath (p);
+                for (ConnectionBinding c : s.connectionBindings) ((BackendData) c.endpoint.backendData).setLocalNeedPath (c.endpoint);
             }
         }
     }

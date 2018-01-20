@@ -1,5 +1,5 @@
 /*
-Copyright 2015-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2015-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -8,6 +8,7 @@ package gov.sandia.n2a.backend.internal;
 
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.EquationSet.AccountableConnection;
+import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.AccessVariable;
@@ -65,7 +66,6 @@ public class InternalBackendData
 
     // The following arrays have exactly the same order as EquationSet.connectionBindings
     public int      endpoints;           // Position in valuesObject of first reference to a connected instance. References are allocated as a contiguous block.
-    public int[]    connectionTargets;   // Position in container.populations of each target
     public int[]    count;               // Position in endpoint.valuesFloat of count value for this connection
     public Object[] projectDependencies; // References used within a $project expression
     public Object[] projectReferences;   // References used within a $project expression
@@ -329,13 +329,13 @@ public class InternalBackendData
                     result = ((EquationSet) o0).compareTo ((EquationSet) o1);
                     if (result != 0) return result;
                 }
-                else if (o0 instanceof Entry<?,?>)
+                else if (o0 instanceof ConnectionBinding)
                 {
-                    Entry<?,?> e0 = (Entry<?,?>) o0;
-                    Entry<?,?> e1 = (Entry<?,?>) o1;
-                    result = ((String     ) e0.getKey   ()).compareTo ((String     ) e1.getKey   ());
+                    ConnectionBinding c0 = (ConnectionBinding) o0;
+                    ConnectionBinding c1 = (ConnectionBinding) o1;
+                    result = c0.alias.compareTo (c1.alias);
                     if (result != 0) return result;
-                    result = ((EquationSet) e0.getValue ()).compareTo ((EquationSet) e1.getValue ());
+                    result = c0.endpoint.compareTo (c1.endpoint);
                     if (result != 0) return result;
                 }
             }
@@ -630,9 +630,48 @@ public class InternalBackendData
         }
     }
 
+    public void addReferenceGlobal (VariableReference r, EquationSet s)
+    {
+        if (globalReference.add (r))
+        {
+            r.index = countGlobalObject++;
+            namesGlobalObject.add ("reference to " + r.variable.container.name);
+        }
+        else
+        {
+            r.index = globalReference.floor (r).index;
+        }
+    }
+
+    public void addReferenceLocal (VariableReference r, EquationSet s)
+    {
+        // Avoid redundancy between references and connections, since many references simply target connection endpoints.
+        Object o = r.resolution.getLast ();  // There should always be at least one entry. This is enforced by the caller.
+        if (o instanceof ConnectionBinding  &&  s.connectionBindings.contains (o))
+        {
+            r.index = endpoints + ((ConnectionBinding) o).index;
+            return;
+        }
+
+        if (localReference.add (r))
+        {
+            r.index = countLocalObject++;
+            namesLocalObject.add ("reference to " + r.variable.container.name);
+        }
+        else
+        {
+            r.index = localReference.floor (r).index;
+        }
+    }
+
     public void analyze (EquationSet s)
     {
         System.out.println (s.name);
+        if (s.connectionBindings != null)
+        {
+            endpoints = countLocalObject;  // Note that populations have already been allocated in the constructor.
+            countLocalObject += s.connectionBindings.size ();
+        }
         for (Variable v : s.ordered)  // we want the sub-lists to be ordered correctly
         {
             String className = "null";
@@ -662,18 +701,7 @@ public class InternalBackendData
                         if (op instanceof AccessVariable)
                         {
                             AccessVariable av = (AccessVariable) op;
-                            if (av.reference.resolution.size () > 0)
-                            {
-                                if (globalReference.add (av.reference))
-                                {
-                                    av.reference.index = countGlobalObject++;
-                                    namesGlobalObject.add ("reference to " + av.reference.variable.container.name);
-                                }
-                                else
-                                {
-                                    av.reference.index = globalReference.floor (av.reference).index;
-                                }
-                            }
+                            if (av.reference.resolution.size () > 0) addReferenceGlobal (av.reference, s);
                             return false;
                         }
                         if (op instanceof Output)
@@ -696,15 +724,7 @@ public class InternalBackendData
                     if (updates) globalUpdate.add (v);
                     if (v.hasAttribute ("reference"))
                     {
-                        if (globalReference.add (v.reference))
-                        {
-                            v.reference.index = countGlobalObject++;
-                            namesGlobalObject.add ("reference to " + v.reference.variable.container.name);
-                        }
-                        else
-                        {
-                            v.reference.index = globalReference.floor (v.reference).index;
-                        }
+                        addReferenceGlobal (v.reference, s);
                     }
                     else
                     {
@@ -747,18 +767,7 @@ public class InternalBackendData
                         if (op instanceof AccessVariable)
                         {
                             AccessVariable av = (AccessVariable) op;
-                            if (av.reference.resolution.size () > 0)
-                            {
-                                if (localReference.add (av.reference))
-                                {
-                                    av.reference.index = countLocalObject++;
-                                    namesLocalObject.add ("reference to " + av.reference.variable.container.name);
-                                }
-                                else
-                                {
-                                    av.reference.index = localReference.floor (av.reference).index;
-                                }
-                            }
+                            if (av.reference.resolution.size () > 0) addReferenceLocal (av.reference, s);
                             return false;
                         }
                         if (op instanceof Output)
@@ -781,15 +790,7 @@ public class InternalBackendData
                     if (updates) localUpdate.add (v);
                     if (v.hasAttribute ("reference"))
                     {
-                        if (localReference.add (v.reference))
-                        {
-                            v.reference.index = countLocalObject++;
-                            namesLocalObject.add ("reference to " + v.reference.variable.container.name);
-                        }
-                        else
-                        {
-                            v.reference.index = localReference.floor (v.reference).index;
-                        }
+                        addReferenceLocal (v.reference, s);
                     }
                     else
                     {
@@ -910,10 +911,7 @@ public class InternalBackendData
         if (s.connectionBindings != null)  // connection-specific stuff
         {
             int size = s.connectionBindings.size ();
-
-            endpoints = countLocalObject;
-            countLocalObject += size;
-            connectionTargets   = new int   [size];
+            // endpoints is allocated at the top of this function, because it is needed for reference handling in the variable analysis loop
             projectDependencies = new Object[size];
             projectReferences   = new Object[size];
 
@@ -924,26 +922,24 @@ public class InternalBackendData
             project = new Variable[size];
             radius  = new Variable[size];
 
-            int i = 0;
-            for (Entry<String, EquationSet> c : s.connectionBindings.entrySet ())
+            for (int i = 0; i < s.connectionBindings.size (); i++)
             {
-                String alias = c.getKey ();
+                ConnectionBinding c = s.connectionBindings.get (i);
                 count  [i] = -1;
-                k      [i] = s.find (new Variable (alias + ".$k"      ));
-                max    [i] = s.find (new Variable (alias + ".$max"    ));
-                min    [i] = s.find (new Variable (alias + ".$min"    ));
-                project[i] = s.find (new Variable (alias + ".$project"));
-                radius [i] = s.find (new Variable (alias + ".$radius" ));
+                k      [i] = s.find (new Variable (c.alias + ".$k"      ));
+                max    [i] = s.find (new Variable (c.alias + ".$max"    ));
+                min    [i] = s.find (new Variable (c.alias + ".$min"    ));
+                project[i] = s.find (new Variable (c.alias + ".$project"));
+                radius [i] = s.find (new Variable (c.alias + ".$radius" ));
 
-                EquationSet endpoint = c.getValue ();
-                if (endpoint.accountableConnections != null)
+                if (c.endpoint.accountableConnections != null)
                 {
-                    AccountableConnection query = new AccountableConnection (s, alias);
-                    AccountableConnection ac = endpoint.accountableConnections.floor (query);
+                    AccountableConnection query = new AccountableConnection (s, c.alias);
+                    AccountableConnection ac = c.endpoint.accountableConnections.floor (query);
                     if (ac.equals (query))  // Only true if this endpoint is accountable.
                     {
                         // Allocate space for counter in target part
-                        InternalBackendData endpointBed = (InternalBackendData) endpoint.backendData;
+                        InternalBackendData endpointBed = (InternalBackendData) c.endpoint.backendData;
                         count[i] = endpointBed.countLocalFloat++;
                         endpointBed.namesLocalFloat.add (s.prefix () + ".$count");
                         if (ac.count != null)  // $count is referenced explicitly, so need to finish setting it up
@@ -953,7 +949,7 @@ public class InternalBackendData
                     }
                 }
 
-                namesLocalObject.add (alias);  // Note that countLocalObject has already been incremented above
+                namesLocalObject.add (c.alias);  // Note that countLocalObject has already been incremented above
 
                 if (project[i] != null)
                 {
@@ -987,18 +983,7 @@ public class InternalBackendData
                     if (references.size () > 0) projectReferences[i] = references;
                 }
 
-                int j = 0;
-                for (EquationSet peer : s.container.parts)  // TODO: this assumes that all connections are to peer populations under the same container; need a more flexible way of locating target populations
-                {
-                    if (peer == c.getValue ())
-                    {
-                        connectionTargets[i] = j;
-                        break;
-                    }
-                    j++;
-                }
-
-                i++;
+                c.resolution = translateResolution (c.resolution, s);
             }
         }
 
@@ -1129,8 +1114,8 @@ public class InternalBackendData
         else if (live.hasAttribute ("accessor")) liveStorage = LIVE_ACCESSOR;
         else                                     liveStorage = LIVE_STORED;  // $live is "initOnly"
 
-        translateReferences (s, localReference);
-        translateReferences (s, globalReference);
+        for (VariableReference r : localReference ) r.resolution = translateResolution (r.resolution, s);
+        for (VariableReference r : globalReference) r.resolution = translateResolution (r.resolution, s);
 
         // Type conversions
         String [] forbiddenAttributes = new String [] {"global", "constant", "accessor", "reference", "temporary", "dummy", "preexistent"};
@@ -1166,14 +1151,13 @@ public class InternalBackendData
             {
                 conversion.bindings = new int[s.connectionBindings.size ()];
                 int i = 0;
-                for (Entry<String, EquationSet> c : s.connectionBindings.entrySet ())
+                for (ConnectionBinding c : s.connectionBindings)
                 {
-                    String name = c.getKey ();
                     conversion.bindings[i] = -1;
                     int j = 0;
-                    for (Entry<String, EquationSet> d : target.connectionBindings.entrySet ())
+                    for (ConnectionBinding d : target.connectionBindings)
                     {
-                        if (name.equals (d.getKey ()))
+                        if (c.alias.equals (d.alias))
                         {
                             conversion.bindings[i] = j;
                             break;
@@ -1226,98 +1210,68 @@ public class InternalBackendData
         }
     }
 
-    public class ResolveConnection implements Instance.Resolver
+    public static class ResolvePart implements Instance.Resolver
     {
         public int i;
 
-        public ResolveConnection (int i)
+        public ResolvePart (int i)
         {
             this.i = i;
         }
 
         public Instance resolve (Instance from)
         {
-            // Notice that this inner class is not static, so we have access to the value of endpoints.
-            return (Instance) from.valuesObject[endpoints+i];
-        }
-    }
-
-    public static class ResolvePopulation implements Instance.Resolver
-    {
-        public int i;
-
-        public ResolvePopulation (int i)
-        {
-            this.i = i;
-        }
-
-        public Instance resolve (Instance from)
-        {
-            return (Instance) ((Part) from).valuesObject[i];
+            if (from instanceof Population)
+            {
+                Backend.err.get ().println ("ERROR: Attempt to resolve a population within another population with iterating over instances. Instead, create a nested connection.");
+                throw new Backend.AbortRun ();
+            }
+            return (Instance) from.valuesObject[i];
         }
     }
 
     /**
-         Convert resolutions to a form that can be processed quickly at runtime.
+         Convert resolution to a form that can be processed quickly at runtime.
     **/
-    public void translateReferences (EquationSet s, TreeSet<VariableReference> references)
+    public LinkedList<Object> translateResolution (LinkedList<Object> resolution, EquationSet current)
     {
-        for (VariableReference r : references)
+        LinkedList<Object> newResolution = new LinkedList<Object> ();
+        Iterator<Object> it = resolution.iterator ();
+        while (it.hasNext ())
         {
-            LinkedList<Object> newResolution = new LinkedList<Object> ();
-            EquationSet current = s;
-            Iterator<Object> it = r.resolution.iterator ();
-            while (it.hasNext ())
+            Object o = it.next ();
+            if (o instanceof EquationSet)  // We are following the containment hierarchy.
             {
-                Object o = it.next ();
-                if (o instanceof EquationSet)  // We are following the containment hierarchy.
+                EquationSet next = (EquationSet) o;
+                if (next == current.container)  // ascend to our container
                 {
-                    EquationSet next = (EquationSet) o;
-                    if (next == current.container)  // ascend to our container
-                    {
-                        newResolution.add (new ResolveContainer ());
-                    }
-                    else  // descend into one of our contained populations
-                    {
-                        if (! it.hasNext ()  &&  r.variable.hasAttribute ("global"))  // descend to the population object itself
-                        {
-                            int i = 0;
-                            for (EquationSet p : current.parts)
-                            {
-                                if (p == next)
-                                {
-                                    newResolution.add (new ResolvePopulation (i));
-                                    break;
-                                }
-                                i++;
-                            }
-                            if (i > current.parts.size ()) throw new EvaluationException ("Could not find population.");
-                        }
-                        else  // descend to an instance of the population.
-                        {
-                            throw new EvaluationException ("Can't reference specific instance of a contained population.");
-                        }
-                    }
-                    current = next;
+                    newResolution.add (new ResolveContainer ());
                 }
-                else if (o instanceof Entry<?,?>)  // We are following a part reference (which means we are a connection)
+                else  // descend to one of our contained populations
                 {
                     int i = 0;
-                    for (Entry<String,EquationSet> c : current.connectionBindings.entrySet ())
+                    for (EquationSet p : current.parts)
                     {
-                        if (c.equals (o))
+                        if (p == next)
                         {
-                            newResolution.add (new ResolveConnection (i));
+                            newResolution.add (new ResolvePart (i));
                             break;
                         }
                         i++;
                     }
-                    if (i > current.connectionBindings.size ()) throw new EvaluationException ("Could not find connection.");
-                    current = (EquationSet) ((Entry<?,?>) o).getValue ();
+                    if (i > current.parts.size ()) throw new EvaluationException ("Could not find connection target.");
                 }
+                current = next;
             }
-            r.resolution = newResolution;
+            else if (o instanceof ConnectionBinding)  // We are following a part reference, which means "current" is a connection.
+            {
+                ConnectionBinding c = (ConnectionBinding) o;
+                InternalBackendData bed = (InternalBackendData) current.backendData;
+                newResolution.add (new ResolvePart (bed.endpoints + c.index));
+                current = c.endpoint;
+            }
         }
+        return newResolution;
     }
 
     public void dump ()

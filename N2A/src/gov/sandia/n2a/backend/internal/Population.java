@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.backend.internal;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.TreeSet;
 
@@ -38,8 +39,10 @@ public class Population extends Instance
     /// @return The Population associated with the given position in EquationSet.connectionBindings collection
     public Population getTarget (int i)
     {
-        InternalBackendData bed = (InternalBackendData) equations.backendData;
-        return (Population) ((Part) container).valuesObject[bed.connectionTargets[i]];
+        Instance result = this;
+        Iterator<Object> it = equations.connectionBindings.get (i).resolution.iterator ();
+        while (it.hasNext ()) result = ((Resolver) it.next ()).resolve (result);
+        return (Population) result;  // This cast could fail if the resolution is ill-constructed.
     }
 
     public void init (Simulator simulator)
@@ -64,8 +67,9 @@ public class Population extends Instance
             // indexAvailable is initially null
         }
 
-        // TODO: A self-connection will have to do both resize() and connect().
-        // It's just coincidental that these are mutually exclusive in the current code.
+        // Note: A connection is forbidden from setting its own population size.
+        // Even if a connection is the target of another connection, and thus functions as a compartment,
+        // it still cannot set its own population size.
         if (equations.connectionBindings == null)
         {
             InternalBackendData bed = (InternalBackendData) equations.backendData;

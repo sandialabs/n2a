@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -42,7 +42,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.NavigableMap;
 import java.util.NavigableSet;
 import java.util.PriorityQueue;
 import java.util.Set;
@@ -57,7 +56,7 @@ public class EquationSet implements Comparable<EquationSet>
     public EquationSet                         container;
     public NavigableSet<Variable>              variables;
     public NavigableSet<EquationSet>           parts;
-    public NavigableMap<String,EquationSet>    connectionBindings;     // non-null iff this is a connection
+    public List<ConnectionBinding>             connectionBindings;     // non-null iff this is a connection
     public boolean                             connected;
     public NavigableSet<AccountableConnection> accountableConnections; // Connections which declare a $min or $max w.r.t. this part. Note: connected can be true even if accountableConnections is null.
     public Map<String, String>                 metadata;
@@ -92,6 +91,20 @@ public class EquationSet implements Comparable<EquationSet>
             if (that instanceof AccountableConnection) return compareTo ((AccountableConnection) that) == 0;
             return false;
         }
+    }
+
+    public static class ConnectionBinding
+    {
+        public int         index;  // position in connectionBindings array
+        public String      alias;
+        public EquationSet endpoint;
+        /**
+            Trail of objects followed to resolve the connection.
+            Assumes that we start within the current instance, so the first entry will almost
+            always be a step up to our container.
+            See VariableReference.resolution for a closely related structure.
+        **/
+        public LinkedList<Object> resolution = new LinkedList<Object> ();
     }
 
     public EquationSet (String name)
@@ -159,6 +172,16 @@ public class EquationSet implements Comparable<EquationSet>
             }
         }
         if (exception) throw new Backend.AbortRun ();
+    }
+
+    public ConnectionBinding find (String alias)
+    {
+        if (connectionBindings == null) return null;
+        for (ConnectionBinding c : connectionBindings)
+        {
+            if (c.alias.equals (alias)) return c;
+        }
+        return null;
     }
 
     /**
@@ -233,11 +256,6 @@ public class EquationSet implements Comparable<EquationSet>
 
     public void resolveConnectionBindings (LinkedList<String> unresolved) throws Exception
     {
-        for (EquationSet s : parts)
-        {
-            s.resolveConnectionBindings (unresolved);
-        }
-
         // Scan for equations that look and smell like connection bindings.
         // A binding equation has these characteristics:
         // * Only one equation on the variable.
@@ -264,62 +282,87 @@ public class EquationSet implements Comparable<EquationSet>
             if (find (new Variable (av.getName ())) != null) continue;
 
             // Resolve connection endpoint to a specific equation set
-            Object o = resolveConnectionBinding (av.name);
-            if (o == null)
+            ConnectionBinding result = new ConnectionBinding ();
+            if (! resolveConnectionBinding (av.name, result))
             {
-                unresolved.add (prefix () + "." + v.nameString () + " --> " + av.name);
+                // If the target name contains a ".", then it is more likely to be a variable reference.
+                // That reference may or may not be resolved later (for example, if it is a $variable that hasn't been added yet).
+                // Only report simple names here, to minimize confusion.
+                if (! av.name.contains (".")) unresolved.add (prefix () + "." + v.nameString () + " --> " + av.name);
                 continue;
             }
-            if (! (o instanceof EquationSet)) continue;  // Could be a variable or prefix referring to an already-found connection.
+            if (result.endpoint == null) continue;  // Could be a variable or prefix referring to an already-found connection.
 
             // Store connection binding
-            if (connectionBindings == null) connectionBindings = new TreeMap<String, EquationSet> ();
-            EquationSet s = (EquationSet) o;
-            connectionBindings.put (v.name, s);
-            s.connected = true;
+            if (connectionBindings == null) connectionBindings = new ArrayList<ConnectionBinding> ();
+            result.alias = v.name;
+            result.index = connectionBindings.size ();
+            connectionBindings.add (result);
+            result.endpoint.connected = true;
             i.remove ();  // Should no longer be in the equation list, as there is nothing further to compute.
+        }
+
+        // Descend to child parts after resolving parent. This order is necessary to support nested connections.
+        for (EquationSet s : parts)
+        {
+            s.resolveConnectionBindings (unresolved);
         }
     }
 
     /**
         Returns reference to the named equation set, based on a search starting in the
         current equation set and applying all the N2A name-resolution rules.
-        This is a simplified form of resolveEquationSet() customized for connection names.
+        This is similar to resolveEquationSet(), but customized for connections rather than variables.
         @return null if the search fails. EquationSet if the connection target is found.
         String if a prefix of the query matches an already-known connection.
     **/
-    public Object resolveConnectionBinding (String query)
+    public boolean resolveConnectionBinding (String query, ConnectionBinding result)
     {
-        if (query.isEmpty ()) return this;
+        if (query.isEmpty ())
+        {
+            result.endpoint = this;
+            return true;
+        }
         String[] pieces = query.split ("\\.", 2);
         String ns = pieces[0];
 
         if (ns.equals ("$up"))  // Don't bother with local checks if we know we are going up
         {
-            if (container == null) return null;
-            if (pieces.length > 1) container.resolveConnectionBinding (pieces[1]);
-            return container;
+            if (container == null) return false;
+            result.resolution.add (container);
+            if (pieces.length > 1) return container.resolveConnectionBinding (pieces[1], result);
+            result.endpoint = container;
+            return true;
         }
 
         EquationSet p = findPart (query);
         if (p != null)
         {
+            result.resolution.add (p);
             int length = p.name.length ();
-            if (length == query.length ()) return p;
-            return p.resolveConnectionBinding (query.substring (length + 1));
+            if (length == query.length ())
+            {
+                result.endpoint = p;
+                return true;
+            }
+            return p.resolveConnectionBinding (query.substring (length + 1), result);
         }
 
-        if (connectionBindings != null)
+        ConnectionBinding c = find (ns);
+        if (c != null)  // ns names an existing (already found) connection binding.
         {
-            p = connectionBindings.get (ns);  // ns may name an existing (already found) connection binding. In this case, it is probably a prefix for a variable in the target equation set.
-            if (p != null) return ns;  // Just something besides null or EquationSet
+            result.resolution.add (c);
+            if (pieces.length > 1) return c.endpoint.resolveConnectionBinding (pieces[1], result);
+            result.endpoint = c.endpoint;  // The query is an alias for the connection.
+            return true;
         }
 
         Variable v = find (new Variable (ns));
-        if (v != null) return v;  // Matching a variable means this is not a reference to an equation set. This is not an error if nextName is empty.
+        if (v != null) return true;  // The match was found, but it turns out to be a variable, not an equation set. result.endpoint should still be null.
 
-        if (container == null) return null;
-        return container.resolveConnectionBinding (query);
+        if (container == null) return false;
+        result.resolution.add (container);
+        return container.resolveConnectionBinding (query, result);
     }
 
     /**
@@ -362,15 +405,12 @@ public class EquationSet implements Comparable<EquationSet>
         String[] ns = v.name.split ("\\.", 2);
         if (ns.length > 1)
         {
-            if (connectionBindings != null)
+            ConnectionBinding c = find (ns[0]);
+            if (c != null)
             {
-                EquationSet alias = connectionBindings.get (ns[0]);
-                if (alias != null)
-                {
-                    v.name = ns[1];
-                    v.reference.resolution.add (connectionBindings.floorEntry (ns[0]));  // We need to add an Entry<> rather than simply the EquationSet in "alias".
-                    return alias.resolveEquationSet (v, create);
-                }
+                v.name = ns[1];
+                v.reference.resolution.add (c);
+                return c.endpoint.resolveEquationSet (v, create);
             }
 
             EquationSet down = findPart (v.name);
@@ -386,15 +426,12 @@ public class EquationSet implements Comparable<EquationSet>
         }
 
         // Check connections
-        if (connectionBindings != null)
+        ConnectionBinding c = find (v.name);
+        if (c != null)
         {
-            EquationSet alias = connectionBindings.get (v.name);
-            if (alias != null)
-            {
-                v.reference.resolution.add (connectionBindings.floorEntry (v.name));  // same kind of resolution path as if we went into connected part, but ...
-                v.name = "(connection)";                                              // don't match any variables within the connected part
-                return alias;                                                         // and terminate as if we found a variable there
-            }
+            v.reference.resolution.add (c);  // same kind of resolution path as if we went into connected part, but ...
+            v.name = "(connection)";             // don't match any variables within the connected part
+            return c.endpoint;               // and terminate as if we found a variable there
         }
 
         // Check variable names
@@ -413,11 +450,11 @@ public class EquationSet implements Comparable<EquationSet>
             // Create a self-referencing variable with no equations
             // TODO: make sure we can handle an empty set of equations in C Backend
             // TODO: what attributes or equations should this have?
-            Variable c = new Variable (v.name, v.order);
-            add (c);
-            c.reference = new VariableReference ();
-            c.reference.variable = c;
-            c.equations = new TreeSet<EquationEntry> ();
+            Variable cv = new Variable (v.name, v.order);
+            add (cv);
+            cv.reference = new VariableReference ();
+            cv.reference.variable = cv;
+            cv.equations = new TreeSet<EquationEntry> ();
             return this;
         }
 
@@ -675,10 +712,10 @@ public class EquationSet implements Comparable<EquationSet>
         prefix = prefix + " ";
         if (connectionBindings != null)
         {
-            for (Entry<String, EquationSet> e : connectionBindings.entrySet ())
+            for (ConnectionBinding c : connectionBindings)
             {
-                renderer.result.append (prefix + e.getKey () + " = ");
-                EquationSet s = e.getValue ();
+                renderer.result.append (prefix + c.alias + " = ");
+                EquationSet s = c.endpoint;
                 if (showNamespace)
                 {
                     renderer.result.append ("<");
@@ -1113,7 +1150,7 @@ public class EquationSet implements Comparable<EquationSet>
             if (connectionBindings != null)
             {
                 String[] ns = v.name.split ("\\.", 2);
-                if (ns.length > 1  &&  connectionBindings.get (ns[0]) != null) continue;
+                if (ns.length > 1  &&  find (ns[0]) != null) continue;
             }
 
             // This may seem inefficient, but in general there will only be one order to process.
@@ -1375,9 +1412,9 @@ public class EquationSet implements Comparable<EquationSet>
 
         if (connectionBindings != null)
         {
-            for (Entry<String,EquationSet> e : connectionBindings.entrySet ())
+            for (ConnectionBinding c : connectionBindings)
             {
-                EquationSet s = e.getValue ();
+                EquationSet s = c.endpoint;
                 if (s.canDie ())
                 {
                     Variable live = s.find (new Variable ("$live"));
@@ -2121,15 +2158,13 @@ public class EquationSet implements Comparable<EquationSet>
         }
 
         if (connectionBindings == null) return;
-        for (Entry<String, EquationSet> c : connectionBindings.entrySet ())
+        for (ConnectionBinding c : connectionBindings)
         {
-            String alias = c.getKey ();
-            Variable max = find (new Variable (alias + ".$max"));
-            Variable min = find (new Variable (alias + ".$min"));
+            Variable max = find (new Variable (c.alias + ".$max"));
+            Variable min = find (new Variable (c.alias + ".$min"));
             if (max == null  &&  min == null) continue;
-            EquationSet endpoint = c.getValue ();
-            if (endpoint.accountableConnections == null) endpoint.accountableConnections = new TreeSet<AccountableConnection> ();
-            endpoint.accountableConnections.add (new AccountableConnection (this, alias));  // Only adds if it is not already there.
+            if (c.endpoint.accountableConnections == null) c.endpoint.accountableConnections = new TreeSet<AccountableConnection> ();
+            c.endpoint.accountableConnections.add (new AccountableConnection (this, c.alias));  // Only adds if it is not already there.
         }
     }
 

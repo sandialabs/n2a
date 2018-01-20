@@ -307,7 +307,7 @@ public class Part extends Instance
                     }
                     spike.eventType = eventType;
                     spike.target    = i;
-                    simulator.eventQueue.add (spike);
+                    simulator.queueEvent.add (spike);
                 }
             }
             else  // All monitors share same condition, so only test one.
@@ -351,7 +351,7 @@ public class Part extends Instance
                         }
                         spike.eventType = eventType;
                         spike.target    = i;
-                        simulator.eventQueue.add (spike);
+                        simulator.queueEvent.add (spike);
                     }
                 }
                 else  // All delays are the same.
@@ -393,7 +393,7 @@ public class Part extends Instance
                     // and synapse creation) occur at vastly different timescales. Wouldn't a nascent synapse
                     // receive spikes even as it is forming?
                     spike.targets = monitors;
-                    simulator.eventQueue.add (spike);
+                    simulator.queueEvent.add (spike);
                 }
             }
         }

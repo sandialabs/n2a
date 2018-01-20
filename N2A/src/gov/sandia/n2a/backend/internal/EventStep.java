@@ -46,7 +46,7 @@ public class EventStep extends Event
         else  // still have instances, so re-queue event
         {
             t += dt;
-            simulator.eventQueue.add (this);
+            simulator.queueEvent.add (this);
         }
     }
 

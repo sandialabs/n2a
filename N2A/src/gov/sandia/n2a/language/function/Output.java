@@ -18,6 +18,7 @@ import java.util.Map.Entry;
 import gov.sandia.n2a.backend.internal.InstanceTemporaries;
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.eqset.EquationSet;
+import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
@@ -271,9 +272,9 @@ public class Output extends Function
             else  // connection
             {
                 // depend on all endpoints
-                for (Entry<String,EquationSet> e : container.connectionBindings.entrySet ())
+                for (ConnectionBinding c : container.connectionBindings)
                 {
-                    dependOnIndex (v, e.getValue ());
+                    dependOnIndex (v, c.endpoint);
                 }
             }
         }
