@@ -38,7 +38,7 @@ public class Part extends Instance
     {
     }
 
-    public Part (EquationSet equations, Population container)
+    public Part (EquationSet equations, Part container)
     {
         this.equations = equations;
         this.container = container;
@@ -61,7 +61,11 @@ public class Part extends Instance
 
     public Type get (Variable v)
     {
-        if (v.global) return container.get (v);  // forward global variables to our population object
+        if (v.global)  // forward global variables to our population object
+        {
+            InternalBackendData bed = (InternalBackendData) equations.backendData;
+            return ((Population) container.valuesObject[bed.populationIndex]).get (v);
+        }
         return super.get (v);
     }
 
@@ -88,7 +92,7 @@ public class Part extends Instance
             }
         }
 
-        ((Population) container).remove (this);
+        ((Population) container.valuesObject[bed.populationIndex]).remove (this);
     }
 
     public void resolve ()
@@ -108,8 +112,8 @@ public class Part extends Instance
     **/
     public void init (Simulator simulator)
     {
-        ((Population) container).insert (this);  // update $n and assign $index
         InstanceTemporaries temp = new InstanceTemporaries (this, simulator, true);
+        ((Population) container.valuesObject[temp.bed.populationIndex]).insert (this);  // update $n and assign $index
 
         // update accountable endpoints
         // Note: these do not require resolve(). Instead, they access their target directly through the endpoints array.
@@ -449,8 +453,7 @@ public class Part extends Instance
                         else
                         {
                             InternalBackendData otherBed = (InternalBackendData) other.backendData;
-                            Population otherPopulation = (Population) ((Part) container.container).valuesObject[otherBed.populationIndex];
-                            Part p = new Part (other, otherPopulation);
+                            Part p = new Part (other, (Part) container);
 
                             // If this is a connection, keep the same bindings
                             Conversion conversion = bed.conversions.get (other);
@@ -529,7 +532,7 @@ public class Part extends Instance
 
         if (equations.lethalContainer)
         {
-            if (! ((Part) container.container).getLive ())
+            if (! ((Part) container).getLive ())
             {
                 die ();
                 return false;
@@ -568,7 +571,7 @@ public class Part extends Instance
 
         if (equations.lethalContainer)
         {
-            if (! ((Part) container.container).getLive ()) return false;
+            if (! ((Part) container).getLive ()) return false;
         }
 
         return true;

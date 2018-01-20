@@ -257,7 +257,7 @@ public class Population extends Instance
             NN.radius = radius > 0 ? radius : Double.POSITIVE_INFINITY;
 
             entries = new ArrayList<KDTree.Entry> (size);
-            c = new Part (equations, Population.this);  // Necessary to use c for getProject(). However, this function should be called before first call to setProbe(), so should produce no side-effects.
+            c = new Part (equations, (Part) container);  // Necessary to use c for getProject(). However, this function should be called before first call to setProbe(), so should produce no side-effects.
             for (int i = 0; i < size; i++)
             {
                 p = instances.get (i);
@@ -532,7 +532,7 @@ public class Population extends Instance
         // outer loop for each of the other populations, just for fulfilling $min.
 
         ConnectIterator outer = iterators.get (0);
-        Part c = new Part (equations, this);
+        Part c = new Part (equations, (Part) container);
         outer.setProbe (c);
         while (outer.next ())
         {
@@ -541,7 +541,7 @@ public class Population extends Instance
             if (create <= 0  ||  create < 1  &&  create < simulator.random.nextDouble ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
             ((Part) container).event.enqueue (c);
             c.init (simulator);
-            c = new Part (equations, this);
+            c = new Part (equations, (Part) container);
             outer.setProbe (c);
         }
     }
@@ -645,7 +645,7 @@ public class Population extends Instance
 
         while (n < requestedN)
         {
-            Part p = new Part (equations, this);
+            Part p = new Part (equations, (Part) container);
             ((Part) container).event.enqueue (p);
             p.resolve ();
             p.init (simulator);

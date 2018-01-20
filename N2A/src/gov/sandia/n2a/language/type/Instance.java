@@ -315,8 +315,7 @@ public class Instance extends Type
     **/
     public String path ()
     {
-        Instance nextLevel = container.container;
-        boolean top = nextLevel instanceof Wrapper  ||  nextLevel == null;  // In general, nextLevel is never null, as that would only happen if this is an instance of Wrapper.
+        boolean top = container instanceof Wrapper  ||  container == null;  // In general, container is never null, as that would only happen if this is the instance of Wrapper.
 
         String result;
         if (top) result = "";
@@ -326,7 +325,7 @@ public class Instance extends Type
         if (bed.index != null  &&  ! (this instanceof Population)) result += get (bed.index);
 
         if (top) return result;
-        String prefix = nextLevel.path ();
+        String prefix = container.path ();
         if (prefix.isEmpty ()) return result;
         return prefix + "." + result;
     }

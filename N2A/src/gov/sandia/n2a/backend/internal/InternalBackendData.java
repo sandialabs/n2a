@@ -1205,8 +1205,7 @@ public class InternalBackendData
     {
         public Instance resolve (Instance from)
         {
-            if (from instanceof Population) return from.container;
-            else                            return from.container.container;  // Parts must dereference their Population to get to their true container.
+            return from.container;
         }
     }
 
