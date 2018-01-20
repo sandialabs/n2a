@@ -70,6 +70,20 @@ public class EquationSet implements Comparable<EquationSet>
     public boolean                             referenced;             // Some other equation set writes to one of our variables. If we can die, then exercise care not to reuse this part while other parts are still writing to it. Otherwise our reincarnated part might get written with values from our previous life.
     public Object                              backendData;            // holder for extra data associated with each equation set by a given backend
 
+    public static class ConnectionBinding
+    {
+        public int         index;  // position in connectionBindings array
+        public String      alias;
+        public EquationSet endpoint;
+        /**
+            Trail of objects followed to resolve the connection.
+            Assumes that we start within the current instance, so the first entry will almost
+            always be a step up to our container.
+            See VariableReference.resolution for a closely related structure.
+        **/
+        public LinkedList<Object> resolution = new LinkedList<Object> ();
+    }
+
     public static class AccountableConnection implements Comparable<AccountableConnection>
     {
         public EquationSet connection; // the connection, that is, the thing being accounted (the endpoint is the thing doing the accounting)
@@ -91,20 +105,6 @@ public class EquationSet implements Comparable<EquationSet>
             if (that instanceof AccountableConnection) return compareTo ((AccountableConnection) that) == 0;
             return false;
         }
-    }
-
-    public static class ConnectionBinding
-    {
-        public int         index;  // position in connectionBindings array
-        public String      alias;
-        public EquationSet endpoint;
-        /**
-            Trail of objects followed to resolve the connection.
-            Assumes that we start within the current instance, so the first entry will almost
-            always be a step up to our container.
-            See VariableReference.resolution for a closely related structure.
-        **/
-        public LinkedList<Object> resolution = new LinkedList<Object> ();
     }
 
     public EquationSet (String name)

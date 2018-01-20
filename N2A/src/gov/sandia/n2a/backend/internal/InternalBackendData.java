@@ -652,6 +652,14 @@ public class InternalBackendData
             r.index = endpoints + ((ConnectionBinding) o).index;
             return;
         }
+        // TODO: Avoid redundant reference to our container.
+        // Right now, if any variable references our container, an entry is made in valuesObject.
+        // That entry is redundant with Instance.container. However, the options for avoiding it both
+        // involve ugly code:
+        // 1) Get rid of of Instance.container and always store container in (say) valuesObject[0].
+        //    Must unpack container everywhere it is used.
+        // 2) Use VariableReference.index==-1 to indicate container (and -2 to indicate no reference). 
+        //    Muse add extra case everywhere that index is used.
 
         if (localReference.add (r))
         {
