@@ -42,6 +42,12 @@ public class Instance extends Type
             Given the current instance, determine the next instance in the resolution chain.
         **/
         public Instance resolve (Instance from);
+        /**
+            Indicates if resolution must pass through the instances of a population.
+            For a direct reference, this is fatal.
+            For a connection, this indicates that the collection of endpoints has a hierarchical structure.
+        **/
+        public boolean shouldEnumerate (Instance from);
     }
 
     public void resolve (TreeSet<VariableReference> references)

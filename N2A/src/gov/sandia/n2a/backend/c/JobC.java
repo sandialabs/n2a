@@ -48,7 +48,6 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.NavigableSet;
 import java.util.Map.Entry;
@@ -3020,7 +3019,7 @@ public class JobC
 
         if (s.lethalConnection  ||  s.lethalContainer)
         {
-            LinkedList<Object>        resolution     = new LinkedList<Object> ();
+            ArrayList<Object>         resolution     = new ArrayList<Object> ();
             NavigableSet<EquationSet> touched        = new TreeSet<EquationSet> ();
             if (! (s.backendData instanceof BackendData)) s.backendData = new BackendData ();
             findLiveReferences (s, resolution, touched, ((BackendData) s.backendData).localReference, false);
@@ -3028,7 +3027,7 @@ public class JobC
     }
 
     @SuppressWarnings("unchecked")
-    public void findLiveReferences (EquationSet s, LinkedList<Object> resolution, NavigableSet<EquationSet> touched, List<VariableReference> localReference, boolean terminate)
+    public void findLiveReferences (EquationSet s, ArrayList<Object> resolution, NavigableSet<EquationSet> touched, List<VariableReference> localReference, boolean terminate)
     {
         if (terminate)
         {
@@ -3040,7 +3039,7 @@ public class JobC
                 {
                     VariableReference result = new VariableReference ();
                     result.variable = live;
-                    result.resolution = (LinkedList<Object>) resolution.clone ();
+                    result.resolution = (ArrayList<Object>) resolution.clone ();
                     localReference.add (result);
                     s.referenced = true;
                 }
@@ -3054,7 +3053,7 @@ public class JobC
         {
             resolution.add (s.container);
             findLiveReferences (s.container, resolution, touched, localReference, true);
-            resolution.removeLast ();
+            resolution.remove (resolution.size () - 1);
         }
 
         // Recurse into connections
@@ -3064,7 +3063,7 @@ public class JobC
             {
                 resolution.add (c);
                 findLiveReferences (c.endpoint, resolution, touched, localReference, true);
-                resolution.removeLast ();
+                resolution.remove (resolution.size () - 1);
             }
         }
     }

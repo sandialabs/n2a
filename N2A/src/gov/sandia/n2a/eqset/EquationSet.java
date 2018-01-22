@@ -59,6 +59,8 @@ public class EquationSet implements Comparable<EquationSet>
     public List<ConnectionBinding>             connectionBindings;     // non-null iff this is a connection
     public boolean                             connected;
     public NavigableSet<AccountableConnection> accountableConnections; // Connections which declare a $min or $max w.r.t. this part. Note: connected can be true even if accountableConnections is null.
+    public List<ConnectionBinding>             dependentConnections;   // Connection bindings which include this equation set along their path. Used to update the paths during flattening.
+    public boolean                             needInstanceTracking;   // Instance tracking is necessary due to a connection path that runs through this part.
     public Map<String, String>                 metadata;
     public List<Variable>                      ordered;
     public List<ArrayList<EquationSet>>        splits;                 // Enumeration of the $type splits this part can go through
@@ -81,7 +83,18 @@ public class EquationSet implements Comparable<EquationSet>
             always be a step up to our container.
             See VariableReference.resolution for a closely related structure.
         **/
-        public LinkedList<Object> resolution = new LinkedList<Object> ();
+        public ArrayList<Object> resolution = new ArrayList<Object> ();
+
+        public void addResolution (Object o)
+        {
+            resolution.add (o);
+            if (o instanceof EquationSet)
+            {
+                EquationSet s = (EquationSet) o;
+                if (s.dependentConnections == null) s.dependentConnections = new ArrayList<ConnectionBinding> ();
+                s.dependentConnections.add (this);
+            }
+        }
     }
 
     public static class AccountableConnection implements Comparable<AccountableConnection>
@@ -254,22 +267,26 @@ public class EquationSet implements Comparable<EquationSet>
         }
     }
 
+    /**
+        Scan for equations that look and smell like connection bindings.
+        A binding equation has these characteristics:
+        <ul>
+        <li>Only one equation on the variable.
+        <li>Unconditional (conditional bindings are not permitted)
+        <li>No operators, only a name on RHS that appears like a variable name.
+        <li>Both LHS and RHS are order 0 (not derivatives)
+        <li>No variable in the current equation set matches the name.
+        </ul>
+        $up is permitted. The explicit name of a higher container may also be used.
+        $connect should not appear. It should have been overwritten during construction.
+        If $connect does appear, bindings are incomplete, which is an error.
+    **/
     public void resolveConnectionBindings (LinkedList<String> unresolved) throws Exception
     {
-        // Scan for equations that look and smell like connection bindings.
-        // A binding equation has these characteristics:
-        // * Only one equation on the variable.
-        // * Unconditional (conditional bindings are not permitted)
-        // * No operators, only a name on RHS that appears like a variable name.
-        // * Both LHS and RHS are order 0 (not derivatives)
-        // * No variable in the current equation set matches the name.
-        // $up is permitted. The explicit name of a higher container may also be used.
-        // $connect should not appear. It should have been overwritten during construction.
-        // If $connect does appear, bindings are incomplete, which is an error.
-        Iterator<Variable> i = variables.iterator ();  // need to use an iterator here, so we can remove variables from the set
-        while (i.hasNext ())
+        Iterator<Variable> it = variables.iterator ();  // need to use an iterator here, so we can remove variables from the set
+        while (it.hasNext ())
         {
-            Variable v = i.next ();
+            Variable v = it.next ();
 
             // Detect instance variables
             if (v.order > 0) continue;
@@ -300,7 +317,34 @@ public class EquationSet implements Comparable<EquationSet>
             result.index = connectionBindings.size ();
             connectionBindings.add (result);
             result.endpoint.connected = true;
-            i.remove ();  // Should no longer be in the equation list, as there is nothing further to compute.
+            it.remove ();  // Should no longer be in the equation list, as there is nothing further to compute.
+        }
+
+        // Evaluate if any equation set along any of the connection paths needs to track instances.
+        // Generally, this is a descent followed immediately by another descent.
+        // The population reached in the first descent needs to be tracked.
+        if (connectionBindings != null)
+        {
+            for (ConnectionBinding c : connectionBindings)
+            {
+                int last = c.resolution.size () - 1;
+                for (int i = 1; i < last; i++)
+                {
+                    Object o0 = c.resolution.get (i-1);
+                    if (! (o0 instanceof EquationSet)) continue;
+                    Object o1 = c.resolution.get (i);
+                    if (! (o1 instanceof EquationSet)) continue;
+                    Object o2 = c.resolution.get (i+1);
+                    if (! (o2 instanceof EquationSet)) continue;
+                    EquationSet s0 = (EquationSet) o0;
+                    EquationSet s1 = (EquationSet) o1;
+                    EquationSet s2 = (EquationSet) o2;
+                    if (s1.container == s0  &&  s2.container == s1)  // double descent
+                    {
+                        s1.needInstanceTracking = true;
+                    }
+                }
+            }
         }
 
         // Descend to child parts after resolving parent. This order is necessary to support nested connections.
@@ -330,7 +374,7 @@ public class EquationSet implements Comparable<EquationSet>
         if (ns.equals ("$up"))  // Don't bother with local checks if we know we are going up
         {
             if (container == null) return false;
-            result.resolution.add (container);
+            result.addResolution (container);
             if (pieces.length > 1) return container.resolveConnectionBinding (pieces[1], result);
             result.endpoint = container;
             return true;
@@ -339,7 +383,7 @@ public class EquationSet implements Comparable<EquationSet>
         EquationSet p = findPart (query);
         if (p != null)
         {
-            result.resolution.add (p);
+            result.addResolution (p);
             int length = p.name.length ();
             if (length == query.length ())
             {
@@ -352,7 +396,7 @@ public class EquationSet implements Comparable<EquationSet>
         ConnectionBinding c = find (ns);
         if (c != null)  // ns names an existing (already found) connection binding.
         {
-            result.resolution.add (c);
+            result.addResolution (c);
             if (pieces.length > 1) return c.endpoint.resolveConnectionBinding (pieces[1], result);
             result.endpoint = c.endpoint;  // The query is an alias for the connection.
             return true;
@@ -362,7 +406,7 @@ public class EquationSet implements Comparable<EquationSet>
         if (v != null) return true;  // The match was found, but it turns out to be a variable, not an equation set. result.endpoint should still be null.
 
         if (container == null) return false;
-        result.resolution.add (container);
+        result.addResolution (container);
         return container.resolveConnectionBinding (query, result);
     }
 
@@ -431,7 +475,7 @@ public class EquationSet implements Comparable<EquationSet>
         if (c != null)
         {
             v.reference.resolution.add (c);  // same kind of resolution path as if we went into connected part, but ...
-            v.name = "(connection)";             // don't match any variables within the connected part
+            v.name = "(connection)";         // don't match any variables within the connected part
             return c.endpoint;               // and terminate as if we found a variable there
         }
 
@@ -820,10 +864,10 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
-        Convert this equation set into an equivalent object where every included
-        part with $n==1 is merged into its containing part. Equations with combiners
-        (=+, =*, and so on) are joined together into one long equation with the appropriate
-        operator.
+        Convert this equation set into an equivalent object where each included part with $n==1
+        (and satisfying a few other conditions) is merged into its containing part.
+        Equations with combiners (=+, =*, and so on) are joined together into one long equation
+        with the appropriate operator.
         @param backend Prefix for metadata keys specific to the engine selected to execute this model.
         Where such keys exists, the parts should not be flattened.
     **/
@@ -834,7 +878,7 @@ public class EquationSet implements Comparable<EquationSet>
         {
             s.flatten (backend);
 
-            // Check if connection. They must remain a separate equation set for code-generation purposes.
+            // Check if connection or endpoint. They must remain separate equation sets for code-generation purposes.
             if (s.connectionBindings != null) continue;
             if (s.connected) continue;
 
@@ -929,7 +973,7 @@ public class EquationSet implements Comparable<EquationSet>
             //   Parts
             for (EquationSet sp : s.parts)
             {
-                sp.container = this;  // s was our former container, but it is going away
+                sp.container = this;  // s was the former container for sp, but s is going away
                 sp.name = prefix + "." + sp.name;
                 parts.add (sp);
             }
@@ -938,6 +982,20 @@ public class EquationSet implements Comparable<EquationSet>
             for (Entry<String, String> e : s.metadata.entrySet ())
             {
                 metadata.put (prefix + "." + e.getKey (), e.getValue ());
+            }
+
+            //   Dependent connections (paths that pass through s)
+            if (s.dependentConnections != null)
+            {
+                if (dependentConnections == null) dependentConnections = new ArrayList<ConnectionBinding> ();
+                for (ConnectionBinding c : s.dependentConnections)
+                {
+                    int i = c.resolution.indexOf (s);  // By construction, this element must exist.
+                    c.resolution.set (i, this);  // replace s with this
+                    if (i+1 < c.resolution.size ()  &&  c.resolution.get (i+1) == this) c.resolution.remove (i+1);
+                    if (i   > 0                     &&  c.resolution.get (i-1) == this) c.resolution.remove (i-1);
+                    if (! dependentConnections.contains (c)) dependentConnections.add (c);
+                }
             }
         }
     }

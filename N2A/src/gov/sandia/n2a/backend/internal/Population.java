@@ -7,11 +7,11 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.backend.internal;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.TreeSet;
 
 import gov.sandia.n2a.eqset.EquationSet;
+import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.Type;
@@ -34,15 +34,6 @@ public class Population extends Instance
         this.container = container;
         InternalBackendData bed = (InternalBackendData) equations.backendData;
         allocate (bed.countGlobalFloat, bed.countGlobalObject);
-    }
-
-    /// @return The Population associated with the given position in EquationSet.connectionBindings collection
-    public Population getTarget (int i)
-    {
-        Instance result = this;
-        Iterator<Object> it = equations.connectionBindings.get (i).resolution.iterator ();
-        while (it.hasNext ()) result = ((Resolver) it.next ()).resolve (result);
-        return (Population) result;  // This cast could fail if the resolution is ill-constructed.
     }
 
     public void init (Simulator simulator)
@@ -195,19 +186,18 @@ public class Population extends Instance
     public class ConnectIterator
     {
         public int                 index;
-        public boolean             newOnly;  // Filter out old instances. Only an iterator with index==0 can set this true.
+        public boolean             newOnly;        // Filter out old instances. Only an iterator with index==0 can set this true.
         public ConnectIterator     permute;
-        public boolean             contained;  // Another iterator holds us in its permute reference.
-        public Population          population;
+        public boolean             contained;      // Another iterator holds us in its permute reference.
         public int                 max;
-        public int                 connectedCount;  // position in p.valuesFloat of $count for this connection
+        public int                 connectedCount; // position in p.valuesFloat of $count for this connection
         public InternalBackendData pbed;
-        public int                 firstborn;
+        public int                 firstborn;      // index in instances of first new entry
         public ArrayList<Part>     instances;
-        public ArrayList<Part>     filtered;  // A subset of instances selected by spatial filtering.
-        public Part                c;  // The connection instance being built.
-        public Part                p;  // Our current part, contributed as an endpoint of c.
-        public Simulator           simulator;  // For evaluating equations
+        public ArrayList<Part>     filtered;       // A subset of instances selected by spatial filtering.
+        public Part                c;              // The connection instance being built.
+        public Part                p;              // Our current part, contributed as an endpoint of c.
+        public Simulator           simulator;      // For evaluating equations
 
         public int size;   // Cached value of instances.size(). Does not change.
         public int count;  // Size of current subset of instances we are iterating through.
@@ -224,17 +214,15 @@ public class Population extends Instance
         public InternalBackendData cbed;
         public double              rank;  // heuristic value indicating how good a candidate this endpoint is to determine C.$xyz
 
-        @SuppressWarnings("unchecked")
-        public ConnectIterator (int index, Population population, InternalBackendData cbed, Simulator simulator)
+        public ConnectIterator (int index, ConnectionBinding target, InternalBackendData cbed, Simulator simulator)
         {
-            this.index      = index;
-            this.population = population;
-            this.cbed       = cbed;
-            this.simulator  = simulator;
-            pbed            = (InternalBackendData) population.equations.backendData;
-            firstborn       = (int)             population.valuesFloat [pbed.firstborn];
-            instances       = (ArrayList<Part>) population.valuesObject[pbed.instances];
-            size            = instances.size ();
+            this.index     = index;
+            this.cbed      = cbed;
+            this.simulator = simulator;
+            pbed           = (InternalBackendData) target.endpoint.backendData;
+            firstborn      = Integer.MAX_VALUE;
+            assemble (Population.this, target.resolution, 0);
+            size           = instances.size ();
 
             if (cbed.max[index] != null)
             {
@@ -248,6 +236,48 @@ public class Population extends Instance
             if (cbed.k     [index] != null) k      = (int) ((Scalar) get (cbed.k     [index])).value;
             if (cbed.radius[index] != null) radius =       ((Scalar) get (cbed.radius[index])).value;
             if (k > 0  ||  radius > 0) rank -= 2;
+        }
+
+        /**
+            Recursively constructs the list of instances from sub-populations.
+            Traverses over the resolution path for our given connection binding.
+            Any time the path descends into a population, we enumerate the instances.
+            If the path terminates, we simply append current instances to the result.
+            In the special case of a simple path with no enumeration, we reference the
+            target instance list rather than copying it. 
+        **/
+        @SuppressWarnings("unchecked")
+        public void assemble (Instance current, ArrayList<Object> resolution, int depth)
+        {
+            int size = resolution.size ();
+            for (int i = depth; i < size; i++)
+            {
+                Resolver r = (Resolver) resolution.get (i);
+                if (r.shouldEnumerate (current))
+                {
+                    InternalBackendData bbed = (InternalBackendData) current.equations.backendData;  // "branch" bed
+                    ArrayList<Part> branchInstances = (ArrayList<Part>) current.valuesObject[bbed.instances];
+                    if (instances == null) instances = new ArrayList<Part> ();
+                    for (Part j : branchInstances) assemble (j, resolution, i);
+                    return;
+                }
+                current = r.resolve (current);
+            }
+
+            // "current" is now a population of the endpoint type, so pbed is the correct backend data
+            int             leafFirstborn = (int)             current.valuesFloat [pbed.firstborn];
+            ArrayList<Part> leafInstances = (ArrayList<Part>) current.valuesObject[pbed.instances];
+            if (instances == null)  // No enumerations occurred during the resolution, so simply reference the existing list of instances.
+            {
+                instances = leafInstances;
+                firstborn = leafFirstborn;
+            }
+            else
+            {
+                if (firstborn == Integer.MAX_VALUE  &&  leafFirstborn < leafInstances.size ()) firstborn = instances.size () + leafFirstborn;
+                instances.addAll (leafInstances);
+            }
+            simulator.clearNew ((Population) current);  // Queue to clear after current cycle.
         }
 
         public void prepareNN ()
@@ -456,14 +486,12 @@ public class Population extends Instance
         boolean spatialFiltering = false;
         for (int i = 0; i < count; i++)
         {
-            Population population = getTarget (i);
-            if (population == null  ||  population.n == 0) return;  // Nothing to connect. This should never happen.
-
-            ConnectIterator it = new ConnectIterator (i, population, bed, simulator);
+            ConnectionBinding target = equations.connectionBindings.get (i);
+            ConnectIterator it = new ConnectIterator (i, target, bed, simulator);
+            if (it.instances == null  ||  it.instances.size () == 0) return;  // Nothing to connect. This should never happen.
             iterators.add (it);
             if (it.firstborn < it.instances.size ()) nothingNew = false;
             if (it.k > 0  ||  it.radius > 0) spatialFiltering = true;
-            simulator.clearNew (population);
         }
         if (nothingNew) return;
 

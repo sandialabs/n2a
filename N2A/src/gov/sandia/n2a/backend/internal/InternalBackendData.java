@@ -30,7 +30,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -646,7 +645,7 @@ public class InternalBackendData
     public void addReferenceLocal (VariableReference r, EquationSet s)
     {
         // Avoid redundancy between references and connections, since many references simply target connection endpoints.
-        Object o = r.resolution.getLast ();  // There should always be at least one entry. This is enforced by the caller.
+        Object o = r.resolution.get (r.resolution.size () - 1);  // There should always be at least one entry. This is enforced by the caller.
         if (o instanceof ConnectionBinding  &&  s.connectionBindings.contains (o))
         {
             r.index = endpoints + ((ConnectionBinding) o).index;
@@ -880,8 +879,10 @@ public class InternalBackendData
             namesGlobalObject.add ("indexAvailable");
         }
 
-        if (s.connected  ||  populationCanResize)  // track instances
+        if (s.connected  ||  s.needInstanceTracking  ||  populationCanResize)  // track instances
         {
+            // The reason populationCanResize forces use of the instances array is to enable pruning of parts when $n decreases.
+
             instances = countGlobalObject++;
             namesGlobalObject.add ("instances");
 
@@ -1215,6 +1216,11 @@ public class InternalBackendData
         {
             return from.container;
         }
+
+        public boolean shouldEnumerate (Instance from)
+        {
+            return false;
+        }
     }
 
     public static class ResolvePart implements Instance.Resolver
@@ -1230,19 +1236,24 @@ public class InternalBackendData
         {
             if (from instanceof Population)
             {
-                Backend.err.get ().println ("ERROR: Attempt to resolve a population within another population with iterating over instances. Instead, create a nested connection.");
+                Backend.err.get ().println ("ERROR: Ambiguous reference to " + from.equations.prefix () + "." + from.equations.name);
                 throw new Backend.AbortRun ();
             }
             return (Instance) from.valuesObject[i];
+        }
+
+        public boolean shouldEnumerate (Instance from)
+        {
+            return from instanceof Population;
         }
     }
 
     /**
          Convert resolution to a form that can be processed quickly at runtime.
     **/
-    public LinkedList<Object> translateResolution (LinkedList<Object> resolution, EquationSet current)
+    public ArrayList<Object> translateResolution (ArrayList<Object> resolution, EquationSet current)
     {
-        LinkedList<Object> newResolution = new LinkedList<Object> ();
+        ArrayList<Object> newResolution = new ArrayList<Object> ();
         Iterator<Object> it = resolution.iterator ();
         while (it.hasNext ())
         {
@@ -1266,7 +1277,7 @@ public class InternalBackendData
                         }
                         i++;
                     }
-                    if (i > current.parts.size ()) throw new EvaluationException ("Could not find connection target.");
+                    if (i >= current.parts.size ()) throw new EvaluationException ("Could not find connection target.");
                 }
                 current = next;
             }
