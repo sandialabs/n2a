@@ -589,6 +589,12 @@ public class EquationSet implements Comparable<EquationSet>
         {
             public Variable from;
             public LinkedList<String> unresolved;
+            public String fromName ()
+            {
+                String result = from.container.prefix ();
+                if (! result.isEmpty ()) result += ".";
+                return result + from.nameString ();
+            }
             public Operator transform (Operator op)
             {
                 if (op instanceof AccessVariable)
@@ -599,7 +605,7 @@ public class EquationSet implements Comparable<EquationSet>
                     EquationSet dest = resolveEquationSet (query, false);
                     if (dest == null)
                     {
-                        unresolved.add (av.name + "\t" + from.container.prefix () + "." + from.nameString ());
+                        unresolved.add (av.name + "\t" + fromName ());
                     }
                     else
                     {
@@ -638,7 +644,7 @@ public class EquationSet implements Comparable<EquationSet>
                             }
                             else
                             {
-                                unresolved.add (av.name + "\t" + from.container.prefix () + "." + from.nameString ());
+                                unresolved.add (av.name + "\t" + fromName ());
                             }
                         }
                         else
@@ -669,7 +675,7 @@ public class EquationSet implements Comparable<EquationSet>
                         String temp = split.names[i];
                         EquationSet part = container.parts.floor (new EquationSet (temp));
                         if (part.name.equals (temp)) split.parts.add (part);
-                        else unresolved.add (temp + "\t" + from.container.prefix () + "." + from.nameString ());
+                        else unresolved.add (temp + "\t" + fromName ());
                     }
                 }
                 return null;
