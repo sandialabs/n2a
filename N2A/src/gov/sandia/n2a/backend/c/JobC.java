@@ -552,9 +552,7 @@ public class JobC
         // -------------------------------------------------------------------
 
         // Population class header
-        result.append ("class " + prefix (s) + "_Population : public ");
-        if (s.connectionBindings == null) result.append ("PopulationCompartment\n");
-        else                              result.append ("PopulationConnection\n");
+        result.append ("class " + prefix (s) + "_Population : public Population\n");
         result.append ("{\n");
         result.append ("public:\n");
 
@@ -624,9 +622,15 @@ public class JobC
             result.append ("  virtual ~" + prefix (s) + "_Population ();\n");
         }
         result.append ("  virtual Part * create ();\n");
+        if (bed.n != null  &&  ! bed.globalMembers.contains (bed.n)) bed.n = null;  // force bed.n to null if $n is not a stored member; used as an indicator
         if (bed.index != null)
         {
             result.append ("  virtual void add (Part * part);\n");
+            bed.trackInstances = s.connected  ||  s.needInstanceTracking  ||  bed.n != null;
+            if (bed.trackInstances)
+            {
+                result.append ("  virtual void remove (Part * part);\n");
+            }
         }
         result.append ("  virtual void init (Simulator & simulator);\n");
         if (bed.globalIntegrated.size () > 0)
@@ -637,7 +641,6 @@ public class JobC
         {
             result.append ("  virtual void update (Simulator & simulator);\n");
         }
-        if (bed.n != null  &&  ! bed.globalMembers.contains (bed.n)) bed.n = null;  // force bed.n to null if $n is not a stored member; used as an indicator
         bed.canGrowOrDie =  s.lethalP  ||  s.lethalType  ||  s.canGrow ();
         if (bed.globalBufferedExternal.size () > 0  ||  (bed.n != null  &&  (bed.canGrowOrDie  ||  ! bed.n.hasAttribute ("initOnly"))))
         {
@@ -1015,15 +1018,35 @@ public class JobC
         result.append ("}\n");
         result.append ("\n");
 
-        // Population add
+        // Population add / remove
         if (bed.index != null)
         {
             result.append ("void " + ns + "add (Part * part)\n");
             result.append ("{\n");
-            result.append ("  ((" + prefix (s) + " *) part)->__24index = nextIndex++;\n");
-            result.append ("  PopulationCompartment::add (part);\n");
+            result.append ("  " + prefix (s) + " * p = (" + prefix (s) + " *) part;\n");
+            result.append ("  if (p->__24index < 0) p->__24index = nextIndex++;\n");
+            if (bed.trackInstances)
+            {
+                result.append ("  p->before        = &live;\n");
+                result.append ("  p->after         =  live.after;\n");
+                result.append ("  p->before->after = p;\n");
+                result.append ("  p->after->before = p;\n");
+            }
             result.append ("}\n");
             result.append ("\n");
+
+            if (bed.trackInstances)
+            {
+                result.append ("void " + ns + "remove (Part * part)\n");
+                result.append ("{\n");
+                result.append ("  " + prefix (s) + " * p = (" + prefix (s) + " *) part;\n");
+                result.append ("  if (p == old) old = old->after;\n");
+                result.append ("  p->before->after = p->after;\n");
+                result.append ("  p->after->before = p->before;\n");
+                result.append ("  Population::remove (part);\n");
+                result.append ("}\n");
+                result.append ("\n");
+            }
         }
 
         // Population getTarget
@@ -1209,7 +1232,7 @@ public class JobC
         {
             result.append ("void " + ns + "resize (Simulator & simulator, int n)\n");
             result.append ("{\n");
-            result.append ("  if (n >= 0) PopulationCompartment::resize (simulator, n);\n");
+            result.append ("  if (n >= 0) Population::resize (simulator, n);\n");
             result.append ("  else " + mangle ("$n") + " = this->n;\n");
             result.append ("};\n");
             result.append ("\n");
@@ -1464,7 +1487,7 @@ public class JobC
         ns = prefix (s) + "::";
 
         // Unit ctor
-        if (bed.localDerivative.size () > 0  ||  bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0  ||  ! s.parts.isEmpty ()  ||  s.accountableConnections != null  ||  bed.refcount)
+        if (bed.localDerivative.size () > 0  ||  bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0  ||  ! s.parts.isEmpty ()  ||  s.accountableConnections != null  ||  bed.refcount  ||  bed.index != null)
         {
             result.append (ns + prefix (s) + " ()\n");
             result.append ("{\n");
@@ -1490,6 +1513,10 @@ public class JobC
             if (bed.refcount)
             {
                 result.append ("  refcount = 0;\n");
+            }
+            if (bed.index != null)
+            {
+                result.append ("  __24index = -1;\n");  // -1 indicates that an index needs to be assigned. This should only be done once.
             }
             if (bed.localMembers.size () > 0)
             {
@@ -3134,6 +3161,7 @@ public class JobC
         public String pathToContainer;
         public List<String> accountableEndpoints = new ArrayList<String> ();
         public boolean refcount;
+        public boolean trackInstances;
         public boolean hasProjectFrom;
         public boolean hasProjectTo;
         public boolean canGrowOrDie;  // via $p or $type

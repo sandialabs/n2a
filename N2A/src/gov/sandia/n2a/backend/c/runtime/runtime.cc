@@ -855,7 +855,12 @@ WrapperBase::addToMembers ()
 
 Population::Population ()
 {
-    dead = 0;
+    dead        = 0;
+    live.before = &live;
+    live.after  = &live;
+    old         = &live;  // same as old=live.after
+    n           = 0;
+    nextIndex   = 0;
 }
 
 Population::~Population ()
@@ -893,92 +898,20 @@ Population::allocate ()
         {
             result = *p;
             result->clear ();
-            *p = (*p)->next;
+            *p = (*p)->next;  // remove from dead
             break;
         }
         p = & (*p)->next;
     }
 
-    if (! result)
-    {
-        result = create ();
-        add (result);
-    }
-
-    return result;
-}
-
-
-// class PopulationCompartment -----------------------------------------------
-
-PopulationCompartment::PopulationCompartment ()
-{
-    live.before = &live;
-    live.after  = &live;
-    old         = &live;  // same as old=live.after
-    n           = 0;
-    nextIndex   = 0;
-}
-
-void
-PopulationCompartment::add (Part * part)
-{
-    part->before        = &live;
-    part->after         =  live.after;
-    part->before->after = part;
-    part->after->before = part;
-}
-
-void
-PopulationCompartment::remove (Part * part)
-{
-    if (part == old) old = old->after;
-    part->before->after = part->after;
-    part->after->before = part->before;
-
-    //Population::remove (part);  // just do it right here, for greater efficiency
-    part->next = dead;
-    dead = part;
-}
-
-Part *
-PopulationCompartment::allocate ()
-{
-    Part * result = 0;
-
-    Part ** p = &dead;
-    while (*p)
-    {
-        if ((*p)->isFree ())
-        {
-            result = *p;
-            result->clear ();
-
-            // remove from dead
-            *p = (*p)->next;
-
-            // add to live
-            result->before        = &live;
-            result->after         =  live.after;
-            result->before->after = result;
-            result->after->before = result;
-
-            break;
-        }
-        p = & (*p)->next;
-    }
-
-    if (! result)
-    {
-        result = create ();
-        add (result);
-    }
+    if (! result) result = create ();
+    add (result);
 
     return result;
 }
 
 void
-PopulationCompartment::resize (Simulator & simulator, int n)
+Population::resize (Simulator & simulator, int n)
 {
     while (this->n < n)
     {
@@ -996,17 +929,14 @@ PopulationCompartment::resize (Simulator & simulator, int n)
     }
 }
 
-
-// class PopulationConnection ------------------------------------------------
-
 Population *
-PopulationConnection::getTarget (int i)
+Population::getTarget (int i)
 {
     return 0;
 }
 
 void
-PopulationConnection::connect (Simulator & simulator)
+Population::connect (Simulator & simulator)
 {
     class KDTreeEntry : public Vector3
     {
@@ -1014,8 +944,8 @@ PopulationConnection::connect (Simulator & simulator)
         Part * part;
     };
 
-    PopulationCompartment * A = dynamic_cast<PopulationCompartment *> (getTarget (0));
-    PopulationCompartment * B = dynamic_cast<PopulationCompartment *> (getTarget (1));
+    Population * A = getTarget (0);
+    Population * B = getTarget (1);
     if (A == 0  ||  B == 0) return;  // Nothing to connect. This should never happen, though we might have a unary connection.
     int An = A->n;
     int Bn = B->n;
@@ -1222,25 +1152,25 @@ PopulationConnection::connect (Simulator & simulator)
 }
 
 int
-PopulationConnection::getK (int i)
+Population::getK (int i)
 {
     return 0;
 }
 
 int
-PopulationConnection::getMax (int i)
+Population::getMax (int i)
 {
     return 0;
 }
 
 int
-PopulationConnection::getMin (int i)
+Population::getMin (int i)
 {
     return 0;
 }
 
 float
-PopulationConnection::getRadius (int i)
+Population::getRadius (int i)
 {
     return 0;
 }
@@ -1273,7 +1203,7 @@ Simulator::run ()
     while (queue)
     {
         // Evaluate connection populations that have requested it
-        vector<PopulationConnection *>::iterator connectIterator;
+        vector<Population *>::iterator connectIterator;
         for (connectIterator = connectQueue.begin (); connectIterator != connectQueue.end (); connectIterator++)
         {
             (*connectIterator)->connect (*this);
@@ -1305,7 +1235,7 @@ Simulator::run ()
         }
 
         // Resize populations that have requested it
-        vector<pair<PopulationCompartment *, int> >::iterator resizeIterator;
+        vector<pair<Population *, int> >::iterator resizeIterator;
         for (resizeIterator = resizeQueue.begin (); resizeIterator != resizeQueue.end (); resizeIterator++)
         {
             resizeIterator->first->resize (*this, resizeIterator->second);
@@ -1336,13 +1266,13 @@ Simulator::move (float dt)
 }
 
 void
-Simulator::resize (PopulationCompartment * population, int n)
+Simulator::resize (Population * population, int n)
 {
     resizeQueue.push_back (make_pair (population, n));
 }
 
 void
-Simulator::connect (PopulationConnection * population)
+Simulator::connect (Population * population)
 {
     connectQueue.push_back (population);
 }
