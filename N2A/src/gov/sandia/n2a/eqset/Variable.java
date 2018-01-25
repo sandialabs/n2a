@@ -771,8 +771,6 @@ public class Variable implements Comparable<Variable>
             <dt>preexistent</dt>
                 <dd>storage does not need to be created for the variable
                 because it is either inherited or passed into a function.</dd>
-            <dt>simulator</dt>
-                <dd>accessible via the simulator object; a subcategory of preexistent</dd>
             <dt>temporary</dt>
                 <dd>this variable is used immediately in the equation set and
                 never stored between time-steps; a temporary must not be

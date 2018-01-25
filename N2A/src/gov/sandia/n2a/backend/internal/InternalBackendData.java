@@ -671,7 +671,7 @@ public class InternalBackendData
         }
     }
 
-    public void analyze (EquationSet s)
+    public void analyze (final EquationSet s)
     {
         System.out.println (s.name);
         if (s.connectionBindings != null)

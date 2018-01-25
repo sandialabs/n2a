@@ -237,7 +237,6 @@ public class InternalBackend extends Backend
         e.addAttribute ("global",      0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
         e.addAttribute ("preexistent", 0, true,  new String[] {"$t'", "$t"});  // variables that are not stored because Instance.get/set intercepts them
         e.addAttribute ("readOnly",    0, true,  new String[] {"$t"});
-        // We don't really need the "simulator" attribute, because it has no impact on the behavior of Internal
         e.makeConstantDtInitOnly ();
         e.findInitOnly ();
         e.purgeInitOnlyTemporary ();

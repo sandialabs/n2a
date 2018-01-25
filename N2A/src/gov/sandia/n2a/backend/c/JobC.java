@@ -50,7 +50,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NavigableSet;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
@@ -137,10 +136,8 @@ public class JobC
         e.findTemporary ();  // for connections, makes $p and $project "temporary" under some circumstances. TODO: make sure this doesn't violate evaluation order rules
         e.determineOrder ();
         e.findDerivative ();
-        e.addAttribute ("global",       0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
-        e.addAttribute ("preexistent", -1, false, new String[] {"$index"});
-        e.addAttribute ("preexistent",  0, true,  new String[] {"$t'", "$t"});
-        e.addAttribute ("simulator",    0, true,  new String[] {"$t'", "$t"});
+        e.addAttribute ("global",      0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
+        e.addAttribute ("preexistent", 0, true,  new String[] {"$t'", "$t"});
         e.makeConstantDtInitOnly ();
         e.findInitOnly ();  // propagate initOnly through ASTs
         e.findDeath ();
@@ -358,11 +355,21 @@ public class JobC
         System.out.println (s.name);
         for (Variable v : s.ordered)  // we want the sub-lists to be ordered correctly
         {
-            System.out.println ("  " + v.nameString () + " " + v.attributeString ());
+            String className = "null";
+            if (v.type != null) className = v.type.getClass ().getSimpleName ();
+            System.out.println ("  " + v.nameString () + " " + v.attributeString () + " " + className);
+
+            if      (v.name.equals ("$type" )                  ) bed.type  = v;
+            else if (v.name.equals ("$n"    )  &&  v.order == 0) bed.n     = v;
+            else if (v.name.equals ("$index"))
+            {
+                bed.index = v;
+                continue;  // Don't let $index enter into any variable lists. Instead, always give it special treatment. In effect, it is a list of one.
+            }
+
             boolean global = v.hasAttribute ("global");
             checkStatic.global = global;
             v.visit (checkStatic);
-            if (v.name.equals ("$type")) bed.type = v;
             if (global)
             {
                 if (! v.hasAny (new String[] {"constant", "accessor"}))
@@ -455,7 +462,7 @@ public class JobC
                     {
                         boolean temporary = v.hasAttribute ("temporary");
                         boolean unusedTemporary = temporary  &&  ! v.hasUsers ();
-                        if (! unusedTemporary  &&  ! v.name.equals ("$index")) bed.localInit.add (v);
+                        if (! unusedTemporary) bed.localInit.add (v);
                         if (! temporary  &&  ! v.hasAttribute ("dummy"))
                         {
                             if (! v.hasAttribute ("preexistent"))
@@ -617,6 +624,10 @@ public class JobC
             result.append ("  virtual ~" + prefix (s) + "_Population ();\n");
         }
         result.append ("  virtual Part * create ();\n");
+        if (bed.index != null)
+        {
+            result.append ("  virtual void add (Part * part);\n");
+        }
         result.append ("  virtual void init (Simulator & simulator);\n");
         if (bed.globalIntegrated.size () > 0)
         {
@@ -626,7 +637,6 @@ public class JobC
         {
             result.append ("  virtual void update (Simulator & simulator);\n");
         }
-        bed.n = s.find (new Variable ("$n", 0));
         if (bed.n != null  &&  ! bed.globalMembers.contains (bed.n)) bed.n = null;  // force bed.n to null if $n is not a stored member; used as an indicator
         bed.canGrowOrDie =  s.lethalP  ||  s.lethalType  ||  s.canGrow ();
         if (bed.globalBufferedExternal.size () > 0  ||  (bed.n != null  &&  (bed.canGrowOrDie  ||  ! bed.n.hasAttribute ("initOnly"))))
@@ -737,9 +747,7 @@ public class JobC
         // -------------------------------------------------------------------
 
         // Unit class
-        result.append ("class " + prefix (s) + " : public ");
-        if (s.connectionBindings == null) result.append ("Compartment\n");
-        else                              result.append ("Connection\n");
+        result.append ("class " + prefix (s) + " : public Part\n");
         result.append ("{\n");
         result.append ("public:\n");
 
@@ -810,6 +818,10 @@ public class JobC
         {
             result.append ("  int refcount;\n");
         }
+        if (bed.index != null)
+        {
+            result.append ("  int __24index;\n");
+        }
         for (Variable v : bed.localMembers)
         {
             result.append ("  " + type (v) + " " + mangle (v) + ";\n");
@@ -837,7 +849,7 @@ public class JobC
         {
             result.append ("  virtual ~" + prefix (s) + " ();\n");
         }
-        if (bed.localMembers.size () > 0  ||  bed.localBufferedExternal.size () > 0)
+        if (bed.localMembers.size () > 0)
         {
             result.append ("  virtual void clear ();\n");
         }
@@ -1002,6 +1014,17 @@ public class JobC
         result.append ("  return p;\n");
         result.append ("}\n");
         result.append ("\n");
+
+        // Population add
+        if (bed.index != null)
+        {
+            result.append ("void " + ns + "add (Part * part)\n");
+            result.append ("{\n");
+            result.append ("  ((" + prefix (s) + " *) part)->__24index = nextIndex++;\n");
+            result.append ("  PopulationCompartment::add (part);\n");
+            result.append ("}\n");
+            result.append ("\n");
+        }
 
         // Population getTarget
         if (s.connectionBindings != null)
@@ -1468,9 +1491,9 @@ public class JobC
             {
                 result.append ("  refcount = 0;\n");
             }
-            for (Variable v : bed.localMembers)
+            if (bed.localMembers.size () > 0)
             {
-                result.append ("  " + mangle (v) + zero (v) + ";\n");
+                result.append ("  clear ();\n");
             }
             result.append ("}\n");
             result.append ("\n");
@@ -1499,7 +1522,7 @@ public class JobC
         }
 
         // Unit clear
-        if (bed.localMembers.size () > 0  ||  bed.localBufferedExternal.size () > 0)
+        if (bed.localMembers.size () > 0)
         {
             result.append ("void " + ns + "clear ()\n");
             result.append ("{\n");
@@ -2884,7 +2907,7 @@ public class JobC
         }
 
         String name = "";
-        if (r.variable.hasAttribute ("simulator"))
+        if (r.variable.hasAttribute ("preexistent"))
         {
             // We can't read $t or $t' from another object's simulator, unless is exactly the same as ours, in which case there is no point.
             // We can't directly write $t' of another object.
@@ -2969,10 +2992,11 @@ public class JobC
                 }
                 current = s;
             }
-            else if (o instanceof Entry<?, ?>)  // We are following a part reference (which means we are a connection)
+            else if (o instanceof ConnectionBinding)  // We are following a part reference (which means we are a connection)
             {
-                containers += mangle ((String) ((Entry<?, ?>) o).getKey ()) + "->";
-                current = (EquationSet) ((Entry<?, ?>) o).getValue ();
+                ConnectionBinding c = (ConnectionBinding) o;
+                containers += mangle (c.alias) + "->";
+                current = c.endpoint;
             }
         }
 
@@ -3102,9 +3126,12 @@ public class JobC
         public List<Variable>          globalDerivativeUpdate                = new ArrayList<Variable> ();
         public List<Variable>          globalDerivativePreserve              = new ArrayList<Variable> ();
 
-        public String pathToContainer;
+        // Ready-to-use handles for common $variables
         public Variable type;
         public Variable n;  // only non-null if $n is actually stored as a member
+        public Variable index;
+
+        public String pathToContainer;
         public List<String> accountableEndpoints = new ArrayList<String> ();
         public boolean refcount;
         public boolean hasProjectFrom;

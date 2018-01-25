@@ -90,8 +90,6 @@ extern void           outputClose ();  ///< Close all OutputHolders
 class Simulatable;
 class Part;
 class Wrapper;
-class Compartment;
-class Connection;
 class Population;
 class PopulationCompartment;
 class PopulationConnection;
@@ -124,7 +122,7 @@ class Simulatable
 {
 public:
     virtual ~Simulatable ();
-    virtual void clear ();  ///< Zero out all member variables. Only necessary when a part is being recycled, as the constructor clears newly created parts.
+    virtual void clear ();  ///< Zeroes the same member variables zeroed by the ctor, in order to recycle a part.
 
     // Interface for computing simulation steps
     virtual void init               (Simulator & simulator);              ///< Initialize all variables. A part must increment $n of its population, enqueue each of its contained populations and call their init(). A population must create its instances, enqueue them and call init(). If this is a connection with $min or $max, increment count in respective target compartments.
@@ -154,6 +152,8 @@ class Part : public Simulatable
 public:
     // Memory management
     Part * next;  ///< All parts exist on one primary linked list, either in the simulator or the population's dead list.
+    Part * before;  ///< For doubly-linked list of population members. Move to generated code.
+    Part * after;
 
     // Lifespan management
     virtual void die             (); ///< Set $live=0 (in some form) and decrement $n of our population. If a connection with $min or $max, decrement connection counts in respective target compartments.
@@ -161,8 +161,16 @@ public:
     virtual void leaveSimulation (); ///< Tells us we are leaving the simulator queue. Ask our population to put us on its dead list. Reduce refcount on parts we directly access, to indicate that they may be re-used.
     virtual bool isFree          (); ///< @return true if the part is ready to use, false if the we are still waiting on other parts that reference us.
 
+    // Connection-specific accessors
+    virtual void   setPart  (int i, Part * part);          ///< Assign the instance of population i referenced by this connection.
+    virtual Part * getPart  (int i);                       ///< @return Pointer to the instance of population i.
+    virtual int    getCount (int i);                       ///< @return Number of connections of this type attached to the part indexed by i.
+    virtual void   project  (int i, int j, Vector3 & xyz); ///< Determine position of connection in space of population j based on position in space of population i. Population i must already be bound, but population j is generally not bound.
+
     // Accessors for $variables
-    virtual float getLive (); ///< @return 1 if we are in normal simulation. 0 if we have died. Default is 1.
+    virtual float getLive ();                      ///< @return 1 if we are in normal simulation. 0 if we have died. Default is 1.
+    virtual float getP    (Simulator & simulator); ///< Default is 1 (always create)
+    virtual void  getXYZ  (Vector3 & xyz);         ///< Default is [0;0;0].
 };
 
 class WrapperBase : public Part
@@ -183,27 +191,6 @@ public:
     virtual void multiplyAddToStack (float scalar);
     virtual void multiply           (float scalar);
     virtual void addToMembers       ();
-};
-
-class Compartment : public Part
-{
-public:
-    int __24index; ///< Unique ID of this part.
-    Compartment * before;
-    Compartment * after;
-
-    virtual void getXYZ (Vector3 & xyz); ///< Default is [0;0;0].
-};
-
-class Connection : public Part
-{
-public:
-    virtual void   setPart  (int i, Part * part);          ///< Assign the instance of population i referenced by this connection.
-    virtual Part * getPart  (int i);                       ///< @return Pointer to the instance of population i.
-    virtual int    getCount (int i);                       ///< @return Number of connections of this type attached to the part indexed by i.
-    virtual void   project  (int i, int j, Vector3 & xyz); ///< Determine position of connection in space of population j based on position in space of population i. Population i must already be bound, but population j is generally not bound.
-
-    virtual float getP (Simulator & simulator); ///< Default is 1 (always create)
 };
 
 /**
@@ -236,10 +223,10 @@ public:
 class PopulationCompartment : public Population
 {
 public:
-    Compartment   live;      ///< Parts currently on simulator queue (regardless of $live), linked via Compartment::before and after. Used for crossing populations to make connections.
-    Compartment * old;       ///< Position in parts linked list of first old part. All parts before this were added in the current simulation cycle. If old==&live, then all parts are new.
-    int           n;         ///< Actual number of parts with $live==1. Maintained directly by parts as they are born or die.
-    int           nextIndex; ///< Next available $index value. Indices are consumed only when add() is called. With garbage collection, there could be gaps in the set of used indices.
+    Part   live;      ///< Parts currently on simulator queue (regardless of $live), linked via Compartment::before and after. Used for crossing populations to make connections.
+    Part * old;       ///< Position in parts linked list of first old part. All parts before this were added in the current simulation cycle. If old==&live, then all parts are new.
+    int    n;         ///< Actual number of parts with $live==1. Maintained directly by parts as they are born or die.
+    int    nextIndex; ///< Next available $index value. Indices are consumed only when add() is called. With garbage collection, there could be gaps in the set of used indices.
 
     PopulationCompartment ();
 

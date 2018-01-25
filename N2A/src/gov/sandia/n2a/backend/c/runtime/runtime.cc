@@ -729,10 +729,49 @@ Part::isFree ()
     return true;
 }
 
+void
+Part::setPart (int i, Part * part)
+{
+}
+
+Part *
+Part::getPart (int i)
+{
+    return 0;
+}
+
+int
+Part::getCount (int i)
+{
+    return 0;
+}
+
+void
+Part::project (int i, int j, Vector3 & xyz)
+{
+    xyz[0] = 0;
+    xyz[1] = 0;
+    xyz[2] = 0;
+}
+
 float
 Part::getLive ()
 {
     return 1;
+}
+
+float
+Part::getP (Simulator & simulator)
+{
+    return 1;
+}
+
+void
+Part::getXYZ (Vector3 & xyz)
+{
+    xyz[0] = 0;
+    xyz[1] = 0;
+    xyz[2] = 0;
 }
 
 
@@ -884,22 +923,18 @@ PopulationCompartment::PopulationCompartment ()
 void
 PopulationCompartment::add (Part * part)
 {
-    Compartment * compartment = (Compartment *) part;  // This cast is guaranteed safe by SimulationC
-    compartment->__24index = nextIndex++;
-
-    compartment->before        = &live;
-    compartment->after         =  live.after;
-    compartment->before->after = compartment;
-    compartment->after->before = compartment;
+    part->before        = &live;
+    part->after         =  live.after;
+    part->before->after = part;
+    part->after->before = part;
 }
 
 void
 PopulationCompartment::remove (Part * part)
 {
-    Compartment * compartment = (Compartment *) part;
-    if (compartment == old) old = old->after;
-    compartment->before->after = compartment->after;
-    compartment->after->before = compartment->before;
+    if (part == old) old = old->after;
+    part->before->after = part->after;
+    part->after->before = part->before;
 
     //Population::remove (part);  // just do it right here, for greater efficiency
     part->next = dead;
@@ -923,11 +958,10 @@ PopulationCompartment::allocate ()
             *p = (*p)->next;
 
             // add to live
-            Compartment * compartment = (Compartment *) result;
-            compartment->before        = &live;
-            compartment->after         =  live.after;
-            compartment->before->after = compartment;
-            compartment->after->before = compartment;
+            result->before        = &live;
+            result->after         =  live.after;
+            result->before->after = result;
+            result->after->before = result;
 
             break;
         }
@@ -953,7 +987,7 @@ PopulationCompartment::resize (Simulator & simulator, int n)
         p->init (simulator);  // increment $n
     }
 
-    Compartment * p = live.before;
+    Part * p = live.before;
     while (this->n > n)
     {
         if (p == &live) throw "Inconsistent $n";
@@ -977,7 +1011,7 @@ PopulationConnection::connect (Simulator & simulator)
     class KDTreeEntry : public Vector3
     {
     public:
-        Compartment * part;
+        Part * part;
     };
 
     PopulationCompartment * A = dynamic_cast<PopulationCompartment *> (getTarget (0));
@@ -999,7 +1033,7 @@ PopulationConnection::connect (Simulator & simulator)
     {
         entries = new KDTreeEntry[Bn];
         entryPointers.resize (Bn);
-        Compartment * b = B->live.after;
+        Part * b = B->live.after;
         int i = 0;
         while (b != &B->live)
         {
@@ -1020,18 +1054,18 @@ PopulationConnection::connect (Simulator & simulator)
     int Bmin = getMin (1);
     int Bmax = getMax (1);
 
-    Connection * c = (Connection *) this->create ();
+    Part * c = this->create ();
 
     // Scan AxB
-    Compartment * Alast = A->old;
-    Compartment * Blast = B->live.after;
+    Part * Alast = A->old;
+    Part * Blast = B->live.after;
     bool minSatisfied = false;
     while (! minSatisfied)
     {
         minSatisfied = true;
 
         // New A with all of B
-        Compartment * a = A->live.after;
+        Part * a = A->live.after;
         while (a != A->old)
         {
             c->setPart (0, a);
@@ -1055,7 +1089,7 @@ PopulationConnection::connect (Simulator & simulator)
                 vector<MatrixAbstract<float> *>::iterator it;
                 for (it = result.begin (); it != result.end (); it++)
                 {
-                    Compartment * b = ((KDTreeEntry *) (*it))->part;
+                    Part * b = ((KDTreeEntry *) (*it))->part;
 
                     c->setPart (1, b);
                     if (Bmax  &&  c->getCount (1) >= Bmax) continue;  // no room in this B
@@ -1064,7 +1098,7 @@ PopulationConnection::connect (Simulator & simulator)
                     simulator.enqueue (c);
                     c->init (simulator);
                     Acount++;
-                    c = (Connection *) this->create ();
+                    c = this->create ();
                     c->setPart (0, a);
 
                     if (Amax  &&  Acount >= Amax) break;  // stop scanning B once this A is full
@@ -1072,9 +1106,9 @@ PopulationConnection::connect (Simulator & simulator)
             }
             else
             {
-                Compartment * Bnext = Blast->before;  // will change if we make some connections
+                Part * Bnext = Blast->before;  // will change if we make some connections
                 if (Bnext == &B->live) Bnext = Bnext->before;
-                Compartment * b = Blast;
+                Part * b = Blast;
                 do
                 {
                     b = b->after;
@@ -1086,7 +1120,7 @@ PopulationConnection::connect (Simulator & simulator)
                     if (create <= 0  ||  create < 1  &&  create < uniform ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
                     simulator.enqueue (c);
                     c->init (simulator);
-                    c = (Connection *) this->create ();
+                    c = this->create ();
                     c->setPart (0, a);
                     Bnext = b;
 
@@ -1106,7 +1140,7 @@ PopulationConnection::connect (Simulator & simulator)
         // New B with old A (new A x new B is already covered in case above)
         if (A->old != &A->live)  // There exist some old A
         {
-            Compartment * b = B->live.after;
+            Part * b = B->live.after;
             while (b != B->old)
             {
                 c->setPart (1, b);
@@ -1121,7 +1155,7 @@ PopulationConnection::connect (Simulator & simulator)
                 // TODO: the projection from A to B could be inverted, and another spatial search structure built.
                 // For now, we don't use spatial constraints.
 
-                Compartment * Anext;
+                Part * Anext;
                 if (Alast == A->old) Anext = A->live.before;
                 else                 Anext = Alast->before;
                 a = Alast;
@@ -1136,7 +1170,7 @@ PopulationConnection::connect (Simulator & simulator)
                     if (create <= 0  ||  create < 1  &&  create < uniform ()) continue;
                     c->init (simulator);
                     simulator.enqueue (c);
-                    c = (Connection *) this->create ();
+                    c = this->create ();
                     c->setPart (1, b);
                     Anext = a;
 
@@ -1156,7 +1190,7 @@ PopulationConnection::connect (Simulator & simulator)
         // Check if minimums have been satisfied for old parts. New parts in both A and B were checked above.
         if (Amin  &&  minSatisfied)
         {
-            Compartment * a = A->old;
+            Part * a = A->old;
             while (a != &A->live)
             {
                 c->setPart (0, a);
@@ -1170,7 +1204,7 @@ PopulationConnection::connect (Simulator & simulator)
         }
         if (Bmin  &&  minSatisfied)
         {
-            Compartment * b = B->old;
+            Part * b = B->old;
             while (b != &B->live)
             {
                 c->setPart (1, b);
@@ -1209,51 +1243,6 @@ float
 PopulationConnection::getRadius (int i)
 {
     return 0;
-}
-
-
-// class Compartment ---------------------------------------------------------
-
-void
-Compartment::getXYZ (Vector3 & xyz)
-{
-    xyz[0] = 0;
-    xyz[1] = 0;
-    xyz[2] = 0;
-}
-
-
-// class Connection ----------------------------------------------------------
-
-void
-Connection::setPart (int i, Part * part)
-{
-}
-
-Part *
-Connection::getPart (int i)
-{
-    return 0;
-}
-
-int
-Connection::getCount (int i)
-{
-    return 0;
-}
-
-void
-Connection::project (int i, int j, Vector3 & xyz)
-{
-    xyz[0] = 0;
-    xyz[1] = 0;
-    xyz[2] = 0;
-}
-
-float
-Connection::getP (Simulator & simulator)
-{
-    return 1;
 }
 
 
