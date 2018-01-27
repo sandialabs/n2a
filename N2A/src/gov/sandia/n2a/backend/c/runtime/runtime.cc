@@ -860,7 +860,6 @@ Population::Population ()
     live.after  = &live;
     old         = &live;  // same as old=live.after
     n           = 0;
-    nextIndex   = 0;
 }
 
 Population::~Population ()

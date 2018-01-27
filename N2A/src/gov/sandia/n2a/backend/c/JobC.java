@@ -601,6 +601,10 @@ public class JobC
             result.append ("  Preserve * preserve;\n");
         }
         result.append ("  " + prefix (s.container) + " * container;\n");
+        if (bed.index != null)
+        {
+            result.append ("  int nextIndex;\n");
+        }
         for (Variable v : bed.globalMembers)
         {
             result.append ("  " + type (v) + " " + mangle (v) + ";\n");
@@ -616,9 +620,14 @@ public class JobC
         result.append ("\n");
 
         // Population functions
-        if (bed.globalDerivative.size () > 0  ||  bed.globalIntegrated.size () > 0  ||  bed.globalDerivativePreserve.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
+        bed.needDtor = bed.globalDerivative.size () > 0  ||  bed.globalIntegrated.size () > 0  ||  bed.globalDerivativePreserve.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0;
+        bed.needCtor = bed.needDtor  ||  bed.index != null;
+        if (bed.needCtor)
         {
             result.append ("  " + prefix (s) + "_Population ();\n");
+        }
+        if (bed.needDtor)
+        {
             result.append ("  virtual ~" + prefix (s) + "_Population ();\n");
         }
         result.append ("  virtual Part * create ();\n");
@@ -973,9 +982,9 @@ public class JobC
         context.global = true;
         String ns = prefix (s) + "_Population::";  // namespace for all functions associated with part s
 
-        if (bed.globalDerivative.size () > 0  ||  bed.globalIntegrated.size () > 0  ||  bed.globalDerivativePreserve.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
+        // Population ctor
+        if (bed.needCtor)
         {
-            // Population ctor
             result.append (ns + prefix (s) + "_Population ()\n");
             result.append ("{\n");
             if (bed.globalDerivative.size () > 0)
@@ -986,10 +995,17 @@ public class JobC
             {
                 result.append ("  preserve = 0;\n");
             }
+            if (bed.index != null)
+            {
+                result.append ("  nextIndex = 0;\n");
+            }
             result.append ("}\n");
             result.append ("\n");
+        }
 
-            // Population dtor
+        // Population dtor
+        if (bed.needDtor)
+        {
             result.append (ns + "~" + prefix (s) + "_Population ()\n");
             result.append ("{\n");
             if (bed.globalDerivative.size () > 0)
@@ -3158,6 +3174,8 @@ public class JobC
         public Variable n;  // only non-null if $n is actually stored as a member
         public Variable index;
 
+        public boolean needCtor;
+        public boolean needDtor;
         public String pathToContainer;
         public List<String> accountableEndpoints = new ArrayList<String> ();
         public boolean refcount;
