@@ -570,7 +570,8 @@ public class JobC
             result.append ("  };\n");
             result.append ("\n");
         }
-        if (bed.globalIntegrated.size () > 0  ||  bed.globalDerivativePreserve.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
+        bed.needGlobalPreserve =  bed.globalIntegrated.size () > 0  ||  bed.globalDerivativePreserve.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0;
+        if (bed.needGlobalPreserve)
         {
             result.append ("  class Preserve\n");
             result.append ("  {\n");
@@ -592,19 +593,23 @@ public class JobC
         }
 
         // Population variables
-        if (bed.globalDerivative.size () > 0)
+        if (bed.n != null)
         {
-            result.append ("  Derivative * stackDerivative;\n");
+            result.append ("  int n;\n");
         }
-        if (bed.globalIntegrated.size () > 0  ||  bed.globalDerivativePreserve.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
-        {
-            result.append ("  Preserve * preserve;\n");
-        }
-        result.append ("  " + prefix (s.container) + " * container;\n");
         if (bed.index != null)
         {
             result.append ("  int nextIndex;\n");
         }
+        if (bed.globalDerivative.size () > 0)
+        {
+            result.append ("  Derivative * stackDerivative;\n");
+        }
+        if (bed.needGlobalPreserve)
+        {
+            result.append ("  Preserve * preserve;\n");
+        }
+        result.append ("  " + prefix (s.container) + " * container;\n");
         for (Variable v : bed.globalMembers)
         {
             result.append ("  " + type (v) + " " + mangle (v) + ";\n");
@@ -620,22 +625,22 @@ public class JobC
         result.append ("\n");
 
         // Population functions
-        bed.needDtor = bed.globalDerivative.size () > 0  ||  bed.globalIntegrated.size () > 0  ||  bed.globalDerivativePreserve.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0;
-        bed.needCtor = bed.needDtor  ||  bed.index != null;
-        if (bed.needCtor)
+        bed.needGlobalDtor = bed.needGlobalPreserve  ||  bed.globalDerivative.size () > 0;
+        bed.needGlobalCtor = bed.needGlobalDtor  ||  bed.index != null  ||  bed.n != null;
+        if (bed.needGlobalCtor)
         {
             result.append ("  " + prefix (s) + "_Population ();\n");
         }
-        if (bed.needDtor)
+        if (bed.needGlobalDtor)
         {
             result.append ("  virtual ~" + prefix (s) + "_Population ();\n");
         }
         result.append ("  virtual Part * create ();\n");
-        if (bed.n != null  &&  ! bed.globalMembers.contains (bed.n)) bed.n = null;  // force bed.n to null if $n is not a stored member; used as an indicator
-        if (bed.index != null)
+        bed.canResize = bed.globalMembers.contains (bed.n);  // Works correctly even if bed.n is null.
+        bed.trackInstances = s.connected  ||  s.needInstanceTracking  ||  bed.canResize;
+        if (bed.index != null  ||  bed.trackInstances)
         {
             result.append ("  virtual void add (Part * part);\n");
-            bed.trackInstances = s.connected  ||  s.needInstanceTracking  ||  bed.n != null;
             if (bed.trackInstances)
             {
                 result.append ("  virtual void remove (Part * part);\n");
@@ -651,11 +656,13 @@ public class JobC
             result.append ("  virtual void update (Simulator & simulator);\n");
         }
         bed.canGrowOrDie =  s.lethalP  ||  s.lethalType  ||  s.canGrow ();
-        if (bed.globalBufferedExternal.size () > 0  ||  (bed.n != null  &&  (bed.canGrowOrDie  ||  ! bed.n.hasAttribute ("initOnly"))))
+        bed.needGlobalFinalizeN =  s.container == null  &&  (bed.canResize  ||  bed.canGrowOrDie);
+        bed.needGlobalFinalize =  bed.globalBufferedExternal.size () > 0  ||  bed.needGlobalFinalizeN  ||  (bed.canResize  &&  (bed.canGrowOrDie  ||  ! bed.n.hasAttribute ("initOnly")));
+        if (bed.needGlobalFinalize)
         {
             result.append ("  virtual bool finalize (Simulator & simulator);\n");
         }
-        if (bed.n != null  &&  bed.n.derivative == null  &&  bed.canGrowOrDie)
+        if (bed.n != null)
         {
             result.append ("  virtual void resize (Simulator & simulator, int n);\n");
         }
@@ -667,7 +674,7 @@ public class JobC
         {
             result.append ("  virtual void finalizeDerivative ();\n");
         }
-        if (bed.globalIntegrated.size () > 0  ||  bed.globalDerivativePreserve.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
+        if (bed.needGlobalPreserve)
         {
             result.append ("  virtual void snapshot ();\n");
             result.append ("  virtual void restore ();\n");
@@ -747,7 +754,7 @@ public class JobC
                 result.append ("  virtual int getRadius (int i);\n");
             }
         }
-        if (bed.globalNeedPath)
+        if (bed.needGlobalPath)
         {
             result.append ("  virtual void path (string & result);\n");
         }
@@ -777,7 +784,8 @@ public class JobC
             result.append ("  };\n");
             result.append ("\n");
         }
-        if (bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0)
+        bed.needLocalPreserve =  bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0;
+        if (bed.needLocalPreserve)
         {
             result.append ("  class Preserve\n");
             result.append ("  {\n");
@@ -803,7 +811,7 @@ public class JobC
         {
             result.append ("  Derivative * stackDerivative;\n");
         }
-        if (bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0)
+        if (bed.needLocalPreserve)
         {
             result.append ("  Preserve * preserve;\n");
         }
@@ -853,11 +861,13 @@ public class JobC
         result.append ("\n");
 
         // Unit functions
-        if (bed.localDerivative.size () > 0  ||  bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0  ||  ! s.parts.isEmpty ()  ||  s.accountableConnections != null  ||  bed.refcount)
+        bed.needLocalDtor =  bed.needLocalPreserve  ||  bed.localDerivative.size () > 0;
+        bed.needLocalCtor =  bed.needLocalDtor  ||  s.accountableConnections != null  ||  bed.refcount;
+        if (bed.needLocalCtor  ||  s.parts.size () > 0)
         {
             result.append ("  " + prefix (s) + " ();\n");
         }
-        if (bed.localDerivative.size () > 0  ||  bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0)
+        if (bed.needLocalDtor)
         {
             result.append ("  virtual ~" + prefix (s) + " ();\n");
         }
@@ -878,7 +888,8 @@ public class JobC
         {
             result.append ("  virtual bool isFree ();\n");
         }
-        if (s.connectionBindings == null  ||  bed.localInit.size () > 0  ||  s.parts.size () > 0  ||  bed.accountableEndpoints.size () > 0)
+        bed.needLocalInit =  s.connectionBindings == null  ||  bed.localInit.size () > 0  ||  bed.accountableEndpoints.size () > 0;
+        if (bed.needLocalInit  ||  s.parts.size () > 0)
         {
             result.append ("  virtual void init (Simulator & simulator);\n");
         }
@@ -890,7 +901,8 @@ public class JobC
         {
             result.append ("  virtual void update (Simulator & simulator);\n");
         }
-        if (bed.localBufferedExternal.size () > 0  ||  bed.type != null  ||  s.canDie ()  ||  s.parts.size () > 0)
+        bed.needLocalFinalize =  bed.localBufferedExternal.size () > 0  ||  bed.type != null  ||  s.canDie ();
+        if (bed.needLocalFinalize  ||  s.parts.size () > 0)
         {
             result.append ("  virtual bool finalize (Simulator & simulator);\n");
         }
@@ -902,7 +914,7 @@ public class JobC
         {
             result.append ("  virtual void finalizeDerivative ();\n");
         }
-        if (bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0  ||  s.parts.size () > 0)
+        if (bed.needLocalPreserve  ||  s.parts.size () > 0)
         {
             result.append ("  virtual void snapshot ();\n");
             result.append ("  virtual void restore ();\n");
@@ -953,7 +965,7 @@ public class JobC
         {
             result.append ("  virtual int getCount (int i);\n");
         }
-        if (bed.localNeedPath)
+        if (bed.needLocalPath)
         {
             result.append ("  virtual void path (string & result);\n");
         }
@@ -983,28 +995,32 @@ public class JobC
         String ns = prefix (s) + "_Population::";  // namespace for all functions associated with part s
 
         // Population ctor
-        if (bed.needCtor)
+        if (bed.needGlobalCtor)
         {
             result.append (ns + prefix (s) + "_Population ()\n");
             result.append ("{\n");
-            if (bed.globalDerivative.size () > 0)
+            if (bed.n != null)
             {
-                result.append ("  stackDerivative = 0;\n");
-            }
-            if (bed.globalIntegrated.size () > 0  ||  bed.globalDerivativePreserve.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
-            {
-                result.append ("  preserve = 0;\n");
+                result.append ("  n = 0;\n");
             }
             if (bed.index != null)
             {
                 result.append ("  nextIndex = 0;\n");
+            }
+            if (bed.globalDerivative.size () > 0)
+            {
+                result.append ("  stackDerivative = 0;\n");
+            }
+            if (bed.needGlobalPreserve)
+            {
+                result.append ("  preserve = 0;\n");
             }
             result.append ("}\n");
             result.append ("\n");
         }
 
         // Population dtor
-        if (bed.needDtor)
+        if (bed.needGlobalDtor)
         {
             result.append (ns + "~" + prefix (s) + "_Population ()\n");
             result.append ("{\n");
@@ -1017,7 +1033,7 @@ public class JobC
                 result.append ("    delete temp;\n");
                 result.append ("  }\n");
             }
-            if (bed.globalIntegrated.size () > 0  ||  bed.globalDerivativePreserve.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
+            if (bed.needGlobalPreserve)
             {
                 result.append ("  if (preserve) delete preserve;\n");
             }
@@ -1119,17 +1135,14 @@ public class JobC
             result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
         }
         //   create instances
+        if (bed.n != null)
         {
-            Variable n = s.find (new Variable ("$n", 0));
-            if (n != null)
+            if (s.connectionBindings != null)
             {
-                if (s.connectionBindings != null)
-                {
-                    Backend.err.get ().println ("$n is not applicable to connections");
-                    throw new Backend.AbortRun ();
-                }
-                result.append ("  resize (simulator, " + resolve (n.reference, context, false) + ");\n");
+                Backend.err.get ().println ("$n is not applicable to connections");
+                throw new Backend.AbortRun ();
             }
+            result.append ("  resize (simulator, " + resolve (bed.n.reference, context, false) + ");\n");
         }
         //   make connections
         if (s.connectionBindings != null)
@@ -1192,12 +1205,12 @@ public class JobC
         }
 
         // Population finalize
-        if (bed.globalBufferedExternal.size () > 0  ||  (bed.n != null  &&  (bed.canGrowOrDie  ||  ! bed.n.hasAttribute ("initOnly"))))
+        if (bed.needGlobalFinalize)
         {
             result.append ("bool " + ns + "finalize (Simulator & simulator)\n");
             result.append ("{\n");
 
-            if (bed.n != null  &&  bed.n.derivative == null  &&  bed.canGrowOrDie)  // $n shares control with other specials, so must coordinate with them
+            if (bed.canResize  &&  bed.n.derivative == null  &&  bed.canGrowOrDie)  // $n shares control with other specials, so must coordinate with them
             {
                 if (bed.n.hasAttribute ("initOnly"))  // $n is explicitly assigned only once, so no need to monitor it for assigned values.
                 {
@@ -1219,13 +1232,20 @@ public class JobC
                 result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
             }
 
-            if (bed.n != null)  
+            // Return value is generally ignored, except for top-level population.
+            boolean returnN = bed.needGlobalFinalizeN;
+            if (bed.canResize)  
             {
                 if (bed.canGrowOrDie)
                 {
                     if (bed.n.derivative != null)  // $n' exists
                     {
                         // the rate of change in $n is pre-determined, so it relentlessly overrides any other structural dynamics
+                        if (returnN)
+                        {
+                            result.append ("  if (n == 0) return false;\n");
+                            returnN = false;
+                        }
                         result.append ("  simulator.resize (this, " + mangle ("$n") + ");\n");
                     }
                 }
@@ -1233,23 +1253,56 @@ public class JobC
                 {
                     if (! bed.n.hasAttribute ("initOnly"))
                     {
+                        if (returnN)
+                        {
+                            result.append ("  if (n == 0) return false;\n");
+                            returnN = false;
+                        }
                         result.append ("  if (n != (int) " + mangle ("$n") + ") simulator.resize (this, " + mangle ("$n") + ");\n");
                     }
                 }
             }
 
-            result.append ("  return true;\n");  // Doesn't matter what we return, because the value is always ignored.
+            if (returnN)
+            {
+                result.append ("  return n;\n");
+            }
+            else
+            {
+                result.append ("  return true;\n");
+            }
             result.append ("};\n");
             result.append ("\n");
         }
 
         // Population resize()
-        if (bed.n != null  &&  bed.n.derivative == null  &&  bed.canGrowOrDie)
+        if (bed.n != null)
         {
             result.append ("void " + ns + "resize (Simulator & simulator, int n)\n");
             result.append ("{\n");
-            result.append ("  if (n >= 0) Population::resize (simulator, n);\n");
-            result.append ("  else " + mangle ("$n") + " = this->n;\n");
+            if (bed.canResize  &&  bed.canGrowOrDie  &&  bed.n.derivative == null)
+            {
+                result.append ("  if (n < 0)\n");
+                result.append ("  {\n");
+                result.append ("    " + mangle ("$n") + " = this->n;\n");
+                result.append ("    return;\n");
+                result.append ("  }\n");
+                result.append ("\n");
+            }
+            result.append ("  while (this->n < n)\n");
+            result.append ("  {\n");
+            result.append ("    Part * p = allocate ();\n");
+            result.append ("    simulator.enqueue (p);\n");
+            result.append ("    p->init (simulator);\n");
+            result.append ("  }\n");
+            result.append ("\n");
+            result.append ("  Part * p = live.before;\n");
+            result.append ("  while (this->n > n)\n");
+            result.append ("  {\n");
+            result.append ("    if (p == &live) throw \"Inconsistent $n\";\n");
+            result.append ("    if (p->getLive ()) p->die ();\n");
+            result.append ("    p = p->before;\n");
+            result.append ("  }\n");
             result.append ("};\n");
             result.append ("\n");
         }
@@ -1292,7 +1345,7 @@ public class JobC
             result.append ("\n");
         }
 
-        if (bed.globalIntegrated.size () > 0  ||  bed.globalDerivativePreserve.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0)
+        if (bed.needGlobalPreserve)
         {
             // Population snapshot
             result.append ("void " + ns + "snapshot ()\n");
@@ -1480,11 +1533,11 @@ public class JobC
             result.append ("\n");
         }
 
-        if (bed.globalNeedPath)
+        if (bed.needGlobalPath)
         {
             result.append ("void " + ns + "path (string & result)\n");
             result.append ("{\n");
-            if (((BackendData) s.container.backendData).localNeedPath)  // Will our container provide a non-empty path?
+            if (((BackendData) s.container.backendData).needLocalPath)  // Will our container provide a non-empty path?
             {
                 result.append ("  container->path (result);\n");
                 result.append ("  result += \"." + s.name + "\";\n");
@@ -1503,7 +1556,7 @@ public class JobC
         ns = prefix (s) + "::";
 
         // Unit ctor
-        if (bed.localDerivative.size () > 0  ||  bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0  ||  ! s.parts.isEmpty ()  ||  s.accountableConnections != null  ||  bed.refcount  ||  bed.index != null)
+        if (bed.needLocalCtor  ||  s.parts.size () > 0)
         {
             result.append (ns + prefix (s) + " ()\n");
             result.append ("{\n");
@@ -1511,7 +1564,7 @@ public class JobC
             {
                 result.append ("  stackDerivative = 0;\n");
             }
-            if (bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0)
+            if (bed.needLocalPreserve)
             {
                 result.append ("  preserve = 0;\n");
             }
@@ -1543,7 +1596,7 @@ public class JobC
         }
 
         // Unit dtor
-        if (bed.localDerivative.size () > 0  ||  bed.localIntegrated.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0)
+        if (bed.needLocalDtor)
         {
             result.append (ns + "~" + prefix (s) + " ()\n");
             result.append ("{\n");
@@ -1556,7 +1609,7 @@ public class JobC
                 result.append ("    delete temp;\n");
                 result.append ("  }\n");
             }
-            if (bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0)
+            if (bed.needLocalPreserve)
             {
                 result.append ("  if (preserve) delete preserve;\n");
             }
@@ -1786,7 +1839,7 @@ public class JobC
         }
 
         // Unit finalize
-        if (bed.localBufferedExternal.size () > 0  ||  bed.type != null  ||  s.canDie ()  ||  s.parts.size () > 0)
+        if (bed.needLocalFinalize  ||  s.parts.size () > 0)
         {
             result.append ("bool " + ns + "finalize (Simulator & simulator)\n");
             result.append ("{\n");
@@ -1977,12 +2030,12 @@ public class JobC
             result.append ("\n");
         }
 
-        if (bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0  ||  s.parts.size () > 0)
+        if (bed.needLocalPreserve  ||  s.parts.size () > 0)
         {
             // Unit snapshot
             result.append ("void " + ns + "snapshot ()\n");
             result.append ("{\n");
-            if (bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0)
+            if (bed.needLocalPreserve)
             {
                 result.append ("  preserve = new Preserve;\n");
                 for (Variable v : bed.localIntegrated)
@@ -2009,7 +2062,7 @@ public class JobC
             // Unit restore
             result.append ("void " + ns + "restore ()\n");
             result.append ("{\n");
-            if (bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0)
+            if (bed.needLocalPreserve)
             {
                 for (Variable v : bed.localDerivativePreserve)
                 {
@@ -2399,7 +2452,7 @@ public class JobC
             result.append ("\n");
         }
 
-        if (bed.localNeedPath)
+        if (bed.needLocalPath)
         {
             result.append ("void " + ns + "path (string & result)\n");
             result.append ("{\n");
@@ -2408,7 +2461,7 @@ public class JobC
                 // We assume that result is passed in as the empty string.
                 if (s.container != null)
                 {
-                    if (((BackendData) s.container.backendData).localNeedPath)  // Will our container provide a non-empty path?
+                    if (((BackendData) s.container.backendData).needLocalPath)  // Will our container provide a non-empty path?
                     {
                         result.append ("  container->path (result);\n");
                         result.append ("  result += \"." + s.name + "\";\n");
@@ -2741,7 +2794,7 @@ public class JobC
                     {
                         String stringName = stringNames.get (op);
                         BackendData bed = (BackendData) context.part.backendData;
-                        if (context.global ? bed.globalNeedPath : bed.localNeedPath)
+                        if (context.global ? bed.needGlobalPath : bed.needLocalPath)
                         {
                             context.result.append (pad + "path (" + stringName + ");\n");
                             context.result.append (pad + stringName + " += \"." + o.variableName + "\";\n");
@@ -3174,8 +3227,19 @@ public class JobC
         public Variable n;  // only non-null if $n is actually stored as a member
         public Variable index;
 
-        public boolean needCtor;
-        public boolean needDtor;
+        public boolean needGlobalCtor;
+        public boolean needGlobalDtor;
+        public boolean needGlobalPreserve;
+        public boolean needGlobalFinalize;
+        public boolean needGlobalFinalizeN;  // population finalize() should return live status based on $n
+        public boolean needGlobalPath;  // need the path() function, which returns a unique string identifying the current instance
+        public boolean needLocalCtor;
+        public boolean needLocalDtor;
+        public boolean needLocalInit;
+        public boolean needLocalPreserve;
+        public boolean needLocalFinalize;
+        public boolean needLocalPath;
+
         public String pathToContainer;
         public List<String> accountableEndpoints = new ArrayList<String> ();
         public boolean refcount;
@@ -3183,13 +3247,12 @@ public class JobC
         public boolean hasProjectFrom;
         public boolean hasProjectTo;
         public boolean canGrowOrDie;  // via $p or $type
+        public boolean canResize;     // via $n
         public boolean needK;
         public boolean needMax;
         public boolean needMin;
         public boolean needRadius;
 
-        public boolean globalNeedPath;  // need the path() function, which returns a unique string identifying the current instance
-        public boolean localNeedPath;
         public List<String> globalColumns = new ArrayList<String> ();
         public List<String> localColumns  = new ArrayList<String> ();
 
@@ -3200,7 +3263,7 @@ public class JobC
         {
             EquationSet c = s.container;
             if (c == null) return;  // Don't set flag, because we know that path() will return "".
-            globalNeedPath = true;
+            needGlobalPath = true;
             setParentNeedPath (s);
         }
 
@@ -3208,7 +3271,7 @@ public class JobC
         {
             EquationSet c = s.container;
             if (c == null  &&  s.isSingleton ()) return;  // Don't set flag, because we know that path() will return "".
-            localNeedPath = true;
+            needLocalPath = true;
             setParentNeedPath (s);
         }
 

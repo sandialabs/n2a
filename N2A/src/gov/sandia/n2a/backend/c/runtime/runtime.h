@@ -207,7 +207,6 @@ public:
     Part * dead;      ///< Head of linked list of available parts, using Part::next.
     Part   live;      ///< Parts currently on simulator queue (regardless of $live), linked via before and after. Used for iterating populations to make connections.
     Part * old;       ///< Position in parts linked list of first old part. All parts before this were added in the current simulation cycle. If old==&live, then all parts are new.
-    int    n;         ///< Actual number of parts with $live==1. Maintained directly by parts as they are born or die.
 
     Population ();
     virtual ~Population ();  ///< Deletes all parts on our dead list.

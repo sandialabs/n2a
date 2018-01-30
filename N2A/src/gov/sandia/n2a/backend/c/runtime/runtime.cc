@@ -798,8 +798,7 @@ WrapperBase::update (Simulator & simulator)
 bool
 WrapperBase::finalize (Simulator & simulator)
 {
-    population->finalize (simulator);
-    return population->n;  // The simulation stops when the last model instance dies.
+    return population->finalize (simulator);  // We depend on explicit code in the top-level finalize() to signal when $n goes to zero.
 }
 
 void
@@ -859,7 +858,6 @@ Population::Population ()
     live.before = &live;
     live.after  = &live;
     old         = &live;  // same as old=live.after
-    n           = 0;
 }
 
 Population::~Population ()
@@ -912,20 +910,6 @@ Population::allocate ()
 void
 Population::resize (Simulator & simulator, int n)
 {
-    while (this->n < n)
-    {
-        Part * p = allocate ();  // creates a part that knows how to find its population (that is, me)
-        simulator.enqueue (p);
-        p->init (simulator);  // increment $n
-    }
-
-    Part * p = live.before;
-    while (this->n > n)
-    {
-        if (p == &live) throw "Inconsistent $n";
-        if (p->getLive ()) p->die ();  // decrement $n. Can't dequeue part until next simulator cycle, so need to store $live.
-        p = p->before;
-    }
 }
 
 Population *
@@ -946,12 +930,10 @@ Population::connect (Simulator & simulator)
     Population * A = getTarget (0);
     Population * B = getTarget (1);
     if (A == 0  ||  B == 0) return;  // Nothing to connect. This should never happen, though we might have a unary connection.
-    int An = A->n;
-    int Bn = B->n;
-    if (An == 0  ||  Bn == 0) return;
     if (A->old == A->live.after  &&  B->old == B->live.after) return;  // Only proceed if there are some new parts. Later, we might consider periodic scanning among old parts.
 
     // Prepare nearest neighbor search structures on B
+    /*
     float radius = getRadius (1);
     int   k      = getK (1);
     KDTreeEntry * entries = 0;
@@ -977,6 +959,7 @@ Population::connect (Simulator & simulator)
         NN.set (entryPointers);
         NN.k = k ? k : INT_MAX;
     }
+    */
 
     int Amin = getMin (0);
     int Amax = getMax (0);
@@ -1007,6 +990,7 @@ Population::connect (Simulator & simulator)
             }
 
             // Select the subset of B
+            /*
             if (doNN)
             {
                 c->setPart (1, B->live.after);  // give a dummy B object, in case xyz call breaks rules about only accessing A
@@ -1034,6 +1018,7 @@ Population::connect (Simulator & simulator)
                 }
             }
             else
+            */
             {
                 Part * Bnext = Blast->before;  // will change if we make some connections
                 if (Bnext == &B->live) Bnext = Bnext->before;
@@ -1147,7 +1132,7 @@ Population::connect (Simulator & simulator)
         }
     }
     delete c;
-    delete [] entries;
+    //delete [] entries;
 }
 
 int
