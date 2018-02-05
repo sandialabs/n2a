@@ -6,7 +6,10 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.type;
 
+import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
+import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Type;
 
 /**
@@ -33,6 +36,24 @@ public class Scalar extends Type
     public Scalar (Matrix that)
     {
         value = that.get (0);
+    }
+
+    /**
+        General utility: given a string containing a number with units, convert to the scaled SI value.
+    **/
+    public static double convert (String expression)
+    {
+        try
+        {
+            Operator op = Operator.parse (expression);
+            if (! (op instanceof Constant)) return 0;
+            Type result = ((Constant) op).value;
+            if (result instanceof Scalar) return ((Scalar) result).value;
+        }
+        catch (ParseException e)
+        {
+        }
+        return 0;
     }
 
     public Type clear ()

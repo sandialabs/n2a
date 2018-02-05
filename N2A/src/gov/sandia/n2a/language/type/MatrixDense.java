@@ -134,7 +134,7 @@ public class MatrixDense extends Matrix
                         {
                             String value = String.valueOf (buffer, 0, index);
                             index = 0;
-                            if (units) row.add (convert        (value));
+                            if (units) row.add (Scalar.convert (value));
                             else       row.add (Double.valueOf (value));
                         }
                         break;
@@ -147,7 +147,7 @@ public class MatrixDense extends Matrix
                         {
                             String value = String.valueOf (buffer, 0, index);
                             index = 0;
-                            if (units) row.add (convert        (value));
+                            if (units) row.add (Scalar.convert (value));
                             else       row.add (Double.valueOf (value));
                         }
                         // Process line

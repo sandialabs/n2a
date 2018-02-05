@@ -53,6 +53,7 @@ import javax.swing.ImageIcon;
 public class EquationSet implements Comparable<EquationSet>
 {
     public String                              name;
+    public MNode                               source;
     public EquationSet                         container;
     public NavigableSet<Variable>              variables;
     public NavigableSet<EquationSet>           parts;
@@ -126,9 +127,9 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
-        Construct the hierarchical tree of parts implied by the N2A code in the given model.
-        This involves reading in other models as indicated by $inherit or $include, and
-        placing variables in the correct set.
+        Construct a hierarchical tree of parts from a fully-resolved model.
+        @param part Generally this should be the MPart constructed from a given model, as MPart
+        handles all inheritance resolution.
     **/
     public EquationSet (MNode part) throws Exception
     {
@@ -146,6 +147,7 @@ public class EquationSet implements Comparable<EquationSet>
             name = source.key ();
         }
 
+        this.source    = source;
         this.container = container;
         variables      = new TreeSet<Variable> ();
         parts          = new TreeSet<EquationSet> ();
@@ -1647,6 +1649,28 @@ public class EquationSet implements Comparable<EquationSet>
             if (s.determineTypesEval ()) changed = true;
         }
         return changed;
+    }
+
+    /**
+        Set initial value in Variable.type, so we can use it as backup when stored value is null.
+    **/
+    public void clearVariables ()
+    {
+        for (EquationSet p : parts) p.clearVariables ();
+        for (Variable v : variables)
+        {
+            if (! v.hasAttribute ("constant"))
+            {
+                if (v.name.equals ("$p")  ||  v.name.equals ("$live"))
+                {
+                    v.type = new Scalar (1);
+                }
+                else
+                {
+                    v.type = v.type.clear ();
+                }
+            }
+        }
     }
 
     /**

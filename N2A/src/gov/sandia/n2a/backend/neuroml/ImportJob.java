@@ -41,17 +41,12 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
 import javax.measure.Unit;
 import javax.measure.format.ParserException;
-import javax.measure.format.UnitFormat;
-import javax.measure.spi.ServiceProvider;
-import javax.measure.spi.SystemOfUnits;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -66,7 +61,7 @@ import tec.uom.se.function.RationalConverter;
 import tec.uom.se.unit.TransformedUnit;
 import tec.uom.se.unit.Units;;
 
-public class ImportJob
+public class ImportJob extends XMLutility
 {
     PartMap                     partMap;
     LinkedList<File>            sources         = new LinkedList<File> ();
@@ -83,14 +78,7 @@ public class ImportJob
     Map<String,ComponentType>   components      = new HashMap<String,ComponentType> ();
     Map<String,TreeSet<String>> aliases         = new HashMap<String,TreeSet<String>> ();
 
-    static Pattern floatParser   = Pattern.compile ("[-+]?(NaN|Infinity|([0-9]*\\.?[0-9]*([eE][-+]?[0-9]+)?))");
-    static Pattern forbiddenUCUM = Pattern.compile ("[.,;><=!&|+\\-*/%\\^~]");
-
-    SystemOfUnits       systemOfUnits = ServiceProvider.current ().getSystemOfUnitsService ().getSystemOfUnits ("UCUM");
-    UnitFormat          UCUM          = ServiceProvider.current ().getUnitFormatService ().getUnitFormat ("UCUM");
     Map<String,Unit<?>> dimensions    = new TreeMap<String,Unit<?>> ();  // Declared dimension names
-
-    static final double epsilon = Math.ulp (1);
 
     public ImportJob (PartMap partMap)
     {
@@ -603,7 +591,7 @@ public class ImportJob
     {
         String id = "Q10Parameters";
         int suffix = 2;
-        while (container.child (id) != null) id = "Q10Parameters" + suffix++;
+        while (container.child (id) != null) id = "Q10Parameters" + suffix++;  // This seems pointless, but the NeuroML XSD says the number of elements is unbounded.
 
         MNode part = container.set (id, "");
         NameMap nameMap = partMap.importMap ("baseQ10Settings");  // This isn't the correct name for use with ion channel, but it will still work.
@@ -670,7 +658,7 @@ public class ImportJob
                     transition (child, part);
                     break;
                 default:
-                    rate (child, part);
+                    rate (child, part, false);
             }
         }
     }
@@ -686,20 +674,43 @@ public class ImportJob
 
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
-            if (child.getNodeType () == Node.ELEMENT_NODE) rate (child, part);
+            if (child.getNodeType () == Node.ELEMENT_NODE) rate (child, part, true);
         }
     }
 
-    public void rate (Node node, MNode container)
+    public void rate (Node node, MNode container, boolean KS)
     {
+        String name = node.getNodeName ();
         String inherit = getAttribute (node, "type");
-        MNode part = container.set (node.getNodeName (), "");
+        MNode part = container.set (name, "");
         NameMap nameMap = partMap.importMap (inherit);
         inherit = nameMap.internal;
         part.set ("$inherit", "\"" + inherit + "\"");
         addDependency (part, inherit);
 
         addAttributes (node, part, nameMap, "type");
+
+        // add appropriate "$up.var=x" statement
+        String up = "";
+        if (name.equals ("forwardRate"))
+        {
+            if (KS) up = "$up.forward";
+            else    up = "$up.alpha";
+        }
+        else if (name.equals ("reverseRate"))
+        {
+            if (KS) up = "$up.reverse";
+            else    up = "$up.beta";
+        }
+        else if (name.equals ("steadyState"))
+        {
+            up = "$up.inf";
+        }
+        else if (name.equals ("timeCourse"))
+        {
+            up = "$up.tau";
+        }
+        if (! up.isEmpty ()) part.set (up, "x");
     }
 
     public void blockingPlasticSynapse (Node node)
@@ -763,7 +774,7 @@ public class ImportJob
         {
             id   = getAttribute (node, "id");
             cell = models.childOrCreate (modelName, id);
-            cell.set ("$metadata", "backend.neuroml.part", "cell");
+            cell.set ("$metadata", "backend.lems.part", "cell");
             // At present, cell is merely a container. It inherits nothing.
             // Every cell must have at least one segment to be useful.
 
@@ -860,7 +871,7 @@ public class ImportJob
                         part.set ("$include", include);
                         break;
                     case "path":
-                    case "subTree":
+                    case "subTree":  // TODO: not sure of the semantics of subTree
                         segmentPath (child, part);
                         break;
                     case "inhomogeneousParameter":
@@ -971,9 +982,9 @@ public class ImportJob
 
             // TODO: What is the correct interpretation of translationStart and normalizationEnd?
             // Here we assume they are a linear transformation of the path length: variable = pathLength * normalizatonEnd + translationStart
-            group.set (variable, "$metadata", "backend.neuroml.param",   "pathLength");
-            group.set (variable, "$metadata", "backend.neuroml.param.a", normalizationEnd);
-            group.set (variable, "$metadata", "backend.neuroml.param.b", translationStart);
+            group.set (variable, "$metadata", "backend.lems.param",   "pathLength");
+            group.set (variable, "$metadata", "backend.lems.param.a", normalizationEnd);
+            group.set (variable, "$metadata", "backend.lems.param.b", translationStart);
         }
 
         public void biophysicalProperties (Node node)
@@ -1408,15 +1419,15 @@ public class ImportJob
                 String pathLength = "";
                 for (MNode v : part)
                 {
-                    if (! v.get ("$metadata", "backend.neuroml.param").equals ("pathLength")) continue;
+                    if (! v.get ("$metadata", "backend.lems.param").equals ("pathLength")) continue;
                     if (pathLength.isEmpty ())
                     {
                         pathLength = "pathLength";
                         int count = 2;
                         while (part.child (pathLength) != null) pathLength = "pathLength" + count++;
                     }
-                    double a = v.getDouble ("$metadata", "backend.neuroml.param.a");
-                    double b = v.getDouble ("$metadata", "backend.neuroml.param.b");
+                    double a = v.getDouble ("$metadata", "backend.lems.param.a");
+                    double b = v.getDouble ("$metadata", "backend.lems.param.b");
                     String value = pathLength;
                     if (a != 1) value += "*" + a;
                     if (b != 0) value += "+" + b;
@@ -1461,7 +1472,8 @@ public class ImportJob
 
             // Create connections to complete the cables
             // Note that all connections are explicit, even within the same group.
-            // TODO: Convert these to unary connections directly from child segment to parent segment.
+            // Multiple "parent" values are necessary, because groups (based on a uniform set of properties)
+            // may connect with multiple other groups, and each other group has its own set of indices.
             for (Entry<Integer,Segment> e : segments.entrySet ())
             {
                 Segment s = e.getValue ();
@@ -1488,18 +1500,41 @@ public class ImportJob
                         connection.set ("$p", "A.$index==B." + parentName);
                         if (childN > 1)
                         {
-                            s.part.set (parentName, ":");
+                            s.part.set (parentName, "");
                             s.part.set (parentName, "@", "-1");
                         }
-                    }
-                    else if (childN > 1)
-                    {
-                        connection.set ("$p", "B.$index==" + s.index);
                     }
                 }
 
                 String parentName = connection.get ("$parent");
-                if (! parentName.isEmpty ())
+                if (parentName.isEmpty ())  // parent group is singleton
+                {
+                    if (childN > 1)  // must specify which child to connect
+                    {
+                        MNode p = connection.child ("$p");
+                        if (p == null)
+                        {
+                            connection.set ("$p", "B.$index==" + s.index);
+                        }
+                        else
+                        {
+                            String existing = p.get ();
+                            if (! existing.isEmpty ())
+                            {
+                                existing = existing.split ("==", 2)[1];
+                                p.set ("");
+                                p.set ("@", "0");
+                                p.set ("@B.$index==" + existing, "1");
+                            }
+                            p.set ("@B.$index==" + s.index, "1");
+                        }
+                        if (p.size () == childN + 1)  // Every member of child group connects to the same singleton parent
+                        {
+                            connection.clear ("$p");
+                        }
+                    }
+                }
+                else  // must specify which parent in group
                 {
                     if (childN > 1) s.part.set (parentName, "@$index==" + s.index, s.parent.index);
                     else            s.part.set (parentName, s.parent.index);
@@ -1515,8 +1550,8 @@ public class ImportJob
                 part.clear ("$G");
                 for (MNode v : part)
                 {
-                    v.clear ("$metadata", "backend.neuroml.param.a");
-                    v.clear ("$metadata", "backend.neuroml.param.b");
+                    v.clear ("$metadata", "backend.lems.param.a");
+                    v.clear ("$metadata", "backend.lems.param.b");
                 }
             }
             groupIndex = finalNames;
@@ -1556,17 +1591,17 @@ public class ImportJob
                         break;
                     case "proximal":
                         proximal = new MatrixDense (3, 1);
-                        proximal.set   (0, Matrix.convert (morphologyUnits (getAttribute (child, "x"))));
-                        proximal.set   (1, Matrix.convert (morphologyUnits (getAttribute (child, "y"))));
-                        proximal.set   (2, Matrix.convert (morphologyUnits (getAttribute (child, "z"))));
-                        proximalDiameter = Matrix.convert (morphologyUnits (getAttribute (child, "diameter")));
+                        proximal.set   (0, Scalar.convert (morphologyUnits (getAttribute (child, "x"))));
+                        proximal.set   (1, Scalar.convert (morphologyUnits (getAttribute (child, "y"))));
+                        proximal.set   (2, Scalar.convert (morphologyUnits (getAttribute (child, "z"))));
+                        proximalDiameter = Scalar.convert (morphologyUnits (getAttribute (child, "diameter")));
                         break;
                     case "distal":
                         distal = new MatrixDense (3, 1);
-                        distal.set   (0, Matrix.convert (morphologyUnits (getAttribute (child, "x"))));
-                        distal.set   (1, Matrix.convert (morphologyUnits (getAttribute (child, "y"))));
-                        distal.set   (2, Matrix.convert (morphologyUnits (getAttribute (child, "z"))));
-                        distalDiameter = Matrix.convert (morphologyUnits (getAttribute (child, "diameter")));
+                        distal.set   (0, Scalar.convert (morphologyUnits (getAttribute (child, "x"))));
+                        distal.set   (1, Scalar.convert (morphologyUnits (getAttribute (child, "y"))));
+                        distal.set   (2, Scalar.convert (morphologyUnits (getAttribute (child, "z"))));
+                        distalDiameter = Scalar.convert (morphologyUnits (getAttribute (child, "diameter")));
                         break;
                 }
             }
@@ -1672,7 +1707,11 @@ public class ImportJob
         if      (name.contains ("Nernst")) potential = "Potential Nernst";
         else if (name.contains ("GHK2"  )) potential = "Potential GHK 2";
         else if (name.contains ("GHK"   )) potential = "Potential GHK";
-        if (! potential.isEmpty ())
+        if (potential.isEmpty ())
+        {
+            part.set ("$inherit", "\"" + ionChannel + "\"");
+        }
+        else
         {
             // For now, assume that ion channel is already defined
             String species = "ca";
@@ -1682,24 +1721,20 @@ public class ImportJob
             part.set ("$inherit", "\"" + potential + "\",\"" + ionChannel + "\"");
             if (doDependency) addDependency (part, potential);
         }
-        else
-        {
-            part.set ("$inherit", "\"" + ionChannel + "\"");
-        }
         if (doDependency) addDependency (part, ionChannel);
 
         if (! number.isEmpty ())
         {
             part.set ("population", number);
             part.set ("population", "$metadata", "public", "");
-            part.set ("population", "$metadata", "backend.neuroml.param", "number");
+            part.set ("population", "$metadata", "backend.lems.param", "number");
             part.set ("Gall", "G1*population");
         }
         if (! condDensity.isEmpty ())
         {
             part.set ("Gdensity", condDensity);
             part.set ("Gdensity", "$metadata", "public", "");
-            part.set ("Gdensity", "$metadata", "backend.neuroml.param", "condDensity");
+            part.set ("Gdensity", "$metadata", "backend.lems.param", "condDensity");
             if (! name.contains ("GHK")) part.set ("Gall", "Gdensity*surfaceArea");
         }
     }
@@ -1741,27 +1776,6 @@ public class ImportJob
         return value + cleanupUnits (units);
     }
 
-    public static int findUnits (String value)
-    {
-        Matcher m = floatParser.matcher (value);
-        m.find ();
-        return m.end ();
-    }
-
-    public String cleanupUnits (String units)
-    {
-        units = units.replace ("_per_", "/");
-        units = units.replace ("per_",  "/");
-        units = units.replace ("_",     ".");
-        units = units.replace (" ",     ".");
-        units = units.replace ("ohm",   "Ohm");
-        units = units.replace ("KOhm",  "kOhm");
-        units = units.replace ("degC",  "Cel");
-        if (units.equals ("M" )) units = "mol";
-        if (units.equals ("mM")) units = "mmol";
-        return safeUnit (units);
-    }
-
     /**
         Create a spike generator, which may be associated with its intended synapse.
     **/
@@ -1784,7 +1798,7 @@ public class ImportJob
 
         // Leave a hint that this spike generator should be the source side of the given synapse.
         // "spikeArray" does not have an associated synapse.
-        if (! synapse.isEmpty ()) part.set ("$metadata", "backend.neuroml.synapse", synapse);
+        if (! synapse.isEmpty ()) part.set ("$metadata", "backend.lems.synapse", synapse);
 
         addAttributes (node, part, nameMap, "id", "synapse", "spikeTarget");
 
@@ -1794,7 +1808,7 @@ public class ImportJob
             if (child.getNodeType () == Node.ELEMENT_NODE  &&  child.getNodeName ().equals ("spike"))
             {
                 String time = biophysicalUnits (getAttribute (child, "time"));
-                sorted.put (Matrix.convert (time), time);
+                sorted.put (Scalar.convert (time), time);
             }
         }
         if (sorted.size () > 0)  // generate spikeArray-like code
@@ -1813,7 +1827,7 @@ public class ImportJob
         String inherit = part.get ("$inherit").replace ("\"", "");
         part.clear ("$inherit");
         if (! inherit.isEmpty ()) removeDependency (part, inherit);
-        part.set ("$metadata", "backend.neuroml.part", "compoundInput");
+        part.set ("$metadata", "backend.lems.part", "compoundInput");
         for (MNode c : part)
         {
             if (c.child ("$inherit") == null) continue;  // not a sub-part
@@ -1836,6 +1850,7 @@ public class ImportJob
             String temperature = getAttribute (node, "temperature");
 
             network = models.childOrCreate (modelName, id);
+            network.set ("$metadata", "backend.lems.part", "network");
             if (! temperature.isEmpty ()) network.set ("temperature", biophysicalUnits (temperature));
 
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
@@ -2047,7 +2062,7 @@ public class ImportJob
                 //   modified to act as a source part for a connection part.
                 // * A spike source with associated synapse. The synapse becomes the connection part,
                 //   and the spike source simply acts as an endpoint for it.
-                String synapse = models.get (modelName, component, "$metadata", "backend.neuroml.synapse");
+                String synapse = models.get (modelName, component, "$metadata", "backend.lems.synapse");
                 if (synapse.isEmpty ())  // assume a current-pattern generator
                 {
                     int childCount = 0;
@@ -2293,7 +2308,7 @@ public class ImportJob
             String name = input + "_to_" + target;
             MNode part = network.childOrCreate (name);
 
-            String synapse = sourcePart.get ("$metadata", "backend.neuroml.synapse");
+            String synapse = sourcePart.get ("$metadata", "backend.lems.synapse");
             if (synapse.isEmpty ())
             {
                 part.set ("$inherit", "\"" + input + "\"");
@@ -2350,7 +2365,7 @@ public class ImportJob
                 MNode part = network.child (name);
                 String inherit = part.get ("$inherit").replace ("\"", "");
                 MNode sourcePart = models.child (modelName, inherit);
-                String synapse = sourcePart.get ("$metadata", "backend.neuroml.synapse");
+                String synapse = sourcePart.get ("$metadata", "backend.lems.synapse");
                 if (! synapse.isEmpty ()) continue;  // We are only concerned about current-pattern generators, not synapses.
                 if (sourcePart.getInt ("$count") <= 1) continue;  // We are the only user, so can directly embed input. That's the current arrangement, so nothing to do.
 
@@ -2380,7 +2395,7 @@ public class ImportJob
 
         public void add (TreeMap<Double,TreeSet<String>> collection, String value, String condition)
         {
-            add (collection, Matrix.convert (value), condition);
+            add (collection, Scalar.convert (value), condition);
         }
 
         public void add (TreeMap<Double,TreeSet<String>> collection, double value, String condition)
@@ -4025,85 +4040,6 @@ public class ImportJob
                 }
                 if (! newKey.equals (key)) node.move (key, newKey);
             }
-        }
-    }
-
-    public static String print (double d)
-    {
-        long l = Math.round (d);
-        if (l != 0  &&  Math.abs (d - l) < epsilon) return String.valueOf (l);
-        String result = String.valueOf (d).toLowerCase ();  // get rid of upper-case E
-        // Don't add ugly and useless ".0"
-        result = result.replace (".0e", "e");
-        if (result.endsWith (".0")) result = result.substring (0, result.length () - 2);
-        return result;
-    }
-
-    public static String safeUnit (String unit)
-    {
-        if (forbiddenUCUM.matcher (unit).find ()) return "(" + unit + ")";
-        return unit;
-    }
-
-    public String safeUnit (Unit<?> unit)
-    {
-        return safeUnit (UCUM.format (unit));
-    }
-
-    public String getText (Node node)
-    {
-        String result = "";
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            if (child.getNodeType () == Node.TEXT_NODE) result = result + child.getNodeValue ();
-        }
-        return result;
-    }
-
-    public String getAttributes (Node node, String... names)
-    {
-        for (String name : names)
-        {
-            String result = getAttribute (node, name);
-            if (! result.isEmpty ()) return result;
-        }
-        return "";
-    }
-
-    public String getAttribute (Node node, String name)
-    {
-        return getAttribute (node, name, "");
-    }
-
-    public String getAttribute (Node node, String name, String defaultValue)
-    {
-        NamedNodeMap attributes = node.getAttributes ();
-        Node attribute = attributes.getNamedItem (name);
-        if (attribute == null) return defaultValue;
-        return attribute.getNodeValue ();
-    }
-
-    public int getAttribute (Node node, String name, int defaultValue)
-    {
-        try
-        {
-            return Integer.parseInt (getAttribute (node, name, String.valueOf (defaultValue)));
-        }
-        catch (NumberFormatException e)
-        {
-            return defaultValue;
-        }
-    }
-
-    public double getAttribute (Node node, String name, double defaultValue)
-    {
-        try
-        {
-            return Double.parseDouble (getAttribute (node, name, String.valueOf (defaultValue)));
-        }
-        catch (NumberFormatException e)
-        {
-            return defaultValue;
         }
     }
 }

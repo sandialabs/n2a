@@ -13,10 +13,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.StringWriter;
 
-import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
-import gov.sandia.n2a.language.Operator;
-import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Type;
 
 public abstract class Matrix extends Type
@@ -40,24 +37,6 @@ public abstract class Matrix extends Type
         {
             throw new EvaluationException ("Can't open matrix file");
         }
-    }
-
-    /**
-        Given a string containing a number with units, convert to the scaled SI value.
-    **/
-    public static double convert (String expression)
-    {
-        try
-        {
-            Operator op = Operator.parse (expression);
-            if (! (op instanceof Constant)) return 0;
-            Type result = ((Constant) op).value;
-            if (result instanceof Scalar) return ((Scalar) result).value;
-        }
-        catch (ParseException e)
-        {
-        }
-        return 0;
     }
 
     public abstract int rows ();

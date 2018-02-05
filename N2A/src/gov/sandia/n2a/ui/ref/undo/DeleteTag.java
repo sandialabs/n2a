@@ -55,8 +55,8 @@ public class DeleteTag extends Undoable
     {
         if (edit instanceof AddTag)
         {
-            AddTag af = (AddTag) edit;
-            if (doc.equals (af.doc)  &&  key.equals (af.key)  &&  af.nameIsGenerated)
+            AddTag at = (AddTag) edit;
+            if (doc == at.doc  &&  key.equals (at.key)  &&  at.nameIsGenerated)
             {
                 neutralized = true;
                 return true;

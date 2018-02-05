@@ -731,10 +731,21 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     }
 
     @Override
-    public boolean equals (Object that)
+    public boolean equals (Object o)
     {
-        if (that instanceof MNode) return compareTo ((MNode) that) == 0;
-        return false;
+        if (this == o) return true;
+        if (! (o instanceof MNode)) return false;
+        MNode that = (MNode) o;
+
+        if (! key ().equals (that.key ())) return false;
+        if (size () != that.size ()) return false;
+        for (MNode a : this)
+        {
+            MNode b = that.child (a.key ());
+            if (b == null) return false;
+            if (! a.equals (b)) return false;
+        }
+        return true;
     }
 
     public String toString ()

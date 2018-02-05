@@ -8,8 +8,6 @@ package gov.sandia.n2a.backend.internal;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.EquationSet;
-import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.parms.Parameter;
 import gov.sandia.n2a.parms.ParameterDomain;
@@ -249,7 +247,7 @@ public class InternalBackend extends Backend
         createBackendData (e);
         analyzeEvents (e);
         analyze (e);
-        clearVariables (e);
+        e.clearVariables ();
     }
 
     public static void createBackendData (EquationSet s)
@@ -271,28 +269,6 @@ public class InternalBackend extends Backend
         bed.analyze (s);
         for (EquationSet p : s.parts) analyze (p);
         bed.analyzeLastT (s);
-    }
-
-    /**
-        Set initial value in Variable.type, so we can use it as backup when stored value is null.
-     **/
-    public static void clearVariables (EquationSet s)
-    {
-        for (EquationSet p : s.parts) clearVariables (p);
-        for (Variable v : s.variables)
-        {
-            if (! v.hasAttribute ("constant"))
-            {
-                if (v.name.equals ("$p")  ||  v.name.equals ("$live"))
-                {
-                    v.type = new Scalar (1);
-                }
-                else
-                {
-                    v.type = v.type.clear ();
-                }
-            }
-        }
     }
 
     public void dumpBackendData (EquationSet s)

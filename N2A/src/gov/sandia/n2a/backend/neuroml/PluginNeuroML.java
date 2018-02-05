@@ -13,7 +13,8 @@ import gov.sandia.n2a.plugins.ExtensionPoint;
 
 public class PluginNeuroML extends Plugin
 {
-    public static PartMap partMap;  // initialize the first time an import or export runs
+    public static PartMap   partMap;  // initialize the first time an import or export runs
+    public static Sequencer sequencer;
 
     @Override
 	public String getName ()
@@ -23,7 +24,7 @@ public class PluginNeuroML extends Plugin
 
     public String getVersion()
     {
-        return "0.9-dev";
+        return "0.9";
     }
 
     public String getProvider ()
