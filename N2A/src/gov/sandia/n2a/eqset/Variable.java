@@ -283,7 +283,14 @@ public class Variable implements Comparable<Variable>
 
         if (v.assignment == REPLACE) 
         {
-            for (EquationEntry e2 : v.equations) add (e2);  // Any pre-existing equation takes precedence over this one.
+            // We want equations from the lower level to override any pre-existing equations in the upper level.
+            // Why? Because the lower-level equations represent an elaboration of the model, and are thus more specific.
+            // Note that Internal executes contained populations after the upper-level equations, so the contained
+            // populations take precedence even without flattening.
+            NavigableSet<EquationEntry> equations0 = equations;
+            equations = new TreeSet<EquationEntry> ();
+            for (EquationEntry e2 : v.equations) add (e2);  // First add the lower-level equations, so they take precedence.
+            for (EquationEntry e0 : equations0) add (e0);
         }
         else
         {
@@ -441,7 +448,7 @@ public class Variable implements Comparable<Variable>
 
             nextEquations.add (e);
         }
-        if (alwaysTrue.size () == 1)
+        if (alwaysTrue.size () == 1)  // Default equation will never be included in alwaysTrue.
         {
             changed = true;
             equations = alwaysTrue;

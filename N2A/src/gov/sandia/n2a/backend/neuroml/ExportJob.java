@@ -43,6 +43,9 @@ import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 
+// TODO: Detect type of plasticity mechanism (by checking if U'=$kill).
+// TODO: detect type of cell (based on use of tau and refractoryPeriod)
+
 public class ExportJob extends XMLutility
 {
     public PartMap   partMap;
@@ -1025,12 +1028,13 @@ public class ExportJob extends XMLutility
         public int rate (MPart part, List<Element> gateElements)
         {
             int result = 0;
-            if      (part.child ("$up.alpha"  ) != null) result = alpha;
-            else if (part.child ("$up.forward") != null) result = alpha;
-            else if (part.child ("$up.beta"   ) != null) result = beta;
-            else if (part.child ("$up.reverse") != null) result = beta;
-            else if (part.child ("$up.tau"    ) != null) result = tau;
-            else if (part.child ("$up.inf"    ) != null) result = inf;
+            if      (part.child ("$up.α"        ) != null) result = alpha;
+            else if (part.child ("$up.forward"  ) != null) result = alpha;
+            else if (part.child ("$up.β"        ) != null) result = beta;
+            else if (part.child ("$up.reverse"  ) != null) result = beta;
+            else if (part.child ("$up.τUnscaled") != null) result = tau;
+            else if (part.child ("$up.inf"      ) != null) result = inf;
+            else if (part.child ("$up.q"        ) != null) result = inf;
 
             String name = part.key ();
             String[] types = part.get ("$metadata", "backend.lems.part").split (",");

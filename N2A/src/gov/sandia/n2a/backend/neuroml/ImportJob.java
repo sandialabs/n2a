@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -619,6 +619,7 @@ public class ImportJob extends XMLutility
     {
         String id   = getAttribute (node, "id");
         String type = getAttribute (node, "type");
+        boolean instantaneous = type.contains ("Instantaneous");
         String inherit;
         if (type.isEmpty ()) inherit = node.getNodeName ();
         else                 inherit = type;
@@ -658,7 +659,7 @@ public class ImportJob extends XMLutility
                     transition (child, part);
                     break;
                 default:
-                    rate (child, part, false);
+                    rate (child, part, false, instantaneous);
             }
         }
     }
@@ -674,11 +675,11 @@ public class ImportJob extends XMLutility
 
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
-            if (child.getNodeType () == Node.ELEMENT_NODE) rate (child, part, true);
+            if (child.getNodeType () == Node.ELEMENT_NODE) rate (child, part, true, false);
         }
     }
 
-    public void rate (Node node, MNode container, boolean KS)
+    public void rate (Node node, MNode container, boolean KS, boolean instantaneous)
     {
         String name = node.getNodeName ();
         String inherit = getAttribute (node, "type");
@@ -695,20 +696,21 @@ public class ImportJob extends XMLutility
         if (name.equals ("forwardRate"))
         {
             if (KS) up = "$up.forward";
-            else    up = "$up.alpha";
+            else    up = "$up.α";
         }
         else if (name.equals ("reverseRate"))
         {
             if (KS) up = "$up.reverse";
-            else    up = "$up.beta";
+            else    up = "$up.β";
         }
         else if (name.equals ("steadyState"))
         {
-            up = "$up.inf";
+            if (instantaneous) up = "$up.q";  // Because the Gate model is written so that inf only initializes q once, while "instantaneous" requires continually changing q.
+            else               up = "$up.inf";
         }
         else if (name.equals ("timeCourse"))
         {
-            up = "$up.tau";
+            up = "$up.τUnscaled";
         }
         if (! up.isEmpty ()) part.set (up, "x");
     }
@@ -727,18 +729,25 @@ public class ImportJob extends XMLutility
             if (child.getNodeType () != Node.ELEMENT_NODE) continue;
             MNode c = genericPart (child, part);
             String name = child.getNodeName ();
-            if (name.endsWith ("Mechanism"))
+            if (name.endsWith ("Mechanism"))  // This handles both block and plasticity mechanisms.
             {
                 removeDependency (c, name);  // We're about to change the $inherit value, so get rid of the dependency created in genericPart().
                 String type    = c.get ("type");
                 String species = c.get ("species");
                 c.clear ("type");
                 c.clear ("species");
+                boolean depressionOnly = type.equals ("tsodyksMarkramDepMechanism");
                 nameMap = partMap.importMap (type);
                 type = nameMap.internal;
                 c.set ("$inherit", "\"" + type + "\"");
                 addDependency (c, type);
                 if (! species.isEmpty ()) c.set ("$metadata", "species", species);
+                if (depressionOnly)
+                {
+                    // Kill variables that enable synaptic facilitation.
+                    c.set ("U", "@in", "");
+                    c.set ("U'", "$kill");
+                }
             }
         }
     }
