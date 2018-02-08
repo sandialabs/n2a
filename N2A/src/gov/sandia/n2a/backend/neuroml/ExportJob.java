@@ -48,13 +48,15 @@ import gov.sandia.n2a.language.type.Scalar;
 
 public class ExportJob extends XMLutility
 {
-    public PartMap   partMap;
-    public Sequencer sequencer;
-    public Document  doc;
-    public String    modelName;
+    public PartMap     partMap;
+    public Sequencer   sequencer;
+    public Document    doc;
+    public String      modelName;
+    public EquationSet equations;
 
     public List<Element>    elements = new ArrayList<Element> ();
     public List<IonChannel> channels = new ArrayList<IonChannel> ();
+    public int              countCell;
 
     public static Map<Unit<?>,String> nmlUnits = new HashMap<Unit<?>,String> ();
     public static Unit<?> um = UCUM.parse ("um");
@@ -107,7 +109,7 @@ public class ExportJob extends XMLutility
         {
             MPart mpart = new MPart ((MPersistent) source);
             modelName = source.key ();
-            EquationSet equations = new EquationSet (mpart);
+            equations = new EquationSet (mpart);
             // Make eqset minimally executable ...
             equations.resolveConnectionBindings ();
             equations.addGlobalConstants ();
@@ -124,7 +126,7 @@ public class ExportJob extends XMLutility
             DocumentBuilder builder = factoryBuilder.newDocumentBuilder ();
             doc = builder.newDocument ();
 
-            process (equations);  // Convert top-level N2A part into top-level NeuroML elements
+            process (mpart);  // Convert top-level N2A part into top-level NeuroML elements
 
             DOMSource dom = new DOMSource (doc);
             StreamResult stream = new StreamResult (new OutputStreamWriter (new FileOutputStream (destination), "UTF-8"));
@@ -140,16 +142,15 @@ public class ExportJob extends XMLutility
         }
     }
 
-    public void process (EquationSet part)
+    public void process (MPart source)
     {
-        MNode source = part.source;
         if (source.get ("$metadata", "backend.lems.part").isEmpty ())
         {
-            for (EquationSet p : part.parts) topLevelPart (p);
+            for (EquationSet p : equations.parts) topLevelPart ((MPart) p.source);
         }
         else
         {
-            topLevelPart (part);
+            topLevelPart (source);
         }
 
         for (IonChannel ic : channels) ic.append ();
@@ -164,44 +165,91 @@ public class ExportJob extends XMLutility
         doc.appendChild (root);
     }
 
-    public void topLevelPart (EquationSet part)
+    public void topLevelPart (MPart source)
     {
-        MPart source = (MPart) part.source;
         switch (source.get ("$metadata", "backend.lems.part"))
         {
             case "network":
-                elements.add (new Network (source).root);
+                new Network (source);
                 break;
             case "cell":
-                // TODO: if $n>1, emit a network element as well
-                elements.add (new Cell (part).root);
+                Cell cell = new Cell (source);
+                if (cell.populationSize == 1)
+                {
+                    cell.cell.setAttribute ("id", cell.name);  // Use final name as ID, since this is purely a cell model
+                }
+                else
+                {
+                    // TODO: wrap cell in a network
+                }
                 break;
             case "":
-                elements.add (new LEMS (part).root);
+                new LEMS (source);
                 break;
             default:
                 genericPart (source, elements);
         }
     }
 
+    /**
+        Adapter to provide basic evaluation environment for extracting values of variables.
+        Some variables are given explicit values, while all others return their default values.
+    **/
+    public static class SimpleContext extends Instance
+    {
+        public int index;
+        public Type get (Variable v)
+        {
+            if (v.name.equals ("$index")) return new Scalar (index);
+            if (v.name.equals ("$init" )) return new Scalar (1);
+            return v.type;
+        }
+    };
+
     public class Network
     {
         String name;
-        Element root;
 
         public Network (MNode source)
         {
             name = source.key ();
-            root = doc.createElement ("network");
-            root.setAttribute ("name", name);
+
+            List<Element> networkElements = new ArrayList<Element> ();
+            for (MNode c : source)
+            {
+                String type = c.get ("$metadata", "backend.lems.part");
+                switch (type)
+                {
+                    case "cell":
+                        Cell cell = new Cell ((MPart) c);
+                        Element population = addElement ("population", networkElements);
+                        population.setAttribute ("id", cell.name);
+                        population.setAttribute ("component", cell.id);
+                        if (cell.populationSize > 1) population.setAttribute ("size", String.valueOf (cell.populationSize));
+                        break;
+                }
+            }
+
+            Element network = addElement ("network", elements);
+            network.setAttribute ("id", name);
+            standalone (source, network, networkElements);
+            String temperature = source.get ("temperature");
+            if (! temperature.isEmpty ())
+            {
+                network.setAttribute ("type", "networkWithTemperature");
+                network.setAttribute ("temperature", biophysicalUnits (temperature));
+            }
+            sequencer.append (network, networkElements);
         }
     }
 
     public class Cell
     {
-        public String name;
-        public Element root;
-        public List<Element>      elements        = new ArrayList<Element> ();
+        public String             name;
+        public String             id;
+        public Element            cell;
+        public int                populationSize;
+        public List<Element>      cellElements    = new ArrayList<Element> ();
         public List<Element>      morphology      = new ArrayList<Element> ();  // break out sub-element for easy access
         public List<Element>      membrane        = new ArrayList<Element> ();  // sub-element of biophysical properties 
         public List<Element>      intra           = new ArrayList<Element> ();  // ditto
@@ -212,13 +260,22 @@ public class ExportJob extends XMLutility
         public int                countMultiGroup;
         // TODO: deal with ca2 variants
 
-        public Cell (EquationSet part)
+        public Cell (MPart source)
         {
-            MNode source = part.source;
             name = source.key ();
-            root = doc.createElement ("cell");
-            root.setAttribute ("name", name);
-            standalone (source, root, elements);
+            id = "N2A_Cell" + countCell++;
+            cell = addElement ("cell", elements);
+            standalone (source, cell, cellElements);
+            cell.setAttribute ("id", id);  // May get changed to "name" if this is a non-networked cell
+
+            EquationSet part = getEquations (source);
+            populationSize = 1;
+            Variable n = part.find (new Variable ("$n", 0));
+            if (n != null)
+            {
+                SimpleContext context = new SimpleContext ();
+                populationSize = (int) Math.floor (((Scalar) n.eval (context)).value);
+            }
 
             // Collect Segments and transform them into distinct property sets.
             // This reverses the import process, which converts property sets into distinct segment populations.
@@ -263,12 +320,12 @@ public class ExportJob extends XMLutility
                         value = parentNode.get ();
                         if (value.isEmpty ())
                         {
-                            for (MNode n : parentNode)
+                            for (MNode m : parentNode)
                             {
-                                String key = n.key ();
+                                String key = m.key ();
                                 if (key.equals ("@")) continue;
                                 int Bindex = Integer.valueOf (key.split ("==", 2)[1]);
-                                int Aindex = Integer.valueOf (n.get ());
+                                int Aindex = Integer.valueOf (m.get ());
                                 A.segments.get (Aindex).addChild (B.segments.get (Bindex));
                             }
                         }
@@ -283,9 +340,9 @@ public class ExportJob extends XMLutility
                         Segment parent = A.segments.get (0);
                         if (value.isEmpty ())
                         {
-                            for (MNode n : p)
+                            for (MNode m : p)
                             {
-                                String key = n.key ();
+                                String key = m.key ();
                                 if (key.equals ("@")) continue;
                                 int index = Integer.valueOf (key.split ("==", 2)[1]);
                                 parent.addChild (B.segments.get (index));
@@ -312,7 +369,7 @@ public class ExportJob extends XMLutility
             for (Property p : properties) p.append ();
             if (! morphology.isEmpty ())
             {
-                Element e = addElement ("morphology", elements);
+                Element e = addElement ("morphology", cellElements);
                 e.setAttribute ("id", name + "_morphology");
                 sequencer.append (e, morphology);
             }
@@ -336,13 +393,13 @@ public class ExportJob extends XMLutility
             }
             if (! biophysical.isEmpty ())
             {
-                Element e = addElement ("biophysicalProperties", elements);
+                Element e = addElement ("biophysicalProperties", cellElements);
                 e.setAttribute ("id", name + "_properties");
                 sequencer.append (e, biophysical);
             }
 
             // Collate
-            sequencer.append (root, elements);
+            sequencer.append (cell, cellElements);
         }
 
         public class Segment
@@ -436,17 +493,7 @@ public class ExportJob extends XMLutility
                 Variable diameter   = part.find (new Variable ("diameter"));
 
                 // Extract segments
-                class IndexContext extends Instance
-                {
-                    public int index;
-                    public Type get (Variable v)
-                    {
-                        if (v.name.equals ("$index")) return new Scalar (index);
-                        if (v.name.equals ("$init" )) return new Scalar (1);
-                        return v.type;
-                    }
-                };
-                IndexContext context = new IndexContext ();
+                SimpleContext context = new SimpleContext ();
                 int count = (int) Math.floor (((Scalar) n.eval (context)).value);
                 if (count == 1)
                 {
@@ -788,14 +835,13 @@ public class ExportJob extends XMLutility
     public class LEMS
     {
         String name;
-        Element root;
+        Element componentType;
 
-        public LEMS (EquationSet part)
+        public LEMS (MPart source)
         {
-            MNode source = part.source;
             name = source.key ();
-            root = doc.createElement ("ComponentType");
-            root.setAttribute ("name", name);
+            componentType = addElement ("ComponentType", elements);
+            componentType.setAttribute ("name", name);
         }
     }
 
@@ -1037,6 +1083,14 @@ public class ExportJob extends XMLutility
             else if (part.child ("$up.q"        ) != null) result = inf;
 
             String name = part.key ();
+            switch (result)
+            {
+                case alpha: name = "forwardRate"; break;
+                case beta : name = "reverseRate"; break;
+                case tau  : name = "timeCourse";  break;
+                case inf  : name = "steadyState"; break;
+            }
+
             String[] types = part.get ("$metadata", "backend.lems.part").split (",");
             String search = "Variable";
             if (name.contains ("Rate")) search = "Rate";
@@ -1105,11 +1159,10 @@ public class ExportJob extends XMLutility
             {
                 String key = m.key ();
                 if (key.startsWith ("backend")) continue;
+                if (key.startsWith ("gui")) continue;
+                if (key.equals ("id")) continue;  // our internal id, not NeuroML id
                 switch (key)
                 {
-                    case "id":
-                        // This should already be processed by the caller.
-                        break;
                     case "description":
                         node.setAttribute ("description", m.get ());
                         break;
@@ -1131,6 +1184,27 @@ public class ExportJob extends XMLutility
         {
             // TODO: emit annotation elements
         }
+    }
+
+    public EquationSet getEquations (MPart p)
+    {
+        List<String> path = new ArrayList<String> ();
+        MPart parent = p;
+        while (parent != null)
+        {
+            path.add (parent.key ());
+            parent = parent.getParent ();
+        }
+
+        EquationSet result = equations;
+        for (int i = path.size () - 2; i >= 0; i--)
+        {
+            String name = path.get (i);
+            result = result.findPart (name);
+            if (result == null) return null;
+            if (! result.name.equals (name)) return null;
+        }
+        return result;
     }
 
     public Element addElement (String name, List<Element> elements)
