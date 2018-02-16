@@ -479,7 +479,7 @@ OutputHolder::~OutputHolder ()
 }
 
 void
-OutputHolder::trace (float now)
+OutputHolder::trace (double now)
 {
     // Detect when time changes and dump any previously traced values.
     if (now > t)
@@ -504,7 +504,7 @@ OutputHolder::trace (float now)
 }
 
 void
-OutputHolder::trace (float now, const string & column, float value)
+OutputHolder::trace (double now, const string & column, float value)
 {
     trace (now);
 
@@ -521,7 +521,7 @@ OutputHolder::trace (float now, const string & column, float value)
 }
 
 void
-OutputHolder::trace (float now, float column, float value)
+OutputHolder::trace (double now, float column, float value)
 {
     trace (now);
 
@@ -634,28 +634,28 @@ Simulatable::clear ()
 }
 
 void
-Simulatable::init (Simulator & simulator)
+Simulatable::init ()
 {
 }
 
 void
-Simulatable::integrate (Simulator & simulator)
+Simulatable::integrate ()
 {
 }
 
 void
-Simulatable::update (Simulator & simulator)
+Simulatable::update ()
 {
 }
 
 bool
-Simulatable::finalize (Simulator & simulator)
+Simulatable::finalize ()
 {
     return true;
 }
 
 void
-Simulatable::updateDerivative (Simulator & simulator)
+Simulatable::updateDerivative ()
 {
 }
 
@@ -707,6 +707,22 @@ Simulatable::getNamedValue (const string & name, string & value)
 
 
 // class Part ----------------------------------------------------------------
+
+void
+Part::setPrevious (Part * previous)
+{
+}
+
+void
+Part::setVisitor (VisitorStep * visitor)
+{
+}
+
+EventStep *
+Part::getEvent ()
+{
+    return (EventStep *) simulator.currentEvent;
+}
 
 void
 Part::die ()
@@ -761,7 +777,7 @@ Part::getLive ()
 }
 
 float
-Part::getP (Simulator & simulator)
+Part::getP ()
 {
     return 1;
 }
@@ -775,36 +791,77 @@ Part::getXYZ (Vector3 & xyz)
 }
 
 
+// class PartTime ------------------------------------------------------------
+
+void
+PartTime::setPrevious (Part * previous)
+{
+    this->previous = previous;
+}
+
+void
+PartTime::setVisitor (VisitorStep * visitor)
+{
+    this->visitor = visitor;
+}
+
+EventStep *
+PartTime::getEvent ()
+{
+    return (EventStep *) visitor->event;
+}
+
+void
+PartTime::dequeue ()
+{
+    // TODO: Need mutex on visitor when modifying its queue, even if it is not part of currentEvent.
+    if (simulator.currentEvent == visitor->event)
+    {
+        // Avoid damaging iterator in visitor
+        if (visitor->previous == this) visitor->previous = next;
+    }
+    if (next) next->setPrevious (previous);
+    previous->next = next;
+}
+
+void
+PartTime::setPeriod (float dt)
+{
+    dequeue ();
+    simulator.enqueue (this, dt);
+}
+
+
 // Wrapper -------------------------------------------------------------------
 
 void
-WrapperBase::init (Simulator & simulator)
+WrapperBase::init ()
 {
-    population->init (simulator);
+    population->init ();
 }
 
 void
-WrapperBase::integrate (Simulator & simulator)
+WrapperBase::integrate ()
 {
-    population->integrate (simulator);
+    population->integrate ();
 }
 
 void
-WrapperBase::update (Simulator & simulator)
+WrapperBase::update ()
 {
-    population->update (simulator);
+    population->update ();
 }
 
 bool
-WrapperBase::finalize (Simulator & simulator)
+WrapperBase::finalize ()
 {
-    return population->finalize (simulator);  // We depend on explicit code in the top-level finalize() to signal when $n goes to zero.
+    return population->finalize ();  // We depend on explicit code in the top-level finalize() to signal when $n goes to zero.
 }
 
 void
-WrapperBase::updateDerivative (Simulator & simulator)
+WrapperBase::updateDerivative ()
 {
-    population->updateDerivative (simulator);
+    population->updateDerivative ();
 }
 
 void
@@ -908,7 +965,7 @@ Population::allocate ()
 }
 
 void
-Population::resize (Simulator & simulator, int n)
+Population::resize (int n)
 {
 }
 
@@ -919,7 +976,7 @@ Population::getTarget (int i)
 }
 
 void
-Population::connect (Simulator & simulator)
+Population::connect ()
 {
     class KDTreeEntry : public Vector3
     {
@@ -1030,10 +1087,11 @@ Population::connect (Simulator & simulator)
 
                     c->setPart (1, b);
                     if (Bmax  &&  c->getCount (1) >= Bmax) continue;  // no room in this B
-                    float create = c->getP (simulator);
+                    float create = c->getP ();
                     if (create <= 0  ||  create < 1  &&  create < uniform ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
-                    simulator.enqueue (c);
-                    c->init (simulator);
+                    c->enterSimulation ();
+                    a->getEvent ()->enqueue (c);
+                    c->init ();
                     c = this->create ();
                     c->setPart (0, a);
                     Bnext = b;
@@ -1047,7 +1105,7 @@ Population::connect (Simulator & simulator)
                 Blast = Bnext;
             }
 
-            if (Amin  &&  Acount < Amin) minSatisfied = false;
+            //if (Amin  &&  Acount < Amin) minSatisfied = false;
             a = a->after;
         }
 
@@ -1080,10 +1138,11 @@ Population::connect (Simulator & simulator)
 
                     c->setPart (0, a);
                     if (Amax  &&  c->getCount (0) >= Amax) continue;
-                    float create = c->getP (simulator);
+                    float create = c->getP ();
                     if (create <= 0  ||  create < 1  &&  create < uniform ()) continue;
-                    c->init (simulator);
-                    simulator.enqueue (c);
+                    c->enterSimulation ();
+                    b->getEvent ()->enqueue (c);
+                    c->init ();
                     c = this->create ();
                     c->setPart (1, b);
                     Anext = a;
@@ -1096,12 +1155,13 @@ Population::connect (Simulator & simulator)
                 while (a != Alast);
                 Alast = Anext;
 
-                if (Bmin  &&  Bcount < Bmin) minSatisfied = false;
+                //if (Bmin  &&  Bcount < Bmin) minSatisfied = false;
                 b = b->after;
             }
         }
 
         // Check if minimums have been satisfied for old parts. New parts in both A and B were checked above.
+        /*
         if (Amin  &&  minSatisfied)
         {
             Part * a = A->old;
@@ -1130,9 +1190,15 @@ Population::connect (Simulator & simulator)
                 b = b->after;
             }
         }
+        */
     }
     delete c;
     //delete [] entries;
+}
+
+void
+Population::clearNew ()
+{
 }
 
 int
@@ -1160,221 +1226,369 @@ Population::getRadius (int i)
 }
 
 
+// class More ----------------------------------------------------------------
+
+bool
+More::operator() (const Event * a, const Event * b) const
+{
+    return a->t >= b->t;  // If "=" is included in the operator, new entries will get sorted after existing entries at the same point in time.
+}
+
+
 // class Simulator -----------------------------------------------------------
+
+Simulator simulator;
 
 Simulator::Simulator ()
 {
-    t     = 0;
-    dt    = 1e-4;
-    queue = 0;
-    p     = &queue;
+    integrator = new Euler;
+    stop = false;
+
+    EventStep * event = new EventStep (0, 1e-4);
+    currentEvent = event;
+    periods.emplace (1e-4, event);
 }
 
 Simulator::~Simulator ()
 {
-    while (queue)
-    {
-        Part * old = queue;
-        queue = queue->next;
-        old->leaveSimulation ();
-    }
+    for (auto it : periods) delete it.second;
+    if (integrator) delete integrator;
 }
 
 void
 Simulator::run ()
 {
-    t = 0;  // updated in middle of loop below, just before integration
-    while (queue)
+    while (! queueEvent.empty ()  &&  ! stop)
     {
-        // Evaluate connection populations that have requested it
-        vector<Population *>::iterator connectIterator;
-        for (connectIterator = connectQueue.begin (); connectIterator != connectQueue.end (); connectIterator++)
-        {
-            (*connectIterator)->connect (*this);
-        }
-        connectQueue.clear ();
-
-        // Update parts
-        t += dt;
-        integrate ();
-        p = &queue;
-        while (*p)
-        {
-            (*p)->update (*this);
-            p = & (*p)->next;
-        }
-        p = &queue;
-        while (*p)
-        {
-            if ((*p)->finalize (*this))  // part remains in queue
-            {
-                p = & (*p)->next;
-            }
-            else  // part leaves queue
-            {
-                Part * old = *p;
-                *p = (*p)->next;  // note that value of p itself remains unchanged, but its referent points to another part.
-                old->leaveSimulation ();
-            }
-        }
-
-        // Resize populations that have requested it
-        vector<pair<Population *, int> >::iterator resizeIterator;
-        for (resizeIterator = resizeQueue.begin (); resizeIterator != resizeQueue.end (); resizeIterator++)
-        {
-            resizeIterator->first->resize (*this, resizeIterator->second);
-        }
-        resizeQueue.clear ();
+        currentEvent = queueEvent.top ();
+        queueEvent.pop ();
+        currentEvent->run ();
     }
 }
 
 void
-Simulator::integrate ()
+Simulator::updatePopulations ()
 {
+    // Resize populations that have requested it
+    for (auto it : queueResize) it.first->resize (it.second);
+    queueResize.clear ();
+
+    // Evaluate connection populations that have requested it
+    while (! queueConnect.empty ())
+    {
+        queueConnect.front ()->connect ();
+        queueConnect.pop ();
+    }
+
+    // Clear new flag from populations that have requested it
+    for (auto it : queueClearNew) it->clearNew ();
+    queueClearNew.clear ();
 }
 
 void
-Simulator::enqueue (Part * part)
+Simulator::enqueue (Part * part, float dt)
 {
-    part->next = queue;
-    queue = part;
-    part->enterSimulation ();
-}
-
-void
-Simulator::move (float dt)
-{
-    // TODO: select correct event and move current part to it. If no such event exists, create a new one.
-    // When above is implemented, we will never change our own dt.
-    this->dt = dt;
+    // find a matching event, or create one
+    EventStep * event;
+    map<float,EventStep *>::iterator period = periods.find (dt);
+    if (period == periods.end ())
+    {
+        event = new EventStep (currentEvent->t + dt, dt);
+        periods.emplace (dt, event);
+        queueEvent.push (event);
+    }
+    else
+    {
+        event = period->second;
+    }
+    event->enqueue (part);
 }
 
 void
 Simulator::resize (Population * population, int n)
 {
-    resizeQueue.push_back (make_pair (population, n));
+    queueResize.push_back (make_pair (population, n));
 }
 
 void
 Simulator::connect (Population * population)
 {
-    connectQueue.push_back (population);
+    queueConnect.push (population);
+}
+
+void
+Simulator::clearNew (Population * population)
+{
+    queueClearNew.insert (population);
 }
 
 
 // class Euler ---------------------------------------------------------------
 
-Euler::~Euler ()
-{
-}
-
 void
-Euler::integrate ()
+Euler::run (Event & event)
 {
-    p = &queue;
-    while (*p)
+    event.visit ([](Visitor * visitor)
     {
-        (*p)->integrate (*this);
-        p = & (*p)->next;
-    }
+        visitor->part->integrate ();
+    });
 }
 
 
 // class RungeKutta ----------------------------------------------------------
 
-RungeKutta::~RungeKutta ()
+void
+RungeKutta::run (Event & event)
+{
+    // k1
+    event.visit ([](Visitor * visitor)
+    {
+        visitor->part->snapshot ();
+        visitor->part->pushDerivative ();
+    });
+
+    // k2 and k3
+    EventStep & es = (EventStep &) event;
+    double t  = es.t;  // Save current values of t and dt
+    float  dt = es.dt;
+    es.dt /= 2.0f;
+    es.t  -= es.dt;  // t is the current point in time, so we must look backward half a timestep
+    for (int i = 0; i < 2; i++)
+    {
+        event.visit ([](Visitor * visitor)
+        {
+            visitor->part->integrate ();
+        });
+        event.visit ([](Visitor * visitor)
+        {
+            visitor->part->updateDerivative ();
+        });
+        event.visit ([](Visitor * visitor)
+        {
+            visitor->part->finalizeDerivative ();
+            visitor->part->multiplyAddToStack (2.0f);
+        });
+    }
+    es.dt = dt;  // restore original values
+    es.t  = t;
+
+    // k4
+    event.visit ([](Visitor * visitor)
+    {
+        visitor->part->integrate ();
+    });
+    event.visit ([](Visitor * visitor)
+    {
+        visitor->part->updateDerivative ();
+    });
+    event.visit ([](Visitor * visitor)
+    {
+        visitor->part->finalizeDerivative ();
+        visitor->part->addToMembers ();  // clears stackDerivative
+    });
+
+    // finish
+    event.visit ([](Visitor * visitor)
+    {
+        visitor->part->multiply (1.0 / 6.0);
+    });
+    event.visit ([](Visitor * visitor)
+    {
+        visitor->part->integrate ();
+    });
+    event.visit ([](Visitor * visitor)
+    {
+        visitor->part->restore ();
+    });
+}
+
+
+// class EventStep -----------------------------------------------------------
+
+Event::~Event ()
+{
+}
+
+
+// class EventStep -----------------------------------------------------------
+
+EventStep::EventStep (double t, float dt)
+:   dt (dt)
+{
+    this->t = t;
+    visitors.push_back (new VisitorStep (this));
+}
+
+EventStep::~EventStep ()
+{
+    for (auto it : visitors) delete it;
+}
+
+void
+EventStep::run ()
+{
+    // Update parts
+    simulator.integrator->run (*this);
+    visit ([](Visitor * visitor)
+    {
+        visitor->part->update ();
+    });
+    visit ([](Visitor * visitor)
+    {
+        if (! visitor->part->finalize ())
+        {
+            VisitorStep * v = (VisitorStep *) visitor;
+            Part * p = visitor->part;  // for convenience
+            if (p->next) p->next->setPrevious (v->previous);
+            v->previous->next = p->next;
+            p->leaveSimulation ();
+        }
+    });
+
+    simulator.updatePopulations ();
+    requeue ();
+}
+
+void
+EventStep::visit (visitorFunction f)
+{
+    visitors[0]->visit (f);
+}
+
+void
+EventStep::requeue ()
+{
+    if (visitors[0]->queue.next)  // still have instances, so re-queue event
+    {
+        t += dt;
+        simulator.queueEvent.push (this);
+    }
+    else  // our list of instances is empty, so die
+    {
+        simulator.periods.erase (simulator.periods.find (dt));
+    }
+}
+
+void
+EventStep::enqueue (Part * part)
+{
+    visitors[0]->enqueue (part);
+}
+
+
+// class EventSpikeSingle ----------------------------------------------------
+
+void
+EventSpikeSingle::run ()
 {
 }
 
 void
-RungeKutta::integrate ()
+EventSpikeSingle::visit (visitorFunction f)
 {
-    // Save current values of t and dt
-    const float t  = this->t;
-    const float dt = this->dt;
+}
 
-    // k1
-    p = &queue;
-    while (*p)
+
+// class EventSpikeSingleLatch -----------------------------------------------
+
+void
+EventSpikeSingleLatch::run ()
+{
+}
+
+
+// class EventSpikeMulti -----------------------------------------------------
+
+void
+EventSpikeMulti::run ()
+{
+}
+
+void
+EventSpikeMulti::visit (visitorFunction f)
+{
+}
+
+
+// class EventSpikeMultiLatch ------------------------------------------------
+
+void
+EventSpikeMultiLatch::run ()
+{
+}
+
+
+// class EventTarget ---------------------------------------------------------
+
+void
+EventTarget::setFlag (Part * part)
+{
+}
+
+
+// class Visitor -------------------------------------------------------------
+
+Visitor::Visitor (Event * event, Part * part)
+:   event (event),
+    part (part)
+{
+}
+
+void
+Visitor::visit (visitorFunction f)
+{
+    f (this);
+}
+
+
+// class VisitorStep ---------------------------------------------------------
+
+VisitorStep::VisitorStep (EventStep * event)
+:   Visitor (event)
+{
+    queue.next = 0;
+    previous = 0;
+}
+
+void
+VisitorStep::visit (visitorFunction f)
+{
+    previous = &queue;
+    while (previous->next)
     {
-        (*p)->snapshot ();
-        (*p)->pushDerivative ();
-        p = & (*p)->next;
+        part = previous->next;
+        f (this);
+        if (previous->next == part) previous = part;  // Normal advance through list. Check is necessary in case part dequeued while f() was running.
     }
+}
 
-    // k2 and k3
-    this->dt /= 2.0f;
-    this->t  -= this->dt;  // t is the current point in time, so we must look backward half a timestep
-    for (int i = 0; i < 2; i++)
+void
+VisitorStep::enqueue (Part * newPart)
+{
+    newPart->setVisitor (this);
+    if (queue.next) queue.next->setPrevious (newPart);
+    newPart->setPrevious (&queue);
+    newPart->next = queue.next;
+    queue.next = newPart;
+
+    cerr << this << " enqueue " << newPart << " " << typeid (*newPart).name () << endl;
+    previous = &queue;
+    while (previous->next)
     {
-        p = &queue;
-        while (*p)
-        {
-            (*p)->integrate (*this);
-            p = & (*p)->next;
-        }
-
-        p = &queue;
-        while (*p)
-        {
-            (*p)->updateDerivative (*this);
-            p = & (*p)->next;
-        }
-
-        p = &queue;
-        while (*p)
-        {
-            (*p)->finalizeDerivative ();
-            (*p)->multiplyAddToStack (2.0f);
-            p = & (*p)->next;
-        }
+        cerr << "  " << previous->next << endl;
+        previous = previous->next;
     }
+}
 
-    // k4
-    this->dt = dt;  // restore original values
-    this->t  = t;
-    {  // curly brace is here just to make organization clear
-        p = &queue;
-        while (*p)
-        {
-            (*p)->integrate (*this);
-            p = & (*p)->next;
-        }
 
-        p = &queue;
-        while (*p)
-        {
-            (*p)->updateDerivative (*this);
-            p = & (*p)->next;
-        }
+// class VisitorSpikeMulti ---------------------------------------------------
 
-        p = &queue;
-        while (*p)
-        {
-            (*p)->finalizeDerivative ();
-            (*p)->addToMembers ();  // clears stackDerivative
-            p = & (*p)->next;
-        }
-    }
+VisitorSpikeMulti::VisitorSpikeMulti (EventSpikeMulti * event)
+:   Visitor (event)
+{
+}
 
-    p = &queue;
-    while (*p)
-    {
-        (*p)->multiply (1.0 / 6.0);
-        p = & (*p)->next;
-    }
-
-    p = &queue;
-    while (*p)
-    {
-        (*p)->integrate (*this);
-        p = & (*p)->next;
-    }
-
-    p = &queue;
-    while (*p)
-    {
-        (*p)->restore ();
-        p = & (*p)->next;
-    }
+void
+VisitorSpikeMulti::visit (visitorFunction f)
+{
 }

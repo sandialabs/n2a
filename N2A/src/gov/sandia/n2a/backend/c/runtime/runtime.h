@@ -6,6 +6,8 @@
 
 #include <vector>
 #include <unordered_map>
+#include <functional>
+#include <queue>
 
 typedef fl::MatrixFixed<float,3,1> Vector3;
 
@@ -70,7 +72,7 @@ public:
     std::vector<float>                  columnValues;
     int                                 columnsPrevious; ///< Number of columns written in previous cycle.
     bool                                traceReceived;   ///< Indicates that at least one column was touched during the current cycle.
-    float                               t;
+    double                              t;
     std::string                         fileName;
     std::ostream *                      out;
     bool                                raw;             ///< Indicates that column is an exact index.
@@ -78,9 +80,9 @@ public:
     OutputHolder (const std::string & fileName);
     ~OutputHolder ();
 
-    void trace (float now);  ///< Subroutine for other trace() functions.
-    void trace (float now, const std::string & column, float value);
-    void trace (float now, float               column, float value);
+    void trace (double now);  ///< Subroutine for other trace() functions.
+    void trace (double now, const std::string & column, float value);
+    void trace (double now, float               column, float value);
     void writeTrace ();
 };
 extern OutputHolder * outputHelper (const std::string & fileName, OutputHolder * oldHandle = 0);
@@ -89,11 +91,26 @@ extern void           outputClose ();  ///< Close all OutputHolders
 
 class Simulatable;
 class Part;
+class PartTime;
 class Wrapper;
 class Population;
 class Simulator;
+class Integrator;
 class Euler;
 class RungeKutta;
+class Visitor;
+class VisitorStep;
+class VisitorSpikeSingle;
+class VisitorSpikeMulti;
+class Event;
+class EventStep;
+class EventSpike;
+class EventSpikeMulti;
+class EventSpikeMultiLatch;
+class EventSpikeSingle;
+class EventSpikeSingleLatch;
+class EventTarget;
+
 
 /**
     The universal interface through which the runtime accesses model
@@ -123,22 +140,22 @@ public:
     virtual void clear ();  ///< Zeroes the same member variables zeroed by the ctor, in order to recycle a part.
 
     // Interface for computing simulation steps
-    virtual void init               (Simulator & simulator);              ///< Initialize all variables. A part must increment $n of its population, enqueue each of its contained populations and call their init(). A population must create its instances, enqueue them and call init(). If this is a connection with $min or $max, increment count in respective target compartments.
-    virtual void integrate          (Simulator & simulator);
-    virtual void update             (Simulator & simulator);
-    virtual bool finalize           (Simulator & simulator);              ///< A population may init() and add new parts to simulator. @return true if this part is still live, false if it should be removed from simulator queue.
-    virtual void updateDerivative   (Simulator & simulator);              ///< Same as update(), but restricted to computing derivatives.
-    virtual void finalizeDerivative ();                                   ///< Same as finalize(), but restricted to computing derivatives.
+    virtual void init               ();  ///< Initialize all variables. A part must increment $n of its population, enqueue each of its contained populations and call their init(). A population must create its instances, enqueue them and call init(). If this is a connection with $min or $max, increment count in respective target compartments.
+    virtual void integrate          ();
+    virtual void update             ();
+    virtual bool finalize           ();  ///< A population may init() and add new parts to simulator. @return true if this part is still live, false if it should be removed from simulator queue.
+    virtual void updateDerivative   ();  ///< Same as update(), but restricted to computing derivatives.
+    virtual void finalizeDerivative ();  ///< Same as finalize(), but restricted to computing derivatives.
 
     // Interface for numerical manipulation
     // This is deliberately a minimal set of functions to support Runge-Kutta, with folded push and pop operations.
     // This interface will no doubt need to be generalized when another integrator is added.
-    virtual void snapshot           ();                  ///< save all members trashed by integration
-    virtual void restore            ();                  ///< restore all members trashed by integration
-    virtual void pushDerivative     ();                  ///< push D0; D0 = members
-    virtual void multiplyAddToStack (float scalar);      ///< D0 += members * scalar
-    virtual void multiply           (float scalar);      ///< members *= scalar
-    virtual void addToMembers       ();                  ///< members += D0; pop D0
+    virtual void snapshot           ();             ///< save all members trashed by integration
+    virtual void restore            ();             ///< restore all members trashed by integration
+    virtual void pushDerivative     ();             ///< push D0; D0 = members
+    virtual void multiplyAddToStack (float scalar); ///< D0 += members * scalar
+    virtual void multiply           (float scalar); ///< members *= scalar
+    virtual void addToMembers       ();             ///< members += D0; pop D0
 
     // Generic metadata
     virtual void path (std::string & result);
@@ -148,13 +165,18 @@ public:
 class Part : public Simulatable
 {
 public:
-    // Memory management
-    Part * next;  ///< All parts exist on one primary linked list, either in the simulator or the population's dead list.
-    Part * before;  ///< For doubly-linked list of population members. Move to generated code.
+    Part * next; ///< All parts exist on one primary linked list, either in the simulator or the population's dead list.
+
+    Part * before;   ///< For doubly-linked list of population members. Move to generated code.
     Part * after;
 
+    // Simulation queue
+    virtual void        setPrevious (Part * previous);
+    virtual void        setVisitor  (VisitorStep * visitor);  ///< Informs this part of both its associated event and the specific thread.
+    virtual EventStep * getEvent    ();  ///< @return the event this part is associated with. Provides t and dt.
+
     // Lifespan management
-    virtual void die             (); ///< Set $live=0 (in some form) and decrement $n of our population. If a connection with $min or $max, decrement connection counts in respective target compartments.
+    virtual void die             (); ///< Set $live=0 (in some form) and decrement $n of our population. If accountable connection, decrement connection counts in target compartments.
     virtual void enterSimulation (); ///< Tells us we are going onto the simulator queue. Increment refcount on parts we directly access.
     virtual void leaveSimulation (); ///< Tells us we are leaving the simulator queue. Ask our population to put us on its dead list. Reduce refcount on parts we directly access, to indicate that they may be re-used.
     virtual bool isFree          (); ///< @return true if the part is ready to use, false if the we are still waiting on other parts that reference us.
@@ -166,21 +188,39 @@ public:
     virtual void   project  (int i, int j, Vector3 & xyz); ///< Determine position of connection in space of population j based on position in space of population i. Population i must already be bound, but population j is generally not bound.
 
     // Accessors for $variables
-    virtual float getLive ();                      ///< @return 1 if we are in normal simulation. 0 if we have died. Default is 1.
-    virtual float getP    (Simulator & simulator); ///< Default is 1 (always create)
-    virtual void  getXYZ  (Vector3 & xyz);         ///< Default is [0;0;0].
+    virtual float getLive ();              ///< @return 1 if we are in normal simulation. 0 if we have died. Default is 1.
+    virtual float getP    ();              ///< Default is 1 (always create)
+    virtual void  getXYZ  (Vector3 & xyz); ///< Default is [0;0;0].
 };
 
-class WrapperBase : public Part
+/**
+    Supports ability to dequeue and move to a different simulation period.
+    Implements other half of doubly-linked list. It is possible to mix singly- and doubly-linked
+    parts in the same queue, but only a doubly-linked part can dequeue outside of sim loop.
+**/
+class PartTime : public Part
+{
+public:
+    Part * previous;
+    VisitorStep * visitor;
+
+    virtual void        setPrevious (Part * previous);
+    virtual void        setVisitor  (VisitorStep * visitor);
+    virtual EventStep * getEvent    ();
+    virtual void        dequeue     ();  ///< Handles all direct requests (oustide of sim loop).
+    virtual void        setPeriod   (float dt);
+};
+
+class WrapperBase : public PartTime
 {
 public:
     Population * population;  // The top-level population can never be a connection, only a compartment.
 
-    virtual void init               (Simulator & simulator);
-    virtual void integrate          (Simulator & simulator);
-    virtual void update             (Simulator & simulator);
-    virtual bool finalize           (Simulator & simulator);
-    virtual void updateDerivative   (Simulator & simulator);
+    virtual void init               ();
+    virtual void integrate          ();
+    virtual void update             ();
+    virtual bool finalize           ();
+    virtual void updateDerivative   ();
     virtual void finalizeDerivative ();
 
     virtual void snapshot           ();
@@ -211,20 +251,28 @@ public:
     Population ();
     virtual ~Population ();  ///< Deletes all parts on our dead list.
 
-    virtual Part * create   () = 0;                         ///< Construct an instance of the kind of part this population holds. Caller is fully responsible for lifespan of result, unless it gives the part to us via add().
-    virtual void   add      (Part * part);                  ///< The given part is going onto a simulator queue, but we may also account for it in other ways.
-    virtual void   remove   (Part * part);                  ///< Move part to dead list, and update any other accounting for the part.
-    virtual Part * allocate ();                             ///< If a dead part is available, re-use it. Otherwise, create and add a new part.
-    virtual void   resize   (Simulator & simulator, int n); ///< Add or kill instances until $n matches given n.
+    virtual Part * create   () = 0;        ///< Construct an instance of the kind of part this population holds. Caller is fully responsible for lifespan of result, unless it gives the part to us via add().
+    virtual void   add      (Part * part); ///< The given part is going onto a simulator queue, but we may also account for it in other ways.
+    virtual void   remove   (Part * part); ///< Move part to dead list, and update any other accounting for the part.
+    virtual Part * allocate ();            ///< If a dead part is available, re-use it. Otherwise, create and add a new part.
+    virtual void   resize   (int n);       ///< Add or kill instances until $n matches given n.
 
-    virtual Population * getTarget (int i);                 ///< @return The end-point of a connection. Index starts at 0. An index out of range returns a null pointer.
-    virtual void         connect   (Simulator & simulator); ///< For a connection population, evaluate each possible connection (or some well-defined subset thereof).
+    virtual Population * getTarget (int i); ///< @return The end-point of a connection. Index starts at 0. An index out of range returns a null pointer.
+    virtual void         connect   ();      ///< For a connection population, evaluate each possible connection (or some well-defined subset thereof).
+    virtual void         clearNew  ();      ///< Reset newborn index
 
     virtual int   getK      (int i);
     virtual int   getMax    (int i);
     virtual int   getMin    (int i);
     virtual float getRadius (int i);
 };
+
+class More
+{
+public:
+    bool operator() (const Event * a, const Event * b) const;
+};
+typedef std::priority_queue<Event *,std::vector<Event *>,More> priorityQueue;
 
 /**
     Lifetime management: When the simulator shuts down, it must dequeue all
@@ -233,40 +281,171 @@ public:
 class Simulator
 {
 public:
-    float t;
-    float dt;
-    Part *  queue; ///< All parts currently being simulated, regardless of type.
-    Part ** p;     ///< Current position of simulation in queue. Needed to implement move().
-    std::vector<std::pair<Population *, int> > resizeQueue;  ///< Populations that need to change $n after the current cycle completes.
-    std::vector<Population *>                  connectQueue; ///< Connection populations that want to construct or recheck their instances after all populations are resized in current cycle.
+    priorityQueue                             queueEvent;    ///< Pending events in time order.
+    std::vector<std::pair<Population *, int>> queueResize;   ///< Populations that need to change $n after the current cycle completes.
+    std::queue<Population *>                  queueConnect;  ///< Connection populations that want to construct or recheck their instances after all populations are resized in current cycle.
+    std::set<Population *>                    queueClearNew; ///< Populations whose newborn index needs to be reset.
+    std::map<float,EventStep *>               periods;
+    Integrator *                              integrator;
+    bool                                      stop;
+    Event *                                   currentEvent;
 
     Simulator ();
-    virtual ~Simulator ();
+    ~Simulator ();
 
-    virtual void run       (); ///< Main entry point for simulation. Do all work.
-    virtual void integrate (); ///< Perform one time step across all the parts contained in all the populations
+    void run (); ///< Main entry point for simulation. Do all work.
+    void updatePopulations ();
+    void enqueue (Part * part, float dt); ///< Places part on event with period dt. If the event already exists, then the actual time till the part next executes may be less than dt, but thereafter will be exactly dt. Caller is responsible to call dequeue() or enterSimulation().
 
     // callbacks
-    virtual void enqueue (Part * part);                    ///< Put part onto the queue and calls Part::enqueue(). The only way to dequeue is to return false from Part::finalize().
-    virtual void move    (float dt);                       ///< Change simulation period for the part that makes the call. We know which part is currently executing, so no need to pass it as a parameter.
-    virtual void resize  (Population * population, int n); ///< Schedule compartment to be resized at end of current cycle.
-    virtual void connect (Population * population);        ///< Schedule connection population to be evaluated at end of current cycle, after all resizing is done.
+    void resize   (Population * population, int n); ///< Schedule population to be resized at end of current cycle.
+    void connect  (Population * population);        ///< Schedule connections to be evaluated at end of current cycle, after all resizing is done.
+    void clearNew (Population * population);        ///< Schedule population to have its newborn index reset after all new connections are evaluated.
 };
+extern Simulator simulator;  // global singleton
 
-class Euler : public Simulator
+class Integrator
 {
 public:
-    virtual ~Euler ();
-
-    virtual void integrate ();
+    // For now, we don't need a virtual dtor, because this class contains no data.
+    virtual void run (Event & event) = 0;
 };
 
-class RungeKutta : public Simulator
+class Euler : public Integrator
 {
 public:
-    virtual ~RungeKutta ();
+    virtual void run (Event & event);
+};
 
-    virtual void integrate ();
+class RungeKutta : public Integrator
+{
+public:
+    virtual void run (Event & event);
+};
+
+/**
+    An instance of this function will normally call some operation on
+    Visitor::part, passing the visitor itself as the parameter.
+    Information specific to the operation is put into a capture by the
+    caller, while information specific to the Simulator/Event is held in
+    visitor.
+**/
+typedef std::function<void (Visitor * visitor)> visitorFunction;
+
+class Event
+{
+public:
+    double t;
+
+    virtual ~Event ();
+
+    virtual void run () = 0;  ///< Does all the work of a simulation cycle. This may be adapted to the specifics of the event type.
+    virtual void visit (visitorFunction f) = 0;  ///< Applies function to each part associated with this event. May visit multiple parts in parallel using separate threads.
+};
+
+/**
+    Holds parts that are formally queued for simulation.
+    Executes on a periodic basis ("step" refers to dt). No other event type can hold parts for the simulator.
+    Equivalently, all queued parts must belong to exactly one EventStep.
+    This class may be heavier (more storage, more computation) than other events, as it is expected
+    to live for the entire length of the simulation and repeatedly insert itself into the event queue.
+**/
+class EventStep : public Event
+{
+public:
+    float dt;
+    std::vector<VisitorStep *> visitors;
+
+    EventStep (double t, float dt);
+    virtual ~EventStep ();
+
+    virtual void  run     ();
+    virtual void  visit   (visitorFunction f);
+    void          requeue ();  ///< Subroutine of run(). If our load of instances is non-empty, then get back in the simulation queue.
+    void          enqueue (Part * part);
+};
+
+/**
+    Lightweight class representing one-time events, of which there may be a large quantity.
+**/
+class EventSpike : public Event
+{
+public:
+    EventTarget * eventType;
+};
+
+class EventSpikeSingle : public EventSpike
+{
+    Part * target;
+
+    virtual void run   ();
+    virtual void visit (visitorFunction f);
+};
+
+class EventSpikeSingleLatch : public EventSpikeSingle
+{
+public:
+    virtual void run ();
+};
+
+class EventSpikeMulti : public EventSpike
+{
+public:
+    std::vector<Part *> * targets;
+
+    virtual void run   ();
+    virtual void visit (visitorFunction f);
+};
+
+class EventSpikeMultiLatch : public EventSpikeMulti
+{
+public:
+    virtual void run ();
+};
+
+class EventTarget
+{
+public:
+    virtual void setFlag (Part * part);
+};
+
+/**
+    The general interface through which a Part communicates with the Event that is currently processing it.
+    This helper class enables Event to be lighter weight by not carrying extra fields that are
+    only needed when actually iterating over parts.
+**/
+class Visitor
+{
+public:
+    Event * event;
+    Part *  part;  ///< Current instance being processed.
+
+    Visitor (Event * event, Part * part = 0);
+
+    virtual void visit (visitorFunction f); ///< Applies function to each instance on our local queue. Steps "part" through the list and calls f(this) each time.
+};
+
+/**
+    Manages the subset of EventStep's load of instances assigned to a specific thread.
+**/
+class VisitorStep : public Visitor
+{
+public:
+    Part   queue;    ///< The head of a singly-linked list. queue itself never executes, rather, its "next" field points to the first active part.
+    Part * previous; ///< Points to the part immediately ahead of the current part.
+
+    VisitorStep (EventStep * event);
+
+    virtual void visit   (visitorFunction f);
+    virtual void enqueue (Part * newPart);  ///< Puts newPart on our local queue. Called by EventStep::enqueue(), which balances load across all threads.
+};
+
+class VisitorSpikeMulti : public Visitor
+{
+public:
+    VisitorSpikeMulti (EventSpikeMulti * event);
+
+    virtual void visit (visitorFunction f);
 };
 
 

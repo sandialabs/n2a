@@ -187,14 +187,20 @@ public class JobC
         // Main
         s.append ("int main (int argc, char * argv[])\n");
         s.append ("{\n");
-        String integrator = e.getNamedValue ("c.integrator", "Euler");
         s.append ("  try\n");
         s.append ("  {\n");
-        s.append ("    " + integrator + " simulator;\n");
+        String integrator = e.getNamedValue ("c.integrator", "Euler");
+        if (! integrator.equals ("Euler"))
+        {
+            s.append ("    simulator.integrator = new " + integrator + ";\n");
+        }
         s.append ("    Wrapper wrapper;\n");
-        s.append ("    simulator.enqueue (&wrapper);\n");
-        s.append ("    wrapper.init (simulator);\n");
-        s.append ("    simulator.run ();\n");
+        s.append ("    EventStep * event = (EventStep *) simulator.currentEvent;\n");
+        s.append ("    event->enqueue (&wrapper);\n");  // no need for wrapper->enterSimulation()
+        s.append ("    wrapper.init ();\n");  // This and the next line implement the init cycle at t=0
+        s.append ("    simulator.updatePopulations ();\n");
+        s.append ("    if (wrapper.visitor->event == event) event->requeue ();\n");
+        s.append ("    simulator.run ();\n");  // Now begin stepping forward in time
         s.append ("    outputClose ();\n");
         s.append ("  }\n");
         s.append ("  catch (const char * message)\n");
@@ -646,29 +652,29 @@ public class JobC
                 result.append ("  virtual void remove (Part * part);\n");
             }
         }
-        result.append ("  virtual void init (Simulator & simulator);\n");
+        result.append ("  virtual void init ();\n");
         if (bed.globalIntegrated.size () > 0)
         {
-            result.append ("  virtual void integrate (Simulator & simulator);\n");
+            result.append ("  virtual void integrate ();\n");
         }
         if (bed.globalUpdate.size () > 0)
         {
-            result.append ("  virtual void update (Simulator & simulator);\n");
+            result.append ("  virtual void update ();\n");
         }
         bed.canGrowOrDie =  s.lethalP  ||  s.lethalType  ||  s.canGrow ();
         bed.needGlobalFinalizeN =  s.container == null  &&  (bed.canResize  ||  bed.canGrowOrDie);
         bed.needGlobalFinalize =  bed.globalBufferedExternal.size () > 0  ||  bed.needGlobalFinalizeN  ||  (bed.canResize  &&  (bed.canGrowOrDie  ||  ! bed.n.hasAttribute ("initOnly")));
         if (bed.needGlobalFinalize)
         {
-            result.append ("  virtual bool finalize (Simulator & simulator);\n");
+            result.append ("  virtual bool finalize ();\n");
         }
         if (bed.n != null)
         {
-            result.append ("  virtual void resize (Simulator & simulator, int n);\n");
+            result.append ("  virtual void resize (int n);\n");
         }
         if (bed.globalDerivativeUpdate.size () > 0)
         {
-            result.append ("  virtual void updateDerivative (Simulator & simulator);\n");
+            result.append ("  virtual void updateDerivative ();\n");
         }
         if (bed.globalBufferedExternalDerivative.size () > 0)
         {
@@ -766,7 +772,7 @@ public class JobC
         // -------------------------------------------------------------------
 
         // Unit class
-        result.append ("class " + prefix (s) + " : public Part\n");
+        result.append ("class " + prefix (s) + " : public PartTime\n");
         result.append ("{\n");
         result.append ("public:\n");
 
@@ -875,6 +881,10 @@ public class JobC
         {
             result.append ("  virtual void clear ();\n");
         }
+        if (s.container == null)
+        {
+            result.append ("  virtual void setPeriod (float dt);\n");
+        }
         if (s.canDie ())
         {
             result.append ("  virtual void die ();\n");
@@ -891,24 +901,24 @@ public class JobC
         bed.needLocalInit =  s.connectionBindings == null  ||  bed.localInit.size () > 0  ||  bed.accountableEndpoints.size () > 0;
         if (bed.needLocalInit  ||  s.parts.size () > 0)
         {
-            result.append ("  virtual void init (Simulator & simulator);\n");
+            result.append ("  virtual void init ();\n");
         }
         if (bed.localIntegrated.size () > 0  ||  s.parts.size () > 0)
         {
-            result.append ("  virtual void integrate (Simulator & simulator);\n");
+            result.append ("  virtual void integrate ();\n");
         }
         if (bed.localUpdate.size () > 0  ||  s.parts.size () > 0)
         {
-            result.append ("  virtual void update (Simulator & simulator);\n");
+            result.append ("  virtual void update ();\n");
         }
         bed.needLocalFinalize =  bed.localBufferedExternal.size () > 0  ||  bed.type != null  ||  s.canDie ();
         if (bed.needLocalFinalize  ||  s.parts.size () > 0)
         {
-            result.append ("  virtual bool finalize (Simulator & simulator);\n");
+            result.append ("  virtual bool finalize ();\n");
         }
         if (bed.localDerivativeUpdate.size () > 0  ||  s.parts.size () > 0)
         {
-            result.append ("  virtual void updateDerivative (Simulator & simulator);\n");
+            result.append ("  virtual void updateDerivative ();\n");
         }
         if (bed.localBufferedExternalDerivative.size () > 0  ||  s.parts.size () > 0)
         {
@@ -944,7 +954,7 @@ public class JobC
             Variable p = s.find (new Variable ("$p", 0));
             if (p != null)
             {
-                result.append ("  virtual float getP (Simulator & simulator);\n");
+                result.append ("  virtual float getP ();\n");
             }
 
             for (ConnectionBinding c : s.connectionBindings)
@@ -976,7 +986,7 @@ public class JobC
         {
             EquationSet source = pair.from;
             EquationSet dest   = pair.to;
-            result.append ("  void " + mangle (source.name) + "_2_" + mangle (dest.name) + " (" + mangle (source.name) + " * from, Simulator & simulator, int " + mangle ("$type") + ");\n");
+            result.append ("  void " + mangle (source.name) + "_2_" + mangle (dest.name) + " (" + mangle (source.name) + " * from, int " + mangle ("$type") + ");\n");
         }
 
         // Unit class trailer
@@ -1102,7 +1112,7 @@ public class JobC
         }
 
         // Population init
-        result.append ("void " + ns + "init (Simulator & simulator)\n");
+        result.append ("void " + ns + "init ()\n");
         result.append ("{\n");
         s.setInit (1);
         //   Zero out members
@@ -1142,7 +1152,7 @@ public class JobC
                 Backend.err.get ().println ("$n is not applicable to connections");
                 throw new Backend.AbortRun ();
             }
-            result.append ("  resize (simulator, " + resolve (bed.n.reference, context, false) + ");\n");
+            result.append ("  resize (" + resolve (bed.n.reference, context, false) + ");\n");
         }
         //   make connections
         if (s.connectionBindings != null)
@@ -1156,20 +1166,21 @@ public class JobC
         // Population integrate
         if (bed.globalIntegrated.size () > 0)
         {
-            result.append ("void " + ns + "integrate (Simulator & simulator)\n");
+            result.append ("void " + ns + "integrate ()\n");
             result.append ("{\n");
+            result.append ("  float dt = getEvent ()->dt;\n");
             result.append ("  if (preserve)\n");
             result.append ("  {\n");
             for (Variable v : bed.globalIntegrated)
             {
-                result.append ("    " + resolve (v.reference, context, false) + " = preserve->" + mangle (v) + " + " + resolve (v.derivative.reference, context, false) + " * simulator.dt;\n");
+                result.append ("    " + resolve (v.reference, context, false) + " = preserve->" + mangle (v) + " + " + resolve (v.derivative.reference, context, false) + " * dt;\n");
             }
             result.append ("  }\n");
             result.append ("  else\n");
             result.append ("  {\n");
             for (Variable v : bed.globalIntegrated)
             {
-                result.append ("    " + resolve (v.reference, context, false) + " += " + resolve (v.derivative.reference, context, false) + " * simulator.dt;\n");
+                result.append ("    " + resolve (v.reference, context, false) + " += " + resolve (v.derivative.reference, context, false) + " * dt;\n");
             }
             result.append ("  }\n");
             result.append ("};\n");
@@ -1179,7 +1190,7 @@ public class JobC
         // Population update
         if (bed.globalUpdate.size () > 0)
         {
-            result.append ("void " + ns + "update (Simulator & simulator)\n");
+            result.append ("void " + ns + "update ()\n");
             result.append ("{\n");
 
             for (Variable v : bed.globalBufferedInternalUpdate)
@@ -1207,7 +1218,7 @@ public class JobC
         // Population finalize
         if (bed.needGlobalFinalize)
         {
-            result.append ("bool " + ns + "finalize (Simulator & simulator)\n");
+            result.append ("bool " + ns + "finalize ()\n");
             result.append ("{\n");
 
             if (bed.canResize  &&  bed.n.derivative == null  &&  bed.canGrowOrDie)  // $n shares control with other specials, so must coordinate with them
@@ -1278,7 +1289,7 @@ public class JobC
         // Population resize()
         if (bed.n != null)
         {
-            result.append ("void " + ns + "resize (Simulator & simulator, int n)\n");
+            result.append ("void " + ns + "resize (int n)\n");
             result.append ("{\n");
             if (bed.canResize  &&  bed.canGrowOrDie  &&  bed.n.derivative == null)
             {
@@ -1289,11 +1300,13 @@ public class JobC
                 result.append ("  }\n");
                 result.append ("\n");
             }
+            result.append ("  EventStep * event = container->getEvent ();\n");
             result.append ("  while (this->n < n)\n");
             result.append ("  {\n");
             result.append ("    Part * p = allocate ();\n");
-            result.append ("    simulator.enqueue (p);\n");
-            result.append ("    p->init (simulator);\n");
+            result.append ("    p->enterSimulation ();\n");
+            result.append ("    event->enqueue (p);\n");
+            result.append ("    p->init ();\n");
             result.append ("  }\n");
             result.append ("\n");
             result.append ("  Part * p = live.before;\n");
@@ -1310,7 +1323,7 @@ public class JobC
         // Population updateDerivative
         if (bed.globalDerivativeUpdate.size () > 0)
         {
-            result.append ("void " + ns + "updateDerivative (Simulator & simulator)\n");
+            result.append ("void " + ns + "updateDerivative ()\n");
             result.append ("{\n");
             for (Variable v : bed.globalBufferedInternalDerivative)
             {
@@ -1630,6 +1643,17 @@ public class JobC
             result.append ("\n");
         }
 
+        // Unit setPeriod
+        if (s.container == null)  // instance of top-level population, so set period on wrapper whenever our period changes
+        {
+            result.append ("void " + ns + "setPeriod (float dt)\n");
+            result.append ("{\n");
+            result.append ("  PartTime::setPeriod (dt);\n");
+            result.append ("  if (container->visitor->event != visitor->event) container->setPeriod (dt);\n");
+            result.append ("}\n");
+            result.append ("\n");
+        }
+
         // Unit die
         if (s.canDie ())
         {
@@ -1700,7 +1724,7 @@ public class JobC
         // Unit init
         if (s.connectionBindings == null  ||  bed.localInit.size () > 0  ||  s.parts.size () > 0  ||  bed.accountableEndpoints.size () > 0)
         {
-            result.append ("void " + ns + "init (Simulator & simulator)\n");
+            result.append ("void " + ns + "init ()\n");
             result.append ("{\n");
             s.setInit (1);
             for (Variable v : bed.localBufferedExternal)
@@ -1734,7 +1758,7 @@ public class JobC
                 if (! v.name.startsWith ("$")) continue;
                 if (v.name.equals ("$t")  &&  v.order == 1)  // $t'
                 {
-                    result.append ("  if (" + mangle ("next_", v) + " != simulator.dt) simulator.move (" + mangle ("next_", v) + ");\n");
+                    result.append ("  if (" + mangle ("next_", v) + " != getEvent ()->dt) setPeriod (" + mangle ("next_", v) + ");\n");
                 }
                 else
                 {
@@ -1771,7 +1795,7 @@ public class JobC
             // contained populations
             for (EquationSet e : s.parts)
             {
-                result.append ("  " + mangle (e.name) + ".init (simulator);\n");
+                result.append ("  " + mangle (e.name) + ".init ();\n");
             }
 
             s.setInit (0);
@@ -1782,31 +1806,32 @@ public class JobC
         // Unit integrate
         if (bed.localIntegrated.size () > 0  ||  s.parts.size () > 0)
         {
-            result.append ("void " + ns + "integrate (Simulator & simulator)\n");
+            result.append ("void " + ns + "integrate ()\n");
             result.append ("{\n");
             if (bed.localIntegrated.size () > 0)
             {
                 // Note the resolve() call on the left-hand-side below has lvalue==false.
                 // Integration always takes place in the primary storage of a variable.
+                result.append ("  float dt = getEvent ()->dt;\n");  // TODO: handle spike events, which produce variable integration times, even for fixed-period models
                 result.append ("  if (preserve)\n");
                 result.append ("  {\n");
                 for (Variable v : bed.localIntegrated)
                 {
-                    result.append ("    " + resolve (v.reference, context, false) + " = preserve->" + mangle (v) + " + " + resolve (v.derivative.reference, context, false) + " * simulator.dt;\n");
+                    result.append ("    " + resolve (v.reference, context, false) + " = preserve->" + mangle (v) + " + " + resolve (v.derivative.reference, context, false) + " * dt;\n");
                 }
                 result.append ("  }\n");
                 result.append ("  else\n");
                 result.append ("  {\n");
                 for (Variable v : bed.localIntegrated)
                 {
-                    result.append ("    " + resolve (v.reference, context, false) + " += " + resolve (v.derivative.reference, context, false) + " * simulator.dt;\n");
+                    result.append ("    " + resolve (v.reference, context, false) + " += " + resolve (v.derivative.reference, context, false) + " * dt;\n");
                 }
                 result.append ("  }\n");
             }
             // contained populations
             for (EquationSet e : s.parts)
             {
-                result.append ("  " + mangle (e.name) + ".integrate (simulator);\n");
+                result.append ("  " + mangle (e.name) + ".integrate ();\n");
             }
             result.append ("}\n");
             result.append ("\n");
@@ -1815,7 +1840,7 @@ public class JobC
         // Unit update
         if (bed.localUpdate.size () > 0  ||  s.parts.size () > 0)
         {
-            result.append ("void " + ns + "update (Simulator & simulator)\n");
+            result.append ("void " + ns + "update ()\n");
             result.append ("{\n");
             for (Variable v : bed.localBufferedInternalUpdate)
             {
@@ -1832,7 +1857,7 @@ public class JobC
             // contained populations
             for (EquationSet e : s.parts)
             {
-                result.append ("  " + mangle (e.name) + ".update (simulator);\n");
+                result.append ("  " + mangle (e.name) + ".update ();\n");
             }
             result.append ("}\n");
             result.append ("\n");
@@ -1841,13 +1866,13 @@ public class JobC
         // Unit finalize
         if (bed.needLocalFinalize  ||  s.parts.size () > 0)
         {
-            result.append ("bool " + ns + "finalize (Simulator & simulator)\n");
+            result.append ("bool " + ns + "finalize ()\n");
             result.append ("{\n");
 
             // contained populations
             for (EquationSet e : s.parts)
             {
-                result.append ("  " + mangle (e.name) + ".finalize (simulator);\n");  // ignore return value
+                result.append ("  " + mangle (e.name) + ".finalize ();\n");  // ignore return value
             }
 
             Variable live = s.find (new Variable ("$live"));
@@ -1860,7 +1885,7 @@ public class JobC
             {
                 if (v.name.equals ("$t")  &&  v.order == 1)
                 {
-                    result.append ("  if (" + mangle ("next_", v) + " != simulator.dt) simulator.move (" + mangle ("next_", v) + ");\n");
+                    result.append ("  if (" + mangle ("next_", v) + " != getEvent ()->dt) setPeriod (" + mangle ("next_", v) + ");\n");
                 }
                 else
                 {
@@ -1909,7 +1934,7 @@ public class JobC
                         {
                             String container = "container->";
                             if (bed.pathToContainer != null) container = mangle (bed.pathToContainer) + "->" + container;
-                            result.append ("      " + container + mangle (s.name) + "_2_" + mangle (to.name) + " (this, simulator, " + (j + 1) + ");\n");
+                            result.append ("      " + container + mangle (s.name) + "_2_" + mangle (to.name) + " (this, " + (j + 1) + ");\n");
                         }
                     }
                     if (used)
@@ -1985,7 +2010,7 @@ public class JobC
         // Unit updateDerivative
         if (bed.localDerivativeUpdate.size () > 0  ||  s.parts.size () > 0)
         {
-            result.append ("void " + ns + "updateDerivative (Simulator & simulator)\n");
+            result.append ("void " + ns + "updateDerivative ()\n");
             result.append ("{\n");
             for (Variable v : bed.localBufferedInternalDerivative)
             {
@@ -2002,7 +2027,7 @@ public class JobC
             // contained populations
             for (EquationSet e : s.parts)
             {
-                result.append ("  " + mangle (e.name) + ".updateDerivative (simulator);\n");
+                result.append ("  " + mangle (e.name) + ".updateDerivative ();\n");
             }
             result.append ("}\n");
             result.append ("\n");
@@ -2205,7 +2230,7 @@ public class JobC
             Variable p = s.find (new Variable ("$p", 0));
             if (p != null)
             {
-                result.append ("float " + ns + "getP (Simulator & simulator)\n");
+                result.append ("float " + ns + "getP ()\n");
                 result.append ("{\n");
 
                 s.setInit (1);
@@ -2518,9 +2543,9 @@ public class JobC
             // Must do everything init() normally does, including increment $n.
             // Parameters:
             //   from -- the source part
-            //   simulator -- the one managing the source part
+            //   visitor -- the one managing the source part
             //   $type -- The integer index, in the $type expression, of the current target part. The target part's $type field will be initialized with this number (and zeroed after one cycle).
-            result.append ("void " + ns + mangle (source.name) + "_2_" + mangle (dest.name) + " (" + mangle (source.name) + " * from, Simulator & simulator, int " + mangle ("$type") + ")\n");
+            result.append ("void " + ns + mangle (source.name) + "_2_" + mangle (dest.name) + " (" + mangle (source.name) + " * from, int " + mangle ("$type") + ")\n");
             result.append ("{\n");
             result.append ("  " + mangle (dest.name) + " * to = " + mangle (dest.name) + ".allocate ();\n");
             if (connectionDest)
@@ -2537,8 +2562,9 @@ public class JobC
                     result.append ("  to->" + mangle (c.alias) + " = from->" + mangle (c.alias) + ";\n");
                 }
             }
-            result.append ("  simulator.enqueue (to);\n");
-            result.append ("  to->init (simulator);\n");  // sets all variables, so partially redundant with the following code ...
+            result.append ("  to->enterSimulation ();\n");
+            result.append ("  getEvent ()->enqueue (to);\n");
+            result.append ("  to->init ();\n");  // sets all variables, so partially redundant with the following code ...
             // TODO: Convert contained populations from matching populations in the source part?
 
             // Match variables between the two sets.
@@ -3005,16 +3031,20 @@ public class JobC
         String name = "";
         if (r.variable.hasAttribute ("preexistent"))
         {
-            // We can't read $t or $t' from another object's simulator, unless is exactly the same as ours, in which case there is no point.
-            // We can't directly write $t' of another object.
-            // TODO: Need a way to tell another part to immediately accelerate
-            if (containers.length () > 0) return "unresolved";
             if (! lvalue)
             {
-                if (r.variable.name.equals ("$t")  &&  r.variable.order == 1) return "simulator.dt";
-                return "simulator." + r.variable.name.substring (1);  // strip the $ and expect it to be a member of simulator, which must be passed into the current function
+                if (r.variable.name.equals ("$t"))
+                {
+                    if      (r.variable.order == 0) name = "getEvent ()->t";
+                    else if (r.variable.order == 1) name = "getEvent ()->dt";
+                    // TODO: what about higher orders of $t?
+                }
+                else
+                {
+                    return "simulator." + r.variable.name.substring (1);  // strip the $ and expect it to be a member of simulator
+                }
             }
-            // if lvalue, then fall through to the main case below 
+            // for lvalue, fall through to the main case below
         }
         if (r.variable.hasAttribute ("accessor"))
         {
@@ -3419,7 +3449,7 @@ public class JobC
                 String outputName;
                 if (o.operands[0] instanceof Constant) outputName = outputNames.get (o.operands[0].toString ());
                 else                                   outputName = outputNames.get (o);
-                result.append (outputName + "->trace (simulator.t, ");
+                result.append (outputName + "->trace (getEvent ()->t, ");
 
                 if (o.operands.length > 2)  // column name is explicit
                 {
