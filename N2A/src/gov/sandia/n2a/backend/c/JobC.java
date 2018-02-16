@@ -58,7 +58,7 @@ public class JobC
 {
     static boolean rebuildRuntime = true;  // always rebuild runtime once per session
 
-    // These values are unique across the whole simulation, so they go here rather than BackendData.
+    // These values are unique across the whole simulation, so they go here rather than BackendDataC.
     // Where possible, the key is a String. Otherwise, it is an Operator which is specific to one expression.
     public HashMap<Object,String> matrixNames = new HashMap<Object,String> ();
     public HashMap<Object,String> inputNames  = new HashMap<Object,String> ();
@@ -145,6 +145,7 @@ public class JobC
         e.forceTemporaryStorageForSpecials ();
         findLiveReferences (e);
         e.determineTypes ();
+        analyze (e);
 
         e.determineDuration ();
         String duration = e.getNamedValue ("duration");
@@ -231,10 +232,17 @@ public class JobC
         for (EquationSet p : s.parts) generateClassList (p, result);
     }
 
+    public void analyze (EquationSet s)
+    {
+        if (! (s.backendData instanceof BackendDataC)) s.backendData = new BackendDataC ();
+        BackendDataC bed = (BackendDataC) s.backendData;
+        bed.analyze (s, this);
+        for (EquationSet p : s.parts) analyze (p);
+    }
+
     /**
         Declares all classes, along with their member variables and functions.
-        Declarations are recursively composed, so that everything below this level
-        is contained in the current class.
+
         This is a very long monolithic function. Use the comments as guideposts on
         the current thing being generated. First we analyze all variables in the
         current equations set, then generate two classes: one for the instances ("local")
@@ -242,17 +250,12 @@ public class JobC
         declare buffer classes for integration and derivation, then member variables,
         and finally member functions as appropriate based on the analysis done at the
         beginning.
-        Note that the analysis is cached in s.backendData for later use when generating function
-        definitions.
-
-        TODO: Move analysis code + BackendData into separate class.
     **/
     public void generateDeclarations (final EquationSet s, final StringBuilder result)
     {
-        // Analyze variables
-        if (! (s.backendData instanceof BackendData)) s.backendData = new BackendData ();
-        final BackendData bed = (BackendData) s.backendData;
+        final BackendDataC bed = (BackendDataC) s.backendData;
 
+        // Generate static definitions
         class CheckStatic extends Visitor
         {
             public boolean global;
@@ -357,200 +360,11 @@ public class JobC
             }
         }
         CheckStatic checkStatic = new CheckStatic ();
-
-        System.out.println (s.name);
-        for (Variable v : s.ordered)  // we want the sub-lists to be ordered correctly
+        for (Variable v : s.ordered)
         {
-            String className = "null";
-            if (v.type != null) className = v.type.getClass ().getSimpleName ();
-            System.out.println ("  " + v.nameString () + " " + v.attributeString () + " " + className);
-
-            if      (v.name.equals ("$type" )                  ) bed.type  = v;
-            else if (v.name.equals ("$n"    )  &&  v.order == 0) bed.n     = v;
-            else if (v.name.equals ("$index"))
-            {
-                bed.index = v;
-                continue;  // Don't let $index enter into any variable lists. Instead, always give it special treatment. In effect, it is a list of one.
-            }
-
-            boolean global = v.hasAttribute ("global");
-            checkStatic.global = global;
+            checkStatic.global = v.hasAttribute ("global");
             v.visit (checkStatic);
-            if (global)
-            {
-                if (! v.hasAny (new String[] {"constant", "accessor"}))
-                {
-                    boolean initOnly               = v.hasAttribute ("initOnly");
-                    boolean derivativeOrDependency = v.hasAttribute ("derivativeOrDependency");
-                    if (! initOnly) bed.globalUpdate.add (v);
-                    if (derivativeOrDependency) bed.globalDerivativeUpdate.add (v);
-                    if (! v.hasAttribute ("reference"))
-                    {
-                        boolean temporary = v.hasAttribute ("temporary");
-                        boolean unusedTemporary = temporary  &&  ! v.hasUsers ();  // here only to make the following line of code more clear
-                        if (! unusedTemporary) bed.globalInit.add (v);
-                        if (! temporary  &&  ! v.hasAttribute ("dummy"))
-                        {
-                            if (! v.hasAttribute ("preexistent"))
-                            {
-                                bed.globalMembers.add (v);
-
-                                // If v is merely a derivative, not used by anything but its own integral, then no reason to preserve it.
-                                // check if v.usedBy contains any variable that is not v's integral
-                                if (derivativeOrDependency  &&  v.derivative == null  &&  v.usedBy != null)
-                                {
-                                    for (Object o : v.usedBy)
-                                    {
-                                        if (o instanceof Variable  &&  ((Variable) o).derivative != v)
-                                        {
-                                            bed.globalDerivativePreserve.add (v);
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-
-                            boolean external = false;
-                            if (! initOnly)
-                            {
-                                if (v.name.equals ("$t"))
-                                {
-                                    if (v.order > 1) bed.globalDerivative.add (v);
-                                }
-                                else
-                                {
-                                    if (v.order > 0) bed.globalDerivative.add (v);
-                                }
-
-                                if (v.hasAttribute ("externalWrite"))
-                                {
-                                    external = true;
-                                    bed.globalBufferedExternalWrite.add (v);
-                                    if (derivativeOrDependency) bed.globalBufferedExternalWriteDerivative.add (v);
-                                }
-                                if (external  ||  (v.hasAttribute ("externalRead")  &&  v.equations.size () > 0))
-                                {
-                                    external = true;
-                                    bed.globalBufferedExternal.add (v);
-                                    if (derivativeOrDependency) bed.globalBufferedExternalDerivative.add (v);
-                                }
-                            }
-                            if (external  ||  v.hasAttribute ("cycle"))
-                            {
-                                bed.globalBuffered.add (v);
-                                if (! external)
-                                {
-                                    bed.globalBufferedInternal.add (v);
-                                    if (! initOnly)
-                                    {
-                                        bed.globalBufferedInternalUpdate.add (v);
-                                        if (derivativeOrDependency) bed.globalBufferedInternalDerivative.add (v);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            else  // local
-            {
-                if (! v.hasAny (new String[] {"constant", "accessor"}))
-                {
-                    boolean initOnly               = v.hasAttribute ("initOnly");
-                    boolean derivativeOrDependency = v.hasAttribute ("derivativeOrDependency");
-                    if (! initOnly) bed.localUpdate.add (v);  // TODO: ensure that initOnly temporary variables are handled correctly. IE: their value doesn't change after init, but they still need to be calculated on the fly.
-                    if (derivativeOrDependency) bed.localDerivativeUpdate.add (v);
-                    if (v.hasAttribute ("reference"))
-                    {
-                        if (v.reference.variable.container.canDie ()) bed.localReference.add (v.reference);
-                    }
-                    else
-                    {
-                        boolean temporary = v.hasAttribute ("temporary");
-                        boolean unusedTemporary = temporary  &&  ! v.hasUsers ();
-                        if (! unusedTemporary) bed.localInit.add (v);
-                        if (! temporary  &&  ! v.hasAttribute ("dummy"))
-                        {
-                            if (! v.hasAttribute ("preexistent"))
-                            {
-                                bed.localMembers.add (v);
-
-                                if (derivativeOrDependency  &&  v.derivative == null  &&  v.usedBy != null)
-                                {
-                                    for (Object o : v.usedBy)
-                                    {
-                                        if (o instanceof Variable  &&  ((Variable) o).derivative != v)
-                                        {
-                                            bed.localDerivativePreserve.add (v);
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-
-                            boolean external = false;
-                            if (! initOnly)
-                            {
-                                if (v.name.equals ("$t"))
-                                {
-                                    if (v.order > 1) bed.localDerivative.add (v);
-                                }
-                                else  // any other variable
-                                {
-                                    if (v.order > 0) bed.localDerivative.add (v);
-                                }
-
-                                if (v.hasAttribute ("externalWrite"))
-                                {
-                                    external = true;
-                                    bed.localBufferedExternalWrite.add (v);
-                                    if (derivativeOrDependency) bed.localBufferedExternalWriteDerivative.add (v);
-                                }
-                                if (external  ||  (v.hasAttribute ("externalRead")  &&  v.equations.size () > 0))
-                                {
-                                    external = true;
-                                    bed.localBufferedExternal.add (v);
-                                    if (derivativeOrDependency) bed.localBufferedExternalDerivative.add (v);
-                                }
-                            }
-                            if (external  ||  v.hasAttribute ("cycle"))
-                            {
-                                bed.localBuffered.add (v);
-                                if (! external)
-                                {
-                                    bed.localBufferedInternal.add (v);
-                                    if (! initOnly)
-                                    {
-                                        bed.localBufferedInternalUpdate.add (v);
-                                        if (derivativeOrDependency) bed.localBufferedInternalDerivative.add (v);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         }
-        for (Variable v : s.variables)  // we need these to be in order by differential level, not by dependency
-        {
-            if (v.derivative != null  &&  ! v.hasAny (new String[] {"constant", "initOnly"}))
-            {
-                if (v.hasAttribute ("global")) bed.globalIntegrated.add (v);
-                else                           bed. localIntegrated.add (v);
-            }
-        }
-
-        if (s.connectionBindings != null)
-        {
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                Variable       v = s.find (new Variable (c.alias + ".$max"));
-                if (v == null) v = s.find (new Variable (c.alias + ".$min"));
-                if (v != null) bed.accountableEndpoints.add (c.alias);
-            }
-        }
-
-        bed.refcount = s.referenced  &&  s.canDie ();
 
         // Sub-parts
         for (EquationSet p : s.parts) generateDeclarations (p, result);
@@ -576,7 +390,6 @@ public class JobC
             result.append ("  };\n");
             result.append ("\n");
         }
-        bed.needGlobalPreserve =  bed.globalIntegrated.size () > 0  ||  bed.globalDerivativePreserve.size () > 0  ||  bed.globalBufferedExternalWriteDerivative.size () > 0;
         if (bed.needGlobalPreserve)
         {
             result.append ("  class Preserve\n");
@@ -631,8 +444,6 @@ public class JobC
         result.append ("\n");
 
         // Population functions
-        bed.needGlobalDtor = bed.needGlobalPreserve  ||  bed.globalDerivative.size () > 0;
-        bed.needGlobalCtor = bed.needGlobalDtor  ||  bed.index != null  ||  bed.n != null;
         if (bed.needGlobalCtor)
         {
             result.append ("  " + prefix (s) + "_Population ();\n");
@@ -642,8 +453,6 @@ public class JobC
             result.append ("  virtual ~" + prefix (s) + "_Population ();\n");
         }
         result.append ("  virtual Part * create ();\n");
-        bed.canResize = bed.globalMembers.contains (bed.n);  // Works correctly even if bed.n is null.
-        bed.trackInstances = s.connected  ||  s.needInstanceTracking  ||  bed.canResize;
         if (bed.index != null  ||  bed.trackInstances)
         {
             result.append ("  virtual void add (Part * part);\n");
@@ -661,9 +470,6 @@ public class JobC
         {
             result.append ("  virtual void update ();\n");
         }
-        bed.canGrowOrDie =  s.lethalP  ||  s.lethalType  ||  s.canGrow ();
-        bed.needGlobalFinalizeN =  s.container == null  &&  (bed.canResize  ||  bed.canGrowOrDie);
-        bed.needGlobalFinalize =  bed.globalBufferedExternal.size () > 0  ||  bed.needGlobalFinalizeN  ||  (bed.canResize  &&  (bed.canGrowOrDie  ||  ! bed.n.hasAttribute ("initOnly")));
         if (bed.needGlobalFinalize)
         {
             result.append ("  virtual bool finalize ();\n");
@@ -695,65 +501,17 @@ public class JobC
         if (s.connectionBindings != null)
         {
             result.append ("  virtual Population * getTarget (int i);\n");
-
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                Variable v = s.find (new Variable (c.alias + ".$k"));
-                EquationEntry e = null;
-                if (v != null) e = v.equations.first ();
-                if (e != null)
-                {
-                    bed.needK = true;
-                    break;
-                }
-            }
             if (bed.needK)
             {
                 result.append ("  virtual int getK (int i);\n");
-            }
-
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                Variable v = s.find (new Variable (c.alias + ".$max"));
-                EquationEntry e = null;
-                if (v != null) e = v.equations.first ();
-                if (e != null)
-                {
-                    bed.needMax = true;
-                    break;
-                }
             }
             if (bed.needMax)
             {
                 result.append ("  virtual int getMax (int i);\n");
             }
-
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                Variable v = s.find (new Variable (c.alias + ".$min"));
-                EquationEntry e = null;
-                if (v != null) e = v.equations.first ();
-                if (e != null)
-                {
-                    bed.needMin = true;
-                    break;
-                }
-            }
             if (bed.needMin)
             {
                 result.append ("  virtual int getMin (int i);\n");
-            }
-
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                Variable v = s.find (new Variable (c.alias + ".$radius"));
-                EquationEntry e = null;
-                if (v != null) e = v.equations.first ();
-                if (e != null)
-                {
-                    bed.needRadius = true;
-                    break;
-                }
             }
             if (bed.needRadius)
             {
@@ -790,7 +548,6 @@ public class JobC
             result.append ("  };\n");
             result.append ("\n");
         }
-        bed.needLocalPreserve =  bed.localIntegrated.size () > 0  ||  bed.localDerivativePreserve.size () > 0  ||  bed.localBufferedExternalWriteDerivative.size () > 0;
         if (bed.needLocalPreserve)
         {
             result.append ("  class Preserve\n");
@@ -867,8 +624,6 @@ public class JobC
         result.append ("\n");
 
         // Unit functions
-        bed.needLocalDtor =  bed.needLocalPreserve  ||  bed.localDerivative.size () > 0;
-        bed.needLocalCtor =  bed.needLocalDtor  ||  s.accountableConnections != null  ||  bed.refcount;
         if (bed.needLocalCtor  ||  s.parts.size () > 0)
         {
             result.append ("  " + prefix (s) + " ();\n");
@@ -898,7 +653,6 @@ public class JobC
         {
             result.append ("  virtual bool isFree ();\n");
         }
-        bed.needLocalInit =  s.connectionBindings == null  ||  bed.localInit.size () > 0  ||  bed.accountableEndpoints.size () > 0;
         if (bed.needLocalInit  ||  s.parts.size () > 0)
         {
             result.append ("  virtual void init ();\n");
@@ -911,7 +665,6 @@ public class JobC
         {
             result.append ("  virtual void update ();\n");
         }
-        bed.needLocalFinalize =  bed.localBufferedExternal.size () > 0  ||  bed.type != null  ||  s.canDie ();
         if (bed.needLocalFinalize  ||  s.parts.size () > 0)
         {
             result.append ("  virtual bool finalize ();\n");
@@ -936,38 +689,27 @@ public class JobC
             result.append ("  virtual void multiply (float scalar);\n");
             result.append ("  virtual void addToMembers ();\n");
         }
-        Variable live = s.find (new Variable ("$live"));
-        if (live != null  &&  ! live.hasAttribute ("constant"))
+        if (bed.live != null  &&  ! bed.live.hasAttribute ("constant"))
         {
             result.append ("  virtual float getLive ();\n");
         }
         if (s.connectionBindings == null)
         {
-            Variable xyz = s.find (new Variable ("$xyz", 0));  // Connections can also have $xyz, but only compartments need to provide an accessor.
-            if (xyz != null)
+            if (bed.xyz != null)
             {
                 result.append ("  virtual void getXYZ (Vector3 & xyz);\n");
             }
         }
         else
         {
-            Variable p = s.find (new Variable ("$p", 0));
-            if (p != null)
+            if (bed.p != null)
             {
                 result.append ("  virtual float getP ();\n");
-            }
-
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                if (s.find (new Variable (c.alias + ".$projectFrom")) != null) bed.hasProjectFrom = true;
-                if (s.find (new Variable (c.alias + ".$projectTo"  )) != null) bed.hasProjectTo   = true;
-                // TODO: if only one of a pair of projections is present, create the other using point sampling
             }
             if (bed.hasProjectFrom  ||  bed.hasProjectTo)
             {
                 result.append ("  virtual void project (int i, int j, Vector3 & xyz);\n");
             }
-
             result.append ("  virtual void setPart (int i, Part * part);\n");
             result.append ("  virtual Part * getPart (int i);\n");
         }
@@ -999,7 +741,7 @@ public class JobC
         CRenderer context = new CRenderer (result, s);
 
         // Access backend data
-        BackendData bed = (BackendData) s.backendData;
+        BackendDataC bed = (BackendDataC) s.backendData;
 
         context.global = true;
         String ns = prefix (s) + "_Population::";  // namespace for all functions associated with part s
@@ -1550,7 +1292,7 @@ public class JobC
         {
             result.append ("void " + ns + "path (string & result)\n");
             result.append ("{\n");
-            if (((BackendData) s.container.backendData).needLocalPath)  // Will our container provide a non-empty path?
+            if (((BackendDataC) s.container.backendData).needLocalPath)  // Will our container provide a non-empty path?
             {
                 result.append ("  container->path (result);\n");
                 result.append ("  result += \"." + s.name + "\";\n");
@@ -2486,7 +2228,7 @@ public class JobC
                 // We assume that result is passed in as the empty string.
                 if (s.container != null)
                 {
-                    if (((BackendData) s.container.backendData).needLocalPath)  // Will our container provide a non-empty path?
+                    if (((BackendDataC) s.container.backendData).needLocalPath)  // Will our container provide a non-empty path?
                     {
                         result.append ("  container->path (result);\n");
                         result.append ("  result += \"." + s.name + "\";\n");
@@ -2819,7 +2561,7 @@ public class JobC
                     if (o.operands.length < 3  &&  init)  // column name is generated; only generate during init phase
                     {
                         String stringName = stringNames.get (op);
-                        BackendData bed = (BackendData) context.part.backendData;
+                        BackendDataC bed = (BackendDataC) context.part.backendData;
                         if (context.global ? bed.needGlobalPath : bed.needLocalPath)
                         {
                             context.result.append (pad + "path (" + stringName + ");\n");
@@ -3109,7 +2851,7 @@ public class JobC
                 }
                 else  // ascend to our container
                 {
-                    BackendData bed = (BackendData) current.backendData;
+                    BackendDataC bed = (BackendDataC) current.backendData;
                     if (bed.pathToContainer != null)  // we are a Connection without a container pointer, so we must go through one of our referenced parts
                     {
                         containers += mangle (bed.pathToContainer) + "->";
@@ -3128,7 +2870,7 @@ public class JobC
 
         if (r.resolution.isEmpty ()  &&  r.variable.hasAttribute ("global")  &&  ! context.global)
         {
-            BackendData bed = (BackendData) current.backendData;
+            BackendDataC bed = (BackendDataC) current.backendData;
             if (bed.pathToContainer != null)
             {
                 containers += mangle (bed.pathToContainer) + "->";
@@ -3152,8 +2894,8 @@ public class JobC
             {
                 if (c.endpoint.container == s.container)
                 {
-                    if (! (s.backendData instanceof BackendData)) s.backendData = new BackendData ();
-                    ((BackendData) s.backendData).pathToContainer = c.alias;
+                    if (! (s.backendData instanceof BackendDataC)) s.backendData = new BackendDataC ();
+                    ((BackendDataC) s.backendData).pathToContainer = c.alias;
                     break;
                 }
             }
@@ -3171,8 +2913,8 @@ public class JobC
         {
             ArrayList<Object>         resolution     = new ArrayList<Object> ();
             NavigableSet<EquationSet> touched        = new TreeSet<EquationSet> ();
-            if (! (s.backendData instanceof BackendData)) s.backendData = new BackendData ();
-            findLiveReferences (s, resolution, touched, ((BackendData) s.backendData).localReference, false);
+            if (! (s.backendData instanceof BackendDataC)) s.backendData = new BackendDataC ();
+            findLiveReferences (s, resolution, touched, ((BackendDataC) s.backendData).localReference, false);
         }
     }
 
@@ -3214,107 +2956,6 @@ public class JobC
                 resolution.add (c);
                 findLiveReferences (c.endpoint, resolution, touched, localReference, true);
                 resolution.remove (resolution.size () - 1);
-            }
-        }
-    }
-
-    public class BackendData
-    {
-        public List<Variable>          localUpdate                           = new ArrayList<Variable> ();  // updated during regular call to update()
-        public List<Variable>          localInit                             = new ArrayList<Variable> ();  // set by init()
-        public List<Variable>          localMembers                          = new ArrayList<Variable> ();  // stored inside the object
-        public List<Variable>          localBuffered                         = new ArrayList<Variable> ();  // needs buffering (temporaries)
-        public List<Variable>          localBufferedInternal                 = new ArrayList<Variable> ();  // subset of buffered that are due to dependencies strictly within the current equation-set
-        public List<Variable>          localBufferedInternalDerivative       = new ArrayList<Variable> ();  // subset of buffered internal that are derivatives or their dependencies
-        public List<Variable>          localBufferedInternalUpdate           = new ArrayList<Variable> ();  // subset of buffered internal that can execute outside of init()
-        public List<Variable>          localBufferedExternal                 = new ArrayList<Variable> ();  // subset of buffered that are due to some external access
-        public List<Variable>          localBufferedExternalDerivative       = new ArrayList<Variable> ();  // subset of external that are derivatives
-        public List<Variable>          localBufferedExternalWrite            = new ArrayList<Variable> ();  // subset of external that are due to external write
-        public List<Variable>          localBufferedExternalWriteDerivative  = new ArrayList<Variable> ();  // subset of external write that are derivatives
-        public List<Variable>          localIntegrated                       = new ArrayList<Variable> ();  // variables that have derivatives, and thus change their value via integration
-        public List<Variable>          localDerivative                       = new ArrayList<Variable> ();  // variables that are derivatives of other variables
-        public List<Variable>          localDerivativeUpdate                 = new ArrayList<Variable> ();  // every variable that must be calculated to update derivatives, including their dependencies
-        public List<Variable>          localDerivativePreserve               = new ArrayList<Variable> ();  // subset of derivative update that must be restored after integration is done
-        public List<VariableReference> localReference                        = new ArrayList<VariableReference> ();  // references to other equation sets which can die
-        public List<Variable>          globalUpdate                          = new ArrayList<Variable> ();
-        public List<Variable>          globalInit                            = new ArrayList<Variable> ();
-        public List<Variable>          globalMembers                         = new ArrayList<Variable> ();
-        public List<Variable>          globalBuffered                        = new ArrayList<Variable> ();
-        public List<Variable>          globalBufferedInternal                = new ArrayList<Variable> ();
-        public List<Variable>          globalBufferedInternalDerivative      = new ArrayList<Variable> ();
-        public List<Variable>          globalBufferedInternalUpdate          = new ArrayList<Variable> ();
-        public List<Variable>          globalBufferedExternal                = new ArrayList<Variable> ();
-        public List<Variable>          globalBufferedExternalDerivative      = new ArrayList<Variable> ();
-        public List<Variable>          globalBufferedExternalWrite           = new ArrayList<Variable> ();
-        public List<Variable>          globalBufferedExternalWriteDerivative = new ArrayList<Variable> ();
-        public List<Variable>          globalIntegrated                      = new ArrayList<Variable> ();
-        public List<Variable>          globalDerivative                      = new ArrayList<Variable> ();
-        public List<Variable>          globalDerivativeUpdate                = new ArrayList<Variable> ();
-        public List<Variable>          globalDerivativePreserve              = new ArrayList<Variable> ();
-
-        // Ready-to-use handles for common $variables
-        public Variable type;
-        public Variable n;  // only non-null if $n is actually stored as a member
-        public Variable index;
-
-        public boolean needGlobalCtor;
-        public boolean needGlobalDtor;
-        public boolean needGlobalPreserve;
-        public boolean needGlobalFinalize;
-        public boolean needGlobalFinalizeN;  // population finalize() should return live status based on $n
-        public boolean needGlobalPath;  // need the path() function, which returns a unique string identifying the current instance
-        public boolean needLocalCtor;
-        public boolean needLocalDtor;
-        public boolean needLocalInit;
-        public boolean needLocalPreserve;
-        public boolean needLocalFinalize;
-        public boolean needLocalPath;
-
-        public String pathToContainer;
-        public List<String> accountableEndpoints = new ArrayList<String> ();
-        public boolean refcount;
-        public boolean trackInstances;
-        public boolean hasProjectFrom;
-        public boolean hasProjectTo;
-        public boolean canGrowOrDie;  // via $p or $type
-        public boolean canResize;     // via $n
-        public boolean needK;
-        public boolean needMax;
-        public boolean needMin;
-        public boolean needRadius;
-
-        public List<String> globalColumns = new ArrayList<String> ();
-        public List<String> localColumns  = new ArrayList<String> ();
-
-        /**
-            @param s The equation set directly associated with this backend data.
-        **/
-        public void setGlobalNeedPath (EquationSet s)
-        {
-            EquationSet c = s.container;
-            if (c == null) return;  // Don't set flag, because we know that path() will return "".
-            needGlobalPath = true;
-            setParentNeedPath (s);
-        }
-
-        public void setLocalNeedPath (EquationSet s)
-        {
-            EquationSet c = s.container;
-            if (c == null  &&  s.isSingleton ()) return;  // Don't set flag, because we know that path() will return "".
-            needLocalPath = true;
-            setParentNeedPath (s);
-        }
-
-        public void setParentNeedPath (EquationSet s)
-        {
-            if (s.connectionBindings == null)
-            {
-                EquationSet c = s.container;
-                if (c != null) ((BackendData) c.backendData).setLocalNeedPath (c);
-            }
-            else
-            {
-                for (ConnectionBinding c : s.connectionBindings) ((BackendData) c.endpoint.backendData).setLocalNeedPath (c.endpoint);
             }
         }
     }

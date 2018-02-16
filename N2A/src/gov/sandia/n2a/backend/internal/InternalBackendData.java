@@ -154,12 +154,12 @@ public class InternalBackendData
 
     public class EventTarget
     {
-        public Event event;          // For evaluating whether the event should be triggered. There may be several equivalent event() calls in the part, so this is just one representative of the group.
-        public int         valueIndex;     // position of bit array in valuesFloat
-        public int         mask;           // an unsigned AND between this and the (int cast) entry from valuesFloat will indicate event active
-        public int         edge  = RISE;
-        public double      delay = -1;     // default is no-care; Indicates to process event in next regularly scheduled cycle of the target part
-        public int         timeIndex = -1; // position in valuesFloat of timestamp when last event to this target was generated; used to force multiple sources to generate only one event in a given cycle; -1 means the guard is unneeded
+        public Event  event;          // For evaluating whether the event should be triggered. There may be several equivalent event() calls in the part, so this is just one representative of the group.
+        public int    valueIndex;     // position of bit array in valuesFloat
+        public int    mask;           // an unsigned AND between this and the (int cast) entry from valuesFloat will indicate event active
+        public int    edge  = RISE;
+        public double delay = -1;     // default is no-care; Indicates to process event in next regularly scheduled cycle of the target part
+        public int    timeIndex = -1; // position in valuesFloat of timestamp when last event to this target was generated; used to force multiple sources to generate only one event in a given cycle; -1 means the guard is unneeded
         public Map<EquationSet,EventSource> sources = new TreeMap<EquationSet,EventSource> ();
         public List<Variable> dependencies = new ArrayList<Variable> ();
 
