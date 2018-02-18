@@ -2295,7 +2295,7 @@ public class JobC
                 // Match connection bindings
                 for (ConnectionBinding c : dest.connectionBindings)
                 {
-                    ConnectionBinding d = source.find (c.alias);
+                    ConnectionBinding d = source.findConnection (c.alias);
                     if (d == null)
                     {
                         Backend.err.get ().println ("Unfulfilled connection binding during $type change.");

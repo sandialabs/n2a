@@ -6,7 +6,6 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.backend.neuroml;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -30,20 +29,39 @@ public class Sequencer extends XMLutility
     Map<String,SequencerElement> elements = new HashMap<String,SequencerElement> ();
     Map<String,String>           alias    = new HashMap<String,String> ();
 
+    public SequencerElement getSequencerElement (Element parent)
+    {
+        String tag = parent.getTagName ();
+        return getSequencerElement (tag);
+    }
+
+    public SequencerElement getSequencerElement (String tag)
+    {
+        String a = alias.get (tag);
+        if (a == null) a = tag;
+        return elements.get (a);
+    }
+
     /**
         Applies ordering to unsorted nodes and adds them to a parent node.
         Chooses type based parent's tag.
     **/
     public void append (Element parent, Collection<Element> unsorted)
     {
-        String tag = parent.getTagName ();
-        String a = alias.get (tag);
-        if (a == null) a = tag;
-        append (a, parent, unsorted);
+        SequencerElement se = getSequencerElement (parent);
+        if (se == null)
+        {
+            for (Element c : unsorted) parent.appendChild (c);
+        }
+        else
+        {
+            se.append (parent, unsorted);
+        }
     }
 
     /**
         Applies ordering to unsorted nodes and adds them to a parent node.
+        Type is specified explicitly by caller.
     **/
     public void append (String type, Element parent, Collection<Element> unsorted)
     {
@@ -58,14 +76,41 @@ public class Sequencer extends XMLutility
         }
     }
 
-    public boolean hasID (String type)
+    public boolean hasID (String tag)
     {
-        SequencerElement s = elements.get (type);
-        if (s == null) return false;
-        return s.hasID;
+        SequencerElement se = getSequencerElement (tag);
+        if (se == null) return false;
+        return se.attributes.contains ("id");
     }
 
-    public void loadXSD (File source)
+    public boolean isRequired (Element parent, String param)
+    {
+        SequencerElement se = getSequencerElement (parent);
+        if (se == null) return false;
+        return se.required.contains (param);
+    }
+
+    public String bestFieldName (Element parent, String fieldNames)
+    {
+        String[] pieces = fieldNames.split (",");
+        SequencerElement se = getSequencerElement (parent);
+        if (se == null) return pieces[0];
+
+        String result = pieces[0];
+        int bestRank = Integer.MAX_VALUE;
+        for (String f : pieces)
+        {
+            int rank = se.attributes.indexOf (f);
+            if (rank >= 0  &&  rank < bestRank)
+            {
+                bestRank = rank;
+                result = f;
+            }
+        }
+        return result;
+    }
+
+    public void loadXSD (String source)
     {
         try
         {
@@ -76,7 +121,7 @@ public class Sequencer extends XMLutility
             factory.setIgnoringElementContentWhitespace (true);
             factory.setXIncludeAware (true);
             DocumentBuilder builder = factory.newDocumentBuilder ();
-            Document doc = builder.parse (source);
+            Document doc = builder.parse (Sequencer.class.getResource (source).openStream ());
 
             // Extract element definitions
             process (doc);
@@ -95,7 +140,7 @@ public class Sequencer extends XMLutility
             while (it.hasNext ())
             {
                 SequencerElement se = it.next ().getValue ();
-                if (se.name.startsWith (">")  ||  (se.children.isEmpty ()  &&  ! se.hasID)) it.remove ();
+                if (se.name.startsWith (">")  ||  (se.children.isEmpty ()  &&  se.attributes.isEmpty ())) it.remove ();
             }
         }
         catch (Exception e)
@@ -142,8 +187,9 @@ public class Sequencer extends XMLutility
     {
         public String       name;  // of the container type
         public String       base;  // of type that we inherit from; null if none or already processed. Used to assemble full sequences during post-processing of XSD.
-        public List<String> children = new ArrayList<String> ();
-        public boolean      hasID;
+        public List<String> children   = new ArrayList<String> ();
+        public List<String> attributes = new ArrayList<String> ();
+        public List<String> required   = new ArrayList<String> ();  // subset of attributes that must be output with this element
         public boolean      resolved;
 
         public void append (Element parent, Collection<Element> unsorted)
@@ -186,7 +232,11 @@ public class Sequencer extends XMLutility
                 else if (name.contains ("attribute"))
                 {
                     String a = getAttribute (child, "name");
-                    if (a.equals ("id")) hasID = true;
+                    if (! attributes.contains (a))
+                    {
+                        attributes.add (a);
+                        if (getAttribute (child, "use").equals ("required")) required.add (a);
+                    }
                 }
             }
         }
@@ -232,8 +282,15 @@ public class Sequencer extends XMLutility
             if (baseElement != null)
             {
                 baseElement.resolve ();
-                hasID |= baseElement.hasID;
                 newChildren.addAll (baseElement.children);
+                for (String a : baseElement.attributes)
+                {
+                    if (! attributes.contains (a)) attributes.add (a);
+                }
+                for (String a : baseElement.required)
+                {
+                    if (! required.contains (a)) required.add (a);
+                }
             }
             for (String c : children)
             {
@@ -256,7 +313,21 @@ public class Sequencer extends XMLutility
 
         public void dump ()
         {
-            for (String c : children) System.out.println ("  " + c);
+            if (! children.isEmpty ())
+            {
+                System.out.println ("  children:");
+                for (String c : children) System.out.println ("    " + c);
+            }
+            if (! attributes.isEmpty ())
+            {
+                System.out.println ("  attributes:");
+                for (String a : attributes)
+                {
+                    System.out.print ("    " + a);
+                    if (required.contains (a)) System.out.print (" (required)");
+                    System.out.println ();
+                }
+            }
         }
     }
 
@@ -264,11 +335,13 @@ public class Sequencer extends XMLutility
     {
         for (Entry<String,SequencerElement> e : elements.entrySet ())
         {
-            System.out.print (e.getKey ());
-            SequencerElement se = e.getValue ();
-            if (se.hasID) System.out.print ("  hasID");
-            System.out.println ();
-            se.dump ();
+            System.out.println (e.getKey ());
+            e.getValue ().dump ();
+        }
+        System.out.println ("Alias:");
+        for (Entry<String,String> e : alias.entrySet ())
+        {
+            System.out.println (e.getKey () + " = " + e.getValue ());
         }
     }
 }

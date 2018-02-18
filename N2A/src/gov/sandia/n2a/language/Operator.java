@@ -23,6 +23,7 @@ import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.function.Round;
 import gov.sandia.n2a.language.function.Signum;
 import gov.sandia.n2a.language.function.Sine;
+import gov.sandia.n2a.language.function.SquareRoot;
 import gov.sandia.n2a.language.function.Tangent;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.Uniform;
@@ -229,6 +230,7 @@ public class Operator implements Cloneable, Comparable<Operator>
         register (Round        .factory ());
         register (Signum       .factory ());
         register (Sine         .factory ());
+        register (SquareRoot   .factory ());
         register (Tangent      .factory ());
         register (Output       .factory ());
         register (Uniform      .factory ());

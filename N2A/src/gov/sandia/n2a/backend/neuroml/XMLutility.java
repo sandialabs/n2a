@@ -76,7 +76,13 @@ public class XMLutility
                 power *= 10;  // now power==10^i
                 double t = d * power;
                 l = Math.round (t);
-                if (l != 0  &&  Math.abs (t - l) < epsilon) return "0." + String.valueOf (l);
+                if (l != 0  &&  Math.abs (t - l) < epsilon)
+                {
+                    String value = String.valueOf (l);
+                    String pad = "";
+                    for (int j = value.length (); j < i; j++) pad += "0";
+                    return "0." + pad + value;
+                }
             }
         }
 

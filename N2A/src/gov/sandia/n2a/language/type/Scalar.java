@@ -11,6 +11,7 @@ import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.operator.Negate;
 
 /**
     Floating-point type.
@@ -46,9 +47,15 @@ public class Scalar extends Type
         try
         {
             Operator op = Operator.parse (expression);
+            double sign = 1;
+            if (op instanceof Negate)
+            {
+                op = ((Negate) op).operand;
+                sign = -1;
+            }
             if (! (op instanceof Constant)) return 0;
             Type result = ((Constant) op).value;
-            if (result instanceof Scalar) return ((Scalar) result).value;
+            if (result instanceof Scalar) return ((Scalar) result).value * sign;
         }
         catch (ParseException e)
         {

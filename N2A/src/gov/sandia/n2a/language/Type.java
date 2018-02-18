@@ -118,4 +118,10 @@ public abstract class Type implements Comparable<Type>
     {
         return false;
     }
+
+    public boolean equals (Object that)
+    {
+        if (! (that instanceof Type)) return false;
+        return compareTo ((Type) that) == 0;
+    }
 }

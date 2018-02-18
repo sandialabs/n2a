@@ -101,7 +101,7 @@ TOKEN_MGR_DECLS:
     | <RRND:    ")" >
 
     | <IDENTIFIER: <LETTER>(<LETTER>|<DIGIT>|".")*("'")*>
-    | <#LETTER: ["$", "A"-"Z", "_", "a"-"z", "\u0080"-"\uffff"]>  // Past lower-ASCII we don't care about character class.
+    | <#LETTER: ["$", "A"-"Z", "_", "a"-"z", "\u0080"-"\u221d", "\u221f"-"\uffff"]>  // Past lower-ASCII we don't care about character class (but skip infinity (221e)).
     | <#DIGIT:  ["0"-"9"]>
 
     | <NUMBER:
@@ -110,6 +110,7 @@ TOKEN_MGR_DECLS:
         | (<DIGIT>)+                (<EXPONENT>)?
         | "." ("i"|"I") ("n"|"N") ("f"|"F")
         | "." ("n"|"N") ("a"|"A") ("n"|"N")
+        | "∞"  // 0x221e
         > : PossibleUnit
     | <#EXPONENT: ["e","E"] (["+","-"])? (<DIGIT>)+>
 
@@ -372,6 +373,7 @@ void Constant() #Constant : {Token t; Token u; String unitName = "";}
         {
             String image = t.image.toLowerCase ();
             if      (image.equals (".inf")) result.value = Double.POSITIVE_INFINITY;
+            else if (image.equals ("∞"   )) result.value = Double.POSITIVE_INFINITY;
             else if (image.equals (".nan")) result.value = Double.NaN;
             else                            result.value = Double.parseDouble (t.image);
         }

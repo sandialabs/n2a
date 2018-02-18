@@ -60,6 +60,23 @@ public class MatrixBoolean
         column[row] = true;
     }
 
+    public void set (int col, MatrixBoolean value)
+    {
+        // not a particularly efficient way to do this...
+        boolean[] valueData = value.data.get (0);
+        int valueRows = valueData.length;
+        int row = 0;
+        for (; row < valueRows; row++)
+        {
+            if (valueData[row]) set   (row, col);
+            else                clear (row, col);
+        }
+        for (; row < rowCount; row++)
+        {
+            clear (row, col);
+        }
+    }
+
     public void clear (int row, int col)
     {
         if (row >= rowCount) rowCount = row + 1;
@@ -78,7 +95,9 @@ public class MatrixBoolean
     public MatrixBoolean column (int col)
     {
         MatrixBoolean result = new MatrixBoolean ();
-        result.data.add (data.get (col));
+        boolean[] value = data.get (col);
+        result.data.add (value);
+        result.rowCount = value.length;
         return result;
     }
 
@@ -119,6 +138,33 @@ public class MatrixBoolean
         if (col >= data.size ()) return -1;
         boolean[] column = data.get (col);
         for (int r = 0; r < column.length; r++) if (column[r]) return r;
+        return -1;
+    }
+
+    /**
+        Returns index of first column which exactly matches pattern, or -1 if no exact match exists.
+        @param pattern Must be a column vector.
+    **/
+    public int matchColumn (MatrixBoolean pattern)
+    {
+        int columnCount = data.size ();
+        int patternRows = pattern.rows ();
+        boolean[] patternColumn = pattern.data.get (0);
+        for (int c = 0; c < columnCount; c++)
+        {
+            boolean[] myColumn = data.get (c);
+            boolean found = true;
+            int r = 0;
+            for (; found  &&  r < patternRows; r++)
+            {
+                if (patternColumn[r] != myColumn[r]) found = false;
+            }
+            for (; found  &&  r < rowCount; r++)
+            {
+                if (myColumn[r]) found = false;
+            }
+            if (found) return c;
+        }
         return -1;
     }
 

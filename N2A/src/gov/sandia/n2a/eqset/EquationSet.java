@@ -189,7 +189,7 @@ public class EquationSet implements Comparable<EquationSet>
         if (exception) throw new Backend.AbortRun ();
     }
 
-    public ConnectionBinding find (String alias)
+    public ConnectionBinding findConnection (String alias)
     {
         if (connectionBindings == null) return null;
         for (ConnectionBinding c : connectionBindings)
@@ -395,7 +395,7 @@ public class EquationSet implements Comparable<EquationSet>
             return p.resolveConnectionBinding (query.substring (length + 1), result);
         }
 
-        ConnectionBinding c = find (ns);
+        ConnectionBinding c = findConnection (ns);
         if (c != null)  // ns names an existing (already found) connection binding.
         {
             result.addResolution (c);
@@ -452,7 +452,7 @@ public class EquationSet implements Comparable<EquationSet>
         String[] ns = v.name.split ("\\.", 2);
         if (ns.length > 1)
         {
-            ConnectionBinding c = find (ns[0]);
+            ConnectionBinding c = findConnection (ns[0]);
             if (c != null)
             {
                 v.name = ns[1];
@@ -473,7 +473,7 @@ public class EquationSet implements Comparable<EquationSet>
         }
 
         // Check connections
-        ConnectionBinding c = find (v.name);
+        ConnectionBinding c = findConnection (v.name);
         if (c != null)
         {
             v.reference.resolution.add (c);  // same kind of resolution path as if we went into connected part, but ...
@@ -1217,7 +1217,7 @@ public class EquationSet implements Comparable<EquationSet>
             if (connectionBindings != null)
             {
                 String[] ns = v.name.split ("\\.", 2);
-                if (ns.length > 1  &&  find (ns[0]) != null) continue;
+                if (ns.length > 1  &&  findConnection (ns[0]) != null) continue;
             }
 
             // This may seem inefficient, but in general there will only be one order to process.

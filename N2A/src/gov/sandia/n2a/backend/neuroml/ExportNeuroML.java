@@ -26,10 +26,8 @@ public class ExportNeuroML implements Exporter
         if (PluginNeuroML.sequencer == null)
         {
             PluginNeuroML.sequencer = new Sequencer ();
-            // TODO: get non-hacked names
-            // TODO: determine if carrying NeuroML XSD documents as payload contaminates the license of N2A
-            PluginNeuroML.sequencer.loadXSD (new File ("/home/fred/software/work/neuroml_dev/NeuroML2/Schemas/NeuroML2/NeuroML_v2beta4.xsd"));
-            PluginNeuroML.sequencer.loadXSD (new File ("/home/fred/software/work/neuroml_dev/LEMS/Schemas/LEMS/LEMS_v0.7.4.xsd"));
+            PluginNeuroML.sequencer.loadXSD ("NeuroML_v2beta4.xsd");
+            PluginNeuroML.sequencer.loadXSD ("LEMS_v0.7.4.xsd");
         }
 
         ExportJob job = new ExportJob (PluginNeuroML.partMap, PluginNeuroML.sequencer);

@@ -191,7 +191,7 @@ public class ImportJob extends XMLutility
                     break;
                 case "decayingPoolConcentrationModel":
                 case "fixedFactorConcentrationModel":
-                case "fixedFactorConcentrationModelTraub":
+                case "fixedFactorConcentrationModelTraub":  // This tag appears in Cells.xml, but not in NeuroML_v2beta4.xsd
                     concentrationModel (child);
                     break;
                 case "blockingPlasticSynapse":
@@ -317,6 +317,35 @@ public class ImportJob extends XMLutility
         for (Entry<String,Cell>          e : cells     .entrySet ()) e.getValue ().finish ();
         for (Entry<String,Network>       e : networks  .entrySet ()) e.getValue ().finish1 ();
         for (Entry<String,Network>       e : networks  .entrySet ()) e.getValue ().finish2 ();
+
+        // (Obscure case) Find spike sources that reference a target synapse but did not get used.
+        // Need to construct fused parts so they are functional on their own.
+        List<String> kill = new ArrayList<String> ();
+        for (MNode spikeSource : models.child (modelName))
+        {
+            String synapseName = spikeSource.get ("$metadata", "backend.lems.synapse");
+            if (synapseName.isEmpty ()) continue;  // not a spike source
+            spikeSource.clear ("$metadata", "backend.lems.synapse");  // this memo is no longer needed
+            if (spikeSource.getInt ("$count") > 0) continue;  // It got used somewhere, so we're done.
+
+            MNode synapse = models.child (modelName, synapseName);
+            if (synapse == null) continue;
+
+            MNode fused = new MVolatile ();
+            fused.merge (synapse);  // Leave the original synapse part alone. Just duplicate it.
+            MNode A = fused.set ("A", "");
+            A.merge (spikeSource);
+
+            removeDependency (spikeSource, spikeSource.get ("$inherit").replace ("\"", ""));
+            spikeSource.clear ();
+            spikeSource.merge (fused);
+            addDependency (spikeSource, spikeSource.get ("$inherit").replace ("\"", ""));
+            A = spikeSource.child ("A");
+            addDependency (A, A.get ("$inherit").replace ("\"", ""));  // Don't do "FromConnection", because we've already injected the part.
+
+            if (synapse.getInt ("$count") == 0  &&  synapse.child ("$lems") == null) kill.add (synapseName);
+        }
+        for (String k : kill) models.clear (modelName, k);
 
         // Select the prime model
         if (primaryModel.isEmpty ())
@@ -736,18 +765,11 @@ public class ImportJob extends XMLutility
                 String species = c.get ("species");
                 c.clear ("type");
                 c.clear ("species");
-                boolean depressionOnly = type.equals ("tsodyksMarkramDepMechanism");
                 nameMap = partMap.importMap (type);
                 type = nameMap.internal;
                 c.set ("$inherit", "\"" + type + "\"");
                 addDependency (c, type);
                 if (! species.isEmpty ()) c.set ("$metadata", "species", species);
-                if (depressionOnly)
-                {
-                    // Kill variables that enable synaptic facilitation.
-                    c.set ("U", "@in", "");
-                    c.set ("U'", "$kill");
-                }
             }
         }
     }
@@ -1536,10 +1558,10 @@ public class ImportJob extends XMLutility
                                 p.set ("@B.$index==" + existing, "1");
                             }
                             p.set ("@B.$index==" + s.index, "1");
-                        }
-                        if (p.size () == childN + 1)  // Every member of child group connects to the same singleton parent
-                        {
-                            connection.clear ("$p");
+                            if (p.size () == childN + 1)  // Every member of child group connects to the same singleton parent
+                            {
+                                connection.clear ("$p");
+                            }
                         }
                     }
                 }
@@ -1824,7 +1846,7 @@ public class ImportJob extends XMLutility
         {
             String times = "";
             for (String s : sorted.values ()) times += ";" + s;
-            times += ";.inf";  // This shuts down spiking after last specified time.
+            times += ";∞";  // This shuts down spiking after last specified time.
             times = "[" + times.substring (1) + "]";
             part.set ("times", times);
         }
@@ -1912,8 +1934,8 @@ public class ImportJob extends XMLutility
                     double oy = getAttribute (child, "yStart",   0.0);
                     double oz = getAttribute (child, "zStart",   0.0);
                     MNode p = network.childOrCreate ("$space", id);
-                    p.set ("scale",  "[" + sx + ";" + sy + ";" + sz + "]");
-                    p.set ("offset", "[" + ox + ";" + oy + ";" + oz + "]");
+                    p.set ("scale",  "[" + print (sx) + ";" + print (sy) + ";" + print (sz) + "]*1um");
+                    p.set ("offset", "[" + print (ox) + ";" + print (oy) + ";" + print (oz) + "]*1um");
                 }
             }
         }
@@ -2258,6 +2280,14 @@ public class ImportJob extends XMLutility
                     part.set ("$inherit", "\"" + inherit + "\"");
                     addDependency (part, inherit);
                 }
+
+                SegmentFinder finder = new SegmentFinder ();
+                if (! inputList) finder.find ("0", A);
+                if (! finder.group.isEmpty ()) part.set ("A", A + "." + finder.group);
+                // Because the input file in un-specific, we don't care about filtering by index.
+
+                finder.find ("0", B);
+                if (! finder.group.isEmpty ()) part.set ("B", B + "." + finder.group);
             }
         }
 
@@ -2374,8 +2404,6 @@ public class ImportJob extends XMLutility
                 MNode part = network.child (name);
                 String inherit = part.get ("$inherit").replace ("\"", "");
                 MNode sourcePart = models.child (modelName, inherit);
-                String synapse = sourcePart.get ("$metadata", "backend.lems.synapse");
-                if (! synapse.isEmpty ()) continue;  // We are only concerned about current-pattern generators, not synapses.
                 if (sourcePart.getInt ("$count") <= 1) continue;  // We are the only user, so can directly embed input. That's the current arrangement, so nothing to do.
 
                 removeDependency (part, inherit);

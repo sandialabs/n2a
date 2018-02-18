@@ -730,20 +730,28 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         return compare (key (), that.key ());
     }
 
+    /**
+        Deep comparison of two nodes. All structure, keys and values must match exactly.
+    **/
     @Override
     public boolean equals (Object o)
     {
         if (this == o) return true;
         if (! (o instanceof MNode)) return false;
         MNode that = (MNode) o;
-
         if (! key ().equals (that.key ())) return false;
+        return equalsRecursive (that);
+    }
+
+    public boolean equalsRecursive (MNode that)
+    {
+        if (! get ().equals (that.get ())) return false;
         if (size () != that.size ()) return false;
         for (MNode a : this)
         {
             MNode b = that.child (a.key ());
             if (b == null) return false;
-            if (! a.equals (b)) return false;
+            if (! a.equalsRecursive (b)) return false;
         }
         return true;
     }
