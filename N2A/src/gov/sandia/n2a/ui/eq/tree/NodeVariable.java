@@ -154,7 +154,8 @@ public class NodeVariable extends NodeFilter
             if (NodePart.isIdentifierPath (value))
             {
                 NodeBase referent = parent.resolveName (value);
-                if (referent instanceof NodePart) isBinding = true;
+                if      (referent == null)             isBinding = ! value.contains (".");
+                else if (referent instanceof NodePart) isBinding = true;
             }
         }
 

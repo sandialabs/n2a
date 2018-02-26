@@ -251,7 +251,7 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
-        Find instance variables (what in other languages might be called pointers) and move them
+        Find instance variables (that in other languages might be called pointers) and move them
         into the connectionBindings structure.
         Dependencies: This function must be the very first thing run after constructing the full
         equation set hierarchy. Other resolve functions depend on it.
@@ -360,8 +360,8 @@ public class EquationSet implements Comparable<EquationSet>
         Returns reference to the named equation set, based on a search starting in the
         current equation set and applying all the N2A name-resolution rules.
         This is similar to resolveEquationSet(), but customized for connections rather than variables.
-        @return null if the search fails. EquationSet if the connection target is found.
-        String if a prefix of the query matches an already-known connection.
+        @return true if the name was resolved. However, it might be resolved to a variable rather than a part.
+        Further test by checking if result.endpoint is set.
     **/
     public boolean resolveConnectionBinding (String query, ConnectionBinding result)
     {

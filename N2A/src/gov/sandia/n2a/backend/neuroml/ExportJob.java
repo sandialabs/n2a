@@ -33,16 +33,18 @@ import org.w3c.dom.Element;
 
 import gov.sandia.n2a.backend.neuroml.PartMap.NameMap;
 import gov.sandia.n2a.db.AppData;
-import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.MatrixDense;
@@ -56,13 +58,13 @@ public class ExportJob extends XMLutility
     public String      modelName;
     public EquationSet equations;
 
-    public List<Element>    elements = new ArrayList<Element> ();
-    public List<IonChannel> channels = new ArrayList<IonChannel> ();
-    public List<Synapse>    synapses = new ArrayList<Synapse> ();
-    public List<Cell>       cells    = new ArrayList<Cell> ();
-    public int              countPointCell;
-    public int              countConcentration;
-    public int              countInput;
+    public List<Element>      elements = new ArrayList<Element> ();
+    public List<IonChannel>   channels = new ArrayList<IonChannel> ();
+    public List<Synapse>      synapses = new ArrayList<Synapse> ();
+    public List<AbstractCell> cells    = new ArrayList<AbstractCell> ();
+    public List<Network>      networks = new ArrayList<Network> ();
+    public int                countConcentration;
+    public int                countInput;
 
     public static Map<Unit<?>,String> nmlUnits = new HashMap<Unit<?>,String> ();
     public static Unit<?> um = UCUM.parse ("um");
@@ -122,6 +124,10 @@ public class ExportJob extends XMLutility
             try
             {
                 equations.resolveConnectionBindings ();
+            }
+            catch (Exception e) {}  // Still try to finish rest of compilation. Maybe only one or two minor parts were affected.
+            try
+            {
                 equations.addGlobalConstants ();
                 equations.addSpecials ();  // $index, $init, $live, $n, $t, $t', $type
                 equations.fillIntegratedVariables ();
@@ -132,10 +138,7 @@ public class ExportJob extends XMLutility
                 equations.determineTypes ();
                 equations.clearVariables ();
             }
-            catch (Exception e)
-            {
-                System.out.println ("WARNING: Model compiled with errors. Export may not be correct.");
-            }
+            catch (Exception e) {}  // It may still be possible to complete the export.
 
             DocumentBuilderFactory factoryBuilder = DocumentBuilderFactory.newInstance ();
             DocumentBuilder builder = factoryBuilder.newDocumentBuilder ();
@@ -189,41 +192,38 @@ public class ExportJob extends XMLutility
         {
             new Network (source);
         }
-        else if (type.equals ("cell"))
+        else if (type.equals ("cell")  ||  type.equals ("segment")  ||  type.contains ("Cell"))
         {
-            Cell cell = new Cell (source);
-            cells.add (cell);
-            if (cell.populationSize == 1)
-            {
-                cell.cell.setAttribute ("id", cell.name);  // Use final name as ID, since this is purely a cell model
-            }
-            else
+            AbstractCell cell = addCell (source, true);
+            if (cell.populationSize > 1)
             {
                 // Wrap cell in a network
                 Element network = addElement ("network", elements);
-                network.setAttribute ("id", "N2A_Network0");
+                network.setAttribute ("id", "N2A_Network" + networks.size ());   // todo: create a real network object
                 Element population = doc.createElement ("population");
                 network.appendChild (population);
-                population.setAttribute ("id", cell.name);
+                population.setAttribute ("id", source.key ());
                 population.setAttribute ("component", cell.id);
                 population.setAttribute ("size", String.valueOf (cell.populationSize));
             }
         }
-        else if (type.isEmpty ())
-        {
-            new LEMS (source);
-        }
-        else if (type.contains ("Generator")  ||  type.contains ("Clamp")  ||  type.contains ("spikeArray")  ||  type.contains ("PointCurrent"))
+        else if (type.contains ("Input")  ||  type.contains ("Generator")  ||  type.contains ("Clamp")  ||  type.contains ("spikeArray")  ||  type.contains ("PointCurrent"))
         {
             input (source, elements, null);
         }
         else if (type.contains ("Synapse"))
         {
-            addSynapse (source, false);
+            Synapse s = addSynapse (source, false);
+            s.id = source.key ();
         }
         else if (inherit.contains ("Coupling"))
         {
-            addSynapse (source, true);
+            Synapse s = addSynapse (source, true);
+            s.id = source.key ();
+        }
+        else if (type.isEmpty ())
+        {
+            new LEMS (source);
         }
         else
         {
@@ -249,161 +249,27 @@ public class ExportJob extends XMLutility
 
     public class Network
     {
-        String           name;
-        List<Element>    networkElements = new ArrayList<Element> ();
-        Map<String,Cell> populations     = new TreeMap<String,Cell> ();
-        List<Space>      spaces          = new ArrayList<Space> ();
+        String                 id;
+        List<Element>          networkElements = new ArrayList<Element> ();
+        Map<String,Population> populations     = new TreeMap<String,Population> ();
+        List<Space>            spaces          = new ArrayList<Space> ();
 
         public Network (MPart source)
         {
-            name = source.key ();
+            id = source.key ();
+            String lemsID = source.get ("$metadata", "backend.lems.id");
+            if (! lemsID.isEmpty ()) id = lemsID;
 
             // Collect populations first, because they contain info needed by projections and inputs.
             for (MNode c : source)
             {
                 MPart p = (MPart) c;
 
-                String component = "";
                 String type = c.get ("$metadata", "backend.lems.part");
-                if (type.equals ("cell")  ||  type.equals ("segment"))  // multi-compartment cell, or HH segment pretending to be a point cell
+                if (type.equals ("cell")  ||  type.equals ("segment")  ||  type.endsWith ("Cell"))
                 {
-                    Cell cell = new Cell (p);
-                    cells.add (cell);
-                    populations.put (cell.name, cell);
-                    component = cell.id;
-                }
-                else if (type.endsWith ("Cell"))  // standard point cell
-                {
-                    Element cell = addElement (type, elements);
-                    genericPart (p, cell);
-                    component = "N2A_PointCell" + countPointCell++;
-                    cell.setAttribute ("id", component);
-                }
-
-                if (! component.isEmpty ())
-                {
-                    EquationSet part = getEquations (p);
-                    Variable n = part.find (new Variable ("$n", 0));
-                    int size = 1;
-                    if (n != null) size = (int) Math.floor (((Scalar) n.eval (context)).value);
-
-                    // Determine type of spatial layout
-                    MNode xyzNode = p.child ("$xyz");
-                    boolean list = xyzNode != null  &&  xyzNode.size () > 0;
-                    type = "population";
-                    if (list) type += "List";
-
-                    // Create population element
-                    Element population = addElement (type, networkElements);
-                    population.setAttribute ("id", p.key ());
-                    population.setAttribute ("component", component);
-                    if (size > 1) population.setAttribute ("size", String.valueOf (size));
-
-                    // Output 3D structure
-                    if (list)
-                    {
-                        Variable xyz = part.find (new Variable ("$xyz", 0));
-                        Variable ijk = part.find (new Variable ("ijk",  0));
-                        for (int index = 0; index < size; index++)
-                        {
-                            context.index = index;
-
-                            Element instance = doc.createElement ("instance");
-                            population.appendChild (instance);
-                            instance.setAttribute ("id", String.valueOf (index));
-                            if (ijk != null)
-                            {
-                                Matrix ijkVector = (Matrix) ijk.eval (context);
-                                instance.setAttribute ("i", print (ijkVector.get (0)));
-                                instance.setAttribute ("j", print (ijkVector.get (1)));
-                                instance.setAttribute ("k", print (ijkVector.get (2)));
-                            }
-
-                            Element location = doc.createElement ("location");
-                            instance.appendChild (location);
-                            Matrix xyzVector = (Matrix) xyz.eval (context);
-                            location.setAttribute ("x", print (xyzVector.get (0) * 1e6));
-                            location.setAttribute ("y", print (xyzVector.get (1) * 1e6));
-                            location.setAttribute ("z", print (xyzVector.get (2) * 1e6));
-                        }
-                    }
-                    else if (xyzNode != null)
-                    {
-                        Element layout = doc.createElement ("layout");
-                        population.appendChild (layout);
-
-                        String value = xyzNode.get ();
-                        if (value.contains ("grid"))
-                        {
-                            value = value.split ("(", 2)[1];
-                            String[] pieces = value.split (")", 2);
-                            String parms = pieces[0];
-                            value = pieces[1];
-
-                            pieces = parms.split (",");
-                            Element grid = doc.createElement ("grid");
-                            layout.appendChild (grid);
-                            grid.setAttribute ("xSize", pieces[1]);
-                            grid.setAttribute ("ySize", pieces[2]);
-                            grid.setAttribute ("zSize", pieces[3]);
-
-                            value = value.trim ();
-                            if (! value.isEmpty ())
-                            {
-                                Matrix scale = null;
-                                if (value.startsWith ("&"))
-                                {
-                                    pieces = value.split ("+", 2);
-                                    scale = parseVector (pieces[0]);
-                                    value = pieces[1];
-                                }
-
-                                Matrix offset = null;
-                                if (! value.isEmpty ())
-                                {
-                                    offset = parseVector (value);
-                                }
-
-                                if (scale != null  ||  offset != null)
-                                {
-                                    Space space = new Space (scale, offset);
-                                    int index = spaces.indexOf (space);
-                                    if (index >= 0) space = spaces.get (index);
-                                    else            spaces.add (space);
-                                    layout.setAttribute ("space", space.name);
-                                }
-                            }
-                        }
-                        else if (value.contains ("uniform"))
-                        {
-                            Element random = doc.createElement ("grid");
-                            layout.appendChild (random);
-                            random.setAttribute ("number", String.valueOf (size));
-
-                            value = value.split ("(", 2)[1];
-                            String[] pieces = value.split (")", 2);
-                            String parms = pieces[0];
-                            value = pieces[1];
-
-                            Matrix scale = null;
-                            parms = parms.trim ();
-                            if (! parms.isEmpty ()) parseVector (parms);
-
-                            Matrix offset = null;
-                            value = value.trim ();
-                            if (! value.isEmpty ()) offset = parseVector (value);
-
-                            if (scale != null   ||  offset != null)
-                            {
-                                Space space = new Space (scale, offset);
-                                int index = spaces.indexOf (space);
-                                if (index >= 0) space = spaces.get (index);
-                                else            spaces.add (space);
-                                layout.setAttribute ("space", space.name);
-                            }
-                        }
-                        // else this is something weird
-                    }
+                    Population pop = new Population (p);
+                    populations.put (pop.id, pop);
                 }
             }
 
@@ -417,7 +283,7 @@ public class ExportJob extends XMLutility
                 if (type.contains ("Synapse"))
                 {
                     Element result = addElement ("projection", networkElements);
-                    result.setAttribute ("synapse", addSynapse (p, false));
+                    result.setAttribute ("synapse", addSynapse (p, false).id);
                     connections (p, result, "connection", "", "");
                 }
                 else if (type.contains ("Projection"))  // gap junctions and split synapses. These use the special projection types.
@@ -428,15 +294,18 @@ public class ExportJob extends XMLutility
                 {
                     // TODO: convert electricalProjection to Coupling during import
                     Element result = addElement ("electricalProjection", networkElements);
-                    String synapseID = addSynapse (p, true);
+                    String synapseID = addSynapse (p, true).id;
                     connections (source, result, "electricalConnection", synapseID, synapseID);
-
                 }
-                else if (type.contains ("Generator")  ||  type.contains ("Clamp")  ||  type.contains ("PointCurrent"))  // unary connection with embedded input
+                else if (type.contains ("Input")  ||  type.contains ("Generator")  ||  type.contains ("Clamp")  ||  type.contains ("spikeArray")  ||  type.contains ("PointCurrent"))  // unary connection with embedded input
                 {
-                    Element result = addElement ("inputList", networkElements);
-                    result.setAttribute ("component", input (p, elements, null));
-                    connections (p, result, "input", "", "");
+                    String inputID = input (p, elements, null);
+                    if (! p.get ("B").contains ("connect("))  // There are NeuroML files that create an input without incorporating it into a network, yet our importer wraps the whole result in a network. This guard prevents a malformed element in the output.
+                    {
+                        Element result = addElement ("inputList", networkElements);
+                        result.setAttribute ("component", inputID);
+                        connections (p, result, "input", "", "");
+                    }
                 }
                 else if (type.isEmpty ())  // binary connection which references a shared input generator
                 {
@@ -449,7 +318,7 @@ public class ExportJob extends XMLutility
             for (Space s : spaces) s.append ();
 
             Element network = addElement ("network", elements);
-            network.setAttribute ("id", name);
+            network.setAttribute ("id", id);
             standalone (source, network, networkElements);
             String temperature = source.get ("temperature");
             if (! temperature.isEmpty ())
@@ -460,15 +329,161 @@ public class ExportJob extends XMLutility
             sequencer.append (network, networkElements);
         }
 
-        public Matrix parseVector (String input)
+        public class Population
         {
-            input = input.split ("[", 2)[1].split ("]", 2)[0];
-            String[] pieces = input.split (";");
-            Matrix result = new MatrixDense (3, 1);
-            result.set (0, Scalar.convert (pieces[0]));
-            result.set (1, Scalar.convert (pieces[1]));
-            result.set (2, Scalar.convert (pieces[2]));
-            return result;
+            public String       id;
+            public AbstractCell cell;
+
+            public Population (MPart source)
+            {
+                id = source.key ();
+                cell = addCell (source, false);
+
+                EquationSet part = getEquations (source);
+                Variable n = part.find (new Variable ("$n", 0));
+                int size = 1;
+                if (n != null) size = (int) Math.floor (((Scalar) n.eval (context)).value);
+
+                // Determine type of spatial layout
+                MNode xyzNode = source.child ("$xyz");
+                boolean list = false;
+                if (xyzNode != null)
+                {
+                    if (xyzNode.size () > 0)
+                    {
+                        list = true;
+                    }
+                    else
+                    {
+                        String value = xyzNode.get ();
+                        if (! value.contains ("grid")  &&  ! value.contains ("uniform")) list = true;
+                    }
+                }
+
+                // Create population element
+                Element population = addElement ("population", networkElements);
+                population.setAttribute ("id", id);
+                population.setAttribute ("component", cell.id);
+                if (list) population.setAttribute ("type", "populationList");
+                if (size > 1) population.setAttribute ("size", String.valueOf (size));
+
+                // Output 3D structure
+                if (list)
+                {
+                    Variable xyz = part.find (new Variable ("$xyz", 0));
+                    Variable ijk = part.find (new Variable ("ijk",  0));
+                    for (int index = 0; index < size; index++)
+                    {
+                        context.index = index;
+
+                        Element instance = doc.createElement ("instance");
+                        population.appendChild (instance);
+                        instance.setAttribute ("id", String.valueOf (index));
+                        if (ijk != null)
+                        {
+                            Matrix ijkVector = (Matrix) ijk.eval (context);
+                            instance.setAttribute ("i", print (ijkVector.get (0)));
+                            instance.setAttribute ("j", print (ijkVector.get (1)));
+                            instance.setAttribute ("k", print (ijkVector.get (2)));
+                        }
+
+                        Element location = doc.createElement ("location");
+                        instance.appendChild (location);
+                        Matrix xyzVector = (Matrix) xyz.eval (context);
+                        location.setAttribute ("x", print (xyzVector.get (0) * 1e6));
+                        location.setAttribute ("y", print (xyzVector.get (1) * 1e6));
+                        location.setAttribute ("z", print (xyzVector.get (2) * 1e6));
+                    }
+                }
+                else if (xyzNode != null)
+                {
+                    Element layout = doc.createElement ("layout");
+                    population.appendChild (layout);
+
+                    String value = xyzNode.get ();
+                    if (value.contains ("grid"))
+                    {
+                        value = value.split ("(", 2)[1];
+                        String[] pieces = value.split (")", 2);
+                        String parms = pieces[0];
+                        value = pieces[1];
+
+                        pieces = parms.split (",");
+                        Element grid = doc.createElement ("grid");
+                        layout.appendChild (grid);
+                        grid.setAttribute ("xSize", pieces[1]);
+                        grid.setAttribute ("ySize", pieces[2]);
+                        grid.setAttribute ("zSize", pieces[3]);
+
+                        value = value.trim ();
+                        if (! value.isEmpty ())
+                        {
+                            Matrix scale = null;
+                            if (value.startsWith ("&"))
+                            {
+                                pieces = value.split ("+", 2);
+                                scale = parseVector (pieces[0]);
+                                value = pieces[1];
+                            }
+
+                            Matrix offset = null;
+                            if (! value.isEmpty ())
+                            {
+                                offset = parseVector (value);
+                            }
+
+                            if (scale != null  ||  offset != null)
+                            {
+                                Space space = new Space (scale, offset);
+                                int index = spaces.indexOf (space);
+                                if (index >= 0) space = spaces.get (index);
+                                else            spaces.add (space);
+                                layout.setAttribute ("space", space.name);
+                            }
+                        }
+                    }
+                    else if (value.contains ("uniform"))
+                    {
+                        Element random = doc.createElement ("grid");
+                        layout.appendChild (random);
+                        random.setAttribute ("number", String.valueOf (size));
+
+                        value = value.split ("(", 2)[1];
+                        String[] pieces = value.split (")", 2);
+                        String parms = pieces[0];
+                        value = pieces[1];
+
+                        Matrix scale = null;
+                        parms = parms.trim ();
+                        if (! parms.isEmpty ()) parseVector (parms);
+
+                        Matrix offset = null;
+                        value = value.trim ();
+                        if (! value.isEmpty ()) offset = parseVector (value);
+
+                        if (scale != null   ||  offset != null)
+                        {
+                            Space space = new Space (scale, offset);
+                            int index = spaces.indexOf (space);
+                            if (index >= 0) space = spaces.get (index);
+                            else            spaces.add (space);
+                            layout.setAttribute ("space", space.name);
+                        }
+                    }
+                    // else this is something weird
+                }
+            }
+
+            public Matrix parseVector (String input)
+            {
+                input = input.split ("[", 2)[1].split ("]", 2)[0];
+                String[] pieces = input.split (";");
+                Matrix result = new MatrixDense (3, 1);
+                result.set (0, Scalar.convert (pieces[0]));
+                result.set (1, Scalar.convert (pieces[1]));
+                result.set (2, Scalar.convert (pieces[2]));
+                return result;
+            }
         }
 
         public class Space
@@ -549,8 +564,8 @@ public class ExportJob extends XMLutility
             String projectionType = electrical ? "electricalProjection" : "continuousProjection";
             String connectionType = electrical ? "electricalConnection" : "continuousConnection";
 
-            String preComponent  = addSynapse (preNode, electrical);
-            String postComponent = addSynapse (postNode, electrical);
+            String preComponent  = addSynapse (preNode, electrical).id;
+            String postComponent = addSynapse (postNode, electrical).id;
 
             Element result = addElement (projectionType, networkElements);
             connections (source, result, connectionType, preComponent, postComponent);
@@ -562,13 +577,17 @@ public class ExportJob extends XMLutility
 
             String[] pieces = source.get ("A").split ("\\.");
             String prePopulation = pieces[0];
-            Cell preCell = populations.get (prePopulation);
+            AbstractCell preCell = null;
+            Population pop = populations.get (prePopulation);
+            if (pop != null) preCell = pop.cell;
             String preSegment = "";
             if (pieces.length > 1) preSegment = pieces[1];
 
             pieces = source.get ("B").split ("\\.");
             String postPopulation = pieces[0];
-            Cell postCell = populations.get (postPopulation);
+            AbstractCell postCell = null;
+            pop = populations.get (postPopulation);
+            if (pop != null) postCell = pop.cell;
             String postSegment = "";
             if (pieces.length > 1) postSegment = pieces[1];
 
@@ -588,9 +607,29 @@ public class ExportJob extends XMLutility
             // Prepare list of conditions
             MNode originalP = source.child ("$p");
             MVolatile p = new MVolatile ();
-            if (originalP == null)
+            if (originalP == null)  // no $p, so all-to-all connection
             {
-                p.set ("@", "1");
+                // Generate every possible combination
+                // Even self-connection is implied by an absent $p
+                int preN = 1;
+                if (preCell != null) preN = preCell.populationSize;
+                int postN = 1;
+                if (postCell != null) postN = postCell.populationSize;
+                for (int i = 0; i < preN; i++)
+                {
+                    String A;
+                    if (preSegment.isEmpty ()) A = "A.$index==" + i;
+                    else                       A = "A.$up.$index==" + i;
+
+                    for (int j = 0; j < postN; j++)
+                    {
+                        String B;
+                        if (postSegment.isEmpty ()) B = "B.$index==" + j;
+                        else                        B = "B.$up.$index==" + j;
+
+                        p.set ("@" + A + "&&" + B, "1");
+                    }
+                }
             }
             else
             {
@@ -605,15 +644,16 @@ public class ExportJob extends XMLutility
 
             // Scan conditions and emit connection for each one
             List<Element> projectionElements = new ArrayList<Element> ();
+            int count = 0;
             for (MNode c : p)
             {
                 if (! c.get ().equals ("1")) continue;
                 String condition = c.key ();
 
-                String indexA   = "";
-                String indexAup = "";
-                String indexB   = "";
-                String indexBup = "";
+                String indexA   = "0";
+                String indexAup = "0";
+                String indexB   = "0";
+                String indexBup = "0";
                 String[] clauses = condition.substring (1).split ("&&");
                 for (String clause : clauses)
                 {
@@ -635,6 +675,7 @@ public class ExportJob extends XMLutility
                 String typeWD = type;
                 if (isConnection  &&  !(weight == 1  &&  delay == 0)) typeWD += "WD";
                 Element connection = addElement (typeWD, projectionElements);
+                connection.setAttribute ("id", String.valueOf (count++));
 
                 String Cell    = "Cell";
                 String Segment = "Segment";
@@ -646,7 +687,6 @@ public class ExportJob extends XMLutility
 
                 if (! inputList)
                 {
-                    String path = prePopulation;
                     String index;
                     if (preSegment.isEmpty ())  // point cell
                     {
@@ -655,16 +695,16 @@ public class ExportJob extends XMLutility
                     else  // multi-compartment cell
                     {
                         index = indexAup;
-                        connection.setAttribute ("pre" + Segment, preCell.mapID (preSegment, indexA));
+                        // If we get here, preCell should never be null, but we have to defend against bad user input.
+                        if (preCell != null)
+                        {
+                            String mappedID = ((Cell) preCell).mapID (preSegment, indexA);
+                            if (! mappedID.equals ("0")) connection.setAttribute ("pre" + Segment, mappedID);
+                        }
                     }
-                    if (preCell.populationSize > 1  &&  ! index.isEmpty ())
-                    {
-                        path = "../" + prePopulation + "/" + index + "/" + preCell.id;
-                    }
-                    connection.setAttribute ("pre" + Cell, path);
+                    connection.setAttribute ("pre" + Cell, index);
                 }
 
-                String path = postPopulation;
                 String index;
                 if (postSegment.isEmpty ())
                 {
@@ -673,15 +713,18 @@ public class ExportJob extends XMLutility
                 else
                 {
                     index = indexBup;
-                    if (inputList) connection.setAttribute ("segmentId",      postCell.mapID (postSegment, indexB));
-                    else           connection.setAttribute ("post" + Segment, postCell.mapID (postSegment, indexB));
+                    if (postCell != null)
+                    {
+                        String mappedID = ((Cell) postCell).mapID (postSegment, indexB);
+                        if (! mappedID.equals ("0"))  // Strictly speaking, inputList does not specify a default for segmentId, so we might need to emit it in any case.
+                        {
+                            if (inputList) connection.setAttribute ("segmentId",      mappedID);
+                            else           connection.setAttribute ("post" + Segment, mappedID);
+                        }
+                    }
                 }
-                if (postCell != null  &&  postCell.populationSize > 1  &&  ! index.isEmpty ())
-                {
-                    path = "../" + postPopulation + "/" + index + "/" + postCell.id;
-                }
-                if (inputList) connection.setAttribute ("target",      path);
-                else           connection.setAttribute ("post" + Cell, path);
+                if (inputList) connection.setAttribute ("target",      index);
+                else           connection.setAttribute ("post" + Cell, index);
 
                 if (inputList)
                 {
@@ -721,7 +764,7 @@ public class ExportJob extends XMLutility
         }
     }
 
-    public String addSynapse (MPart source, boolean electrical)
+    public Synapse addSynapse (MPart source, boolean electrical)
     {
         Synapse s = new Synapse (source, electrical);
         int index = synapses.indexOf (s);
@@ -730,21 +773,20 @@ public class ExportJob extends XMLutility
 
         // Check for chained synapse (embedded input)
         MPart A = (MPart) source.child ("A");
-        if (A == null  ||  A.size () == 0) return s.id;
+        if (A == null  ||  A.size () == 0) return s;
         Synapse s2 = new Synapse (s.id, A);
 
         index = synapses.indexOf (s2);
         if (index >= 0) s2 = synapses.get (index);
         else                 synapses.add (s2);
-        return s2.id;
+        return s2;
     }
 
     public class Synapse
     {
-        String  id      = "N2A_Synapse" + synapses.size ();
+        String  id;
         String  chainID = "";
         MPart   source;
-        MPart   sourceA;  // Only non-null if we have an embedded input.
         MNode   base    = new MVolatile ();
         boolean electrical;  // A hint about context. Shouldn't change identity.
 
@@ -754,25 +796,40 @@ public class ExportJob extends XMLutility
             this.electrical = electrical;
 
             // Assemble a part that best recreates the underlying synapse before it got incorporated into a projection
-            for (MNode c : source)
+            base.merge (source);
+            for (String key : new String[] {"A", "B", "$p", "weight", "delay", "preFraction", "postFraction"}) base.clear (key);
+            String type = source.get ("$metadata", "backend.lems.part");
+            if (type.contains ("gapJunction")  ||  type.contains ("silentSynapse")  ||  type.contains ("gradedSynapse"))
             {
-                String key = c.key ();
-                if ("A|B|$p|weight|delay|preFraction|postFraction".contains (key)) continue;
-                base.set (key, c);
+                for (String key : new String[] {"A.I", "B.I", "V", "Vpeer"}) base.clear (key);
+            }
+
+            String inherit = source.get ("$inherit").replace ("\"", "");
+            if (inherit.startsWith (modelName))
+            {
+                id = inherit.substring (modelName.length () + 1);
+            }
+            else
+            {
+                id = source.get ("$metadata", "backend.lems.id");
+                if (id.isEmpty ()) id = "N2A_Synapse" + synapses.size ();
             }
         }
 
-        public Synapse (String chainID, MPart sourceA)
+        public Synapse (String chainID, MPart source)
         {
             this.chainID = chainID;
-            this.sourceA = sourceA;
+            this.source  = source;
+
+            String lemsID = source.get ("$metadata", "backend.lems.id");
+            if (! lemsID.isEmpty ()) id = lemsID;
         }
 
         public void append ()
         {
             if (! chainID.isEmpty ())  // We have embedded input, so the main synapse will be emitted elsewhere.
             {
-                input (sourceA, elements, this);
+                input (source, elements, this);
                 return;
             }
 
@@ -814,7 +871,7 @@ public class ExportJob extends XMLutility
                     skip.add (key);
                     Element block = addElement ("blockMechanism", synapseElements);
                     block.setAttribute ("type", "voltageConcDepBlockMechanism");
-                    block.setAttribute ("species", c.get ("$metadata", "species"));
+                    block.setAttribute ("species", p.get ("$metadata", "species"));
                     genericPart (p, block);
                 }
             }
@@ -833,7 +890,7 @@ public class ExportJob extends XMLutility
             Synapse that = (Synapse) o;
             if (! chainID.isEmpty ()  ||  ! that.chainID.isEmpty ())
             {
-                return chainID.equals (that.chainID)  &&  sourceA.equals (that.sourceA);
+                return chainID.equals (that.chainID)  &&  source.equals (that.source);
             }
             return base.equals (that.base);
         }
@@ -850,6 +907,7 @@ public class ExportJob extends XMLutility
             MPart p = (MPart) c;
             if (p.isPart ())
             {
+                skip.add (p.key ());
                 input (p, inputElements, null);
             }
             else if (p.key ().equals ("times"))
@@ -906,7 +964,8 @@ public class ExportJob extends XMLutility
         String id;
         if (synapse == null)
         {
-            id = source.key ();
+            id = source.get ("$metadata", "backend.lems.id");
+            if (id.isEmpty ()) id = source.key ();
         }
         else
         {
@@ -921,12 +980,149 @@ public class ExportJob extends XMLutility
         return id;
     }
 
-    public class Cell
+    public AbstractCell addCell (MPart source, boolean topLevel)
     {
-        public String             name;
-        public String             id;
+        AbstractCell cell = null;
+        String type = source.get ("$metadata", "backend.lems.part");
+        if (type.equals ("cell")  ||  type.equals ("segment"))  // multi-compartment cell, or HH segment pretending to be a point cell
+        {
+            cell = new Cell (source);
+        }
+        else if (type.endsWith ("Cell"))  // standard point cell
+        {
+            cell = new AbstractCell (source);
+        }
+        if (cell == null) throw new RuntimeException ("Not a cell type");
+
+        int index = cells.indexOf (cell);
+        if (index >= 0) return cells.get (index);
+        cells.add (cell);
+        if (topLevel  &&  cell.populationSize == 1)
+        {
+            cell.id = source.key ();  // Use final name as ID, since this is purely a cell model
+        }
+        cell.append ();
+        return cell;
+    }
+
+    public class AbstractCell
+    {
+        public String id;
+        public MPart  source;
+        public MNode  base;
+        public int    populationSize;  // Ideally this would be a member of Population, but cells can be created outside a network, and N2A (but not NeuroML) allows them to have $n > 1.
+
+        public AbstractCell (MPart source)
+        {
+            this.source = source;
+
+            String inherit = source.get ("$inherit").replace ("\"", "");
+            if (inherit.startsWith (modelName))
+            {
+                id = inherit.substring (modelName.length ()).trim ();
+            }
+            else
+            {
+                id = source.get ("$metadata", "backend.lems.id");
+                if (id.isEmpty ()) id = "N2A_Cell" + cells.size ();  // Can't be source.key(), because that is most likely reserved for population id. If this is at top level, then id will be replaced with key elsewhere.
+            }
+
+            base = new MVolatile ();
+            base.merge (source);
+            base.clear ("$n");
+            base.clear ("$xyz");
+            base.clear ("ijk");
+
+            EquationSet part = getEquations (source);
+            populationSize = 1;
+            Variable n = part.find (new Variable ("$n", 0));
+            if (n != null) populationSize = (int) Math.floor (((Scalar) n.eval (context)).value);
+        }
+
+        public void append ()
+        {
+            String type = source.get ("$metadata", "backend.lems.part");
+            List<String> skip = new ArrayList<String> ();
+            if (type.contains ("izhikevich"))
+            {
+                // Check if crucial variables have been touched
+                type = "izhikevichCell";
+                if (anyOverride (source, "C", "k", "vr", "vt")) type = "izhikevich2007Cell";
+            }
+            else if (type.contains ("iaf"))  // Case is important. We don't want "adExIaFCell" with a capital "I".
+            {
+                // There are four types of IAF, depending on whether it is refractory, and whether it uses tau.
+                NameMap nameMap = partMap.importMap ("iafTauCell");
+                String tau = nameMap.importName ("tau");
+                MPart p = (MPart) source.child (tau);
+                boolean hasTau =  p != null  &&  p.isFromTopDocument ();
+
+                String refract = nameMap.importName ("refract");
+                p = (MPart) source.child (refract);
+                boolean hasRefract =  p != null  &&  p.isFromTopDocument ();
+
+                if (hasTau)
+                {
+                    if (hasRefract) type = "iafTauRefCell";
+                    else            type = "iafTauCell";
+                }
+                else
+                {
+                    if (hasRefract) type = "iafRefCell";
+                    else            type = "iafCell";
+                }
+            }
+            else if (type.contains ("fitzHughNagumo"))
+            {
+                // Since TS is a hard-coded constant, there's really nothing we can do.
+                // In general, prefer FN1969 over the more limited FN.
+                if (source.get ("TS").equals ("1s")) type = "fitzHughNagumoCell";
+                else                                 type = "fitzHughNagumo1969Cell";
+                skip.add ("TS");
+            }
+
+            Element cell = addElement (type, elements);
+            cell.setAttribute ("id", id);
+            standalone (source, cell);
+            genericPart (source, cell, skip.toArray (new String[] {}));
+
+            if (type.equals ("izhikevichCell"))  // strip units
+            {
+                for (String v : new String[] {"a", "b", "c", "d"})
+                {
+                    MPart p = (MPart) source.child (v);
+                    String value = p.get ();
+                    int index = findUnits (value);
+                    if (index < value.length ())
+                    {
+                        value = value.substring (0, index);
+                        cell.setAttribute (v, value);
+                    }
+                }
+            }
+        }
+
+        public boolean anyOverride (MPart source, String... names)
+        {
+            for (String n : names)
+            {
+                MPart p = (MPart) source.child (n);
+                if (p == null  ||  p.isFromTopDocument ()) return true;
+            }
+            return false;
+        }
+
+        public boolean equals (Object o)
+        {
+            if (! (o instanceof AbstractCell)) return false;
+            AbstractCell that = (AbstractCell) o;
+            return base.equals (that.base);
+        }
+    }
+
+    public class Cell extends AbstractCell
+    {
         public Element            cell;
-        public int                populationSize;
         public List<Element>      cellElements    = new ArrayList<Element> ();
         public List<Element>      morphology      = new ArrayList<Element> ();  // break out sub-element for easy access
         public List<Element>      membrane        = new ArrayList<Element> ();  // sub-element of biophysical properties 
@@ -940,23 +1136,26 @@ public class ExportJob extends XMLutility
 
         public Cell (MPart source)
         {
-            name = source.key ();
-            id = "N2A_Cell" + cells.size ();
+            super (source);
+
+            if (source.get ("$metadata", "backend.lems.part").equals ("segment"))  // This is a standalone segment, pretending to be a cell.
+            {
+                populationSize = 1;  // Since SegmentBlock also interprets $n, and that is the right place to do it in this case.
+            }
+        }
+
+        public void append ()
+        {
             cell = addElement ("cell", elements);
             standalone (source, cell, cellElements);
             cell.setAttribute ("id", id);  // May get changed to "name" if this is a non-networked cell
 
-            EquationSet part = getEquations (source);
-            populationSize = 1;
-            Variable n = part.find (new Variable ("$n", 0));
-            if (n != null) populationSize = (int) Math.floor (((Scalar) n.eval (context)).value);
-
             // Collect Segments and transform them into distinct property sets.
             // This reverses the import process, which converts property sets into distinct segment populations.
-            if (source.get ("$metadata", "backend.lems.part").equals ("segment"))  // This is a standalone segment, pretending to be a cell.
+            EquationSet part = getEquations (source);
+            if (source.get ("$metadata", "backend.lems.part").equals ("segment"))
             {
                 blocks.add (new SegmentBlock (part));
-                populationSize = 1;  // Since SegmentBlock also interprets $n, and that is the right place to do it in this case.
                 // TODO: process peer Coupling parts into segment parent-child relationships
             }
             else  // conventional cell
@@ -1092,12 +1291,12 @@ public class ExportJob extends XMLutility
                 if (blockName.equals (sb.block.key ()))
                 {
                     int count = sb.segments.size ();
-                    if (count == 1) return String.valueOf (sb.segments.get (0).id);
                     int i = Integer.valueOf (index);
-                    if (i < count) return String.valueOf (sb.segments.get (i).id);
+                    if (count == 1  ||  i >= count) return String.valueOf (sb.segments.get (0).id);
+                    return String.valueOf (sb.segments.get (i).id);
                 }
             }
-            return index;
+            return "0";
         }
 
         public class Segment
@@ -1108,10 +1307,20 @@ public class ExportJob extends XMLutility
             public int           id; // NeuroML id
 
             public double fractionAlong    = 1;
-            public Matrix proximal;
-            public Matrix distal;
-            public double proximalDiameter = -1;
-            public double distalDiameter   = -1;
+            public Matrix proximal         = new MatrixDense (3, 1);
+            public Matrix distal           = new MatrixDense (3, 1);
+            public double proximalDiameter = 0;
+            public double distalDiameter   = 0;
+
+            public String neuroLexId = "";
+            public String notes      = "";
+
+            public Segment (MNode source, int index)
+            {
+                name       = source.get ("$metadata", "backend.lems.id" + index);
+                neuroLexId = source.get ("$metadata", "neuroLexId"      + index);
+                notes      = source.get ("$metadata", "notes"           + index);
+            }
 
             public void addChild (Segment child)
             {
@@ -1131,14 +1340,20 @@ public class ExportJob extends XMLutility
                 Element segment = addElement ("segment", morphology);
                 segment.setAttribute ("id", String.valueOf (id));
                 segment.setAttribute ("name", name);
-                // TODO: handle obscure use-cases: neuroLexId, notes, property, annotation
+                if (! neuroLexId.isEmpty ()) segment.setAttribute ("neuroLexId", neuroLexId);
+                List<Element> segmentElements = new ArrayList<Element> ();
+
+                if (! notes.isEmpty ())
+                {
+                    Element n = addElement ("notes", segmentElements);
+                    n.setTextContent (notes);
+                }
 
                 double fractionAlong = 1;
                 double parentDiameter = proximalDiameter;
                 if (parent != null)
                 {
-                    Element p = doc.createElement ("parent");
-                    segment.appendChild (p);
+                    Element p = addElement ("parent", segmentElements);
                     p.setAttribute ("segment", String.valueOf (parent.id));
                     fractionAlong = ((Matrix) proximal.subtract (parent.proximal)).norm (2) / ((Matrix) parent.distal.subtract (parent.proximal)).norm (2);
                     if (1 - fractionAlong > epsilon)
@@ -1154,8 +1369,7 @@ public class ExportJob extends XMLutility
 
                 if (parent == null  ||  Math.abs (proximalDiameter - parentDiameter) > epsilon)
                 {
-                    Element p = doc.createElement ("proximal");
-                    segment.appendChild (p);
+                    Element p = addElement ("proximal", segmentElements);
                     // Convert all morphology to micrometers.
                     p.setAttribute ("x",        print (proximal.get (0) * 1e6));
                     p.setAttribute ("y",        print (proximal.get (1) * 1e6));
@@ -1163,27 +1377,33 @@ public class ExportJob extends XMLutility
                     p.setAttribute ("diameter", print (proximalDiameter * 1e6));
                 }
 
-                Element d = doc.createElement ("distal");
-                segment.appendChild (d);
+                Element d = addElement ("distal", segmentElements);
                 d.setAttribute ("x",        print (distal.get (0) * 1e6));
                 d.setAttribute ("y",        print (distal.get (1) * 1e6));
                 d.setAttribute ("z",        print (distal.get (2) * 1e6));
                 d.setAttribute ("diameter", print (distalDiameter * 1e6));
+
+                sequencer.append (segment, segmentElements);
             }
         }
-
-        // TODO: handle inhomogeneous parameters
 
         public class SegmentBlock
         {
             public EquationSet   part;
             public MNode         block;
             public List<Segment> segments = new ArrayList<Segment> ();
+            public List<String>  inhomo   = new ArrayList<String> ();
 
             public SegmentBlock (EquationSet part)
             {
                 this.part = part;
                 block     = part.source;
+
+                // Find inhomogeneousParameters
+                for (MNode c : block)
+                {
+                    if (c.get ().contains ("pathLength")) inhomo.add (c.key ());
+                }
 
                 // Analyze
                 Variable n          = part.find (new Variable ("$n", 0));
@@ -1193,31 +1413,26 @@ public class ExportJob extends XMLutility
                 Variable diameter   = part.find (new Variable ("diameter"));
 
                 // Extract segments
-                int count = (int) Math.floor (((Scalar) n.eval (context)).value);
-                if (count == 1)
+                int count = 1;
+                if (n != null) count = (int) Math.floor (((Scalar) n.eval (context)).value);
+                for (int i = 0; i < count; i++)
                 {
-                    Segment s = new Segment ();
+                    Segment s = new Segment (block, i);
                     segments.add (s);
-                    s.name = block.key ();
-                }
-                else
-                {
-                    for (int i = 0; i < count; i++)
+                    if (s.name.isEmpty ())
                     {
-                        Segment s = new Segment ();
-                        segments.add (s);
-                        s.name = block.get ("$metadata", "name" + i);
-                        if (s.name.isEmpty ()) s.name = block.key () + i;
+                        if (count == 1) s.name = block.key ();
+                        else            s.name = block.key () + i;
                     }
                 }
                 for (int index = 0; index < count; index++)
                 {
                     Segment s = segments.get (index);
                     context.index = index;
-                    s.proximal         =  (Matrix) xyz0     .eval (context);
-                    s.distal           =  (Matrix) xyz      .eval (context);
-                    s.proximalDiameter = ((Scalar) diameter0.eval (context)).value;
-                    s.distalDiameter   = ((Scalar) diameter .eval (context)).value;
+                    if (xyz0      != null) s.proximal         =  (Matrix) xyz0     .eval (context);
+                    if (xyz       != null) s.distal           =  (Matrix) xyz      .eval (context);
+                    if (diameter0 != null) s.proximalDiameter = ((Scalar) diameter0.eval (context)).value;
+                    if (diameter  != null) s.distalDiameter   = ((Scalar) diameter .eval (context)).value;
                 }
 
                 // Extract properties
@@ -1281,59 +1496,99 @@ public class ExportJob extends XMLutility
             {
                 for (Segment s : segments) s.append ();
                 int size = segments.size ();
-                if (size > 1)
+                if (size <= 1  &&  inhomo.size () == 0) return;
+
+                Element group = addElement ("segmentGroup", morphology);
+                group.setAttribute ("id", block.key ());
+                String neuroLexId = block.get ("$metadata", "neuroLexId");
+                if (! neuroLexId.isEmpty ()) group.setAttribute ("neuroLexId", neuroLexId);
+                List<Element> groupElements = new ArrayList<Element> ();
+
+                // Output inhomogeneousParameters
+                for (String key : inhomo)
                 {
-                    Element group = addElement ("segmentGroup", morphology);
-                    group.setAttribute ("id", block.key ());
-                    String neuroLexId = block.get ("$metadata", "neuroLexId");
-                    if (! neuroLexId.isEmpty ()) group.setAttribute ("neuroLexId", neuroLexId);
-                    List<Element> groupElements = new ArrayList<Element> ();
-
-                    // detect opportunities to use path or subTree rather than member
-                    // TODO: a better approach is to sort by id, then scan for contiguous blocks, while also emitting isolated IDs as members
-                    if (size > 4)
+                    MNode v = block.child (key);
+                    Element parameter = addElement ("inhomogeneousParameter", groupElements);
+                    parameter.setAttribute ("id", block.key () + "_" + key);
+                    parameter.setAttribute ("variable", key);
+                    parameter.setAttribute ("metric", "Path Length from root");
+                    double a = v.getOrDefaultDouble ("$metadata", "backend.lems.a", "1");
+                    double b = v.getOrDefaultDouble ("$metadata", "backend.lems.b", "0");
+                    if (a != 1)
                     {
-                        int from = Integer.MAX_VALUE;
-                        int to   = Integer.MIN_VALUE;
-                        for (Segment s : segments)
-                        {
-                            from = Math.min (from, s.id);
-                            to   = Math.max (to,   s.id);
-                        }
-
-                        if (to - from + 1 == size)
-                        {
-                            Element path = addElement ("path", groupElements);
-                            Element f = doc.createElement ("from");
-                            f.setAttribute ("from", String.valueOf (from));
-                            path.appendChild (f);
-                            Element t = doc.createElement ("to");
-                            t.setAttribute ("to", String.valueOf (to));
-                            path.appendChild (t);
-                            return;
-                        }
+                        Element distal = doc.createElement ("distal");
+                        parameter.appendChild (distal);
+                        distal.setAttribute ("normalizationEnd", print (a));
                     }
+                    if (b != 0)
+                    {
+                        Element proximal = doc.createElement ("proximal");
+                        parameter.appendChild (proximal);
+                        proximal.setAttribute ("translationStart", print (b));
+                    }
+                }
 
-                    for (Segment s : segments)
+                // Sort segments by ID, so we can find contiguous paths for compact output
+                TreeMap<Integer,Segment> sorted = new TreeMap<Integer,Segment> ();
+                for (Segment s : segments) sorted.put (s.id, s);
+                int i = 0;
+                for (Segment s : sorted.values ()) segments.set (i++, s);
+
+                // Output
+                int from = segments.get (0).id;
+                int to   = from;
+                for (Segment s : segments)
+                {
+                    if (s.id - to <= 1)
+                    {
+                        to = s.id;
+                    }
+                    else  // a break in the contiguous list of IDs
+                    {
+                        appendPath (from, to, groupElements);
+                        from = to = s.id;
+                    }
+                }
+                appendPath (from, to, groupElements);
+
+                sequencer.append (group, groupElements);
+            }
+
+            public void appendPath (int from, int to, List<Element> groupElements)
+            {
+                int count = to - from + 1;
+                if (count < 4)
+                {
+                    for (int i = from; i <= to; i++)
                     {
                         Element member = addElement ("member", groupElements);
-                        member.setAttribute ("segment", String.valueOf (s.id));
+                        member.setAttribute ("segment", String.valueOf (i));
                     }
-
-                    sequencer.append (group, groupElements);
+                }
+                else
+                {
+                    Element path = addElement ("path", groupElements);
+                    Element f = doc.createElement ("from");
+                    f.setAttribute ("from", String.valueOf (from));
+                    path.appendChild (f);
+                    Element t = doc.createElement ("to");
+                    t.setAttribute ("to", String.valueOf (to));
+                    path.appendChild (t);
                 }
             }
         }
 
         public class Property
         {
-            public int column = properties.size ();  // in P
+            public int    column           = properties.size ();  // in P
+            public String segmentName      = "";
+            public String segmentGroupName = "";
 
             public void append ()
             {
             }
 
-            public void setSegment (Element e)
+            public void generateSegmentGroup ()
             {
                 // Count individual segments associated with this property
                 int count = 0;
@@ -1358,27 +1613,27 @@ public class ExportJob extends XMLutility
                 if (count == 1)  // use individual segment reference
                 {
                     Segment s = lastFound.segments.get (0);
-                    e.setAttribute ("segment", String.valueOf (s.id));
+                    segmentName = String.valueOf (s.id);
                 }
                 else if (lastFound.segments.size () == count)  // Single group associated with Segment
                 {
-                    e.setAttribute ("segmentGroup", lastFound.block.key ());
+                    segmentGroupName = lastFound.block.key ();
                 }
                 else  // Assemble multiple groups
                 {
-                    String groupName = "Group";
+                    segmentGroupName = "Group";
                     int match = multiGroup.matchColumn (P.column (column));
                     if (match >= 0)
                     {
-                        groupName += match;
+                        segmentGroupName += match;
                     }
                     else
                     {
                         match = multiGroup.columns ();
                         multiGroup.set (match, P.column (column));
-                        groupName += match;
+                        segmentGroupName += match;
                         Element group = addElement ("segmentGroup", morphology);
-                        group.setAttribute ("name", groupName);
+                        group.setAttribute ("name", segmentGroupName);
                         for (int r = 0; r < rows; r++)
                         {
                             if (P.get (r, column))
@@ -1402,8 +1657,13 @@ public class ExportJob extends XMLutility
                             }
                         }
                     }
-                    e.setAttribute ("segmentGroup", groupName);
                 }
+            }
+
+            public void setSegment (Element e)
+            {
+                if      (! segmentName     .isEmpty ()) e.setAttribute ("segment",      segmentName);
+                else if (! segmentGroupName.isEmpty ()) e.setAttribute ("segmentGroup", segmentGroupName);
             }
         }
 
@@ -1424,7 +1684,11 @@ public class ExportJob extends XMLutility
             {
                 Element e = addElement (name, target);
                 e.setAttribute ("value", biophysicalUnits (value));
-                if (target == membrane) setSegment (e);
+                if (target == membrane)
+                {
+                    generateSegmentGroup ();
+                    setSegment (e);
+                }
             }
 
             public boolean equals (Object that)
@@ -1448,11 +1712,63 @@ public class ExportJob extends XMLutility
 
             public void append ()
             {
+                // Check for variableParameters
+                List<String> skipList = new ArrayList<String> ();
+                Map<String,String> variableParameters = new TreeMap<String,String> ();
+                class ParameterVisitor extends Visitor
+                {
+                    List<String> inhomo = new ArrayList<String> ();
+                    String found;
+                    public ParameterVisitor ()
+                    {
+                        int rows = blocks.size ();
+                        for (int r = 0; r < rows; r++)
+                        {
+                            if (P.get (r, column))
+                            {
+                                inhomo.addAll (blocks.get (r).inhomo);
+                            }
+                        }
+                    }
+                    public boolean visit (Operator op)
+                    {
+                        if (op instanceof AccessVariable)
+                        {
+                            AccessVariable av = (AccessVariable) op;
+                            if (inhomo.contains (av.name)) found = av.name;
+                            return false;
+                        }
+                        return true;
+                    }
+                }
+                ParameterVisitor visitor = new ParameterVisitor ();
+                if (visitor.inhomo.size () > 0)
+                {
+                    for (MNode c : source)
+                    {
+                        MPart p = (MPart) c;
+                        if (! p.isFromTopDocument ()) continue;
+                        try
+                        {
+                            Operator op = Operator.parse (p.get ());
+                            visitor.found = "";
+                            op.visit (visitor);
+                            if (! visitor.found.isEmpty ())
+                            {
+                                String key = p.key ();
+                                skipList.add (key);
+                                variableParameters.put (key, visitor.found);
+                            }
+                        }
+                        catch (ParseException e) {}
+                    }
+                }
+                boolean nonuniform = skipList.size () > 0;
+
                 // Select element type
                 String type = "channelPopulation";
-                if (source.get ("population").isEmpty ())
+                if (! source.get ("Gall").contains ("population"))
                 {
-                    boolean hasDensity = ! source.get ("Gdensity").isEmpty ();
                     String potential = findPotential (source);
                     if (potential.startsWith ("Potential "))
                     {
@@ -1460,16 +1776,13 @@ public class ExportJob extends XMLutility
                         switch (potential)
                         {
                             case "Nernst":
-                                if (hasDensity) type = "channelDensityNernst";
-                                else            type = "channelDensityNonUniformNernst";
+                                if (nonuniform) type = "channelDensityNonUniformNernst";
+                                else            type = "channelDensityNernst";
                                 if (ca2) type += "Ca2";
                                 break;
                             case "GHK":
-                                // If permeability fails to parse into a number, then it is (probably) an
-                                // expression that involves a variableParameter, indicating non-uniform.
-                                double permeability = Scalar.convert (source.get ("permeability"));
-                                if (permeability == 0) type = "channelDensityNonUniformGHK";
-                                else                   type = "channelDensityGHK";
+                                if (nonuniform) type = "channelDensityNonUniformGHK";
+                                else            type = "channelDensityGHK";
                                 break;
                             case "GHK 2":
                                 type = "channelDensityGHK2";
@@ -1478,36 +1791,49 @@ public class ExportJob extends XMLutility
                     }
                     else  // potential is empty
                     {
-                        if (hasDensity) type = "channelDensity";
-                        else            type = "channelDensityNonUniform";
+                        if (nonuniform) type = "channelDensityNonUniform";
+                        else            type = "channelDensity";
                     }
                 }
 
                 IonChannel ic = new IonChannel (source);
-                boolean found = false;
-                for (IonChannel o : channels)
+                int index = channels.indexOf (ic);
+                if (index >= 0) ic = channels.get (index);
+                else            channels.add (ic);
+                skipList.addAll (ic.skipList);
+
+                Element channel = addElement (type, membrane);
+                genericPart (source, channel, skipList.toArray (new String[] {}));
+                channel.setAttribute ("id", source.key ());
+                channel.setAttribute ("ionChannel", ic.id);
+                String ion = source.get ("$metadata", "species");
+                if (! ion.isEmpty ()) channel.setAttribute ("ion", ion);
+
+                generateSegmentGroup ();
+                if (nonuniform)
                 {
-                    if (o.equals (ic))
+                    for (Entry<String,String> e : variableParameters.entrySet ())
                     {
-                        ic = o;
-                        found = true;
-                        break;
+                        String key = e.getKey ();
+                        MNode v = source.child (key);
+                        String parameter = key;
+                        String fieldNames = v.get ("$metadata", "backend.lems.param");
+                        if (! fieldNames.isEmpty ()) parameter = sequencer.bestFieldName (channel, fieldNames);
+
+                        Element vp = doc.createElement ("variableParameter");
+                        channel.appendChild (vp);
+                        vp.setAttribute ("segmentGroup", segmentGroupName);
+                        vp.setAttribute ("parameter", parameter);
+
+                        Element value = doc.createElement ("inhomogeneousValue");
+                        vp.appendChild (value);
+                        value.setAttribute ("inhomogeneousParameter", segmentGroupName + "_" + e.getValue ());  // This is imperfect, as there is no guarantee that this segment group is not constructed.
+                        value.setAttribute ("value", v.get ());
                     }
                 }
-                if (! found) channels.add (ic);
-
-                Element e = addElement (type, membrane);
-                e.setAttribute ("id", source.key ());
-                e.setAttribute ("ionChannel", ic.id);
-                setSegment (e);
-
-                String ion = source.get ("$metadata", "species");
-                if (! ion.isEmpty ()) e.setAttribute ("ion", ion);
-
-                for (String attributeName : new String[] {"E", "population", "Gdensity", "permeability"})
+                else
                 {
-                    MPart attribute = (MPart) source.child (attributeName);
-                    if (attribute != null  &&  attribute.isFromTopDocument ()) setNumber (e, attribute);
+                    setSegment (channel);
                 }
             }
 
@@ -1546,15 +1872,16 @@ public class ExportJob extends XMLutility
 
             public void append ()
             {
-                String ion = source.key ();  // Concentration models are always named after their ion.
-                String type = source.get ("$metadata", "backend.lems.part").split (",")[0];
-                String inherit = source.get ("$inherit").replace ("\"", "");
-                NameMap nameMap = partMap.exportMap (inherit);
-                String inside0  = nameMap.importName ("initialConcentration");
-                String outside0 = nameMap.importName ("initialExtConcentration");
+                String  ion      = source.key ();  // Concentration models are always named after their ion.
+                String  type     = source.get ("$metadata", "backend.lems.part").split (",")[0];
+                String  inherit  = source.get ("$inherit").replace ("\"", "");
+                NameMap nameMap  = partMap.exportMap (inherit);
+                String  inside0  = nameMap.importName ("initialConcentration");
+                String  outside0 = nameMap.importName ("initialExtConcentration");
 
                 Element concentration = addElement (type, elements);
-                String concentrationID = "N2A_Concentration" + countConcentration++;
+                String concentrationID = source.get ("$metadata", "backend.lems.id");
+                if (concentrationID.isEmpty ()) concentrationID = "N2A_Concentration" + countConcentration++;
                 concentration.setAttribute ("id",  concentrationID);
                 concentration.setAttribute ("ion", ion);
                 genericPart (source, concentration, inside0, outside0);
@@ -1592,10 +1919,11 @@ public class ExportJob extends XMLutility
     {
         public String        id;
         public MPart         source;    // from original document
-        public MPart         base;      // pseudo-document with modifications to factor out changes made by Segment
+        public MNode         base;      // pseudo-document with modifications to factor out changes made by Segment
         public String        inherit;   // model name of parent channel, without the Potential
         public String        potential; // model name for the Potential, if specified. null if no Potential is given.
         public List<Element> channelElements = new ArrayList<Element> ();
+        public List<String>  skipList        = new ArrayList<String> ();  // A hint to containing channel about which elements it should skip.
 
         public IonChannel (MPart source)
         {
@@ -1613,14 +1941,16 @@ public class ExportJob extends XMLutility
                 inherit   = inherits[1].replace ("\"", "");
             }
 
-            // Assemble a part that best recreates the underlying channel before it got incorporated into a Segment
-            base = new MPart (new MDoc ("/"));  // Path doesn't matter, because we will never save this doc.
+            // Assemble a part that best recreates the underlying channel before it got incorporated into a property
+            base = new MVolatile ();
             base.set ("$inherit", inherit);  // skip potential, if it existed
+            List<String> forbidden = Arrays.asList ("$inherit", "c", "E", "Gall", "Gdensity", "population", "permeability");
             for (MNode c : source)
             {
                 String key = c.key ();
-                if ("$inherit|c|E|Gall|Gdensity|population|permeability".contains (key)) continue;
+                if (forbidden.contains (key)) continue;
                 base.set (key, c);
+                skipList.add (key);
             }
 
             // Suggest an id
@@ -1630,7 +1960,8 @@ public class ExportJob extends XMLutility
             }
             else
             {
-                id = "N2A_Channel" + channels.size ();
+                id = source.get ("$metadata", "backend.lems.id");
+                if (id.isEmpty ()) id = "N2A_Channel" + channels.size ();
             }
         }
 
@@ -1939,6 +2270,13 @@ public class ExportJob extends XMLutility
         return isOverride (part.get ("$inherit").replace ("\"", ""), key);
     }
 
+    public void standalone (MPart source, Element node)
+    {
+        List<Element> standaloneElements = new ArrayList<Element> ();
+        standalone (source, node, standaloneElements);
+        sequencer.append (node, standaloneElements);
+    }
+
     /**
         Process child elements common to all Standalone elements.
     **/
@@ -2022,19 +2360,6 @@ public class ExportJob extends XMLutility
         return result;
     }
 
-    public void setNumber (Element e, MNode source)
-    {
-        String name = source.get ("$metadata", "backend.lems.param").split (",", 2)[0];
-        if (name.isEmpty ()) name = source.key ();
-        setNumber (e, name, source.get ());
-    }
-
-    public void setNumber (Element e, String name, String value)
-    {
-        value = biophysicalUnits (value);
-        e.setAttribute (name, value);
-    }
-
     public String morphologyUnits (String value)
     {
         value = value.trim ();
@@ -2092,7 +2417,6 @@ public class ExportJob extends XMLutility
         // Determine power in numberString itself
         double power = 1; 
         if (v != 0) power = Math.pow (10, Math.floor ((Math.getExponent (v) + 1) / baseRatio));
-        System.out.println (value + " = " + power);
 
         // Find closest matching unit
         Entry<Unit<?>,String> closest      = null;

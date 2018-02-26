@@ -213,7 +213,8 @@ public class NodePart extends NodeFilter
             Object o = i.nextElement ();
             if (o instanceof NodeVariable)
             {
-                if (((NodeVariable) o).source.key ().equals (ns)) return null;  // could also return the actual NodeVariable, if it proved useful
+                NodeVariable v = (NodeVariable) o;
+                if (v.source.key ().equals (ns)) return v;
             }
             else if (o instanceof NodePart)
             {

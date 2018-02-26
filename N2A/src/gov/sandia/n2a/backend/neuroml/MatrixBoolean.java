@@ -148,20 +148,27 @@ public class MatrixBoolean
     public int matchColumn (MatrixBoolean pattern)
     {
         int columnCount = data.size ();
-        int patternRows = pattern.rows ();
         boolean[] patternColumn = pattern.data.get (0);
+        int patternRows = patternColumn.length;
         for (int c = 0; c < columnCount; c++)
         {
             boolean[] myColumn = data.get (c);
+            int myRows = myColumn.length;
+            int sharedRows = Math.min (patternRows, myRows);
             boolean found = true;
             int r = 0;
-            for (; found  &&  r < patternRows; r++)
+            for (; found  &&  r < sharedRows; r++)
             {
                 if (patternColumn[r] != myColumn[r]) found = false;
             }
-            for (; found  &&  r < rowCount; r++)
+            // At most one of the following two loops will actually execute.
+            for (; found  &&  r < myRows; r++)
             {
                 if (myColumn[r]) found = false;
+            }
+            for (; found  &&  r < patternRows; r++)
+            {
+                if (patternColumn[r]) found = false;
             }
             if (found) return c;
         }

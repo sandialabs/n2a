@@ -238,8 +238,9 @@ public class PartMap
         public void dump ()
         {
             System.out.println (internal + " " + neuroml);
-            System.out.print ("  containers = ");
-            for (NameMap c : containers) System.out.println (c.internal + ", ");  // leaves one bogus comma at end, but we don't really care
+            System.out.print ("  containers = [");
+            for (NameMap c : containers) System.out.print (c.internal + ", ");  // leaves one bogus comma at end, but we don't really care
+            System.out.println ("]");
             for (Entry<String, ArrayList<String>> e : outward.entrySet ())
             {
                 System.out.println ("  " + e.getKey () + " " + e.getValue ());

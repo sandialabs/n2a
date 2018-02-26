@@ -400,10 +400,44 @@ public class Scalar extends Type
         return this;
     }
 
+    public static String print (double d)
+    {
+        double epsilon = Math.ulp (1);  // Even though this is stored as double, it is really a single-precision epsilon
+
+        // Round to integer?
+        long l = Math.round (d);
+        if (l != 0  &&  Math.abs (d - l) < epsilon) return String.valueOf (l);
+
+        // Check rounding to each of the first 3 places after the decimal.
+        // This prevents ridiculous and ugly output such as "0.19999999999999998"
+        if (d < 1)
+        {
+            int power = 1;
+            for (int i = 1; i <= 3; i++)
+            {
+                power *= 10;  // now power==10^i
+                double t = d * power;
+                l = Math.round (t);
+                if (l != 0  &&  Math.abs (t - l) < epsilon)
+                {
+                    String value = String.valueOf (l);
+                    String pad = "";
+                    for (int j = value.length (); j < i; j++) pad += "0";
+                    return "0." + pad + value;
+                }
+            }
+        }
+
+        String result = String.valueOf (d).toLowerCase ();  // get rid of upper-case E
+        // Don't add ugly and useless ".0"
+        result = result.replace (".0e", "e");
+        if (result.endsWith (".0")) result = result.substring (0, result.length () - 2);
+        return result;
+    }
+
     public String toString ()
     {
-        if ((int) value == value) return String.valueOf ((int) value);  // simplify display a little, since we don't distinguish float from int
-        return String.valueOf (value);
+        return print (value);
     }
 
     public int compareTo (Type that)

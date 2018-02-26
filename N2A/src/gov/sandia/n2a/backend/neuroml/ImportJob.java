@@ -20,6 +20,7 @@ import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Renderer;
+import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.parse.ExpressionParser;
 import gov.sandia.n2a.language.type.Matrix;
@@ -34,6 +35,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -50,7 +52,6 @@ import javax.measure.format.ParserException;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
-
 import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
@@ -204,6 +205,10 @@ public class ImportJob extends XMLutility
                     Cell cell = new Cell (child);
                     cells.put (cell.id, cell);
                     break;
+                case "fitzHughNagumoCell":
+                    MNode FN = genericPart (child, model);
+                    FN.set ("TS", "1s");  // Force time-scale to match the hard-coded value in LEMS definitions.
+                    break;
                 case "poissonFiringSynapse":
                 case "transientPoissonFiringSynapse":
                 case "spikeArray":
@@ -333,8 +338,10 @@ public class ImportJob extends XMLutility
 
             MNode fused = new MVolatile ();
             fused.merge (synapse);  // Leave the original synapse part alone. Just duplicate it.
+            fused.set ("$metadata", "backend.lems.id", synapseName);
             MNode A = fused.set ("A", "");
             A.merge (spikeSource);
+            A.set ("$metadata", "backend.lems.id", spikeSource.key ());
 
             removeDependency (spikeSource, spikeSource.get ("$inherit").replace ("\"", ""));
             spikeSource.clear ();
@@ -396,6 +403,7 @@ public class ImportJob extends XMLutility
                 MNode dest = models.childOrCreate (modelName, p.key ());
                 dest.merge (p);
             }
+            models.set (modelName, "$metadata", "backend.lems.id", primaryModel);
         }
 
         if (models.child (modelName).size () == 0) models.clear (modelName);
@@ -551,6 +559,8 @@ public class ImportJob extends XMLutility
                         if (c == null) dependent.set (key, n);
                         else           c.mergeUnder (n);
                     }
+
+                    if (! proxy) dependent.set ("$metadata", "backend.lems.id", sourceName);
                 }
                 if (count == -1) models.clear (modelName, sourceName);
             }
@@ -760,15 +770,8 @@ public class ImportJob extends XMLutility
             String name = child.getNodeName ();
             if (name.endsWith ("Mechanism"))  // This handles both block and plasticity mechanisms.
             {
-                removeDependency (c, name);  // We're about to change the $inherit value, so get rid of the dependency created in genericPart().
-                String type    = c.get ("type");
                 String species = c.get ("species");
-                c.clear ("type");
                 c.clear ("species");
-                nameMap = partMap.importMap (type);
-                type = nameMap.internal;
-                c.set ("$inherit", "\"" + type + "\"");
-                addDependency (c, type);
                 if (! species.isEmpty ()) c.set ("$metadata", "species", species);
             }
         }
@@ -790,6 +793,19 @@ public class ImportJob extends XMLutility
         }
     }
 
+    /**
+        Auxiliary structures in cell MNode:
+        $group
+            each child is a named group, complete with equation set that will become a segment directly under cell
+            $G = column in matrix G
+            $inhomo
+                inhomogeneousParameter id
+                    {variable name before} = {variable name after} -- remap variable name because there is a collision in the segment equations
+            $parent -- temporary used when connecting groups
+        $properties
+            {arbitrary integer index} = {group name} -- allows multiple properties to be associated with same group
+                single child, which is a complete equation set implementing the property
+    **/
     public class Cell
     {
         String               id;
@@ -996,9 +1012,18 @@ public class ImportJob extends XMLutility
 
         public void inhomogeneousParameter (Node node, MNode group)
         {
-            //String id       = getAttribute (node, "id");
+            String id       = getAttribute (node, "id");
             String variable = getAttribute (node, "variable");
 
+            // Ensure there is no name collision
+            NameMap nameMap = partMap.importMap ("segment");
+            MNode parent = AppData.models.child (nameMap.internal);
+            String v = variable;
+            int suffix = 2;
+            while (parent.child (v) != null) v = variable + suffix++;
+            if (! v.equals (variable)) group.set ("$inhomo", id, variable, v);  // When processing inhomogeneousParameter with id, remap from variable to v
+
+            // Collect scaling parameters
             String translationStart = "0";
             String normalizationEnd = "1";
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
@@ -1010,12 +1035,8 @@ public class ImportJob extends XMLutility
                     case "distal"  : normalizationEnd = getAttribute (child, "normalizationEnd"); break;
                 }
             }
-
-            // TODO: What is the correct interpretation of translationStart and normalizationEnd?
-            // Here we assume they are a linear transformation of the path length: variable = pathLength * normalizatonEnd + translationStart
-            group.set (variable, "$metadata", "backend.lems.param",   "pathLength");
-            group.set (variable, "$metadata", "backend.lems.param.a", normalizationEnd);
-            group.set (variable, "$metadata", "backend.lems.param.b", translationStart);
+            group.set (v, "$metadata", "backend.lems.a", normalizationEnd);
+            group.set (v, "$metadata", "backend.lems.b", translationStart);
         }
 
         public void biophysicalProperties (Node node)
@@ -1138,18 +1159,52 @@ public class ImportJob extends XMLutility
                         }
                     }
                     subpart = clone.iterator ().next ();
-                    subpart.set (parameter, variableParameter (child));
+                    variableParameter (child, subpart, parameter, segmentGroup);
                 }
             }
         }
 
-        public String variableParameter (Node node)
+        public void variableParameter (Node node, MNode subpart, String parameter, String segmentGroup)
         {
+            String inherit = subpart.get ("$inherit").replace ("\"", "");
+            NameMap nameMap = exportMap (inherit);  // could also do importMap() on lems.part
+            parameter = nameMap.importName (parameter);
+
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
-                if (child.getNodeType () == Node.ELEMENT_NODE  &&  child.getNodeName ().equals ("inhomogeneousValue")) return getAttribute (child, "value");
+                if (child.getNodeType () == Node.ELEMENT_NODE  &&  child.getNodeName ().equals ("inhomogeneousValue"))
+                {
+                    String id    = getAttribute (child, "inhomogeneousParameter");
+                    String value = getAttribute (child, "value");
+
+                    MNode remap = cell.child ("$group", segmentGroup, "$inhomo", id);  // We can safely assume that segmentGroup has already been created, and thus has all necessary $inhomo entries.
+                    if (remap != null)
+                    {
+                        remap = remap.iterator ().next ();
+                        String before = remap.key ();
+                        String after  = remap.get ();
+                        try
+                        {
+                            Operator op = Operator.parse (value);
+                            op.transform (new Transformer ()
+                            {
+                                public Operator transform (Operator op)
+                                {
+                                    if (op instanceof AccessVariable)
+                                    {
+                                        AccessVariable av = (AccessVariable) op;
+                                        if (av.name.equals (before)) av.name = after;
+                                    }
+                                    return null;
+                                }
+                            });
+                            value = op.render ().replace (" ", "");
+                        }
+                        catch (ParseException e) {}
+                    }
+                    subpart.set (parameter, value);
+                }
             }
-            return "";
         }
 
         public void finish ()
@@ -1447,18 +1502,20 @@ public class ImportJob extends XMLutility
                 }
 
                 // Collect inhomogeneous variables
+                // TODO: What is the correct interpretation of translationStart and normalizationEnd?
+                // Here we assume they are a linear transformation of the path length: variable = pathLength * normalizatonEnd + translationStart
                 String pathLength = "";
                 for (MNode v : part)
                 {
-                    if (! v.get ("$metadata", "backend.lems.param").equals ("pathLength")) continue;
+                    if (v.child ("$metadata", "backend.lems.a") == null) continue;
                     if (pathLength.isEmpty ())
                     {
                         pathLength = "pathLength";
                         int count = 2;
                         while (part.child (pathLength) != null) pathLength = "pathLength" + count++;
                     }
-                    double a = v.getDouble ("$metadata", "backend.lems.param.a");
-                    double b = v.getDouble ("$metadata", "backend.lems.param.b");
+                    double a = v.getDouble ("$metadata", "backend.lems.a");
+                    double b = v.getDouble ("$metadata", "backend.lems.b");
                     String value = pathLength;
                     if (a != 1) value += "*" + a;
                     if (b != 0) value += "+" + b;
@@ -1484,17 +1541,19 @@ public class ImportJob extends XMLutility
                 {
                     if (! M.get (r, c)) continue;
                     Segment s = segments.get (r);
-                    
+
+                    if (! s.neuroLexId.isEmpty ()) part.set ("$metadata", "neuroLexId" + index, s.neuroLexId);
+                    if (! s.notes     .isEmpty ()) part.set ("$metadata", "notes"      + index, s.notes);
                     if (n > 1)
                     {
-                        if (! s.name.isEmpty ()) part.set ("$metadata", "name" + index, s.name);
-                        if (! pathLength.isEmpty ()) part.set (pathLength, "@$index==" + index, s.pathLength (0.5));  // mid-point method. TODO: add way to subdivide segments for more precise modeling of varying density
+                        if (! s.name.isEmpty ()) part.set ("$metadata", "backend.lems.id" + index, s.name);
+                        if (! pathLength.isEmpty ()) part.set (pathLength, "@$index==" + index, print (s.pathLength (0.5) * 1e6) + "um");  // mid-point method. TODO: add way to subdivide segments for more precise modeling of varying density
                         s.output (part, index++);
                     }
                     else
                     {
-                        if (! s.name.isEmpty ()  &&  ! s.name.equals (currentName)) part.set ("$metadata", "name", s.name);
-                        if (! pathLength.isEmpty ()) part.set (pathLength, s.pathLength (0.5));
+                        if (! s.name.isEmpty ()  &&  ! s.name.equals (currentName)) part.set ("$metadata", "backend.lems.id0", s.name);
+                        if (! pathLength.isEmpty ()) part.set (pathLength, print (s.pathLength (0.5) * 1e6) + "um");
                         s.output (part, -1);
                         break;  // Since we've already processed the only segment.
                     }
@@ -1579,10 +1638,11 @@ public class ImportJob extends XMLutility
             {
                 part.clear ("$parent");
                 part.clear ("$G");
+                part.clear ("$inhomo");
                 for (MNode v : part)
                 {
-                    v.clear ("$metadata", "backend.lems.param.a");
-                    v.clear ("$metadata", "backend.lems.param.b");
+                    v.clear ("$metadata", "backend.lems.a");
+                    v.clear ("$metadata", "backend.lems.b");
                 }
             }
             groupIndex = finalNames;
@@ -1607,10 +1667,15 @@ public class ImportJob extends XMLutility
         double       distalDiameter     = -1;
         double       proximalPathLength = -1;  // Path length from proximal end to root. Used to calculate pathLength().
 
+        String       neuroLexId = "";
+        String       notes      = "";
+
         public Segment (Node node)
         {
-            id   = Integer.parseInt (getAttribute (node, "id", "0"));
-            name =                   getAttribute (node, "name"); 
+            id = Integer.parseInt (getAttribute (node, "id", "0"));
+            name       = getAttribute (node, "name"); 
+            neuroLexId = getAttribute (node, "neuroLexId"); 
+
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
                 if (child.getNodeType () != Node.ELEMENT_NODE) continue;
@@ -1633,6 +1698,9 @@ public class ImportJob extends XMLutility
                         distal.set   (1, Scalar.convert (morphologyUnits (getAttribute (child, "y"))));
                         distal.set   (2, Scalar.convert (morphologyUnits (getAttribute (child, "z"))));
                         distalDiameter = Scalar.convert (morphologyUnits (getAttribute (child, "diameter")));
+                        break;
+                    case "notes":
+                        notes = child.getTextContent ();
                         break;
                 }
             }
@@ -1722,14 +1790,11 @@ public class ImportJob extends XMLutility
 
     public void channel (Node node, MNode part, boolean doDependency)
     {
-        String name        = node.getNodeName ();
-        String ionChannel  = part.get ("ionChannel");
-        String number      = part.get ("number");
-        String condDensity = part.get ("condDensity");
+        String name       = node.getNodeName ();
+        String number     = part.get ("number");
+        String ionChannel = part.get ("ionChannel");
 
         part.clear ("ionChannel");
-        part.clear ("number");
-        part.clear ("condDensity");
         NameMap nameMap = partMap.importMap ("ionChannel");  // There is only one internal part for all ion-channel-related components in NeuroML. It includes both individual channels and populations/densities.
         remap (part, nameMap);
 
@@ -1756,17 +1821,7 @@ public class ImportJob extends XMLutility
 
         if (! number.isEmpty ())
         {
-            part.set ("population", number);
-            part.set ("population", "$metadata", "public", "");
-            part.set ("population", "$metadata", "backend.lems.param", "number");
-            part.set ("Gall", "G1*population");
-        }
-        if (! condDensity.isEmpty ())
-        {
-            part.set ("Gdensity", condDensity);
-            part.set ("Gdensity", "$metadata", "public", "");
-            part.set ("Gdensity", "$metadata", "backend.lems.param", "condDensity");
-            if (! name.contains ("GHK")) part.set ("Gall", "Gdensity*surfaceArea");
+            part.set ("Gall", "G1*population");  // The default is Gdensity*surfaceArea
         }
     }
 
@@ -1873,7 +1928,7 @@ public class ImportJob extends XMLutility
         List<Node>   extracellularProperties = new ArrayList<Node> ();
         List<Node>   projections             = new ArrayList<Node> ();
         List<Node>   explicitInputs          = new ArrayList<Node> ();
-        List<String> explicitInputRecheck    = new ArrayList<String> ();
+        Set<String>  explicitInputRecheck    = new TreeSet<String> ();
 
         public Network (Node node)
         {
@@ -2102,9 +2157,10 @@ public class ImportJob extends XMLutility
                         if (child.getNodeType () == Node.ELEMENT_NODE) childCount++;
                     }
 
-                    if (childCount == 1)  // single direct connection
+                    if (childCount == 1)  // single direct connection, equivalent to explicitInput
                     {
                         inherit = component;
+                        explicitInputRecheck.add (id);
                         // A remains empty
                     }
                     else  // multiple connections
@@ -2542,12 +2598,7 @@ public class ImportJob extends XMLutility
         while (container.child (id) != null) id = stem + suffix++;
         MNode part = container.childOrCreate (id);
 
-        boolean skipType = false;
-        if (nodeName.equals ("Component"))
-        {
-            skipType = true;
-            nodeName = getAttribute (node, "type", nodeName);
-        }
+        nodeName = getAttribute (node, "type", nodeName);
 
         List<MNode> parents = collectParents (container);
         String inherit = typeFor (nodeName, parents);
@@ -2573,8 +2624,8 @@ public class ImportJob extends XMLutility
         {
             Node a = attributes.item (i);
             String name = a.getNodeName ();
-            if (              name.equals ("id"  )) continue;
-            if (skipType  &&  name.equals ("type")) continue;
+            if (name.equals ("id"  )) continue;
+            if (name.equals ("type")) continue;
             name = nameMap.importName (name);
             if (isPart (name, parents))
             {
@@ -2622,20 +2673,12 @@ public class ImportJob extends XMLutility
     {
         NamedNodeMap attributes = node.getAttributes ();
         int count = attributes.getLength ();
+        List<String> forbiddenList = Arrays.asList (forbidden);
         for (int i = 0; i < count; i++)
         {
             Node a = attributes.item (i);
             String name = a.getNodeName ();
-            boolean isForbidden = false;
-            for (String f : forbidden)
-            {
-                if (f.equals (name))
-                {
-                    isForbidden = true;
-                    break;
-                }
-            }
-            if (isForbidden) continue;
+            if (forbiddenList.contains (name)) continue;
             name = nameMap.importName (name);
             String defaultUnit = nameMap.defaultUnit (name);
             part.set (name, biophysicalUnits (a.getNodeValue (), defaultUnit));  // biophysicalUnits() will only modify text if there is a numeric value

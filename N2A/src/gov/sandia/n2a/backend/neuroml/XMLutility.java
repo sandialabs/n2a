@@ -17,6 +17,8 @@ import javax.measure.spi.SystemOfUnits;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 
+import gov.sandia.n2a.language.type.Scalar;
+
 public class XMLutility
 {
     public static Pattern       floatParser   = Pattern.compile ("[-+]?(NaN|Infinity|([0-9]*\\.?[0-9]*([eE][-+]?[0-9]+)?))");
@@ -62,35 +64,7 @@ public class XMLutility
 
     public static String print (double d)
     {
-        // Round to integer?
-        long l = Math.round (d);
-        if (l != 0  &&  Math.abs (d - l) < epsilon) return String.valueOf (l);
-
-        // Check rounding to each of the first 3 places after the decimal.
-        // This prevents ridiculous and ugly output such as "0.19999999999999998"
-        if (d < 1)
-        {
-            int power = 1;
-            for (int i = 1; i <= 3; i++)
-            {
-                power *= 10;  // now power==10^i
-                double t = d * power;
-                l = Math.round (t);
-                if (l != 0  &&  Math.abs (t - l) < epsilon)
-                {
-                    String value = String.valueOf (l);
-                    String pad = "";
-                    for (int j = value.length (); j < i; j++) pad += "0";
-                    return "0." + pad + value;
-                }
-            }
-        }
-
-        String result = String.valueOf (d).toLowerCase ();  // get rid of upper-case E
-        // Don't add ugly and useless ".0"
-        result = result.replace (".0e", "e");
-        if (result.endsWith (".0")) result = result.substring (0, result.length () - 2);
-        return result;
+        return Scalar.print (d);
     }
 
     public static String getText (Node node)
