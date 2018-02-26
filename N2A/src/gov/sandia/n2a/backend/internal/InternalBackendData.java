@@ -152,7 +152,7 @@ public class InternalBackendData
         public int[] bindings;  // to index = bindings[from index]
     }
 
-    public class EventTarget
+    public static class EventTarget
     {
         public Event  event;          // For evaluating whether the event should be triggered. There may be several equivalent event() calls in the part, so this is just one representative of the group.
         public int    valueIndex;     // position of bit array in valuesFloat
@@ -300,7 +300,7 @@ public class InternalBackendData
         }
     }
 
-    public class EventSource
+    public static class EventSource
     {
         public EventTarget       target;
         public int               monitorIndex; // position of monitor array in source_instance.valuesObject
@@ -360,12 +360,58 @@ public class InternalBackendData
         This must be done before the variables are sorted into sets according to attributes, because we
         may need to add the "externalRead" attribute to some of them.
     **/
-    public void analyzeEvents (final EquationSet s) throws Backend.AbortRun
+    public void analyzeEvents (EquationSet s)
+    {
+        analyzeEvents (s, eventTargets, eventReferences);
+
+        // Allocate storage
+        int valueIndex = -1;
+        int mask       = 0;
+        for (EventTarget et : eventTargets)
+        {
+            if (valueIndex == -1)
+            {
+                valueIndex = countLocalFloat++;
+                namesLocalFloat.add ("event_latch" + valueIndex);
+                eventLatches.add (valueIndex);
+                mask = 1;
+            }
+            et.valueIndex = valueIndex;
+            et.mask       = mask;
+            mask <<= 1;
+            if (mask > 0x400000) valueIndex = -1;  // Due to limitations of float-int conversion, only 23 bits are available. Allocate another float.
+
+            if (et.track != null  &&  et.track.name.startsWith ("event_aux"))
+            {
+                et.track.readIndex = et.track.writeIndex = countLocalFloat++;
+                namesLocalFloat.add (et.track.name);
+            }
+
+            // Force multiple sources to generate only one event in a given cycle
+            if (et.sources.size () > 1  &&  et.edge == EventTarget.NONZERO)
+            {
+                et.timeIndex = countLocalFloat++;
+                namesLocalFloat.add ("event_time" + eventTargets.size ());
+            }
+
+            // TODO: What if two different event targets in this part reference the same source part? What if the condition is different? The same?
+            for (Entry<EquationSet,EventSource> entry : et.sources.entrySet ())
+            {
+                EquationSet sourceContainer = entry.getKey ();
+                EventSource es              = entry.getValue ();
+
+                InternalBackendData sourceBed = (InternalBackendData) sourceContainer.backendData;
+                es.monitorIndex = sourceBed.countLocalObject++;
+                sourceBed.namesLocalObject.add ("event_monitor_" + s.prefix ());  // TODO: Consolidate monitors that share the same trigger condition.
+                sourceBed.eventSources.add (es);
+            }
+        }
+    }
+
+    public static void analyzeEvents (final EquationSet s, final List<EventTarget> eventTargets, final List<Variable> eventReferences)
     {
         class EventVisitor extends Visitor
         {
-            public int     valueIndex = -1;
-            public int     mask;
             public boolean found;
 
             public boolean visit (Operator op)
@@ -387,22 +433,6 @@ public class InternalBackendData
                             // Create an entry and save the index
                             eventTargets.add (et);
                             de.eventType = et;
-
-                            // Allocate a latch bit
-                            if (valueIndex == -1)
-                            {
-                                valueIndex = countLocalFloat++;
-                                namesLocalFloat.add ("event_latch" + valueIndex);
-                                eventLatches.add (valueIndex);
-                                mask = 1;
-                            }
-                            et.valueIndex = valueIndex;
-                            et.mask       = mask;
-                            mask <<= 1;
-                            if (mask > 0x400000) valueIndex = -1;  // Due to limitations of float-int conversion, only 23 bits are available. Allocate another float.
-
-                            
-                            // Analyze the event ...
 
                             // Determine edge type
                             if (de.operands.length < 3)
@@ -462,8 +492,6 @@ public class InternalBackendData
                                 et.track.type = new Scalar (0);
                                 et.track.reference = new VariableReference ();
                                 et.track.reference.variable = et.track;
-                                et.track.readIndex = et.track.writeIndex = countLocalFloat++;
-                                namesLocalFloat.add (et.track.name);
                             }
 
                             // Locate any temporaries for evaluation. TODO: for more efficiency, we could have separate lists of temporaries for the condition and delay operands
@@ -538,13 +566,9 @@ public class InternalBackendData
                                         // Set up monitors for values that can vary during update.
                                         if (! (v.hasAttribute ("constant")  ||  v.hasAttribute ("initOnly")  ||  et.sources.containsKey (sourceContainer)))
                                         {
-                                            InternalBackendData sourceBed = (InternalBackendData) sourceContainer.backendData;
                                             EventSource es = new EventSource ();
-                                            es.target       = et;
-                                            es.monitorIndex = sourceBed.countLocalObject++;
+                                            es.target      = et;
                                             if (sourceContainer != s) es.reference = av.reference;  // null means self-reference, a special case handled in Part
-                                            sourceBed.namesLocalObject.add ("event_monitor_" + s.prefix ());  // TODO: Consolidate monitors that share the same trigger condition.
-                                            sourceBed.eventSources.add (es);
                                             et.sources.put (sourceContainer, es);
                                         }
                                         return false;
@@ -584,11 +608,8 @@ public class InternalBackendData
                                 if (! neverFires)
                                 {
                                     EventSource es = new EventSource ();
-                                    es.target       = et;
-                                    es.monitorIndex = countLocalObject++;
-                                    // es.reference should be null for self
-                                    namesLocalObject.add ("event_monitor_" + s.prefix ());
-                                    eventSources.add (es);
+                                    es.target      = et;
+                                    // This is a self-reference, so es.reference should be null.
                                     et.sources.put (s, es);
                                 }
                             }
@@ -605,13 +626,6 @@ public class InternalBackendData
                                 // associated with any given source instance, so every target must be evaluated separately.
                                 if (cv.containers.size () > 1) source.testEach = true;
                                 if (dv.containers.size () > 1  ||  (dv.containers.size () == 1  &&  dv.containers.first () != container)) source.delayEach = true;
-                            }
-
-                            // Force multiple sources to generate only one event in a given cycle
-                            if (et.sources.size () > 1  &&  et.edge == EventTarget.NONZERO)
-                            {
-                                et.timeIndex = countLocalFloat++;
-                                namesLocalFloat.add ("event_time" + eventTargets.size ());
                             }
                         }
                     }

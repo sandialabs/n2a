@@ -8,6 +8,11 @@ package gov.sandia.n2a.backend.c;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map.Entry;
+
+import gov.sandia.n2a.backend.internal.InternalBackendData;
+import gov.sandia.n2a.backend.internal.InternalBackendData.EventSource;
+import gov.sandia.n2a.backend.internal.InternalBackendData.EventTarget;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
@@ -84,6 +89,30 @@ public class BackendDataC
 
     public List<String> globalColumns = new ArrayList<String> ();
     public List<String> localColumns  = new ArrayList<String> ();
+
+    public List<EventTarget> eventTargets    = new ArrayList<EventTarget> ();
+    public List<EventSource> eventSources    = new ArrayList<EventSource> ();
+    public List<Variable>    eventReferences = new ArrayList<Variable> ();
+
+    public void analyzeEvents (final EquationSet s)
+    {
+        InternalBackendData.analyzeEvents (s, eventTargets, eventReferences);
+        for (EventTarget et : eventTargets)
+        {
+            if (et.sources.size () > 1  &&  et.edge == EventTarget.NONZERO)
+            {
+                // TODO: Force multiple sources to generate only one event in a given cycle
+            }
+
+            for (Entry<EquationSet,EventSource> entry : et.sources.entrySet ())
+            {
+                EquationSet sourceContainer = entry.getKey ();
+                EventSource es              = entry.getValue ();
+                BackendDataC sourceBed = (BackendDataC) sourceContainer.backendData;
+                sourceBed.eventSources.add (es);
+            }
+        }
+    }
 
     public void analyze (final EquationSet s, final JobC job)
     {
