@@ -410,20 +410,23 @@ public class Scalar extends Type
 
         // Check rounding to each of the first 3 places after the decimal.
         // This prevents ridiculous and ugly output such as "0.19999999999999998"
-        if (d < 1)
+        double sd = Math.abs (d);
+        if (sd < 1)
         {
+            String sign = "";
+            if (d < 0) sign = "-";
             int power = 1;
             for (int i = 1; i <= 3; i++)
             {
                 power *= 10;  // now power==10^i
-                double t = d * power;
+                double t = sd * power;
                 l = Math.round (t);
                 if (l != 0  &&  Math.abs (t - l) < epsilon)
                 {
                     String value = String.valueOf (l);
                     String pad = "";
                     for (int j = value.length (); j < i; j++) pad += "0";
-                    return "0." + pad + value;
+                    return sign + "0." + pad + value;
                 }
             }
         }
