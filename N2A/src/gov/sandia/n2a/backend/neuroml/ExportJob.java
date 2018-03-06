@@ -170,7 +170,7 @@ public class ExportJob extends XMLutility
     {
         for (EquationSet p : s.parts) analyze (p);
 
-        for (Variable v : s.variables)
+        for (final Variable v : s.variables)
         {
             Visitor visitor = new Visitor ()
             {
