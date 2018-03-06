@@ -1202,8 +1202,8 @@ public class ImportJob extends XMLutility
                     if (remap != null)
                     {
                         remap = remap.iterator ().next ();
-                        String before = remap.key ();
-                        String after  = remap.get ();
+                        final String before = remap.key ();
+                        final String after  = remap.get ();
                         try
                         {
                             Operator op = Operator.parse (value);
