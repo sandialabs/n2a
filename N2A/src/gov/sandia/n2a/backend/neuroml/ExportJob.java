@@ -39,6 +39,8 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.VariableReference;
+import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
@@ -139,6 +141,7 @@ public class ExportJob extends XMLutility
                 equations.clearVariables ();
             }
             catch (Exception e) {}  // It may still be possible to complete the export.
+            analyze (equations);
 
             DocumentBuilderFactory factoryBuilder = DocumentBuilderFactory.newInstance ();
             DocumentBuilder builder = factoryBuilder.newDocumentBuilder ();
@@ -159,6 +162,74 @@ public class ExportJob extends XMLutility
             e.printStackTrace ();
         }
     }
+
+    /**
+        Find references to $index in connection endpoints, and set up info for ConnectionContext.
+    **/
+    public void analyze (EquationSet s)
+    {
+        for (EquationSet p : s.parts) analyze (p);
+
+        for (Variable v : s.variables)
+        {
+            Visitor visitor = new Visitor ()
+            {
+                public boolean visit (Operator op)
+                {
+                    if (op instanceof AccessVariable)
+                    {
+                        VariableReference r = ((AccessVariable) op).reference;
+                        Variable rv = r.variable;
+                        if (rv.container != v.container  &&  ! r.resolution.isEmpty ())
+                        {
+                            Object o = r.resolution.get (r.resolution.size () - 1);
+                            if (o instanceof ConnectionBinding)
+                            {
+                                ConnectionBinding c = (ConnectionBinding) o;
+                                // This is somewhat of a hack, but ConnectionContext assumes the mappings A->0 and B->1.
+                                if (c.alias.equals ("A")) r.index = 0;
+                                if (c.alias.equals ("B")) r.index = 1;
+                            }
+                        }
+                    }
+                    return true;
+                }
+            };
+            v.visit (visitor);
+        }
+    }
+
+    /**
+        Adapter to provide basic evaluation environment for extracting values of variables.
+        Some variables are given explicit values, while all others return their default values.
+    **/
+    public static class SimpleContext extends Instance
+    {
+        public int index;
+        public Type get (VariableReference r)
+        {
+            return get (r.variable);
+        }
+        public Type get (Variable v)
+        {
+            if (v.name.equals ("$index")) return new Scalar (index);
+            if (v.name.equals ("$init" )) return new Scalar (1);
+            return v.type;
+        }
+    };
+    public SimpleContext context = new SimpleContext ();
+
+    public static class ConnectionContext extends SimpleContext
+    {
+        public int Aindex;
+        public int Bindex;
+        public Type get (VariableReference r)
+        {
+            if (r.index == 0) return new Scalar (Aindex);
+            if (r.index == 1) return new Scalar (Bindex);
+            return get (r.variable);
+        }
+    };
 
     public void process (MPart source)
     {
@@ -230,22 +301,6 @@ public class ExportJob extends XMLutility
             genericPart (source, elements);
         }
     }
-
-    /**
-        Adapter to provide basic evaluation environment for extracting values of variables.
-        Some variables are given explicit values, while all others return their default values.
-    **/
-    public static class SimpleContext extends Instance
-    {
-        public int index;
-        public Type get (Variable v)
-        {
-            if (v.name.equals ("$index")) return new Scalar (index);
-            if (v.name.equals ("$init" )) return new Scalar (1);
-            return v.type;
-        }
-    };
-    public SimpleContext context = new SimpleContext ();
 
     public class Network
     {
@@ -1153,7 +1208,7 @@ public class ExportJob extends XMLutility
             // Collect Segments and transform them into distinct property sets.
             // This reverses the import process, which converts property sets into distinct segment populations.
             EquationSet part = getEquations (source);
-            if (source.get ("$metadata", "backend.lems.part").equals ("segment"))
+            if (source.get ("$metadata", "backend.lems.part").equals ("segment"))  // segment pretending to be a cell (such as HH)
             {
                 blocks.add (new SegmentBlock (part));
                 // TODO: process peer Coupling parts into segment parent-child relationships
@@ -1180,60 +1235,16 @@ public class ExportJob extends XMLutility
                     SegmentBlock B = blockNames.get (c.source.get ("B"));  // child
                     if (A == null  ||  B == null) continue;  // This should never happen for imported models, but user-made models could be ill-formed.
 
-                    MNode p = c.source.child ("$p");
-                    if (p == null)  // connect all to all
+                    Variable p = c.find (new Variable ("$p", 0));
+                    if (p == null) continue;  // NeuroML can only represent a directed acyclic graph, but missing $p means all-to-all, so just give up.
+                    ConnectionContext cc = new ConnectionContext ();
+                    for (cc.Aindex = 0; cc.Aindex < A.segments.size (); cc.Aindex++)
                     {
-                        for (Segment a : A.segments)
+                        Segment a = A.segments.get (cc.Aindex);
+                        for (cc.Bindex = 0; cc.Bindex < B.segments.size (); cc.Bindex++)
                         {
-                            for (Segment b : B.segments)
-                            {
-                                a.addChild (b);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        String value = p.get ();
-                        if (value.startsWith ("A.$index==B."))  // explicit parent indices
-                        {
-                            String parentName = value.substring (12);
-                            MNode parentNode = B.block.child (parentName);
-                            value = parentNode.get ();
-                            if (value.isEmpty ())
-                            {
-                                for (MNode m : parentNode)
-                                {
-                                    String key = m.key ();
-                                    if (key.equals ("@")) continue;
-                                    int Bindex = Integer.valueOf (key.split ("==", 2)[1]);
-                                    int Aindex = Integer.valueOf (m.get ());
-                                    A.segments.get (Aindex).addChild (B.segments.get (Bindex));
-                                }
-                            }
-                            else  // singleton child
-                            {
-                                int index = Integer.valueOf (value);
-                                A.segments.get (index).addChild (B.segments.get (0));
-                            }
-                        }
-                        else  // singleton parent with explicit child indices in $p
-                        {
-                            Segment parent = A.segments.get (0);
-                            if (value.isEmpty ())
-                            {
-                                for (MNode m : p)
-                                {
-                                    String key = m.key ();
-                                    if (key.equals ("@")) continue;
-                                    int index = Integer.valueOf (key.split ("==", 2)[1]);
-                                    parent.addChild (B.segments.get (index));
-                                }
-                            }
-                            else
-                            {
-                                int index = Integer.valueOf (value.split ("==", 2)[1]);
-                                parent.addChild (B.segments.get (index));
-                            }
+                            Segment b = B.segments.get (cc.Bindex);
+                            if (((Scalar) p.eval (cc)).value == 1) a.addChild (b);
                         }
                     }
                 }
@@ -1415,19 +1426,16 @@ public class ExportJob extends XMLutility
                 // Extract segments
                 int count = 1;
                 if (n != null) count = (int) Math.floor (((Scalar) n.eval (context)).value);
-                for (int i = 0; i < count; i++)
+                for (int index = 0; index < count; index++)
                 {
-                    Segment s = new Segment (block, i);
+                    Segment s = new Segment (block, index);
                     segments.add (s);
                     if (s.name.isEmpty ())
                     {
                         if (count == 1) s.name = block.key ();
-                        else            s.name = block.key () + i;
+                        else            s.name = block.key () + index;
                     }
-                }
-                for (int index = 0; index < count; index++)
-                {
-                    Segment s = segments.get (index);
+
                     context.index = index;
                     if (xyz0      != null) s.proximal         =  (Matrix) xyz0     .eval (context);
                     if (xyz       != null) s.distal           =  (Matrix) xyz      .eval (context);
@@ -1512,19 +1520,20 @@ public class ExportJob extends XMLutility
                     parameter.setAttribute ("id", block.key () + "_" + key);
                     parameter.setAttribute ("variable", key);
                     parameter.setAttribute ("metric", "Path Length from root");
-                    double a = v.getOrDefaultDouble ("$metadata", "backend.lems.a", "1");
-                    double b = v.getOrDefaultDouble ("$metadata", "backend.lems.b", "0");
-                    if (a != 1)
-                    {
-                        Element distal = doc.createElement ("distal");
-                        parameter.appendChild (distal);
-                        distal.setAttribute ("normalizationEnd", print (a));
-                    }
-                    if (b != 0)
+
+                    String[] pieces = v.get ().split ("\\+");
+                    if (pieces.length > 1)
                     {
                         Element proximal = doc.createElement ("proximal");
                         parameter.appendChild (proximal);
-                        proximal.setAttribute ("translationStart", print (b));
+                        proximal.setAttribute ("translationStart", pieces[1]);
+                    }
+                    pieces = pieces[0].split ("\\*");
+                    if (pieces.length > 1)
+                    {
+                        Element distal = doc.createElement ("distal");
+                        parameter.appendChild (distal);
+                        distal.setAttribute ("normalizationEnd", pieces[1]);
                     }
                 }
 

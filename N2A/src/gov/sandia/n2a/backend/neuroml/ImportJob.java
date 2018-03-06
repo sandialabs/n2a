@@ -797,14 +797,30 @@ public class ImportJob extends XMLutility
         Auxiliary structures in cell MNode:
         $group
             each child is a named group, complete with equation set that will become a segment directly under cell
-            $G = column in matrix G
-            $inhomo
-                inhomogeneousParameter id
-                    {variable name before} = {variable name after} -- remap variable name because there is a collision in the segment equations
-            $parent -- temporary used when connecting groups
+                special group names:
+                    [all] is the group of all segments
+                    [segment index] is an individual segment
+                $G = column in matrix G
+                $inhomo
+                    inhomogeneousParameter id
+                        {variable name before} = {variable name after} -- remap variable name because there is a collision in the segment equations
+                $parent -- temporary used when connecting groups
+                $properties -- number of properties that reference this group
         $properties
             {arbitrary integer index} = {group name} -- allows multiple properties to be associated with same group
                 single child, which is a complete equation set implementing the property
+
+        G matrix     G = MO
+            columns are groups as detected in original input file
+                also includes [segment index] groups created for segment-specific properties
+                but does not include [all]
+            rows are segment indices
+        M matrix  -- "membership"
+            columns are groups with unique combinations of properties
+            rowas are segment indices
+        O matrix -- "optimized"
+            columns are groups as detected in original input file
+            rows are groups with unique combinations of properties
     **/
     public class Cell
     {
@@ -1113,7 +1129,12 @@ public class ImportJob extends XMLutility
                     }
                 }
             }
+
             MNode result = properties.set (String.valueOf (properties.size ()), group);
+            MNode count = cell.child ("$group", group, "$properties");
+            if (count == null) cell.set ("$group", group, "$properties", "1");
+            else               count.set (count.getInt () + 1);
+
             if (id.isEmpty ()) return result;
 
             // Create a subpart with the given name
@@ -1279,6 +1300,7 @@ public class ImportJob extends XMLutility
                 String name = segments.get (smallestID).name;  // Name the group after the first segment, if it has a name.
                 if (name.isEmpty ()) name = "segments";
                 cell.set ("$group", name, "$G", 0);
+                groups = cell.child ("$group");
                 groupIndex.put (0, name);
             }
 
@@ -1349,7 +1371,12 @@ public class ImportJob extends XMLutility
             // Then, the set that has the largest overlap with an unclaimed segment group, without exceeding it, gets its name.
             // All remaining sets get a name formed from a concatenation of each group it overlaps with.
 
-            G.foldRows (M, O);
+            MatrixBoolean mask = new MatrixBoolean ();
+            for (MNode g : cell.child ("$group"))
+            {
+                mask.set (0, g.getInt ("$G"), g.getInt ("$properties") > 0);
+            }
+            G.foldRows (mask, M, O);
 
             // Scan for exact matches
             int columnsG = G.columns ();
@@ -1424,16 +1451,9 @@ public class ImportJob extends XMLutility
             // Build concatenated parts
             for (int i : newIndices)
             {
-                String name = "";
-                for (int j = 0; j < columnsG; j++)
-                {
-                    if (O.get (i, j))
-                    {
-                        String groupName = groupIndex.get (j);
-                        if (! name.isEmpty ()) name = name + "_";
-                        name = name + groupName;
-                    }
-                }
+                int suffix = i;
+                String name = "Segments";
+                while (finalNames.values ().contains (name)) name = "Segments" + suffix++;
                 cell.set (name, "");
                 finalNames.put (i, name);
             }
@@ -1562,14 +1582,20 @@ public class ImportJob extends XMLutility
 
             // Create connections to complete the cables
             // Note that all connections are explicit, even within the same group.
-            // Multiple "parent" values are necessary, because groups (based on a uniform set of properties)
-            // may connect with multiple other groups, and each other group has its own set of indices.
+            // In each connection, endpoint A refers to the segment closest to the root (soma), while B
+            // refers to further segment. In NeuroML terms, B is the segment which has a "parent" element.
+            // Part B may contain one or more "parent" constants. The connection part uses these to determine
+            // the index in A to connect with given index in B. Because N2A segment populations are based
+            // on shared properties rather than structure, a single B part may be connected to several
+            // different A parts, and therefore need several different parent variables (each with a
+            // slightly different name).
+            // The connection part stores a throw-away key "$parent", which indicates the name of the parent
+            // variable in B, if needed.
             for (Entry<Integer,Segment> e : segments.entrySet ())
             {
                 Segment s = e.getValue ();
                 if (s.parent == null) continue;
 
-                int childN = s.part.getOrDefaultInt ("$n", "1");
                 String connectionName = s.parent.part.key () + "_to_" + s.part.key ();
                 MNode connection = cell.child (connectionName);
                 if (connection == null)
@@ -1578,56 +1604,37 @@ public class ImportJob extends XMLutility
                     connection.set ("$inherit", "\"Coupling\"");  // Explicit non-NeuroML part, so no need for mapping
                     connection.set ("A", s.parent.part.key ());
                     connection.set ("B", s       .part.key ());
-
-                    int parentN = s.parent.part.getOrDefaultInt ("$n", "1");
-                    if (parentN > 1)
-                    {
-                        String parentName = "parent";
-                        int suffix = 2;
-                        while (s.part.child (parentName) != null) parentName = "parent" + suffix++;
-                        connection.set ("$parent", parentName);  // temporary memo
-
-                        connection.set ("$p", "A.$index==B." + parentName);
-                        if (childN > 1)
-                        {
-                            s.part.set (parentName, "");
-                            s.part.set (parentName, "@", "-1");
-                        }
-                    }
                 }
 
-                String parentName = connection.get ("$parent");
-                if (parentName.isEmpty ())  // parent group is singleton
+                String condition = "";
+                int parentN = s.parent.part.getOrDefaultInt ("$n", "1");
+                int childN  = s       .part.getOrDefaultInt ("$n", "1");
+                if (parentN > 1)
                 {
-                    if (childN > 1)  // must specify which child to connect
-                    {
-                        MNode p = connection.child ("$p");
-                        if (p == null)
-                        {
-                            connection.set ("$p", "B.$index==" + s.index);
-                        }
-                        else
-                        {
-                            String existing = p.get ();
-                            if (! existing.isEmpty ())
-                            {
-                                existing = existing.split ("==", 2)[1];
-                                p.set ("");
-                                p.set ("@", "0");
-                                p.set ("@B.$index==" + existing, "1");
-                            }
-                            p.set ("@B.$index==" + s.index, "1");
-                            if (p.size () == childN + 1)  // Every member of child group connects to the same singleton parent
-                            {
-                                connection.clear ("$p");
-                            }
-                        }
-                    }
+                    condition = "A.$index==" + s.parent.index;
+                    if (childN > 1) condition += "&&";
                 }
-                else  // must specify which parent in group
+                if (childN > 1) condition += "B.$index==" + s.index;
+
+                MNode p = connection.child ("$p");
+                if (p == null)
                 {
-                    if (childN > 1) s.part.set (parentName, "@$index==" + s.index, s.parent.index);
-                    else            s.part.set (parentName, s.parent.index);
+                    connection.set ("$p", condition);
+                }
+                else
+                {
+                    String existing = p.get ();
+                    if (! existing.isEmpty ())
+                    {
+                        p.set ("");
+                        p.set ("@", "0");
+                        p.set ("@" + existing, "1");
+                    }
+                    p.set ("@" + condition, "1");
+                    if (parentN == 1  &&  p.size () == childN + 1)  // Every member of child group connects to the same singleton parent
+                    {
+                        connection.clear ("$p");
+                    }
                 }
             }
 
@@ -1636,9 +1643,9 @@ public class ImportJob extends XMLutility
             cell.clear ("$group");
             for (MNode part : cell)
             {
-                part.clear ("$parent");
                 part.clear ("$G");
                 part.clear ("$inhomo");
+                part.clear ("$properties");
                 for (MNode v : part)
                 {
                     v.clear ("$metadata", "backend.lems.a");

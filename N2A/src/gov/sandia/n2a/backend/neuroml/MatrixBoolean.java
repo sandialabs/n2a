@@ -18,6 +18,20 @@ public class MatrixBoolean
     {
     }
 
+    /**
+        Construct a deep copy of the given matrix.
+    **/
+    public MatrixBoolean (MatrixBoolean B)
+    {
+        rowCount = B.rowCount;
+        for (boolean[] c : B.data)
+        {
+            boolean[] cc = new boolean[c.length];
+            data.add (cc);
+            for (int r = 0; r < c.length; r++) cc[r] = c[r];
+        }
+    }
+
     public MatrixBoolean (int rows, int columns)
     {
         for (int c = 0; c < columns; c++) data.add (new boolean[rows]);
@@ -60,6 +74,12 @@ public class MatrixBoolean
         column[row] = true;
     }
 
+    public void set (int row, int col, boolean value)
+    {
+        if (value) set   (row, col);
+        else       clear (row, col);
+    }
+
     public void set (int col, MatrixBoolean value)
     {
         // not a particularly efficient way to do this...
@@ -87,6 +107,13 @@ public class MatrixBoolean
         boolean[] column = data.get (col);
         if (row >= column.length) return;
         column[row] = false;
+    }
+
+    public void clearColumn (int col)
+    {
+        if (col >= data.size ()) return;
+        boolean[] column = data.get (col);
+        for (int r = 0; r < column.length; r++) column[r] = false;
     }
 
     /**
@@ -183,12 +210,15 @@ public class MatrixBoolean
     }
 
     /**
-        Collapse rows with the same pattern into single rows, and compute
-        a permutation matrix (of sorts) which can recover the original matrix.
+        Collapse rows with the same pattern into single rows, and compute a
+        prefix which can recover the original matrix.
+        @param mask A row vector which contains 1 for every column that should
+        be considered significant when comparing rows, and a 0 for every column
+        that should be ignored.
         @param P The permutation matrix. The original matrix is the product PF.
         @param F The simplified ("folded") matrix. Each row is unique.
     **/
-    public void foldRows (MatrixBoolean P, MatrixBoolean F)
+    public void foldRows (MatrixBoolean mask, MatrixBoolean P, MatrixBoolean F)
     {
         int columnCount = data.size ();
         for (int r = 0; r < rowCount; r++)
@@ -200,7 +230,7 @@ public class MatrixBoolean
                 boolean match = true;
                 for (int c = 0; c < columnCount; c++)
                 {
-                    if (get (r, c) != F.get (f, c))
+                    if (mask.get (0, c)  &&  get (r, c) != F.get (f, c))
                     {
                         match = false;
                         break;
@@ -209,10 +239,7 @@ public class MatrixBoolean
                 if (match) break;
             }
             P.set (r, f);
-            if (f >= F.rowCount)
-            {
-                for (int c = 0; c < columnCount; c++) if (get (r, c)) F.set (f, c);
-            }
+            for (int c = 0; c < columnCount; c++) F.set (f, c,  F.get (f, c)  ||  get (r, c));
         }
     }
 
