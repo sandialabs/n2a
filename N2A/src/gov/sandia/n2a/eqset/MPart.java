@@ -259,10 +259,7 @@ public class MPart extends MNode  // Could derive this from MVolatile, but the e
     public static boolean isPart (MNode node)
     {
         if (! node.get ().isEmpty ()) return false;  // A part never has an assignment. A variable might not have an assignment if it is multi-line.
-        String key = node.key ();
-        if (key.equals ("$inherit"  )) return false;
-        if (key.equals ("$metadata" )) return false;
-        if (key.equals ("$reference")) return false;
+        if (node.key ().startsWith ("$")) return false;
         for (MNode c : node) if (c.key ().startsWith ("@")) return false;  // has the form of a multi-line equation
         return true;
     }

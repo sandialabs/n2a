@@ -841,6 +841,16 @@ public class ImportJob extends XMLutility
             // At present, cell is merely a container. It inherits nothing.
             // Every cell must have at least one segment to be useful.
 
+            // Include a top-level morphology node
+            // Must come first so all morphology sections are completed before any biophysics sections.
+            String include = getAttribute (node, "morphology");
+            if (! include.isEmpty ())
+            {
+                Node child = morphologies.get (include);
+                if (child != null) morphology (child);
+            }
+
+            // Direct children
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
                 if (child.getNodeType () != Node.ELEMENT_NODE) continue;
@@ -852,14 +862,8 @@ public class ImportJob extends XMLutility
                 }
             }
 
-            // Alternate attribute-based method for pulling in morphology and biophysics
-            // This only works if such sections appear before this cell node. It seems that the NeuroML spec guarantees this.
-            String include = getAttribute (node, "morphology");
-            if (! include.isEmpty ())
-            {
-                Node child = morphologies.get (include);
-                if (child != null) morphology (child);
-            }
+            // Include top-level biophysics node
+            // Must come last
             include = getAttribute (node, "biophysicalProperties");
             if (! include.isEmpty ())
             {
@@ -909,14 +913,15 @@ public class ImportJob extends XMLutility
             part.set ("$G", c);
             groupIndex.put (c, groupName);
 
-            NamedNodeMap attributes = node.getAttributes ();
-            int count = attributes.getLength ();
-            for (int i = 0; i < count; i++)
+            String neuroLexID = getAttribute (node, "neuroLexId");
+            if (! neuroLexID.isEmpty ())
             {
-                Node a = attributes.item (i);
-                String name = a.getNodeName ();
-                if (name.equals ("id")) continue;
-                part.set ("$metadata", name, a.getNodeValue ());
+                MNode properties = cell.childOrCreate ("$properties");
+                MNode property = properties.set (String.valueOf (properties.size ()), groupName);
+                property.set ("$metadata", "neuroLexID", neuroLexID);
+                MNode count = cell.child ("$group", groupName, "$properties");
+                if (count == null) cell.set ("$group", groupName, "$properties", "1");
+                else               count.set (count.getInt () + 1);
             }
 
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
@@ -1020,9 +1025,7 @@ public class ImportJob extends XMLutility
                 // Merge segment members
                 int columnP = p.getInt ("$G");
                 G.OR (columnG, columnP);
-                // Don't merge metadata from included groups, only members.
-                // All metadata will get combined when groups are finalized.
-                // If it is merged here, it gets combined twice, and some items can leak into groups they are not really related to.
+                // Groups require further analysis before we are ready to merge properties.
             }
         }
 
@@ -1369,7 +1372,7 @@ public class ImportJob extends XMLutility
             // Ideally, the sets exactly match the segment groups, but in general there may be more sets.
             // If a set exactly matches an original segment group, it gets that group's name.
             // Then, the set that has the largest overlap with an unclaimed segment group, without exceeding it, gets its name.
-            // All remaining sets get a name formed from a concatenation of each group it overlaps with.
+            // All remaining sets get a generated name.
 
             MatrixBoolean mask = new MatrixBoolean ();
             for (MNode g : cell.child ("$group"))
@@ -1462,7 +1465,7 @@ public class ImportJob extends XMLutility
             String inheritSegment = partMap.importName ("segment");
             for (Entry<Integer,String> e : finalNames.entrySet ())
             {
-                int c = e.getKey ();  // column of M, the mapping from segments to new groups
+                int c = e.getKey ();  // column of M, the mapping from segments to this new group
                 String currentName = e.getValue ();
                 MNode part = cell.child (currentName);
 
@@ -1481,31 +1484,27 @@ public class ImportJob extends XMLutility
                 }
 
                 // Merge original groups into new part
-                //   A heuristic is that smaller groups (ones with fewer segments) are more specific, so their metadata should take precedence.
-                //   Thus, we sort the relevant original groups by size and apply them in that order.
-                class ColumnSize implements Comparable<ColumnSize>
-                {
-                    public int column;
-                    public int size;  // number of rows in column
-                    public ColumnSize (int column, int size)
-                    {
-                        this.column = column;
-                        this.size   = size;
-                    }
-                    public int compareTo (ColumnSize o)
-                    {
-                        int result = size - o.size;
-                        if (result != 0) return result;
-                        return column - o.column;  // Just a tie breaker. Favors lower-numbered column.
-                    }
-                }
-                TreeSet<ColumnSize> sortedColumns = new TreeSet<ColumnSize> ();
                 //   rows of O are new parts (columns of M); columns of O are original segment groups
-                for (int i = 0; i < columnsG; i++) if (O.get (c, i)) sortedColumns.add (new ColumnSize (i, G.columnNorm0 (i)));
-                for (ColumnSize cs : sortedColumns)
+                for (int i = 0; i < columnsG; i++)
                 {
-                    String groupName = groupIndex.get (cs.column);  // a name from the original set of groups, not the new groups
-                    part.mergeUnder (cell.child ("$group", groupName));
+                    if (! O.get (c, i)) continue;
+                    String groupName = groupIndex.get (i);  // Name from the original set of groups, not the new groups
+                    MNode group = cell.child ("$group", groupName);
+
+                    // neuroLexID is a minor property, but it takes some heavy code to process correctly
+                    List<String> neuroLexIDs = Arrays.asList (part.get ("$metadata", "neuroLexID").split (","));
+                    if (neuroLexIDs.size () == 1  &&  neuroLexIDs.get (0).isEmpty ()) neuroLexIDs = new ArrayList<String> ();
+
+                    // This is the important code
+                    part.merge (group);
+
+                    // merge nlid
+                    String neuroLexID = part.get ("$metadata", "neuroLexID");
+                    if (! neuroLexID.isEmpty ()  &&  ! neuroLexIDs.contains (neuroLexID))
+                    {
+                        for (String nlid : neuroLexIDs) neuroLexID += "," + nlid;
+                        part.set ("$metadata", "neuroLexID", neuroLexID);
+                    }
                 }
                 part.set ("$inherit", "\"" + inheritSegment + "\"");
                 addDependency (part, inheritSegment);
@@ -1531,6 +1530,8 @@ public class ImportJob extends XMLutility
                     if (pathLength.isEmpty ())
                     {
                         pathLength = "pathLength";
+                        // There is only one variable that actually stores path length, but it
+                        // is possible for a model to define the same name for some other purpose.
                         int count = 2;
                         while (part.child (pathLength) != null) pathLength = "pathLength" + count++;
                     }
@@ -1556,14 +1557,19 @@ public class ImportJob extends XMLutility
                 // Add segments
                 int n = M.columnNorm0 (c);
                 if (n > 1) part.set ("$n", n);
+                List<String> neuroLexIDs = Arrays.asList (part.get ("$metadata", "neuroLexID").split (","));
+                if (neuroLexIDs.size () == 1  &&  neuroLexIDs.get (0).isEmpty ()) neuroLexIDs = new ArrayList<String> ();
                 int index = 0;
                 for (int r = 0; r < M.rows (); r++)
                 {
                     if (! M.get (r, c)) continue;
                     Segment s = segments.get (r);
 
-                    if (! s.neuroLexId.isEmpty ()) part.set ("$metadata", "neuroLexId" + index, s.neuroLexId);
-                    if (! s.notes     .isEmpty ()) part.set ("$metadata", "notes"      + index, s.notes);
+                    if (! s.neuroLexID.isEmpty ()  &&  ! neuroLexIDs.contains (s.neuroLexID))
+                    {
+                        part.set ("$metadata", "neuroLexID" + index, s.neuroLexID);
+                    }
+
                     if (n > 1)
                     {
                         if (! s.name.isEmpty ()) part.set ("$metadata", "backend.lems.id" + index, s.name);
@@ -1581,16 +1587,11 @@ public class ImportJob extends XMLutility
             }
 
             // Create connections to complete the cables
-            // Note that all connections are explicit, even within the same group.
+            // N2A segment populations are based on shared properties rather than structure, so each
+            // population may contain instances from several different NeuroML segment groups.
+            // All connections are explicit, even within the same group.
             // In each connection, endpoint A refers to the segment closest to the root (soma), while B
             // refers to further segment. In NeuroML terms, B is the segment which has a "parent" element.
-            // Part B may contain one or more "parent" constants. The connection part uses these to determine
-            // the index in A to connect with given index in B. Because N2A segment populations are based
-            // on shared properties rather than structure, a single B part may be connected to several
-            // different A parts, and therefore need several different parent variables (each with a
-            // slightly different name).
-            // The connection part stores a throw-away key "$parent", which indicates the name of the parent
-            // variable in B, if needed.
             for (Entry<Integer,Segment> e : segments.entrySet ())
             {
                 Segment s = e.getValue ();
@@ -1615,6 +1616,7 @@ public class ImportJob extends XMLutility
                     if (childN > 1) condition += "&&";
                 }
                 if (childN > 1) condition += "B.$index==" + s.index;
+                if (condition.isEmpty ()) continue;
 
                 MNode p = connection.child ("$p");
                 if (p == null)
@@ -1674,14 +1676,13 @@ public class ImportJob extends XMLutility
         double       distalDiameter     = -1;
         double       proximalPathLength = -1;  // Path length from proximal end to root. Used to calculate pathLength().
 
-        String       neuroLexId = "";
-        String       notes      = "";
+        String       neuroLexID         = "";
 
         public Segment (Node node)
         {
             id = Integer.parseInt (getAttribute (node, "id", "0"));
-            name       = getAttribute (node, "name"); 
-            neuroLexId = getAttribute (node, "neuroLexId"); 
+            name       = getAttribute (node, "name");
+            neuroLexID = getAttribute (node, "neuroLexId");
 
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
@@ -1705,9 +1706,6 @@ public class ImportJob extends XMLutility
                         distal.set   (1, Scalar.convert (morphologyUnits (getAttribute (child, "y"))));
                         distal.set   (2, Scalar.convert (morphologyUnits (getAttribute (child, "z"))));
                         distalDiameter = Scalar.convert (morphologyUnits (getAttribute (child, "diameter")));
-                        break;
-                    case "notes":
-                        notes = child.getTextContent ();
                         break;
                 }
             }
@@ -2334,6 +2332,7 @@ public class ImportJob extends XMLutility
                 if (! delay.isEmpty ())  connection.add (connection.delays,        delay,        condition);
             }
             for (Connection c : connections) c.injectConditionalValues ();
+            // TODO: detect all-to-all case and clear $p?
 
             if (connections.size () == 0)  // No connections were added, so add a minimalist projection part.
             {
@@ -2343,11 +2342,12 @@ public class ImportJob extends XMLutility
                     part.set ("$inherit", "\"" + inherit + "\"");
                     addDependency (part, inherit);
                 }
+                part.set ("$p", "0");  // No connections at all
 
                 SegmentFinder finder = new SegmentFinder ();
                 if (! inputList) finder.find ("0", A);
                 if (! finder.group.isEmpty ()) part.set ("A", A + "." + finder.group);
-                // Because the input file in un-specific, we don't care about filtering by index.
+                // Because the input file is un-specific, we don't care about filtering by index.
 
                 finder.find ("0", B);
                 if (! finder.group.isEmpty ()) part.set ("B", B + "." + finder.group);
@@ -2630,13 +2630,21 @@ public class ImportJob extends XMLutility
         for (int i = 0; i < count; i++)
         {
             Node a = attributes.item (i);
-            String name = a.getNodeName ();
+            String name  = a.getNodeName ();
+            String value = a.getNodeValue ();
+
             if (name.equals ("id"  )) continue;
             if (name.equals ("type")) continue;
+            if (name.equals ("neuroLexId"))
+            {
+                part.set ("$metadata", "neuroLexID", value);
+                continue;
+            }
+
             name = nameMap.importName (name);
             if (isPart (name, parents))
             {
-                inherit = a.getNodeValue ();
+                inherit = value;
                 part.set (name, "$inherit", "\"" + inherit + "\"");
                 addDependency (part.child (name), inherit);
                 addAlias (inherit, name);
@@ -2644,7 +2652,7 @@ public class ImportJob extends XMLutility
             else
             {
                 String defaultUnit = nameMap.defaultUnit (name);
-                part.set (name, biophysicalUnits (a.getNodeValue (), defaultUnit));
+                part.set (name, biophysicalUnits (value, defaultUnit));
             }
         }
 
@@ -2684,11 +2692,18 @@ public class ImportJob extends XMLutility
         for (int i = 0; i < count; i++)
         {
             Node a = attributes.item (i);
-            String name = a.getNodeName ();
+            String name  = a.getNodeName ();
+            String value = a.getNodeValue ();
             if (forbiddenList.contains (name)) continue;
+            if (name.equals ("neuroLexId"))
+            {
+                part.set ("$metadata", "neuroLexID", value);
+                continue;
+            }
+
             name = nameMap.importName (name);
             String defaultUnit = nameMap.defaultUnit (name);
-            part.set (name, biophysicalUnits (a.getNodeValue (), defaultUnit));  // biophysicalUnits() will only modify text if there is a numeric value
+            part.set (name, biophysicalUnits (value, defaultUnit));  // biophysicalUnits() will only modify text if there is a numeric value
         }
     }
 

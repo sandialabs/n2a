@@ -690,7 +690,7 @@ public class ExportJob extends XMLutility
             {
                 p.set (originalP);
                 String condition = p.get ();
-                if (! condition.isEmpty ())
+                if (! condition.isEmpty ()  &&  ! condition.equals ("0"))
                 {
                     p.set ("");
                     p.set ("@" + condition, "1");
@@ -1177,16 +1177,19 @@ public class ExportJob extends XMLutility
 
     public class Cell extends AbstractCell
     {
-        public Element            cell;
-        public List<Element>      cellElements    = new ArrayList<Element> ();
-        public List<Element>      morphology      = new ArrayList<Element> ();  // break out sub-element for easy access
-        public List<Element>      membrane        = new ArrayList<Element> ();  // sub-element of biophysical properties 
-        public List<Element>      intra           = new ArrayList<Element> ();  // ditto
-        public List<Element>      extra           = new ArrayList<Element> ();  // ditto
-        public List<Property>     properties      = new ArrayList<Property> ();
-        public List<SegmentBlock> blocks          = new ArrayList<SegmentBlock> ();  // entries map to rows of P
-        public MatrixBoolean      P               = new MatrixBoolean ();
-        public MatrixBoolean      multiGroup      = new MatrixBoolean ();
+        public Element             cell;
+        public List<Element>       cellElements   = new ArrayList<Element> ();
+        public List<Element>       morphology     = new ArrayList<Element> ();  // break out sub-element for easy access
+        public List<Element>       membrane       = new ArrayList<Element> ();  // sub-element of biophysical properties 
+        public List<Element>       intra          = new ArrayList<Element> ();  // ditto
+        public List<Element>       extra          = new ArrayList<Element> ();  // ditto
+        public List<Property>      properties     = new ArrayList<Property> ();
+        public List<Segment>       segments       = new ArrayList<Segment> ();
+        public List<SegmentBlock>  blocks         = new ArrayList<SegmentBlock> ();  // entries map to rows of P
+        public MatrixBoolean       P              = new MatrixBoolean ();
+        public MatrixBoolean       G              = new MatrixBoolean ();            // Maps blocks (rows) to added combo groups (columns)
+        public List<String>        Gnames         = new ArrayList<String> ();        // Group name associated with each column of G
+        public Map<String,Element> groups         = new TreeMap<String,Element> ();  // The elements associated with every segmentGroup
         // TODO: deal with ca2 variants
 
         public Cell (MPart source)
@@ -1215,7 +1218,6 @@ public class ExportJob extends XMLutility
             }
             else  // conventional cell
             {
-                List<Segment> segments = new ArrayList<Segment> ();
                 Map<String,SegmentBlock> blockNames = new TreeMap<String,SegmentBlock> ();  // for easy lookup by name
                 for (EquationSet s : part.parts)
                 {
@@ -1236,15 +1238,27 @@ public class ExportJob extends XMLutility
                     if (A == null  ||  B == null) continue;  // This should never happen for imported models, but user-made models could be ill-formed.
 
                     Variable p = c.find (new Variable ("$p", 0));
-                    if (p == null) continue;  // NeuroML can only represent a directed acyclic graph, but missing $p means all-to-all, so just give up.
-                    ConnectionContext cc = new ConnectionContext ();
-                    for (cc.Aindex = 0; cc.Aindex < A.segments.size (); cc.Aindex++)
+                    if (p == null)
                     {
-                        Segment a = A.segments.get (cc.Aindex);
-                        for (cc.Bindex = 0; cc.Bindex < B.segments.size (); cc.Bindex++)
+                        // Absent $p indicates all-to-all, which NeuroML can only represent if A is a singleton
+                        Segment a = A.segments.get (0);
+                        for (int Bindex = 0; Bindex < B.segments.size (); Bindex++)
                         {
-                            Segment b = B.segments.get (cc.Bindex);
-                            if (((Scalar) p.eval (cc)).value == 1) a.addChild (b);
+                            Segment b = B.segments.get (Bindex);
+                            a.addChild (b);
+                        }
+                    }
+                    else
+                    {
+                        ConnectionContext cc = new ConnectionContext ();
+                        for (cc.Aindex = 0; cc.Aindex < A.segments.size (); cc.Aindex++)
+                        {
+                            Segment a = A.segments.get (cc.Aindex);
+                            for (cc.Bindex = 0; cc.Bindex < B.segments.size (); cc.Bindex++)
+                            {
+                                Segment b = B.segments.get (cc.Bindex);
+                                if (((Scalar) p.eval (cc)).value == 1) a.addChild (b);
+                            }
                         }
                     }
                 }
@@ -1255,11 +1269,18 @@ public class ExportJob extends XMLutility
                 {
                     if (s.parent == null) index = s.assignID (index);
                 }
+
+                // Sort segments by ID, so they get appended in a pleasing manner.
+                TreeMap<Integer,Segment> sorted = new TreeMap<Integer,Segment> ();
+                for (Segment s : segments) sorted.put (s.id, s);
+                int i = 0;
+                for (Segment s : sorted.values ()) segments.set (i++, s);
             }
 
             // Emit segments and groups
             for (SegmentBlock sb : blocks) sb.append ();
             for (Property p : properties) p.append ();
+            for (Segment s : segments) s.append ();
             if (! morphology.isEmpty ())
             {
                 Element e = addElement ("morphology", cellElements);
@@ -1323,14 +1344,12 @@ public class ExportJob extends XMLutility
             public double proximalDiameter = 0;
             public double distalDiameter   = 0;
 
-            public String neuroLexId = "";
-            public String notes      = "";
+            public String neuroLexID = "";
 
             public Segment (MNode source, int index)
             {
                 name       = source.get ("$metadata", "backend.lems.id" + index);
-                neuroLexId = source.get ("$metadata", "neuroLexId"      + index);
-                notes      = source.get ("$metadata", "notes"           + index);
+                neuroLexID = source.get ("$metadata", "neuroLexID"      + index);
             }
 
             public void addChild (Segment child)
@@ -1351,14 +1370,8 @@ public class ExportJob extends XMLutility
                 Element segment = addElement ("segment", morphology);
                 segment.setAttribute ("id", String.valueOf (id));
                 segment.setAttribute ("name", name);
-                if (! neuroLexId.isEmpty ()) segment.setAttribute ("neuroLexId", neuroLexId);
+                if (! neuroLexID.isEmpty ()) segment.setAttribute ("neuroLexId", neuroLexID);
                 List<Element> segmentElements = new ArrayList<Element> ();
-
-                if (! notes.isEmpty ())
-                {
-                    Element n = addElement ("notes", segmentElements);
-                    n.setTextContent (notes);
-                }
 
                 double fractionAlong = 1;
                 double parentDiameter = proximalDiameter;
@@ -1402,13 +1415,15 @@ public class ExportJob extends XMLutility
         {
             public EquationSet   part;
             public MNode         block;
-            public List<Segment> segments = new ArrayList<Segment> ();
-            public List<String>  inhomo   = new ArrayList<String> ();
+            public int           row;  // in P.
+            public List<Segment> segments   = new ArrayList<Segment> ();
+            public List<String>  inhomo     = new ArrayList<String> ();
 
             public SegmentBlock (EquationSet part)
             {
                 this.part = part;
                 block     = part.source;
+                row       = blocks.size ();  // We have not been added to blocks yet, so blocks.size() gives our (future) index.
 
                 // Find inhomogeneousParameters
                 for (MNode c : block)
@@ -1417,11 +1432,11 @@ public class ExportJob extends XMLutility
                 }
 
                 // Analyze
-                Variable n          = part.find (new Variable ("$n", 0));
-                Variable xyz0       = part.find (new Variable ("xyz0"));
-                Variable xyz        = part.find (new Variable ("$xyz"));
-                Variable diameter0  = part.find (new Variable ("diameter0"));
-                Variable diameter   = part.find (new Variable ("diameter"));
+                Variable n         = part.find (new Variable ("$n", 0));
+                Variable xyz0      = part.find (new Variable ("xyz0"));
+                Variable xyz       = part.find (new Variable ("$xyz"));
+                Variable diameter0 = part.find (new Variable ("diameter0"));
+                Variable diameter  = part.find (new Variable ("diameter"));
 
                 // Extract segments
                 int count = 1;
@@ -1444,6 +1459,13 @@ public class ExportJob extends XMLutility
                 }
 
                 // Extract properties
+
+                //   neuroLexId
+                String neuroLexID = block.get ("$metadata", "neuroLexID");
+                if (! neuroLexID.isEmpty ())
+                {
+                    for (String nlid : neuroLexID.split (",")) addUnique (new PropertyNeuroLexID (nlid));
+                }
 
                 //   initMembPotential
                 String value = getLocalProperty ("V", block);
@@ -1497,19 +1519,40 @@ public class ExportJob extends XMLutility
                 int index = properties.indexOf (p);
                 if (index >= 0) p = properties.get (index);
                 else            properties.add (p);
-                P.set (blocks.size (), p.column);  // this SegmentBlock has not been added to blocks yet, so blocks.size() gives our (future) index.
+                P.set (row, p.column);
             }
 
             public void append ()
             {
-                for (Segment s : segments) s.append ();
                 int size = segments.size ();
-                if (size <= 1  &&  inhomo.size () == 0) return;
+                if (size == 0) return;  // This could only happen if user explicitly sets $n=0, a very unusual situation.
+
+                // Check if any property is a neuroLexID that belongs exclusively to this group
+                PropertyNeuroLexID pnlid = null;
+                int pnlidCount = 0;
+                for (int c = 0; c < P.columns (); c++)
+                {
+                    if (! P.get (row, c)  ||  P.columnNorm0 (c) > 1) continue;
+                    Property property = properties.get (c);
+                    if (property instanceof PropertyNeuroLexID)
+                    {
+                        pnlid = (PropertyNeuroLexID) property;
+                        pnlidCount++;
+                    }
+                }
+                if (pnlidCount == 1  &&  size == 1  &&  segments.get (0).neuroLexID.isEmpty ()) pnlid = null;
+
+                if (size == 1  &&  inhomo.size () == 0  &&  pnlid == null) return;
 
                 Element group = addElement ("segmentGroup", morphology);
-                group.setAttribute ("id", block.key ());
-                String neuroLexId = block.get ("$metadata", "neuroLexId");
-                if (! neuroLexId.isEmpty ()) group.setAttribute ("neuroLexId", neuroLexId);
+                String id = block.key ();
+                group.setAttribute ("id", id);
+                groups.put (id, group);
+                if (pnlid != null)
+                {
+                    group.setAttribute ("neuroLexId", pnlid.value);
+                    pnlid.done = true;
+                }
                 List<Element> groupElements = new ArrayList<Element> ();
 
                 // Output inhomogeneousParameters
@@ -1517,7 +1560,7 @@ public class ExportJob extends XMLutility
                 {
                     MNode v = block.child (key);
                     Element parameter = addElement ("inhomogeneousParameter", groupElements);
-                    parameter.setAttribute ("id", block.key () + "_" + key);
+                    parameter.setAttribute ("id", id + "_" + key);
                     parameter.setAttribute ("variable", key);
                     parameter.setAttribute ("metric", "Path Length from root");
 
@@ -1597,7 +1640,7 @@ public class ExportJob extends XMLutility
             {
             }
 
-            public void generateSegmentGroup ()
+            public void generateSegmentGroup (boolean doAll)
             {
                 // Count individual segments associated with this property
                 int count = 0;
@@ -1618,31 +1661,35 @@ public class ExportJob extends XMLutility
                 }
                 // count will always be at least 1
 
-                if (all) return;  // Don't emit any kind of segment selection, as the default is all.
+                if (all  &&  ! doAll) return;  // Don't emit any kind of segment selection, as the default is all.
                 if (count == 1)  // use individual segment reference
                 {
                     Segment s = lastFound.segments.get (0);
                     segmentName = String.valueOf (s.id);
                 }
-                else if (lastFound.segments.size () == count)  // Single group associated with Segment
+                else if (lastFound.segments.size () == count)  // Single group associated with SegmentBlock
                 {
                     segmentGroupName = lastFound.block.key ();
                 }
                 else  // Assemble multiple groups
                 {
-                    segmentGroupName = "Group";
-                    int match = multiGroup.matchColumn (P.column (column));
-                    if (match >= 0)
+                    int index = G.matchColumn (P.column (column));
+                    if (index >= 0)
                     {
-                        segmentGroupName += match;
+                        segmentGroupName = Gnames.get (index);
                     }
                     else
                     {
-                        match = multiGroup.columns ();
-                        multiGroup.set (match, P.column (column));
-                        segmentGroupName += match;
+                        index = G.columns ();
+                        G.set (index, P.column (column));
+
+                        segmentGroupName = "Group" + index++;
+                        while (groups.containsKey (segmentGroupName)) segmentGroupName = "Group" + index++;
+                        Gnames.add (segmentGroupName);
+
                         Element group = addElement ("segmentGroup", morphology);
-                        group.setAttribute ("name", segmentGroupName);
+                        group.setAttribute ("id", segmentGroupName);
+                        groups.put (segmentGroupName, group);
                         for (int r = 0; r < rows; r++)
                         {
                             if (P.get (r, column))
@@ -1676,6 +1723,57 @@ public class ExportJob extends XMLutility
             }
         }
 
+        public class PropertyNeuroLexID extends Property
+        {
+            String  value;
+            boolean done;  // Indicates if this property has already been appended
+
+            public PropertyNeuroLexID (String value)
+            {
+                this.value = value;
+            }
+
+            public void append ()
+            {
+                if (done) return;
+                done = true;  // Has no real effect, since done is about pre-emptive emission of property.
+
+                generateSegmentGroup (true);
+                if (! segmentName.isEmpty ())  // Single specific segment.
+                {
+                    int index = Integer.valueOf (segmentName);
+                    Segment s = segments.get (index);
+                    if (s.neuroLexID.isEmpty ())
+                    {
+                        s.neuroLexID = value;
+                    }
+                    else
+                    {
+                        int i = G.columns ();
+                        segmentGroupName = segmentName + "_Group" + i++;
+                        while (groups.containsKey (segmentGroupName)) segmentGroupName = segmentName + "_Group" + i++;
+
+                        Element group = addElement ("segmentGroup", morphology);
+                        group.setAttribute ("id", segmentGroupName);
+                        group.setAttribute ("neuroLexId", value);
+                        groups.put (segmentGroupName, group);
+                    }
+                }
+                else if (! segmentGroupName.isEmpty ())
+                {
+                    Element group = groups.get (segmentGroupName);
+                    group.setAttribute ("neuroLexId", value);
+                }
+            }
+
+            public boolean equals (Object o)
+            {
+                if (! (o instanceof PropertyNeuroLexID)) return false;
+                PropertyNeuroLexID that = (PropertyNeuroLexID) o;
+                return that.value.equals (value);
+            }
+        }
+
         public class PropertyMembrane extends Property
         {
             String        name;
@@ -1695,7 +1793,7 @@ public class ExportJob extends XMLutility
                 e.setAttribute ("value", biophysicalUnits (value));
                 if (target == membrane)
                 {
-                    generateSegmentGroup ();
+                    generateSegmentGroup (false);
                     setSegment (e);
                 }
             }
@@ -1818,7 +1916,7 @@ public class ExportJob extends XMLutility
                 String ion = source.get ("$metadata", "species");
                 if (! ion.isEmpty ()) channel.setAttribute ("ion", ion);
 
-                generateSegmentGroup ();
+                generateSegmentGroup (false);
                 if (nonuniform)
                 {
                     for (Entry<String,String> e : variableParameters.entrySet ())
