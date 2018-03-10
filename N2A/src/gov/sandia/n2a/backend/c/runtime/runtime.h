@@ -191,7 +191,14 @@ public:
     virtual float getLive ();              ///< @return 1 if we are in normal simulation. 0 if we have died. Default is 1.
     virtual float getP    ();              ///< Default is 1 (always create)
     virtual void  getXYZ  (Vector3 & xyz); ///< Default is [0;0;0].
+
+    // Events
+    virtual bool  eventTest  (int i);
+    virtual float eventDelay (int i);
+    virtual void  setLatch   (int i);
 };
+
+extern void removeMonitor (std::vector<Part *> & partList, Part * part);
 
 /**
     Supports ability to dequeue and move to a different simulation period.
@@ -289,6 +296,8 @@ public:
     Integrator *                              integrator;
     bool                                      stop;
     Event *                                   currentEvent;
+    enum {BEFORE, DURING, AFTER};
+    int                                       eventMode = DURING;
 
     Simulator ();
     ~Simulator ();
@@ -371,11 +380,12 @@ public:
 class EventSpike : public Event
 {
 public:
-    EventTarget * eventType;
+    int latch;
 };
 
 class EventSpikeSingle : public EventSpike
 {
+public:
     Part * target;
 
     virtual void run   ();
@@ -395,18 +405,13 @@ public:
 
     virtual void run   ();
     virtual void visit (visitorFunction f);
+    void setLatch ();
 };
 
 class EventSpikeMultiLatch : public EventSpikeMulti
 {
 public:
     virtual void run ();
-};
-
-class EventTarget
-{
-public:
-    virtual void setFlag (Part * part);
 };
 
 /**

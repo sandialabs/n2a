@@ -8,8 +8,6 @@ package gov.sandia.n2a.backend.c;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map.Entry;
-
 import gov.sandia.n2a.backend.internal.InternalBackendData;
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventSource;
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventTarget;
@@ -97,20 +95,25 @@ public class BackendDataC
     public void analyzeEvents (final EquationSet s)
     {
         InternalBackendData.analyzeEvents (s, eventTargets, eventReferences);
+
+        int eventIndex = 0;
         for (EventTarget et : eventTargets)
         {
+            et.valueIndex = eventIndex;
+
+            // Force multiple sources to generate only one event in a given cycle
             if (et.sources.size () > 1  &&  et.edge == EventTarget.NONZERO)
             {
-                // TODO: Force multiple sources to generate only one event in a given cycle
+                et.timeIndex = eventIndex;
             }
 
-            for (Entry<EquationSet,EventSource> entry : et.sources.entrySet ())
+            for (EventSource es : et.sources)
             {
-                EquationSet sourceContainer = entry.getKey ();
-                EventSource es              = entry.getValue ();
-                BackendDataC sourceBed = (BackendDataC) sourceContainer.backendData;
+                BackendDataC sourceBed = (BackendDataC) es.container.backendData;
                 sourceBed.eventSources.add (es);
             }
+
+            eventIndex++;
         }
     }
 
@@ -309,15 +312,15 @@ public class BackendDataC
             }
         }
 
-        refcount = s.referenced  &&  s.canDie ();
-        needGlobalPreserve =  globalIntegrated.size () > 0  ||  globalDerivativePreserve.size () > 0  ||  globalBufferedExternalWriteDerivative.size () > 0;
-        needGlobalDtor = needGlobalPreserve  ||  globalDerivative.size () > 0;
-        needGlobalCtor = needGlobalDtor  ||  index != null  ||  n != null;
-        canResize = globalMembers.contains (n);  // Works correctly even if n is null.
-        trackInstances = s.connected  ||  s.needInstanceTracking  ||  canResize;
-        canGrowOrDie =  s.lethalP  ||  s.lethalType  ||  s.canGrow ();
-        needGlobalFinalizeN =  s.container == null  &&  (canResize  ||  canGrowOrDie);
-        needGlobalFinalize =  globalBufferedExternal.size () > 0  ||  needGlobalFinalizeN  ||  (canResize  &&  (canGrowOrDie  ||  ! n.hasAttribute ("initOnly")));
+        refcount            = s.referenced  &&  s.canDie ();
+        needGlobalPreserve  = globalIntegrated.size () > 0  ||  globalDerivativePreserve.size () > 0  ||  globalBufferedExternalWriteDerivative.size () > 0;
+        needGlobalDtor      = needGlobalPreserve  ||  globalDerivative.size () > 0;
+        needGlobalCtor      = needGlobalDtor  ||  index != null  ||  n != null;
+        canResize           = globalMembers.contains (n);  // Works correctly even if n is null.
+        trackInstances      = s.connected  ||  s.needInstanceTracking  ||  canResize;
+        canGrowOrDie        = s.lethalP  ||  s.lethalType  ||  s.canGrow ();
+        needGlobalFinalizeN = s.container == null  &&  (canResize  ||  canGrowOrDie);
+        needGlobalFinalize  = globalBufferedExternal.size () > 0  ||  needGlobalFinalizeN  ||  (canResize  &&  (canGrowOrDie  ||  ! n.hasAttribute ("initOnly")));
 
         if (s.connectionBindings != null)
         {
@@ -370,11 +373,11 @@ public class BackendDataC
             }
         }
 
-        needLocalPreserve =  localIntegrated.size () > 0  ||  localDerivativePreserve.size () > 0  ||  localBufferedExternalWriteDerivative.size () > 0;
-        needLocalDtor =  needLocalPreserve  ||  localDerivative.size () > 0;
-        needLocalCtor =  needLocalDtor  ||  s.accountableConnections != null  ||  refcount;
-        needLocalInit =  s.connectionBindings == null  ||  localInit.size () > 0  ||  accountableEndpoints.size () > 0;
-        needLocalFinalize =  localBufferedExternal.size () > 0  ||  type != null  ||  s.canDie ();
+        needLocalPreserve = localIntegrated.size () > 0  ||  localDerivativePreserve.size () > 0  ||  localBufferedExternalWriteDerivative.size () > 0;
+        needLocalDtor     = needLocalPreserve  ||  localDerivative.size () > 0;
+        needLocalCtor     = needLocalDtor  ||  s.accountableConnections != null  ||  refcount;
+        needLocalInit     = s.connectionBindings == null  ||  localInit.size () > 0  ||  accountableEndpoints.size () > 0  ||  eventTargets.size () > 0;
+        needLocalFinalize = localBufferedExternal.size () > 0  ||  type != null  ||  s.canDie ();
         if (s.connectionBindings != null)
         {
             for (ConnectionBinding c : s.connectionBindings)

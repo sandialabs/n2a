@@ -6,6 +6,8 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.backend.c;
 
+import gov.sandia.n2a.backend.internal.InternalBackendData.EventSource;
+import gov.sandia.n2a.backend.internal.InternalBackendData.EventTarget;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
@@ -191,7 +193,7 @@ public class JobC
         s.append ("  try\n");
         s.append ("  {\n");
         String integrator = e.getNamedValue ("c.integrator", "Euler");
-        if (! integrator.equals ("Euler"))
+        if (! integrator.equals ("Euler")  &&  ! integrator.isEmpty ())
         {
             s.append ("    simulator.integrator = new " + integrator + ";\n");
         }
@@ -620,6 +622,28 @@ public class JobC
         for (String columnName : bed.localColumns)
         {
             result.append ("  string " + columnName + ";\n");
+        }
+        for (EventSource es : bed.eventSources)
+        {
+            result.append ("  std::vector<Part *> " + "eventMonitor_" + prefix (es.target.container) + ";\n");
+        }
+        for (EventTarget et : bed.eventTargets)
+        {
+            if (et.track != null  &&  et.track.name.startsWith ("eventAux"))
+            {
+                result.append ("  float " + et.track.name + ";\n");
+            }
+            if (et.timeIndex >= 0)
+            {
+                result.append ("  float eventTime" + et.timeIndex + ";\n");
+            }
+        }
+        if (bed.eventTargets.size () > 0)
+        {
+            // This should come last, because it can affect alignment.
+            // Since bool is typically stored as a single byte, this approach is suitable for 4 or fewer event types.
+            // For larger quantities, a bit-mapped int is better.
+            result.append ("  bool eventLatch[" + bed.eventTargets.size () + "];\n");
         }
         result.append ("\n");
 
@@ -1381,6 +1405,30 @@ public class JobC
             {
                 result.append ("  " + mangle (v) + zero (v) + ";\n");
             }
+            for (EventSource es : bed.eventSources)
+            {
+                result.append ("  " + mangle ("eventMonitor_", es.target.container.name) + ".clear ();\n");
+            }
+            for (EventTarget et : bed.eventTargets)
+            {
+                if (et.track != null  &&  et.track.name.startsWith ("eventAux"))
+                {
+                    result.append ("  " + et.track.name + " = 0;\n");
+                }
+                if (et.timeIndex >= 0)
+                {
+                    result.append ("  eventTime" + et.timeIndex + " = 10;\n");  // Normal values are modulo 1 second. This initial value guarantees no match.
+                }
+            }
+            int eventCount = bed.eventTargets.size ();
+            if (eventCount > 0)
+            {
+                result.append ("  for (int i = 0; i < " + eventCount + "; i++) eventLatch[i] = false;\n");
+            }
+            for (EquationSet p : s.parts)
+            {
+                result.append ("  " + prefix (p) + "_Population " + mangle (p.name) + ";\n");
+            }
             result.append ("}\n");
             result.append ("\n");
         }
@@ -1415,6 +1463,17 @@ public class JobC
             for (String alias : bed.accountableEndpoints)
             {
                 result.append ("  " + mangle (alias) + "->" + prefix (s) + "_" + mangle (alias) + "_count--;\n");
+            }
+
+            // release event monitors
+            for (EventTarget et : bed.eventTargets)
+            {
+                for (EventSource es : et.sources)
+                {
+                    String part = "";
+                    if (es.reference != null) part = resolveContainer (es.reference, context, "");
+                    result.append ("  removeMonitor (" + part + "eventMonitor_" + prefix (s) + ", this);\n");
+                }
             }
 
             result.append ("}\n");
@@ -1464,7 +1523,7 @@ public class JobC
         }
 
         // Unit init
-        if (s.connectionBindings == null  ||  bed.localInit.size () > 0  ||  s.parts.size () > 0  ||  bed.accountableEndpoints.size () > 0)
+        if (bed.needLocalInit  ||  s.parts.size () > 0)
         {
             result.append ("void " + ns + "init ()\n");
             result.append ("{\n");
@@ -1532,6 +1591,17 @@ public class JobC
             for (String alias : bed.accountableEndpoints)
             {
                 result.append ("  " + mangle (alias) + "->" + prefix (s) + "_" + mangle (alias) + "_count++;\n");
+            }
+
+            // Request event monitors
+            for (EventTarget et : bed.eventTargets)
+            {
+                for (EventSource es : et.sources)
+                {
+                    String part = "";
+                    if (es.reference != null) part = resolveContainer (es.reference, context, "");
+                    result.append ("  " + part + "eventMonitor_" + prefix (s) + ".push_back (this);\n");
+                }
             }
 
             // contained populations
@@ -1617,12 +1687,58 @@ public class JobC
                 result.append ("  " + mangle (e.name) + ".finalize ();\n");  // ignore return value
             }
 
+            // Early-out if we are already dead
             Variable live = s.find (new Variable ("$live"));
             if (live != null  &&  ! live.hasAny (new String[] {"constant", "accessor"}))  // $live is stored in this part
             {
                 result.append ("  if (" + resolve (live.reference, context, false) + " == 0) return false;\n");  // early-out if we are already dead, to avoid another call to die()
             }
 
+            // Events
+            for (EventSource es : bed.eventSources)
+            {
+                EventTarget et = es.target;
+                String eventMonitor = "eventMonitor_" + prefix (et.container);
+
+                if (es.testEach)
+                {
+                    result.append ("  for (Part * p : " + eventMonitor + ")\n");
+                    result.append ("  {\n");
+                    result.append ("    if (! p  ||  ! p->eventTest (" + et.valueIndex + ")) continue;\n");
+                    eventGenerate ("    ", et, context, false);
+                    result.append ("  }\n");
+                }
+                else  // All monitors share same condition, so only test one.
+                {
+                    result.append ("  if (" + eventMonitor + ".size ())\n");
+                    result.append ("  {\n");
+                    result.append ("    Part * p = 0;\n");
+                    result.append ("    for (p : " + eventMonitor + ") if (p) break;\n");  // Find first non-null part.
+                    result.append ("    if (p  &&  p->eventTest (" + et.valueIndex + "))\n");
+                    result.append ("    {\n");
+                    if (es.delayEach)  // Each target instance may require a different delay.
+                    {
+                        result.append ("      for (p : " + eventMonitor + ")\n");
+                        result.append ("      {\n");
+                        result.append ("        if (! p) continue;\n");
+                        eventGenerate ("        ", et, context, false);
+                        result.append ("      }\n");
+                    }
+                    else  // All delays are the same.
+                    {
+                        eventGenerate ("      ", et, context, true);
+                    }
+                    result.append ("    }\n");
+                    result.append ("  }\n");
+                }
+            }
+            int eventCount = bed.eventTargets.size ();
+            if (eventCount > 0)
+            {
+                result.append ("  for (int i = 0; i < " + eventCount + "; i++) eventLatch[i] = false;\n");
+            }
+
+            // Finalize variables
             for (Variable v : bed.localBufferedExternal)
             {
                 if (v.name.equals ("$t")  &&  v.order == 1)
@@ -2041,6 +2157,115 @@ public class JobC
             }
         }
 
+        // Unit events
+        if (bed.eventTargets.size () > 0)
+        {
+            result.append ("bool " + ns + "eventTest (int i)\n");
+            result.append ("{\n");
+            result.append ("  switch (i)\n");
+            result.append ("  {\n");
+            for (EventTarget et : bed.eventTargets)
+            {
+                result.append ("    case " + et.valueIndex + ":\n");
+                result.append ("    {\n");
+                for (Variable v : et.dependencies)
+                {
+                    multiconditional (v, context, "      ");
+                }
+                if (et.edge != EventTarget.NONZERO)
+                {
+                    result.append ("      float before = " + resolve (et.track.reference, context, false) + ";\n");
+                }
+                if (et.trackOne)  // This is a single variable, so check its value directly.
+                {
+                    result.append ("      float after = " + resolve (et.track.reference, context, true) + ";\n");
+                }
+                else  // This is an expression, so use our private auxiliary variable.
+                {
+                    result.append ("      float after = ");
+                    et.event.operands[0].render (context);
+                    result.append (";\n");
+                    if (et.edge != EventTarget.NONZERO)
+                    {
+                        result.append ("      " + mangle (et.track) + " = after;\n");
+                    }
+                }
+                switch (et.edge)
+                {
+                    case EventTarget.NONZERO:
+                        if (et.timeIndex >= 0)
+                        {
+                            // Guard against multiple events in a given cycle.
+                            // Note that other trigger types don't need this because they set the auxiliary variable,
+                            // so the next test in the same cycle will no longer see change.
+                            result.append ("      if (after == 0) return false;\n");
+                            result.append ("      float moduloTime = (float) fmod (getEvent ().t, 1);\n");  // Wrap time at 1 second, to fit in float precision.
+                            result.append ("      if (eventTime" + et.timeIndex + " == moduloTime) return false;\n");
+                            result.append ("      eventTime" + et.timeIndex + " = moduloTime;\n");
+                            result.append ("      return true;\n");
+                        }
+                        else
+                        {
+                            result.append ("      return after != 0;\n");
+                        }
+                        break;
+                    case EventTarget.CHANGE:
+                        result.append ("      return before != after;\n");
+                        break;
+                    case EventTarget.FALL:
+                        result.append ("      return before != 0  &&  after == 0;\n");
+                        break;
+                    case EventTarget.RISE:
+                    default:
+                        result.append ("      return before == 0  &&  after != 0;\n");
+                }
+                result.append ("    }\n");
+            }
+            result.append ("  }\n");
+            result.append ("}\n");
+            result.append ("\n");
+
+            int nonconstantCount = 0;
+            for (EventTarget et : bed.eventTargets)
+            {
+                if (et.delay < -1) nonconstantCount++;
+            }
+            if (nonconstantCount > 0)
+            {
+                result.append ("float " + ns + "eventDelay (int i)\n");
+                result.append ("{\n");
+                result.append ("  switch (i)\n");
+                result.append ("  {\n");
+                for (EventTarget et : bed.eventTargets)
+                {
+                    if (et.delay >= -1) continue;
+
+                    // Need to evaluate expression
+                    result.append ("    case " + et.valueIndex + ":\n");
+                    result.append ("    {\n");
+                    for (Variable v : et.dependencies)
+                    {
+                        multiconditional (v, context, "      ");
+                    }
+                    result.append ("      float result = ");
+                    et.event.operands[1].render (context);
+                    result.append (";\n");
+                    result.append ("      if (result < 0) return -1;\n");
+                    result.append ("      return result;\n");
+                    result.append ("    }\n");
+                }
+                result.append ("  }\n");
+                result.append ("}\n");
+                result.append ("\n");
+            }
+
+            result.append ("void " + ns + "setLatch (int i)\n");
+            result.append ("{\n");
+            result.append ("  eventLatch[i] = value;\n");
+            result.append ("}\n");
+            result.append ("\n");
+        }
+
         // Unit project
         if (bed.hasProjectFrom  ||  bed.hasProjectTo)
         {
@@ -2336,6 +2561,87 @@ public class JobC
 
         // Unit sub-parts
         for (EquationSet p : s.parts) generateDefinitions (p, result);
+    }
+
+    public void eventGenerate (String pad, EventTarget et, CRenderer context, boolean multi)
+    {
+        String eventSpike = "EventSpike";
+        if (multi) eventSpike += "Multi";
+        else       eventSpike += "Single";
+        String eventSpikeLatch = eventSpike + "Latch";
+
+        StringBuilder result = context.result;
+        result.append (pad + "EventStep * event = getEvent ();\n");
+        if (et.delay >= -1)  // delay is a constant, so do all tests at the Java level
+        {
+            if (et.delay < 0)  // timing is no-care
+            {
+                result.append (pad + eventSpike + " * spike = new " + eventSpikeLatch + ";\n");
+                result.append (pad + "spike->t = event->t;\n");  // queue immediately after current cycle, so latches get set for next full cycle
+            }
+            else if (et.delay == 0)  // process as close to current cycle as possible
+            {
+                result.append (pad + eventSpike + " * spike = new " + eventSpike + ";\n");  // fully execute the event (not latch it)
+                result.append (pad + "spike->t = event->t;\n");  // queue immediately
+            }
+            else
+            {
+                // Is delay an quantum number of $t' steps?
+                result.append (pad + eventSpike + " * spike;\n");
+                result.append (pad + "float delay = " + context.print (et.delay) + ";\n");
+                result.append (pad + "float ratio = delay / event->dt;\n");
+                result.append (pad + "int step = (int) round (ratio);\n");
+                result.append (pad + "if (abs (ratio - step) < 1e-3)\n");  // Is delay close enough to a time-quantum?
+                result.append (pad + "{\n");
+                result.append (pad + "  if (simulator.eventMode == Simulator::DURING) spike = new " + eventSpikeLatch + ";\n");
+                result.append (pad + "  else spike = new " + eventSpike + ";\n");
+                result.append (pad + "  if (simulator.eventMode == Simulator::AFTER) delay = (step + 1e-6) * event->dt;\n");
+                result.append (pad + "  else delay = (step - 1e-6) * event->dt;\n");
+                result.append (pad + "}\n");
+                result.append (pad + "else\n");
+                result.append (pad + "{\n");
+                result.append (pad + "  spike = new " + eventSpike + ";\n");
+                result.append (pad + "}\n");
+                result.append (pad + "spike->t = event->t + delay;\n");
+            }
+        }
+        else  // delay must be evaluated, so emit tests at C level
+        {
+            result.append (pad + "float delay = p->eventDelay (" + et.valueIndex + ");\n");
+            result.append (pad + eventSpike + " * spike;\n");
+            result.append (pad + "if (delay < 0)\n");
+            result.append (pad + "{\n");
+            result.append (pad + "  " + eventSpike + " * spike = new " + eventSpikeLatch + ";\n");
+            result.append (pad + "  spike->t = event->t;\n");
+            result.append (pad + "}\n");
+            result.append (pad + "else if (delay == 0)\n");
+            result.append (pad + "{\n");
+            result.append (pad + "  " + eventSpike + " * spike = new " + eventSpike + ";\n");
+            result.append (pad + "  spike->t = event->t;\n");
+            result.append (pad + "}\n");
+            result.append (pad + "else\n");
+            result.append (pad + "{\n");
+            result.append (pad + "  float ratio = delay / event->dt;\n");
+            result.append (pad + "  int step = (int) round (ratio);\n");
+            result.append (pad + "  if (abs (ratio - step) < 1e-3)\n");  // Is delay close enough to a time-quantum?
+            result.append (pad + "  {\n");
+            result.append (pad + "    if (simulator.eventMode == Simulator::DURING) spike = new " + eventSpikeLatch + ";\n");
+            result.append (pad + "    else spike = new " + eventSpike + ";\n");
+            result.append (pad + "    if (simulator.eventMode == Simulator::AFTER) delay = (step + 1e-6) * event->dt;\n");
+            result.append (pad + "    else delay = (step - 1e-6) * event->dt;\n");
+            result.append (pad + "  }\n");
+            result.append (pad + "  else\n");
+            result.append (pad + "  {\n");
+            result.append (pad + "    spike = new " + eventSpike + ";\n");
+            result.append (pad + "  }\n");
+            result.append (pad + "  spike->t = event->t + delay;\n");
+            result.append (pad + "}\n");
+        }
+
+        result.append (pad + "spike->index = " + et.valueIndex + ";\n");
+        if (multi) result.append (pad + "spike->targets = &eventMonitor_" + et.container.name + ";\n");
+        else       result.append (pad + "spike->target = p;\n");
+        result.append (pad + "simulator.queueEvent.push (spike);\n");
     }
 
     public void multiconditional (Variable v, CRenderer context, String pad) throws Exception
@@ -2841,10 +3147,10 @@ public class JobC
                     }
                     else  // descend to an instance of the population.
                     {
-                        // Note: we can only descend a chain of singletons, as indexing is now removed from the N2A langauge.
+                        // Note: we can only descend a chain of singletons, as indexing is now removed from the N2A language.
                         // This restriction does not apply to connections, as they have direct pointers to their targets.
                         String typeName = prefix (s);  // fully qualified
-                        // cast PopulationCompartment.live->after, because it is declared in runtime.h as simply a Compartment,
+                        // cast Population.live->after, because it is declared in runtime.h as simply a Compartment,
                         // but we need it to be the specific type of compartment we have generated.
                         containers = "((" + typeName + " *) " + containers + mangle (s.name) + ".live->after)->";
                     }
@@ -3155,9 +3461,7 @@ public class JobC
                 Type o = c.value;
                 if (o instanceof Scalar)
                 {
-                    result.append (o.toString ());
-                    double value = ((Scalar) o).value;
-                    if ((int) value != value) result.append ("f");  // Tell c compiler that our type is float, not double. TODO: let user select numeric type of runtime
+                    result.append (print (((Scalar) o).value));
                     return true;
                 }
                 if (o instanceof Text)
@@ -3189,6 +3493,13 @@ public class JobC
                 return true;
             }
             return false;
+        }
+
+        public String print (double d)
+        {
+            String result = Scalar.print (d);
+            if ((int) d != d) result += "f";  // Tell C compiler that our type is float, not double. TODO: let user select numeric type of runtime
+            return result;
         }
     }
 }

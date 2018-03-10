@@ -27,7 +27,6 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 import java.util.Comparator;
 import java.util.IdentityHashMap;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -154,14 +153,15 @@ public class InternalBackendData
 
     public static class EventTarget
     {
-        public Event  event;          // For evaluating whether the event should be triggered. There may be several equivalent event() calls in the part, so this is just one representative of the group.
-        public int    valueIndex;     // position of bit array in valuesFloat
-        public int    mask;           // an unsigned AND between this and the (int cast) entry from valuesFloat will indicate event active
-        public int    edge  = RISE;
-        public double delay = -1;     // default is no-care; Indicates to process event in next regularly scheduled cycle of the target part
-        public int    timeIndex = -1; // position in valuesFloat of timestamp when last event to this target was generated; used to force multiple sources to generate only one event in a given cycle; -1 means the guard is unneeded
-        public Map<EquationSet,EventSource> sources = new TreeMap<EquationSet,EventSource> ();
-        public List<Variable> dependencies = new ArrayList<Variable> ();
+        public EquationSet       container;
+        public Event             event;             // For evaluating whether the event should be triggered. There may be several equivalent event() calls in the part, so this is just one representative of the group.
+        public int               valueIndex;        // position of bit array in valuesFloat
+        public int               mask;              // an unsigned AND between this and the (int cast) entry from valuesFloat will indicate event active
+        public int               edge         = RISE;
+        public double            delay        = -1; // default is no-care; Indicates to process event in next regularly scheduled cycle of the target part
+        public int               timeIndex    = -1; // position in valuesFloat of timestamp when last event to this target was generated; used to force multiple sources to generate only one event in a given cycle; -1 means the guard is unneeded
+        public List<EventSource> sources      = new ArrayList<EventSource> ();
+        public List<Variable>    dependencies = new ArrayList<Variable> ();
 
         /**
             Every event() function has a trigger expression as its first parameter.
@@ -177,7 +177,6 @@ public class InternalBackendData
         public boolean  trackOne;  // we are following a single first-class variable, so track is only a holder for its reference
 
         // edge types
-        public static final int EVALUATE = -1;  // Always recompute the edge type, because the parameter is not constant.
         public static final int RISE     = 0;
         public static final int FALL     = 1;
         public static final int CHANGE   = 2;
@@ -186,6 +185,12 @@ public class InternalBackendData
         public EventTarget (Event event)
         {
             this.event = event;
+        }
+
+        public boolean monitors (EquationSet sourceContainer)
+        {
+            for (EventSource es : sources) if (es.container == sourceContainer) return true;
+            return false;
         }
 
         public void setLatch (Instance i)
@@ -222,8 +227,8 @@ public class InternalBackendData
             }
 
             double before;
-            if (this.edge == NONZERO) before = 0;  // just to silence error about uninitialized variable
-            else                      before = ((Scalar) temp.get (track.reference)).value;
+            if (edge == NONZERO) before = 0;  // just to silence error about uninitialized variable
+            else                 before = ((Scalar) temp.get (track.reference)).value;
 
             double after;
             if (trackOne)  // This is a single variable, so check its value directly.
@@ -233,19 +238,10 @@ public class InternalBackendData
             else  // This is an expression, so use our private auxiliary variable.
             {
                 Scalar result = (Scalar) event.operands[0].eval (temp);
-                if (this.edge != NONZERO) temp.setFinal (track, result);  // Since the variable is effectively hidden, we don't wait for the finalize phase.
+                if (edge != NONZERO) temp.setFinal (track, result);  // Since the variable is effectively hidden, we don't wait for the finalize phase.
                 after = result.value;
             }
 
-            int edge = this.edge;
-            if (edge == EVALUATE)
-            {
-                Text t = (Text) event.operands[2].eval (temp);
-                if      (t.value.equalsIgnoreCase ("nonzero")) edge = NONZERO;
-                else if (t.value.equalsIgnoreCase ("change" )) edge = CHANGE;
-                else if (t.value.equalsIgnoreCase ("fall"   )) edge = FALL;
-                else                                           edge = RISE;
-            }
             switch (edge)
             {
                 case NONZERO:
@@ -302,11 +298,18 @@ public class InternalBackendData
 
     public static class EventSource
     {
+        public EquationSet       container;
         public EventTarget       target;
         public int               monitorIndex; // position of monitor array in source_instance.valuesObject
         public VariableReference reference;    // for determining index of source part in target_instance.valuesObject. This is done indirectly so that event analysis can be done before indices are fully assigned.
         public boolean           testEach;     // indicates that the monitor must test each target instance, generally because the trigger references variables outside the source part
         public boolean           delayEach;    // indicates that the monitor evaluate the delay for each target instance
+
+        public EventSource (EquationSet container, EventTarget target)
+        {
+            this.container = container;
+            this.target    = target;
+        }
     }
 
     public class ReferenceComparator implements Comparator<VariableReference>
@@ -367,12 +370,13 @@ public class InternalBackendData
         // Allocate storage
         int valueIndex = -1;
         int mask       = 0;
+        int eventIndex = 0;
         for (EventTarget et : eventTargets)
         {
             if (valueIndex == -1)
             {
                 valueIndex = countLocalFloat++;
-                namesLocalFloat.add ("event_latch" + valueIndex);
+                namesLocalFloat.add ("eventLatch" + valueIndex);
                 eventLatches.add (valueIndex);
                 mask = 1;
             }
@@ -381,7 +385,7 @@ public class InternalBackendData
             mask <<= 1;
             if (mask > 0x400000) valueIndex = -1;  // Due to limitations of float-int conversion, only 23 bits are available. Allocate another float.
 
-            if (et.track != null  &&  et.track.name.startsWith ("event_aux"))
+            if (et.track != null  &&  et.track.name.startsWith ("eventAux"))
             {
                 et.track.readIndex = et.track.writeIndex = countLocalFloat++;
                 namesLocalFloat.add (et.track.name);
@@ -391,20 +395,20 @@ public class InternalBackendData
             if (et.sources.size () > 1  &&  et.edge == EventTarget.NONZERO)
             {
                 et.timeIndex = countLocalFloat++;
-                namesLocalFloat.add ("event_time" + eventTargets.size ());
+                namesLocalFloat.add ("eventTime" + eventIndex);
             }
 
             // TODO: What if two different event targets in this part reference the same source part? What if the condition is different? The same?
-            for (Entry<EquationSet,EventSource> entry : et.sources.entrySet ())
+            for (EventSource es : et.sources)
             {
-                EquationSet sourceContainer = entry.getKey ();
-                EventSource es              = entry.getValue ();
-
+                EquationSet sourceContainer = es.container;
                 InternalBackendData sourceBed = (InternalBackendData) sourceContainer.backendData;
                 es.monitorIndex = sourceBed.countLocalObject++;
-                sourceBed.namesLocalObject.add ("event_monitor_" + s.prefix ());  // TODO: Consolidate monitors that share the same trigger condition.
+                sourceBed.namesLocalObject.add ("eventMonitor_" + s.prefix ());  // TODO: Consolidate monitors that share the same trigger condition.
                 sourceBed.eventSources.add (es);
             }
+
+            eventIndex++;
         }
     }
 
@@ -431,8 +435,10 @@ public class InternalBackendData
                         else  // we must create a new event target, or more properly, fill in the event target we just used as a query object
                         {
                             // Create an entry and save the index
+                            targetIndex = eventTargets.size ();
                             eventTargets.add (et);
                             de.eventType = et;
+                            et.container = s;
 
                             // Determine edge type
                             if (de.operands.length < 3)
@@ -452,13 +458,14 @@ public class InternalBackendData
                                 }
                                 else
                                 {
-                                    Backend.err.get ().println ("ERROR: Edge type for event() must be specified with a string.");
+                                    Backend.err.get ().println ("ERROR: event() edge type must be a string.");
                                     throw new Backend.AbortRun ();
                                 }
                             }
                             else
                             {
-                                et.edge = EventTarget.EVALUATE;
+                                Backend.err.get ().println ("ERROR: event() edge type must be constant.");
+                                throw new Backend.AbortRun ();
                             }
 
                             // Allocate auxiliary variable
@@ -488,7 +495,7 @@ public class InternalBackendData
                             }
                             if (! et.trackOne  &&  et.edge != EventTarget.NONZERO)  // Expression, so create auxiliary variable. Aux not needed for NONZERO, because no change detection.
                             {
-                                et.track = new Variable ("event_aux" + eventTargets.size (), 0);
+                                et.track = new Variable ("eventAux" + targetIndex, 0);
                                 et.track.type = new Scalar (0);
                                 et.track.reference = new VariableReference ();
                                 et.track.reference.variable = et.track;
@@ -564,12 +571,11 @@ public class InternalBackendData
                                         containers.add (sourceContainer);
 
                                         // Set up monitors for values that can vary during update.
-                                        if (! (v.hasAttribute ("constant")  ||  v.hasAttribute ("initOnly")  ||  et.sources.containsKey (sourceContainer)))
+                                        if (! v.hasAttribute ("constant")  &&  ! v.hasAttribute ("initOnly")  &&  ! et.monitors (sourceContainer))
                                         {
-                                            EventSource es = new EventSource ();
-                                            es.target      = et;
+                                            EventSource es = new EventSource (sourceContainer, et);
                                             if (sourceContainer != s) es.reference = av.reference;  // null means self-reference, a special case handled in Part
-                                            et.sources.put (sourceContainer, es);
+                                            et.sources.add (es);
                                         }
                                         return false;
                                     }
@@ -599,7 +605,7 @@ public class InternalBackendData
                                             throw new Backend.AbortRun ();
                                         }
                                     }
-                                    else if (et.edge != EventTarget.EVALUATE)
+                                    else
                                     {
                                         neverFires = true;
                                     }
@@ -607,25 +613,22 @@ public class InternalBackendData
 
                                 if (! neverFires)
                                 {
-                                    EventSource es = new EventSource ();
-                                    es.target      = et;
+                                    EventSource es = new EventSource (s, et);
                                     // This is a self-reference, so es.reference should be null.
-                                    et.sources.put (s, es);
+                                    et.sources.add (es);
                                 }
                             }
 
                             // Determine if monitor needs to test every target, or if one representative target is sufficient
-                            for (Entry<EquationSet,EventSource> e : et.sources.entrySet ())
+                            for (EventSource source : et.sources)
                             {
-                                EquationSet container = e.getKey ();
-                                EventSource source    = e.getValue ();
                                 // If all the variables used by the event expression are within the same source
                                 // part, then the answer will be the same for all registered target parts. However,
                                 // if any of the variables belong to a different source part, then it's possible for
                                 // different combinations of instances (via references from the target) to be
                                 // associated with any given source instance, so every target must be evaluated separately.
                                 if (cv.containers.size () > 1) source.testEach = true;
-                                if (dv.containers.size () > 1  ||  (dv.containers.size () == 1  &&  dv.containers.first () != container)) source.delayEach = true;
+                                if (dv.containers.size () > 1  ||  (dv.containers.size () == 1  &&  dv.containers.first () != source.container)) source.delayEach = true;
                             }
                         }
                     }

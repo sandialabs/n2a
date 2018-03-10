@@ -790,6 +790,37 @@ Part::getXYZ (Vector3 & xyz)
     xyz[2] = 0;
 }
 
+bool
+Part::eventTest (int i)
+{
+    return false;
+}
+
+float
+Part::eventDelay (int i)
+{
+    return -1;  // no care
+}
+
+void
+Part::setLatch (int i)
+{
+}
+
+void
+removeMonitor (vector<Part *> & partList, Part * part)
+{
+    vector<Part *>::iterator it;
+    for (it = partList.begin (); it != partList.end (); it++)
+    {
+        if (*it == part)
+        {
+            *it = 0;
+            break;
+        }
+    }
+}
+
 
 // class PartTime ------------------------------------------------------------
 
@@ -1481,11 +1512,31 @@ EventStep::enqueue (Part * part)
 void
 EventSpikeSingle::run ()
 {
+    target->setLatch (latch);
+
+    simulator.integrator->run (*this);
+    visit ([](Visitor * visitor)
+    {
+        visitor->part->update ();
+        bool live = visitor->part->finalize ();
+        // TODO: implement equivalent of Internal finishEvent()
+        if (! live)  // Immediately dequeue, if possible. This is not strictly necessary, but it is necessary to store $live for any part that can't dequeue immediately.
+        {
+            PartTime * p = dynamic_cast<PartTime *> (visitor->part);  // Use of RTTI is potentially expensive
+            if (p)
+            {
+                p->dequeue ();
+                p->leaveSimulation ();
+            }
+        }
+    });
 }
 
 void
 EventSpikeSingle::visit (visitorFunction f)
 {
+    Visitor v (this, target);
+    f (&v);
 }
 
 
@@ -1494,6 +1545,7 @@ EventSpikeSingle::visit (visitorFunction f)
 void
 EventSpikeSingleLatch::run ()
 {
+    target->setLatch (latch);
 }
 
 
@@ -1502,11 +1554,56 @@ EventSpikeSingleLatch::run ()
 void
 EventSpikeMulti::run ()
 {
+    setLatch ();
+
+    simulator.integrator->run (*this);
+    visit ([](Visitor * visitor)
+    {
+        visitor->part->update ();
+    });
+    visit ([](Visitor * visitor)
+    {
+        bool live = visitor->part->finalize ();
+        // TODO: implement equivalent of Internal finishEvent()
+        if (! live)
+        {
+            PartTime * p = dynamic_cast<PartTime *> (visitor->part);  // Use of RTTI is potentially expensive
+            if (p)
+            {
+                p->dequeue ();
+                p->leaveSimulation ();
+            }
+        }
+    });
 }
 
 void
 EventSpikeMulti::visit (visitorFunction f)
 {
+    VisitorSpikeMulti v (this);
+    v.visit (f);
+}
+
+void
+EventSpikeMulti::setLatch ()
+{
+    int i = 0;
+    int last = targets->size () - 1;
+    while (i < last)
+    {
+        Part * target = (*targets)[i];
+        if (target)
+        {
+            target->setLatch (latch);
+        }
+        else
+        {
+            (*targets)[i] = (*targets)[last--];
+        }
+        i++;  // can go past last, but this will cause no harm.
+    }
+    if ((*targets)[last]) targets->resize (last + 1);
+    else                  targets->resize (last);
 }
 
 
@@ -1515,14 +1612,7 @@ EventSpikeMulti::visit (visitorFunction f)
 void
 EventSpikeMultiLatch::run ()
 {
-}
-
-
-// class EventTarget ---------------------------------------------------------
-
-void
-EventTarget::setFlag (Part * part)
-{
+    setLatch ();
 }
 
 
@@ -1570,14 +1660,6 @@ VisitorStep::enqueue (Part * newPart)
     newPart->setPrevious (&queue);
     newPart->next = queue.next;
     queue.next = newPart;
-
-    cerr << this << " enqueue " << newPart << " " << typeid (*newPart).name () << endl;
-    previous = &queue;
-    while (previous->next)
-    {
-        cerr << "  " << previous->next << endl;
-        previous = previous->next;
-    }
 }
 
 
@@ -1591,4 +1673,10 @@ VisitorSpikeMulti::VisitorSpikeMulti (EventSpikeMulti * event)
 void
 VisitorSpikeMulti::visit (visitorFunction f)
 {
+    EventSpikeMulti * e = (EventSpikeMulti *) event;
+    for (auto target : *e->targets)
+    {
+        part = target;
+        f (this);
+    }
 }

@@ -1,5 +1,6 @@
 package gov.sandia.n2a.backend.internal;
 
+import java.util.Iterator;
 import java.util.List;
 
 import gov.sandia.n2a.eqset.Variable;
@@ -25,6 +26,12 @@ public class EventSpikeMulti extends EventSpike
 
     public void setFlag ()
     {
-        for (Instance i : targets) eventType.setLatch (i);
+        Iterator<Instance> it = targets.iterator ();
+        while (it.hasNext ())
+        {
+            Instance i = it.next ();
+            if (i == null) it.remove ();
+            else eventType.setLatch (i);
+        }
     }
 }

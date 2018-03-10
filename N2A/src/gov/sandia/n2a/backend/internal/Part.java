@@ -8,8 +8,6 @@ package gov.sandia.n2a.backend.internal;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map.Entry;
-
 import gov.sandia.n2a.backend.internal.InternalBackendData.Conversion;
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventSource;
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventTarget;
@@ -92,6 +90,20 @@ public class Part extends Instance
             }
         }
 
+        // Release event monitors
+        for (EventTarget et : bed.eventTargets)
+        {
+            for (EventSource es : et.sources)
+            {
+                if (es.reference == null) continue;  // Don't bother with self-connection, since we are going away.
+                Part source = (Part) valuesObject[es.reference.index];
+                @SuppressWarnings("unchecked")
+                ArrayList<Instance> monitors = (ArrayList<Instance>) source.valuesObject[es.monitorIndex];
+                int index = monitors.indexOf (this);
+                monitors.set (index, null);  // Actually removing the element can cause a concurrent modification exception. Instead, the monitors array will get flushed next time an event processes it.
+            }
+        }
+
         ((Population) container.valuesObject[bed.populationIndex]).remove (this);
     }
 
@@ -162,9 +174,8 @@ public class Part extends Instance
         // Request event monitors
         for (EventTarget et : temp.bed.eventTargets)
         {
-            for (Entry<EquationSet,EventSource> i : et.sources.entrySet ())
+            for (EventSource es : et.sources)
             {
-                EventSource es = i.getValue ();
                 Part source;
                 if (es.reference == null) source = this;
                 else                      source = (Part) valuesObject[es.reference.index];
@@ -277,6 +288,7 @@ public class Part extends Instance
             {
                 for (Instance i : monitors)
                 {
+                    if (i == null) continue;
                     double delay = eventType.test (i, simulator);
                     if (delay < -1) continue;  // the trigger condition was not satisfied
 
@@ -316,13 +328,20 @@ public class Part extends Instance
             }
             else  // All monitors share same condition, so only test one.
             {
-                double delay = eventType.test (monitors.get (0), simulator);
+                double delay = -2;
+                for (Instance i : monitors)
+                {
+                    if (i == null) continue;
+                    delay = eventType.test (i, simulator);
+                    break;
+                }
                 if (delay < -1) continue;  // the trigger condition was not satisfied
 
                 if (es.delayEach)  // Each target instance may require a different delay.
                 {
                     for (Instance i : monitors)
                     {
+                        if (i == null) continue;
                         delay = eventType.delay (i, simulator);  // This results in one redundant eval, of first entry in monitors. Not clear if it's worth the work to avoid this.
 
                         EventSpikeSingle spike;
