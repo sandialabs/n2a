@@ -27,6 +27,7 @@ import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Split;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
+import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Norm;
@@ -142,11 +143,14 @@ public class JobC
         e.addAttribute ("preexistent", 0, true,  new String[] {"$t'", "$t"});
         e.makeConstantDtInitOnly ();
         e.findInitOnly ();  // propagate initOnly through ASTs
+        e.purgeInitOnlyTemporary ();
         e.findDeath ();
         e.setAttributesLive ();
         e.forceTemporaryStorageForSpecials ();
         findLiveReferences (e);
         e.determineTypes ();
+        createBackendData (e);
+        analyzeEvents (e);
         analyze (e);
 
         e.determineDuration ();
@@ -227,6 +231,27 @@ public class JobC
         job.set ("$metadata", "pid", pid);
     }
 
+    public static void createBackendData (EquationSet s)
+    {
+        if (! (s.backendData instanceof BackendDataC)) s.backendData = new BackendDataC ();
+        for (EquationSet p : s.parts) createBackendData (p);
+    }
+
+    public static void analyzeEvents (EquationSet s) throws Backend.AbortRun
+    {
+        BackendDataC bed = (BackendDataC) s.backendData;
+        bed.analyzeEvents (s);
+        for (EquationSet p : s.parts) analyzeEvents (p);
+    }
+
+    public void analyze (EquationSet s)
+    {
+        BackendDataC bed = (BackendDataC) s.backendData;
+        bed.analyze (s);
+        for (EquationSet p : s.parts) analyze (p);
+        // TODO: analyze lastT
+    }
+
     public void generateClassList (EquationSet s, StringBuilder result)
     {
         result.append ("class " + prefix (s) + "_Population;\n");
@@ -234,24 +259,13 @@ public class JobC
         for (EquationSet p : s.parts) generateClassList (p, result);
     }
 
-    public void analyze (EquationSet s)
-    {
-        if (! (s.backendData instanceof BackendDataC)) s.backendData = new BackendDataC ();
-        BackendDataC bed = (BackendDataC) s.backendData;
-        bed.analyze (s, this);
-        for (EquationSet p : s.parts) analyze (p);
-    }
-
     /**
         Declares all classes, along with their member variables and functions.
 
-        This is a very long monolithic function. Use the comments as guideposts on
-        the current thing being generated. First we analyze all variables in the
-        current equations set, then generate two classes: one for the instances ("local")
-        and one for the population as a whole ("global"). Within each class we
-        declare buffer classes for integration and derivation, then member variables,
-        and finally member functions as appropriate based on the analysis done at the
-        beginning.
+        For each part, generates two classes: one for the instances ("local")
+        and one for the population as a whole ("global"). Within each class,
+        declares buffer classes for integration and derivation, then member
+        variables, and finally member functions as appropriate.
     **/
     public void generateDeclarations (final EquationSet s, final StringBuilder result)
     {
@@ -736,6 +750,19 @@ public class JobC
             }
             result.append ("  virtual void setPart (int i, Part * part);\n");
             result.append ("  virtual Part * getPart (int i);\n");
+        }
+        if (bed.eventTargets.size () > 0)
+        {
+            result.append ("  virtual bool eventTest (int i);\n");
+            if (bed.needLocalEventDelay)
+            {
+                result.append ("  virtual float eventDelay (int i);\n");
+            }
+            result.append ("  virtual void setLatch (int i);\n");
+            if (bed.eventReferences.size () > 0)
+            {
+                result.append ("  virtual void finalizeEvent ();\n");
+            }
         }
         if (bed.accountableEndpoints.size () > 0)
         {
@@ -1405,30 +1432,6 @@ public class JobC
             {
                 result.append ("  " + mangle (v) + zero (v) + ";\n");
             }
-            for (EventSource es : bed.eventSources)
-            {
-                result.append ("  " + mangle ("eventMonitor_", es.target.container.name) + ".clear ();\n");
-            }
-            for (EventTarget et : bed.eventTargets)
-            {
-                if (et.track != null  &&  et.track.name.startsWith ("eventAux"))
-                {
-                    result.append ("  " + et.track.name + " = 0;\n");
-                }
-                if (et.timeIndex >= 0)
-                {
-                    result.append ("  eventTime" + et.timeIndex + " = 10;\n");  // Normal values are modulo 1 second. This initial value guarantees no match.
-                }
-            }
-            int eventCount = bed.eventTargets.size ();
-            if (eventCount > 0)
-            {
-                result.append ("  for (int i = 0; i < " + eventCount + "; i++) eventLatch[i] = false;\n");
-            }
-            for (EquationSet p : s.parts)
-            {
-                result.append ("  " + prefix (p) + "_Population " + mangle (p.name) + ";\n");
-            }
             result.append ("}\n");
             result.append ("\n");
         }
@@ -1528,10 +1531,28 @@ public class JobC
             result.append ("void " + ns + "init ()\n");
             result.append ("{\n");
             s.setInit (1);
+
             for (Variable v : bed.localBufferedExternal)
             {
                 result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
             }
+            for (EventTarget et : bed.eventTargets)
+            {
+                if (et.track != null  &&  et.track.name.startsWith ("eventAux"))
+                {
+                    result.append ("  " + et.track.name + " = 0;\n");
+                }
+                if (et.timeIndex >= 0)
+                {
+                    result.append ("  eventTime" + et.timeIndex + " = 10;\n");  // Normal values are modulo 1 second. This initial value guarantees no match.
+                }
+            }
+            int eventCount = bed.eventTargets.size ();
+            if (eventCount > 0)
+            {
+                result.append ("  for (int i = 0; i < " + eventCount + "; i++) eventLatch[i] = false;\n");
+            }
+
             // declare buffer variables
             for (Variable v : bed.localBufferedInternal)
             {
@@ -1694,7 +1715,19 @@ public class JobC
                 result.append ("  if (" + resolve (live.reference, context, false) + " == 0) return false;\n");  // early-out if we are already dead, to avoid another call to die()
             }
 
+            // Preemptively fetch current event
+            boolean needT = bed.eventSources.size () > 0;
+            for (Variable v : bed.localBufferedExternal)
+            {
+                if (v.name.equals ("$t")  &&  v.order == 1) needT = true;
+            }
+            if (needT)
+            {
+                result.append ("  EventStep * event = getEvent ();\n");
+            }
+
             // Events
+            boolean declaredFire = false;
             for (EventSource es : bed.eventSources)
             {
                 EventTarget et = es.target;
@@ -1710,25 +1743,37 @@ public class JobC
                 }
                 else  // All monitors share same condition, so only test one.
                 {
-                    result.append ("  if (" + eventMonitor + ".size ())\n");
+                    if (declaredFire)
+                    {
+                        result.append ("  fire = false;\n");
+                    }
+                    else
+                    {
+                        result.append ("  bool fire = false;\n");
+                        declaredFire = true;
+                    }
+                    result.append ("  for (auto p : " + eventMonitor + ")\n");  // Find first non-null part.
                     result.append ("  {\n");
-                    result.append ("    Part * p = 0;\n");
-                    result.append ("    for (p : " + eventMonitor + ") if (p) break;\n");  // Find first non-null part.
-                    result.append ("    if (p  &&  p->eventTest (" + et.valueIndex + "))\n");
+                    result.append ("    if (p)\n");
                     result.append ("    {\n");
+                    result.append ("      fire = p->eventTest (" + et.valueIndex + ");\n");
+                    result.append ("      break;\n");
+                    result.append ("    }\n");
+                    result.append ("  }\n");
+                    result.append ("  if (fire)\n");
+                    result.append ("  {\n");
                     if (es.delayEach)  // Each target instance may require a different delay.
                     {
-                        result.append ("      for (p : " + eventMonitor + ")\n");
-                        result.append ("      {\n");
-                        result.append ("        if (! p) continue;\n");
-                        eventGenerate ("        ", et, context, false);
-                        result.append ("      }\n");
+                        result.append ("    for (auto p : " + eventMonitor + ")\n");
+                        result.append ("    {\n");
+                        result.append ("      if (! p) continue;\n");
+                        eventGenerate ("      ", et, context, false);
+                        result.append ("    }\n");
                     }
                     else  // All delays are the same.
                     {
-                        eventGenerate ("      ", et, context, true);
+                        eventGenerate ("    ", et, context, true);
                     }
-                    result.append ("    }\n");
                     result.append ("  }\n");
                 }
             }
@@ -1743,7 +1788,7 @@ public class JobC
             {
                 if (v.name.equals ("$t")  &&  v.order == 1)
                 {
-                    result.append ("  if (" + mangle ("next_", v) + " != getEvent ()->dt) setPeriod (" + mangle ("next_", v) + ");\n");
+                    result.append ("  if (" + mangle ("next_", v) + " != event->dt) setPeriod (" + mangle ("next_", v) + ");\n");
                 }
                 else
                 {
@@ -1809,6 +1854,7 @@ public class JobC
                 result.append ("  }\n");
             }
 
+            // TODO: recognize when $p is contingent on $connect (formerly !$live) and don't emit those equations
             if (s.lethalP)
             {
                 Variable p = s.find (new Variable ("$p")); // lethalP implies that $p exists, so no need to check for null
@@ -2225,12 +2271,7 @@ public class JobC
             result.append ("}\n");
             result.append ("\n");
 
-            int nonconstantCount = 0;
-            for (EventTarget et : bed.eventTargets)
-            {
-                if (et.delay < -1) nonconstantCount++;
-            }
-            if (nonconstantCount > 0)
+            if (bed.needLocalEventDelay)
             {
                 result.append ("float " + ns + "eventDelay (int i)\n");
                 result.append ("{\n");
@@ -2261,9 +2302,47 @@ public class JobC
 
             result.append ("void " + ns + "setLatch (int i)\n");
             result.append ("{\n");
-            result.append ("  eventLatch[i] = value;\n");
+            result.append ("  eventLatch[i] = true;\n");
+            result.append ("  cerr << \"setLatch " + s.name + " \" << _A->__24index << \" \" << _B->__24index << endl;\n");
             result.append ("}\n");
             result.append ("\n");
+
+            if (bed.eventReferences.size () > 0)
+            {
+                result.append ("void " + ns + "finalizeEvent ()\n");
+                result.append ("{\n");
+                for (Variable v : bed.eventReferences)
+                {
+                    String current  = resolve (v.reference, context, false);
+                    String buffered = resolve (v.reference, context, true);
+                    result.append ("  " + current);
+                    switch (v.assignment)
+                    {
+                        case Variable.ADD:
+                            result.append (" += " + buffered + ";\n");
+                            result.append ("  " + buffered + zero (v) + ";\n");
+                            break;
+                        case Variable.MULTIPLY:
+                        case Variable.DIVIDE:
+                            result.append (" *= " + buffered + ";\n");
+                            result.append ("  " + buffered + clear (v, 1, context) + ";\n");
+                            break;
+                        case Variable.MIN:
+                            result.append (" = min (" + current + ", " + buffered + ");\n");  // TODO: Write elementwise min() and max() for matrices.
+                            result.append ("  " + buffered + clear (v, Double.POSITIVE_INFINITY, context) + ";\n");
+                            break;
+                        case Variable.MAX:
+                            result.append (" = max (" + current + ", " + buffered + ");\n");
+                            result.append ("  " + buffered + clear (v, Double.NEGATIVE_INFINITY, context) + ";\n");
+                            break;
+                        default:  // REPLACE
+                            result.append (" = " + buffered + ";\n");
+                            break;
+                    }
+                }
+                result.append ("}\n");
+                result.append ("\n");
+            }
         }
 
         // Unit project
@@ -2571,7 +2650,6 @@ public class JobC
         String eventSpikeLatch = eventSpike + "Latch";
 
         StringBuilder result = context.result;
-        result.append (pad + "EventStep * event = getEvent ();\n");
         if (et.delay >= -1)  // delay is a constant, so do all tests at the Java level
         {
             if (et.delay < 0)  // timing is no-care
@@ -2638,8 +2716,8 @@ public class JobC
             result.append (pad + "}\n");
         }
 
-        result.append (pad + "spike->index = " + et.valueIndex + ";\n");
-        if (multi) result.append (pad + "spike->targets = &eventMonitor_" + et.container.name + ";\n");
+        result.append (pad + "spike->latch = " + et.valueIndex + ";\n");
+        if (multi) result.append (pad + "spike->targets = &eventMonitor_" + prefix (et.container) + ";\n");
         else       result.append (pad + "spike->target = p;\n");
         result.append (pad + "simulator.queueEvent.push (spike);\n");
     }
@@ -2666,7 +2744,8 @@ public class JobC
         // Dump matrices needed by conditions
         for (EquationEntry e : v.equations)
         {
-            if (e.condition != null) prepareMatrices (e.condition, context, init, pad);
+            if (init) prepareStaticObjects (e.expression, context, pad);
+            if (e.condition != null) prepareDynamicObjects (e.condition, context, init, pad);
         }
 
         // Write the conditional equations
@@ -2717,7 +2796,7 @@ public class JobC
             }
             else
             {
-                prepareMatrices (e.expression, context, init, pad);
+                prepareDynamicObjects (e.expression, context, init, pad);
                 context.result.append (padIf);
                 renderEquation (context, e);
             }
@@ -2729,16 +2808,32 @@ public class JobC
         {
             if (isType)
             {
-                if (haveIf) context.result.append (pad + "else\n  ");
+                if (haveIf)
+                {
+                    context.result.append (pad + "else\n");
+                    context.result.append (pad + "{\n");
+                }
                 context.result.append (padIf + resolve (v.reference, context, true) + " = 0;\n");  // always reset $type to 0
+                if (haveIf) context.result.append (pad + "}\n");
             }
             else
             {
-                // externalWrite variables already have a default action in the prepare() method, so only deal with cycle and externalRead
-                if (v.reference.variable == v  &&  v.equations.size () > 0  &&  v.hasAny ("cycle", "externalRead")  &&  ! v.hasAttribute ("initOnly"))
+                // External-write variables with a combiner get reset during finalize.
+                // However, buffered variables with simple assignment (REPLACE) need
+                // to copy forward the current buffered value.
+                if (   v.assignment == Variable.REPLACE
+                    && v.reference.variable == v
+                    && v.equations.size () > 0
+                    && v.hasAny ("cycle", "externalRead")
+                    && ! v.hasAttribute ("initOnly"))
                 {
-                    if (haveIf) context.result.append (pad + "else\n  ");
+                    if (haveIf)
+                    {
+                        context.result.append (pad + "else\n");
+                        context.result.append (pad + "{\n");
+                    }
                     context.result.append (padIf + resolve (v.reference, context, true) + " = " + resolve (v.reference, context, false) + ";\n");  // copy previous value
+                    if (haveIf) context.result.append (pad + "}\n");
                 }
             }
         }
@@ -2757,7 +2852,7 @@ public class JobC
             }
             else
             {
-                prepareMatrices (defaultEquation.expression, context, init, pad);
+                prepareDynamicObjects (defaultEquation.expression, context, init, pad);
                 context.result.append (padIf);
                 renderEquation (context, defaultEquation);
             }
@@ -2773,38 +2868,71 @@ public class JobC
         }
         else
         {
+            context.result.append (resolve (e.variable.reference, context, true));
             switch (e.variable.assignment)
             {
                 case Variable.REPLACE:
-                    context.result.append (resolve (e.variable.reference, context, true) + " = ");
-                    e.expression.render (context);
+                    context.result.append (" = ");
                     break;
                 case Variable.ADD:
-                    context.result.append (resolve (e.variable.reference, context, true) + " += ");
-                    e.expression.render (context);
+                    context.result.append (" += ");
                     break;
                 case Variable.MULTIPLY:
-                    context.result.append (resolve (e.variable.reference, context, true) + " *= ");
-                    e.expression.render (context);
+                    context.result.append (" *= ");
+                    break;
+                case Variable.DIVIDE:
+                    context.result.append (" /= ");
                     break;
                 case Variable.MIN:
-                    context.result.append (resolve (e.variable.reference, context, true) + " = min (" + resolve (e.variable.reference, context, true) + ", ");
-                    e.expression.render (context);
-                    context.result.append (")");
+                    context.result.append (" = min (" + resolve (e.variable.reference, context, true) + ", ");
                     break;
                 case Variable.MAX:
-                    context.result.append (resolve (e.variable.reference, context, true) + " = max (" + resolve (e.variable.reference, context, true) + ", ");
-                    e.expression.render (context);
-                    context.result.append (")");
+                    context.result.append (" = max (" + resolve (e.variable.reference, context, true) + ", ");
+            }
+            e.expression.render (context);
+            if (e.variable.assignment == Variable.MAX  ||  e.variable.assignment == Variable.MIN)
+            {
+                context.result.append (")");
             }
         }
         context.result.append (";\n");
     }
 
+    public void prepareStaticObjects (Operator op, final CRenderer context, final String pad) throws Exception
+    {
+        Visitor visitor = new Visitor ()
+        {
+            public boolean visit (Operator op)
+            {
+                if (op instanceof Output)
+                {
+                    Output o = (Output) op;
+                    if (o.operands.length < 3)  // column name is generated
+                    {
+                        String stringName = stringNames.get (op);
+                        BackendDataC bed = (BackendDataC) context.part.backendData;
+                        if (context.global ? bed.needGlobalPath : bed.needLocalPath)
+                        {
+                            context.result.append (pad + "path (" + stringName + ");\n");
+                            context.result.append (pad + stringName + " += \"." + o.variableName + "\";\n");
+                        }
+                        else
+                        {
+                            context.result.append (pad + stringName + " = \"" + o.variableName + "\";\n");
+                        }
+                    }
+                    return false;
+                }
+                return true;
+            }
+        };
+        op.visit (visitor);
+    }
+
     /**
         Build complex sub-expressions into a single local variable that can be referenced by the equation.
     **/
-    public void prepareMatrices (Operator op, final CRenderer context, final boolean init, final String pad) throws Exception
+    public void prepareDynamicObjects (Operator op, final CRenderer context, final boolean init, final String pad) throws Exception
     {
         // Pass 1 -- Strings and matrix expressions
         Visitor visitor1 = new Visitor ()
@@ -2860,25 +2988,6 @@ public class JobC
                         context.result.append (";\n");
                         return false;
                     }
-                }
-                if (op instanceof Output)
-                {
-                    Output o = (Output) op;
-                    if (o.operands.length < 3  &&  init)  // column name is generated; only generate during init phase
-                    {
-                        String stringName = stringNames.get (op);
-                        BackendDataC bed = (BackendDataC) context.part.backendData;
-                        if (context.global ? bed.needGlobalPath : bed.needLocalPath)
-                        {
-                            context.result.append (pad + "path (" + stringName + ");\n");
-                            context.result.append (pad + stringName + " += \"." + o.variableName + "\";\n");
-                        }
-                        else
-                        {
-                            context.result.append (pad + stringName + " = \"" + o.variableName + "\";\n");
-                        }
-                    }
-                    // Fall through to return true, because we also want to visit all the operands of Output.
                 }
                 return true;
             }
@@ -3022,6 +3131,19 @@ public class JobC
         if      (v.type instanceof Scalar) return " = 0";
         else if (v.type instanceof Matrix) return ".clear ()";
         else if (v.type instanceof Text  ) return ".clear ()";
+        else
+        {
+            Backend.err.get ().println ("Unknown Type");
+            throw new Backend.AbortRun ();
+        }
+    }
+
+    public static String clear (Variable v, double value, CRenderer context) throws Exception
+    {
+        String p = context.print (value);
+        if      (v.type instanceof Scalar) return " = " + p;
+        else if (v.type instanceof Matrix) return ".clear (" + p + ")";
+        else if (v.type instanceof Text  ) return ".clear (" + p + ")";
         else
         {
             Backend.err.get ().println ("Unknown Type");
@@ -3346,6 +3468,12 @@ public class JobC
                     u.operands[0].render (this);
                 }
                 result.append (")");
+                return true;
+            }
+            if (op instanceof Event)
+            {
+                Event e = (Event) op;
+                result.append ("(eventLatch[" + e.eventType.valueIndex + "] ? 1 : 0)");
                 return true;
             }
             if (op instanceof ReadMatrix)

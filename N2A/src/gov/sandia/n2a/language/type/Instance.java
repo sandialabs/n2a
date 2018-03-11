@@ -199,7 +199,7 @@ public class Instance extends Type
                 if (v.type instanceof Matrix) set (v, ((Matrix) v.type).clear (Double.NEGATIVE_INFINITY));
                 else                          set (v, new Scalar (Double.NEGATIVE_INFINITY));
                 break;
-            default:
+            default:  // REPLACE
                 setFinal (v, buffered);
         }
     }

@@ -196,6 +196,7 @@ public:
     virtual bool  eventTest  (int i);
     virtual float eventDelay (int i);
     virtual void  setLatch   (int i);
+    virtual void  finalizeEvent ();  ///< Does finalize on any external references touched by some event in this part.
 };
 
 extern void removeMonitor (std::vector<Part *> & partList, Part * part);

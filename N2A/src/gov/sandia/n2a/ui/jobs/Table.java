@@ -10,9 +10,13 @@ import java.awt.Component;
 import java.awt.FontMetrics;
 import java.io.File;
 
+import javax.swing.JLabel;
 import javax.swing.JTable;
 import javax.swing.table.AbstractTableModel;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableColumnModel;
+
+import gov.sandia.n2a.language.type.Scalar;
 
 public class Table extends OutputParser
 {
@@ -35,6 +39,7 @@ public class Table extends OutputParser
     {
         JTable result = new JTable (new OutputTableModel ());
         result.setAutoResizeMode (JTable.AUTO_RESIZE_OFF);
+        ((DefaultTableCellRenderer) result.getTableHeader ().getDefaultRenderer ()).setHorizontalAlignment (JLabel.LEFT);
 
         FontMetrics fm = result.getFontMetrics (result.getFont ());
         int digitWidth = fm.charWidth ('0');
@@ -72,7 +77,7 @@ public class Table extends OutputParser
             if (row < 0  ||  row >= c.values.size ()) return "";
             double result = c.values.get (row);
             if (Double.isNaN (result)) return "";
-            return result;
+            return Scalar.print (result);
         }
     }
 }

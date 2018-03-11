@@ -808,6 +808,11 @@ Part::setLatch (int i)
 }
 
 void
+Part::finalizeEvent ()
+{
+}
+
+void
 removeMonitor (vector<Part *> & partList, Part * part)
 {
     vector<Part *>::iterator it;
@@ -1563,17 +1568,9 @@ EventSpikeMulti::run ()
     });
     visit ([](Visitor * visitor)
     {
-        bool live = visitor->part->finalize ();
-        // TODO: implement equivalent of Internal finishEvent()
-        if (! live)
-        {
-            PartTime * p = dynamic_cast<PartTime *> (visitor->part);  // Use of RTTI is potentially expensive
-            if (p)
-            {
-                p->dequeue ();
-                p->leaveSimulation ();
-            }
-        }
+        visitor->part->finalize ();
+        visitor->part->finalizeEvent ();
+        // A part could die during event processing, but it can wait till next EventStep to leave queue.
     });
 }
 
@@ -1589,7 +1586,7 @@ EventSpikeMulti::setLatch ()
 {
     int i = 0;
     int last = targets->size () - 1;
-    while (i < last)
+    while (i <= last)
     {
         Part * target = (*targets)[i];
         if (target)

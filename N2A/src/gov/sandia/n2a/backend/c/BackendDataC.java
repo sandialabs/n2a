@@ -64,12 +64,18 @@ public class BackendDataC
     public boolean needGlobalPreserve;
     public boolean needGlobalFinalize;
     public boolean needGlobalFinalizeN;  // population finalize() should return live status based on $n
+    public boolean needK;
+    public boolean needMax;
+    public boolean needMin;
+    public boolean needRadius;
     public boolean needGlobalPath;  // need the path() function, which returns a unique string identifying the current instance
+
     public boolean needLocalCtor;
     public boolean needLocalDtor;
     public boolean needLocalInit;
     public boolean needLocalPreserve;
     public boolean needLocalFinalize;
+    public boolean needLocalEventDelay;
     public boolean needLocalPath;
 
     public String pathToContainer;
@@ -80,10 +86,6 @@ public class BackendDataC
     public boolean hasProjectTo;
     public boolean canGrowOrDie;  // via $p or $type
     public boolean canResize;     // via $n
-    public boolean needK;
-    public boolean needMax;
-    public boolean needMin;
-    public boolean needRadius;
 
     public List<String> globalColumns = new ArrayList<String> ();
     public List<String> localColumns  = new ArrayList<String> ();
@@ -117,7 +119,7 @@ public class BackendDataC
         }
     }
 
-    public void analyze (final EquationSet s, final JobC job)
+    public void analyze (final EquationSet s)
     {
         System.out.println (s.name);
         for (Variable v : s.ordered)  // we want the sub-lists to be ordered correctly
@@ -137,77 +139,79 @@ public class BackendDataC
                 continue;  // Don't let $index enter into any variable lists. Instead, always give it special treatment. In effect, it is a list of one.
             }
 
-            boolean global = v.hasAttribute ("global");
-            if (global)
+            if (v.hasAny (new String[] {"constant", "accessor"})) continue;
+
+            boolean initOnly               = v.hasAttribute ("initOnly");
+            boolean derivativeOrDependency = v.hasAttribute ("derivativeOrDependency");
+            boolean temporary              = v.hasAttribute ("temporary");
+            boolean unusedTemporary        = temporary  &&  ! v.hasUsers ();
+            boolean updates                = ! initOnly  &&  v.equations.size () > 0  &&  (v.derivative == null  ||  v.hasAttribute ("updates"));
+
+            if (v.hasAttribute ("global"))
             {
-                if (! v.hasAny (new String[] {"constant", "accessor"}))
+                if (updates  &&  ! unusedTemporary) globalUpdate.add (v);
+                if (derivativeOrDependency) globalDerivativeUpdate.add (v);
+                if (! v.hasAttribute ("reference"))
                 {
-                    boolean initOnly               = v.hasAttribute ("initOnly");
-                    boolean derivativeOrDependency = v.hasAttribute ("derivativeOrDependency");
-                    if (! initOnly) globalUpdate.add (v);
-                    if (derivativeOrDependency) globalDerivativeUpdate.add (v);
-                    if (! v.hasAttribute ("reference"))
+                    if (! unusedTemporary) globalInit.add (v);
+                    if (! temporary  &&  ! v.hasAttribute ("dummy"))
                     {
-                        boolean temporary = v.hasAttribute ("temporary");
-                        boolean unusedTemporary = temporary  &&  ! v.hasUsers ();  // here only to make the following line of code more clear
-                        if (! unusedTemporary) globalInit.add (v);
-                        if (! temporary  &&  ! v.hasAttribute ("dummy"))
+                        if (! v.hasAttribute ("preexistent"))
                         {
-                            if (! v.hasAttribute ("preexistent"))
-                            {
-                                globalMembers.add (v);
+                            globalMembers.add (v);
 
-                                // If v is merely a derivative, not used by anything but its own integral, then no reason to preserve it.
-                                // check if v.usedBy contains any variable that is not v's integral
-                                if (derivativeOrDependency  &&  v.derivative == null  &&  v.usedBy != null)
+                            // If v is merely a derivative, not used by anything but its own integral, then no reason to preserve it.
+                            // check if v.usedBy contains any variable that is not v's integral
+                            if (derivativeOrDependency  &&  v.derivative == null  &&  v.usedBy != null)
+                            {
+                                for (Object o : v.usedBy)
                                 {
-                                    for (Object o : v.usedBy)
+                                    if (o instanceof Variable  &&  ((Variable) o).derivative != v)
                                     {
-                                        if (o instanceof Variable  &&  ((Variable) o).derivative != v)
-                                        {
-                                            globalDerivativePreserve.add (v);
-                                            break;
-                                        }
+                                        globalDerivativePreserve.add (v);
+                                        break;
                                     }
                                 }
                             }
+                        }
 
-                            boolean external = false;
-                            if (! initOnly)
+                        boolean external = false;
+                        if (! initOnly)
+                        {
+                            if (v.name.equals ("$t"))
                             {
-                                if (v.name.equals ("$t"))
-                                {
-                                    if (v.order > 1) globalDerivative.add (v);
-                                }
-                                else
-                                {
-                                    if (v.order > 0) globalDerivative.add (v);
-                                }
-
-                                if (v.hasAttribute ("externalWrite"))
-                                {
-                                    external = true;
-                                    globalBufferedExternalWrite.add (v);
-                                    if (derivativeOrDependency) globalBufferedExternalWriteDerivative.add (v);
-                                }
-                                if (external  ||  (v.hasAttribute ("externalRead")  &&  v.equations.size () > 0))
-                                {
-                                    external = true;
-                                    globalBufferedExternal.add (v);
-                                    if (derivativeOrDependency) globalBufferedExternalDerivative.add (v);
-                                }
+                                if (v.order > 1) globalDerivative.add (v);
                             }
-                            if (external  ||  v.hasAttribute ("cycle"))
+                            else  // any other variable
                             {
-                                globalBuffered.add (v);
-                                if (! external)
+                                if (v.order > 0) globalDerivative.add (v);
+                            }
+
+                            // Sometimes we want to both integrate a value (say V' -> V) and add to it in the same cycle.
+                            // The integration step has roughly the same effect as an external write.
+                            if (v.hasAttribute ("externalWrite")  ||  v.assignment != Variable.REPLACE)
+                            {
+                                external = true;
+                                globalBufferedExternalWrite.add (v);
+                                if (derivativeOrDependency) globalBufferedExternalWriteDerivative.add (v);
+                            }
+                            if (external  ||  (v.hasAttribute ("externalRead")  &&  updates))
+                            {
+                                external = true;
+                                globalBufferedExternal.add (v);
+                                if (derivativeOrDependency) globalBufferedExternalDerivative.add (v);
+                            }
+                        }
+                        if (external  ||  v.hasAttribute ("cycle"))
+                        {
+                            globalBuffered.add (v);
+                            if (! external)
+                            {
+                                globalBufferedInternal.add (v);
+                                if (! initOnly)
                                 {
-                                    globalBufferedInternal.add (v);
-                                    if (! initOnly)
-                                    {
-                                        globalBufferedInternalUpdate.add (v);
-                                        if (derivativeOrDependency) globalBufferedInternalDerivative.add (v);
-                                    }
+                                    globalBufferedInternalUpdate.add (v);
+                                    if (derivativeOrDependency) globalBufferedInternalDerivative.add (v);
                                 }
                             }
                         }
@@ -216,76 +220,69 @@ public class BackendDataC
             }
             else  // local
             {
-                if (! v.hasAny (new String[] {"constant", "accessor"}))
+                if (updates  &&  ! unusedTemporary) localUpdate.add (v);
+                if (derivativeOrDependency) localDerivativeUpdate.add (v);
+                if (v.hasAttribute ("reference"))
                 {
-                    boolean initOnly               = v.hasAttribute ("initOnly");
-                    boolean derivativeOrDependency = v.hasAttribute ("derivativeOrDependency");
-                    if (! initOnly) localUpdate.add (v);  // TODO: ensure that initOnly temporary variables are handled correctly. IE: their value doesn't change after init, but they still need to be calculated on the fly.
-                    if (derivativeOrDependency) localDerivativeUpdate.add (v);
-                    if (v.hasAttribute ("reference"))
+                    if (v.reference.variable.container.canDie ()) localReference.add (v.reference);
+                }
+                else
+                {
+                    if (! unusedTemporary) localInit.add (v);
+                    if (! temporary  &&  ! v.hasAttribute ("dummy"))
                     {
-                        if (v.reference.variable.container.canDie ()) localReference.add (v.reference);
-                    }
-                    else
-                    {
-                        boolean temporary = v.hasAttribute ("temporary");
-                        boolean unusedTemporary = temporary  &&  ! v.hasUsers ();
-                        if (! unusedTemporary) localInit.add (v);
-                        if (! temporary  &&  ! v.hasAttribute ("dummy"))
+                        if (! v.hasAttribute ("preexistent"))
                         {
-                            if (! v.hasAttribute ("preexistent"))
-                            {
-                                localMembers.add (v);
+                            localMembers.add (v);
 
-                                if (derivativeOrDependency  &&  v.derivative == null  &&  v.usedBy != null)
+                            if (derivativeOrDependency  &&  v.derivative == null  &&  v.usedBy != null)
+                            {
+                                for (Object o : v.usedBy)
                                 {
-                                    for (Object o : v.usedBy)
+                                    if (o instanceof Variable  &&  ((Variable) o).derivative != v)
                                     {
-                                        if (o instanceof Variable  &&  ((Variable) o).derivative != v)
-                                        {
-                                            localDerivativePreserve.add (v);
-                                            break;
-                                        }
+                                        localDerivativePreserve.add (v);
+                                        break;
                                     }
                                 }
                             }
+                        }
 
-                            boolean external = false;
-                            if (! initOnly)
+                        boolean external = false;
+                        if (! initOnly)
+                        {
+                            if (v.name.equals ("$t"))
                             {
-                                if (v.name.equals ("$t"))
-                                {
-                                    if (v.order > 1) localDerivative.add (v);
-                                }
-                                else  // any other variable
-                                {
-                                    if (v.order > 0) localDerivative.add (v);
-                                }
-
-                                if (v.hasAttribute ("externalWrite"))
-                                {
-                                    external = true;
-                                    localBufferedExternalWrite.add (v);
-                                    if (derivativeOrDependency) localBufferedExternalWriteDerivative.add (v);
-                                }
-                                if (external  ||  (v.hasAttribute ("externalRead")  &&  v.equations.size () > 0))
-                                {
-                                    external = true;
-                                    localBufferedExternal.add (v);
-                                    if (derivativeOrDependency) localBufferedExternalDerivative.add (v);
-                                }
+                                if (v.order > 1) localDerivative.add (v);
                             }
-                            if (external  ||  v.hasAttribute ("cycle"))
+                            else
                             {
-                                localBuffered.add (v);
-                                if (! external)
+                                if (v.order > 0) localDerivative.add (v);
+                            }
+
+                            if (v.hasAttribute ("externalWrite")  ||  v.assignment != Variable.REPLACE)
+                            {
+                                external = true;
+                                localBufferedExternalWrite.add (v);
+                                if (derivativeOrDependency) localBufferedExternalWriteDerivative.add (v);
+                            }
+                            if (external  ||  (v.hasAttribute ("externalRead")  &&  updates))
+                            {
+                                external = true;
+                                localBufferedExternal.add (v);
+                                if (derivativeOrDependency) localBufferedExternalDerivative.add (v);
+                            }
+                        }
+                        if (external  ||  v.hasAttribute ("cycle"))
+                        {
+                            localBuffered.add (v);
+                            if (! external)
+                            {
+                                localBufferedInternal.add (v);
+                                if (! initOnly)
                                 {
-                                    localBufferedInternal.add (v);
-                                    if (! initOnly)
-                                    {
-                                        localBufferedInternalUpdate.add (v);
-                                        if (derivativeOrDependency) localBufferedInternalDerivative.add (v);
-                                    }
+                                    localBufferedInternalUpdate.add (v);
+                                    if (derivativeOrDependency) localBufferedInternalDerivative.add (v);
                                 }
                             }
                         }
@@ -329,47 +326,25 @@ public class BackendDataC
                 Variable v = s.find (new Variable (c.alias + ".$k"));
                 EquationEntry e = null;
                 if (v != null) e = v.equations.first ();
-                if (e != null)
-                {
-                    needK = true;
-                    break;
-                }
-            }
+                if (e != null) needK = true;
 
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                Variable v = s.find (new Variable (c.alias + ".$max"));
-                EquationEntry e = null;
+                v = s.find (new Variable (c.alias + ".$max"));
+                e = null;
                 if (v != null) e = v.equations.first ();
-                if (e != null)
-                {
-                    needMax = true;
-                    break;
-                }
-            }
+                if (e != null) needMax = true;
 
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                Variable v = s.find (new Variable (c.alias + ".$min"));
-                EquationEntry e = null;
+                v = s.find (new Variable (c.alias + ".$min"));
+                e = null;
                 if (v != null) e = v.equations.first ();
-                if (e != null)
-                {
-                    needMin = true;
-                    break;
-                }
-            }
+                if (e != null) needMin = true;
 
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                Variable v = s.find (new Variable (c.alias + ".$radius"));
-                EquationEntry e = null;
+                v = s.find (new Variable (c.alias + ".$radius"));
+                e = null;
                 if (v != null) e = v.equations.first ();
-                if (e != null)
-                {
-                    needRadius = true;
-                    break;
-                }
+                if (e != null) needRadius = true;
+
+                if (s.find (new Variable (c.alias + ".$projectFrom")) != null) hasProjectFrom = true;
+                if (s.find (new Variable (c.alias + ".$projectTo"  )) != null) hasProjectTo   = true;
             }
         }
 
@@ -378,12 +353,16 @@ public class BackendDataC
         needLocalCtor     = needLocalDtor  ||  s.accountableConnections != null  ||  refcount;
         needLocalInit     = s.connectionBindings == null  ||  localInit.size () > 0  ||  accountableEndpoints.size () > 0  ||  eventTargets.size () > 0;
         needLocalFinalize = localBufferedExternal.size () > 0  ||  type != null  ||  s.canDie ();
-        if (s.connectionBindings != null)
+
+        if (eventTargets.size () > 0)
         {
-            for (ConnectionBinding c : s.connectionBindings)
+            for (EventTarget et : eventTargets)
             {
-                if (s.find (new Variable (c.alias + ".$projectFrom")) != null) hasProjectFrom = true;
-                if (s.find (new Variable (c.alias + ".$projectTo"  )) != null) hasProjectTo   = true;
+                if (et.delay < -1)
+                {
+                    needLocalEventDelay = true;
+                    break;
+                }
             }
         }
     }
