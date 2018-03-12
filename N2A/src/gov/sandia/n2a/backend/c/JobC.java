@@ -652,12 +652,10 @@ public class JobC
                 result.append ("  float eventTime" + et.timeIndex + ";\n");
             }
         }
-        if (bed.eventTargets.size () > 0)
+        if (! bed.flagType.isEmpty ())
         {
             // This should come last, because it can affect alignment.
-            // Since bool is typically stored as a single byte, this approach is suitable for 4 or fewer event types.
-            // For larger quantities, a bit-mapped int is better.
-            result.append ("  bool eventLatch[" + bed.eventTargets.size () + "];\n");
+            result.append ("  " + bed.flagType + " flags;\n");
         }
         result.append ("\n");
 
@@ -1454,10 +1452,9 @@ public class JobC
             result.append ("{\n");
 
             // tag part as dead
-            Variable live = s.find (new Variable ("$live"));
-            if (live != null  &&  ! live.hasAny (new String[] {"constant", "accessor"}))  // $live is stored in this part
+            if (bed.liveFlag >= 0)  // $live is stored in this part
             {
-                result.append ("  " + resolve (live.reference, context, true) + " = 0;\n");
+                result.append ("  flags &= ~((" + bed.flagType + ") 0x1 << " + bed.liveFlag + ");\n");
             }
 
             // instance counting
@@ -1547,10 +1544,16 @@ public class JobC
                     result.append ("  eventTime" + et.timeIndex + " = 10;\n");  // Normal values are modulo 1 second. This initial value guarantees no match.
                 }
             }
-            int eventCount = bed.eventTargets.size ();
-            if (eventCount > 0)
+            if (! bed.flagType.isEmpty ())
             {
-                result.append ("  for (int i = 0; i < " + eventCount + "; i++) eventLatch[i] = false;\n");
+                if (bed.liveFlag < 0)
+                {
+                    result.append ("  flags = 0;\n");
+                }
+                else
+                {
+                    result.append ("  flags = (" + bed.flagType + ") 0x1 << " + bed.liveFlag + ";\n");
+                }
             }
 
             // declare buffer variables
@@ -1561,13 +1564,9 @@ public class JobC
             // $variables
             for (Variable v : bed.localInit)
             {
-                if (v.name.equals ("$live")) multiconditional (v, context, "  ");  // force $live to be ahead of everything else, because $live must be true during all of init cycle
-            }
-            for (Variable v : bed.localInit)
-            {
                 if (! v.name.startsWith ("$")) continue;  // TODO: This doesn't allow in temporaries that a $variable may depend on. See InternalBackendData sorting section for example of how to handle this better.
-                if (v.name.equals ("$live")) continue;
-                if (v.name.equals ("$type"))
+                if (v == bed.live) continue;
+                if (v == bed.type)
                 {
                     Backend.err.get ().println ("$type must be conditional, and it must never be assigned during init.");  // TODO: Work out logic of $type better. This trap should not be here.
                     throw new Backend.AbortRun ();
@@ -1578,7 +1577,7 @@ public class JobC
             for (Variable v : bed.localBuffered)  // more than just localBufferedInternal, because we must finalize members as well
             {
                 if (! v.name.startsWith ("$")) continue;
-                if (v.name.equals ("$t")  &&  v.order == 1)  // $t'
+                if (v == bed.dt)
                 {
                     result.append ("  if (" + mangle ("next_", v) + " != getEvent ()->dt) setPeriod (" + mangle ("next_", v) + ");\n");
                 }
@@ -1709,17 +1708,16 @@ public class JobC
             }
 
             // Early-out if we are already dead
-            Variable live = s.find (new Variable ("$live"));
-            if (live != null  &&  ! live.hasAny (new String[] {"constant", "accessor"}))  // $live is stored in this part
+            if (bed.liveFlag >= 0)  // $live is stored in this part
             {
-                result.append ("  if (" + resolve (live.reference, context, false) + " == 0) return false;\n");  // early-out if we are already dead, to avoid another call to die()
+                result.append ("  if (! (flags & (" + bed.flagType + ") 0x1 << " + bed.liveFlag + ")) return false;\n");  // early-out if we are already dead, to avoid another call to die()
             }
 
             // Preemptively fetch current event
             boolean needT = bed.eventSources.size () > 0;
             for (Variable v : bed.localBufferedExternal)
             {
-                if (v.name.equals ("$t")  &&  v.order == 1) needT = true;
+                if (v == bed.dt) needT = true;
             }
             if (needT)
             {
@@ -1780,13 +1778,13 @@ public class JobC
             int eventCount = bed.eventTargets.size ();
             if (eventCount > 0)
             {
-                result.append ("  for (int i = 0; i < " + eventCount + "; i++) eventLatch[i] = false;\n");
+                result.append ("  flags &= ~(" + bed.flagType + ") 0 << " + eventCount + ";\n");
             }
 
             // Finalize variables
             for (Variable v : bed.localBufferedExternal)
             {
-                if (v.name.equals ("$t")  &&  v.order == 1)
+                if (v == bed.dt)
                 {
                     result.append ("  if (" + mangle ("next_", v) + " != event->dt) setPeriod (" + mangle ("next_", v) + ");\n");
                 }
@@ -1857,15 +1855,15 @@ public class JobC
             // TODO: recognize when $p is contingent on $connect (formerly !$live) and don't emit those equations
             if (s.lethalP)
             {
-                Variable p = s.find (new Variable ("$p")); // lethalP implies that $p exists, so no need to check for null
-                if (p.hasAttribute ("temporary"))
+                // lethalP implies that $p exists, so no need to check for null
+                if (bed.p.hasAttribute ("temporary"))
                 {
-                    multiconditional (p, context, "  ");
+                    multiconditional (bed.p, context, "  ");
                 }
-                if (p.hasAttribute ("constant"))
+                if (bed.p.hasAttribute ("constant"))
                 {
-                    double pvalue = ((Scalar) ((Constant) p.equations.first ().expression).value).value;
-                    if (pvalue != 0) result.append ("  if (" + resolve (p.reference, context, false) + " < uniform ())\n");
+                    double pvalue = ((Scalar) ((Constant) bed.p.equations.first ().expression).value).value;
+                    if (pvalue != 0) result.append ("  if (" + resolve (bed.p.reference, context, false) + " < uniform ())\n");
                 }
                 else
                 {
@@ -1884,7 +1882,7 @@ public class JobC
                 	VariableReference r = s.resolveReference (c.alias + ".$live");
                 	if (! r.variable.hasAttribute ("constant"))
                 	{
-                        result.append ("  if (" + resolve (r, context, false) + " == 0)\n");
+                        result.append ("  if (" + resolve (r, context, false, "", true) + " == 0)\n");
                         result.append ("  {\n");
                         result.append ("    die ();\n");
                         result.append ("    return false;\n");
@@ -1898,7 +1896,7 @@ public class JobC
                 VariableReference r = s.resolveReference ("$up.$live");
                 if (! r.variable.hasAttribute ("constant"))
                 {
-                    result.append ("  if (" + resolve (r, context, false) + " == 0)\n");
+                    result.append ("  if (" + resolve (r, context, false, "", true) + " == 0)\n");
                     result.append ("  {\n");
                     result.append ("    die ();\n");
                     result.append ("    return false;\n");
@@ -2093,46 +2091,42 @@ public class JobC
         // shouldn't use the accessors.
 
         // Unit getLive
+        if (bed.live != null  &&  ! bed.live.hasAttribute ("constant"))
         {
-            Variable live = s.find (new Variable ("$live"));
-            if (live != null  &&  ! live.hasAttribute ("constant"))
+            result.append ("float " + ns + "getLive ()\n");
+            result.append ("{\n");
+            if (! bed.live.hasAttribute ("accessor"))  // "accessor" indicates whether or not $value is actually stored
             {
-                result.append ("float " + ns + "getLive ()\n");
-                result.append ("{\n");
-                if (! live.hasAttribute ("accessor"))
+                result.append ("  if (" + resolve (bed.live.reference, context, false, "", true) + " == 0) return 0;\n");
+            }
+            if (s.lethalConnection)
+            {
+                for (ConnectionBinding c : s.connectionBindings)
                 {
-                    result.append ("  if (" + resolve (live.reference, context, false) + " == 0) return 0;\n");
-                }
-                if (s.lethalConnection)
-                {
-                    for (ConnectionBinding c : s.connectionBindings)
-                    {
-                        VariableReference r = s.resolveReference (c.alias + ".$live");
-                        if (! r.variable.hasAttribute ("constant"))
-                        {
-                            result.append ("  if (" + resolve (r, context, false) + " == 0) return 0;\n");
-                        }
-                    }
-                }
-                if (s.lethalContainer)
-                {
-                    VariableReference r = s.resolveReference ("$up.$live");
+                    VariableReference r = s.resolveReference (c.alias + ".$live");
                     if (! r.variable.hasAttribute ("constant"))
                     {
-                        result.append ("  if (" + resolve (r, context, false) + " == 0) return 0;\n");
+                        result.append ("  if (" + resolve (r, context, false, "", true) + " == 0) return 0;\n");
                     }
                 }
-                result.append ("  return 1;\n");
-                result.append ("}\n");
-                result.append ("\n");
             }
+            if (s.lethalContainer)
+            {
+                VariableReference r = s.resolveReference ("$up.$live");
+                if (! r.variable.hasAttribute ("constant"))
+                {
+                    result.append ("  if (" + resolve (r, context, false, "", true) + " == 0) return 0;\n");
+                }
+            }
+            result.append ("  return 1;\n");
+            result.append ("}\n");
+            result.append ("\n");
         }
 
         // Unit getP
         if (s.connectionBindings != null)
         {
-            Variable p = s.find (new Variable ("$p", 0));
-            if (p != null)
+            if (bed.p != null)
             {
                 result.append ("float " + ns + "getP ()\n");
                 result.append ("{\n");
@@ -2140,30 +2134,29 @@ public class JobC
                 s.setInit (1);
 
                 // set $live to 0
-                Variable live = s.find (new Variable ("$live"));
-                Set<String> liveAttributes = live.attributes;
-                live.attributes = null;
-                live.addAttribute ("constant");
-                EquationEntry e = live.equations.first ();  // this should always be an equation we create; the user cannot declare $live (or $init for that matter)
+                Set<String> liveAttributes = bed.live.attributes;
+                bed.live.attributes = null;
+                bed.live.addAttribute ("constant");
+                EquationEntry e = bed.live.equations.first ();  // this should always be an equation we create; the user cannot declare $live (or $init for that matter)
                 Scalar liveValue = (Scalar) ((Constant) e.expression).value;
                 liveValue.value = 0;
 
-                if (! p.hasAttribute ("constant"))
+                if (! bed.p.hasAttribute ("constant"))
                 {
                     // Generate any temporaries needed by $p
                     for (Variable t : s.variables)
                     {
-                        if (t.hasAttribute ("temporary")  &&  p.dependsOn (t) != null)
+                        if (t.hasAttribute ("temporary")  &&  bed.p.dependsOn (t) != null)
                         {
                             multiconditional (t, context, "  ");
                         }
                     }
-                    multiconditional (p, context, "  ");  // $p is always calculated, because we are in a pseudo-init phase
+                    multiconditional (bed.p, context, "  ");  // $p is always calculated, because we are in a pseudo-init phase
                 }
-                result.append ("  return " + resolve (p.reference, context, false) + ";\n");
+                result.append ("  return " + resolve (bed.p.reference, context, false) + ";\n");
 
                 // restore $live
-                live.attributes = liveAttributes;
+                bed.live.attributes = liveAttributes;
                 liveValue.value = 1;
 
                 s.setInit (0);
@@ -2302,8 +2295,7 @@ public class JobC
 
             result.append ("void " + ns + "setLatch (int i)\n");
             result.append ("{\n");
-            result.append ("  eventLatch[i] = true;\n");
-            result.append ("  cerr << \"setLatch " + s.name + " \" << _A->__24index << \" \" << _B->__24index << endl;\n");
+            result.append ("  flags |= (" + bed.flagType + ") 0x1 << i;\n");
             result.append ("}\n");
             result.append ("\n");
 
@@ -2630,7 +2622,7 @@ public class JobC
                 Variable v2 = source.find (v);
                 if (v2 != null  &&  v2.equals (v))
                 {
-                    result.append ("  to->" + mangle (v) + " = " + resolve (v2.reference, context, false, "from->") + ";\n");
+                    result.append ("  to->" + mangle (v) + " = " + resolve (v2.reference, context, false, "from->", false) + ";\n");
                 }
             }
 
@@ -3165,7 +3157,7 @@ public class JobC
 
     public String resolve (VariableReference r, CRenderer context, boolean lvalue)
     {
-        return resolve (r, context, lvalue, "");
+        return resolve (r, context, lvalue, "", false);
     }
 
     /**
@@ -3173,8 +3165,9 @@ public class JobC
         @param context For the AST rendering system.
         @param lvalue Indicates that this will receive a value assignment. The other case is an rvalue, which will simply be read.
         @param base Injects a pointer at the beginning of the resolution path.
+        @param logical The intended use is in a boolean expression, such as an if-test.
     **/
-    public String resolve (VariableReference r, CRenderer context, boolean lvalue, String base)
+    public String resolve (VariableReference r, CRenderer context, boolean lvalue, String base, boolean logical)
     {
         if (r == null  ||  r.variable == null) return "unresolved";
 
@@ -3216,12 +3209,23 @@ public class JobC
             }
             // for lvalue, fall through to the main case below
         }
+        if (r.variable.name.equals ("$live"))
+        {
+            if (r.variable.hasAttribute ("accessor"))
+            {
+                if (lvalue) return "unresolved";
+                name = "getLive ()";
+            }
+            else  // not "constant" or "accessor", so must be direct access
+            {
+                BackendDataC bed = (BackendDataC) r.variable.container.backendData;
+                if (logical) return "(" + containers + "flags & (" + bed.flagType + ") 0x1 << " + bed.liveFlag + ")";
+                else return "((" + containers + "flags & (" + bed.flagType + ") 0x1 << " + bed.liveFlag + ") ? 1 : 0)";
+            }
+        }
         if (r.variable.hasAttribute ("accessor"))
         {
-            if (lvalue) return "unresolved";
-
-            if (r.variable.name.equals ("$live")) name = "getLive ()";
-            else return "unresolved";
+            return "unresolved";  // At present, only $live can have "accessor" attribute.
         }
         if (r.variable.name.endsWith (".$count"))
         {
@@ -3391,12 +3395,14 @@ public class JobC
     class CRenderer extends Renderer
     {
         public EquationSet part;
+        public BackendDataC bed;
         public boolean global;  ///< Whether this is in the population object (true) or a part object (false)
 
         public CRenderer (StringBuilder result, EquationSet part)
         {
             super (result);
             this.part = part;
+            bed = (BackendDataC) part.backendData;
         }
 
         public boolean render (Operator op)
@@ -3473,7 +3479,9 @@ public class JobC
             if (op instanceof Event)
             {
                 Event e = (Event) op;
-                result.append ("(eventLatch[" + e.eventType.valueIndex + "] ? 1 : 0)");
+                // The cast to bool gets rid of the specific numeric value from flags.
+                // If used in a numeric expression, it should convert to either 1 or 0.
+                result.append ("((bool) (flags & (" + bed.flagType + ") 0x1 << " + e.eventType.valueIndex + "))");
                 return true;
             }
             if (op instanceof ReadMatrix)

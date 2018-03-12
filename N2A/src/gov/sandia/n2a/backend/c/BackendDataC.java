@@ -15,6 +15,7 @@ import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
 
 public class BackendDataC
@@ -56,6 +57,8 @@ public class BackendDataC
     public Variable live;
     public Variable n;  // only non-null if $n is actually stored as a member
     public Variable p;
+    public Variable t;
+    public Variable dt;  // $t'
     public Variable type;
     public Variable xyz;
 
@@ -93,6 +96,10 @@ public class BackendDataC
     public List<EventTarget> eventTargets    = new ArrayList<EventTarget> ();
     public List<EventSource> eventSources    = new ArrayList<EventSource> ();
     public List<Variable>    eventReferences = new ArrayList<Variable> ();
+
+    public String flagType = "";  // empty string indicates that flags are not required
+    public int    liveFlag = -1;  // -1 means $live is not stored
+    public int    newborn  = -1;
 
     public void analyzeEvents (final EquationSet s)
     {
@@ -133,6 +140,11 @@ public class BackendDataC
             else if (v.name.equals ("$p"    )  &&  v.order == 0) p     = v;
             else if (v.name.equals ("$type" )                  ) type  = v;
             else if (v.name.equals ("$xyz"  )  &&  v.order == 0) xyz   = v;
+            else if (v.name.equals ("$t"))
+            {
+                if      (v.order == 0) t  = v;
+                else if (v.order == 1) dt = v;
+            }
             else if (v.name.equals ("$index"))
             {
                 index = v;
@@ -364,6 +376,19 @@ public class BackendDataC
                     break;
                 }
             }
+        }
+
+        int flagCount = eventTargets.size ();
+        if (live != null  &&  ! live.hasAny (new String[] {"constant", "accessor"})) liveFlag = flagCount++;
+        if      (flagCount == 0 ) flagType = "";
+        else if (flagCount <= 8 ) flagType = "uint8_t";
+        else if (flagCount <= 16) flagType = "uint16_t";
+        else if (flagCount <= 32) flagType = "uint32_t";
+        else if (flagCount <= 64) flagType = "uint64_t";
+        else
+        {
+            Backend.err.get ().println ("ERROR: Too many flags to fit in basic integer type");
+            throw new Backend.AbortRun ();
         }
     }
 
