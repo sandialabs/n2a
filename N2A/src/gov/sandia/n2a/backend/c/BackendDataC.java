@@ -135,20 +135,24 @@ public class BackendDataC
             if (v.type != null) className = v.type.getClass ().getSimpleName ();
             System.out.println ("  " + v.nameString () + " " + v.attributeString () + " " + className);
 
-            if      (v.name.equals ("$live" )                  ) live  = v;
-            else if (v.name.equals ("$n"    )  &&  v.order == 0) n     = v;
+            if      (v.name.equals ("$n"    )  &&  v.order == 0) n     = v;
             else if (v.name.equals ("$p"    )  &&  v.order == 0) p     = v;
             else if (v.name.equals ("$type" )                  ) type  = v;
             else if (v.name.equals ("$xyz"  )  &&  v.order == 0) xyz   = v;
-            else if (v.name.equals ("$t"))
-            {
-                if      (v.order == 0) t  = v;
-                else if (v.order == 1) dt = v;
-            }
             else if (v.name.equals ("$index"))
             {
                 index = v;
                 continue;  // Don't let $index enter into any variable lists. Instead, always give it special treatment. In effect, it is a list of one.
+            }
+            else if (v.name.equals ("$live"))
+            {
+                live = v;
+                continue;  // $live can never function as a regular variable because it is stored as a bit flag
+            }
+            else if (v.name.equals ("$t"))
+            {
+                if      (v.order == 0) t  = v;
+                else if (v.order == 1) dt = v;
             }
 
             if (v.hasAny (new String[] {"constant", "accessor"})) continue;

@@ -913,7 +913,7 @@ public class JobC
         }
         for (Variable v : bed.globalBufferedExternal)
         {
-            result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
+            result.append ("  " + mangle ("next_", v) + clearAccumulator (v, context) + ";\n");
         }
         //   declare buffer variables
         for (Variable v : bed.globalBufferedInternal)
@@ -933,7 +933,7 @@ public class JobC
         //   clear variables that may be written externally before first finalize()
         for (Variable v : bed.globalBufferedExternalWrite)
         {
-            result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
+            result.append ("  " + mangle ("next_", v) + clearAccumulator (v, context) + ";\n");
         }
         //   create instances
         if (bed.n != null)
@@ -1031,7 +1031,7 @@ public class JobC
             }
             for (Variable v : bed.globalBufferedExternalWrite)
             {
-                result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
+                result.append ("  " + mangle ("next_", v) + clearAccumulator (v, context) + ";\n");
             }
 
             // Return value is generally ignored, except for top-level population.
@@ -1143,7 +1143,7 @@ public class JobC
             }
             for (Variable v : bed.globalBufferedExternalWriteDerivative)
             {
-                result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
+                result.append ("  " + mangle ("next_", v) + clearAccumulator (v, context) + ";\n");
             }
             result.append ("};\n");
             result.append ("\n");
@@ -1166,7 +1166,7 @@ public class JobC
             for (Variable v : bed.globalBufferedExternalWriteDerivative)
             {
                 result.append ("  preserve->" + mangle ("next_", v) + " = " + mangle ("next_", v) + ";\n");
-                result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
+                result.append ("  " + mangle ("next_", v) + clearAccumulator (v, context) + ";\n");
             }
             result.append ("};\n");
             result.append ("\n");
@@ -1531,7 +1531,7 @@ public class JobC
 
             for (Variable v : bed.localBufferedExternal)
             {
-                result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
+                result.append ("  " + mangle ("next_", v) + clearAccumulator (v, context) + ";\n");
             }
             for (EventTarget et : bed.eventTargets)
             {
@@ -1602,7 +1602,7 @@ public class JobC
             // clear variables that may be written externally before first finalize()
             for (Variable v : bed.localBufferedExternalWrite)
             {
-                result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
+                result.append ("  " + mangle ("next_", v) + clearAccumulator (v, context) + ";\n");
             }
 
             // instance counting
@@ -1795,7 +1795,7 @@ public class JobC
             }
             for (Variable v : bed.localBufferedExternalWrite)
             {
-                result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
+                result.append ("  " + mangle ("next_", v) + clearAccumulator (v, context) + ";\n");
             }
 
             if (bed.type != null)
@@ -1946,7 +1946,7 @@ public class JobC
             }
             for (Variable v : bed.localBufferedExternalWriteDerivative)
             {
-                result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
+                result.append ("  " + mangle ("next_", v) + clearAccumulator (v, context) + ";\n");
             }
             // contained populations
             for (EquationSet e : s.parts)
@@ -1976,7 +1976,7 @@ public class JobC
                 for (Variable v : bed.localBufferedExternalWriteDerivative)
                 {
                     result.append ("  preserve->" + mangle ("next_", v) + " = " + mangle ("next_", v) + ";\n");
-                    result.append ("  " + mangle ("next_", v) + zero (v) + ";\n");
+                    result.append ("  " + mangle ("next_", v) + clearAccumulator (v, context) + ";\n");
                 }
             }
             for (EquationSet e : s.parts)
@@ -2733,7 +2733,7 @@ public class JobC
             if (e.ifString.length () == 0) defaultEquation = e;
         }
 
-        // Dump matrices needed by conditions
+        // Initialize static objects, and dump dynamic objects needed by conditions
         for (EquationEntry e : v.equations)
         {
             if (init) prepareStaticObjects (e.expression, context, pad);
@@ -3143,6 +3143,19 @@ public class JobC
         }
     }
 
+    public static String clearAccumulator (Variable v, CRenderer context) throws Exception
+    {
+        switch (v.assignment)
+        {
+            case Variable.MULTIPLY:
+            case Variable.DIVIDE:   return clear (v, 1, context);
+            case Variable.MIN:      return clear (v, Double.POSITIVE_INFINITY, context);
+            case Variable.MAX:      return clear (v, Double.NEGATIVE_INFINITY, context);
+            case Variable.ADD:
+            default:                return zero (v);
+        }
+    }
+
     public static String prefix (EquationSet t)
     {
         if (t == null) return "Wrapper";
@@ -3192,6 +3205,7 @@ public class JobC
         }
 
         String name = "";
+        BackendDataC bed = (BackendDataC) r.variable.container.backendData;  // NOT context.bed !
         if (r.variable.hasAttribute ("preexistent"))
         {
             if (! lvalue)
@@ -3218,12 +3232,11 @@ public class JobC
             }
             else  // not "constant" or "accessor", so must be direct access
             {
-                BackendDataC bed = (BackendDataC) r.variable.container.backendData;
                 if (logical) return "(" + containers + "flags & (" + bed.flagType + ") 0x1 << " + bed.liveFlag + ")";
                 else return "((" + containers + "flags & (" + bed.flagType + ") 0x1 << " + bed.liveFlag + ") ? 1 : 0)";
             }
         }
-        if (r.variable.hasAttribute ("accessor"))
+        else if (r.variable.hasAttribute ("accessor"))
         {
             return "unresolved";  // At present, only $live can have "accessor" attribute.
         }
@@ -3235,9 +3248,7 @@ public class JobC
         }
         if (name.length () == 0)
         {
-            if (   lvalue
-                && (   r.variable.hasAny ("cycle", "externalWrite")
-                    || (r.variable.hasAttribute ("externalRead")  &&  ! r.variable.hasAttribute ("initOnly"))))
+            if (lvalue  &&  (bed.globalBuffered.contains (r.variable)  ||  bed.localBuffered.contains (r.variable)))
             {
                 name = mangle ("next_", r.variable);
             }
