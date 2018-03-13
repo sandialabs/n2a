@@ -194,20 +194,20 @@ public class JobC extends Thread
         analyze (model);
     }
 
-    public static void createBackendData (EquationSet s)
+    public void createBackendData (EquationSet s)
     {
         if (! (s.backendData instanceof BackendDataC)) s.backendData = new BackendDataC ();
         for (EquationSet p : s.parts) createBackendData (p);
     }
 
-    public static void analyzeEvents (EquationSet s) throws Backend.AbortRun
+    public void analyzeEvents (EquationSet s) throws Backend.AbortRun
     {
         BackendDataC bed = (BackendDataC) s.backendData;
         bed.analyzeEvents (s);
         for (EquationSet p : s.parts) analyzeEvents (p);
     }
 
-    public static void analyze (EquationSet s)
+    public void analyze (EquationSet s)
     {
         BackendDataC bed = (BackendDataC) s.backendData;
         bed.analyze (s);
@@ -229,8 +229,10 @@ public class JobC extends Thread
         s.append ("using namespace std;\n");
         s.append ("using namespace fl;\n");
         s.append ("\n");
-        s.append ("class Wrapper;\n");
+        generateStatic (model, s);
+        s.append ("\n");
         generateClassList (model, s);
+        s.append ("class Wrapper;\n");
         s.append ("\n");
         generateDeclarations (model, s);
         s.append ("class Wrapper : public WrapperBase\n");
@@ -246,7 +248,6 @@ public class JobC extends Thread
         s.append ("};\n");
         s.append ("\n");
         generateDefinitions (model, s);
-        s.append ("\n");
 
         // Main
         s.append ("int main (int argc, char * argv[])\n");
@@ -280,24 +281,17 @@ public class JobC extends Thread
 
     public void generateClassList (EquationSet s, StringBuilder result)
     {
+        for (EquationSet p : s.parts) generateClassList (p, result);
         result.append ("class " + prefix (s) + "_Population;\n");
         result.append ("class " + prefix (s) + ";\n");
-        for (EquationSet p : s.parts) generateClassList (p, result);
     }
 
-    /**
-        Declares all classes, along with their member variables and functions.
-
-        For each part, generates two classes: one for the instances ("local")
-        and one for the population as a whole ("global"). Within each class,
-        declares buffer classes for integration and derivation, then member
-        variables, and finally member functions as appropriate.
-    **/
-    public void generateDeclarations (final EquationSet s, final StringBuilder result)
+    public void generateStatic (final EquationSet s, final StringBuilder result)
     {
-        final BackendDataC bed = (BackendDataC) s.backendData;
+        for (EquationSet p : s.parts) generateStatic (p, result);
 
         // Generate static definitions
+        final BackendDataC bed = (BackendDataC) s.backendData;
         class CheckStatic extends Visitor
         {
             public boolean global;
@@ -407,11 +401,21 @@ public class JobC extends Thread
             checkStatic.global = v.hasAttribute ("global");
             v.visit (checkStatic);
         }
+    }
 
-        // Sub-parts
+    /**
+        Declares all classes, along with their member variables and functions.
+
+        For each part, generates two classes: one for the instances ("local")
+        and one for the population as a whole ("global"). Within each class,
+        declares buffer classes for integration and derivation, then member
+        variables, and finally member functions as appropriate.
+    **/
+    public void generateDeclarations (EquationSet s, StringBuilder result)
+    {
         for (EquationSet p : s.parts) generateDeclarations (p, result);
 
-        // -------------------------------------------------------------------
+        BackendDataC bed = (BackendDataC) s.backendData;
 
         // Population class header
         result.append ("class " + prefix (s) + "_Population : public Population\n");
@@ -813,10 +817,12 @@ public class JobC extends Thread
 
     public void generateDefinitions (EquationSet s, StringBuilder result) throws Exception
     {
-        CRenderer context = new CRenderer (result, s);
+        for (EquationSet p : s.parts) generateDefinitions (p, result);
 
-        // Access backend data
+        CRenderer context = new CRenderer (result, s);
         BackendDataC bed = (BackendDataC) s.backendData;
+
+        // -------------------------------------------------------------------
 
         context.global = true;
         String ns = prefix (s) + "_Population::";  // namespace for all functions associated with part s
@@ -2655,9 +2661,6 @@ public class JobC extends Thread
             result.append ("}\n");
             result.append ("\n");
         }
-
-        // Unit sub-parts
-        for (EquationSet p : s.parts) generateDefinitions (p, result);
     }
 
     public void eventGenerate (String pad, EventTarget et, CRenderer context, boolean multi)
