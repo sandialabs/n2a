@@ -8,9 +8,6 @@ package gov.sandia.n2a.backend.c;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
@@ -59,31 +56,7 @@ public class BackendC extends Backend
     @Override
     public void start (final MNode job)
     {
-        Thread t = new Thread ("BackendC.execute")
-        {
-            @Override
-            public void run ()
-            {
-                String jobDir = new File (job.get ()).getParent ();  // assumes the MNode "job" is really an MDoc. In any case, the value of the node should point to a file on disk where it is stored in a directory just for it.
-                try {err.set (new PrintStream (new FileOutputStream (new File (jobDir, "err"), true)));}
-                catch (FileNotFoundException e) {}
-
-                try
-                {
-                    new JobC ().execute (job);
-                }
-                catch (AbortRun a)
-                {
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace (Backend.err.get ());
-                }
-
-                PrintStream ps = err.get ();
-                if (ps != System.err) ps.close ();
-            }
-        };
+        Thread t = new JobC (job);
         t.setDaemon (true);
         t.start ();
     }

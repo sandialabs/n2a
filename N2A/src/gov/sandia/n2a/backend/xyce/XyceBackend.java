@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2016 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -30,10 +30,10 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.PrintStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -148,13 +148,13 @@ class XyceBackend extends Backend
             @Override
             public void run ()
             {
-                String jobDir = new File (job.get ()).getParent ();
-                try {err.set (new PrintStream (new FileOutputStream (new File (jobDir, "err"), true)));}
+                Path jobDir = Paths.get (job.get ()).getParent ();
+                try {Backend.err.set (new PrintStream (jobDir.resolve ("err").toFile ()));}
                 catch (FileNotFoundException e) {}
 
                 try
                 {
-                    Files.createFile (Paths.get (jobDir, "started"));
+                    Files.createFile (jobDir.resolve ("started"));
 
                     // Ensure essential metadata is set
                     if (job.child ("$metadata", "duration"               ) == null) job.set ("$metadata", "duration",                "1.0");
@@ -163,19 +163,19 @@ class XyceBackend extends Backend
 
                     // set up job info
                     ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("$metadata", "host", "localhost"));
-                    String xyce    = env.getNamedValue ("xyce.binary");
-                    String cirFile = env.file (jobDir, "model.cir");
-                    String prnFile = env.file (jobDir, "result");  // "prn" doesn't work, at least on windows
+                    String xyce  = env.getNamedValue ("xyce.binary");
+                    Path cirFile = jobDir.resolve ("model.cir");
+                    Path prnFile = jobDir.resolve ("result");  // "prn" doesn't work, at least on windows
 
                     EquationSet e = new EquationSet (job);
-                    Simulator simulator = InternalBackend.constructStaticNetwork (e, jobDir);
+                    Simulator simulator = InternalBackend.constructStaticNetwork (e, jobDir.toString ());
                     analyze (e);
 
                     // Just in case a $p expression says something different than $metadata.duration
                     String duration = e.getNamedValue ("duration");
                     if (! duration.isEmpty ()) job.set (duration, "$metadata", "duration");
 
-                    FileWriter writer = new FileWriter (cirFile);
+                    FileWriter writer = new FileWriter (cirFile.toFile ());
                     generateNetlist (job, simulator, writer);
                     writer.close ();
 

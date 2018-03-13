@@ -41,13 +41,15 @@ import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 import gov.sandia.n2a.plugins.extpoints.Backend;
+import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.InputStreamReader;
+import java.io.ByteArrayInputStream;
+import java.io.FileNotFoundException;
 import java.io.PrintStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -55,11 +57,13 @@ import java.util.List;
 import java.util.NavigableSet;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.stream.Collectors;
 
-public class JobC
+public class JobC extends Thread
 {
     static boolean rebuildRuntime = true;  // always rebuild runtime once per session
+
+    public MNode       job;
+    public EquationSet model;
 
     // These values are unique across the whole simulation, so they go here rather than BackendDataC.
     // Where possible, the key is a String. Otherwise, it is an Operator which is specific to one expression.
@@ -68,21 +72,65 @@ public class JobC
     public HashMap<Object,String> outputNames = new HashMap<Object,String> ();
     public HashMap<Object,String> stringNames = new HashMap<Object,String> ();
 
-    public void execute (MNode job) throws Exception
+    public JobC (MNode job)
     {
-        String jobDir = new File (job.get ()).getParent ();
-        Files.createFile (Paths.get (jobDir, "started"));
+        super ("C Job");
+        this.job = job;
+    }
 
-        // Ensure runtime is built
-        // TODO: Generalize file handling for remote jobs. This present code will only work with a local directory.
-        ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("$metadata", "host", "localhost"));
-        String runtimeDir = env.getNamedValue ("c.directory");
-        if (runtimeDir.length () == 0)
+    public void run ()
+    {
+        Path jobDir = Paths.get (job.get ()).getParent ();  // assumes the MNode "job" is really an MDoc. In any case, the value of the node should point to a file on disk where it is stored in a directory just for it.
+        try {Backend.err.set (new PrintStream (jobDir.resolve ("err").toFile ()));}
+        catch (FileNotFoundException e) {}
+
+        try
         {
-            Backend.err.get ().println ("Couldn't determine runtime directory");
-            throw new Backend.AbortRun ();
+            Files.createFile (jobDir.resolve ("started"));
+
+            ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("$metadata", "host", "localhost"));
+            Path runtimeDir = Paths.get (env.getNamedValue ("c.directory"));
+            Path runtime = rebuildRuntime (env, runtimeDir);
+
+            model = new EquationSet (job);
+            digestModel ();
+            model.determineDuration ();
+            String duration = model.getNamedValue ("duration");
+            if (! duration.isEmpty ()) job.set ("$metadata", "duration", duration);
+
+            model.setInit (0);
+            System.out.println (model.dump (false));
+
+            Path source = jobDir.resolve ("model.cc");
+            generateCode (runtimeDir, source);
+            String command = env.quotePath (env.build (source, runtime));
+
+            // The C program will append to the same error file, so we need to close the file before submitting.
+            PrintStream ps = Backend.err.get ();
+            if (ps != System.err)
+            {
+                ps.close ();
+                Backend.err.remove ();
+            }
+
+            long pid = env.submitJob (job, command);
+            job.set ("$metadata", "pid", pid);
         }
-        String runtime;
+        catch (AbortRun a)
+        {
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace (Backend.err.get ());
+        }
+
+        // If an exception occurred, the error file will still be open.
+        PrintStream ps = Backend.err.get ();
+        if (ps != System.err) ps.close ();
+    }
+
+    public Path rebuildRuntime (ExecutionEnv env, Path runtimeDir) throws Exception
+    {
         try
         {
             if (rebuildRuntime)
@@ -90,79 +138,88 @@ public class JobC
                 rebuildRuntime = false;
                 throw new Exception ();
             }
-            runtime = env.buildRuntime (env.file (runtimeDir, "runtime.cc"));
+            return env.buildRuntime (runtimeDir.resolve ("runtime.cc"));
         }
         catch (Exception e)
         {
             // Presumably we failed to build runtime because files aren't present
-
-            env.createDir (runtimeDir);
-            String[] sourceFiles = {"runtime.cc", "runtime.h", "Neighbor.cc"};
-            for (String s : sourceFiles)
+            Files.createDirectories (runtimeDir);
+            for (String s : new String[] {"runtime.cc", "runtime.h", "Neighbor.cc"})
             {
-                BufferedReader reader = new BufferedReader (new InputStreamReader (JobC.class.getResource ("runtime/" + s).openStream ()));
-                String contents = reader.lines ().collect (Collectors.joining ("\n"));
-                env.setFileContents (env.file (runtimeDir, s), contents);
+                Files.copy (JobC.class.getResource ("runtime/" + s).openStream (), runtimeDir.resolve (s), StandardCopyOption.REPLACE_EXISTING);
             }
 
-            String flDir = env.file (runtimeDir, "fl");
-            env.createDir (flDir);
-            sourceFiles = new String [] {"archive.h", "blasproto.h", "math.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "neighbor.h", "pointer.h", "string.h", "Vector.tcc"};
-            for (String s : sourceFiles)
+            Path flDir = runtimeDir.resolve ("fl");
+            Files.createDirectories (flDir);
+            for (String s : new String [] {"archive.h", "blasproto.h", "math.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "neighbor.h", "pointer.h", "string.h", "Vector.tcc"})
             {
-                BufferedReader reader = new BufferedReader (new InputStreamReader (JobC.class.getResource ("runtime/fl/" + s).openStream ()));
-                String contents = reader.lines ().collect (Collectors.joining ("\n"));
-                env.setFileContents (env.file (flDir, s), contents);
+                Files.copy (JobC.class.getResource ("runtime/fl/" + s).openStream (), flDir.resolve (s), StandardCopyOption.REPLACE_EXISTING);
             }
 
-            runtime = env.buildRuntime (env.file (runtimeDir, "runtime.cc"));
+            return env.buildRuntime (runtimeDir.resolve ("runtime.cc"));
         }
+    }
 
-        // Create model-specific executable
-        String sourceFileName = env.file (jobDir, "model.cc");
+    public void digestModel () throws Exception
+    {
+        model.resolveConnectionBindings ();
+        model.flatten ("backend.c");
+        model.addGlobalConstants ();
+        model.addSpecials ();  // $dt, $index, $init, $live, $n, $t, $type
+        model.fillIntegratedVariables ();
+        model.findIntegrated ();
+        model.resolveLHS ();
+        model.resolveRHS ();
+        model.findConstants ();
+        model.determineTraceVariableName ();
+        model.removeUnused ();  // especially get rid of unneeded $variables created by addSpecials()
+        model.collectSplits ();
+        findPathToContainer (model);
+        model.findAccountableConnections ();
+        model.findTemporary ();  // for connections, makes $p and $project "temporary" under some circumstances. TODO: make sure this doesn't violate evaluation order rules
+        model.determineOrder ();
+        model.findDerivative ();
+        model.addAttribute ("global",      0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
+        model.addAttribute ("preexistent", 0, true,  new String[] {"$t'", "$t"});
+        model.makeConstantDtInitOnly ();
+        model.findInitOnly ();  // propagate initOnly through ASTs
+        model.purgeInitOnlyTemporary ();
+        model.findDeath ();
+        model.setAttributesLive ();
+        model.forceTemporaryStorageForSpecials ();
+        findLiveReferences (model);
+        model.determineTypes ();
+        createBackendData (model);
+        analyzeEvents (model);
+        analyze (model);
+    }
 
-        EquationSet e = new EquationSet (job);
-        e.resolveConnectionBindings ();
-        e.flatten ("backend.c");
-        e.addGlobalConstants ();
-        e.addSpecials ();  // $dt, $index, $init, $live, $n, $t, $type
-        e.fillIntegratedVariables ();
-        e.findIntegrated ();
-        e.resolveLHS ();
-        e.resolveRHS ();
-        e.findConstants ();
-        e.determineTraceVariableName ();
-        e.removeUnused ();  // especially get rid of unneeded $variables created by addSpecials()
-        e.collectSplits ();
-        findPathToContainer (e);
-        e.findAccountableConnections ();
-        e.findTemporary ();  // for connections, makes $p and $project "temporary" under some circumstances. TODO: make sure this doesn't violate evaluation order rules
-        e.determineOrder ();
-        e.findDerivative ();
-        e.addAttribute ("global",      0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
-        e.addAttribute ("preexistent", 0, true,  new String[] {"$t'", "$t"});
-        e.makeConstantDtInitOnly ();
-        e.findInitOnly ();  // propagate initOnly through ASTs
-        e.purgeInitOnlyTemporary ();
-        e.findDeath ();
-        e.setAttributesLive ();
-        e.forceTemporaryStorageForSpecials ();
-        findLiveReferences (e);
-        e.determineTypes ();
-        createBackendData (e);
-        analyzeEvents (e);
-        analyze (e);
+    public static void createBackendData (EquationSet s)
+    {
+        if (! (s.backendData instanceof BackendDataC)) s.backendData = new BackendDataC ();
+        for (EquationSet p : s.parts) createBackendData (p);
+    }
 
-        e.determineDuration ();
-        String duration = e.getNamedValue ("duration");
-        if (! duration.isEmpty ()) job.set ("$metadata", "duration", duration);
+    public static void analyzeEvents (EquationSet s) throws Backend.AbortRun
+    {
+        BackendDataC bed = (BackendDataC) s.backendData;
+        bed.analyzeEvents (s);
+        for (EquationSet p : s.parts) analyzeEvents (p);
+    }
 
-        e.setInit (0);
-        System.out.println (e.dump (false));
+    public static void analyze (EquationSet s)
+    {
+        BackendDataC bed = (BackendDataC) s.backendData;
+        bed.analyze (s);
+        for (EquationSet p : s.parts) analyze (p);
+        // TODO: analyze lastT
+    }
 
+    public void generateCode (Path runtimeDir, Path source) throws Exception
+    {
         StringBuilder s = new StringBuilder ();
 
-        s.append ("#include \"" + env.file (runtimeDir, "runtime.h") + "\"\n");
+        s.append ("#include \"" + runtimeDir.resolve ("runtime.h") + "\"\n");
         s.append ("\n");
         s.append ("#include <iostream>\n");
         s.append ("#include <vector>\n");
@@ -173,22 +230,22 @@ public class JobC
         s.append ("using namespace fl;\n");
         s.append ("\n");
         s.append ("class Wrapper;\n");
-        generateClassList (e, s);
+        generateClassList (model, s);
         s.append ("\n");
-        generateDeclarations (e, s);
+        generateDeclarations (model, s);
         s.append ("class Wrapper : public WrapperBase\n");
         s.append ("{\n");
         s.append ("public:\n");
-        s.append ("  " + prefix (e) + "_Population " + mangle (e.name) + ";\n");
+        s.append ("  " + prefix (model) + "_Population " + mangle (model.name) + ";\n");
         s.append ("\n");
         s.append ("  Wrapper ()\n");
         s.append ("  {\n");
-        s.append ("    population = &" + mangle (e.name) + ";\n");
-        s.append ("    " + mangle (e.name) + ".container = this;\n");
+        s.append ("    population = &" + mangle (model.name) + ";\n");
+        s.append ("    " + mangle (model.name) + ".container = this;\n");
         s.append ("  }\n");
         s.append ("};\n");
         s.append ("\n");
-        generateDefinitions (e, s);
+        generateDefinitions (model, s);
         s.append ("\n");
 
         // Main
@@ -196,7 +253,7 @@ public class JobC
         s.append ("{\n");
         s.append ("  try\n");
         s.append ("  {\n");
-        String integrator = e.getNamedValue ("c.integrator", "Euler");
+        String integrator = model.getNamedValue ("c.integrator", "Euler");
         if (! integrator.equals ("Euler")  &&  ! integrator.isEmpty ())
         {
             s.append ("    simulator.integrator = new " + integrator + ";\n");
@@ -218,38 +275,7 @@ public class JobC
         s.append ("  return 0;\n");
         s.append ("}\n");
 
-        env.setFileContents (sourceFileName, s.toString ());
-        String command = env.quotePath (env.build (sourceFileName, runtime));
-
-        PrintStream ps = Backend.err.get ();
-        if (ps != System.err)
-        {
-            ps.close ();
-            Backend.err.remove ();
-        }
-        long pid = env.submitJob (job, command);
-        job.set ("$metadata", "pid", pid);
-    }
-
-    public static void createBackendData (EquationSet s)
-    {
-        if (! (s.backendData instanceof BackendDataC)) s.backendData = new BackendDataC ();
-        for (EquationSet p : s.parts) createBackendData (p);
-    }
-
-    public static void analyzeEvents (EquationSet s) throws Backend.AbortRun
-    {
-        BackendDataC bed = (BackendDataC) s.backendData;
-        bed.analyzeEvents (s);
-        for (EquationSet p : s.parts) analyzeEvents (p);
-    }
-
-    public void analyze (EquationSet s)
-    {
-        BackendDataC bed = (BackendDataC) s.backendData;
-        bed.analyze (s);
-        for (EquationSet p : s.parts) analyze (p);
-        // TODO: analyze lastT
+        Files.copy (new ByteArrayInputStream (s.toString ().getBytes ("UTF-8")), source);
     }
 
     public void generateClassList (EquationSet s, StringBuilder result)

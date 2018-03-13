@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -19,6 +19,9 @@ import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
 import java.lang.management.OperatingSystemMXBean;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -55,49 +58,44 @@ public abstract class ExecutionEnv
     }
 
     /*
-        TODO: This interface is broken in a number of ways.  The job of
-        encapsulating potentially remote access is more complicated than
-        local access vs. various machine types.  Since the long-term goal
-        is to treat remote access as a P2P call to another N2A system, this
-        interface will pretend that all access is local.  We add just
-        enough abstraction so remote access still works, but this should
-        be removed later when P2P is implemented.  Particulars:
-        * Use File rather than String to hold paths
-        * reading/writing file content as strings should be done elsewhere
-        * downloading remote files belongs in a P2P protocol
+        TODO: This interface should use NIO as much as possible.
+        In particular, remote file access should be encapsulated in a FileSystemProvider.
+
+        TODO: This class should be renamed to "Host", and details about Host X Backend needs another class.
+        For example, details about compiling with GCC belong elsewhere.
+        OTOH, resource management and process monitoring do belong here.
     */
 
-    public abstract Set<Long>    getActiveProcs    ()                                  throws Exception;
-    public abstract long         getProcMem        (long pid)                          throws Exception;
-    public abstract AllJobInfo   getJobs           ()                                  throws Exception;
-    public abstract String       createJobDir      ()                                  throws Exception;
-    public abstract void         createDir         (String path)                       throws Exception;
-    public abstract String       build             (String sourceFile, String runtime) throws Exception;
+    public abstract Set<Long>    getActiveProcs    ()                            throws Exception;
+    public abstract long         getProcMem        (long pid)                    throws Exception;
+    public abstract AllJobInfo   getJobs           ()                            throws Exception;
+    public abstract String       createJobDir      ()                            throws Exception;
+    public abstract Path         build             (Path source, Path runtime)   throws Exception;
     /**
      * Ensures that runtime object file is newer than sourceFile.  If not, then attempts to build
      * from sourceFile.  If sourceFile does not exist, then throws exception.
      * @return Path to linkable object file.
      */
-    public abstract String       buildRuntime      (String sourceFile)                 throws Exception;
+    public abstract Path         buildRuntime      (Path source)                 throws Exception;
     /**
      * Starts the simulation on the host system.
      * Sets up piping of the program's stdout and stderr to files "out" and "err" respectively.
      * If a file called "in" exists in the jobDir, then pipes it into the program.
      */
-    public abstract long         submitJob         (MNode job, String command)         throws Exception;
-    public abstract void         killJob           (long pid)                          throws Exception;
-    public abstract void         setFileContents   (String path, String content)       throws Exception;
-    public abstract String       getFileContents   (String path)                       throws Exception;
-    public abstract void         deleteJob         (String jobName)                    throws Exception;
-    public abstract void         downloadFile      (String path, File destPath)        throws Exception;
+    public abstract long         submitJob         (MNode job, String command)   throws Exception;
+    public abstract void         killJob           (long pid)                    throws Exception;
+    public abstract void         setFileContents   (String path, String content) throws Exception;
+    public abstract String       getFileContents   (String path)                 throws Exception;
+    public abstract void         deleteJob         (String jobName)              throws Exception;
+    public abstract void         downloadFile      (String path, File destPath)  throws Exception;
 
-    public long lastModified (String path)
+    public long lastModified (Path path)
     {
         try
         {
-            return new File (path).lastModified ();
+            return Files.readAttributes (path, BasicFileAttributes.class).lastModifiedTime ().toMillis ();
         }
-        catch (Exception e)
+        catch (IOException e1)
         {
             return 0;
         }
@@ -108,7 +106,7 @@ public abstract class ExecutionEnv
         return new File (dirName, fileName).getAbsolutePath ();
     }
 
-    public String quotePath (String path)
+    public String quotePath (Path path)
     {
         return "'" + path + "'";
     }

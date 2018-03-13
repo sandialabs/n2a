@@ -15,6 +15,7 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 
 import java.io.File;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.text.SimpleDateFormat;
@@ -70,29 +71,16 @@ public abstract class LocalMachineEnv extends ExecutionEnv
     }
 
     @Override
-    public void createDir (String path) throws Exception
+    public Path build (Path source, Path runtime) throws Exception
     {
-        File dir = new File (path);
-        if (dir.isDirectory ()) return;
-        if (! dir.mkdirs ())
-        {
-            Backend.err.get ().println ("Could not create directory: " + path);
-            throw new Backend.AbortRun ();
-        }
-    }
-
-    @Override
-    public String build (String sourceFile, String runtime) throws Exception
-    {
-        File sf = new File (sourceFile);
-        String stem = new File (sf.getParent (), sf.getName ().split ("\\.", 2)[0]).getAbsolutePath ();
-        String binary = stem + ".bin";
-        String dir = new File (runtime).getParent ();
+        String stem = source.getFileName ().toString ().split ("\\.", 2)[0];
+        Path binary = source.getParent ().resolve (stem + ".bin");
+        Path dir = runtime.getParent ();
 
         // Need to handle cl, and maybe others as well.
         String compiler = getNamedValue ("c.compiler", "g++");
 
-        String [] commands = {compiler, "-O3", "-o", binary, "-I" + dir, runtime, "-x", "c++", sourceFile};
+        String [] commands = {compiler, "-O3", "-o", binary.toString (), "-I" + dir, runtime.toString (), "-std=c++11", source.toString ()};
         Process p = Runtime.getRuntime ().exec (commands);
         p.waitFor ();
         if (p.exitValue () != 0)
@@ -105,17 +93,16 @@ public abstract class LocalMachineEnv extends ExecutionEnv
     }
 
     @Override
-    public String buildRuntime (String sourceFile) throws Exception
+    public Path buildRuntime (Path sourceFile) throws Exception
     {
-        File f = new File (sourceFile);
-        String stem = f.getName ();
+        String stem = sourceFile.getFileName ().toString ();
         int index = stem.lastIndexOf (".");
         if (index > 0)
         {
             stem = stem.substring (0, index);
         }
-        String dir = f.getParent ();
-        String binary = new File (dir, stem + ".o").getAbsolutePath ();
+        Path dir = sourceFile.getParent ();
+        Path binary = dir.resolve (stem + ".o");
 
         long sourceDate = lastModified (sourceFile);
         if (sourceDate == 0)
@@ -127,7 +114,7 @@ public abstract class LocalMachineEnv extends ExecutionEnv
 
         String compiler = getNamedValue ("c.compiler", "g++");
 
-        String [] commands = {compiler, "-c", "-O3", "-I" + dir, "-o", binary, "-x", "c++", sourceFile};
+        String [] commands = {compiler, "-c", "-O3", "-I" + dir, "-o", binary.toString (), "-std=c++11", sourceFile.toString ()};
         Process p = Runtime.getRuntime ().exec (commands);
         p.waitFor ();
         if (p.exitValue () != 0)

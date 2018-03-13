@@ -17,6 +17,8 @@ import gov.sandia.n2a.ssh.RedSkyConnection.Result;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.StringReader;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -69,7 +71,7 @@ public abstract class RedSkyEnv extends ExecutionEnv
         return jobDir;
     }
 
-    @Override
+    // TODO: package remote file operations into a FileSystemProvider
     public void createDir (String path) throws Exception
     {
         Result r = RedSkyConnection.exec ("mkdir -p '" + path + "'");
@@ -80,21 +82,22 @@ public abstract class RedSkyEnv extends ExecutionEnv
         }
     }
 
+    // TODO: work with proper Path objects provided by our remote FileSystemProvider
     @Override
-    public String build (String sourceFile, String runtime) throws Exception
+    public Path build (Path source, Path runtime) throws Exception
     {
-        String binary = sourceFile + ".bin";
-        Result r = RedSkyConnection.exec ("g++ -o '" + binary + "' '" + runtime + "' -x c++ '" + sourceFile + "'");
+        String binary = source.toString () + ".bin";
+        Result r = RedSkyConnection.exec ("g++ -o '" + binary + "' '" + runtime + "' -std=c++11 '" + source.toString () + "'");
         if (r.error)
         {
             Backend.err.get ().println ("Failed to compile: " + r.stdErr);
             throw new Backend.AbortRun ();
         }
-        return binary;
+        return Paths.get (binary);
     }
 
     @Override
-    public String buildRuntime (String sourceFile) throws Exception
+    public Path buildRuntime (Path sourceFile) throws Exception
     {
         Backend.err.get ().println ("buildRuntime() not implemented");
         throw new Backend.AbortRun ();
