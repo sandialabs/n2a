@@ -646,8 +646,8 @@ public class PanelRun extends JPanel
     public void addNewRun (MNode run)
     {
         final NodeJob node = new NodeJob (run);
-        model.insertNodeInto (node, root, 0);  // TODO: race condition on model, between this code and initial load in monitor thread
-        if (root.getChildCount () == 1) model.nodeStructureChanged (root);  // If the list was empty, wee need to give the JTree a little extra kick to get started.
+        model.insertNodeInto (node, root, 0);  // Since this always executes on event dispatch thread, it will not conflict with other code that accesses model.
+        if (root.getChildCount () == 1) model.nodeStructureChanged (root);  // If the list was empty, we need to give the JTree a little extra kick to get started.
         tree.setSelectionRow (0);
         tree.requestFocusInWindow ();
 

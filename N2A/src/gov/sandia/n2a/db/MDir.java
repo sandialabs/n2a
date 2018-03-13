@@ -252,11 +252,13 @@ public class MDir extends MNode
 
     public class IteratorWrapperSoft implements Iterator<MNode>
     {
-        Iterator<Entry<String,SoftReference<MDoc>>> iterator;
+        List<String> keys;
+        Iterator<String> iterator;
 
-        public IteratorWrapperSoft (Iterator<Entry<String,SoftReference<MDoc>>> iterator)
+        public IteratorWrapperSoft (List<String> keys)
         {
-            this.iterator = iterator;
+            this.keys = keys;
+            iterator = keys.iterator ();
         }
 
         public boolean hasNext ()
@@ -264,16 +266,13 @@ public class MDir extends MNode
             return iterator.hasNext ();
         }
 
+        /**
+            If a document is deleted while the iterator is running, this could return null.
+            If a document is added, it will not be included.
+        **/
         public MNode next ()
         {
-            Entry<String,SoftReference<MDoc>> e = iterator.next ();
-            MDoc doc = e.getValue ().get ();
-            if (doc == null)
-            {
-                doc = new MDoc (MDir.this, e.getKey ());
-                e.setValue (new SoftReference<MDoc> (doc));
-            }
-            return doc;
+            return child (iterator.next ());
         }
 
         public void remove ()
@@ -284,26 +283,29 @@ public class MDir extends MNode
 
     public synchronized Iterator<MNode> iterator ()
     {
-        if (! loaded)
-        {
-            String[] fileNames = root.list ();  // This may cost a lot of time in some cases. However, N2A should never have more than about 10,000 models in a dir.
-            for (String index : fileNames)
-            {
-                if (index.startsWith (".")) continue; // Filter out special files. This allows, for example, a git repo to share the models dir.
+        load ();
+        List<String> keys = new ArrayList<String> ();
+        keys.addAll (children.keySet ());  // Duplicate the keys, to avoid concurrent modification
+        return new IteratorWrapperSoft (keys);
+    }
 
-                // This is a slightly more compact version of child(index)
-                MDoc doc = null;
-                SoftReference<MDoc> ref = children.get (index);
-                if (ref != null) doc = ref.get ();
-                if (doc == null)
-                {
-                    doc = new MDoc (this, index);
-                    children.put (index, new SoftReference<MDoc> (doc));
-                }
-            }
-            loaded = true;
+    public synchronized void load ()
+    {
+        if (loaded) return;
+
+        NavigableMap<String,SoftReference<MDoc>> newChildren = new TreeMap<String,SoftReference<MDoc>> ();
+        for (String index : root.list ())  // This may cost a lot of time in some cases. However, N2A should never have more than about 10,000 models in a dir.
+        {
+            if (index.startsWith (".")) continue; // Filter out special files. This allows, for example, a git repo to share the models dir.
+            newChildren.put (index, null);
         }
-        return new IteratorWrapperSoft (children.entrySet ().iterator ());
+        for (Entry<String,SoftReference<MDoc>> c : children.entrySet ())
+        {
+            newChildren.put (c.getKey (), c.getValue ());
+        }
+        children = newChildren;
+
+        loaded = true;
     }
 
     public synchronized void save ()
