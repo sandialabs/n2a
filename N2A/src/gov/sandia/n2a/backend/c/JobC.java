@@ -104,7 +104,7 @@ public class JobC extends Thread
 
             Path source = jobDir.resolve ("model.cc");
             generateCode (runtimeDir, source);
-            String command = env.quotePath (env.build (source, runtime));
+            String command = env.quotePath (build (source, runtime));
 
             // The C program will append to the same error file, so we need to close the file before submitting.
             PrintStream ps = Backend.err.get ();
@@ -141,8 +141,24 @@ public class JobC extends Thread
             rebuildRuntime = false;   // Stop checking files for this session.
         }
 
-        if (changed) return env.buildRuntime (runtimeDir.resolve ("runtime.cc"));
-        return runtimeDir.resolve ("runtime.o");  // TODO: We should instead rely on compiler wrapper to know what the object file's name is.
+        // Compile runtime
+        Path binary = runtimeDir.resolve ("runtime.o");
+        if (changed  ||  ! Files.exists (binary))
+        {
+            Path source = runtimeDir.resolve ("runtime.cc");
+
+            String compiler = "g++";  // TODO: retrieve this from add data
+
+            String [] commands = {compiler, "-c", "-O3", "-I" + runtimeDir, "-o", binary.toString (), "-std=c++11", source.toString ()};
+            Process p = Runtime.getRuntime ().exec (commands);
+            p.waitFor ();
+            if (p.exitValue () != 0)
+            {
+                Backend.err.get ().println ("Failed to compile:\n" + HostSystem.streamToString (p.getErrorStream ()));
+                throw new Backend.AbortRun ();
+            }
+        }
+        return binary;
     }
 
     public boolean unpackRuntime (Path runtimeDir, String suffix, String... names) throws Exception
@@ -165,6 +181,27 @@ public class JobC extends Thread
             }
         }
         return changed;
+    }
+
+    public Path build (Path source, Path runtime) throws Exception
+    {
+        String stem = source.getFileName ().toString ().split ("\\.", 2)[0];
+        Path binary = source.getParent ().resolve (stem + ".bin");
+        Path dir = runtime.getParent ();
+
+        // Need to handle cl, and maybe others as well.
+        String compiler = "g++";
+
+        String [] commands = {compiler, "-O3", "-o", binary.toString (), "-I" + dir, runtime.toString (), "-std=c++11", source.toString ()};
+        Process p = Runtime.getRuntime ().exec (commands);
+        p.waitFor ();
+        if (p.exitValue () != 0)
+        {
+            Backend.err.get ().println ("Failed to compile:\n" + HostSystem.streamToString (p.getErrorStream ()));
+            throw new Backend.AbortRun ();
+        }
+
+        return binary;
     }
 
     public void digestModel () throws Exception

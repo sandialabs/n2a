@@ -13,29 +13,11 @@ import gov.sandia.n2a.ssh.RedSkyConnection.Result;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.StringReader;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.Locale;
 
 public abstract class RemoteHost extends HostSystem
 {
-    @Override
-    public String createJobDir () throws Exception
-    {
-        String dir = getNamedValue ("directory.jobs");
-        String jobName = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + jobCount++;
-        String jobDir = dir + "/" + jobName;
-        Result r = RedSkyConnection.exec ("mkdir -p '" + jobDir + "'");
-        if (r.error)
-        {
-            Backend.err.get ().println ("Could not create job directory: " + r.stdErr);
-            throw new Backend.AbortRun ();
-        }
-        return jobDir;
-    }
-
     // TODO: package remote file operations into a FileSystemProvider
     public void createDir (String path) throws Exception
     {
@@ -45,27 +27,6 @@ public abstract class RemoteHost extends HostSystem
             Backend.err.get ().println ("Could not create job directory: " + r.stdErr);
             throw new Backend.AbortRun ();
         }
-    }
-
-    // TODO: work with proper Path objects provided by our remote FileSystemProvider
-    @Override
-    public Path build (Path source, Path runtime) throws Exception
-    {
-        String binary = source.toString () + ".bin";
-        Result r = RedSkyConnection.exec ("g++ -o '" + binary + "' '" + runtime + "' -std=c++11 '" + source.toString () + "'");
-        if (r.error)
-        {
-            Backend.err.get ().println ("Failed to compile: " + r.stdErr);
-            throw new Backend.AbortRun ();
-        }
-        return Paths.get (binary);
-    }
-
-    @Override
-    public Path buildRuntime (Path sourceFile) throws Exception
-    {
-        Backend.err.get ().println ("buildRuntime() not implemented");
-        throw new Backend.AbortRun ();
     }
 
     @Override

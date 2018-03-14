@@ -7,81 +7,13 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.execenvs;
 
 import gov.sandia.n2a.db.AppData;
-import gov.sandia.n2a.plugins.extpoints.Backend;
-
 import java.io.File;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
 
 public abstract class LocalHost extends HostSystem
 {
-    @Override
-    public String createJobDir () throws Exception
-    {
-        File dir = new File (getNamedValue ("directory.jobs"));
-        String jobName = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + jobCount++;
-        File jobDir = new File (dir, jobName);
-        if (! jobDir.mkdirs ())
-        {
-            Backend.err.get ().println ("Could not create job directory");
-            throw new Backend.AbortRun ();
-        }
-        return jobDir.getAbsolutePath ();
-    }
-
-    @Override
-    public Path build (Path source, Path runtime) throws Exception
-    {
-        String stem = source.getFileName ().toString ().split ("\\.", 2)[0];
-        Path binary = source.getParent ().resolve (stem + ".bin");
-        Path dir = runtime.getParent ();
-
-        // Need to handle cl, and maybe others as well.
-        String compiler = getNamedValue ("c.compiler", "g++");
-
-        String [] commands = {compiler, "-O3", "-o", binary.toString (), "-I" + dir, runtime.toString (), "-std=c++11", source.toString ()};
-        Process p = Runtime.getRuntime ().exec (commands);
-        p.waitFor ();
-        if (p.exitValue () != 0)
-        {
-            Backend.err.get ().println ("Failed to compile:\n" + streamToString (p.getErrorStream ()));
-            throw new Backend.AbortRun ();
-        }
-
-        return binary;
-    }
-
-    @Override
-    public Path buildRuntime (Path sourceFile) throws Exception
-    {
-        String stem = sourceFile.getFileName ().toString ();
-        int index = stem.lastIndexOf (".");
-        if (index > 0)
-        {
-            stem = stem.substring (0, index);
-        }
-        Path dir = sourceFile.getParent ();
-        Path binary = dir.resolve (stem + ".o");
-
-        String compiler = getNamedValue ("c.compiler", "g++");
-
-        String [] commands = {compiler, "-c", "-O3", "-I" + dir, "-o", binary.toString (), "-std=c++11", sourceFile.toString ()};
-        Process p = Runtime.getRuntime ().exec (commands);
-        p.waitFor ();
-        if (p.exitValue () != 0)
-        {
-            Backend.err.get ().println ("Failed to compile:\n" + streamToString (p.getErrorStream ()));
-            throw new Backend.AbortRun ();
-        }
-
-        return binary;
-    }
-
     @Override
     public void setFileContents (String path, String content) throws Exception
     {

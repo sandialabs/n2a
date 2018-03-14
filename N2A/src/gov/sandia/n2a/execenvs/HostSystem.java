@@ -25,6 +25,15 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+    Encapsulates access to a computer system, whether it is a workstation, a supercomputer or a "cloud" service.
+    Services include:
+    <ul>
+    <li>File access
+    <li>Process management (starting, monitoring, stopping)
+    <li>Resource monitoring (memory, disk capacity, processor load)
+    </ul>
+**/
 public abstract class HostSystem
 {
     public String name;  // Simple handle used internally. A nickname in the case of remote systems. Note that IP address or host name is specified separately.
@@ -57,30 +66,16 @@ public abstract class HostSystem
         return result;
     }
 
-    /*
-        TODO: This interface should use NIO as much as possible.
-        In particular, remote file access should be encapsulated in a FileSystemProvider.
-
-        TODO: This class should be renamed to "Host", and details about Host X Backend needs another class.
-        For example, details about compiling with GCC belong elsewhere.
-        OTOH, resource management and process monitoring do belong here.
-    */
+    // TODO: This interface should use NIO as much as possible.
+    // In particular, remote file access should be encapsulated in a FileSystemProvider.
 
     public abstract Set<Long>    getActiveProcs    ()                            throws Exception;
     public abstract long         getProcMem        (long pid)                    throws Exception;
-    public abstract String       createJobDir      ()                            throws Exception;
-    public abstract Path         build             (Path source, Path runtime)   throws Exception;
     /**
-     * Ensures that runtime object file is newer than sourceFile.  If not, then attempts to build
-     * from sourceFile.  If sourceFile does not exist, then throws exception.
-     * @return Path to linkable object file.
-     */
-    public abstract Path         buildRuntime      (Path source)                 throws Exception;
-    /**
-     * Starts the simulation on the host system.
-     * Sets up piping of the program's stdout and stderr to files "out" and "err" respectively.
-     * If a file called "in" exists in the jobDir, then pipes it into the program.
-     */
+        Starts the simulation on the host system.
+        Sets up piping of the program's stdout and stderr to files "out" and "err" respectively.
+        If a file called "in" exists in the jobDir, then pipes it into the program.
+    **/
     public abstract long         submitJob         (MNode job, String command)   throws Exception;
     public abstract void         killJob           (long pid)                    throws Exception;
     public abstract void         setFileContents   (String path, String content) throws Exception;
