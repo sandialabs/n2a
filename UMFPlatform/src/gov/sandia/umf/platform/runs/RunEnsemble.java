@@ -77,19 +77,9 @@ public class RunEnsemble
         return AppData.models.child (source.get ("model"));
     }
 
-    public HostSystem getEnvironment() {
-        String envName =  source.get("environment");
-        HostSystem chosenEnv = null;
-        for(HostSystem env : HostSystem.envs) {
-            if(envName.equals(env.getNamedValue("name"))) {
-                chosenEnv = env;
-                break;
-            }
-        }
-        if(chosenEnv == null) {
-            // error - default env?
-        }
-        return chosenEnv;
+    public HostSystem getEnvironment ()
+    {
+        return HostSystem.get (source.get ("environment"));
     }
 
     public Backend getSimulator() {

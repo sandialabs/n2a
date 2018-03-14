@@ -40,7 +40,7 @@ public class UIController
         }
 
         // Set up execution environments.
-        HostSystem[] envs = HostSystem.envs.toArray(new HostSystem[0]);
+        HostSystem[] envs = new HostSystem[0];  // Hack to suppress errors in this outdated code.
 
         // TODO: Fix this with appropriate interfaces.
         String name = (String) ReflectionUtil.invoke("getName", model);
@@ -50,7 +50,7 @@ public class UIController
             (JFrame) SwingUtilities.getRoot(parentComponent),
             -1, // TODO change from -1
             /*TEMP*/ name, owner, 12342347483L,/*TEMP until appropriate interfaces*/
-            model, simulators, simulators[0], envs, envs[0], false);
+            model, simulators, simulators[0], envs, HostSystem.get ("localhost"), false);
 
         dlg.setVisible(true);
 

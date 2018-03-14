@@ -22,39 +22,41 @@ import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 public abstract class HostSystem
 {
-    public static List<HostSystem> envs = new ArrayList<HostSystem>();
+    public String name;  // Simple handle used internally. A nickname in the case of remote systems. Note that IP address or host name is specified separately.
 
-    public static HostSystem windows = new Windows ();
-    public static HostSystem linux   = new Linux ();
-    public static HostSystem redsky  = new RemoteParallel ();  // TODO: Generalize redsky to arbitrary remote computing platforms
-    
-    static
+    protected static Map<String,HostSystem> hosts    = new HashMap<String,HostSystem> ();
+    protected static int                    jobCount = 0;
+
+    public static HostSystem get (String hostname)
     {
-        envs.add (linux);
-        envs.add (windows);
-        envs.add (redsky);
-        envs.add (new RemoteGateway ());
-    }
+        // Lazy initialization of host collection
+        if (hosts.isEmpty ())
+        {
+            HostSystem localhost;
+            if (System.getProperty ("os.name").startsWith ("Windows"))
+            {
+                localhost = new Windows ();
+            }
+            else
+            {
+                localhost = new Linux ();
+            }
+            localhost.name = "localhost";
+            hosts.put (localhost.name, localhost);
 
-    static int jobCount = 0;
+            // TODO: load configured remote hosts from app data
+        }
 
-    /**
-        Determine our local environment and return the appropriate class.
-    **/
-    public static HostSystem factory (String host)
-    {
-        if (host.equals ("redsky")) return redsky;  // TODO: generalize this to a collection of configured remote hosts
-
-        // The default is localhost, and in particular linux
-        if (System.getProperty ("os.name").startsWith ("Windows")) return windows;
-        return linux;
+        HostSystem result = hosts.get (hostname);
+        if (result == null) result = hosts.get ("localhost");
+        return result;
     }
 
     /*

@@ -89,7 +89,7 @@ public class JobC extends Thread
         {
             Files.createFile (jobDir.resolve ("started"));
 
-            HostSystem env = HostSystem.factory (job.getOrDefault ("$metadata", "host", "localhost"));
+            HostSystem env = HostSystem.get (job.getOrDefault ("$metadata", "host", "localhost"));
             Path runtimeDir = Paths.get (env.getNamedValue ("c.directory"));
             Path runtime = rebuildRuntime (env, runtimeDir);
 

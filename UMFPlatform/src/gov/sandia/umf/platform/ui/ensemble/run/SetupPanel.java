@@ -79,7 +79,7 @@ public class SetupPanel extends JPanel
 //        UIDebugUtil.enableColor();
 
 //        EnvironmentSelectionPanel pnlEnvironment =
-//            new EnvironmentSelectionPanel(parentRef, uic, envs, defaultEnv);
+//            new EnvironmentSelectionPanel(parentRef, uic, hosts, defaultEnv);
 //        SimulatorSelectionPanel pnlSimulator =
 //            new SimulatorSelectionPanel(parentRef, uic, simulators, defaultSimulator);
 
