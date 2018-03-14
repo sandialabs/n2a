@@ -16,7 +16,7 @@ import java.nio.file.Path;
 import java.util.Set;
 import java.util.TreeSet;
 
-public class Windows extends LocalMachineEnv
+public class Windows extends LocalHost
 {
     @Override
     public Set<Long> getActiveProcs () throws Exception

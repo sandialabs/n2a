@@ -9,7 +9,7 @@ package gov.sandia.umf.platform.runs;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
-import gov.sandia.n2a.execenvs.ExecutionEnv;
+import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.n2a.parms.ParameterSet;
 import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Backend;
@@ -77,10 +77,10 @@ public class RunEnsemble
         return AppData.models.child (source.get ("model"));
     }
 
-    public ExecutionEnv getEnvironment() {
+    public HostSystem getEnvironment() {
         String envName =  source.get("environment");
-        ExecutionEnv chosenEnv = null;
-        for(ExecutionEnv env : ExecutionEnv.envs) {
+        HostSystem chosenEnv = null;
+        for(HostSystem env : HostSystem.envs) {
             if(envName.equals(env.getNamedValue("name"))) {
                 chosenEnv = env;
                 break;

@@ -16,7 +16,7 @@ import java.io.StringReader;
 import java.util.Set;
 import java.util.TreeSet;
 
-public class RedSkyParallelEnv extends RedSkyEnv
+public class RemoteParallel extends RemoteHost
 {
     @Override
     public Set<Long> getActiveProcs() throws Exception

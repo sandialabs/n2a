@@ -10,7 +10,7 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.execenvs.ExecutionEnv;
+import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
@@ -434,7 +434,7 @@ public class PanelRun extends JPanel
                 //   huge  -- too big to store on local system, for example a supercomputer job; must be downloaded/displayed in segments
                 // The current code only handles small files. In particular, we don't actually do Step 1, but instead assume data is local.
                 MNode job = ((NodeJob) node.getParent ()).source;
-                ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("$metadata", "host", "localhost"));
+                HostSystem env = HostSystem.factory (job.getOrDefault ("$metadata", "host", "localhost"));
 
                 // Step 2 -- Load data
                 // The exact method depends on the current display mode, selected by pushbuttons and stored in viz
@@ -611,7 +611,7 @@ public class PanelRun extends JPanel
                         synchronized (running) {running.remove (job);}
 
                         MDoc doc = (MDoc) job.source;
-                        ExecutionEnv env = ExecutionEnv.factory (doc.getOrDefault ("$metadata", "host", "localhost"));
+                        HostSystem env = HostSystem.factory (doc.getOrDefault ("$metadata", "host", "localhost"));
                         String jobName = doc.key ();
                         try
                         {

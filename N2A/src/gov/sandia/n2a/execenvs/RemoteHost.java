@@ -23,7 +23,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
-public abstract class RedSkyEnv extends ExecutionEnv
+public abstract class RemoteHost extends HostSystem
 {
     @Override
     public AllJobInfo getJobs () throws Exception

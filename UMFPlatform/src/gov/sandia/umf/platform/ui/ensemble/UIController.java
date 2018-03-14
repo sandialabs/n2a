@@ -7,7 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.umf.platform.ui.ensemble;
 
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.execenvs.ExecutionEnv;
+import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.n2a.parms.ParameterSpecification;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
@@ -40,7 +40,7 @@ public class UIController
         }
 
         // Set up execution environments.
-        ExecutionEnv[] envs = ExecutionEnv.envs.toArray(new ExecutionEnv[0]);
+        HostSystem[] envs = HostSystem.envs.toArray(new HostSystem[0]);
 
         // TODO: Fix this with appropriate interfaces.
         String name = (String) ReflectionUtil.invoke("getName", model);
@@ -57,7 +57,7 @@ public class UIController
         if(dlg.getResult() == CreateRunEnsembleDialog.CREATE) {
 
             String label = dlg.getLabel();
-            ExecutionEnv env = dlg.getEnvironment();
+            HostSystem env = dlg.getEnvironment();
             Backend simulator = dlg.getSimulator();
             ParameterSpecGroupSet groups = dlg.getParameterSpecGroupSet();
             ParameterSpecGroupSet simHandledGroups;
@@ -156,7 +156,7 @@ public class UIController
         return result;
     }
 
-//    public void submitRunEnsemble(PlatformRecord model, String label, ExecutionEnv env,
+//    public void submitRunEnsemble(PlatformRecord model, String label, HostSystem env,
 //                                  Simulator simulator, ParameterSpecGroupSet groups,
 //                                  List<String> outputExpressions) {
 //

@@ -27,20 +27,20 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public abstract class ExecutionEnv
+public abstract class HostSystem
 {
-    public static List<ExecutionEnv> envs = new ArrayList<ExecutionEnv>();
+    public static List<HostSystem> envs = new ArrayList<HostSystem>();
 
-    public static ExecutionEnv windows = new Windows ();
-    public static ExecutionEnv linux   = new Linux ();
-    public static ExecutionEnv redsky  = new RedSkyParallelEnv ();  // TODO: Generalize redsky to arbitrary remote computing platforms
+    public static HostSystem windows = new Windows ();
+    public static HostSystem linux   = new Linux ();
+    public static HostSystem redsky  = new RemoteParallel ();  // TODO: Generalize redsky to arbitrary remote computing platforms
     
     static
     {
         envs.add (linux);
         envs.add (windows);
         envs.add (redsky);
-        envs.add (new RedSkyLoginEnv ());
+        envs.add (new RemoteGateway ());
     }
 
     static int jobCount = 0;
@@ -48,7 +48,7 @@ public abstract class ExecutionEnv
     /**
         Determine our local environment and return the appropriate class.
     **/
-    public static ExecutionEnv factory (String host)
+    public static HostSystem factory (String host)
     {
         if (host.equals ("redsky")) return redsky;  // TODO: generalize this to a collection of configured remote hosts
 

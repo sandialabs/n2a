@@ -15,7 +15,7 @@ import gov.sandia.n2a.eqset.EquationSet.Conversion;
 import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
-import gov.sandia.n2a.execenvs.ExecutionEnv;
+import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.n2a.language.AccessElement;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.BuildMatrix;
@@ -89,7 +89,7 @@ public class JobC extends Thread
         {
             Files.createFile (jobDir.resolve ("started"));
 
-            ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("$metadata", "host", "localhost"));
+            HostSystem env = HostSystem.factory (job.getOrDefault ("$metadata", "host", "localhost"));
             Path runtimeDir = Paths.get (env.getNamedValue ("c.directory"));
             Path runtime = rebuildRuntime (env, runtimeDir);
 
@@ -130,7 +130,7 @@ public class JobC extends Thread
         if (ps != System.err) ps.close ();
     }
 
-    public Path rebuildRuntime (ExecutionEnv env, Path runtimeDir) throws Exception
+    public Path rebuildRuntime (HostSystem env, Path runtimeDir) throws Exception
     {
         // Update runtime source files, if necessary
         boolean changed = false;

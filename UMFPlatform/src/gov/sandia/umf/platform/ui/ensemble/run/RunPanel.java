@@ -6,7 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.umf.platform.ui.ensemble.run;
 
-import gov.sandia.n2a.execenvs.ExecutionEnv;
+import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.n2a.parms.ParameterDomain;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
@@ -45,7 +45,7 @@ public class RunPanel extends JPanel {
     public RunPanel(CreateRunEnsembleDialog parentRef, long estDur,
             /*TEMP*/String modName, String modOwner, long modLm,/*TEMP*/
             final Object model, Backend[] simulators, Backend defaultSimulator,
-            ExecutionEnv[] envs, ExecutionEnv defaultEnv) {
+            HostSystem[] envs, HostSystem defaultEnv) {
 
         ParameterDomain domains = ((Parameterizable) model).getAllParameters();
 
@@ -102,7 +102,7 @@ public class RunPanel extends JPanel {
     public String getLabel() {
         return pnlSetup.getLabel();
     }
-    public ExecutionEnv getEnvironment() {
+    public HostSystem getEnvironment() {
         return pnlSetup.getEnvironment();
     }
     public Backend getSimulator() {

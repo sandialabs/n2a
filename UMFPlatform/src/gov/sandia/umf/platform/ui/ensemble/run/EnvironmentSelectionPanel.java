@@ -6,7 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.umf.platform.ui.ensemble.run;
 
-import gov.sandia.n2a.execenvs.ExecutionEnv;
+import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.umf.platform.ui.ensemble.UIController;
 
 import javax.swing.DefaultComboBoxModel;
@@ -39,13 +39,13 @@ public class EnvironmentSelectionPanel extends JPanel {
     // CONSTRUCTOR //
     /////////////////
 
-    public EnvironmentSelectionPanel(CreateRunEnsembleDialog parentRef, UIController uic, ExecutionEnv[] envs, ExecutionEnv defaultEnv) {
+    public EnvironmentSelectionPanel(CreateRunEnsembleDialog parentRef, UIController uic, HostSystem[] envs, HostSystem defaultEnv) {
         uiController = uic;
 
         // Populate simulator combo box model.
         mdlEnvironments = new DefaultComboBoxModel();
 
-        for(ExecutionEnv env : envs) {
+        for(HostSystem env : envs) {
             mdlEnvironments.addElement(env);
         }
 
@@ -78,7 +78,7 @@ public class EnvironmentSelectionPanel extends JPanel {
         );
     }
 
-    public ExecutionEnv getEnvironment() {
-        return (ExecutionEnv) cboEnvironments.getSelectedItem();
+    public HostSystem getEnvironment() {
+        return (HostSystem) cboEnvironments.getSelectedItem();
     }
 }

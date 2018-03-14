@@ -6,7 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.umf.platform.ui.ensemble.run;
 
-import gov.sandia.n2a.execenvs.ExecutionEnv;
+import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.ui.ensemble.images.ImageUtil;
 
@@ -41,7 +41,7 @@ public class SetupPanel extends JPanel
     public SetupPanel(CreateRunEnsembleDialog parentRef,
             /*TEMP*/String modName, String modOwner, long modLm,/*TEMP*/
             Backend[] simulators, Backend defaultSimulator,
-            ExecutionEnv[] envs, ExecutionEnv defaultEnv) {
+            HostSystem[] envs, HostSystem defaultEnv) {
         // Populate simulator combo box model.
         mdlSimulators = new DefaultComboBoxModel();
         for(Backend simulator : simulators) {
@@ -64,7 +64,7 @@ public class SetupPanel extends JPanel
         // Populate simulator combo box model.
         mdlEnvironments = new DefaultComboBoxModel();
 
-        for(ExecutionEnv env : envs) {
+        for(HostSystem env : envs) {
             mdlEnvironments.addElement(env);
         }
 
@@ -169,8 +169,8 @@ public class SetupPanel extends JPanel
     public Backend getSimulator() {
         return ((SimulatorWrapper) cboSimulators.getSelectedItem()).simulator;
     }
-    public ExecutionEnv getEnvironment() {
-        return (ExecutionEnv) cboEnvironments.getSelectedItem();
+    public HostSystem getEnvironment() {
+        return (HostSystem) cboEnvironments.getSelectedItem();
     }
 
 

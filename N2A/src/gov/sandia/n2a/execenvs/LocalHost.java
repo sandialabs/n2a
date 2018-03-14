@@ -22,7 +22,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
-public abstract class LocalMachineEnv extends ExecutionEnv
+public abstract class LocalHost extends HostSystem
 {
     @Override
     public AllJobInfo getJobs () throws Exception

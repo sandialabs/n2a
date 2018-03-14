@@ -14,7 +14,7 @@ import java.nio.file.Paths;
 import gov.sandia.n2a.backend.internal.InternalBackend;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.EquationSet;
-import gov.sandia.n2a.execenvs.ExecutionEnv;
+import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.n2a.parms.Parameter;
 import gov.sandia.n2a.parms.ParameterDomain;
 import gov.sandia.n2a.plugins.extpoints.Backend;
@@ -69,7 +69,7 @@ public class BackendC extends Backend
         {
             try
             {
-                ExecutionEnv.factory (job.getOrDefault ("$metadata", "host", "localhost")).killJob (pid);
+                HostSystem.factory (job.getOrDefault ("$metadata", "host", "localhost")).killJob (pid);
                 String jobDir = new File (job.get ()).getParent ();
                 Files.copy (new ByteArrayInputStream ("killed".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
             }

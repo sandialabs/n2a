@@ -6,7 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.umf.platform.ui.ensemble.run;
 
-import gov.sandia.n2a.execenvs.ExecutionEnv;
+import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.umf.platform.ensemble.params.groupset.ParameterSpecGroupSet;
 import gov.sandia.umf.platform.ui.ensemble.ParameterDetailsPanel;
@@ -69,7 +69,7 @@ public class CreateRunEnsembleDialog extends EscapeDialog implements HelpCapable
     public CreateRunEnsembleDialog(JFrame parent, final long estDur,
             /*TEMP*/String modName, String modOwner, long modLm,/*TEMP*/
             final Object model, Backend[] simulators, Backend defaultSimulator,
-            ExecutionEnv[] envs, ExecutionEnv defaultEnv, final boolean askNoOutputs) {
+            HostSystem[] envs, HostSystem defaultEnv, final boolean askNoOutputs) {
 
         super(parent, "Create New Run Ensemble", true);
 
@@ -197,7 +197,7 @@ public class CreateRunEnsembleDialog extends EscapeDialog implements HelpCapable
     public String getLabel() {
         return pnlRun.getLabel();
     }
-    public ExecutionEnv getEnvironment() {
+    public HostSystem getEnvironment() {
         return pnlRun.getEnvironment();
     }
     public Backend getSimulator() {

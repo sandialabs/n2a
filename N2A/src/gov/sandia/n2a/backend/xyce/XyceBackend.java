@@ -17,7 +17,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.execenvs.ExecutionEnv;
+import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Visitor;
@@ -79,7 +79,7 @@ class XyceBackend extends Backend
     @Override
     public boolean canRunNow (MNode job)
     {
-        ExecutionEnv execEnv = ExecutionEnv.factory (job.getOrDefault ("$metadata", "host", "localhost"));
+        HostSystem execEnv = HostSystem.factory (job.getOrDefault ("$metadata", "host", "localhost"));
 
         // TODO - estimate what memory and CPU resources this sim needs
         // getting good estimates could be very difficult...
@@ -162,7 +162,7 @@ class XyceBackend extends Backend
                     if (job.child ("$metadata", "backend.xyce.integrator") == null) job.set ("$metadata", "backend.xyce.integrator", "trapezoid");
 
                     // set up job info
-                    ExecutionEnv env = ExecutionEnv.factory (job.getOrDefault ("$metadata", "host", "localhost"));
+                    HostSystem env = HostSystem.factory (job.getOrDefault ("$metadata", "host", "localhost"));
                     String xyce  = env.getNamedValue ("xyce.binary");
                     Path cirFile = jobDir.resolve ("model.cir");
                     Path prnFile = jobDir.resolve ("result");  // "prn" doesn't work, at least on windows
@@ -212,7 +212,7 @@ class XyceBackend extends Backend
         {
             try
             {
-                ExecutionEnv.factory (job.getOrDefault ("$metadata", "host", "localhost")).killJob (pid);
+                HostSystem.factory (job.getOrDefault ("$metadata", "host", "localhost")).killJob (pid);
                 String jobDir = new File (job.get ()).getParent ();
                 Files.copy (new ByteArrayInputStream ("killed".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
             }

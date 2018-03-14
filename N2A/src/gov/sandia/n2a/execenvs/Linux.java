@@ -16,7 +16,7 @@ import java.io.InputStreamReader;
 import java.util.Set;
 import java.util.TreeSet;
 
-public class Linux extends LocalMachineEnv
+public class Linux extends LocalHost
 {
     static boolean writeBackgroundScript = true;  // always write the script on first use in a given session
 

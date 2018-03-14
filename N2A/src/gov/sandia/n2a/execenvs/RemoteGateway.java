@@ -17,7 +17,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 
-public class RedSkyLoginEnv extends RedSkyEnv
+public class RemoteGateway extends RemoteHost
 {
     @Override
     public Set<Long> getActiveProcs () throws Exception
