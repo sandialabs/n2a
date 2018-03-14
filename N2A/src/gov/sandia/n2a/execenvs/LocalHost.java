@@ -7,10 +7,6 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.execenvs;
 
 import gov.sandia.n2a.db.AppData;
-import gov.sandia.n2a.execenvs.beans.AllJobInfo;
-import gov.sandia.n2a.execenvs.beans.DateGroup;
-import gov.sandia.n2a.execenvs.beans.Job;
-import gov.sandia.n2a.execenvs.beans.Resource;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 
 import java.io.File;
@@ -24,38 +20,6 @@ import java.util.Locale;
 
 public abstract class LocalHost extends HostSystem
 {
-    @Override
-    public AllJobInfo getJobs () throws Exception
-    {
-        AllJobInfo result = new AllJobInfo ();
-
-        File dir = new File (getNamedValue ("directory.jobs"));
-        File[] jobDirs = dir.listFiles ();
-        if (jobDirs == null)
-        {
-            return result;
-        }
-        for (File jobDir : jobDirs)
-        {
-            if (! jobDir.isDirectory ())
-            {
-                continue;
-            }
-
-            String jobName = jobDir.getName ();
-            DateGroup group = result.addDateGroup (jobName.substring (0, 10));
-            Job job = group.addJob (jobName);
-
-            File[] jobFiles = jobDir.listFiles ();
-            for (File jobFile : jobFiles)
-            {
-                job.addResource (new Resource (jobFile.getAbsolutePath ()));
-            }
-        }
-
-        return result;
-    }
-
     @Override
     public String createJobDir () throws Exception
     {

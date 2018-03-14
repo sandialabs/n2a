@@ -7,8 +7,6 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.execenvs;
 
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.execenvs.beans.AllJobInfo;
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -70,7 +68,6 @@ public abstract class HostSystem
 
     public abstract Set<Long>    getActiveProcs    ()                            throws Exception;
     public abstract long         getProcMem        (long pid)                    throws Exception;
-    public abstract AllJobInfo   getJobs           ()                            throws Exception;
     public abstract String       createJobDir      ()                            throws Exception;
     public abstract Path         build             (Path source, Path runtime)   throws Exception;
     /**

@@ -6,10 +6,6 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.execenvs;
 
-import gov.sandia.n2a.execenvs.beans.AllJobInfo;
-import gov.sandia.n2a.execenvs.beans.DateGroup;
-import gov.sandia.n2a.execenvs.beans.Job;
-import gov.sandia.n2a.execenvs.beans.Resource;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ssh.RedSkyConnection;
 import gov.sandia.n2a.ssh.RedSkyConnection.Result;
@@ -25,37 +21,6 @@ import java.util.Locale;
 
 public abstract class RemoteHost extends HostSystem
 {
-    @Override
-    public AllJobInfo getJobs () throws Exception
-    {
-        String dir = getNamedValue ("directory.jobs");
-        int dirLength = dir.length ();
-        Result r = RedSkyConnection.exec ("find '" + dir + "'");
-        if (r.error)
-        {
-            Backend.err.get ().println (r.stdErr);
-            throw new Backend.AbortRun ();
-        }
-
-        AllJobInfo result = new AllJobInfo ();
-        BufferedReader reader = new BufferedReader (new StringReader (r.stdOut));
-        String line;
-        while ((line = reader.readLine ()) != null)
-        {
-            int idx     = line.indexOf ("/", dirLength);
-            if (idx     == -1) continue;
-            int nextIdx = line.indexOf ("/", idx + 1);
-            if (nextIdx == -1) continue;
-
-            String jobName = line.substring (idx + 1, nextIdx);
-            DateGroup group = result.addDateGroup (jobName.substring (0, 10));
-            Job job = group.addJob (jobName);
-            job.addResource (new Resource (line));
-        }
-
-        return result;
-    }
-
     @Override
     public String createJobDir () throws Exception
     {
