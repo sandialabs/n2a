@@ -375,14 +375,9 @@ float
 InputHolder::get (float row, bool time, const string & column)
 {
     getRow (row, time);
-    try
-    {
-        return currentValues[columnMap.at (column)];
-    }
-    catch (const out_of_range & e)
-    {
-        return 0;
-    }
+    unordered_map<string,int>::const_iterator it = columnMap.find (column);
+    if (it == columnMap.end ()) return 0;
+    return currentValues[it->second];
 }
 
 float
@@ -1524,17 +1519,8 @@ EventSpikeSingle::run ()
     visit ([](Visitor * visitor)
     {
         visitor->part->update ();
-        bool live = visitor->part->finalize ();
-        // TODO: implement equivalent of Internal finishEvent()
-        if (! live)  // Immediately dequeue, if possible. This is not strictly necessary, but it is necessary to store $live for any part that can't dequeue immediately.
-        {
-            PartTime * p = dynamic_cast<PartTime *> (visitor->part);  // Use of RTTI is potentially expensive
-            if (p)
-            {
-                p->dequeue ();
-                p->leaveSimulation ();
-            }
-        }
+        visitor->part->finalize ();
+        visitor->part->finalizeEvent ();
     });
 }
 

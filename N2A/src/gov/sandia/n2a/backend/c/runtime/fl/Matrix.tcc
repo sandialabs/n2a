@@ -20,7 +20,6 @@ for details.
 
 #include "fl/matrix.h"
 #include "fl/string.h"
-#include "fl/blasproto.h"
 
 #include <algorithm>
 #include <typeinfo>
@@ -322,7 +321,8 @@ namespace fl
   MatrixResult<T>
   MatrixAbstract<T>::operator ! () const
   {
-	throw "Matrix inverse not implemented. Is LAPACK available?";
+	printf ("Matrix inverse not implemented. Is LAPACK available?\n");
+	exit (1);
   }
 
   template<class T>

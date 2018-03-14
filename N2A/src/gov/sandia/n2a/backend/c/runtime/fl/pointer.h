@@ -106,7 +106,11 @@ namespace fl
 		Pointer temp (that);  // force refcount up on memory block
 		if (that.memory == memory) detach ();  // the enemy is us...
 		ptrdiff_t size = temp.size ();
-		if (size < 0) throw "Don't know size of block to copy";
+		if (size < 0)
+		{
+		  printf ("Don't know size of block to copy\n");
+		  exit (1);
+		}
 		grow (size);
 		memcpy (memory, temp.memory, size);
 	  }
@@ -148,7 +152,11 @@ namespace fl
 	{
 	  if      (metaData < 0) memset (memory, 0, memory[-1].size);
 	  else if (metaData > 0) memset (memory, 0, metaData);
-	  else throw "Don't know size of block to clear";
+	  else
+	  {
+		printf ("Don't know size of block to clear\n");
+		exit (1);
+	  }
 	}
 
 	int32_t refcount () const
@@ -229,7 +237,8 @@ namespace fl
 	  else
 	  {
 		metaData = 0;
-		throw "Unable to allocate memory";
+		printf ("Unable to allocate memory\n");
+		exit (1);
 	  }
 	}
 
