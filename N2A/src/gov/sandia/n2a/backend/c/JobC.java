@@ -46,6 +46,7 @@ import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
 import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
 import java.io.PrintStream;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -131,33 +132,39 @@ public class JobC extends Thread
 
     public Path rebuildRuntime (ExecutionEnv env, Path runtimeDir) throws Exception
     {
-        try
+        // Update runtime source files, if necessary
+        boolean changed = false;
+        if (rebuildRuntime)
         {
-            if (rebuildRuntime)
-            {
-                rebuildRuntime = false;
-                throw new Exception ();
-            }
-            return env.buildRuntime (runtimeDir.resolve ("runtime.cc"));
+            if (unpackRuntime (runtimeDir, "",   "runtime.cc", "runtime.h", "Neighbor.cc")) changed = true;
+            if (unpackRuntime (runtimeDir, "fl", "archive.h", "blasproto.h", "math.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "neighbor.h", "pointer.h", "string.h", "Vector.tcc")) changed = true;
+            rebuildRuntime = false;   // Stop checking files for this session.
         }
-        catch (Exception e)
+
+        if (changed) return env.buildRuntime (runtimeDir.resolve ("runtime.cc"));
+        return runtimeDir.resolve ("runtime.o");  // TODO: We should instead rely on compiler wrapper to know what the object file's name is.
+    }
+
+    public boolean unpackRuntime (Path runtimeDir, String suffix, String... names) throws Exception
+    {
+        boolean changed = false;
+        Path dir = runtimeDir.resolve (suffix);
+        Files.createDirectories (dir);
+        String root = "runtime/";
+        if (! suffix.isEmpty ()) root += suffix + "/";
+        for (String s : names)
         {
-            // Presumably we failed to build runtime because files aren't present
-            Files.createDirectories (runtimeDir);
-            for (String s : new String[] {"runtime.cc", "runtime.h", "Neighbor.cc"})
+            URL url = JobC.class.getResource (root + s);
+            long resourceModified = url.openConnection ().getLastModified ();
+            Path f = dir.resolve (s);
+            long fileModified = Files.getLastModifiedTime (f).toMillis ();
+            if (resourceModified > fileModified)
             {
-                Files.copy (JobC.class.getResource ("runtime/" + s).openStream (), runtimeDir.resolve (s), StandardCopyOption.REPLACE_EXISTING);
+                changed = true;
+                Files.copy (url.openStream (), f, StandardCopyOption.REPLACE_EXISTING);
             }
-
-            Path flDir = runtimeDir.resolve ("fl");
-            Files.createDirectories (flDir);
-            for (String s : new String [] {"archive.h", "blasproto.h", "math.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "neighbor.h", "pointer.h", "string.h", "Vector.tcc"})
-            {
-                Files.copy (JobC.class.getResource ("runtime/fl/" + s).openStream (), flDir.resolve (s), StandardCopyOption.REPLACE_EXISTING);
-            }
-
-            return env.buildRuntime (runtimeDir.resolve ("runtime.cc"));
         }
+        return changed;
     }
 
     public void digestModel () throws Exception

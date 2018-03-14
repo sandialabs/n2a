@@ -104,14 +104,6 @@ public abstract class LocalMachineEnv extends ExecutionEnv
         Path dir = sourceFile.getParent ();
         Path binary = dir.resolve (stem + ".o");
 
-        long sourceDate = lastModified (sourceFile);
-        if (sourceDate == 0)
-        {
-            Backend.err.get ().println ("No source file for runtime");
-            throw new Backend.AbortRun ();
-        }
-        if (lastModified (binary) > sourceDate) return binary;  // early out, because we are already compiled
-
         String compiler = getNamedValue ("c.compiler", "g++");
 
         String [] commands = {compiler, "-c", "-O3", "-I" + dir, "-o", binary.toString (), "-std=c++11", sourceFile.toString ()};
