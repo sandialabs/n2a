@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.backend.c;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import gov.sandia.n2a.backend.internal.InternalBackendData;
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventSource;
@@ -75,6 +76,7 @@ public class BackendDataC
 
     public boolean needLocalCtor;
     public boolean needLocalDtor;
+    public boolean needLocalDie;
     public boolean needLocalInit;
     public boolean needLocalPreserve;
     public boolean needLocalFinalize;
@@ -308,11 +310,19 @@ public class BackendDataC
         }
         for (Variable v : s.variables)  // we need these to be in order by differential level, not by dependency
         {
-            if (v.derivative != null  &&  ! v.hasAny (new String[] {"constant", "initOnly"}))
+            if (v.derivative != null  &&  ! v.hasAny ("constant", "initOnly"))
             {
                 if (v.hasAttribute ("global")) globalIntegrated.add (v);
                 else                            localIntegrated.add (v);
             }
+        }
+
+        // Purge any lists that consist solely of temporaries, as they accomplish nothing.
+        for (List<Variable> list : Arrays.asList (globalUpdate, globalDerivativeUpdate, globalInit, globalIntegrated, localUpdate, localDerivativeUpdate, localInit, localIntegrated))
+        {
+            boolean allTemporary = true;
+            for (Variable v : list) if (! v.hasAttribute ("temporary")) allTemporary = false;
+            if (allTemporary) list.clear ();
         }
 
         if (s.connectionBindings != null)
@@ -364,12 +374,6 @@ public class BackendDataC
             }
         }
 
-        needLocalPreserve = localIntegrated.size () > 0  ||  localDerivativePreserve.size () > 0  ||  localBufferedExternalWriteDerivative.size () > 0;
-        needLocalDtor     = needLocalPreserve  ||  localDerivative.size () > 0;
-        needLocalCtor     = needLocalDtor  ||  s.accountableConnections != null  ||  refcount;
-        needLocalInit     = s.connectionBindings == null  ||  localInit.size () > 0  ||  accountableEndpoints.size () > 0  ||  eventTargets.size () > 0;
-        needLocalFinalize = localBufferedExternal.size () > 0  ||  type != null  ||  s.canDie ();
-
         if (eventTargets.size () > 0)
         {
             for (EventTarget et : eventTargets)
@@ -394,6 +398,13 @@ public class BackendDataC
             Backend.err.get ().println ("ERROR: Too many flags to fit in basic integer type");
             throw new Backend.AbortRun ();
         }
+
+        needLocalPreserve = localIntegrated.size () > 0  ||  localDerivativePreserve.size () > 0  ||  localBufferedExternalWriteDerivative.size () > 0;
+        needLocalDtor     = needLocalPreserve  ||  localDerivative.size () > 0;
+        needLocalCtor     = needLocalDtor  ||  s.accountableConnections != null  ||  refcount;
+        needLocalDie      = s.canDie ()  &&  (liveFlag >= 0  ||  s.connectionBindings == null  ||  accountableEndpoints.size () > 0  ||  eventTargets.size () > 0);
+        needLocalInit     = s.connectionBindings == null  ||  localInit.size () > 0  ||  accountableEndpoints.size () > 0  ||  eventTargets.size () > 0;
+        needLocalFinalize = localBufferedExternal.size () > 0  ||  type != null  ||  s.canDie ();
     }
 
     /**

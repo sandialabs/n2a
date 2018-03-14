@@ -713,7 +713,7 @@ public class JobC extends Thread
         {
             result.append ("  virtual void setPeriod (float dt);\n");
         }
-        if (s.canDie ())
+        if (bed.needLocalDie)
         {
             result.append ("  virtual void die ();\n");
         }
@@ -1485,7 +1485,7 @@ public class JobC extends Thread
         }
 
         // Unit die
-        if (s.canDie ())
+        if (bed.needLocalDie)
         {
             result.append ("void " + ns + "die ()\n");
             result.append ("{\n");
