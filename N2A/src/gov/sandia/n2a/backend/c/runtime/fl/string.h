@@ -76,8 +76,8 @@ namespace fl
   inline void
   trim (std::string & target)
   {
-	int begin = target.find_first_not_of (" \t");
-	int end   = target.find_last_not_of  (" \t");
+	int begin = target.find_first_not_of (" \t\r\n");
+	int end   = target.find_last_not_of  (" \t\r\n");
 	if (begin == std::string::npos)
 	{
 	  // all spaces

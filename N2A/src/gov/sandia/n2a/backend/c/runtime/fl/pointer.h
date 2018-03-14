@@ -6,7 +6,7 @@ Distributed under the UIUC/NCSA Open Source License.  See the file LICENSE
 for details.
 
 
-Copyright 2005, 2009 Sandia Corporation.
+Copyright 2005, 2009, 2010 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the GNU Lesser General Public License.  See the file LICENSE
@@ -25,82 +25,9 @@ for details.
 #include <string.h>
 #include <stdint.h>
 #include <stddef.h>
+
 #include <ostream>
-
-
-#undef needFLmutexPointer
-#if defined (__GNUC__)  &&  (defined (__i386__)  ||  defined (__x86_64__))
-
-  static inline void
-  atomicInc (int32_t & a)
-  {
-	__asm ("movl      $1, %%eax;"
-		   "lock xadd %%eax, %0;"
-		   : "=m" (a)
-		   : "m" (a)
-		   : "cc", "eax");
-  }
-
-  static inline int32_t
-  atomicDec (int32_t & a)
-  {
-	register int32_t result;
-	__asm ("movl      $-1, %0;"
-		   "lock xadd %0, %1;"
-		   "subl      $1, %0;"  // adjust value so it represents pre-decrement, not post-decrement
-		   : "=r" (result), "=m" (a)
-		   : "m" (a)
-		   : "cc");
-	return result;
-  }
-
-#elif defined (_MSC_VER)
-
-#  define _WINSOCKAPI_
-#  define NOMINMAX
-#  include <windows.h>
-
-  static inline void
-  atomicInc (int32_t & a)
-  {
-	InterlockedIncrement ((volatile long *) &a);
-  }
-
-  static inline int32_t
-  atomicDec (int32_t & a)
-  {
-	return InterlockedDecrement ((volatile long *) &a);
-  }
-
-#else  // Generic code
-
-  // The simplest way to ensure atomicity is a single global mutex.  This isn't
-  // very good for performance, so it is better to develop platform-specific
-  // solutions.
-
-#  include <pthread.h>
-#  define needFLmutexPointer 1
-
-  extern pthread_mutex_t mutexPointer;
-
-  static inline void
-  atomicInc (int32_t & a)
-  {
-	pthread_mutex_lock   (&mutexPointer);
-	a++;
-	pthread_mutex_unlock (&mutexPointer);
-  }
-
-  static inline int32_t
-  atomicDec (int32_t & a)
-  {
-	pthread_mutex_lock   (&mutexPointer);
-	int result = --a;
-	pthread_mutex_unlock (&mutexPointer);
-	return result;
-  }
-
-#endif
+#include <atomic>
 
 
 namespace fl
@@ -121,15 +48,18 @@ namespace fl
 	  memory = 0;
 	  metaData = 0;
 	}
+
 	Pointer (const Pointer & that)
 	{
 	  attach (that);
 	}
+
 	Pointer (void * that, ptrdiff_t size = 0)
 	{
-	  memory = that;
+	  memory = (Counts *) that;
 	  metaData = size;
 	}
+
 	Pointer (ptrdiff_t size)
 	{
 	  if (size > 0)
@@ -142,6 +72,7 @@ namespace fl
 		metaData = 0;
 	  }
 	}
+
 	~Pointer ()
 	{
 	  detach ();
@@ -156,31 +87,28 @@ namespace fl
 	  }
 	  return *this;
 	}
+
 	Pointer & operator = (void * that)
 	{
 	  attach (that);
 	  return *this;
 	}
+
 	void attach (void * that, ptrdiff_t size = 0)
 	{
 	  detach ();
-	  memory = that;
+	  memory = (Counts *) that;
 	  metaData = size;
 	}
+
 	void copyFrom (const Pointer & that)  ///< decouple from memory held by that.  "that" could also be this.
 	{
 	  if (that.memory)
 	  {
 		Pointer temp (that);  // force refcount up on memory block
-		if (that.memory == memory)  // the enemy is us...
-		{
-		  detach ();
-		}
+		if (that.memory == memory) detach ();  // the enemy is us...
 		ptrdiff_t size = temp.size ();
-		if (size < 0)
-		{
-		  throw "Don't know size of block to copy";
-		}
+		if (size < 0) throw "Don't know size of block to copy";
 		grow (size);
 		memcpy (memory, temp.memory, size);
 	  }
@@ -189,14 +117,12 @@ namespace fl
 		detach ();
 	  }
 	}
+
 	void copyFrom (const void * that, ptrdiff_t size)
 	{
 	  if (size > 0)
 	  {
-		if (that == memory)
-		{
-		  detach ();
-		}
+		if (that == memory) detach ();
 		grow (size);
 		memcpy (memory, that, size);
 	  }
@@ -210,55 +136,33 @@ namespace fl
 	{
 	  if (metaData < 0)
 	  {
-		if (((ptrdiff_t *) memory)[-2] >= size)
-		{
-		  return;
-		}
+		if (memory[-1].size >= size) return;
 		detach ();
 	  }
 	  else if (metaData >= size)  // note:  metaData >= 0 at this point
 	  {
 		return;
 	  }
-	  if (size > 0)
-	  {
-		allocate (size);
-	  }
+	  if (size > 0) allocate (size);
 	}
+
 	void clear ()  // Erase block of memory
 	{
-	  if (metaData < 0)
-	  {
-		memset (memory, 0, ((ptrdiff_t *) memory)[-2]);
-	  }
-	  else if (metaData > 0)
-	  {
-		memset (memory, 0, metaData);
-	  }
-	  else
-	  {
-		throw "Don't know size of block to clear";
-	  }
+	  if      (metaData < 0) memset (memory, 0, memory[-1].size);
+	  else if (metaData > 0) memset (memory, 0, metaData);
+	  else throw "Don't know size of block to clear";
 	}
 
 	int32_t refcount () const
 	{
-	  if (metaData < 0)
-	  {
-		return ((int32_t *) memory)[-1];
-	  }
+	  if (metaData < 0) return memory[-1].refcount;
 	  return -1;
 	}
+
 	ptrdiff_t size () const
 	{
-	  if (metaData < 0)
-	  {
-		return ((ptrdiff_t *) memory)[-2];
-	  }
-	  else if (metaData > 0)
-	  {
-		return metaData;
-	  }
+	  if      (metaData < 0) return memory[-1].size;
+	  else if (metaData > 0) return metaData;
 	  return -1;
 	}
 
@@ -272,20 +176,27 @@ namespace fl
 	{
 	  return memory == that.memory;
 	}
+
 	bool operator != (const Pointer & that) const
 	{
 	  return memory != that.memory;
 	}
 
-	// Functions mainly for internal use
-
+	/**
+	   Release memory and reset this pointer back to unititialized state.
+	   This is primarily an internal function, but it is OK for client
+	   code to call.
+	**/
 	void detach ()
 	{
 	  if (metaData < 0)
 	  {
-		if (atomicDec (((int32_t *) memory)[-1]) == 0)
+		if (--memory[-1].refcount == 0)
 		{
-		  free ((ptrdiff_t *) memory - 2);
+		  // Technically, we should not use delete (memory - 1), because it was
+		  // allocated with malloc(), not new.
+		  (memory - 1)->~Counts ();  // placement dtor, in case atomic_uint needs destruction
+		  free (memory - 1);
 		}
 	  }
 	  memory = 0;
@@ -303,19 +214,18 @@ namespace fl
 	{
 	  memory = that.memory;
 	  metaData = that.metaData;
-	  if (metaData < 0)
-	  {
-		atomicInc (((int32_t *) memory)[-1]);
-	  }
+	  if (metaData < 0) memory[-1].refcount++;
 	}
+
 	void allocate (ptrdiff_t size)
 	{
-	  memory = malloc (size + 2 * sizeof (ptrdiff_t));
+	  memory = (Counts *) malloc (sizeof (Counts) + size);
 	  if (memory)
 	  {
-		memory = & ((ptrdiff_t *) memory)[2];
-		((int32_t *)   memory)[-1] = 1;
-		((ptrdiff_t *) memory)[-2] = size;
+		memory = & memory[1];
+		new (memory - 1) Counts ();  // in case atomic_uint needs construction
+		memory[-1].refcount = 1;
+		memory[-1].size     = size;
 		metaData = -1;
 	  }
 	  else
@@ -325,9 +235,16 @@ namespace fl
 	  }
 	}
 
-  public:
-	void * memory;  ///< Pointer to block in heap.  Must cast as needed.
+	struct Counts
+	{
+	  std::atomic_uint refcount;
+	  ptrdiff_t        size;  ///< Actual size of block, not including this structure. Partially redundant with metadata field.
+	};
+	Counts * memory;  ///< Pointer to block in heap. Must be offset and typecast to access managed data.
+
 	/**
+	   This field is partially redundant with Counts::size. It allows us
+	   to wrap blocks of memory owned by other code.
 	   metaData < 0 indicates memory is a special pointer we constructed.
 	   There is meta data associated with the pointer, and all "smart" pointer
 	   functions are available.  This is the only time that we can (and must)
@@ -338,14 +255,14 @@ namespace fl
 	   own it.
 	**/
 	ptrdiff_t metaData;
+
+	friend std::ostream & operator << (std::ostream & stream, const Pointer & pointer);
   };
 
   inline std::ostream &
   operator << (std::ostream & stream, const Pointer & pointer)
   {
-	stream << "[" << pointer.memory << " " << pointer.size () << " " << pointer.refcount () << "]";
-	//stream << "[" << &pointer << ": " << pointer.memory << " " << pointer.size () << " " << pointer.refcount () << "]";
-	return stream;
+	return stream << "[" << &pointer << " " << pointer.memory << " " << pointer.size () << " " << pointer.refcount () << "]";
   }
 
 
@@ -411,10 +328,7 @@ namespace fl
 
 	int32_t refcount () const
 	{
-	  if (memory)
-	  {
-		return memory->refcount;
-	  }
+	  if (memory) return memory->refcount;
 	  return -1;
 	}
 
@@ -432,26 +346,26 @@ namespace fl
 	{
 	  if (memory)
 	  {
-		if (atomicDec (memory->refcount) == 0) delete memory;
+		if (--memory->refcount == 0) delete memory;
 		memory = 0;
 	  }
 	}
 
 	struct RefcountBlock
 	{
-	  T object;
-	  int32_t refcount;
+	  T                object;
+	  std::atomic_uint refcount;
 	};
 	RefcountBlock * memory;
 
   protected:
 	/**
 	   attach assumes that memory == 0, so we must protect it.
-	 **/
+	**/
 	void attach (RefcountBlock * that)
 	{
 	  memory = that;
-	  if (memory) atomicInc (memory->refcount);
+	  if (memory) memory->refcount++;
 	}
   };
 
@@ -468,7 +382,7 @@ namespace fl
   {
   public:
 	ReferenceCounted () {PointerPolyReferenceCount = 0;}
-	mutable int32_t PointerPolyReferenceCount;  ///< The number of PointerPolys that are attached to this instance.
+	mutable std::atomic_uint PointerPolyReferenceCount;  ///< The number of PointerPolys that are attached to this instance.
   };
   
 
@@ -542,10 +456,7 @@ namespace fl
 
 	int32_t refcount () const
 	{
-	  if (memory)
-	  {
-		return memory->PointerPolyReferenceCount;
-	  }
+	  if (memory) return memory->PointerPolyReferenceCount;
 	  return -1;
 	}
 
@@ -591,12 +502,12 @@ namespace fl
 	   Binds to the given pointer.  This method should only be called when
 	   we are not currently bound to anything.  This class is coded so that
 	   this condition is always true when this function is called internally.
-	 **/
+	**/
 	void attach (T * that)
 	{
 	  assert (memory == 0);
 	  memory = that;
-	  if (memory) atomicInc (memory->PointerPolyReferenceCount);
+	  if (memory) memory->PointerPolyReferenceCount++;
 	}
 
 	void detach ()
@@ -604,7 +515,7 @@ namespace fl
 	  if (memory)
 	  {
 		assert (memory->PointerPolyReferenceCount > 0);
-		if (atomicDec (memory->PointerPolyReferenceCount) == 0) delete memory;
+		if (--memory->PointerPolyReferenceCount == 0) delete memory;
 		memory = 0;
 	  }
 	}

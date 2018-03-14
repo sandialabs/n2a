@@ -85,6 +85,7 @@ void
 KDTree::clear ()
 {
   delete root;
+  root = 0;
 }
 
 void

@@ -18,6 +18,7 @@ for details.
 #include <vector>
 #include <set>
 #include <map>
+#include <unordered_map>
 #include <typeinfo>
 #include <iostream>
 #include <fstream>
@@ -80,15 +81,16 @@ namespace fl
   class Archive
   {
   public:
+	SHARED Archive ();  ///< Creates archive in the closed state. Must call open() before inserting or extracting data. However, classes may be registered before call to open().
 	SHARED Archive (std::istream & in,  bool ownStream = false);
 	SHARED Archive (std::ostream & out, bool ownStream = false);
 	SHARED Archive (const std::string & fileName, const std::string & mode);
 	SHARED ~Archive ();
 
-	SHARED void open (std::istream & in, bool ownStream = false);
+	SHARED void open (std::istream & in,  bool ownStream = false);
 	SHARED void open (std::ostream & out, bool ownStream = false);
 	SHARED void open (const std::string & fileName, const std::string & mode);
-	SHARED void close ();
+	SHARED void close (bool reuseRegistrations = false);  ///< @param reuseRegistrations Retain knowledge of the current set of registered classes, so the archive can be opened for another serialization without registering them again.
 
 	/**
 	   Create a class description record in memory.
@@ -235,7 +237,7 @@ namespace fl
 		  uint32_t nullPointer = 0xFFFFFFFF;
 		  return (*this) & nullPointer;
 		}
-		std::map<const void *, uint32_t>::iterator p = pointersOut.find (data);
+		std::unordered_map<const void *, uint32_t>::iterator p = pointersOut.find (data);
 		if (p != pointersOut.end ()) (*this) & p->second;
 		else
 		{
@@ -315,8 +317,8 @@ namespace fl
 	std::ostream * out;
 	bool ownStream;
 
-	std::vector<const void *>        pointersIn;   ///< mapping from serial # to pointer
-	std::map<const void *, uint32_t> pointersOut;  ///< mapping from pointer to serial #; @todo change this to unordered_map when broadly available
+	std::vector       <const void *>           pointersIn;   ///< mapping from serial # to pointer
+	std::unordered_map<const void *, uint32_t> pointersOut;  ///< mapping from pointer to serial #
 
 	std::vector<ClassDescription *>           classesIn;   ///< mapping from serial # to class description; ClassDescription objects are held by classesOut
 	std::map<std::string, ClassDescription *> classesOut;  ///< mapping from RTTI name to class description; one-to-one

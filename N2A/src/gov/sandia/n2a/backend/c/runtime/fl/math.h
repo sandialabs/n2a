@@ -23,6 +23,7 @@ for details.
 #endif
 
 #include <cmath>
+#include <algorithm>
 #include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -86,48 +87,26 @@ namespace std
 	return log ((double) a);
   }
 
-  inline double
-  erf (double x)
-  {
-	const double a1 =  0.254829592;
-	const double a2 = -0.284496736;
-	const double a3 =  1.421413741;
-	const double a4 = -1.453152027;
-	const double a5 =  1.061405429;
-	const double p  =  0.3275911;
-
-	double sign = 1;
-	if (x < 0)
-	{
-	  sign = -1;
-	  x = -x;
-	}
-
-	double t = 1.0 / (1.0 + p * x);
-	double y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * exp (- x * x);
-	return sign * y;
-  }
-
 #endif
 
   /**
 	 Four-way max.  Used mainly for finding limits of a set of four points in the plane.
    **/
   template<class T>
-  inline T
-  max (T a, T b, T c, T d)
+  inline const T &
+  max (const T & a, const T & b, const T & c, const T & d)
   {
-	return max (a, max (b, max (c, d)));
+	return max (max (a, b), max (c, d));
   }
 
   /**
 	 Four-way min.  Used mainly for finding limits of a set of four points in the plane.
    **/
   template<class T>
-  inline T
-  min (T a, T b, T c, T d)
+  inline const T &
+  min (const T & a, const T & b, const T & c, const T & d)
   {
-	return min (a, min (b, min (c, d)));
+	return min (min (a, b), min (c, d));
   }
 }
 
@@ -195,17 +174,6 @@ namespace fl
 	return floor (a + 0.5);
   }
 
-  inline double
-  mod2pi (double a)
-  {
-	a = fmod (a, TWOPI);
-	if (a < 0)
-	{
-	  a += TWOPI;
-	}
-	return a;
-  }
-
   inline float
   mod2pi (float a)
   {
@@ -213,6 +181,17 @@ namespace fl
 	if (a < 0)
 	{
 	  a += TWOPIf;
+	}
+	return a;
+  }
+
+  inline double
+  mod2pi (double a)
+  {
+	a = fmod (a, TWOPI);
+	if (a < 0)
+	{
+	  a += TWOPI;
 	}
 	return a;
   }
