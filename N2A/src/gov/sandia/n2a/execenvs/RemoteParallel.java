@@ -7,9 +7,8 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.execenvs;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.execenvs.Connection.Result;
 import gov.sandia.n2a.plugins.extpoints.Backend;
-import gov.sandia.n2a.ssh.RedSkyConnection;
-import gov.sandia.n2a.ssh.RedSkyConnection.Result;
 
 import java.io.BufferedReader;
 import java.io.StringReader;
@@ -21,7 +20,7 @@ public class RemoteParallel extends RemoteHost
     @Override
     public Set<Long> getActiveProcs() throws Exception
     {
-        Result r = RedSkyConnection.exec ("squeue -o \"%u %i\" -u " + System.getProperty ("user.name"));
+        Result r = Connection.exec ("squeue -o \"%u %i\" -u " + System.getProperty ("user.name"));
         if (r.error && r.stdErr != null && !r.stdErr.equals (""))
         {
             Backend.err.get ().println (r.stdErr);
@@ -52,7 +51,7 @@ public class RemoteParallel extends RemoteHost
         );
 
         // Note: There may be other sbatch parameters that are worth controlling here.
-        Result r = RedSkyConnection.exec
+        Result r = Connection.exec
         (
             "sbatch"
             + " --nodes="            + nodes
@@ -89,7 +88,7 @@ public class RemoteParallel extends RemoteHost
     @Override
     public void killJob (long pid) throws Exception
     {
-        RedSkyConnection.exec ("scancel " + pid);
+        Connection.exec ("scancel " + pid);
     }
 
     public String getNamedValue (String name, String defaultValue)

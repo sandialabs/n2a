@@ -4,7 +4,7 @@ Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
-package gov.sandia.n2a.ssh;
+package gov.sandia.n2a.execenvs;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -21,7 +21,7 @@ import com.jcraft.jsch.JSchException;
 import com.jcraft.jsch.Session;
 import com.jcraft.jsch.UserInfo;
 
-public class RedSkyConnection {
+public class Connection {
 
     // Inner class for exec results.
     public static class Result {
@@ -68,7 +68,7 @@ public class RedSkyConnection {
             // Create a new session and attempt to connect.
             String user = System.getProperty("user.name");
             session = jsch.getSession(user, RED_SKY_HOST, SSH_PORT);
-            UserInfo ui = new MyUserInfo();
+            UserInfo ui = new ConnectionInfo();
             session.setUserInfo(ui);
             session.connect(30000);
         }

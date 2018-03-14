@@ -6,9 +6,8 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.execenvs;
 
+import gov.sandia.n2a.execenvs.Connection.Result;
 import gov.sandia.n2a.plugins.extpoints.Backend;
-import gov.sandia.n2a.ssh.RedSkyConnection;
-import gov.sandia.n2a.ssh.RedSkyConnection.Result;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -21,7 +20,7 @@ public abstract class RemoteHost extends HostSystem
     // TODO: package remote file operations into a FileSystemProvider
     public void createDir (String path) throws Exception
     {
-        Result r = RedSkyConnection.exec ("mkdir -p '" + path + "'");
+        Result r = Connection.exec ("mkdir -p '" + path + "'");
         if (r.error)
         {
             Backend.err.get ().println ("Could not create job directory: " + r.stdErr);
@@ -34,7 +33,7 @@ public abstract class RemoteHost extends HostSystem
     {
         File tempFile = new File ("tempSetFileContents");  // Created in local working directory, which should be set to the job dir.
         stringToFile (tempFile, content);
-        Result r = RedSkyConnection.send (tempFile, path);
+        Result r = Connection.send (tempFile, path);
         if (r.error)
         {
             Backend.err.get ().println ("Could not send file content to remote system: " + r.stdErr);
@@ -45,7 +44,7 @@ public abstract class RemoteHost extends HostSystem
     @Override
     public String getFileContents (String path) throws Exception
     {
-        Result r = RedSkyConnection.exec ("cat '" + path + "'");
+        Result r = Connection.exec ("cat '" + path + "'");
         if (r.error)
         {
             Backend.err.get ().println (r.stdErr);
@@ -60,7 +59,7 @@ public abstract class RemoteHost extends HostSystem
         String dir = getNamedValue ("directory.jobs");
         String path = dir + "/" + jobName;
         String rmCmd = "rm -rf '" + path + "'";
-        Result r = RedSkyConnection.exec (rmCmd);
+        Result r = Connection.exec (rmCmd);
         if (r.error)
         {
             Backend.err.get ().println (r.stdErr);
@@ -71,7 +70,7 @@ public abstract class RemoteHost extends HostSystem
     @Override
     public void downloadFile (String path, File destPath) throws Exception
     {
-        Result r = RedSkyConnection.receive (path, destPath);
+        Result r = Connection.receive (path, destPath);
         if (r.error)
         {
             Backend.err.get ().println (r.stdErr);
@@ -83,7 +82,7 @@ public abstract class RemoteHost extends HostSystem
     {
         try
         {
-            Result r = RedSkyConnection.exec ("ls --time-style=full '" + path + "'");
+            Result r = Connection.exec ("ls --time-style=full '" + path + "'");
             if (r.error) return 0;
             String line = new BufferedReader (new StringReader (r.stdOut)).readLine ();
             if (line.contains ("No such")) return 0;
@@ -112,7 +111,7 @@ public abstract class RemoteHost extends HostSystem
         {
             try
             {
-                Result r = RedSkyConnection.exec ("cd; pwd");  // return to home directory and print it; probably pwd alone is sufficient
+                Result r = Connection.exec ("cd; pwd");  // return to home directory and print it; probably pwd alone is sufficient
                 String line = new BufferedReader (new StringReader (r.stdOut)).readLine ();
                 return line + "/.n2a";
             }
@@ -125,7 +124,7 @@ public abstract class RemoteHost extends HostSystem
         {
             try
             {
-                Result r = RedSkyConnection.exec ("cd; pwd");  // return to home directory and print it; probably pwd alone is sufficient
+                Result r = Connection.exec ("cd; pwd");  // return to home directory and print it; probably pwd alone is sufficient
                 String line = new BufferedReader (new StringReader (r.stdOut)).readLine ();
                 return line + "/.n2a_cruntime";
             }

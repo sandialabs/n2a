@@ -7,9 +7,8 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.execenvs;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.execenvs.Connection.Result;
 import gov.sandia.n2a.plugins.extpoints.Backend;
-import gov.sandia.n2a.ssh.RedSkyConnection;
-import gov.sandia.n2a.ssh.RedSkyConnection.Result;
 
 import java.io.BufferedReader;
 import java.io.StringReader;
@@ -22,7 +21,7 @@ public class RemoteGateway extends RemoteHost
     @Override
     public Set<Long> getActiveProcs () throws Exception
     {
-        Result r = RedSkyConnection.exec ("ps ux");
+        Result r = Connection.exec ("ps ux");
         if (r.error)
         {
             Backend.err.get ().println (r.stdErr);
@@ -47,10 +46,10 @@ public class RemoteGateway extends RemoteHost
     public long submitJob (MNode job, String command) throws Exception
     {
         String jobDir = job.get ("$metadata", "remote.dir");  // Of course, this is a dir this class generated for the job.
-        RedSkyConnection.exec (command + " > '" + jobDir + "/out' 2> '" + jobDir + "/err' &", true);
+        Connection.exec (command + " > '" + jobDir + "/out' 2> '" + jobDir + "/err' &", true);
 
         // Get PID of newly-created job
-        Result r = RedSkyConnection.exec ("ps -ewwo pid,command");
+        Result r = Connection.exec ("ps -ewwo pid,command");
         if (r.error) return 0;
         BufferedReader reader = new BufferedReader (new StringReader (r.stdOut));
         String line;
@@ -66,7 +65,7 @@ public class RemoteGateway extends RemoteHost
     @Override
     public void killJob (long pid) throws Exception
     {
-        RedSkyConnection.exec ("kill -9 " + pid);
+        Connection.exec ("kill -9 " + pid);
     }
 
     public String getNamedValue (String name, String defaultValue)

@@ -5,7 +5,7 @@ the U.S. Government retains certain rights in this software.
 */
 
 
-package gov.sandia.n2a.ssh;
+package gov.sandia.n2a.execenvs;
 
 import java.awt.Container;
 import java.awt.GridBagConstraints;
@@ -23,7 +23,7 @@ import javax.swing.event.AncestorListener;
 import com.jcraft.jsch.UIKeyboardInteractive;
 import com.jcraft.jsch.UserInfo;
 
-public class MyUserInfo implements UserInfo, UIKeyboardInteractive {
+public class ConnectionInfo implements UserInfo, UIKeyboardInteractive {
     private JTextField passwordField = new JPasswordField(20);
     private String passwd;
 
