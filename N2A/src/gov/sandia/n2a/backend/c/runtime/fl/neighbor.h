@@ -39,9 +39,6 @@ namespace fl
   public:
 	virtual ~Neighbor ();
 
-	static uint32_t serializeVersion;
-	void serialize (Archive & archive, uint32_t version);
-
 	/**
 	   Prepare internal structures for fast retrieval of neighbors.
 	   @param data We do not take ownership of the collection, but expect the
@@ -92,8 +89,6 @@ namespace fl
 	KDTree ();
 	virtual ~KDTree ();
 	void clear ();
-
-	void serialize (Archive & archive, uint32_t version);
 
 	virtual void set  (const std::vector<MatrixAbstract<float> *> & data);
 	virtual void find (const MatrixAbstract<float> & query, std::vector<MatrixAbstract<float> *> & result) const;

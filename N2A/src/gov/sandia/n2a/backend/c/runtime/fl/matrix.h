@@ -20,7 +20,6 @@ for details.
 
 #include "fl/math.h"
 #include "fl/pointer.h"
-#include "fl/archive.h"
 
 #include <iostream>
 #include <sstream>
@@ -196,10 +195,6 @@ namespace fl
 	        MatrixAbstract & operator -= (const MatrixResult<T> & B) {return operator -= (*B.result);}
 	virtual MatrixAbstract & operator -= (const T scalar);            ///< Decrease each element by scalar
 
-	// Serialization
-	void serialize (Archive & archive, uint32_t version);
-	static uint32_t serializeVersion;
-
 	// Global Data
 	static int displayWidth;  ///< Number of character positions per cell to use when printing out matrix.
 	static int displayPrecision;  ///< Number of significant digits to output.
@@ -361,8 +356,6 @@ namespace fl
 	        MatrixAbstract<T> & operator -= (const MatrixResult      & B)      {return *result -= *B.result;}
 	virtual MatrixAbstract<T> & operator -= (const T scalar)                   {return *result -= scalar;}
 
-	void serialize (Archive & archive, uint32_t version)                       {throw "Attempt to serialize a MatrixResult";}
-
 	MatrixAbstract<T> * result;  ///< We always take responsibility for destroying "result".
   };
 
@@ -483,8 +476,6 @@ namespace fl
 	template<class T2> MatrixResult<T> operator * (const MatrixAbstract<T2> & B) const {return operator * ((MatrixStrided<T>) B);}
 	template<class T2> MatrixResult<T> operator - (const MatrixAbstract<T2> & B) const {return operator - ((MatrixStrided<T>) B);}
 
-	void serialize (Archive & archive, uint32_t version);
-
 	// Data
 	Pointer data;
 	int offset;
@@ -578,8 +569,6 @@ namespace fl
 
 	virtual MatrixResult<T> operator ~ () const;
 
-	void serialize (Archive & archive, uint32_t version);
-
 	// Data
 	Pointer data;
 	int rows_;  ///< columns = rows
@@ -622,8 +611,6 @@ namespace fl
 	using MatrixAbstract<T>::operator *;
 	virtual MatrixResult<T>  operator - (const MatrixAbstract<T> & B) const;
 	using MatrixAbstract<T>::operator -;
-
-	void serialize (Archive & archive, uint32_t version);
 
 	int rows_;
 	fl::PointerStruct< std::vector< std::map<int, T> > > data;
@@ -683,8 +670,6 @@ namespace fl
 	virtual MatrixResult<T>  operator / (const T scalar)              const;
 	virtual MatrixResult<T>  operator - (const MatrixAbstract<T> & B) const;
 	using MatrixAbstract<T>::operator -;
-
-	void serialize (Archive & archive, uint32_t version);
 
 	std::vector<int> startRows;
 	std::vector<int> startColumns;
@@ -908,8 +893,6 @@ namespace fl
 
 	virtual MatrixAbstract<T> & operator *= (const T scalar);
 	virtual MatrixAbstract<T> & operator /= (const T scalar);
-
-	void serialize (Archive & archive, uint32_t version);
 
 	// Data
 	T data[C][R];

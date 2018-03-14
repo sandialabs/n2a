@@ -22,13 +22,6 @@ Neighbor::~Neighbor ()
 {
 }
 
-uint32_t Neighbor::serializeVersion = 0;
-
-void
-Neighbor::serialize (Archive & archive, uint32_t version)
-{
-}
-
 
 // class Entry ----------------------------------------------------------------
 
@@ -86,11 +79,6 @@ KDTree::clear ()
 {
   delete root;
   root = 0;
-}
-
-void
-KDTree::serialize (Archive & archive, uint32_t version)
-{
 }
 
 void

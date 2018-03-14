@@ -375,14 +375,6 @@ namespace fl
 	while (i < end) *i++ /= scalar;
 	return *this;
   }
-
-  template<class T, int R, int C>
-  void
-  MatrixFixed<T,R,C>::serialize (Archive & archive, uint32_t version)
-  {
-	if (archive.in) archive.in ->read  ((char *) data, R * C * sizeof (T));
-	else            archive.out->write ((char *) data, R * C * sizeof (T));
-  }
 }
 
 

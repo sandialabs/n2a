@@ -18,8 +18,6 @@ for details.
 #define pointer_h
 
 
-#include "fl/archive.h"
-
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
@@ -426,14 +424,6 @@ namespace fl
 	  detach ();
 	}
 
-	static uint32_t serializeVersion;
-
-	void serialize (Archive & archive, uint32_t version)
-	{
-	  archive & memory;
-	  if (archive.in) memory->PointerPolyReferenceCount = 1;
-	}
-
 	PointerPoly & operator = (const PointerPoly & that)
 	{
 	  if (that.memory != memory)
@@ -522,8 +512,6 @@ namespace fl
 
 	T * memory;
   };
-
-  template<class T> uint32_t PointerPoly<T>::serializeVersion = 1;
 }
 
 

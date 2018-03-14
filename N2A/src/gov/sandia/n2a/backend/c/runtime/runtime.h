@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <functional>
 #include <queue>
+#include <set>
 
 typedef fl::MatrixFixed<float,3,1> Vector3;
 

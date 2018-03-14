@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <fstream>
 
 #include "fl/Matrix.tcc"
 #include "fl/MatrixFixed.tcc"

@@ -37,9 +37,6 @@ namespace fl
   int MatrixAbstract<T>::displayPrecision = 6;
 
   template<class T>
-  uint32_t MatrixAbstract<T>::serializeVersion = 0;
-
-  template<class T>
   MatrixAbstract<T>::~MatrixAbstract ()
   {
   }
@@ -595,12 +592,6 @@ namespace fl
   {
 	copyFrom ((*this) - scalar);
 	return *this;
-  }
-
-  template<class T>
-  void
-  MatrixAbstract<T>::serialize (Archive & archive, uint32_t version)
-  {
   }
 
   /**
@@ -1833,64 +1824,6 @@ namespace fl
 	  i += stepC;
 	}
 	return *this;
-  }
-
-  template<class T>
-  void
-  MatrixStrided<T>::serialize (Archive & archive, uint32_t version)
-  {
-	archive & rows_;
-	archive & columns_;
-
-	if (archive.in)
-	{
-	  offset  = 0;
-	  strideR = 1;
-	  strideC = rows_;
-
-	  if (! archive.in->good ()) throw "Stream bad.  Unable to finish reading Matrix.";
-	  int bytes = rows_ * columns_ * sizeof (T);
-	  this->data.grow (bytes);
-	  archive.in->read ((char *) data, bytes);
-	}
-	else
-	{
-	  T * i = (T *) data + offset;
-	  // Chunk the output as much as possible.  This makes writing to the stream much faster.
-	  if (strideR == 1)
-	  {
-		if (strideC == rows_)
-		{
-		  archive.out->write ((char *) i, rows_ * columns_ * sizeof (T));
-		}
-		else
-		{
-		  const int bytes = rows_ * sizeof (T);
-		  int count = bytes * columns_;
-		  while (count > 0)
-		  {
-			archive.out->write ((char *) i, bytes);
-			i += strideC;
-			count -= bytes;
-		  }
-		}
-	  }
-	  else
-	  {
-		T * end = i + strideC * columns_;
-		const int stepC = strideC - rows_ * strideR;
-		while (i != end)
-		{
-		  T * columnEnd = i + rows_ * strideR;
-		  while (i != columnEnd)
-		  {
-			archive.out->write ((char *) i, sizeof (T));
-			i += strideR;
-		  }
-		  i += stepC;
-		}
-	  }
-	}
   }
 
 
