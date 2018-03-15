@@ -156,6 +156,7 @@ public class Part extends Instance
         {
             temp.setFinal (v, temp.getFinal (v));
         }
+        if (temp.bed.lastT != null) temp.setFinal (temp.bed.lastT, new Scalar (simulator.currentEvent.t));
 
         // non-$variables
         for (Variable v : temp.bed.localInitRegular)

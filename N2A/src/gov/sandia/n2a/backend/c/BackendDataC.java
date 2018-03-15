@@ -63,6 +63,8 @@ public class BackendDataC
     public Variable type;
     public Variable xyz;
 
+    public boolean lastT;
+
     public boolean needGlobalCtor;
     public boolean needGlobalDtor;
     public boolean needGlobalPreserve;
@@ -405,6 +407,20 @@ public class BackendDataC
         needLocalDie      = s.canDie ()  &&  (liveFlag >= 0  ||  s.connectionBindings == null  ||  accountableEndpoints.size () > 0  ||  eventTargets.size () > 0);
         needLocalInit     = s.connectionBindings == null  ||  localInit.size () > 0  ||  accountableEndpoints.size () > 0  ||  eventTargets.size () > 0;
         needLocalFinalize = localBufferedExternal.size () > 0  ||  type != null  ||  s.canDie ();
+    }
+
+    public void analyzeLastT (EquationSet s)
+    {
+        boolean hasIntegrated = localIntegrated.size () > 0;
+        for (EquationSet p : s.parts)
+        {
+            if (hasIntegrated) break;
+            hasIntegrated = ((BackendDataC) p.backendData).globalIntegrated.size () > 0;
+        }
+        boolean dtCanChange =  dt != null  &&  dt.equations.size () > 0  &&  ! dt.hasAttribute ("initOnly");
+        // dt could also change if we use a variable-step integrator. There are currently no plans to implement one.
+
+        lastT = hasIntegrated  &&  (eventTargets.size () > 0  ||  dtCanChange);
     }
 
     /**

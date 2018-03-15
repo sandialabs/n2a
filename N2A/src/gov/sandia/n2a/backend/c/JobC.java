@@ -257,7 +257,7 @@ public class JobC extends Thread
         BackendDataC bed = (BackendDataC) s.backendData;
         bed.analyze (s);
         for (EquationSet p : s.parts) analyze (p);
-        // TODO: analyze lastT
+        bed.analyzeLastT (s);
     }
 
     public void generateCode (Path runtimeDir, Path source) throws Exception
@@ -695,6 +695,10 @@ public class JobC extends Thread
         if (bed.index != null)
         {
             result.append ("  int __24index;\n");
+        }
+        if (bed.lastT)
+        {
+            result.append ("  double lastT;\n");  // $lastT is for internal use only, so no need for __24 prefix.
         }
         for (Variable v : bed.localMembers)
         {
@@ -1651,12 +1655,20 @@ public class JobC extends Thread
                 multiconditional (v, context, "  ");
             }
             // finalize $variables
+            if (bed.localBuffered.contains (bed.dt)  ||  bed.lastT)
+            {
+                result.append ("  EventStep * event = getEvent ();\n");
+            }
+            if (bed.lastT)
+            {
+                result.append ("  lastT = event.t;\n");
+            }
             for (Variable v : bed.localBuffered)  // more than just localBufferedInternal, because we must finalize members as well
             {
                 if (! v.name.startsWith ("$")) continue;
                 if (v == bed.dt)
                 {
-                    result.append ("  if (" + mangle ("next_", v) + " != getEvent ()->dt) setPeriod (" + mangle ("next_", v) + ");\n");
+                    result.append ("  if (" + mangle ("next_", v) + " != event->dt) setPeriod (" + mangle ("next_", v) + ");\n");
                 }
                 else
                 {
@@ -1719,9 +1731,17 @@ public class JobC extends Thread
             result.append ("{\n");
             if (bed.localIntegrated.size () > 0)
             {
+                result.append ("  EventStep * event = getEvent ();\n");
+                if (bed.lastT)
+                {
+                    result.append ("  float dt = event->t - lastT;\n");
+                }
+                else
+                {
+                    result.append ("  float dt = event->dt;\n");
+                }
                 // Note the resolve() call on the left-hand-side below has lvalue==false.
                 // Integration always takes place in the primary storage of a variable.
-                result.append ("  float dt = getEvent ()->dt;\n");  // TODO: handle spike events, which produce variable integration times, even for fixed-period models
                 result.append ("  if (preserve)\n");
                 result.append ("  {\n");
                 for (Variable v : bed.localIntegrated)
@@ -1791,7 +1811,7 @@ public class JobC extends Thread
             }
 
             // Preemptively fetch current event
-            boolean needT = bed.eventSources.size () > 0;
+            boolean needT = bed.eventSources.size () > 0  ||  bed.lastT;
             for (Variable v : bed.localBufferedExternal)
             {
                 if (v == bed.dt) needT = true;
@@ -1859,6 +1879,10 @@ public class JobC extends Thread
             }
 
             // Finalize variables
+            if (bed.lastT)
+            {
+                result.append ("  lastT = event.t;\n");
+            }
             for (Variable v : bed.localBufferedExternal)
             {
                 if (v == bed.dt)
