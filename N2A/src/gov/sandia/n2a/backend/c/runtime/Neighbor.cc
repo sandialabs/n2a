@@ -154,6 +154,7 @@ KDTree::find (const MatrixAbstract<float> & query, vector<MatrixAbstract<float> 
   }
 }
 
+#ifndef N2A_SPINNAKER
 void
 KDTree::dump (ostream & out, const string & pad) const
 {
@@ -166,6 +167,7 @@ KDTree::dump (ostream & out, const string & pad) const
 	root->dump (out, pad + "  ");
   }
 }
+#endif
 
 KDTree::Node *
 KDTree::construct (vector<MatrixAbstract<float> *> & points)
@@ -287,6 +289,7 @@ KDTree::Branch::search (float distance, Query & q) const
   }
 }
 
+#ifndef N2A_SPINNAKER
 void
 KDTree::Branch::dump (ostream & out, const string & pad) const
 {
@@ -302,6 +305,7 @@ KDTree::Branch::dump (ostream & out, const string & pad) const
 	highNode->dump (out, pad + "  ");
   }
 }
+#endif
 
 
 // class KDTree::Leaf ---------------------------------------------------------
@@ -342,8 +346,10 @@ KDTree::Leaf::search (float distance, Query & q) const
   }
 }
 
+#ifndef N2A_SPINNAKER
 void
 KDTree::Leaf::dump (ostream & out, const string & pad) const
 {
   for (int i = 0; i < points.size (); i++) out << pad << *points[i] << endl;
 }
+#endif

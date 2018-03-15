@@ -244,6 +244,11 @@ public class InternalBackend extends Backend
         e.determineTypes ();
         e.determineDuration ();
 
+        prepareToRun (e);
+    }
+
+    public static void prepareToRun (EquationSet e)
+    {
         createBackendData (e);
         analyzeEvents (e);
         analyze (e);

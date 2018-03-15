@@ -19,7 +19,6 @@ import java.lang.management.OperatingSystemMXBean;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -83,11 +82,11 @@ public abstract class HostSystem
     public abstract void         deleteJob         (String jobName)              throws Exception;
     public abstract void         downloadFile      (String path, File destPath)  throws Exception;
 
-    public long lastModified (Path path)
+    public static long lastModified (Path path)
     {
         try
         {
-            return Files.readAttributes (path, BasicFileAttributes.class).lastModifiedTime ().toMillis ();
+            return Files.getLastModifiedTime (path).toMillis ();
         }
         catch (IOException e1)
         {

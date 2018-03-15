@@ -19,7 +19,6 @@ for details.
 
 
 #include "fl/matrix.h"
-#include "fl/string.h"
 
 #include <algorithm>
 #include <typeinfo>
@@ -284,6 +283,7 @@ namespace fl
 	return new MatrixRegion<T> (*this, firstRow, firstColumn, lastRow, lastColumn);
   }
 
+# ifndef N2A_SPINNAKER
   template<class T>
   const char *
   MatrixAbstract<T>::toString (std::string & buffer) const
@@ -293,6 +293,7 @@ namespace fl
 	buffer = stream.str ();
 	return buffer.c_str ();
   }
+#endif
 
   template<class T>
   bool
@@ -594,6 +595,22 @@ namespace fl
 	return *this;
   }
 
+#ifndef N2A_SPINNAKER
+
+  inline void
+  trim (std::string & target)
+  {
+	int begin = target.find_first_not_of (" \t\r\n");
+	int end   = target.find_last_not_of  (" \t\r\n");
+	if (begin == std::string::npos)
+	{
+	  // all spaces
+	  target.erase ();
+	  return;
+	}
+	target = target.substr (begin, end - begin + 1);
+  }
+
   /**
 	 Relies on ostream to absorb the variability in the type T.
 	 This function should be specialized for char (since ostreams treat
@@ -778,6 +795,8 @@ namespace fl
 	stream >> A;
 	return A;
   }
+
+#endif
 
 
   // class MatrixStrided<T> ---------------------------------------------------
@@ -1867,11 +1886,13 @@ namespace fl
 	}
   }
 
+# ifndef N2A_SPINNAKER
   template<class T>
   Matrix<T>::Matrix (const std::string & source)
   {
 	*this << source;
   }
+# endif
 
   template<class T>
   Matrix<T>::Matrix (T * that, const int rows, const int columns)

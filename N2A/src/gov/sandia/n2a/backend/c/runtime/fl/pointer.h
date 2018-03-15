@@ -266,11 +266,13 @@ namespace fl
 	friend std::ostream & operator << (std::ostream & stream, const Pointer & pointer);
   };
 
+# ifndef N2A_SPINNAKER
   inline std::ostream &
   operator << (std::ostream & stream, const Pointer & pointer)
   {
 	return stream << "[" << &pointer << " " << pointer.memory << " " << pointer.size () << " " << pointer.refcount () << "]";
   }
+# endif
 
 
   /**

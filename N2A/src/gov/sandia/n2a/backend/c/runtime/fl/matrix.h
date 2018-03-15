@@ -218,6 +218,7 @@ namespace fl
   template<class T>
   SHARED T elementFromString (const std::string & value);
 
+#ifndef N2A_SPINNAKER
   /**
 	 Print human readable matrix to stream.  Formatted to be readable by
 	 operator >> (istream, Matrix).
@@ -255,6 +256,7 @@ namespace fl
   template<class T>
   SHARED MatrixAbstract<T> &
   operator << (MatrixAbstract<T> & A, const std::string & source);
+#endif
 
   /**
 	 An adapter that allows a function to return a matrix created on the heap

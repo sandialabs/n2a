@@ -41,7 +41,10 @@ class InputHolder
 {
 public:
     std::string                         fileName;
+#   ifndef N2A_SPINNAKER
     std::istream *                      in;
+#   endif
+
     float                               currentLine;
     float *                             currentValues;
     int                                 currentCount;
@@ -69,13 +72,27 @@ extern InputHolder * inputHelper (const std::string & fileName, InputHolder * ol
 class OutputHolder
 {
 public:
+
+#   ifdef N2A_SPINNAKER
+
+    std::string fileName;
+    bool        raw;
+
+    OutputHolder (const std::string & fileName);
+
+    void trace (double now, const std::string & column, float value);
+    void trace (double now, float               column, float value);
+
+#   else
+
+    std::string                         fileName;
+    std::ostream *                      out;
+
     std::unordered_map<std::string,int> columnMap;
     std::vector<float>                  columnValues;
     int                                 columnsPrevious; ///< Number of columns written in previous cycle.
     bool                                traceReceived;   ///< Indicates that at least one column was touched during the current cycle.
     double                              t;
-    std::string                         fileName;
-    std::ostream *                      out;
     bool                                raw;             ///< Indicates that column is an exact index.
 
     OutputHolder (const std::string & fileName);
@@ -85,6 +102,8 @@ public:
     void trace (double now, const std::string & column, float value);
     void trace (double now, float               column, float value);
     void writeTrace ();
+
+#   endif
 };
 extern OutputHolder * outputHelper (const std::string & fileName, OutputHolder * oldHandle = 0);
 extern void           outputClose ();  ///< Close all OutputHolders

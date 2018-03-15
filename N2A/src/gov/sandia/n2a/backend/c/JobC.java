@@ -8,6 +8,7 @@ package gov.sandia.n2a.backend.c;
 
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventSource;
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventTarget;
+import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
@@ -61,7 +62,7 @@ import java.util.TreeSet;
 
 public class JobC extends Thread
 {
-    static boolean rebuildRuntime = true;  // always rebuild runtime once per session
+    protected static boolean needRuntime = true;  // always rebuild runtime once per session
 
     public MNode       job;
     public EquationSet model;
@@ -90,8 +91,8 @@ public class JobC extends Thread
             Files.createFile (jobDir.resolve ("started"));
 
             HostSystem env = HostSystem.get (job.getOrDefault ("$metadata", "host", "localhost"));
-            Path runtimeDir = Paths.get (env.getNamedValue ("c.directory"));
-            Path runtime = rebuildRuntime (env, runtimeDir);
+            Path runtimeDir = Paths.get (AppData.properties.get ("resourceDir")).resolve ("cruntime");
+            Path runtime = rebuildRuntime (runtimeDir);
 
             model = new EquationSet (job);
             digestModel ();
@@ -130,15 +131,15 @@ public class JobC extends Thread
         if (ps != System.err) ps.close ();
     }
 
-    public Path rebuildRuntime (HostSystem env, Path runtimeDir) throws Exception
+    public Path rebuildRuntime (Path runtimeDir) throws Exception
     {
         // Update runtime source files, if necessary
         boolean changed = false;
-        if (rebuildRuntime)
+        if (needRuntime)
         {
             if (unpackRuntime (runtimeDir, "",   "runtime.cc", "runtime.h", "Neighbor.cc")) changed = true;
-            if (unpackRuntime (runtimeDir, "fl", "archive.h", "blasproto.h", "math.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "neighbor.h", "pointer.h", "string.h", "Vector.tcc")) changed = true;
-            rebuildRuntime = false;   // Stop checking files for this session.
+            if (unpackRuntime (runtimeDir, "fl", "math.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "neighbor.h", "pointer.h", "Vector.tcc")) changed = true;
+            needRuntime = false;   // Stop checking files for this session.
         }
 
         // Compile runtime
@@ -173,7 +174,7 @@ public class JobC extends Thread
             URL url = JobC.class.getResource (root + s);
             long resourceModified = url.openConnection ().getLastModified ();
             Path f = dir.resolve (s);
-            long fileModified = Files.getLastModifiedTime (f).toMillis ();
+            long fileModified = HostSystem.lastModified (f);
             if (resourceModified > fileModified)
             {
                 changed = true;

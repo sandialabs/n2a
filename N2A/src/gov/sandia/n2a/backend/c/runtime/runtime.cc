@@ -223,6 +223,13 @@ matrixHelper (const string & fileName, MatrixInput * oldHandle)
     MatrixInput * handle = new MatrixInput;
     handle->fileName = fileName;
     matrixMap.insert (make_pair (fileName, handle));
+
+#   ifdef N2A_SPINNAKER
+
+    // TODO: receive matrix elements from host
+
+#   else
+
     ifstream ifs (fileName.c_str ());
     ifs >> (*handle);
     if (! ifs.good ()) cerr << "Failed to open matrix file: " << fileName << endl;
@@ -232,6 +239,9 @@ matrixHelper (const string & fileName, MatrixInput * oldHandle)
         handle->resize (1, 1);  // fallback matrix
         handle->clear ();       // set to 0
     }
+
+#   endif
+
     return handle;
 }
 
@@ -252,6 +262,7 @@ InputHolder::InputHolder (const string & fileName)
     timeColumnSet = false;
     epsilon       = 0;
 
+#   ifndef N2A_SPINNAKER
     if (fileName.empty ())
     {
         in = &cin;
@@ -260,11 +271,14 @@ InputHolder::InputHolder (const string & fileName)
     {
         in = new ifstream (fileName.c_str ());
     }
+#   endif
 }
 
 InputHolder::~InputHolder ()
 {
+#   ifndef N2A_SPINNAKER
     if (in  &&  in != &cin) delete in;
+#   endif
     if (currentValues) delete[] currentValues;
     if (nextValues   ) delete[] nextValues;
 }
@@ -272,6 +286,13 @@ InputHolder::~InputHolder ()
 void
 InputHolder::getRow (float row, bool time)
 {
+#   ifdef N2A_SPINNAKER
+
+    // TODO: receive data from host
+    // One strategy may be to simply replace getline() with something that waits for packets and assembles line of text.
+
+#   else
+
     while (true)
     {
         // Read and process next line
@@ -361,6 +382,8 @@ InputHolder::getRow (float row, bool time)
         nextValues = tempValues;
         nextCount  = tempCount;
     }
+
+#   endif
 }
 
 int
@@ -445,6 +468,30 @@ inputHelper (const string & fileName, InputHolder * oldHandle)
 
 
 // OutputHolder --------------------------------------------------------------
+
+#   ifdef N2A_SPINNAKER
+
+OutputHolder::OutputHolder (const string & fileName)
+:   fileName (fileName)
+{
+}
+
+void
+OutputHolder::trace (double now, const string & column, float value)
+{
+	// TODO: assemble packet to host
+}
+
+void
+OutputHolder::trace (double now, float column, float value)
+{
+    char buffer[32];
+    if (raw) sprintf (buffer, "%i", (int) round (column));
+    else     sprintf (buffer, "%g", column);
+    trace (now, buffer, value);
+}
+
+#   else
 
 OutputHolder::OutputHolder (const string & fileName)
 :   fileName (fileName)
@@ -585,6 +632,8 @@ OutputHolder::writeTrace ()
 
     traceReceived = false;
 }
+
+#   endif
 
 map<string,OutputHolder *> outputMap;
 
