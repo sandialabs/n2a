@@ -138,7 +138,7 @@ public class JobC extends Thread
         if (needRuntime)
         {
             if (unpackRuntime (runtimeDir, "",   "runtime.cc", "runtime.h", "Neighbor.cc")) changed = true;
-            if (unpackRuntime (runtimeDir, "fl", "math.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "neighbor.h", "pointer.h", "Vector.tcc")) changed = true;
+            if (unpackRuntime (runtimeDir, "fl", "io.h", "math.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "neighbor.h", "pointer.h", "Vector.tcc")) changed = true;
             needRuntime = false;   // Stop checking files for this session.
         }
 
@@ -1184,7 +1184,7 @@ public class JobC extends Thread
             result.append ("  Part * p = live.before;\n");
             result.append ("  while (this->n > n)\n");
             result.append ("  {\n");
-            result.append ("    if (p == &live) throw \"Inconsistent $n\";\n");
+            result.append ("    if (p == &live) N2A_THROW (\"Inconsistent $n\");\n");
             result.append ("    if (p->getLive ()) p->die ();\n");
             result.append ("    p = p->before;\n");
             result.append ("  }\n");

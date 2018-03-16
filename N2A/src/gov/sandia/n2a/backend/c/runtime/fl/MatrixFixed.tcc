@@ -45,7 +45,7 @@ namespace fl
 	MatrixFixed<T,2,2> * result = new MatrixFixed<T,2,2>;
 
 	T q = det (A);
-	if (q == 0) throw "invert: Matrix is singular!";
+	if (q == 0) N2A_THROW ("invert: Matrix is singular!");
 
 	result->data[0][0] = A.data[1][1] / q;
 	result->data[0][1] = A.data[0][1] / -q;
@@ -63,7 +63,7 @@ namespace fl
 	T b = A.data[0][0] + A.data[1][1];  // trace
 	T c = A.data[0][0] * A.data[1][1] - A.data[0][1] * A.data[1][0];  // determinant
 	T b4c = b * b - 4 * c;
-	if (b4c < 0) throw "geev: 2x2 matrix has immaginary eigenvalues, which we are not equipped to handle";
+	if (b4c < 0) N2A_THROW ("geev: 2x2 matrix has immaginary eigenvalues, which we are not equipped to handle");
 	if (b4c > 0) b4c = sqrt (b4c);
 
 	eigenvalues.resize (2, 1);
@@ -78,7 +78,7 @@ namespace fl
 	T b = A.data[0][0] + A.data[1][1];  // trace
 	T c = A.data[0][0] * A.data[1][1] - A.data[0][1] * A.data[1][0];  // determinant
 	T b4c = b * b - 4 * c;
-	if (b4c < 0) throw "geev: 2x2 matrix has immaginary eigenvalues, which we are not equipped to handle";
+	if (b4c < 0) N2A_THROW ("geev: 2x2 matrix has immaginary eigenvalues, which we are not equipped to handle");
 	if (b4c > 0) b4c = sqrt (b4c);
 
 	eigenvalues.resize (2, 1);
@@ -142,7 +142,7 @@ namespace fl
 	T q = det (A);
 	if (q == 0)
 	{
-	  throw "invert: Matrix is singular!";
+	  N2A_THROW ("invert: Matrix is singular!");
 	}
 
 	// Ugly, but ensures we actually inline this code.

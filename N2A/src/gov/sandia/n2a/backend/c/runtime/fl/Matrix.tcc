@@ -19,9 +19,7 @@ for details.
 
 
 #include "fl/matrix.h"
-
-#include <algorithm>
-#include <typeinfo>
+#include "fl/io.h"
 
 
 namespace fl
@@ -322,8 +320,7 @@ namespace fl
   MatrixResult<T>
   MatrixAbstract<T>::operator ! () const
   {
-	printf ("Matrix inverse not implemented. Is LAPACK available?\n");
-	exit (1);
+	N2A_THROW("Matrix inverse not implemented. Is LAPACK available?");
   }
 
   template<class T>

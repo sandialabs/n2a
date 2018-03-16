@@ -4,11 +4,14 @@
 
 #include "fl/matrix.h"
 
-#include <vector>
-#include <unordered_map>
 #include <functional>
 #include <queue>
 #include <set>
+#ifndef N2A_SPINNAKER
+# include <vector>
+# include <map>
+# include <unordered_map>
+#endif
 
 typedef fl::MatrixFixed<float,3,1> Vector3;
 
@@ -26,6 +29,7 @@ extern fl::MatrixResult<float> gaussian (const fl::MatrixAbstract<float> & sigma
 extern fl::MatrixResult<float> grid (int i, int nx, int ny = 1, int nz = 1);
 
 // Matrix input
+#ifndef N2A_SPINNAKER
 class MatrixInput : public fl::Matrix<float>
 {
 public:
@@ -35,15 +39,15 @@ public:
     float getRaw (float row, float column);
 };
 extern MatrixInput * matrixHelper (const std::string & fileName, MatrixInput * oldHandle = 0);
+#endif
 
 // Input
+#ifndef N2A_SPINNAKER
 class InputHolder
 {
 public:
     std::string                         fileName;
-#   ifndef N2A_SPINNAKER
     std::istream *                      in;
-#   endif
 
     float                               currentLine;
     float *                             currentValues;
@@ -67,6 +71,7 @@ public:
     float getRaw     (float row, bool time, float column);
 };
 extern InputHolder * inputHelper (const std::string & fileName, InputHolder * oldHandle = 0);
+#endif
 
 // Output
 class OutputHolder
@@ -106,7 +111,9 @@ public:
 #   endif
 };
 extern OutputHolder * outputHelper (const std::string & fileName, OutputHolder * oldHandle = 0);
+#ifndef N2A_SPINNAKER
 extern void           outputClose ();  ///< Close all OutputHolders
+#endif
 
 
 class Simulatable;

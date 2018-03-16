@@ -20,8 +20,6 @@ for details.
 
 #include "fl/matrix.h"
 
-#include <typeinfo>
-
 
 namespace fl
 {
@@ -77,11 +75,13 @@ namespace fl
 	this->strideC  = this->rows_;
   }
 
+# ifndef N2A_SPINNAKER
   template<class T>
   Vector<T>::Vector (const std::string & source)
   {
 	(*this) = Matrix<T> (source);
   }
+# endif
 
   template<class T>
   Vector<T>::Vector (T * that, const int rows)

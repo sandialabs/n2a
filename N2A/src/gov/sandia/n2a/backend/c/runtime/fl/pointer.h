@@ -18,14 +18,19 @@ for details.
 #define pointer_h
 
 
+#include "fl/io.h"
+
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
 #include <stddef.h>
 
-#include <ostream>
-#include <atomic>
+#include <new>
+#ifndef N2A_SPINNAKER
+# include <atomic>
+# include <ostream>
+#endif
 
 
 namespace fl
@@ -108,8 +113,7 @@ namespace fl
 		ptrdiff_t size = temp.size ();
 		if (size < 0)
 		{
-		  printf ("Don't know size of block to copy\n");
-		  exit (1);
+			N2A_THROW ("Don't know size of block to copy");
 		}
 		grow (size);
 		memcpy (memory, temp.memory, size);
@@ -154,8 +158,7 @@ namespace fl
 	  else if (metaData > 0) memset (memory, 0, metaData);
 	  else
 	  {
-		printf ("Don't know size of block to clear\n");
-		exit (1);
+		  N2A_THROW ("Don't know size of block to clear");
 	  }
 	}
 
@@ -237,14 +240,17 @@ namespace fl
 	  else
 	  {
 		metaData = 0;
-		printf ("Unable to allocate memory\n");
-		exit (1);
+		N2A_THROW ("Unable to allocate memory");
 	  }
 	}
 
 	struct Counts
 	{
+#	  ifdef N2A_SPINNAKER
+	  uint32_t         refcount;   // For now, we assume only a single thread will access these structures, so no need for atomic locks.
+#	  else
 	  std::atomic_uint refcount;
+#	  endif
 	  ptrdiff_t        size;  ///< Actual size of block, not including this structure. Partially redundant with metadata field.
 	};
 	Counts * memory;  ///< Pointer to block in heap. Must be offset and typecast to access managed data.
@@ -263,7 +269,9 @@ namespace fl
 	**/
 	ptrdiff_t metaData;
 
+#   ifndef N2A_SPINNAKER
 	friend std::ostream & operator << (std::ostream & stream, const Pointer & pointer);
+#   endif
   };
 
 # ifndef N2A_SPINNAKER
@@ -363,7 +371,11 @@ namespace fl
 	struct RefcountBlock
 	{
 	  T                object;
+#	  ifdef N2A_SPINNAKER
+	  uint32_t         refcount;
+#	  else
 	  std::atomic_uint refcount;
+#	  endif
 	};
 	RefcountBlock * memory;
 
@@ -391,7 +403,11 @@ namespace fl
   {
   public:
 	ReferenceCounted () {PointerPolyReferenceCount = 0;}
+#	ifdef N2A_SPINNAKER
+	mutable uint32_t  PointerPolyReferenceCount;
+#	else
 	mutable std::atomic_uint PointerPolyReferenceCount;  ///< The number of PointerPolys that are attached to this instance.
+#	endif
   };
   
 

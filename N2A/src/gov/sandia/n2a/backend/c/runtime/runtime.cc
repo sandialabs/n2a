@@ -144,6 +144,8 @@ gridRaw (int i, int nx, int ny, int nz)
 
 // MatrixInput ---------------------------------------------------------------
 
+#ifndef N2A_SPINNAKER
+
 float
 MatrixInput::get (float row, float column)
 {
@@ -224,12 +226,6 @@ matrixHelper (const string & fileName, MatrixInput * oldHandle)
     handle->fileName = fileName;
     matrixMap.insert (make_pair (fileName, handle));
 
-#   ifdef N2A_SPINNAKER
-
-    // TODO: receive matrix elements from host
-
-#   else
-
     ifstream ifs (fileName.c_str ());
     ifs >> (*handle);
     if (! ifs.good ()) cerr << "Failed to open matrix file: " << fileName << endl;
@@ -240,13 +236,15 @@ matrixHelper (const string & fileName, MatrixInput * oldHandle)
         handle->clear ();       // set to 0
     }
 
-#   endif
-
     return handle;
 }
 
+#endif
+
 
 // InputHolder ---------------------------------------------------------------
+
+#ifndef N2A_SPINNAKER
 
 InputHolder::InputHolder (const string & fileName)
 :   fileName (fileName)
@@ -262,7 +260,6 @@ InputHolder::InputHolder (const string & fileName)
     timeColumnSet = false;
     epsilon       = 0;
 
-#   ifndef N2A_SPINNAKER
     if (fileName.empty ())
     {
         in = &cin;
@@ -271,14 +268,11 @@ InputHolder::InputHolder (const string & fileName)
     {
         in = new ifstream (fileName.c_str ());
     }
-#   endif
 }
 
 InputHolder::~InputHolder ()
 {
-#   ifndef N2A_SPINNAKER
     if (in  &&  in != &cin) delete in;
-#   endif
     if (currentValues) delete[] currentValues;
     if (nextValues   ) delete[] nextValues;
 }
@@ -286,13 +280,6 @@ InputHolder::~InputHolder ()
 void
 InputHolder::getRow (float row, bool time)
 {
-#   ifdef N2A_SPINNAKER
-
-    // TODO: receive data from host
-    // One strategy may be to simply replace getline() with something that waits for packets and assembles line of text.
-
-#   else
-
     while (true)
     {
         // Read and process next line
@@ -382,8 +369,6 @@ InputHolder::getRow (float row, bool time)
         nextValues = tempValues;
         nextCount  = tempCount;
     }
-
-#   endif
 }
 
 int
@@ -466,10 +451,12 @@ inputHelper (const string & fileName, InputHolder * oldHandle)
     return handle;
 }
 
+#endif
+
 
 // OutputHolder --------------------------------------------------------------
 
-#   ifdef N2A_SPINNAKER
+#ifdef N2A_SPINNAKER
 
 OutputHolder::OutputHolder (const string & fileName)
 :   fileName (fileName)
@@ -491,7 +478,7 @@ OutputHolder::trace (double now, float column, float value)
     trace (now, buffer, value);
 }
 
-#   else
+#else
 
 OutputHolder::OutputHolder (const string & fileName)
 :   fileName (fileName)
@@ -633,7 +620,7 @@ OutputHolder::writeTrace ()
     traceReceived = false;
 }
 
-#   endif
+#endif
 
 map<string,OutputHolder *> outputMap;
 
@@ -659,12 +646,14 @@ outputHelper (const string & fileName, OutputHolder * oldHandle)
     return handle;
 }
 
+#ifndef N2A_SPINNAKER
 void
 outputClose ()
 {
     for (auto it : outputMap) delete it.second;
     // No need to clear collection, because this function is only called during shutdown.
 }
+#endif
 
 
 // class Simulatable ---------------------------------------------------------

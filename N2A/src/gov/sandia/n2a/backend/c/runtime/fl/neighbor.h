@@ -33,7 +33,7 @@ namespace fl
 {
   /**
 	 Retrieves items in space near a given query.
-   **/
+  **/
   class SHARED Neighbor
   {
   public:
@@ -140,7 +140,9 @@ namespace fl
 	{
 	public:
 	  virtual void search (float distance, Query & q) const;
+#	  ifndef N2A_SPINNAKER
 	  virtual void dump (std::ostream & out, const std::string & pad = "") const;
+#	  endif
 
 	  std::vector<MatrixAbstract<float> *> points;
 	};

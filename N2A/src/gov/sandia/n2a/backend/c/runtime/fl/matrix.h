@@ -21,11 +21,12 @@ for details.
 #include "fl/math.h"
 #include "fl/pointer.h"
 
-#include <iostream>
-#include <sstream>
-#include <vector>
-#include <map>
 #include <complex>
+#ifndef N2A_SPINNAKER
+# include <vector>
+# include <iostream>
+# include <sstream>
+#endif
 
 #undef SHARED
 #ifdef _MSC_VER
@@ -147,7 +148,9 @@ namespace fl
 	virtual MatrixResult<T> row             (const int r) const;  ///< Returns a view row r.  The matrix is oriented "horizontal".
 	virtual MatrixResult<T> column          (const int c) const;  ///< Returns a view of column c.
 	virtual MatrixResult<T> region          (const int firstRow = 0, const int firstColumn = 0, int lastRow = -1, int lastColumn = -1) const;  ///< Same as call to MatrixRegion<T> (*this, firstRow, firstColumn, lastRow, lastColumn)
+#	ifndef N2A_SPINNAKER
 	const char *            toString        (std::string & buffer) const;  ///< Convenience funtion.  Same output as operator <<
+#	endif
 
 	// Basic operations
 
@@ -212,13 +215,14 @@ namespace fl
 	return A * (T) -1;
   }
 
+#ifndef N2A_SPINNAKER
+
   template<class T>
   SHARED std::string elementToString (const T & value);
 
   template<class T>
   SHARED T elementFromString (const std::string & value);
 
-#ifndef N2A_SPINNAKER
   /**
 	 Print human readable matrix to stream.  Formatted to be readable by
 	 operator >> (istream, Matrix).
@@ -256,6 +260,7 @@ namespace fl
   template<class T>
   SHARED MatrixAbstract<T> &
   operator << (MatrixAbstract<T> & A, const std::string & source);
+
 #endif
 
   /**
@@ -495,7 +500,9 @@ namespace fl
 	Matrix (const int rows, const int columns = 1);
 	Matrix (const MatrixAbstract<T> & that);
 	template<class T2> Matrix (const MatrixAbstract<T2> & that) : MatrixStrided<T> (that) {}
+#	ifndef N2A_SPINNAKER
 	Matrix (const std::string & source);
+#	endif
 	Matrix (T * that, const int rows, const int columns = 1);  ///< Attach to memory block pointed to by that
 	Matrix (Pointer & that, const int rows = -1, const int columns = 1);  ///< Share memory block with that.  rows == -1 or columns == -1 means infer number from size of memory.  At least one of {rows, columns} must be positive.
 	virtual uint32_t classID () const;
@@ -531,205 +538,13 @@ namespace fl
 	Vector (const MatrixAbstract<T> & that);
 	template<class T2> Vector (const MatrixAbstract<T2> & that) : Matrix<T> (that) {this->strideC = this->rows_ = this->rows_ * this->columns_; this->columns_ = 1;}
 	Vector (const Matrix<T> & that);
+#	ifndef N2A_SPINNAKER
 	Vector (const std::string & source);
+#	endif
 	Vector (T * that, const int rows);  ///< Attach to memory block pointed to by that
 	Vector (Pointer & that, const int rows = -1);  ///< Share memory block with that.  rows == -1 means infer number from size of memory
 
 	virtual void resize (const int rows, const int columns = 1);  ///< Converts all requests to a single column with height of requested rows * requested columns.
-  };
-
-  /**
-	 This Matrix is presumed to be Symmetric.  It could also be Hermitian
-	 or Triangular, but these require more specialization.  The whole point
-	 of having this class is to take advantage of symmetry to cut down on
-	 memory accesses.
-
-	 For purpose of calls to LAPACK, this matrix stores the upper triangular
-	 portion.
-  **/
-  template<class T>
-  class SHARED MatrixPacked : public MatrixAbstract<T>
-  {
-  public:
-	MatrixPacked ();
-	MatrixPacked (const int rows);  ///< columns = rows
-	MatrixPacked (const MatrixAbstract<T> & that);
-	void detach ();  ///< Set the state of this matrix as if it has no data.  Releases any memory.
-	virtual uint32_t classID () const;
-
-	virtual MatrixAbstract<T> * clone (bool deep = false) const;
-	virtual void copyFrom (const MatrixAbstract<T> & that, bool deep = true);
-	using MatrixAbstract<T>::copyFrom;
-
-	virtual T & operator () (const int row, const int column) const;
-	virtual T & operator [] (const int row) const;
-	virtual int rows () const;
-	virtual int columns () const;
-	virtual void resize (const int rows, const int columns = -1);
-
-	virtual void clear (const T scalar = (T) 0);
-
-	virtual MatrixResult<T> operator ~ () const;
-
-	// Data
-	Pointer data;
-	int rows_;  ///< columns = rows
-  };
-
-  /**
-	 Stores only nonzero elements.  Assumes that every column has at least
-	 one non-zero entry, so stores a structure for every column.  This is
-	 a trade-off between time and space (as always).  If the matrix is
-	 extremely sparse (not all columns used), then a sparse structure for
-	 holding the column structures would be better.
-  **/
-  template<class T>
-  class SHARED MatrixSparse : public MatrixAbstract<T>
-  {
-  public:
-	MatrixSparse ();
-	MatrixSparse (const int rows, const int columns);
-	MatrixSparse (const MatrixAbstract<T> & that);
-	virtual ~MatrixSparse ();
-	virtual uint32_t classID () const;
-
-	virtual MatrixAbstract<T> * clone (bool deep = false) const;
-	virtual void copyFrom (const MatrixAbstract<T> & that, bool deep = true);
-	using MatrixAbstract<T>::copyFrom;
-
-	void set (const int row, const int column, const T value);  ///< If value is non-zero, creates element if not already there; if value is zero, removes element if it exists.
-	virtual T & operator () (const int row, const int column) const;
-	virtual int rows () const;
-	virtual int columns () const;
-	virtual void resize (const int rows, const int columns = 1);  ///< Changing number of rows has no effect at all.  Changing number of columns resizes column list.
-
-	virtual void clear (const T scalar = (T) 0);  ///< Completely ignore the value of scalar, and simply delete all data.
-	virtual T norm (float n) const;
-	virtual MatrixResult<T> transposeSquare () const;
-	virtual MatrixResult<T> transposeTimes (const MatrixAbstract<T> & B) const;
-	using MatrixAbstract<T>::transposeTimes;
-
-	virtual MatrixResult<T>  operator * (const MatrixAbstract<T> & B) const;
-	using MatrixAbstract<T>::operator *;
-	virtual MatrixResult<T>  operator - (const MatrixAbstract<T> & B) const;
-	using MatrixAbstract<T>::operator -;
-
-	int rows_;
-	fl::PointerStruct< std::vector< std::map<int, T> > > data;
-  };
-
-  /**
-	 A matrix where the elements themselves are matrices. Each element is represented
-	 as a pointer to a MatrixAbstract, and can be null. A null entry acts as a block
-	 of zeros for the purpose of matrix operations.
-
-	 All matrices that share a block-column must have the same number of columns,
-	 and all matrices that share the same block-row must have the same number of rows.
-	 In general, the row or column count is the max over all the relevant entries,
-	 and in some cases you may get away with having some undersized matrices.
-  **/
-  template<class T>
-  class SHARED MatrixBlock : public MatrixAbstract<T>
-  {
-  public:
-	MatrixBlock ();
-	MatrixBlock (const int blockRows, const int blockColumns = 1);
-	MatrixBlock (const MatrixAbstract<T> & that);
-	virtual ~MatrixBlock ();
-	void detach ();  ///< reset to empty and delete all pointers we own
-	virtual uint32_t classID () const;
-
-	virtual MatrixAbstract<T> * clone (bool deep = false) const;
-	virtual void copyFrom (const MatrixAbstract<T> & that, bool deep = true);
-	using MatrixAbstract<T>::copyFrom;
-	MatrixAbstract<T> & operator = (const MatrixBlock & that);  ///< Transfers ownership of that contents (in violation of const semantics).
-
-	void                blockSet       (const int blockRow, const int blockColumn,       MatrixAbstract<T> * A);  ///< If A is zero, deletes block. If non-zero, takes ownership of pointer.
-	void                blockSet       (const int blockRow, const int blockColumn, const MatrixAbstract<T> & A);  ///< Clones A.
-	MatrixAbstract<T> * blockGet       (const int blockRow, const int blockColumn) const;
-	void                blockUpdate    (const int blockRow, const int blockColumn);  ///< Maintain row and column counts. Call when a block element has changed size.
-	void                blockUpdateAll ();
-	int                 blockRows      () const;
-	int                 blockColumns   () const;
-	void                blockResize    (const int blockRows, const int blockColumns = 1);  ///< Preserves any existing blocks inside new shape. All new elements are set to null.
-	void                blockDump      () const;  ///< print a structural trace to stderr
-
-	virtual T & operator () (const int row, const int column) const;  ///< Extremely expensive to look up an entry!
-	virtual int rows () const;
-	virtual int columns () const;
-	virtual void resize (const int rows, const int columns = 1);  ///< On reduction, trims any existing blocks that boundary cuts through. On expansion, extends any existing blocks at perimeter.
-
-	virtual void clear                      (const T scalar = (T) 0);  ///< Calls clear() on all blocks. If scalar is anything besides zero, only clears blocks that exist.
-	virtual T norm                          (float n) const;  ///< Calls norm() on all blocks, and combines results using proper norm.
-	virtual MatrixResult<T> transposeSquare () const;
-	virtual MatrixResult<T> transposeTimes  (const MatrixAbstract<T> & B) const;
-	using MatrixAbstract<T>::transposeTimes;
-	virtual MatrixResult<T> row             (const int r) const;
-	virtual MatrixResult<T> column          (const int c) const;
-
-	virtual MatrixResult<T>  operator * (const MatrixAbstract<T> & B) const;
-	using MatrixAbstract<T>::operator *;
-	virtual MatrixResult<T>  operator / (const T scalar)              const;
-	virtual MatrixResult<T>  operator - (const MatrixAbstract<T> & B) const;
-	using MatrixAbstract<T>::operator -;
-
-	std::vector<int> startRows;
-	std::vector<int> startColumns;
-	int blockStride;
-	Pointer data;
-  };
-
-  /**
-	 A square matrix that always returns the same value for a diagonal
-	 element and zero for any other element.
-  **/
-  template<class T>
-  class SHARED MatrixIdentity : public MatrixAbstract<T>
-  {
-  public:
-	MatrixIdentity ();
-	MatrixIdentity (int size, T value = 1);
-	virtual uint32_t classID () const;
-
-	virtual MatrixAbstract<T> * clone (bool deep = false) const;
-
-	virtual T & operator () (const int row, const int column) const;
-	virtual int rows () const;
-	virtual int columns () const;
-	virtual void resize (const int rows, const int columns = -1);
-
-	virtual void clear (const T scalar = (T) 0);
-
-	int size;
-	T value;
-  };
-
-  /**
-	 A square matrix that only stores values for the diagonal entries
-	 and returns zero for any other element.
-  **/
-  template<class T>
-  class SHARED MatrixDiagonal : public MatrixAbstract<T>
-  {
-  public:
-	MatrixDiagonal ();
-	MatrixDiagonal (const int rows, const int columns = -1);
-	MatrixDiagonal (const Vector<T> & that, const int rows = -1, const int columns = -1);
-	virtual uint32_t classID () const;
-
-	virtual MatrixAbstract<T> * clone (bool deep = false) const;
-
-	virtual T & operator () (const int row, const int column) const;
-	virtual T & operator [] (const int row) const;
-	virtual int rows () const;
-	virtual int columns () const;
-	virtual void resize (const int rows, const int columns = -1);
-
-	virtual void clear (const T scalar = (T) 0);
-
-	int rows_;
-	int columns_;
-	Pointer data;
   };
 
 
