@@ -2,16 +2,18 @@
 #define backend_c_runtime_h
 
 
+#ifdef N2A_SPINNAKER
+# include "nosys.h"
+#endif
+
 #include "fl/matrix.h"
 
 #include <functional>
 #include <queue>
 #include <set>
-#ifndef N2A_SPINNAKER
-# include <vector>
-# include <map>
-# include <unordered_map>
-#endif
+#include <vector>
+#include <map>
+#include <unordered_map>
 
 typedef fl::MatrixFixed<float,3,1> Vector3;
 

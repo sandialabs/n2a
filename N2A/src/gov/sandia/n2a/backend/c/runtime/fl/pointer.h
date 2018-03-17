@@ -27,10 +27,8 @@ for details.
 #include <stddef.h>
 
 #include <new>
-#ifndef N2A_SPINNAKER
-# include <atomic>
-# include <ostream>
-#endif
+#include <atomic>
+#include <ostream>
 
 
 namespace fl
@@ -246,11 +244,7 @@ namespace fl
 
 	struct Counts
 	{
-#	  ifdef N2A_SPINNAKER
-	  uint32_t         refcount;   // For now, we assume only a single thread will access these structures, so no need for atomic locks.
-#	  else
 	  std::atomic_uint refcount;
-#	  endif
 	  ptrdiff_t        size;  ///< Actual size of block, not including this structure. Partially redundant with metadata field.
 	};
 	Counts * memory;  ///< Pointer to block in heap. Must be offset and typecast to access managed data.
@@ -371,11 +365,7 @@ namespace fl
 	struct RefcountBlock
 	{
 	  T                object;
-#	  ifdef N2A_SPINNAKER
-	  uint32_t         refcount;
-#	  else
 	  std::atomic_uint refcount;
-#	  endif
 	};
 	RefcountBlock * memory;
 
@@ -403,11 +393,7 @@ namespace fl
   {
   public:
 	ReferenceCounted () {PointerPolyReferenceCount = 0;}
-#	ifdef N2A_SPINNAKER
-	mutable uint32_t  PointerPolyReferenceCount;
-#	else
 	mutable std::atomic_uint PointerPolyReferenceCount;  ///< The number of PointerPolys that are attached to this instance.
-#	endif
   };
   
 

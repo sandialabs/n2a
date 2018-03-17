@@ -4,6 +4,10 @@
 #include <iostream>
 #include <fstream>
 
+#ifdef N2A_SPINNAKER
+# include "nosys.cc"
+#endif
+
 #include "fl/Matrix.tcc"
 #include "fl/MatrixFixed.tcc"
 #include "fl/Vector.tcc"

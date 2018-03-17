@@ -67,6 +67,11 @@ public class JobC extends Thread
     public MNode       job;
     public EquationSet model;
 
+    public Path jobDir;
+    public Path runtimeDir;
+    public Path runtime;  // Object file containing runtime code
+    public Path gcc;
+
     // These values are unique across the whole simulation, so they go here rather than BackendDataC.
     // Where possible, the key is a String. Otherwise, it is an Operator which is specific to one expression.
     public HashMap<Object,String> matrixNames = new HashMap<Object,String> ();
@@ -82,7 +87,7 @@ public class JobC extends Thread
 
     public void run ()
     {
-        Path jobDir = Paths.get (job.get ()).getParent ();  // assumes the MNode "job" is really an MDoc. In any case, the value of the node should point to a file on disk where it is stored in a directory just for it.
+        jobDir = Paths.get (job.get ()).getParent ();  // assumes the MNode "job" is really an MDoc. In any case, the value of the node should point to a file on disk where it is stored in a directory just for it.
         try {Backend.err.set (new PrintStream (jobDir.resolve ("err").toFile ()));}
         catch (FileNotFoundException e) {}
 
@@ -91,8 +96,11 @@ public class JobC extends Thread
             Files.createFile (jobDir.resolve ("started"));
 
             HostSystem env = HostSystem.get (job.getOrDefault ("$metadata", "host", "localhost"));
-            Path runtimeDir = Paths.get (AppData.properties.get ("resourceDir")).resolve ("cruntime");
-            Path runtime = rebuildRuntime (runtimeDir);
+            Path resourceDir = Paths.get (AppData.properties.get ("resourceDir"));
+            gcc              = Paths.get (AppData.state.getOrDefault ("BackendC", "gcc", "g++"));
+            runtimeDir       = resourceDir.resolve ("cruntime");
+            runtime          = runtimeDir.resolve ("runtime.o");
+            rebuildRuntime ();
 
             model = new EquationSet (job);
             digestModel ();
@@ -104,8 +112,8 @@ public class JobC extends Thread
             System.out.println (model.dump (false));
 
             Path source = jobDir.resolve ("model.cc");
-            generateCode (runtimeDir, source);
-            String command = env.quotePath (build (source, runtime));
+            generateCode (source);
+            String command = env.quotePath (build (source));
 
             // The C program will append to the same error file, so we need to close the file before submitting.
             PrintStream ps = Backend.err.get ();
@@ -131,26 +139,23 @@ public class JobC extends Thread
         if (ps != System.err) ps.close ();
     }
 
-    public Path rebuildRuntime (Path runtimeDir) throws Exception
+    public void rebuildRuntime () throws Exception
     {
         // Update runtime source files, if necessary
         boolean changed = false;
         if (needRuntime)
         {
-            if (unpackRuntime (runtimeDir, "",   "runtime.cc", "runtime.h", "Neighbor.cc")) changed = true;
-            if (unpackRuntime (runtimeDir, "fl", "io.h", "math.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "neighbor.h", "pointer.h", "Vector.tcc")) changed = true;
+            if (unpackRuntime (JobC.class, runtimeDir, "",   "runtime.cc", "runtime.h", "Neighbor.cc")) changed = true;
+            if (unpackRuntime (JobC.class, runtimeDir, "fl", "io.h", "math.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "neighbor.h", "pointer.h", "Vector.tcc")) changed = true;
             needRuntime = false;   // Stop checking files for this session.
         }
 
         // Compile runtime
-        Path binary = runtimeDir.resolve ("runtime.o");
-        if (changed  ||  ! Files.exists (binary))
+        if (changed  ||  ! Files.exists (runtime))
         {
             Path source = runtimeDir.resolve ("runtime.cc");
 
-            String compiler = "g++";  // TODO: retrieve this from add data
-
-            String [] commands = {compiler, "-c", "-O3", "-I" + runtimeDir, "-o", binary.toString (), "-std=c++11", source.toString ()};
+            String [] commands = {gcc.toString (), "-c", "-O3", "-I" + runtimeDir, "-o", runtime.toString (), "-std=c++11", source.toString ()};
             Process p = Runtime.getRuntime ().exec (commands);
             p.waitFor ();
             if (p.exitValue () != 0)
@@ -159,10 +164,9 @@ public class JobC extends Thread
                 throw new Backend.AbortRun ();
             }
         }
-        return binary;
     }
 
-    public boolean unpackRuntime (Path runtimeDir, String suffix, String... names) throws Exception
+    public boolean unpackRuntime (Class<?> from, Path runtimeDir, String suffix, String... names) throws Exception
     {
         boolean changed = false;
         Path dir = runtimeDir.resolve (suffix);
@@ -171,7 +175,7 @@ public class JobC extends Thread
         if (! suffix.isEmpty ()) root += suffix + "/";
         for (String s : names)
         {
-            URL url = JobC.class.getResource (root + s);
+            URL url = from.getResource (root + s);
             long resourceModified = url.openConnection ().getLastModified ();
             Path f = dir.resolve (s);
             long fileModified = HostSystem.lastModified (f);
@@ -184,16 +188,12 @@ public class JobC extends Thread
         return changed;
     }
 
-    public Path build (Path source, Path runtime) throws Exception
+    public Path build (Path source) throws Exception
     {
         String stem = source.getFileName ().toString ().split ("\\.", 2)[0];
         Path binary = source.getParent ().resolve (stem + ".bin");
-        Path dir = runtime.getParent ();
 
-        // Need to handle cl, and maybe others as well.
-        String compiler = "g++";
-
-        String [] commands = {compiler, "-O3", "-o", binary.toString (), "-I" + dir, runtime.toString (), "-std=c++11", source.toString ()};
+        String [] commands = {gcc.toString (), "-O3", "-o", binary.toString (), "-I" + runtimeDir, runtime.toString (), "-std=c++11", source.toString ()};
         Process p = Runtime.getRuntime ().exec (commands);
         p.waitFor ();
         if (p.exitValue () != 0)
@@ -260,7 +260,7 @@ public class JobC extends Thread
         bed.analyzeLastT (s);
     }
 
-    public void generateCode (Path runtimeDir, Path source) throws Exception
+    public void generateCode (Path source) throws Exception
     {
         StringBuilder s = new StringBuilder ();
 

@@ -22,11 +22,9 @@ for details.
 #include "fl/pointer.h"
 
 #include <complex>
-#ifndef N2A_SPINNAKER
-# include <vector>
-# include <iostream>
-# include <sstream>
-#endif
+#include <vector>
+#include <iostream>
+#include <sstream>
 
 #undef SHARED
 #ifdef _MSC_VER
