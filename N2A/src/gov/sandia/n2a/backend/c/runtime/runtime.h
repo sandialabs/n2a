@@ -6,6 +6,7 @@
 # include "nosys.h"
 #endif
 
+#include "String.h"
 #include "fl/matrix.h"
 
 #include <functional>
@@ -35,12 +36,12 @@ extern fl::MatrixResult<float> grid (int i, int nx, int ny = 1, int nz = 1);
 class MatrixInput : public fl::Matrix<float>
 {
 public:
-    std::string fileName;
+    String fileName;
 
     float get    (float row, float column);
     float getRaw (float row, float column);
 };
-extern MatrixInput * matrixHelper (const std::string & fileName, MatrixInput * oldHandle = 0);
+extern MatrixInput * matrixHelper (const String & fileName, MatrixInput * oldHandle = 0);
 #endif
 
 // Input
@@ -48,31 +49,31 @@ extern MatrixInput * matrixHelper (const std::string & fileName, MatrixInput * o
 class InputHolder
 {
 public:
-    std::string                         fileName;
-    std::istream *                      in;
+    String                         fileName;
+    std::istream *                 in;
 
-    float                               currentLine;
-    float *                             currentValues;
-    int                                 currentCount;
-    float                               nextLine;
-    float *                             nextValues;
-    int                                 nextCount;
-    int                                 columnCount;
-    std::unordered_map<std::string,int> columnMap;
-    int                                 timeColumn;
-    bool                                timeColumnSet;
-    float                               epsilon;  ///< for time values
+    float                          currentLine;
+    float *                        currentValues;
+    int                            currentCount;
+    float                          nextLine;
+    float *                        nextValues;
+    int                            nextCount;
+    int                            columnCount;
+    std::unordered_map<String,int> columnMap;
+    int                            timeColumn;
+    bool                           timeColumnSet;
+    float                          epsilon;  ///< for time values
 
-    InputHolder (const std::string & fileName);
+    InputHolder (const String & fileName);
     ~InputHolder ();
 
     void  getRow     (float row, bool time);  ///< subroutine of get() and getRaw()
     int   getColumns (           bool time);  ///< Returns number of columns seen so far.
-    float get        (float row, bool time, const std::string & column);
+    float get        (float row, bool time, const String & column);
     float get        (float row, bool time, float column);
     float getRaw     (float row, bool time, float column);
 };
-extern InputHolder * inputHelper (const std::string & fileName, InputHolder * oldHandle = 0);
+extern InputHolder * inputHelper (const String & fileName, InputHolder * oldHandle = 0);
 #endif
 
 // Output
@@ -82,37 +83,37 @@ public:
 
 #   ifdef N2A_SPINNAKER
 
-    std::string fileName;
-    bool        raw;
+    String fileName;
+    bool   raw;
 
-    OutputHolder (const std::string & fileName);
+    OutputHolder (const String & fileName);
 
-    void trace (double now, const std::string & column, float value);
-    void trace (double now, float               column, float value);
+    void trace (double now, const String & column, float value);
+    void trace (double now, float          column, float value);
 
 #   else
 
-    std::string                         fileName;
-    std::ostream *                      out;
+    String                         fileName;
+    std::ostream *                 out;
 
-    std::unordered_map<std::string,int> columnMap;
-    std::vector<float>                  columnValues;
-    int                                 columnsPrevious; ///< Number of columns written in previous cycle.
-    bool                                traceReceived;   ///< Indicates that at least one column was touched during the current cycle.
-    double                              t;
-    bool                                raw;             ///< Indicates that column is an exact index.
+    std::unordered_map<String,int> columnMap;
+    std::vector<float>             columnValues;
+    int                            columnsPrevious; ///< Number of columns written in previous cycle.
+    bool                           traceReceived;   ///< Indicates that at least one column was touched during the current cycle.
+    double                         t;
+    bool                           raw;             ///< Indicates that column is an exact index.
 
-    OutputHolder (const std::string & fileName);
+    OutputHolder (const String & fileName);
     ~OutputHolder ();
 
     void trace (double now);  ///< Subroutine for other trace() functions.
-    void trace (double now, const std::string & column, float value);
-    void trace (double now, float               column, float value);
+    void trace (double now, const String & column, float value);
+    void trace (double now, float          column, float value);
     void writeTrace ();
 
 #   endif
 };
-extern OutputHolder * outputHelper (const std::string & fileName, OutputHolder * oldHandle = 0);
+extern OutputHolder * outputHelper (const String & fileName, OutputHolder * oldHandle = 0);
 #ifndef N2A_SPINNAKER
 extern void           outputClose ();  ///< Close all OutputHolders
 #endif
@@ -187,8 +188,8 @@ public:
     virtual void addToMembers       ();             ///< members += D0; pop D0
 
     // Generic metadata
-    virtual void path (std::string & result);
-    virtual void getNamedValue (const std::string & name, std::string & value);
+    virtual void path (String & result);
+    virtual void getNamedValue (const String & name, String & value);
 };
 
 class Part : public Simulatable
@@ -322,7 +323,7 @@ public:
     std::vector<std::pair<Population *, int>> queueResize;   ///< Populations that need to change $n after the current cycle completes.
     std::queue<Population *>                  queueConnect;  ///< Connection populations that want to construct or recheck their instances after all populations are resized in current cycle.
     std::set<Population *>                    queueClearNew; ///< Populations whose newborn index needs to be reset.
-    std::map<float,EventStep *>               periods;
+    std::vector<EventStep *>                  periods;
     Integrator *                              integrator;
     bool                                      stop;
     Event *                                   currentEvent;
@@ -334,7 +335,10 @@ public:
 
     void run (); ///< Main entry point for simulation. Do all work.
     void updatePopulations ();
-    void enqueue (Part * part, float dt); ///< Places part on event with period dt. If the event already exists, then the actual time till the part next executes may be less than dt, but thereafter will be exactly dt. Caller is responsible to call dequeue() or enterSimulation().
+
+    void enqueue      (Part * part, float dt); ///< Places part on event with period dt. If the event already exists, then the actual time till the part next executes may be less than dt, but thereafter will be exactly dt. Caller is responsible to call dequeue() or enterSimulation().
+    int  findPeriod   (float dt);  ///< Returns index of first entry such that entry.dt >= dt. If index == periods.size (), then no such entry exists.
+    void removePeriod (EventStep * event);
 
     // callbacks
     void resize   (Population * population, int n); ///< Schedule population to be resized at end of current cycle.

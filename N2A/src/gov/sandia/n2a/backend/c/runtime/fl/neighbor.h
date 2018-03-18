@@ -93,7 +93,7 @@ namespace fl
 	virtual void set  (const std::vector<MatrixAbstract<float> *> & data);
 	virtual void find (const MatrixAbstract<float> & query, std::vector<MatrixAbstract<float> *> & result) const;
 #	ifndef N2A_SPINNAKER
-	virtual void dump (std::ostream & out, const std::string & pad = "") const;
+	virtual void dump (std::ostream & out, const String & pad = "") const;
 #	endif
 
 	class Node;
@@ -115,7 +115,7 @@ namespace fl
 	  virtual ~Node ();
 	  virtual void search (float distance, Query & q) const = 0;
 #	  ifndef N2A_SPINNAKER
-	  virtual void dump (std::ostream & out, const std::string & pad = "") const = 0;
+	  virtual void dump (std::ostream & out, const String & pad = "") const = 0;
 #	  endif
 	};
 
@@ -125,7 +125,7 @@ namespace fl
 	  virtual ~Branch ();
 	  virtual void search (float distance, Query & q) const;
 #	  ifndef N2A_SPINNAKER
-	  virtual void dump (std::ostream & out, const std::string & pad = "") const;
+	  virtual void dump (std::ostream & out, const String & pad = "") const;
 #	  endif
 
 	  int dimension;
@@ -141,7 +141,7 @@ namespace fl
 	public:
 	  virtual void search (float distance, Query & q) const;
 #	  ifndef N2A_SPINNAKER
-	  virtual void dump (std::ostream & out, const std::string & pad = "") const;
+	  virtual void dump (std::ostream & out, const String & pad = "") const;
 #	  endif
 
 	  std::vector<MatrixAbstract<float> *> points;

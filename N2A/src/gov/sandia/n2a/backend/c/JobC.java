@@ -145,7 +145,7 @@ public class JobC extends Thread
         boolean changed = false;
         if (needRuntime)
         {
-            if (unpackRuntime (JobC.class, runtimeDir, "",   "runtime.cc", "runtime.h", "Neighbor.cc")) changed = true;
+            if (unpackRuntime (JobC.class, runtimeDir, "",   "runtime.cc", "runtime.h", "Neighbor.cc", "String.h", "String.cc")) changed = true;
             if (unpackRuntime (JobC.class, runtimeDir, "fl", "io.h", "math.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "neighbor.h", "pointer.h", "Vector.tcc")) changed = true;
             needRuntime = false;   // Stop checking files for this session.
         }
@@ -155,14 +155,8 @@ public class JobC extends Thread
         {
             Path source = runtimeDir.resolve ("runtime.cc");
 
-            String [] commands = {gcc.toString (), "-c", "-O3", "-I" + runtimeDir, "-o", runtime.toString (), "-std=c++11", source.toString ()};
-            Process p = Runtime.getRuntime ().exec (commands);
-            p.waitFor ();
-            if (p.exitValue () != 0)
-            {
-                Backend.err.get ().println ("Failed to compile:\n" + HostSystem.streamToString (p.getErrorStream ()));
-                throw new Backend.AbortRun ();
-            }
+            Path out = runCommand (gcc.toString (), "-c", "-O3", "-std=c++11", "-I" + runtimeDir, "-o", runtime.toString (), source.toString ());
+            Files.delete (out);
         }
     }
 
@@ -193,16 +187,37 @@ public class JobC extends Thread
         String stem = source.getFileName ().toString ().split ("\\.", 2)[0];
         Path binary = source.getParent ().resolve (stem + ".bin");
 
-        String [] commands = {gcc.toString (), "-O3", "-o", binary.toString (), "-I" + runtimeDir, runtime.toString (), "-std=c++11", source.toString ()};
-        Process p = Runtime.getRuntime ().exec (commands);
+        Path out = runCommand (gcc.toString (), "-O3", "-std=c++11", "-I" + runtimeDir, runtime.toString (), "-o", binary.toString (), source.toString ());
+        Files.delete (out);
+
+        return binary;
+    }
+
+    public Path runCommand (String... command) throws Exception
+    {
+        // Useful for debugging. The dumped command can be used directly in a terminal to diagnose stalled builds.
+        for (String s : command) System.out.print (s + " ");
+        System.out.println ();
+
+        Path out = jobDir.resolve ("compile.out");
+        Path err = jobDir.resolve ("compile.err");
+
+        ProcessBuilder b = new ProcessBuilder (command);
+        b.redirectOutput (out.toFile ());  // Should truncate existing files.
+        b.redirectError  (err.toFile ());
+        Process p = b.start ();
         p.waitFor ();
         if (p.exitValue () != 0)
         {
-            Backend.err.get ().println ("Failed to compile:\n" + HostSystem.streamToString (p.getErrorStream ()));
+            PrintStream ps = Backend.err.get ();
+            ps.println ("Failed to compile:");
+            ps.print (HostSystem.streamToString (Files.newInputStream (err)));
+            Files.delete (out);
+            Files.delete (err);
             throw new Backend.AbortRun ();
         }
-
-        return binary;
+        Files.delete (err);
+        return out;
     }
 
     public void digestModel () throws Exception
@@ -269,7 +284,6 @@ public class JobC extends Thread
         s.append ("#include <iostream>\n");
         s.append ("#include <vector>\n");
         s.append ("#include <cmath>\n");
-        s.append ("#include <string>\n");
         s.append ("\n");
         s.append ("using namespace std;\n");
         s.append ("using namespace fl;\n");
@@ -530,7 +544,7 @@ public class JobC extends Thread
         }
         for (String columnName : bed.globalColumns)
         {
-            result.append ("  string " + columnName + ";\n");
+            result.append ("  String " + columnName + ";\n");
         }
         result.append ("\n");
 
@@ -611,7 +625,7 @@ public class JobC extends Thread
         }
         if (bed.needGlobalPath)
         {
-            result.append ("  virtual void path (string & result);\n");
+            result.append ("  virtual void path (String & result);\n");
         }
 
         // Population class trailer
@@ -714,7 +728,7 @@ public class JobC extends Thread
         }
         for (String columnName : bed.localColumns)
         {
-            result.append ("  string " + columnName + ";\n");
+            result.append ("  String " + columnName + ";\n");
         }
         for (EventSource es : bed.eventSources)
         {
@@ -847,7 +861,7 @@ public class JobC extends Thread
         }
         if (bed.needLocalPath)
         {
-            result.append ("  virtual void path (string & result);\n");
+            result.append ("  virtual void path (String & result);\n");
         }
 
         // Conversions
@@ -1420,7 +1434,7 @@ public class JobC extends Thread
 
         if (bed.needGlobalPath)
         {
-            result.append ("void " + ns + "path (string & result)\n");
+            result.append ("void " + ns + "path (String & result)\n");
             result.append ("{\n");
             if (((BackendDataC) s.container.backendData).needLocalPath)  // Will our container provide a non-empty path?
             {
@@ -2618,7 +2632,7 @@ public class JobC extends Thread
 
         if (bed.needLocalPath)
         {
-            result.append ("void " + ns + "path (string & result)\n");
+            result.append ("void " + ns + "path (String & result)\n");
             result.append ("{\n");
             if (s.connectionBindings == null)
             {
@@ -2635,9 +2649,7 @@ public class JobC extends Thread
                         result.append ("  result = \"" + s.name + "\";\n");
                     }
                 }
-                result.append ("  char index[32];\n");
-                result.append ("  sprintf (index, \"%i\", __24index);\n");
-                result.append ("  result += index;\n");
+                result.append ("  result += __24index;\n");
             }
             else
             {
@@ -2647,7 +2659,7 @@ public class JobC extends Thread
                     if (first)
                     {
                         result.append ("  " + mangle (c.alias) + ".path (result);\n");
-                        result.append ("  string temp;\n");
+                        result.append ("  String temp;\n");
                         first = false;
                     }
                     else
@@ -3065,17 +3077,13 @@ public class JobC extends Thread
                     String stringName = stringNames.get (a);
                     if (stringName != null)
                     {
-                        context.result.append (pad + "ostringstream " + stringName + ";\n");
-                        context.result.append (pad + stringName);
+                        context.result.append (pad + "String " + stringName + ";\n");
                         for (Operator o : flattenAdd (a))
                         {
-                            boolean needParen = ! (o instanceof Constant);
-                            context.result.append (" << ");
-                            if (needParen) context.result.append ("(");
+                            context.result.append (pad + stringName + " += ");
                             o.render (context);
-                            if (needParen) context.result.append (")");
+                            context.result.append (";\n");
                         }
-                        context.result.append (";\n");
                         return false;
                     }
                 }
@@ -3095,10 +3103,8 @@ public class JobC extends Thread
                     if (! (r.operands[0] instanceof Constant))
                     {
                         String matrixName = matrixNames.get (r);
-                        context.result.append (pad + "MatrixInput * " + matrixName + " = matrixHelper (");
                         String stringName = stringNames.get (r.operands[0]);
-                        context.result.append (stringName + ".str ()");
-                        context.result.append (");\n");
+                        context.result.append (pad + "MatrixInput * " + matrixName + " = matrixHelper (" + stringName + ");\n");
                     }
                     return false;
                 }
@@ -3108,10 +3114,8 @@ public class JobC extends Thread
                     if (! (i.operands[0] instanceof Constant))
                     {
                         String inputName = inputNames.get (i);
-                        context.result.append (pad + "InputHolder * " + inputName + " = inputHelper (");
                         String stringName = stringNames.get (i.operands[0]);
-                        context.result.append (stringName + ".str ()");
-                        context.result.append (");\n");
+                        context.result.append (pad + "InputHolder * " + inputName + " = inputHelper (" + stringName + ");\n");
                     }
                     return false;
                 }
@@ -3126,10 +3130,8 @@ public class JobC extends Thread
                     else
                     {
                         outputName = outputNames.get (o);
-                        context.result.append (pad + "OutputHolder * " + outputName + " = outputHelper (");
                         String stringName = stringNames.get (o.operands[0]);
-                        context.result.append (stringName + ".str ()");
-                        context.result.append (");\n");
+                        context.result.append (pad + "OutputHolder * " + outputName + " = outputHelper (" + stringName + ");\n");
                     }
 
                     // Detect raw flag
@@ -3212,7 +3214,7 @@ public class JobC extends Thread
             if (m.columns () == 1  &&  m.rows () == 3) return "Vector3";
             return "Matrix<float>";
         }
-        if (v.type instanceof Text) return "string";
+        if (v.type instanceof Text) return "String";
         return "float";
     }
 
@@ -3727,7 +3729,7 @@ public class JobC extends Thread
                 String stringName = stringNames.get (op);
                 if (stringName != null)
                 {
-                    result.append (stringName + ".str ()");
+                    result.append (stringName);
                     return true;
                 }
                 return false;

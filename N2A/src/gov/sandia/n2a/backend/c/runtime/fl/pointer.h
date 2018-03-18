@@ -28,7 +28,9 @@ for details.
 
 #include <new>
 #include <atomic>
-#include <ostream>
+#ifndef N2A_SPINNAKER
+# include <ostream>
+#endif
 
 
 namespace fl

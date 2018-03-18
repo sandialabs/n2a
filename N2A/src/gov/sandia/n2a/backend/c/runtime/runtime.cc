@@ -1,18 +1,19 @@
 #include "runtime.h"
 
-#include <cmath>
-#include <iostream>
-#include <fstream>
-
 #ifdef N2A_SPINNAKER
 # include "nosys.cc"
+#else
+# include <iostream>
+# include <fstream>
 #endif
 
+// Rather than build separate object files and link into an archive, we simply merge all
+// the code into a monolithic source and compile in one pass. This simplifies the process.
+#include "String.cc"
 #include "fl/Matrix.tcc"
 #include "fl/MatrixFixed.tcc"
 #include "fl/Vector.tcc"
-// As an FL source file, Neighbor.cc has "using namespace" statements in it. Therefore it must come last.
-#include "Neighbor.cc"
+#include "Neighbor.cc"  // As an FL source file, Neighbor.cc has "using namespace" statements in it. Therefore it must come last.
 
 template class MatrixAbstract<float>;
 template class Matrix<float>;
@@ -207,15 +208,15 @@ MatrixInput::getRaw (float row, float column)
     return (*this)(r,c);
 }
 
-map<string, MatrixInput *> matrixMap;
+map<String, MatrixInput *> matrixMap;
 
 MatrixInput *
-matrixHelper (const string & fileName, MatrixInput * oldHandle)
+matrixHelper (const String & fileName, MatrixInput * oldHandle)
 {
     if (oldHandle)
     {
         if (oldHandle->fileName == fileName) return oldHandle;
-        map<string, MatrixInput *>::iterator i = matrixMap.find (oldHandle->fileName);
+        map<String, MatrixInput *>::iterator i = matrixMap.find (oldHandle->fileName);
         if (i != matrixMap.end ())
         {
             delete i->second;
@@ -223,7 +224,7 @@ matrixHelper (const string & fileName, MatrixInput * oldHandle)
         }
     }
 
-    map<string, MatrixInput *>::iterator i = matrixMap.find (fileName);
+    map<String, MatrixInput *>::iterator i = matrixMap.find (fileName);
     if (i != matrixMap.end ()) return i->second;
 
     MatrixInput * handle = new MatrixInput;
@@ -250,7 +251,7 @@ matrixHelper (const string & fileName, MatrixInput * oldHandle)
 
 #ifndef N2A_SPINNAKER
 
-InputHolder::InputHolder (const string & fileName)
+InputHolder::InputHolder (const String & fileName)
 :   fileName (fileName)
 {
     currentLine   = -1;
@@ -289,7 +290,7 @@ InputHolder::getRow (float row, bool time)
         // Read and process next line
         if (nextLine < 0  &&  in->good ())
         {
-            string line;
+            String line;
             getline (*in, line);
             if (! line.empty ())
             {
@@ -308,7 +309,7 @@ InputHolder::getRow (float row, bool time)
                     while (i < end)
                     {
                         int j = line.find_first_of (" \t", i);
-                        if (j == string::npos) j = end;
+                        if (j == String::npos) j = end;
                         if (j > i) columnMap.emplace (line.substr (i, j - i), index);
                         i = j + 1;
                         index++;
@@ -347,7 +348,7 @@ InputHolder::getRow (float row, bool time)
                 for (; index < tempCount; index++)
                 {
                     int j = line.find_first_of (" \t", i);
-                    if (j == string::npos) j = line.size ();
+                    if (j == String::npos) j = line.size ();
                     if (j > i) nextValues[index] = atof (line.substr (i, j - i).c_str ());
                     else       nextValues[index] = 0;
                     i = j + 1;
@@ -384,10 +385,10 @@ InputHolder::getColumns (bool time)
 }
 
 float
-InputHolder::get (float row, bool time, const string & column)
+InputHolder::get (float row, bool time, const String & column)
 {
     getRow (row, time);
-    unordered_map<string,int>::const_iterator it = columnMap.find (column);
+    unordered_map<String,int>::const_iterator it = columnMap.find (column);
     if (it == columnMap.end ()) return 0;
     return currentValues[it->second];
 }
@@ -431,15 +432,15 @@ InputHolder::getRaw (float row, bool time, float column)
     return currentValues[c];
 }
 
-map<string,InputHolder *> inputMap;
+map<String,InputHolder *> inputMap;
 
 InputHolder *
-inputHelper (const string & fileName, InputHolder * oldHandle)
+inputHelper (const String & fileName, InputHolder * oldHandle)
 {
     if (oldHandle)
     {
         if (oldHandle->fileName == fileName) return oldHandle;
-        map<string,InputHolder *>::iterator i = inputMap.find (oldHandle->fileName);
+        map<String,InputHolder *>::iterator i = inputMap.find (oldHandle->fileName);
         if (i != inputMap.end ())
         {
             delete i->second;
@@ -447,7 +448,7 @@ inputHelper (const string & fileName, InputHolder * oldHandle)
         }
     }
 
-    map<string,InputHolder *>::iterator i = inputMap.find (fileName);
+    map<String,InputHolder *>::iterator i = inputMap.find (fileName);
     if (i != inputMap.end ()) return i->second;
 
     InputHolder * handle = new InputHolder (fileName);
@@ -462,13 +463,13 @@ inputHelper (const string & fileName, InputHolder * oldHandle)
 
 #ifdef N2A_SPINNAKER
 
-OutputHolder::OutputHolder (const string & fileName)
+OutputHolder::OutputHolder (const String & fileName)
 :   fileName (fileName)
 {
 }
 
 void
-OutputHolder::trace (double now, const string & column, float value)
+OutputHolder::trace (double now, const String & column, float value)
 {
 	// TODO: assemble packet to host
 }
@@ -484,7 +485,7 @@ OutputHolder::trace (double now, float column, float value)
 
 #else
 
-OutputHolder::OutputHolder (const string & fileName)
+OutputHolder::OutputHolder (const String & fileName)
 :   fileName (fileName)
 {
     columnsPrevious = 0;
@@ -538,11 +539,11 @@ OutputHolder::trace (double now)
 }
 
 void
-OutputHolder::trace (double now, const string & column, float value)
+OutputHolder::trace (double now, const String & column, float value)
 {
     trace (now);
 
-    unordered_map<string, int>::iterator result = columnMap.find (column);
+    unordered_map<String, int>::iterator result = columnMap.find (column);
     if (result == columnMap.end ())
     {
         columnMap[column] = columnValues.size ();
@@ -563,9 +564,9 @@ OutputHolder::trace (double now, float column, float value)
     int index = (int) round (column);  // "raw" is the most likely case, so preemptively convert to int
     if (raw) sprintf (buffer, "%i", index);
     else     sprintf (buffer, "%g", column);
-    string columnName = buffer;
+    String columnName = buffer;
 
-    unordered_map<string, int>::iterator result = columnMap.find (columnName);
+    unordered_map<String, int>::iterator result = columnMap.find (columnName);
     if (result == columnMap.end ())
     {
         if (raw)
@@ -593,7 +594,7 @@ OutputHolder::writeTrace ()
     // Write headers if new columns have been added
     if (! raw  &&  count > columnsPrevious)
     {
-        vector<string> headers (count);
+        vector<String> headers (count);
         for (auto it : columnMap) headers[it.second] = it.first;
 
         (*out) << headers[0];  // Should be $t
@@ -626,15 +627,15 @@ OutputHolder::writeTrace ()
 
 #endif
 
-map<string,OutputHolder *> outputMap;
+map<String,OutputHolder *> outputMap;
 
 OutputHolder *
-outputHelper (const string & fileName, OutputHolder * oldHandle)
+outputHelper (const String & fileName, OutputHolder * oldHandle)
 {
     if (oldHandle)
     {
         if (oldHandle->fileName == fileName) return oldHandle;
-        map<string,OutputHolder *>::iterator i = outputMap.find (oldHandle->fileName);
+        map<String,OutputHolder *>::iterator i = outputMap.find (oldHandle->fileName);
         if (i != outputMap.end ())
         {
             delete i->second;
@@ -642,7 +643,7 @@ outputHelper (const string & fileName, OutputHolder * oldHandle)
         }
     }
 
-    map<string, OutputHolder *>::iterator i = outputMap.find (fileName);
+    map<String, OutputHolder *>::iterator i = outputMap.find (fileName);
     if (i != outputMap.end ()) return i->second;
 
     OutputHolder * handle = new OutputHolder (fileName);
@@ -733,13 +734,13 @@ Simulatable::addToMembers ()
 }
 
 void
-Simulatable::path (string & result)
+Simulatable::path (String & result)
 {
     result = "";
 }
 
 void
-Simulatable::getNamedValue (const string & name, string & value)
+Simulatable::getNamedValue (const String & name, String & value)
 {
 }
 
@@ -1315,17 +1316,17 @@ Simulator simulator;
 
 Simulator::Simulator ()
 {
-    integrator = new Euler;
+    integrator = 0;
     stop = false;
 
     EventStep * event = new EventStep (0, 1e-4);
     currentEvent = event;
-    periods.emplace (1e-4, event);
+    periods.push_back (event);
 }
 
 Simulator::~Simulator ()
 {
-    for (auto it : periods) delete it.second;
+    for (auto event : periods) delete event;
     if (integrator) delete integrator;
 }
 
@@ -1355,27 +1356,48 @@ Simulator::updatePopulations ()
     }
 
     // Clear new flag from populations that have requested it
-    for (auto it : queueClearNew) it->clearNew ();
-    queueClearNew.clear ();
+    //for (auto it : queueClearNew) it->clearNew ();
+    //queueClearNew.clear ();
 }
 
 void
 Simulator::enqueue (Part * part, float dt)
 {
-    // find a matching event, or create one
-    EventStep * event;
-    map<float,EventStep *>::iterator period = periods.find (dt);
-    if (period == periods.end ())
+    // find a matching event
+    int index = 0;
+    int count = periods.size ();
+    for (; index < count; index++)
     {
-        event = new EventStep (currentEvent->t + dt, dt);
-        periods.emplace (dt, event);
-        queueEvent.push (event);
+        if (periods[index]->dt >= dt) break;
+    }
+
+    EventStep * event;
+    if (index < count  &&  periods[index]->dt == dt)
+    {
+        event = periods[index];
     }
     else
     {
-        event = period->second;
+        event = new EventStep (currentEvent->t + dt, dt);
+        periods.insert (periods.begin () + index, event);
+        queueEvent.push (event);
     }
     event->enqueue (part);
+}
+
+void
+Simulator::removePeriod (EventStep * event)
+{
+    vector<EventStep *>::iterator it;
+    for (it = periods.begin (); it != periods.end (); it++)
+    {
+        if (*it == event)
+        {
+            periods.erase (it);
+            break;
+        }
+    }
+    delete event;  // Events still in periods at end will get deleted by dtor.
 }
 
 void
@@ -1539,7 +1561,7 @@ EventStep::requeue ()
     }
     else  // our list of instances is empty, so die
     {
-        simulator.periods.erase (simulator.periods.find (dt));
+        simulator.removePeriod (this);
     }
 }
 
@@ -1564,6 +1586,8 @@ EventSpikeSingle::run ()
         visitor->part->finalize ();
         visitor->part->finalizeEvent ();
     });
+
+    delete this;
 }
 
 void
@@ -1580,6 +1604,7 @@ void
 EventSpikeSingleLatch::run ()
 {
     target->setLatch (latch);
+    delete this;
 }
 
 
@@ -1601,6 +1626,8 @@ EventSpikeMulti::run ()
         visitor->part->finalizeEvent ();
         // A part could die during event processing, but it can wait till next EventStep to leave queue.
     });
+
+    delete this;
 }
 
 void
@@ -1639,6 +1666,7 @@ void
 EventSpikeMultiLatch::run ()
 {
     setLatch ();
+    delete this;
 }
 
 

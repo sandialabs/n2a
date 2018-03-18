@@ -23,8 +23,10 @@ for details.
 
 #include <complex>
 #include <vector>
-#include <iostream>
-#include <sstream>
+#ifndef N2A_SPINNAKER
+# include <iostream>
+# include <sstream>
+#endif
 
 #undef SHARED
 #ifdef _MSC_VER
