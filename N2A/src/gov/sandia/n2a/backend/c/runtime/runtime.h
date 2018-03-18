@@ -337,7 +337,6 @@ public:
     void updatePopulations ();
 
     void enqueue      (Part * part, float dt); ///< Places part on event with period dt. If the event already exists, then the actual time till the part next executes may be less than dt, but thereafter will be exactly dt. Caller is responsible to call dequeue() or enterSimulation().
-    int  findPeriod   (float dt);  ///< Returns index of first entry such that entry.dt >= dt. If index == periods.size (), then no such entry exists.
     void removePeriod (EventStep * event);
 
     // callbacks
