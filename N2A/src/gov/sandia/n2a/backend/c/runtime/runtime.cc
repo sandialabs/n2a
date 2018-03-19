@@ -13,7 +13,6 @@
 # include "nosys.cc"
 #endif
 #include "io.cc"
-#include "String.cc"   // TODO: will inlining all String methods make the object file bigger or smaller?
 #include "Neighbor.cc"
 
 template class MatrixAbstract<float>;
