@@ -3,9 +3,13 @@
 
 
 #ifdef N2A_SPINNAKER
+# define N2A_THROW(message) rt_error (RTE_ABORT);
 # include "nosys.h"
+#else
+# define N2A_THROW(message) throw message;
 #endif
 
+#include "io.h"
 #include "String.h"
 #include "fl/matrix.h"
 
@@ -14,12 +18,12 @@
 #include <set>
 #include <vector>
 #include <map>
-#include <unordered_map>
 
 typedef fl::MatrixFixed<float,3,1> Vector3;
 
 
-// General functions. See the N2A language reference for details.
+// General functions ---------------------------------------------------------
+// See the N2A language reference for details.
 
 extern float                   uniform ();
 extern float                   uniform (float sigma);
@@ -32,98 +36,7 @@ extern fl::MatrixResult<float> gaussian (const fl::MatrixAbstract<float> & sigma
 extern fl::MatrixResult<float> grid (int i, int nx, int ny = 1, int nz = 1);
 
 
-// I/O
-
-class Holder
-{
-public:
-    String fileName;
-    Holder (const String & fileName) : fileName (fileName) {}
-};
-std::vector<Holder *>::iterator findIn (std::vector<Holder *> & holders, const String & fileName);
-std::vector<Holder *>::iterator findIn (std::vector<Holder *> & holders, const Holder * holder);
-
-// Matrix input
-#ifndef N2A_SPINNAKER
-class MatrixInput : public Holder, public fl::Matrix<float>
-{
-public:
-    MatrixInput (const String & fileName);
-
-    float get    (float row, float column);
-    float getRaw (float row, float column);
-};
-extern MatrixInput * matrixHelper (const String & fileName, MatrixInput * oldHandle = 0);
-#endif
-
-// Input
-#ifndef N2A_SPINNAKER
-class InputHolder : public Holder
-{
-public:
-    std::istream *                 in;
-    float                          currentLine;
-    float *                        currentValues;
-    int                            currentCount;
-    float                          nextLine;
-    float *                        nextValues;
-    int                            nextCount;
-    int                            columnCount;
-    std::unordered_map<String,int> columnMap;
-    int                            timeColumn;
-    bool                           timeColumnSet;
-    float                          epsilon;  ///< for time values
-
-    InputHolder (const String & fileName);
-    ~InputHolder ();
-
-    void  getRow     (float row, bool time);  ///< subroutine of get() and getRaw()
-    int   getColumns (           bool time);  ///< Returns number of columns seen so far.
-    float get        (float row, bool time, const String & column);
-    float get        (float row, bool time, float column);
-    float getRaw     (float row, bool time, float column);
-};
-extern InputHolder * inputHelper (const String & fileName, InputHolder * oldHandle = 0);
-#endif
-
-// Output
-class OutputHolder : public Holder
-{
-public:
-
-    bool raw; ///< Indicates that column is an exact index.
-
-#   ifdef N2A_SPINNAKER
-
-    OutputHolder (const String & fileName);
-
-    void trace (double now, const String & column, float value);
-    void trace (double now, float          column, float value);
-
-#   else
-
-    std::ostream *                 out;
-    std::unordered_map<String,int> columnMap;
-    std::vector<float>             columnValues;
-    int                            columnsPrevious; ///< Number of columns written in previous cycle.
-    bool                           traceReceived;   ///< Indicates that at least one column was touched during the current cycle.
-    double                         t;
-
-    OutputHolder (const String & fileName);
-    ~OutputHolder ();
-
-    void trace (double now);  ///< Subroutine for other trace() functions.
-    void trace (double now, const String & column, float value);
-    void trace (double now, float          column, float value);
-    void writeTrace ();
-
-#   endif
-};
-extern OutputHolder * outputHelper (const String & fileName, OutputHolder * oldHandle = 0);
-#ifndef N2A_SPINNAKER
-extern void           outputClose ();  ///< Close all OutputHolders
-#endif
-
+// Simulation classes --------------------------------------------------------
 
 class Simulatable;
 class Part;

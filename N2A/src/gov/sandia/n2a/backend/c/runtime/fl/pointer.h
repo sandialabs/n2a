@@ -18,8 +18,6 @@ for details.
 #define pointer_h
 
 
-#include "fl/io.h"
-
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>

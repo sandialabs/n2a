@@ -75,12 +75,9 @@ public class Output extends Function
         public Simulator           simulator;  ///< So we can get time associated with each trace() call.
         public boolean             raw;  ///< Indicates that column is an exact index.
 
-        public void trace (String column, float value)
+        public void trace (double now, String column, float value)
         {
             // Detect when time changes and dump any previously traced values.
-            double now;
-            if (simulator.currentEvent == null) now = 0;
-            else                                now = (float) simulator.currentEvent.t;
             if (now > t)
             {
                 writeTrace ();
@@ -219,7 +216,10 @@ public class Output extends Function
             }
         }
 
-        H.trace (column, (float) ((Scalar) result).value);
+        double now;
+        if (simulator.currentEvent == null) now = 0;
+        else                                now = (float) simulator.currentEvent.t;
+        H.trace (now, column, (float) ((Scalar) result).value);
 
         return result;
     }
