@@ -1,9 +1,7 @@
 /**
     A lightweight drop-in replacement for stl::string.
-    This is lightweight in that it avoid STL bloat (like traits, locales, exceptions ...)
-    and only deals with single-byte characters.
-    This class only implements functions that are actually used by the runtime engine,
-    and it adds a few useful functions not found in STL.
+    Avoids STL bloat (locales, exceptions ...) and only deals with single-byte characters.
+    This class only implements functions that are actually used by the runtime engine.
 **/
 
 #ifndef n2a_string_h

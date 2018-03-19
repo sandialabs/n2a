@@ -147,9 +147,39 @@ gridRaw (int i, int nx, int ny, int nz)
 }
 
 
+// I/O
+
+vector<Holder *>::iterator
+findIn (vector<Holder *> & holders, const String & fileName)
+{
+    vector<Holder *>::iterator it;
+    for (it = holders.begin (); it != holders.end (); it++)
+    {
+        if ((*it)->fileName == fileName) return it;
+    }
+    return it;  // Since i == end, caller will know that item was not found
+}
+
+vector<Holder *>::iterator
+findIn (vector<Holder *> & holders, const Holder * holder)
+{
+    vector<Holder *>::iterator it;
+    for (it = holders.begin (); it != holders.end (); it++)
+    {
+        if (*it == holder) return it;
+    }
+    return it;
+}
+
+
 // MatrixInput ---------------------------------------------------------------
 
 #ifndef N2A_SPINNAKER
+
+MatrixInput::MatrixInput (const String & fileName)
+:   Holder (fileName)
+{
+}
 
 float
 MatrixInput::get (float row, float column)
@@ -208,7 +238,7 @@ MatrixInput::getRaw (float row, float column)
     return (*this)(r,c);
 }
 
-map<String, MatrixInput *> matrixMap;
+vector<Holder *> matrixMap;
 
 MatrixInput *
 matrixHelper (const String & fileName, MatrixInput * oldHandle)
@@ -216,20 +246,19 @@ matrixHelper (const String & fileName, MatrixInput * oldHandle)
     if (oldHandle)
     {
         if (oldHandle->fileName == fileName) return oldHandle;
-        map<String, MatrixInput *>::iterator i = matrixMap.find (oldHandle->fileName);
-        if (i != matrixMap.end ())
+        vector<Holder *>::iterator it = findIn (matrixMap, oldHandle);
+        if (it != matrixMap.end ())
         {
-            delete i->second;
-            matrixMap.erase (i);
+            delete *it;
+            matrixMap.erase (it);
         }
     }
 
-    map<String, MatrixInput *>::iterator i = matrixMap.find (fileName);
-    if (i != matrixMap.end ()) return i->second;
+    vector<Holder *>::iterator it = findIn (matrixMap, fileName);
+    if (it != matrixMap.end ()) return (MatrixInput *) *it;
 
-    MatrixInput * handle = new MatrixInput;
-    handle->fileName = fileName;
-    matrixMap.insert (make_pair (fileName, handle));
+    MatrixInput * handle = new MatrixInput (fileName);
+    matrixMap.push_back (handle);
 
     ifstream ifs (fileName.c_str ());
     ifs >> (*handle);
@@ -252,7 +281,7 @@ matrixHelper (const String & fileName, MatrixInput * oldHandle)
 #ifndef N2A_SPINNAKER
 
 InputHolder::InputHolder (const String & fileName)
-:   fileName (fileName)
+:   Holder (fileName)
 {
     currentLine   = -1;
     currentValues = 0;
@@ -432,7 +461,7 @@ InputHolder::getRaw (float row, bool time, float column)
     return currentValues[c];
 }
 
-map<String,InputHolder *> inputMap;
+vector<Holder *> inputMap;
 
 InputHolder *
 inputHelper (const String & fileName, InputHolder * oldHandle)
@@ -440,19 +469,19 @@ inputHelper (const String & fileName, InputHolder * oldHandle)
     if (oldHandle)
     {
         if (oldHandle->fileName == fileName) return oldHandle;
-        map<String,InputHolder *>::iterator i = inputMap.find (oldHandle->fileName);
-        if (i != inputMap.end ())
+        vector<Holder *>::iterator it = findIn (inputMap, oldHandle);
+        if (it != inputMap.end ())
         {
-            delete i->second;
-            inputMap.erase (i);
+            delete *it;
+            inputMap.erase (it);
         }
     }
 
-    map<String,InputHolder *>::iterator i = inputMap.find (fileName);
-    if (i != inputMap.end ()) return i->second;
+    vector<Holder *>::iterator it = findIn (inputMap, fileName);
+    if (it != inputMap.end ()) return (InputHolder *) *it;
 
     InputHolder * handle = new InputHolder (fileName);
-    inputMap.emplace (fileName, handle);
+    inputMap.push_back (handle);
     return handle;
 }
 
@@ -464,7 +493,7 @@ inputHelper (const String & fileName, InputHolder * oldHandle)
 #ifdef N2A_SPINNAKER
 
 OutputHolder::OutputHolder (const String & fileName)
-:   fileName (fileName)
+:   Holder (fileName)
 {
 }
 
@@ -486,7 +515,7 @@ OutputHolder::trace (double now, float column, float value)
 #else
 
 OutputHolder::OutputHolder (const String & fileName)
-:   fileName (fileName)
+:   Holder (fileName)
 {
     columnsPrevious = 0;
     traceReceived   = false;
@@ -627,7 +656,7 @@ OutputHolder::writeTrace ()
 
 #endif
 
-map<String,OutputHolder *> outputMap;
+vector<Holder *> outputMap;
 
 OutputHolder *
 outputHelper (const String & fileName, OutputHolder * oldHandle)
@@ -635,19 +664,19 @@ outputHelper (const String & fileName, OutputHolder * oldHandle)
     if (oldHandle)
     {
         if (oldHandle->fileName == fileName) return oldHandle;
-        map<String,OutputHolder *>::iterator i = outputMap.find (oldHandle->fileName);
-        if (i != outputMap.end ())
+        vector<Holder *>::iterator it = findIn (outputMap, oldHandle);
+        if (it != outputMap.end ())
         {
-            delete i->second;
-            outputMap.erase (i);
+            delete *it;
+            outputMap.erase (it);
         }
     }
 
-    map<String, OutputHolder *>::iterator i = outputMap.find (fileName);
-    if (i != outputMap.end ()) return i->second;
+    vector<Holder *>::iterator it = findIn (outputMap, fileName);
+    if (it != outputMap.end ()) return (OutputHolder *) *it;
 
     OutputHolder * handle = new OutputHolder (fileName);
-    outputMap.emplace (fileName, handle);
+    outputMap.push_back (handle);
     return handle;
 }
 
@@ -655,7 +684,7 @@ outputHelper (const String & fileName, OutputHolder * oldHandle)
 void
 outputClose ()
 {
-    for (auto it : outputMap) delete it.second;
+    for (auto it : outputMap) delete it;
     // No need to clear collection, because this function is only called during shutdown.
 }
 #endif

@@ -314,10 +314,8 @@ public class JobC extends Thread
         s.append ("  try\n");
         s.append ("  {\n");
         String integrator = model.getNamedValue ("c.integrator", "Euler");
-        if (! integrator.equals ("Euler")  &&  ! integrator.isEmpty ())
-        {
-            s.append ("    simulator.integrator = new " + integrator + ";\n");
-        }
+        if (! "Euler|RungeKutta".contains (integrator)) integrator = "Euler";
+        s.append ("    simulator.integrator = new " + integrator + ";\n");
         s.append ("    Wrapper wrapper;\n");
         s.append ("    EventStep * event = (EventStep *) simulator.currentEvent;\n");
         s.append ("    event->enqueue (&wrapper);\n");  // no need for wrapper->enterSimulation()

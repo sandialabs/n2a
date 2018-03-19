@@ -31,12 +31,24 @@ extern fl::MatrixResult<float> gaussian (const fl::MatrixAbstract<float> & sigma
 
 extern fl::MatrixResult<float> grid (int i, int nx, int ny = 1, int nz = 1);
 
-// Matrix input
-#ifndef N2A_SPINNAKER
-class MatrixInput : public fl::Matrix<float>
+
+// I/O
+
+class Holder
 {
 public:
     String fileName;
+    Holder (const String & fileName) : fileName (fileName) {}
+};
+std::vector<Holder *>::iterator findIn (std::vector<Holder *> & holders, const String & fileName);
+std::vector<Holder *>::iterator findIn (std::vector<Holder *> & holders, const Holder * holder);
+
+// Matrix input
+#ifndef N2A_SPINNAKER
+class MatrixInput : public Holder, public fl::Matrix<float>
+{
+public:
+    MatrixInput (const String & fileName);
 
     float get    (float row, float column);
     float getRaw (float row, float column);
@@ -46,12 +58,10 @@ extern MatrixInput * matrixHelper (const String & fileName, MatrixInput * oldHan
 
 // Input
 #ifndef N2A_SPINNAKER
-class InputHolder
+class InputHolder : public Holder
 {
 public:
-    String                         fileName;
     std::istream *                 in;
-
     float                          currentLine;
     float *                        currentValues;
     int                            currentCount;
@@ -77,14 +87,13 @@ extern InputHolder * inputHelper (const String & fileName, InputHolder * oldHand
 #endif
 
 // Output
-class OutputHolder
+class OutputHolder : public Holder
 {
 public:
 
-#   ifdef N2A_SPINNAKER
+    bool raw; ///< Indicates that column is an exact index.
 
-    String fileName;
-    bool   raw;
+#   ifdef N2A_SPINNAKER
 
     OutputHolder (const String & fileName);
 
@@ -93,15 +102,12 @@ public:
 
 #   else
 
-    String                         fileName;
     std::ostream *                 out;
-
     std::unordered_map<String,int> columnMap;
     std::vector<float>             columnValues;
     int                            columnsPrevious; ///< Number of columns written in previous cycle.
     bool                           traceReceived;   ///< Indicates that at least one column was touched during the current cycle.
     double                         t;
-    bool                           raw;             ///< Indicates that column is an exact index.
 
     OutputHolder (const String & fileName);
     ~OutputHolder ();
