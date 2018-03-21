@@ -710,7 +710,7 @@ public class JobC extends Thread
         }
         if (bed.lastT)
         {
-            result.append ("  double lastT;\n");  // $lastT is for internal use only, so no need for __24 prefix.
+            result.append ("  float lastT;\n");  // $lastT is for internal use only, so no need for __24 prefix.
         }
         for (Variable v : bed.localMembers)
         {

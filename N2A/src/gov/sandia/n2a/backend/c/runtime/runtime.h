@@ -224,10 +224,33 @@ public:
     virtual float getRadius (int i);
 };
 
+/**
+    An instance of this function will normally call some operation on
+    Visitor::part, passing the visitor itself as the parameter.
+    Information specific to the operation is put into a capture by the
+    caller, while information specific to the Simulator/Event is held in
+    visitor.
+**/
+typedef std::function<void (Visitor * visitor)> visitorFunction;
+
+class Event
+{
+public:
+    float t;
+
+    virtual ~Event ();
+
+    virtual void run () = 0;  ///< Does all the work of a simulation cycle. This may be adapted to the specifics of the event type.
+    virtual void visit (visitorFunction f) = 0;  ///< Applies function to each part associated with this event. May visit multiple parts in parallel using separate threads.
+};
+
 class More
 {
 public:
-    bool operator() (const Event * a, const Event * b) const;
+    bool operator() (const Event * a, const Event * b) const
+    {
+        return a->t >= b->t;  // If "=" is included in the operator, new entries will get sorted after existing entries at the same point in time.
+    }
 };
 typedef std::priority_queue<Event *,std::vector<Event *>,More> priorityQueue;
 
@@ -285,26 +308,6 @@ public:
 };
 
 /**
-    An instance of this function will normally call some operation on
-    Visitor::part, passing the visitor itself as the parameter.
-    Information specific to the operation is put into a capture by the
-    caller, while information specific to the Simulator/Event is held in
-    visitor.
-**/
-typedef std::function<void (Visitor * visitor)> visitorFunction;
-
-class Event
-{
-public:
-    double t;
-
-    virtual ~Event ();
-
-    virtual void run () = 0;  ///< Does all the work of a simulation cycle. This may be adapted to the specifics of the event type.
-    virtual void visit (visitorFunction f) = 0;  ///< Applies function to each part associated with this event. May visit multiple parts in parallel using separate threads.
-};
-
-/**
     Holds parts that are formally queued for simulation.
     Executes on a periodic basis ("step" refers to dt). No other event type can hold parts for the simulator.
     Equivalently, all queued parts must belong to exactly one EventStep.
@@ -317,7 +320,7 @@ public:
     float dt;
     std::vector<VisitorStep *> visitors;
 
-    EventStep (double t, float dt);
+    EventStep (float t, float dt);
     virtual ~EventStep ();
 
     virtual void  run     ();

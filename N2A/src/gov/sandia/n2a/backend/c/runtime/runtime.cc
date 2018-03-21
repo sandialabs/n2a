@@ -814,15 +814,6 @@ Population::getRadius (int i)
 }
 
 
-// class More ----------------------------------------------------------------
-
-bool
-More::operator() (const Event * a, const Event * b) const
-{
-    return a->t >= b->t;  // If "=" is included in the operator, new entries will get sorted after existing entries at the same point in time.
-}
-
-
 // class Simulator -----------------------------------------------------------
 
 Simulator simulator;
@@ -958,8 +949,8 @@ RungeKutta::run (Event & event)
 
     // k2 and k3
     EventStep & es = (EventStep &) event;
-    double t  = es.t;  // Save current values of t and dt
-    float  dt = es.dt;
+    float t  = es.t;  // Save current values of t and dt
+    float dt = es.dt;
     es.dt /= 2.0f;
     es.t  -= es.dt;  // t is the current point in time, so we must look backward half a timestep
     for (int i = 0; i < 2; i++)
@@ -1021,7 +1012,7 @@ Event::~Event ()
 
 // class EventStep -----------------------------------------------------------
 
-EventStep::EventStep (double t, float dt)
+EventStep::EventStep (float t, float dt)
 :   dt (dt)
 {
     this->t = t;
