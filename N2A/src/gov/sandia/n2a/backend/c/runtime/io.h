@@ -71,9 +71,9 @@ public:
     OutputHolder (const String & fileName);
     ~OutputHolder ();
 
-    void trace (double now);  ///< Subroutine for other trace() functions.
-    void trace (double now, const String & column, float value);
-    void trace (double now, float          column, float value);
+    void trace (float now);  ///< Subroutine for other trace() functions.
+    void trace (float now, const String & column, float value);
+    void trace (float now, float          column, float value);
     void writeTrace ();
 };
 extern OutputHolder * outputHelper (const String & fileName, OutputHolder * oldHandle = 0);

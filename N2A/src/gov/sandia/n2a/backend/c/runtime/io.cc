@@ -325,7 +325,7 @@ OutputHolder::~OutputHolder ()
 }
 
 void
-OutputHolder::trace (double now)
+OutputHolder::trace (float now)
 {
     // Detect when time changes and dump any previously traced values.
     if (now > t)
@@ -350,7 +350,7 @@ OutputHolder::trace (double now)
 }
 
 void
-OutputHolder::trace (double now, const String & column, float value)
+OutputHolder::trace (float now, const String & column, float value)
 {
     trace (now);
 
@@ -367,7 +367,7 @@ OutputHolder::trace (double now, const String & column, float value)
 }
 
 void
-OutputHolder::trace (double now, float column, float value)
+OutputHolder::trace (float now, float column, float value)
 {
     trace (now);
 
