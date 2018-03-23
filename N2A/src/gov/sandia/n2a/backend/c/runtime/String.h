@@ -45,7 +45,7 @@ public:
         memory   = 0;
         top      = 0;
         capacity = 0;
-        assign (that.memory, that.top - that.memory);
+        assign (that.memory, that.top - that.memory);  // If that is an empty string, then that.memory may be null. assign() handles this case properly.
     }
 
     String (String && that) noexcept
@@ -65,7 +65,7 @@ public:
 
     String & assign (const char * value, size_t n)
     {
-        if (value  &&  n)
+        if (value  &&  n  &&  n <= max_size ())  // We should really throw an error if n > max_size, but this library avoids exceptions to support bare metal.
         {
             size_t requiredCapacity = n + 1;
             if (requiredCapacity > capacity)
@@ -82,14 +82,12 @@ public:
             top = memory;
         }
         if (top) *top = 0;
+        return *this;
     }
 
     String & operator= (const String & that)
     {
-        if (this != &that)
-        {
-            assign (that.memory, that.top - that.memory);
-        }
+        if (this != &that) assign (that.memory, that.top - that.memory);
         return *this;
     }
 
@@ -141,19 +139,35 @@ public:
         return "";
     }
 
+    int compare (const String & that) const noexcept
+    {
+        if (memory == that.memory) return 0;
+        if (memory == 0) return -1;
+        if (that.memory == 0) return 1;
+
+        int thisLength =      top -      memory;
+        int thatLength = that.top - that.memory;
+        int length = (thisLength < thatLength) ? thisLength : thatLength;
+
+        char * a   =      memory;
+        char * b   = that.memory;
+        char * end = a + length;
+        while (a < end)
+        {
+            int diff = *a++ - *b++;
+            if (diff) return diff;
+        }
+        return thisLength - thatLength;
+    }
+
     bool operator== (const String & that) const
     {
-        if (memory == that.memory) return true;
-        if (memory == 0  ||  that.memory == 0) return false;
-        return strcmp (memory, that.memory) == 0;
+        return compare (that) == 0;
     }
 
     bool operator< (const String & that) const
     {
-        if (memory == that.memory) return false;
-        if (memory == 0) return true;
-        if (that.memory == 0) return false;
-        return strcmp (memory, that.memory) < 0;
+        return compare (that) < 0;
     }
 
     const char & operator[] (size_t pos) const
@@ -202,8 +216,16 @@ public:
             char * temp = memory;
             capacity = requiredCapacity;
             memory = (char *) malloc (capacity);
-            combine (temp, that, memory);
+
+            char * m = memory;
+            char * a = temp;
+            if (a) while (*a) {*m++ = *a++;}
+            const char * b   = that;
+            const char * end = b + n;
+            if (b) while (b < end) {*m++ = *b++;}
+
             top = memory + length;
+            *top = 0;
             if (temp) free (temp);
         }
         else
@@ -243,10 +265,10 @@ public:
     String substr (size_t pos, size_t length = npos) const noexcept
     {
         String result;
-        size_t available = top - memory;
-        if (length > available  ||  length == npos) length = available;
-        length -= pos;
-        if (length >= 0) result.assign (memory + pos, length);
+        int available = (top - memory) - pos;
+        if (available <= 0) return result;
+        if (length > available) length = available;   // Assumes that npos works out to a large positive number.
+        result.assign (memory + pos, length);
         return result;
     }
 
@@ -262,6 +284,7 @@ public:
                 if (*p == *c) return c - memory;
                 p++;
             }
+            c++;
         }
         return npos;
     }
@@ -280,7 +303,8 @@ public:
 
 inline std::ostream & operator<< (std::ostream & out, const String & value)
 {
-    return out << value.memory;
+    if (value.memory) out << value.memory;
+    return out;
 }
 
 inline std::istream & getline (std::istream & in, String & result, char delimiter = '\n')
@@ -301,8 +325,9 @@ inline std::istream & getline (std::istream & in, String & result, char delimite
             b = buffer;
             if (result.size () >= limit) break;
         }
-        c = rdbuf->sgetc ();
+        c = rdbuf->snextc ();
     }
+    if (c == delimiter) rdbuf->snextc ();  // Could cause stream bad, but by not using another streambuf function (sbumpc), we may reduce object file size slightly.
     int remaining = b - buffer;
     if (remaining) result.append (buffer, remaining);
 }
