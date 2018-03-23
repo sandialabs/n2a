@@ -43,16 +43,17 @@ public:
     std::unordered_map<String,int> columnMap;
     int                            timeColumn;
     bool                           timeColumnSet;
+    bool                           time;     ///< mode
     float                          epsilon;  ///< for time values
 
     InputHolder (const String & fileName);
     ~InputHolder ();
 
-    void  getRow     (float row, bool time);  ///< subroutine of get() and getRaw()
-    int   getColumns (           bool time);  ///< Returns number of columns seen so far.
-    float get        (float row, bool time, const String & column);
-    float get        (float row, bool time, float column);
-    float getRaw     (float row, bool time, float column);
+    void  getRow     (float row); ///< subroutine of get() and getRaw()
+    int   getColumns ();          ///< Returns number of columns seen so far.
+    float get        (float row, const String & column);
+    float get        (float row, float column);
+    float getRaw     (float row, float column);
 };
 extern InputHolder * inputHelper (const String & fileName, InputHolder * oldHandle = 0);
 

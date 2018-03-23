@@ -1,4 +1,5 @@
 #include "io.h"
+#include "fl/math.h"
 
 #include <fstream>
 
@@ -110,7 +111,8 @@ InputHolder::InputHolder (const String & fileName)
     columnCount   = 0;
     timeColumn    = 0;
     timeColumnSet = false;
-    epsilon       = 0;
+    time          = false;
+    epsilon       = FLT_EPSILON;
 
     if (fileName.empty ())
     {
@@ -130,7 +132,7 @@ InputHolder::~InputHolder ()
 }
 
 void
-InputHolder::getRow (float row, bool time)
+InputHolder::getRow (float row)
 {
     while (true)
     {
@@ -224,26 +226,26 @@ InputHolder::getRow (float row, bool time)
 }
 
 int
-InputHolder::getColumns (bool time)
+InputHolder::getColumns ()
 {
-    getRow (0, time);
+    getRow (0);
     if (time) return max (0, columnCount - 1);
     return columnCount;
 }
 
 float
-InputHolder::get (float row, bool time, const String & column)
+InputHolder::get (float row, const String & column)
 {
-    getRow (row, time);
+    getRow (row);
     unordered_map<String,int>::const_iterator it = columnMap.find (column);
     if (it == columnMap.end ()) return 0;
     return currentValues[it->second];
 }
 
 float
-InputHolder::get (float row, bool time, float column)
+InputHolder::get (float row, float column)
 {
-    getRow (row, time);
+    getRow (row);
     int lastColumn = currentCount - 1;
     if (time) column *= (lastColumn - 1);  // time column is not included in interpolation
     else      column *=  lastColumn;
@@ -269,9 +271,9 @@ InputHolder::get (float row, bool time, float column)
 }
 
 float
-InputHolder::getRaw (float row, bool time, float column)
+InputHolder::getRaw (float row, float column)
 {
-    getRow (row, time);
+    getRow (row);
     int c = (int) round (column);
     if (time  &&  c >= timeColumn) c++;  // time column is not included in raw index
     if      (c < 0            ) c = 0;

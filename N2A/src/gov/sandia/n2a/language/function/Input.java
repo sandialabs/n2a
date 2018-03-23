@@ -158,7 +158,7 @@ public class Input extends Function
                 if (path.isEmpty ()) H.stream = new BufferedReader (new InputStreamReader (System.in));  // not ideal; reading stdin should be reserved for headless operation
                 else                 H.stream = new BufferedReader (new FileReader (new File (path).getAbsoluteFile ()));
 
-                H.epsilon = Math.sqrt (Math.ulp (1.0));  // sqrt (machine epsilon), about 1e-8
+                H.epsilon = Math.sqrt (Math.ulp (1.0));  // sqrt (epsilon for time representation (currently double)), about 1e-8
                 if (simulator.currentEvent instanceof EventStep) H.epsilon = Math.min (H.epsilon, ((EventStep) simulator.currentEvent).dt / 1000);
 
                 simulator.inputs.put (path, H);

@@ -23,6 +23,7 @@ for details.
 #endif
 
 #include <cmath>
+#include <cfloat>
 #include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>

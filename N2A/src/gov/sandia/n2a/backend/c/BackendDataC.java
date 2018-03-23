@@ -403,7 +403,7 @@ public class BackendDataC
 
         needLocalPreserve = localIntegrated.size () > 0  ||  localDerivativePreserve.size () > 0  ||  localBufferedExternalWriteDerivative.size () > 0;
         needLocalDtor     = needLocalPreserve  ||  localDerivative.size () > 0;
-        needLocalCtor     = needLocalDtor  ||  s.accountableConnections != null  ||  refcount;
+        needLocalCtor     = needLocalDtor  ||  s.accountableConnections != null  ||  refcount  ||  index != null  ||  localMembers.size () > 0;
         needLocalDie      = s.canDie ()  &&  (liveFlag >= 0  ||  s.connectionBindings == null  ||  accountableEndpoints.size () > 0  ||  eventTargets.size () > 0);
         needLocalInit     = s.connectionBindings == null  ||  localInit.size () > 0  ||  accountableEndpoints.size () > 0  ||  eventTargets.size () > 0;
         needLocalFinalize = localBufferedExternal.size () > 0  ||  type != null  ||  s.canDie ();

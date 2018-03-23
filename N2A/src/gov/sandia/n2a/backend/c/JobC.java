@@ -2844,7 +2844,11 @@ public class JobC extends Thread
         // Initialize static objects, and dump dynamic objects needed by conditions
         for (EquationEntry e : v.equations)
         {
-            if (init) prepareStaticObjects (e.expression, context, pad);
+            if (init)
+            {
+                prepareStaticObjects (e.expression, context, pad);
+                if (e.condition != null) prepareStaticObjects (e.condition, context, pad);
+            }
             if (e.condition != null) prepareDynamicObjects (e.condition, context, init, pad);
         }
 
@@ -3109,12 +3113,36 @@ public class JobC extends Thread
                 if (op instanceof Input)
                 {
                     Input i = (Input) op;
-                    if (! (i.operands[0] instanceof Constant))
+                    String inputName;
+                    if (i.operands[0] instanceof Constant)
                     {
-                        String inputName = inputNames.get (i);
+                        inputName = inputNames.get (i.operands[0].toString ());
+                    }
+                    else
+                    {
+                        inputName = inputNames.get (i);
                         String stringName = stringNames.get (i.operands[0]);
                         context.result.append (pad + "InputHolder * " + inputName + " = inputHelper (" + stringName + ");\n");
                     }
+
+                    //context.result.append (pad + inputName + "->epsilon = getEvent ()->dt / 1000;\n");
+
+                    // Detect time flag
+                    String mode = "";
+                    if (i.operands.length > 3)
+                    {
+                        mode = i.operands[3].toString ();  // just assuming it's a constant string
+                    }
+                    else if (i.operands[1] instanceof Constant)
+                    {
+                        Constant c = (Constant) i.operands[1];
+                        if (c.value instanceof Text) mode = c.toString ();
+                    }
+                    if (mode.contains ("time"))
+                    {
+                        context.result.append (pad + inputName + "->time = true;\n");
+                    }
+
                     return false;
                 }
                 if (op instanceof Output)
@@ -3123,7 +3151,7 @@ public class JobC extends Thread
                     String outputName;
                     if (o.operands[0] instanceof Constant)
                     {
-                        outputName = outputNames.get (o.operands[0].render ());
+                        outputName = outputNames.get (o.operands[0].toString ());
                     }
                     else
                     {
@@ -3675,14 +3703,14 @@ public class JobC extends Thread
                     Constant c = (Constant) i.operands[1];
                     if (c.value instanceof Text) mode = c.toString ();
                 }
-                boolean time = mode.contains ("time");
 
                 if (mode.contains ("columns"))
                 {
-                    result.append (inputName + "->getColumns (" + time + ")");
+                    result.append (inputName + "->getColumns ()");
                 }
                 else
                 {
+                    Operator op1 = i.operands[1];
                     Operator op2 = i.operands[2];
                     result.append (inputName + "->get");
                     if (   mode.contains ("raw")   // select raw mode, but only if column is not identified by a string
@@ -3692,8 +3720,8 @@ public class JobC extends Thread
                         result.append ("Raw");
                     }
                     result.append (" (");
-                    i.operands[1].render (this);
-                    result.append (", " + time + ", ");
+                    op1.render (this);
+                    result.append (", ");
                     op2.render (this);
                     result.append (")");
                 }
