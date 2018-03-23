@@ -124,15 +124,15 @@ public class MainTabbedPane extends JTabbedPane
                         for (int i = 1; i < getTabCount (); i++) order += "," + getTitleAt (i);
                         AppData.state.set ("MainTabbedPane", "order", order);
                     }
+                    setCursor (savedCursor);
                 }
                 dragged = false;
-                setCursor (savedCursor);
             }
 
             @Override
             public void mouseDragged (MouseEvent e)
             {
-                if (! dragged)  // drag is initiating, so change cursor
+                if (! dragged  &&  draggedTab >= 0)  // drag is initiating, so change cursor
                 {
                     savedCursor = getCursor ();
                     java.awt.Toolkit toolkit = java.awt.Toolkit.getDefaultToolkit ();
