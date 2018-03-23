@@ -75,6 +75,27 @@ public class Output extends Function
         public Simulator           simulator;  ///< So we can get time associated with each trace() call.
         public boolean             raw;  ///< Indicates that column is an exact index.
 
+        public Holder (Simulator simulator, String path)
+        {
+            this.simulator = simulator;
+            if (path.isEmpty ())
+            {
+                out = simulator.out;
+            }
+            else
+            {
+                try
+                {
+                    out = new PrintStream (new File (path).getAbsoluteFile ());
+                }
+                catch (FileNotFoundException e)
+                {
+                    out = simulator.out;
+                }
+            }
+            simulator.outputs.put (path, this);
+        }
+
         public void trace (double now, String column, float value)
         {
             // Detect when time changes and dump any previously traced values.
@@ -174,27 +195,8 @@ public class Output extends Function
         Holder H = simulator.outputs.get (path);
         if (H == null)
         {
-            H = new Holder ();
-            H.simulator = simulator;
-            if (path.isEmpty ())
-            {
-                H.out = simulator.out;
-            }
-            else
-            {
-                try
-                {
-                    H.out = new PrintStream (new File (path).getAbsoluteFile ());
-                }
-                catch (FileNotFoundException e)
-                {
-                    H.out = simulator.out;
-                }
-            }
-
+            H = new Holder (simulator, path);
             if (operands.length > 3) H.raw = operands[3].eval (context).toString ().contains ("raw");
-
-            simulator.outputs.put (path, H);
         }
 
         // Determine column name
