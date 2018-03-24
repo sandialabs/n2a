@@ -18,6 +18,8 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
+import java.util.Map;
+import java.util.TreeMap;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.extpoints.Backend;
@@ -26,6 +28,7 @@ import gov.sandia.n2a.ui.images.ImageUtil;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
+import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 
@@ -137,6 +140,8 @@ public class NodeJob extends NodeBase
                 }
             });
         }
+
+        if (! panel.tree.isCollapsed (new TreePath (getPath ()))) build (panel.tree);
     }
 
     public void stop ()
@@ -146,21 +151,33 @@ public class NodeJob extends NodeBase
 
     public void build (JTree tree)
     {
-        removeAllChildren ();
-
         // Only handle local resources.
         // If a job runs remotely, then we need to fetch its files to view them, so assume they will be downloaded to local dir when requested.
 
+        NodeBase selected = (NodeBase) tree.getLastSelectedPathComponent ();
+        TreeMap<File,NodeFile> existing = new TreeMap<File,NodeFile> ();
+        if (children != null)
+        {
+            for (Object c : children)
+            {
+                NodeFile nf = (NodeFile) c;
+                nf.found = false;
+                existing.put (nf.path, nf);
+            }
+        }
+
+        boolean changed = false;
         File path = new File (source.get ()).getParentFile ();
         for (File file : path.listFiles ())
         {
-            NodeBase newNode;
+            NodeFile newNode;
             String fileName = file.getName ();
 
             if (fileName.startsWith ("n2a_job" )) continue;
             if (fileName.equals     ("model"   )) continue;  // This is the file associated with our own "source"
             if (fileName.equals     ("started" )) continue;
             if (fileName.equals     ("finished")) continue;
+            if (fileName.startsWith ("compile" )) continue;  // Piped files for compilation process. These will get copied to appropriate places if necessary.
             if (fileName.endsWith   (".bin"    )) continue;  // Don't show generated binaries
             if (fileName.endsWith   (".aplx"   )) continue;
 
@@ -169,9 +186,51 @@ public class NodeJob extends NodeBase
             else if (fileName.endsWith ("result" )) newNode = new NodeFile (NodeFile.Type.Result,  file);
             else if (fileName.endsWith ("console")) newNode = new NodeFile (NodeFile.Type.Console, file);
             else                                    newNode = new NodeFile (NodeFile.Type.Other,   file);
-            add (newNode);
+
+            NodeFile oldNode = existing.get (newNode.path);
+            if (oldNode == null)
+            {
+                add (newNode);
+                changed = true;
+            }
+            else
+            {
+                oldNode.found = true;
+            }
         }
-        DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
-        model.nodeStructureChanged (this);
+
+        for (NodeFile nf : existing.values ())
+        {
+            if (! nf.found)
+            {
+                remove (nf);
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            if (selected != null)
+            {
+                if (selected instanceof NodeFile)
+                {
+                    NodeBase parent = (NodeBase) selected.getParent ();
+                    if (parent != NodeJob.this) selected = null;
+                    else if (! ((NodeFile) selected).found) selected = parent;
+                }
+            }
+            final TreePath selectedPath = (selected == null) ? null : new TreePath (selected.getPath ());
+            Runnable update = new Runnable ()
+            {
+                public void run ()
+                {
+                    DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+                    model.nodeStructureChanged (NodeJob.this);
+                    if (selectedPath != null) tree.setSelectionPath (selectedPath);
+                }
+            };
+            if (EventQueue.isDispatchThread ()) update.run ();
+            else                                EventQueue.invokeLater (update);
+        }
     }
 }

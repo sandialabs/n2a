@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2016,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -189,7 +189,11 @@ public class PanelRun extends JPanel
                     while (true)
                     {
                         NodeBase d = displayNode;  // Make local copy (atomic action) to prevent it changing from under us
-                        if (d instanceof NodeJob) ((NodeJob) d).monitorProgress (PanelRun.this);
+                        if (d != null)
+                        {
+                            if (d instanceof NodeFile) d = (NodeBase) d.getParent ();
+                            ((NodeJob) d).monitorProgress (PanelRun.this);
+                        }
                         if (shortCycles++ < 20)
                         {
                             Thread.sleep (1000);

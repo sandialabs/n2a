@@ -35,8 +35,9 @@ public class NodeFile extends NodeBase
         }
     }
 
-    protected File path;
-    protected Type type;
+    protected File    path;
+    protected Type    type;
+    protected boolean found;  // Flag to indicate if associated file was found during last scan.
 
     public NodeFile (Type type, File path)
     {
