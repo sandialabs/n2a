@@ -21,7 +21,6 @@ import gov.sandia.n2a.language.AccessElement;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.BuildMatrix;
 import gov.sandia.n2a.language.Constant;
-import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Renderer;
@@ -37,7 +36,6 @@ import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.operator.Power;
-import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
@@ -1052,7 +1050,9 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "integrate ()\n");
             result.append ("{\n");
-            result.append ("  float dt = getEvent ()->dt;\n");
+            result.append ("  EventStep * event = getEvent ();\n");
+            context.hasEvent = true;
+            result.append ("  float dt = event->dt;\n");
             result.append ("  if (preserve)\n");
             result.append ("  {\n");
             for (Variable v : bed.globalIntegrated)
@@ -1067,6 +1067,7 @@ public class JobC extends Thread
                 result.append ("    " + resolve (v.reference, context, false) + " += " + resolve (v.derivative.reference, context, false) + " * dt;\n");
             }
             result.append ("  }\n");
+            context.hasEvent = false;
             result.append ("};\n");
             result.append ("\n");
         }
@@ -1667,13 +1668,14 @@ public class JobC extends Thread
                 multiconditional (v, context, "  ");
             }
             // finalize $variables
-            if (bed.localBuffered.contains (bed.dt)  ||  bed.lastT)
+            if (bed.localBuffered.contains (bed.dt))
             {
                 result.append ("  EventStep * event = getEvent ();\n");
+                context.hasEvent = true;
             }
             if (bed.lastT)
             {
-                result.append ("  lastT = event.t;\n");
+                result.append ("  lastT = simulator.currentEvent->t;\n");
             }
             for (Variable v : bed.localBuffered)  // more than just localBufferedInternal, because we must finalize members as well
             {
@@ -1732,6 +1734,7 @@ public class JobC extends Thread
             }
 
             s.setInit (0);
+            context.hasEvent = false;
             result.append ("}\n");
             result.append ("\n");
         }
@@ -1743,13 +1746,14 @@ public class JobC extends Thread
             result.append ("{\n");
             if (bed.localIntegrated.size () > 0)
             {
-                result.append ("  EventStep * event = getEvent ();\n");
                 if (bed.lastT)
                 {
-                    result.append ("  float dt = event->t - lastT;\n");
+                    result.append ("  float dt = simulator.currentEvent->t - lastT;\n");
                 }
                 else
                 {
+                    result.append ("  EventStep * event = getEvent ();\n");
+                    context.hasEvent = true;
                     result.append ("  float dt = event->dt;\n");
                 }
                 // Note the resolve() call on the left-hand-side below has lvalue==false.
@@ -1774,6 +1778,7 @@ public class JobC extends Thread
             {
                 result.append ("  " + mangle (e.name) + ".integrate ();\n");
             }
+            context.hasEvent = false;
             result.append ("}\n");
             result.append ("\n");
         }
@@ -1823,7 +1828,7 @@ public class JobC extends Thread
             }
 
             // Preemptively fetch current event
-            boolean needT = bed.eventSources.size () > 0  ||  bed.lastT;
+            boolean needT = bed.eventSources.size () > 0;
             for (Variable v : bed.localBufferedExternal)
             {
                 if (v == bed.dt) needT = true;
@@ -1831,6 +1836,7 @@ public class JobC extends Thread
             if (needT)
             {
                 result.append ("  EventStep * event = getEvent ();\n");
+                context.hasEvent = true;
             }
 
             // Events
@@ -1893,7 +1899,7 @@ public class JobC extends Thread
             // Finalize variables
             if (bed.lastT)
             {
-                result.append ("  lastT = event.t;\n");
+                result.append ("  lastT = simulator.currentEvent.t;\n");
             }
             for (Variable v : bed.localBufferedExternal)
             {
@@ -2018,6 +2024,7 @@ public class JobC extends Thread
             }
 
             result.append ("  return true;\n");
+            context.hasEvent = false;
             result.append ("}\n");
             result.append ("\n");
         }
@@ -2351,7 +2358,7 @@ public class JobC extends Thread
                             // Note that other trigger types don't need this because they set the auxiliary variable,
                             // so the next test in the same cycle will no longer see change.
                             result.append ("      if (after == 0) return false;\n");
-                            result.append ("      float moduloTime = (float) fmod (getEvent ().t, 1);\n");  // Wrap time at 1 second, to fit in float precision.
+                            result.append ("      float moduloTime = (float) fmod (simulator.currentEvent->t, 1);\n");  // Wrap time at 1 second, to fit in float precision.
                             result.append ("      if (eventTime" + et.timeIndex + " == moduloTime) return false;\n");
                             result.append ("      eventTime" + et.timeIndex + " = moduloTime;\n");
                             result.append ("      return true;\n");
@@ -3025,7 +3032,52 @@ public class JobC extends Thread
                             context.result.append (pad + stringName + " = \"" + o.variableName + "\";\n");
                         }
                     }
-                    return false;
+                    else if (o.operands.length > 3)  // mode flags are present
+                    {
+                        if (o.operands[0] instanceof Constant)
+                        {
+                            // Detect raw flag
+                            Operator op3 = o.operands[3];
+                            if (op3 instanceof Constant)
+                            {
+                                if (op3.toString ().contains ("raw"))
+                                {
+                                    String outputName = outputNames.get (o.operands[0].toString ());
+                                    context.result.append (pad + outputName + "->raw = true;\n");
+                                }
+                            }
+                        }
+                    }
+                    return true;  // Continue to drill down, because I/O functions can be nested.
+                }
+                if (op instanceof Input)
+                {
+                    Input i = (Input) op;
+                    if (i.operands[0] instanceof Constant)
+                    {
+                        String inputName = inputNames.get (i.operands[0].toString ());
+                        if (! context.global)
+                        {
+                            context.result.append (pad + inputName + "->epsilon = " + resolve (context.bed.dt.reference, context, false) + " / 1000;\n");
+                        }
+
+                        // Detect time flag
+                        String mode = "";
+                        if (i.operands.length > 3)
+                        {
+                            mode = i.operands[3].toString ();  // just assuming it's a constant string
+                        }
+                        else if (i.operands[1] instanceof Constant)
+                        {
+                            Constant c = (Constant) i.operands[1];
+                            if (c.value instanceof Text) mode = c.toString ();
+                        }
+                        if (mode.contains ("time"))
+                        {
+                            context.result.append (pad + inputName + "->time = true;\n");
+                        }
+                    }
+                    return true;
                 }
                 return true;
             }
@@ -3113,70 +3165,57 @@ public class JobC extends Thread
                 if (op instanceof Input)
                 {
                     Input i = (Input) op;
-                    String inputName;
-                    if (i.operands[0] instanceof Constant)
+                    if (! (i.operands[0] instanceof Constant))
                     {
-                        inputName = inputNames.get (i.operands[0].toString ());
-                    }
-                    else
-                    {
-                        inputName = inputNames.get (i);
+                        String inputName = inputNames.get (i);
                         String stringName = stringNames.get (i.operands[0]);
                         context.result.append (pad + "InputHolder * " + inputName + " = inputHelper (" + stringName + ");\n");
-                    }
+                        if (! context.global)
+                        {
+                            context.result.append (pad + inputName + "->epsilon = " + resolve (context.bed.dt.reference, context, false) + " / 1000;\n");
+                        }
 
-                    //context.result.append (pad + inputName + "->epsilon = getEvent ()->dt / 1000;\n");
-
-                    // Detect time flag
-                    String mode = "";
-                    if (i.operands.length > 3)
-                    {
-                        mode = i.operands[3].toString ();  // just assuming it's a constant string
+                        // Detect time flag
+                        String mode = "";
+                        if (i.operands.length > 3)
+                        {
+                            mode = i.operands[3].toString ();  // just assuming it's a constant string
+                        }
+                        else if (i.operands[1] instanceof Constant)
+                        {
+                            Constant c = (Constant) i.operands[1];
+                            if (c.value instanceof Text) mode = c.toString ();
+                        }
+                        if (mode.contains ("time"))
+                        {
+                            context.result.append (pad + inputName + "->time = true;\n");
+                        }
                     }
-                    else if (i.operands[1] instanceof Constant)
-                    {
-                        Constant c = (Constant) i.operands[1];
-                        if (c.value instanceof Text) mode = c.toString ();
-                    }
-                    if (mode.contains ("time"))
-                    {
-                        context.result.append (pad + inputName + "->time = true;\n");
-                    }
-
-                    return false;
+                    return true;  // I/O functions can be nested
                 }
                 if (op instanceof Output)
                 {
                     Output o = (Output) op;
-                    String outputName;
-                    if (o.operands[0] instanceof Constant)
+                    if (! (o.operands[0] instanceof Constant))
                     {
-                        outputName = outputNames.get (o.operands[0].toString ());
-                    }
-                    else
-                    {
-                        outputName = outputNames.get (o);
+                        String outputName = outputNames.get (o);
                         String stringName = stringNames.get (o.operands[0]);
                         context.result.append (pad + "OutputHolder * " + outputName + " = outputHelper (" + stringName + ");\n");
-                    }
 
-                    // Detect raw flag
-                    if (o.operands.length > 3)
-                    {
-                        Instance bypass = new Instance ()
+                        // Detect raw flag
+                        if (o.operands.length > 3)
                         {
-                            public Type get (VariableReference r) throws EvaluationException
+                            Operator op3 = o.operands[3];
+                            if (op3 instanceof Constant)
                             {
-                                return r.variable.type;
+                                if (op3.toString ().contains ("raw"))
+                                {
+                                    context.result.append (pad + outputName + "->raw = true;\n");
+                                }
                             }
-                        };
-                        if (o.operands[3].eval (bypass).toString ().contains ("raw"))
-                        {
-                            context.result.append (pad + outputName + "->raw = true;\n");
                         }
                     }
-
-                    return false;
+                    return true;
                 }
                 return true;
             }
@@ -3338,8 +3377,12 @@ public class JobC extends Thread
             {
                 if (r.variable.name.equals ("$t"))
                 {
-                    if      (r.variable.order == 0) name = "getEvent ()->t";
-                    else if (r.variable.order == 1) name = "getEvent ()->dt";
+                    if      (r.variable.order == 0) name = "simulator.currentEvent->t";
+                    else if (r.variable.order == 1)
+                    {
+                        if (context.hasEvent) name = "event->dt";
+                        else                  name = "getEvent ()->dt";
+                    }
                     // TODO: what about higher orders of $t?
                 }
                 else
@@ -3534,6 +3577,7 @@ public class JobC extends Thread
         public EquationSet part;
         public BackendDataC bed;
         public boolean global;  ///< Whether this is in the population object (true) or a part object (false)
+        public boolean hasEvent;  ///< Indicates that event has been retrieved within current scope.
 
         public CRenderer (StringBuilder result, EquationSet part)
         {
@@ -3669,7 +3713,7 @@ public class JobC extends Thread
                 String outputName;
                 if (o.operands[0] instanceof Constant) outputName = outputNames.get (o.operands[0].toString ());
                 else                                   outputName = outputNames.get (o);
-                result.append (outputName + "->trace (getEvent ()->t, ");
+                result.append (outputName + "->trace (simulator.currentEvent->t, ");
 
                 if (o.operands.length > 2)  // column name is explicit
                 {

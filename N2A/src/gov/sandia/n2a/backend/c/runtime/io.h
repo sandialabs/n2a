@@ -15,7 +15,8 @@ class Holder
 {
 public:
     String fileName;
-    Holder (const String & fileName) : fileName (fileName) {}
+    Holder (const String & fileName);
+    virtual ~Holder ();
 };
 extern Holder * holderHelper (std::vector<Holder *> & holders, const String & fileName, Holder * oldHandle);
 
@@ -47,7 +48,7 @@ public:
     float                          epsilon;  ///< for time values
 
     InputHolder (const String & fileName);
-    ~InputHolder ();
+    virtual ~InputHolder ();
 
     void  getRow     (float row); ///< subroutine of get() and getRaw()
     int   getColumns ();          ///< Returns number of columns seen so far.
@@ -70,7 +71,7 @@ public:
     double                         t;
 
     OutputHolder (const String & fileName);
-    ~OutputHolder ();
+    virtual ~OutputHolder ();
 
     void trace (float now);  ///< Subroutine for other trace() functions.
     void trace (float now, const String & column, float value);

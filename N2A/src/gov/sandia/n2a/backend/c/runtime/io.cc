@@ -8,6 +8,18 @@ using namespace fl;
 using namespace std;
 
 
+// Holder --------------------------------------------------------------------
+
+Holder::Holder (const String & fileName)
+:   fileName (fileName)
+{
+}
+
+Holder::~Holder ()
+{
+}
+
+
 // MatrixInput ---------------------------------------------------------------
 
 MatrixInput::MatrixInput (const String & fileName)
@@ -112,7 +124,7 @@ InputHolder::InputHolder (const String & fileName)
     timeColumn    = 0;
     timeColumnSet = false;
     time          = false;
-    epsilon       = FLT_EPSILON;
+    epsilon       = 1e-6f;
 
     if (fileName.empty ())
     {
