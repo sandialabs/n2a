@@ -11,6 +11,8 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.TreeMap;
@@ -23,9 +25,12 @@ import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 
 public class Input extends Function
 {
+    public boolean timeWarning;
+
     public static Factory factory ()
     {
         return new Factory ()
@@ -62,12 +67,14 @@ public class Input extends Function
         public double              nextLine      = -1;
         public double[]            nextValues    = empty;
         public Map<String,Integer> columnMap     = new TreeMap<String,Integer> ();
+        public List<String>        headers       = new ArrayList<String> ();  // The inverse of columnMap
         public int                 columnCount;
+        public boolean             time;  // mode flag
         public int                 timeColumn;
         public boolean             timeColumnSet;
         public double              epsilon;
 
-        public void getRow (double requested, boolean time) throws IOException
+        public void getRow (double requested) throws IOException
         {
             while (true)
             {
@@ -89,7 +96,12 @@ public class Input extends Function
                                 for (int i = 0; i < columns.length; i++)
                                 {
                                     String header = columns[i];
-                                    if (! header.isEmpty ()) columnMap.put (header, i);
+                                    if (! header.isEmpty ())
+                                    {
+                                        columnMap.put (header, i);
+                                        while (headers.size () < i) headers.add ("");
+                                        headers.add (header);
+                                    }
                                 }
 
                                 // Select time column
@@ -158,13 +170,20 @@ public class Input extends Function
                 if (path.isEmpty ()) H.stream = new BufferedReader (new InputStreamReader (System.in));  // not ideal; reading stdin should be reserved for headless operation
                 else                 H.stream = new BufferedReader (new FileReader (new File (path).getAbsoluteFile ()));
 
+                H.time = time;
                 H.epsilon = Math.sqrt (Math.ulp (1.0));  // sqrt (epsilon for time representation (currently double)), about 1e-8
                 if (simulator.currentEvent instanceof EventStep) H.epsilon = Math.min (H.epsilon, ((EventStep) simulator.currentEvent).dt / 1000);
 
                 simulator.inputs.put (path, H);
             }
-            if (op1 instanceof Scalar) H.getRow (((Scalar) op1).value, time);
-            else                       H.getRow (0,                    time);
+            if (H.time != time  &&  ! timeWarning)
+            {
+                Backend.err.get ().println ("WARNING: Changed time mode for input(" + path + ")");
+                timeWarning = true;
+            }
+
+            if (op1 instanceof Scalar) H.getRow (((Scalar) op1).value);
+            else                       H.getRow (0);
         }
         catch (IOException e)
         {

@@ -3058,7 +3058,8 @@ public class JobC extends Thread
                         String inputName = inputNames.get (i.operands[0].toString ());
                         if (! context.global)
                         {
-                            context.result.append (pad + inputName + "->epsilon = " + resolve (context.bed.dt.reference, context, false) + " / 1000;\n");
+                            // Read $t' as an lvalue, to ensure we get any newly-set frequency.
+                            context.result.append (pad + inputName + "->epsilon = " + resolve (context.bed.dt.reference, context, true) + " / 1000;\n");
                         }
 
                         // Detect time flag
@@ -3172,7 +3173,8 @@ public class JobC extends Thread
                         context.result.append (pad + "InputHolder * " + inputName + " = inputHelper (" + stringName + ");\n");
                         if (! context.global)
                         {
-                            context.result.append (pad + inputName + "->epsilon = " + resolve (context.bed.dt.reference, context, false) + " / 1000;\n");
+                            // Read $t' as an lvalue, to ensure we get any newly-set frequency.
+                            context.result.append (pad + inputName + "->epsilon = " + resolve (context.bed.dt.reference, context, true) + " / 1000;\n");
                         }
 
                         // Detect time flag
