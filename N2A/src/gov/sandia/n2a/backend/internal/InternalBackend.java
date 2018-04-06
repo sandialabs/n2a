@@ -104,6 +104,7 @@ public class InternalBackend extends Backend
                 simulator = new Simulator (new Wrapper (digestedModel), seed);
                 simulator.eventMode = eventMode;
                 elapsedTime = System.nanoTime ();
+                simulator.init ();
                 simulator.run ();  // Does not return until simulation is finished.
                 elapsedTime = System.nanoTime () - elapsedTime;
                 if (simulator.stop) Files.copy (new ByteArrayInputStream ("killed" .getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
@@ -209,7 +210,9 @@ public class InternalBackend extends Backend
     {
         digestModel (e, jobDir);
         long seed = Long.parseLong (e.getNamedValue ("seed", "0"));
-        return new Simulator (new Wrapper (e), seed);
+        Simulator result = new Simulator (new Wrapper (e), seed);
+        result.init ();
+        return result;
     }
 
     public static void digestModel (EquationSet e, String jobDir) throws Exception

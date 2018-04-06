@@ -89,10 +89,19 @@ public class Simulator implements Iterable<Part>
 
         eventFactory = factory;
         EventStep e = eventFactory.create (0.0, 1e-4);
-        e.enqueue (wrapper);
         periods.put (e.dt, e);
-
         currentEvent = e;
+    }
+
+    /**
+        Perform the init cycle at time zero.
+        run() picks up immediately after this to continue the simulation.
+        Mainly, this function constructs the network, which is useful for export.
+    **/
+    public void init ()
+    {
+        EventStep e = (EventStep) currentEvent;
+        e.enqueue (wrapper);
         wrapper.init (this);
         updatePopulations ();
 
