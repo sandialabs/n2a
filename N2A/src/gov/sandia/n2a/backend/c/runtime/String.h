@@ -23,7 +23,8 @@ public:
     char * top;       // position of null terminator in memory block
     size_t capacity;  // size of currently-allocated memory block
 
-    static const size_t npos = static_cast<size_t> (-1);
+    static const size_t npos    = static_cast<size_t> (-1);
+    static const size_t maxSize = 0x1000000;  // 16Mb. This is suitable for most systems.
 
     String ()
     {
@@ -65,7 +66,7 @@ public:
 
     String & assign (const char * value, size_t n)
     {
-        if (value  &&  n  &&  n <= max_size ())  // We should really throw an error if n > max_size, but this library avoids exceptions to support bare metal.
+        if (value  &&  n  &&  n <= maxSize)  // We should really throw an error if n > max_size, but this library supports bare metal so it does not throw exceptions.
         {
             size_t requiredCapacity = n + 1;
             if (requiredCapacity > capacity)
@@ -124,7 +125,7 @@ public:
 
     size_t max_size () const
     {
-        return 0x1000000;  // 16Mb; This is suitable for most systems.
+        return maxSize;
     }
 
     const char * c_str () const
@@ -310,7 +311,7 @@ inline std::ostream & operator<< (std::ostream & out, const String & value)
 inline std::istream & getline (std::istream & in, String & result, char delimiter = '\n')
 {
     result.clear ();
-    const int limit = result.max_size ();
+    const int limit = String::maxSize;
     char buffer[128];
     char * top = buffer + sizeof (buffer);
     char * b   = buffer;
