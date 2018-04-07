@@ -50,6 +50,65 @@ public abstract class Matrix extends Type
         return get (row, 0);
     }
 
+    public double get (double row, double column, boolean raw)
+    {
+        int rows    = rows ();
+        int columns = columns ();
+        int lastRow    = rows    - 1;
+        int lastColumn = columns - 1;
+
+        if (raw)
+        {
+            int r = (int) Math.floor (row);
+            int c = (int) Math.floor (column);
+            if      (r < 0    ) r = 0;
+            else if (r >= rows) r = lastRow;
+            if      (c < 0       ) c = 0;
+            else if (c >= columns) c = lastColumn;
+            return get (r, c);
+        }
+        else
+        {
+            row    *= lastRow;
+            column *= lastColumn;
+            int r = (int) Math.floor (row);
+            int c = (int) Math.floor (column);
+            if (r < 0)
+            {
+                if      (c <  0         ) return get (0, 0);
+                else if (c >= lastColumn) return get (0, lastColumn);
+                else
+                {
+                    double b = column - c;
+                    return (1 - b) * get (0, c) + b * get (0, c+1);
+                }
+            }
+            else if (r >= lastRow)
+            {
+                if      (c <  0         ) return get (lastRow, 0);
+                else if (c >= lastColumn) return get (lastRow, lastColumn);
+                else
+                {
+                    double b = column - c;
+                    return (1 - b) * get (lastRow, c) + b * get (lastRow, c+1);
+                }
+            }
+            else
+            {
+                double a = row - r;
+                double a1 = 1 - a;
+                if      (c <  0         ) return a1 * get (r, 0         ) + a * get (r+1, 0         );
+                else if (c >= lastColumn) return a1 * get (r, lastColumn) + a * get (r+1, lastColumn);
+                else
+                {
+                    double b = column - c;
+                    return   (1 - b) * (a1 * get (r, c  ) + a * get (r+1, c  ))
+                           +      b  * (a1 * get (r, c+1) + a * get (r+1, c+1));
+                }
+            }
+        }
+    }
+
     public abstract void set (int row, int column, double a);
 
     public void set (int row, double a)

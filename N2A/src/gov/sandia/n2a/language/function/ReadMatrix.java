@@ -68,63 +68,9 @@ public class ReadMatrix extends Function
         if (mode.equals ("columns")) return new Scalar (A.columns ());
         if (mode.equals ("rows"   )) return new Scalar (A.rows    ());
 
-        int rows    = A.rows ();
-        int columns = A.columns ();
-        int lastRow    = rows    - 1;
-        int lastColumn = columns - 1;
         double row    = ((Scalar) operands[1].eval (context)).value;
         double column = ((Scalar) operands[2].eval (context)).value;
-
-        if (mode.equals ("raw"))
-        {
-            int r = (int) Math.floor (row);
-            int c = (int) Math.floor (column);
-            if      (r < 0    ) r = 0;
-            else if (r >= rows) r = lastRow;
-            if      (c < 0       ) c = 0;
-            else if (c >= columns) c = lastColumn;
-            return new Scalar (A.get (r, c));
-        }
-        else
-        {
-            row    *= lastRow;
-            column *= lastColumn;
-            int r = (int) Math.floor (row);
-            int c = (int) Math.floor (column);
-            if (r < 0)
-            {
-                if      (c <  0         ) return new Scalar (A.get (0, 0));
-                else if (c >= lastColumn) return new Scalar (A.get (0, lastColumn));
-                else
-                {
-                    double b = column - c;
-                    return new Scalar ((1 - b) * A.get (0, c) + b * A.get (0, c+1));
-                }
-            }
-            else if (r >= lastRow)
-            {
-                if      (c <  0         ) return new Scalar (A.get (lastRow, 0));
-                else if (c >= lastColumn) return new Scalar (A.get (lastRow, lastColumn));
-                else
-                {
-                    double b = column - c;
-                    return new Scalar ((1 - b) * A.get (lastRow, c) + b * A.get (lastRow, c+1));
-                }
-            }
-            else
-            {
-                double a = row - r;
-                double a1 = 1 - a;
-                if      (c <  0         ) return new Scalar (a1 * A.get (r, 0         ) + a * A.get (r+1, 0         ));
-                else if (c >= lastColumn) return new Scalar (a1 * A.get (r, lastColumn) + a * A.get (r+1, lastColumn));
-                else
-                {
-                    double b = column - c;
-                    return new Scalar (  (1 - b) * (a1 * A.get (r, c  ) + a * A.get (r+1, c  ))
-                                       +      b  * (a1 * A.get (r, c+1) + a * A.get (r+1, c+1)));
-                }
-            }
-        }
+        return new Scalar (A.get (row, column, mode.equals ("raw")));
     }
 
     public String toString ()
