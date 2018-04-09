@@ -1352,6 +1352,7 @@ public class JobC extends Thread
                 result.append ("    {\n");
                 result.append ("      result = new ConnectIterator (i);\n");
 
+                boolean hasKR = false;
                 Variable v = s.find (new Variable (c.alias + ".$k"));
                 EquationEntry e = null;
                 if (v != null) e = v.equations.first ();
@@ -1360,6 +1361,7 @@ public class JobC extends Thread
                     result.append ("      result->k = ");
                     e.expression.render (context);
                     result.append (";\n");
+                    hasKR = true;
                 }
 
                 v = s.find (new Variable (c.alias + ".$max"));
@@ -1390,13 +1392,17 @@ public class JobC extends Thread
                     result.append ("      result->radius = ");
                     e.expression.render (context);
                     result.append (";\n");
+                    hasKR = true;
                 }
 
                 if (s.find (new Variable (c.alias + ".$project")) != null)
                 {
                     result.append ("      result->rank += 1;");
                 }
-                result.append ("      if (result->k > 0  ||  result->radius > 0) result->rank -= 2;\n");
+                if (hasKR)
+                {
+                    result.append ("      if (result->k > 0  ||  result->radius > 0) result->rank -= 2;\n");
+                }
 
                 assembleInstances (s, "", c.resolution, 0, "      ", result);
 
@@ -3451,7 +3457,7 @@ public class JobC extends Thread
     public String containerOf (EquationSet s, boolean global, String base)
     {
         BackendDataC bed = (BackendDataC) s.backendData;
-        if (bed.pathToContainer != null) base += mangle (bed.pathToContainer) + "->";
+        if (bed.pathToContainer != null  &&  ! global) base += mangle (bed.pathToContainer) + "->";
         base += "container";
         if (bed.pathToContainer != null  ||  global)
         {
@@ -3557,7 +3563,7 @@ public class JobC extends Thread
             findPathToContainer (p);
         }
 
-        if (s.connectionBindings != null  &&  s.lethalContainer)  // and therefore needs to check its container
+        if (s.connectionBindings != null)
         {
             for (ConnectionBinding c : s.connectionBindings)
             {
