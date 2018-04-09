@@ -13,7 +13,6 @@
 # include "nosys.cc"
 #endif
 #include "io.cc"
-#include "Neighbor.cc"
 
 template class MatrixAbstract<float>;
 template class Matrix<float>;

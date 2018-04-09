@@ -11,16 +11,13 @@
 
 #include "io.h"
 #include "String.h"
-#include "fl/neighbor.h"
-#include "fl/matrix.h"
+#include "KDTree.h"
 
 #include <functional>
 #include <queue>
 #include <set>
 #include <vector>
 #include <map>
-
-typedef fl::MatrixFixed<float,3,1> Vector3;
 
 
 // General functions ---------------------------------------------------------
@@ -43,7 +40,6 @@ class Simulatable;
 class Part;
 class PartTime;
 class Wrapper;
-class KDTreeEntry;
 class ConnectIterator;
 class Population;
 class Simulator;
@@ -189,12 +185,6 @@ public:
     virtual void addToMembers       ();
 };
 
-class KDTreeEntry : public Vector3
-{
-public:
-    Part * part;
-};
-
 /**
     Enumerates all instances that can act as a particular connection endpoint.
     Handles deep paths to multiple populations, appending them into a single contiguous list.
@@ -228,11 +218,11 @@ public:
     float radius;
 
     // Nearest-neighbor filtering
-    float                      rank;        ///< heuristic value indicating how good a candidate this endpoint is to determine C.$xyz
-    bool                       explicitXYZ; ///< c explicitly defines $xyz, which takes precedence over any $project value
-    Vector3 *                  xyz;         ///< C.$xyz (that is, probe $xyz), shared by all iterators
-    fl::KDTree *               NN;          ///< "nearest neighbor" search class
-    KDTreeEntry *              entries;     ///< A dynamically-allocated array
+    float         rank;        ///< heuristic value indicating how good a candidate this endpoint is to determine C.$xyz
+    bool          explicitXYZ; ///< c explicitly defines $xyz, which takes precedence over any $project value
+    Vector3 *     xyz;         ///< C.$xyz (that is, probe $xyz), shared by all iterators
+    KDTree *      NN;          ///< "nearest neighbor" search class
+    KDTreeEntry * entries;     ///< A dynamically-allocated array
 
     ConnectIterator (int index);
     ~ConnectIterator ();
