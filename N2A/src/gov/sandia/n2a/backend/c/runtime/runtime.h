@@ -11,6 +11,7 @@
 
 #include "io.h"
 #include "String.h"
+#include "fl/neighbor.h"
 #include "fl/matrix.h"
 
 #include <functional>
@@ -42,6 +43,8 @@ class Simulatable;
 class Part;
 class PartTime;
 class Wrapper;
+class KDTreeEntry;
+class ConnectIterator;
 class Population;
 class Simulator;
 class Integrator;
@@ -116,9 +119,6 @@ class Part : public Simulatable
 public:
     Part * next; ///< All parts exist on one primary linked list, either in the simulator or the population's dead list.
 
-    Part * before;   ///< For doubly-linked list of population members. Move to generated code.
-    Part * after;
-
     // Simulation queue
     virtual void        setPrevious (Part * previous);
     virtual void        setVisitor  (VisitorStep * visitor);  ///< Informs this part of both its associated event and the specific thread.
@@ -131,10 +131,11 @@ public:
     virtual bool isFree          (); ///< @return true if the part is ready to use, false if the we are still waiting on other parts that reference us.
 
     // Connection-specific accessors
-    virtual void   setPart  (int i, Part * part);          ///< Assign the instance of population i referenced by this connection.
-    virtual Part * getPart  (int i);                       ///< @return Pointer to the instance of population i.
-    virtual int    getCount (int i);                       ///< @return Number of connections of this type attached to the part indexed by i.
-    virtual void   project  (int i, int j, Vector3 & xyz); ///< Determine position of connection in space of population j based on position in space of population i. Population i must already be bound, but population j is generally not bound.
+    virtual void   setPart    (int i, Part * part);   ///< Assign the instance of population i referenced by this connection.
+    virtual Part * getPart    (int i);                ///< @return Pointer to the instance of population i.
+    virtual int    getCount   (int i);                ///< @return Number of connections of this type attached to the part indexed by i.
+    virtual void   getProject (int i, Vector3 & xyz); ///< Determine position of endpoint i as projected into this connection's space. Default is the endpoint's own $xyz.
+    virtual bool   getNewborn ();                     ///< @return The value of the newborn flag (or false if it doesn't exist in this part). Unlike the above, this is a direct function of the endpoint.
 
     // Accessors for $variables
     virtual float getLive ();              ///< @return 1 if we are in normal simulation. 0 if we have died. Default is 1.
@@ -188,6 +189,61 @@ public:
     virtual void addToMembers       ();
 };
 
+class KDTreeEntry : public Vector3
+{
+public:
+    Part * part;
+};
+
+/**
+    Enumerates all instances that can act as a particular connection endpoint.
+    Handles deep paths to multiple populations, appending them into a single contiguous list.
+    When nested, this class is responsible for destructing its inner iterators.
+**/
+class ConnectIterator
+{
+public:
+    int                   index;      ///< of endpoint, for use with accessors
+    ConnectIterator *     permute;
+    bool                  contained;  ///< Another iterator holds us in its permute reference.
+    std::vector<Part *> * instances;
+    bool                  deleteInstances;
+    int                   size;       ///< Cached value of instances.size(). Doesn't change.
+    int                   firstborn;  ///< Index in instances of first new entry. In simplest case, it is the same as population firstborn.
+    std::vector<Part *>   filtered;   ///< A subset of instances selected by spatial filtering.
+    Part *                c;          ///< The connection instance being built.
+    Part *                p;          ///< Our current part, contributed as an endpoint of c.
+
+    // Iteration
+    bool newOnly;
+    int  count;  ///< Size of current subset of instances we are iterating through.
+    int  offset;
+    int  i;
+    int  stop;
+
+    // Endpoint parameters get stashed here, rather than using accessors.
+    int   Max;  // $max. Capitalized to avoid name collision with macro or function.
+    int   Min;
+    int   k;
+    float radius;
+
+    // Nearest-neighbor filtering
+    float                      rank;        ///< heuristic value indicating how good a candidate this endpoint is to determine C.$xyz
+    bool                       explicitXYZ; ///< c explicitly defines $xyz, which takes precedence over any $project value
+    Vector3 *                  xyz;         ///< C.$xyz (that is, probe $xyz), shared by all iterators
+    fl::KDTree *               NN;          ///< "nearest neighbor" search class
+    KDTreeEntry *              entries;     ///< A dynamically-allocated array
+
+    ConnectIterator (int index);
+    ~ConnectIterator ();
+
+    void prepareNN ();
+    bool setProbe  (Part * probe); ///< @return true If we need to advance to the next instance. This happens when p has reached its max number of connections.
+    void reset     (bool newOnly);
+    bool old       ();             ///< Indicates that all iterators from this level down return a part that is old.
+    bool next      ();             ///< Fills probe with next permutation. Returns false if no more permutations are available.
+};
+
 /**
     The shared variables of a group of part instances. Because a population
     may be contained in another part, which may be replicated several times,
@@ -201,27 +257,25 @@ public:
 class Population : public Simulatable
 {
 public:
-    Part * dead;      ///< Head of linked list of available parts, using Part::next.
-    Part   live;      ///< Parts currently on simulator queue (regardless of $live), linked via before and after. Used for iterating populations to make connections.
-    Part * old;       ///< Position in parts linked list of first old part. All parts before this were added in the current simulation cycle. If old==&live, then all parts are new.
+    Part * container;
+    Part * dead; ///< Head of linked list of available parts, using Part::next.
 
     Population ();
     virtual ~Population ();  ///< Deletes all parts on our dead list.
 
+    // Instance management
     virtual Part * create   () = 0;        ///< Construct an instance of the kind of part this population holds. Caller is fully responsible for lifespan of result, unless it gives the part to us via add().
     virtual void   add      (Part * part); ///< The given part is going onto a simulator queue, but we may also account for it in other ways.
     virtual void   remove   (Part * part); ///< Move part to dead list, and update any other accounting for the part.
     virtual Part * allocate ();            ///< If a dead part is available, re-use it. Otherwise, create and add a new part.
     virtual void   resize   (int n);       ///< Add or kill instances until $n matches given n.
+    virtual int    getN     ();
 
-    virtual Population * getTarget (int i); ///< @return The end-point of a connection. Index starts at 0. An index out of range returns a null pointer.
-    virtual void         connect   ();      ///< For a connection population, evaluate each possible connection (or some well-defined subset thereof).
-    virtual void         clearNew  ();      ///< Reset newborn index
-
-    virtual int   getK      (int i);
-    virtual int   getMax    (int i);
-    virtual int   getMin    (int i);
-    virtual float getRadius (int i);
+    // Connections
+    virtual void              connect      (); ///< For a connection population, evaluate each possible connection (or some well-defined subset thereof).
+    virtual void              clearNew     (); ///< Reset newborn index
+    virtual ConnectIterator * getIterators (); ///< Assembles one or more nested iterators in an optimal manner and returns the outermost one.
+    virtual ConnectIterator * getIterator  (int i);
 };
 
 /**
@@ -275,7 +329,7 @@ public:
     Simulator ();
     ~Simulator ();
 
-    void run (); ///< Main entry point for simulation. Do all work.
+    void run (WrapperBase & wrapper); ///< Main entry point for simulation. Do all work.
     void updatePopulations ();
 
     void enqueue      (Part * part, float dt); ///< Places part on event with period dt. If the event already exists, then the actual time till the part next executes may be less than dt, but thereafter will be exactly dt. Caller is responsible to call dequeue() or enterSimulation().

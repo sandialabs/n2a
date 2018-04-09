@@ -52,7 +52,6 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.NavigableSet;
 import java.util.Set;
@@ -232,6 +231,7 @@ public class JobC extends Thread
         model.determineTraceVariableName ();
         model.removeUnused ();  // especially get rid of unneeded $variables created by addSpecials()
         model.collectSplits ();
+        createBackendData (model);
         findPathToContainer (model);
         model.findAccountableConnections ();
         model.findTemporary ();  // for connections, makes $p and $project "temporary" under some circumstances. TODO: make sure this doesn't violate evaluation order rules
@@ -247,7 +247,6 @@ public class JobC extends Thread
         model.forceTemporaryStorageForSpecials ();
         findLiveReferences (model);
         model.determineTypes ();
-        createBackendData (model);
         analyzeEvents (model);
         analyze (model);
     }
@@ -315,12 +314,7 @@ public class JobC extends Thread
         if (! "Euler|RungeKutta".contains (integrator)) integrator = "Euler";
         s.append ("    simulator.integrator = new " + integrator + ";\n");
         s.append ("    Wrapper wrapper;\n");
-        s.append ("    EventStep * event = (EventStep *) simulator.currentEvent;\n");
-        s.append ("    event->enqueue (&wrapper);\n");  // no need for wrapper->enterSimulation()
-        s.append ("    wrapper.init ();\n");  // This and the next line implement the init cycle at t=0
-        s.append ("    simulator.updatePopulations ();\n");
-        s.append ("    if (wrapper.visitor->event == event) event->requeue ();\n");
-        s.append ("    simulator.run ();\n");  // Now begin stepping forward in time
+        s.append ("    simulator.run (wrapper);\n");
         s.append ("    outputClose ();\n");
         s.append ("  }\n");
         s.append ("  catch (const char * message)\n");
@@ -517,9 +511,17 @@ public class JobC extends Thread
         {
             result.append ("  int n;\n");
         }
-        if (bed.index != null)
+        if (bed.trackInstances)
+        {
+            result.append ("  vector<" + prefix (s) + " *> instances;\n");
+        }
+        else if (bed.index != null)  // The instances vector can supply the next index, so only declare nextIndex if instances was not declared.
         {
             result.append ("  int nextIndex;\n");
+        }
+        if (bed.newborn >= 0)
+        {
+            result.append ("  int firstborn;\n");
         }
         if (bed.globalDerivative.size () > 0)
         {
@@ -529,7 +531,6 @@ public class JobC extends Thread
         {
             result.append ("  Preserve * preserve;\n");
         }
-        result.append ("  " + prefix (s.container) + " * container;\n");
         for (Variable v : bed.globalMembers)
         {
             result.append ("  " + type (v) + " " + mangle (v) + ";\n");
@@ -575,9 +576,13 @@ public class JobC extends Thread
         {
             result.append ("  virtual bool finalize ();\n");
         }
-        if (bed.n != null)
+        if (bed.canResize)
         {
             result.append ("  virtual void resize (int n);\n");
+        }
+        if (bed.n != null)
+        {
+            result.append ("  virtual int getN ();\n");
         }
         if (bed.globalDerivativeUpdate.size () > 0)
         {
@@ -599,25 +604,13 @@ public class JobC extends Thread
             result.append ("  virtual void multiply (float scalar);\n");
             result.append ("  virtual void addToMembers ();\n");
         }
+        if (bed.newborn >= 0)
+        {
+            result.append ("  virtual void clearNew ();\n");
+        }
         if (s.connectionBindings != null)
         {
-            result.append ("  virtual Population * getTarget (int i);\n");
-            if (bed.needK)
-            {
-                result.append ("  virtual int getK (int i);\n");
-            }
-            if (bed.needMax)
-            {
-                result.append ("  virtual int getMax (int i);\n");
-            }
-            if (bed.needMin)
-            {
-                result.append ("  virtual int getMin (int i);\n");
-            }
-            if (bed.needRadius)
-            {
-                result.append ("  virtual int getRadius (int i);\n");
-            }
+            result.append ("  virtual ConnectIterator * getIterator (int i);\n");
         }
         if (bed.needGlobalPath)
         {
@@ -831,12 +824,16 @@ public class JobC extends Thread
             {
                 result.append ("  virtual float getP ();\n");
             }
-            if (bed.hasProjectFrom  ||  bed.hasProjectTo)
+            if (bed.hasProject)
             {
-                result.append ("  virtual void project (int i, int j, Vector3 & xyz);\n");
+                result.append ("  virtual void getProject (int i, Vector3 & xyz);\n");
             }
             result.append ("  virtual void setPart (int i, Part * part);\n");
             result.append ("  virtual Part * getPart (int i);\n");
+        }
+        if (bed.newborn >= 0)
+        {
+            result.append ("  virtual bool getNewborn ();\n");
         }
         if (bed.eventTargets.size () > 0)
         {
@@ -895,9 +892,13 @@ public class JobC extends Thread
             {
                 result.append ("  n = 0;\n");
             }
-            if (bed.index != null)
+            if (! bed.trackInstances  &&  bed.index != null)
             {
                 result.append ("  nextIndex = 0;\n");
+            }
+            if (bed.newborn >= 0)
+            {
+                result.append ("  firstborn = 0;\n");
             }
             if (bed.globalDerivative.size () > 0)
             {
@@ -937,7 +938,7 @@ public class JobC extends Thread
         result.append ("Part * " + ns + "create ()\n");
         result.append ("{\n");
         result.append ("  " + prefix (s) + " * p = new " + prefix (s) + ";\n");
-        if (bed.pathToContainer == null) result.append ("  p->container = container;\n");
+        if (bed.pathToContainer == null) result.append ("  p->container = (" + prefix (s.container) + " *) container;\n");
         result.append ("  return p;\n");
         result.append ("}\n");
         result.append ("\n");
@@ -948,13 +949,26 @@ public class JobC extends Thread
             result.append ("void " + ns + "add (Part * part)\n");
             result.append ("{\n");
             result.append ("  " + prefix (s) + " * p = (" + prefix (s) + " *) part;\n");
-            result.append ("  if (p->__24index < 0) p->__24index = nextIndex++;\n");
             if (bed.trackInstances)
             {
-                result.append ("  p->before        = &live;\n");
-                result.append ("  p->after         =  live.after;\n");
-                result.append ("  p->before->after = p;\n");
-                result.append ("  p->after->before = p;\n");
+                result.append ("  if (p->__24index < 0)\n");
+                result.append ("  {\n");
+                result.append ("    p->__24index = instances.size ();\n");
+                result.append ("    instances.push_back (p);\n");
+                result.append ("  }\n");
+                result.append ("  else\n");
+                result.append ("  {\n");
+                result.append ("    instances[p->__24index] = p;\n");
+                result.append ("  }\n");
+                if (bed.newborn >= 0)
+                {
+                    result.append ("  p->flags = (" + bed.flagType + ") 0x1 << " + bed.newborn + ";\n");
+                    result.append ("  firstborn = min (firstborn, p->__24index);\n");
+                }
+            }
+            else
+            {
+                result.append ("  if (p->__24index < 0) p->__24index = nextIndex++;\n");
             }
             result.append ("}\n");
             result.append ("\n");
@@ -964,33 +978,11 @@ public class JobC extends Thread
                 result.append ("void " + ns + "remove (Part * part)\n");
                 result.append ("{\n");
                 result.append ("  " + prefix (s) + " * p = (" + prefix (s) + " *) part;\n");
-                result.append ("  if (p == old) old = old->after;\n");
-                result.append ("  p->before->after = p->after;\n");
-                result.append ("  p->after->before = p->before;\n");
+                result.append ("  instances[p->__24index] = 0;\n");
                 result.append ("  Population::remove (part);\n");
                 result.append ("}\n");
                 result.append ("\n");
             }
-        }
-
-        // Population getTarget
-        if (s.connectionBindings != null)
-        {
-            result.append ("Population * " + ns + "getTarget (int i)\n");
-            result.append ("{\n");
-            result.append ("  switch (i)\n");
-            result.append ("  {\n");
-            int i = 0;
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                // TODO: Need a function to permute all descending paths to a class of populations.
-                // In the simplest form, it is a peer in our current container, so no iteration at all.
-                result.append ("    case " + i++ + ": return & container->" + mangle (c.endpoint.name) + ";\n");
-            }
-            result.append ("    default: return 0;\n");
-            result.append ("  }\n");
-            result.append ("}\n");
-            result.append ("\n");
         }
 
         // Population init
@@ -1091,11 +1083,6 @@ public class JobC extends Thread
                 result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
             }
 
-            if (s.connectionBindings == null)
-            {
-                result.append ("  old = live.after;\n");  // TODO: find a better way to keep track of "new" parts. Problem: what if a part is "new" relative to several different connection types, and what if those connections are tested at different times?
-            }
-
             result.append ("};\n");
             result.append ("\n");
         }
@@ -1172,11 +1159,11 @@ public class JobC extends Thread
         }
 
         // Population resize()
-        if (bed.n != null)
+        if (bed.canResize)
         {
             result.append ("void " + ns + "resize (int n)\n");
             result.append ("{\n");
-            if (bed.canResize  &&  bed.canGrowOrDie  &&  bed.n.derivative == null)
+            if (bed.canGrowOrDie  &&  bed.n.derivative == null)
             {
                 result.append ("  if (n < 0)\n");
                 result.append ("  {\n");
@@ -1185,22 +1172,23 @@ public class JobC extends Thread
                 result.append ("  }\n");
                 result.append ("\n");
             }
-            result.append ("  EventStep * event = container->getEvent ();\n");
-            result.append ("  while (this->n < n)\n");
-            result.append ("  {\n");
-            result.append ("    Part * p = allocate ();\n");
-            result.append ("    p->enterSimulation ();\n");
-            result.append ("    event->enqueue (p);\n");
-            result.append ("    p->init ();\n");
-            result.append ("  }\n");
+            result.append ("  Population::resize (n);\n");
             result.append ("\n");
-            result.append ("  Part * p = live.before;\n");
-            result.append ("  while (this->n > n)\n");
+            result.append ("  for (int i = instances.size () - 1; this->n > n  &&  i >= 0; i--)\n");
             result.append ("  {\n");
-            result.append ("    if (p == &live) N2A_THROW (\"Inconsistent $n\");\n");
-            result.append ("    if (p->getLive ()) p->die ();\n");
-            result.append ("    p = p->before;\n");
+            result.append ("    Part * p = instances[i];\n");
+            result.append ("    if (p  &&  p->getLive ()) p->die ();\n");
             result.append ("  }\n");
+            result.append ("};\n");
+            result.append ("\n");
+        }
+
+        // Population getN
+        if (bed.n != null)
+        {
+            result.append ("int " + ns + "getN ()\n");
+            result.append ("{\n");
+            result.append ("  return n;\n");
             result.append ("};\n");
             result.append ("\n");
         }
@@ -1331,102 +1319,92 @@ public class JobC extends Thread
             result.append ("\n");
         }
 
-        // Population getK
-        if (bed.needK)
+        // Population clearNew
+        if (bed.newborn >= 0)
         {
-            result.append ("int " + ns + "getK (int i)\n");
+            result.append ("void " + ns + "clearNew ()\n");
             result.append ("{\n");
+            result.append ("  int count = instances.size ();\n");
+            result.append ("  for (int i = firstborn; i < count; i++)\n");
+            result.append ("  {\n");
+            result.append ("    " + prefix (s) + " * p = instances[i];\n");
+            result.append ("    if (p) p->flags &= ~((" + bed.flagType + ") 0x1 << " + bed.newborn + ");\n");
+            result.append ("  }\n");
+            result.append ("  firstborn = count;\n");
+            result.append ("}\n");
+            result.append ("\n");
+        }
+
+        // Population getIterator
+        if (s.connectionBindings != null)
+        {
+            // Approach: supplement the runtime ConnectIterator ctor by directly filling some members
+            // It may eventually become necessary to create subclasses.
+
+            result.append ("ConnectIterator * " + ns + "getIterator (int i)\n");
+            result.append ("{\n");
+            result.append ("  ConnectIterator * result = 0;\n");
             result.append ("  switch (i)\n");
             result.append ("  {\n");
             for (ConnectionBinding c : s.connectionBindings)
             {
+                result.append ("    case " + c.index + ":\n");
+                result.append ("    {\n");
+                result.append ("      result = new ConnectIterator (i);\n");
+
                 Variable v = s.find (new Variable (c.alias + ".$k"));
                 EquationEntry e = null;
                 if (v != null) e = v.equations.first ();
                 if (e != null)
                 {
-                    result.append ("    case " + c.index + ": return ");
+                    result.append ("      result->k = ");
                     e.expression.render (context);
                     result.append (";\n");
                 }
-            }
-            result.append ("  }\n");
-            result.append ("  return 0;\n");
-            result.append ("}\n");
-            result.append ("\n");
-        }
 
-        // Population getMax
-        if (bed.needMax)
-        {
-            result.append ("int " + ns + "getMax (int i)\n");
-            result.append ("{\n");
-            result.append ("  switch (i)\n");
-            result.append ("  {\n");
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                Variable v = s.find (new Variable (c.alias + ".$max"));
-                EquationEntry e = null;
+                v = s.find (new Variable (c.alias + ".$max"));
+                e = null;
                 if (v != null) e = v.equations.first ();
                 if (e != null)
                 {
-                    result.append ("    case " + c.index + ": return ");
+                    result.append ("      result->Max = ");
                     e.expression.render (context);
                     result.append (";\n");
                 }
-            }
-            result.append ("  }\n");
-            result.append ("  return 0;\n");
-            result.append ("}\n");
-            result.append ("\n");
-        }
 
-        // Population getMin
-        if (bed.needMin)
-        {
-            result.append ("int " + ns + "getMin (int i)\n");
-            result.append ("{\n");
-            result.append ("  switch (i)\n");
-            result.append ("  {\n");
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                Variable v = s.find (new Variable (c.alias + ".$min"));
-                EquationEntry e = null;
+                v = s.find (new Variable (c.alias + ".$min"));
+                e = null;
                 if (v != null) e = v.equations.first ();
                 if (e != null)
                 {
-                    result.append ("    case " + c.index + ": return ");
+                    result.append ("      result->Min = ");
                     e.expression.render (context);
                     result.append (";\n");
                 }
-            }
-            result.append ("  }\n");
-            result.append ("  return 0;\n");
-            result.append ("}\n");
-            result.append ("\n");
-        }
 
-        // Population getRadius
-        if (bed.needRadius)
-        {
-            result.append ("int " + ns + "getRadius (int i)\n");
-            result.append ("{\n");
-            result.append ("  switch (i)\n");
-            result.append ("  {\n");
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                Variable v = s.find (new Variable (c.alias + ".$radius"));
-                EquationEntry e = null;
+                v = s.find (new Variable (c.alias + ".$radius"));
+                e = null;
                 if (v != null) e = v.equations.first ();
                 if (e != null)
                 {
-                    result.append ("    case " + c.index + ": return ");
+                    result.append ("      result->radius = ");
                     e.expression.render (context);
                     result.append (";\n");
                 }
+
+                if (s.find (new Variable (c.alias + ".$project")) != null)
+                {
+                    result.append ("      result->rank += 1;");
+                }
+                result.append ("      if (result->k > 0  ||  result->radius > 0) result->rank -= 2;\n");
+
+                assembleInstances (s, "", c.resolution, 0, "      ", result);
+
+                result.append ("      break;\n");
+                result.append ("    }\n");
             }
             result.append ("  }\n");
-            result.append ("  return 0;\n");
+            result.append ("  return result;\n");
             result.append ("}\n");
             result.append ("\n");
         }
@@ -1552,7 +1530,7 @@ public class JobC extends Thread
             }
 
             // instance counting
-            if (s.connectionBindings == null) result.append ("  container->" + mangle (s.name) + ".n--;\n");
+            if (bed.n != null) result.append ("  container->" + mangle (s.name) + ".n--;\n");
 
             for (String alias : bed.accountableEndpoints)
             {
@@ -1593,13 +1571,11 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "leaveSimulation ()\n");
             result.append ("{\n");
-            String container = "container->";
-            if (bed.pathToContainer != null) container = mangle (bed.pathToContainer) + "->" + container;
-            result.append ("  " + container + mangle (s.name) + ".remove (this);\n");
+            result.append ("  " + containerOf (s, false, "") + mangle (s.name) + ".remove (this);\n");
             TreeSet<String> touched = new TreeSet<String> ();
             for (VariableReference r : bed.localReference)
             {
-                container = resolveContainer (r, context, "");
+                String container = resolveContainer (r, context, "");
                 if (touched.add (container)) result.append ("  " + container + "refcount--;\n");
             }
             result.append ("}\n");
@@ -1640,13 +1616,24 @@ public class JobC extends Thread
             }
             if (! bed.flagType.isEmpty ())
             {
-                if (bed.liveFlag < 0)
+                if (bed.liveFlag >= 0)
                 {
-                    result.append ("  flags = 0;\n");
+                    if (bed.newborn >= 0)
+                    {
+                        result.append ("  flags |= (" + bed.flagType + ") 0x1 << " + bed.liveFlag + ";\n");
+                    }
+                    else
+                    {
+                        result.append ("  flags = (" + bed.flagType + ") 0x1 << " + bed.liveFlag + ";\n");
+                    }
                 }
                 else
                 {
-                    result.append ("  flags = (" + bed.flagType + ") 0x1 << " + bed.liveFlag + ";\n");
+                    if (bed.newborn < 0)
+                    {
+                        result.append ("  flags = 0;\n");
+                    }
+                    // else flags has already been initialized by Population::add()
                 }
             }
 
@@ -1709,7 +1696,7 @@ public class JobC extends Thread
             }
 
             // instance counting
-            if (s.connectionBindings == null) result.append ("  container->" + mangle (s.name) + ".n++;\n");
+            if (bed.n != null) result.append ("  " + containerOf (s, false, "") + mangle (s.name) + ".n++;\n");
 
             for (String alias : bed.accountableEndpoints)
             {
@@ -1952,9 +1939,7 @@ public class JobC extends Thread
                         }
                         else
                         {
-                            String container = "container->";
-                            if (bed.pathToContainer != null) container = mangle (bed.pathToContainer) + "->" + container;
-                            result.append ("      " + container + mangle (s.name) + "_2_" + mangle (to.name) + " (this, " + (j + 1) + ");\n");
+                            result.append ("      " + containerOf (s, false, "") + mangle (s.name) + "_2_" + mangle (to.name) + " (this, " + (j + 1) + ");\n");
                         }
                     }
                     if (used)
@@ -1971,7 +1956,6 @@ public class JobC extends Thread
                 result.append ("  }\n");
             }
 
-            // TODO: recognize when $p is contingent on $connect (formerly !$live) and don't emit those equations
             if (s.lethalP)
             {
                 // lethalP implies that $p exists, so no need to check for null
@@ -2201,14 +2185,150 @@ public class JobC extends Thread
             result.append ("\n");
         }
 
-        // Note: There is a difference between these accessors and transients.
-        // * Accessors exist specifically to provide the C runtime engine a way to get values of
-        // certain $variables without knowing explicitly what is in the equation set.
-        // These accessors adapt around whatever is there, and give back a useful answer.
-        // * Transients are variables in the equation set that should be calculated whenever
-        // needed, rather than stored. A stored variable may have an accessor, but that alone
-        // does not make it transient. Furthermore, calculations within the class
-        // shouldn't use the accessors.
+        // Unit setPart
+        if (s.connectionBindings != null)
+        {
+            result.append ("void " + ns + "setPart (int i, Part * part)\n");
+            result.append ("{\n");
+            result.append ("  switch (i)\n");
+            result.append ("  {\n");
+            for (ConnectionBinding c : s.connectionBindings)
+            {
+                result.append ("    case " + c.index + ": " + mangle (c.alias) + " = (" + prefix (c.endpoint) + " *) part; return;\n");
+            }
+            result.append ("  }\n");
+            result.append ("}\n");
+            result.append ("\n");
+        }
+
+        // Unit getPart
+        if (s.connectionBindings != null)
+        {
+            result.append ("Part * " + ns + "getPart (int i)\n");
+            result.append ("{\n");
+            result.append ("  switch (i)\n");
+            result.append ("  {\n");
+            for (ConnectionBinding c : s.connectionBindings)
+            {
+                result.append ("    case " + c.index + ": return " + mangle (c.alias) + ";\n");
+            }
+            result.append ("  }\n");
+            result.append ("  return 0;\n");
+            result.append ("}\n");
+            result.append ("\n");
+        }
+
+        // Unit getCount
+        if (bed.accountableEndpoints.size () > 0)
+        {
+            result.append ("int " + ns + "getCount (int i)\n");
+            result.append ("{\n");
+            result.append ("  switch (i)\n");
+            result.append ("  {\n");
+            for (ConnectionBinding c : s.connectionBindings)
+            {
+                if (bed.accountableEndpoints.contains (c.alias))
+                {
+                    result.append ("    case " + c.index + ": return " + mangle (c.alias) + "->" + prefix (s) + "_" + mangle (c.alias) + "_count;\n");
+                }
+            }
+            result.append ("  }\n");
+            result.append ("  return 0;\n");
+            result.append ("}\n");
+            result.append ("\n");
+        }
+
+        // Unit getProject
+        if (bed.hasProject)
+        {
+            result.append ("void " + ns + "getProject (int i, Vector3 & xyz)\n");
+            result.append ("{\n");
+
+            // $project is evaluated similar to $p. The phase is $init&&!$live (eventually replace with $connect)
+            // and the result is not stored.
+
+            s.setInit (1);
+
+            // set $live to 0
+            Set<String> liveAttributes = bed.live.attributes;
+            bed.live.attributes = null;
+            bed.live.addAttribute ("constant");
+            EquationEntry e = bed.live.equations.first ();
+            Scalar liveValue = (Scalar) ((Constant) e.expression).value;
+            liveValue.value = 0;
+
+            result.append ("  switch (i)\n");
+            result.append ("  {\n");
+            boolean needDefault = false;
+            for (ConnectionBinding c : s.connectionBindings)
+            {
+                result.append ("    case " + c.index + ":");
+                Variable project = s.find (new Variable (c.alias + ".$project"));
+                if (project == null)  // fetch $xyz from endpoint
+                {
+                    VariableReference fromXYZ = s.resolveReference (c.alias + ".$xyz");
+                    if (fromXYZ.variable == null)
+                    {
+                        needDefault = true;
+                    }
+                    else
+                    {
+                        if (fromXYZ.variable.hasAttribute ("temporary"))  // calculated value
+                        {
+                            result.append (" " + mangle (c.alias) + "->getXYZ (xyz); break;\n");
+                        }
+                        else  // stored value or "constant"
+                        {
+                            result.append (" xyz = " + resolve (fromXYZ, context, false) + "; break;\n");
+                        }
+                    }
+                }
+                else  // compute $project
+                {
+                    result.append ("\n");  // to complete the "case" line
+                    result.append ("    {\n");
+                    if (project.hasAttribute ("temporary"))  // it could also be "constant", but no other type
+                    {
+                        for (Variable t : s.variables)
+                        {
+                            if (t.hasAttribute ("temporary")  &&  project.dependsOn (t) != null)
+                            {
+                                multiconditional (t, context, "      ");
+                            }
+                        }
+                        multiconditional (project, context, "      ");
+                    }
+                    result.append ("      xyz = " + resolve (project.reference, context, false) + ";\n");
+                    result.append ("      break;\n");
+                    result.append ("    }\n");
+                }
+            }
+            if (needDefault)
+            {
+                result.append ("    default:\n");
+                result.append ("      xyz[0] = 0;\n");
+                result.append ("      xyz[1] = 0;\n");
+                result.append ("      xyz[2] = 0;\n");
+            }
+            result.append ("  }\n");
+            result.append ("}\n");
+
+            // restore $live
+            bed.live.attributes = liveAttributes;
+            liveValue.value = 1;
+
+            s.setInit (0);
+        }
+
+        // Unit getNewborn
+        if (bed.newborn >= 0)
+        {
+            result.append ("bool " + ns + "getNewborn ()\n");
+            result.append ("{\n");
+            result.append ("  return flags & (" + bed.flagType + ") 0x1 << " + bed.newborn + ";\n");
+            result.append ("}\n");
+            result.append ("\n");
+        }
 
         // Unit getLive
         if (bed.live != null  &&  ! bed.live.hasAttribute ("constant"))
@@ -2457,184 +2577,7 @@ public class JobC extends Thread
             }
         }
 
-        // Unit project
-        if (bed.hasProjectFrom  ||  bed.hasProjectTo)
-        {
-            Variable xyz = s.find (new Variable ("$xyz", 0));
-            boolean xyzStored    = false;
-            boolean xyzTemporary = false;
-            if (xyz != null)
-            {
-                xyzTemporary = xyz.hasAttribute ("temporary");
-                xyzStored = ! xyzTemporary;
-            }
-
-            result.append ("void " + ns + "project (int i, int j, Vector3 & xyz)\n");
-            result.append ("{\n");
-
-            String localXYZ = "xyz";
-            if (bed.hasProjectTo)
-            {
-                localXYZ = "__24xyz";
-                if (! xyzStored) result.append ("  Vector3 " + mangle (xyz) + ";\n");  // local temporary storage
-            }
-
-            // TODO: Handle the case where $xyz is explicitly specified with an equation.
-            // This should override all instances of $projectFrom.
-            // Or should it merely be the default when $projectFrom is missing?
-            result.append ("  switch (i)\n");
-            result.append ("  {\n");
-            boolean needDefault = false;
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                Variable projectFrom = s.find (new Variable (c.alias + ".$projectFrom"));
-                if (projectFrom == null)
-                {
-                    VariableReference fromXYZ = s.resolveReference (c.alias + ".$xyz");
-                    if (fromXYZ.variable == null)
-                    {
-                        needDefault = true;
-                    }
-                    else
-                    {
-                        result.append ("    case " + c.index + ": " + localXYZ + " = " + resolve (fromXYZ, context, false) + "; break;\n");
-                    }
-                }
-                else
-                {
-                    result.append ("    case " + c.index + ":\n");
-                    result.append ("    {\n");
-                    if (projectFrom.hasAttribute ("temporary"))  // it could also be "constant", but no other type
-                    {
-                        for (Variable t : s.variables)
-                        {
-                            if (t.hasAttribute ("temporary")  &&  projectFrom.dependsOn (t) != null)
-                            {
-                                multiconditional (t, context, "      ");
-                            }
-                        }
-                        multiconditional (projectFrom, context, "      ");
-                    }
-                    result.append ("      " + localXYZ + " = " + resolve (projectFrom.reference, context, false) + ";\n");
-                    result.append ("      break;\n");
-                    result.append ("    }\n");
-                }
-            }
-            if (needDefault)
-            {
-                result.append ("    default:\n");
-                result.append ("      " + localXYZ + "[0] = 0;\n");
-                result.append ("      " + localXYZ + "[1] = 0;\n");
-                result.append ("      " + localXYZ + "[2] = 0;\n");
-            }
-            result.append ("  }\n");
-            result.append ("\n");
-
-            if (xyzStored  &&  ! localXYZ.equals ("__24xyz"))
-            {
-                result.append ("  __24xyz = " + localXYZ + ";\n");
-            }
-
-            if (bed.hasProjectTo)
-            {
-                if (xyzTemporary) xyz.removeAttribute ("temporary");
-                result.append ("  switch (j)\n");
-                result.append ("  {\n");
-                needDefault = false;
-                for (ConnectionBinding c : s.connectionBindings)
-                {
-                    Variable projectTo = s.find (new Variable (c.alias + ".$projectTo"));
-                    if (projectTo == null)
-                    {
-                        needDefault = true;
-                    }
-                    else
-                    {
-                        result.append ("    case " + c.index + ":\n");
-                        result.append ("    {\n");
-                        if (projectTo.hasAttribute ("temporary"))
-                        {
-                            for (Variable t : s.variables)
-                            {
-                                if (t.hasAttribute ("temporary")  &&  projectTo.dependsOn (t) != null)
-                                {
-                                    multiconditional (t, context, "      ");
-                                }
-                            }
-                            multiconditional (projectTo, context, "      ");
-                        }
-                        result.append ("      xyz = " + resolve (projectTo.reference, context, false) + ";\n");
-                        result.append ("      break;\n");
-                        result.append ("    }\n");
-                    }
-                }
-                if (needDefault)
-                {
-                    result.append ("    default:\n");
-                    result.append ("      xyz = __24xyz;\n");
-                }
-                result.append ("  }\n");
-                if (xyzTemporary) xyz.addAttribute ("temporary");
-            }
-
-            result.append ("}\n");
-            result.append ("\n");
-        }
-
-        // Unit getCount
-        if (bed.accountableEndpoints.size () > 0)
-        {
-            result.append ("int " + ns + "getCount (int i)\n");
-            result.append ("{\n");
-            result.append ("  switch (i)\n");
-            result.append ("  {\n");
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                if (bed.accountableEndpoints.contains (c.alias))
-                {
-                    result.append ("    case " + c.index + ": return " + mangle (c.alias) + "->" + prefix (s) + "_" + mangle (c.alias) + "_count;\n");
-                }
-            }
-            result.append ("  }\n");
-            result.append ("  return 0;\n");
-            result.append ("}\n");
-            result.append ("\n");
-        }
-
-        // Unit setPart
-        if (s.connectionBindings != null)
-        {
-            result.append ("void " + ns + "setPart (int i, Part * part)\n");
-            result.append ("{\n");
-            result.append ("  switch (i)\n");
-            result.append ("  {\n");
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                // TODO: This assumes that all the parts are children of the same container as the connection. Need to generalize so connections can cross branches of the containment hierarchy.
-                result.append ("    case " + c.index + ": " + mangle (c.alias) + " = (" + prefix (c.endpoint) + " *) part; return;\n");
-            }
-            result.append ("  }\n");
-            result.append ("}\n");
-            result.append ("\n");
-        }
-
-        // Unit getPart
-        if (s.connectionBindings != null)
-        {
-            result.append ("Part * " + ns + "getPart (int i)\n");
-            result.append ("{\n");
-            result.append ("  switch (i)\n");
-            result.append ("  {\n");
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                result.append ("    case " + c.index + ": return " + mangle (c.alias) + ";\n");
-            }
-            result.append ("  }\n");
-            result.append ("  return 0;\n");
-            result.append ("}\n");
-            result.append ("\n");
-        }
-
+        // Unit path
         if (bed.needLocalPath)
         {
             result.append ("void " + ns + "path (String & result)\n");
@@ -2659,18 +2602,24 @@ public class JobC extends Thread
             else
             {
                 boolean first = true;
+                boolean temp  = false;
                 for (ConnectionBinding c : s.connectionBindings)
                 {
                     if (first)
                     {
-                        result.append ("  " + mangle (c.alias) + ".path (result);\n");
-                        result.append ("  String temp;\n");
+                        result.append ("  " + mangle (c.alias) + "->path (result);\n");
                         first = false;
                     }
                     else
                     {
-                        result.append ("  " + mangle (c.alias) + ".path (temp);\n");
-                        result.append ("  result += \"-\" + temp;\n");
+                        if (! temp)
+                        {
+                            result.append ("  String temp;\n");
+                            temp = true;
+                        }
+                        result.append ("  " + mangle (c.alias) + "->path (temp);\n");
+                        result.append ("  result += \"-\";\n");
+                        result.append ("  result += temp;\n");
                     }
                 }
             }
@@ -3366,9 +3315,7 @@ public class JobC extends Thread
 
         if (r.variable.name.equals ("(connection)"))
         {
-            if (containers.endsWith ("->")) containers = containers.substring (0, containers.length () - 2);
-            if (containers.endsWith ("." )) containers = containers.substring (0, containers.length () - 1);
-            return containers;
+            return stripDereference (containers);
         }
 
         String name = "";
@@ -3439,38 +3386,44 @@ public class JobC extends Thread
     {
         String containers = base;
         EquationSet current = context.part;
-        Iterator<Object> it = r.resolution.iterator ();
-        while (it.hasNext ())
+        int last = r.resolution.size () - 1;
+        for (int i = 0; i <= last; i++)
         {
-            Object o = it.next ();
+            Object o = r.resolution.get (i);
             if (o instanceof EquationSet)  // We are following the containment hierarchy.
             {
                 EquationSet s = (EquationSet) o;
                 if (s.container == current)  // descend into one of our contained populations
                 {
-                    if (! it.hasNext ()  &&  r.variable.hasAttribute ("global"))  // descend to the population object
+                    if (i == last  &&  r.variable.hasAttribute ("global"))  // descend to the population object
                     {
                         // No need to cast the population instance, because it is explicitly typed
                         containers += mangle (s.name) + ".";
                     }
                     else  // descend to an instance of the population.
                     {
-                        // Note: we can only descend a chain of singletons, as indexing is now removed from the N2A language.
-                        // This restriction does not apply to connections, as they have direct pointers to their targets.
-                        String typeName = prefix (s);  // fully qualified
-                        // cast Population.live->after, because it is declared in runtime.h as simply a Compartment,
-                        // but we need it to be the specific type of compartment we have generated.
-                        containers = "((" + typeName + " *) " + containers + mangle (s.name) + ".live->after)->";
+                        // We can only descend a chain of singletons.
+                        if (! s.isSingleton ())
+                        {
+                            Backend.err.get ().println ("ERROR: Down-reference to population with more than one instance is ambiguous.");
+                            throw new AbortRun ();
+                        }
+
+                        BackendDataC bed = (BackendDataC) s.backendData;
+                        if (! bed.trackInstances)
+                        {
+                            // TODO: Add full support for down-references. Requires careful sequencing of object construction as well as a pointer to singleton instance.
+                            Backend.err.get ().println ("ERROR: Support for down-reference to singleton is not fully implemented.");
+                            throw new AbortRun ();
+                        }
+
+                        // TODO: When part is a singleton, use a simple pointer rather than a vector of pointers
+                        containers += mangle (s.name) + ".instances[0]->";
                     }
                 }
                 else  // ascend to our container
                 {
-                    BackendDataC bed = (BackendDataC) current.backendData;
-                    if (bed.pathToContainer != null)  // we are a Connection without a container pointer, so we must go through one of our referenced parts
-                    {
-                        containers += mangle (bed.pathToContainer) + "->";
-                    }
-                    containers += "container->";
+                    containers = containerOf (current, i == 0  &&  context.global, containers);
                 }
                 current = s;
             }
@@ -3484,15 +3437,117 @@ public class JobC extends Thread
 
         if (r.resolution.isEmpty ()  &&  r.variable.hasAttribute ("global")  &&  ! context.global)
         {
-            BackendDataC bed = (BackendDataC) current.backendData;
-            if (bed.pathToContainer != null)
-            {
-                containers += mangle (bed.pathToContainer) + "->";
-            }
-            containers += "container->" + mangle (current.name) + ".";
+            // This is a reference to a global variable in our own part.
+            containers = containerOf (current, false, containers);
         }
 
         return containers;
+    }
+
+    /**
+        We either have direct access to our container, or we are a connection using indirect access through an endpoint.
+        Direct access is typed, but indirect access through a population requires a typecast.
+    **/
+    public String containerOf (EquationSet s, boolean global, String base)
+    {
+        BackendDataC bed = (BackendDataC) s.backendData;
+        if (bed.pathToContainer != null) base += mangle (bed.pathToContainer) + "->";
+        base += "container";
+        if (bed.pathToContainer != null  ||  global)
+        {
+            return "((" + prefix (s.container) + " *) " + base + ")->";
+        }
+        return base + "->";
+    }
+
+    public String stripDereference (String containers)
+    {
+        if (containers.endsWith ("->")) return containers.substring (0, containers.length () - 2);
+        if (containers.endsWith ("." )) return containers.substring (0, containers.length () - 1);
+        return containers;
+    }
+
+    /**
+        Generate code to enumerate all instances of a connection endpoint. Handles deep hierarchical
+        embedding.
+
+        <p>A connection resolution can take 3 kinds of step:
+        <ul>
+        <li>Up to container
+        <li>Down to a population
+        <li>Through another connection
+        </ul>
+
+        @param current EquationSet associated with the context of the current step of resolution.
+        @param pointer Name of a pointer to the context for the current step of resolution. Can
+        be a chain of pointers. Can be empty if the code is to be emitted in the current context.
+        @param depth Position in the resolution array of our next step.
+        @param prefix Spaces to insert in front of each line to maintain nice indenting.
+    **/
+    public void assembleInstances (EquationSet current, String pointer, ArrayList<Object> resolution, int depth, String prefix, StringBuilder result)
+    {
+        int last = resolution.size () - 1;
+        for (int i = depth; i <= last; i++)
+        {
+            Object r = resolution.get (i);
+            if (r instanceof EquationSet)
+            {
+                EquationSet s = (EquationSet) r;
+                if (r == current.container)  // ascend to parent
+                {
+                    pointer = containerOf (current, i == 0, pointer);
+                }
+                else  // descend to child
+                {
+                    pointer += mangle (s.name) + ".";
+                    if (i < last)  // Enumerate the instances of child population.
+                    {
+                        // TODO: handle singleton
+
+                        if (depth == 0)
+                        {
+                            result.append (prefix + "result->instances = new vector<Part *>;\n");
+                            result.append (prefix + "result->deleteInstances = true;\n");
+                        }
+                        String it = "it" + i;
+                        result.append (prefix + "for (auto " + it + " : " + pointer + "instances)\n");
+                        result.append (prefix + "{\n");
+                        assembleInstances (s, it + "->", resolution, i+1, prefix + "  ", result);
+                        result.append (prefix + "}\n");
+                        return;
+                    }
+                }
+                current = s;
+            }
+            else if (r instanceof ConnectionBinding)
+            {
+                ConnectionBinding c = (ConnectionBinding) r;
+                pointer += mangle (c.alias) + "->";
+                current = c.endpoint;
+            }
+            // else something is broken. This case should never occur.
+        }
+
+        // "pointer" now references the target population.
+        // Collect its instances.
+        if (depth == 0)  // No enumerations occurred during the resolution, so simply reference the existing list of instances.
+        {
+            result.append (prefix + "result->firstborn = " + pointer + "firstborn;\n");
+            result.append (prefix + "result->instances = (vector<Part *> *) & " + pointer + "instances;\n");
+        }
+        else  // Enumerations occurred, so append instances to our own list.
+        {
+            result.append (prefix + "if (result->firstborn == INT_MAX  &&  " + pointer + "firstborn < " + pointer + "instances.size ()) result->firstborn = result->instances.size () + " + pointer + "firstborn;\n");
+            result.append (prefix + "result->instances->insert (result->instances->end (), " + pointer + "instances.begin (), " + pointer + "instances.end ());\n");
+        }
+
+        // Schedule the population to have its newborn flags cleared.
+        // We assume that any newborn flags along the path to this population are either unimportant
+        // or will get cleared elsewhere.
+        pointer = stripDereference (pointer);
+        if (pointer.isEmpty ()) pointer = "this";
+        else                    pointer = "& " + pointer;
+        result.append (prefix + "simulator.clearNew (" + pointer + ");\n");
     }
 
     public void findPathToContainer (EquationSet s)
@@ -3508,8 +3563,8 @@ public class JobC extends Thread
             {
                 if (c.endpoint.container == s.container)
                 {
-                    if (! (s.backendData instanceof BackendDataC)) s.backendData = new BackendDataC ();
-                    ((BackendDataC) s.backendData).pathToContainer = c.alias;
+                    BackendDataC bed = (BackendDataC) s.backendData;
+                    bed.pathToContainer = c.alias;
                     break;
                 }
             }
@@ -3651,7 +3706,7 @@ public class JobC extends Thread
             if (op instanceof Uniform)
             {
                 Uniform u = (Uniform) op;
-                result.append ("gaussian (");
+                result.append ("uniform (");
                 if (u.operands.length > 0)
                 {
                     u.operands[0].render (this);

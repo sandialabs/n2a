@@ -191,8 +191,8 @@ public class PanelRun extends JPanel
                         NodeBase d = displayNode;  // Make local copy (atomic action) to prevent it changing from under us
                         if (d != null)
                         {
-                            if (d instanceof NodeFile) d = (NodeBase) d.getParent ();
-                            ((NodeJob) d).monitorProgress (PanelRun.this);
+                            if (d instanceof NodeFile) d = (NodeBase) d.getParent ();  // parent could be null, if a sub-node was just deleted
+                            if (d != null) ((NodeJob) d).monitorProgress (PanelRun.this);
                         }
                         if (shortCycles++ < 20)
                         {

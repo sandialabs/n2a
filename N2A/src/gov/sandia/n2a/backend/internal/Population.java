@@ -287,7 +287,7 @@ public class Population extends Instance
             NN.radius = radius > 0 ? radius : Double.POSITIVE_INFINITY;
 
             entries = new ArrayList<KDTree.Entry> (size);
-            c = new Part (equations, (Part) container);  // Necessary to use c for getProject(). However, this function should be called before first call to setProbe(), so should produce no side-effects.
+            if (project != null) c = new Part (equations, (Part) container);  // Necessary to use c for getProject(). However, this function should be called before first call to setProbe(), so should produce no side-effects.
             for (int i = 0; i < size; i++)
             {
                 p = instances.get (i);
@@ -490,7 +490,7 @@ public class Population extends Instance
             ConnectIterator it = new ConnectIterator (i, target, bed, simulator);
             if (it.instances == null  ||  it.instances.size () == 0) return;  // Nothing to connect. This should never happen.
             iterators.add (it);
-            if (it.firstborn < it.instances.size ()) nothingNew = false;
+            if (it.firstborn < it.size) nothingNew = false;
             if (it.k > 0  ||  it.radius > 0) spatialFiltering = true;
         }
         if (nothingNew) return;

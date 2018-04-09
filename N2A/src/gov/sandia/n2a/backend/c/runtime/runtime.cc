@@ -315,11 +315,15 @@ Part::getCount (int i)
 }
 
 void
-Part::project (int i, int j, Vector3 & xyz)
+Part::getProject (int i, Vector3 & xyz)
 {
-    xyz[0] = 0;
-    xyz[1] = 0;
-    xyz[2] = 0;
+    getPart (i)->getXYZ (xyz);
+}
+
+bool
+Part::getNewborn ()
+{
+    return false;
 }
 
 float
@@ -495,14 +499,203 @@ WrapperBase::addToMembers ()
 }
 
 
+// class ConnectIterator -----------------------------------------------------
+
+ConnectIterator::ConnectIterator (int index)
+:   index (index)
+{
+    permute         = 0;
+    contained       = false;
+    instances       = 0;
+    deleteInstances = false;
+    firstborn       = INT_MAX;
+    c               = 0;
+    p               = 0;
+
+    i    = 0;  // These two values force a reset
+    stop = 0;
+
+    Max    = 0;
+    Min    = 0;
+    k      = 0;
+    radius = 0;
+
+    rank        = 0;
+    explicitXYZ = false;
+    NN          = 0;
+    entries     = 0;
+}
+
+ConnectIterator::~ConnectIterator ()
+{
+    if (permute) delete permute;
+    else if (xyz) delete xyz;  // The innermost iterator is responsible for destructing xyz.
+    if (NN) delete NN;
+    if (entries) delete[] entries;
+    if (instances  &&  deleteInstances) delete instances;
+}
+
+void
+ConnectIterator::prepareNN ()
+{
+    NN = new KDTree ();
+    if (k > 0) NN->k = k;
+    else       NN->k = INT_MAX;
+    if (radius > 0) NN->radius = radius;
+    //else NN->radius is INFINITY
+
+    entries = new KDTreeEntry[size];
+    vector<MatrixAbstract<float> *> pointers (size);
+    for (int i = 0; i < size; i++)
+    {
+        p = (*instances)[i];
+        if (! p) continue;
+
+        KDTreeEntry & e = entries[i];
+        e.part = p;
+        // c should already be assigned by caller, but not via setProbe()
+        c->setPart (index, p);
+        c->getProject (index, e);
+        pointers[i] = &e;
+    }
+    NN->set (pointers);
+}
+
+bool
+ConnectIterator::setProbe (Part * probe)
+{
+    c = probe;
+    bool result = false;
+    if (p)
+    {
+        c->setPart (index, p);
+        // A new connection was just made, so counts (if they are used) have been updated.
+        // Step to next endpoint instance if current instance is full.
+        if (Max > 0  &&  c->getCount (index) >= Max) result = true;
+    }
+    if (permute  &&  permute->setProbe (c))
+    {
+        i = stop;  // next() will trigger a reset
+        result = true;
+    }
+    return result;
+}
+
+void
+ConnectIterator::reset (bool newOnly)
+{
+    this->newOnly = newOnly;
+    if (NN)
+    {
+        vector<MatrixAbstract<float> *> result;
+        NN->find (*xyz, result);
+        count = result.size ();
+        filtered.resize (count);
+        int j = 0;
+        for (auto e : result) filtered[j++] = ((KDTreeEntry *) e)->part;
+        i = 0;
+    }
+    else
+    {
+        if (newOnly) count = size - firstborn;
+        else         count = size;
+        if (count > 1) i = (int) round (uniform () * (count - 1));
+        else           i = 0;
+    }
+    stop = i + count;
+}
+
+bool
+ConnectIterator::old ()
+{
+    if (p->getNewborn ()) return false;
+    if (permute) return permute->old ();
+    return true;
+}
+
+bool
+ConnectIterator::next ()
+{
+    while (true)
+    {
+        if (i >= stop)  // Need to either reset or terminate, depending on whether we have something left to permute with.
+        {
+            if (! permute)
+            {
+                if (stop > 0) return false;  // We already reset once, so done.
+                // A unary connection should only iterate over new instances.
+                // The innermost (slowest) iterator of a multi-way connection should iterate over all instances.
+                reset (! contained);
+            }
+            else
+            {
+                if (! permute->next ()) return false;
+                if (contained) reset (false);
+                else           reset (permute->old ());
+            }
+        }
+
+        if (NN)
+        {
+            for (; i < stop; i++)
+            {
+                p = filtered[i];
+                if (p->getNewborn ())
+                {
+                    if (Max == 0) break;
+                    c->setPart (index, p);
+                    if (c->getCount (index) < Max) break;
+                }
+            }
+        }
+        else if (newOnly)
+        {
+            for (; i < stop; i++)
+            {
+                p = (*instances)[i % count + firstborn];
+                if (p  &&  p->getNewborn ())
+                {
+                    if (Max == 0) break;
+                    c->setPart (index, p);
+                    if (c->getCount (index) < Max) break;
+                }
+            }
+        }
+        else
+        {
+            for (; i < stop; i++)
+            {
+                p = (*instances)[i % count];
+                if (p)
+                {
+                    if (Max == 0) break;
+                    c->setPart (index, p);
+                    if (c->getCount (index) < Max) break;
+                }
+            }
+        }
+
+        i++;
+        if (p  &&  i <= stop)
+        {
+            if (Max == 0) c->setPart (index, p);
+            if (xyz  &&  ! permute)  // Spatial filtering is on, and we are the endpoint that determines the query $xyz
+            {
+                // Obtain C.$xyz, the best way we can
+                if (explicitXYZ) c->getXYZ (*xyz);
+                else             c->getProject (index, *xyz);
+            }
+            return true;
+        }
+    }
+}
+
+
 // class Population ----------------------------------------------------------
 
 Population::Population ()
 {
-    dead        = 0;
-    live.before = &live;
-    live.after  = &live;
-    old         = &live;  // same as old=live.after
+    dead = 0;
 }
 
 Population::~Population ()
@@ -555,233 +748,46 @@ Population::allocate ()
 void
 Population::resize (int n)
 {
+    EventStep * event = container->getEvent ();
+    for (int currentN = getN (); currentN < n; currentN++)
+    {
+        Part * p = allocate ();
+        p->enterSimulation ();
+        event->enqueue (p);
+        p->init ();
+    }
 }
 
-Population *
-Population::getTarget (int i)
+int
+Population::getN ()
 {
-    return 0;
+    N2A_THROW ("getN not implemented");
 }
 
 void
 Population::connect ()
 {
-    class KDTreeEntry : public Vector3
-    {
-    public:
-        Part * part;
-    };
+    ConnectIterator * outer = getIterators ();
+    if (! outer) return;
 
-    Population * A = getTarget (0);
-    Population * B = getTarget (1);
-    if (A == 0  ||  B == 0) return;  // Nothing to connect. This should never happen, though we might have a unary connection.
-    if (A->old == A->live.after  &&  B->old == B->live.after) return;  // Only proceed if there are some new parts. Later, we might consider periodic scanning among old parts.
-
-    // Prepare nearest neighbor search structures on B
-    /*
-    float radius = getRadius (1);
-    int   k      = getK (1);
-    KDTreeEntry * entries = 0;
-    vector<MatrixAbstract<float> *> entryPointers;
-    KDTree NN;
-    bool doNN = k  ||  radius;
-    if (doNN)
+    EventStep * event = container->getEvent ();
+    Part * c = create ();
+    outer->setProbe (c);
+    while (outer->next ())
     {
-        entries = new KDTreeEntry[Bn];
-        entryPointers.resize (Bn);
-        Part * b = B->live.after;
-        int i = 0;
-        while (b != &B->live)
-        {
-            assert (i < Bn);
-            KDTreeEntry & e = entries[i];
-            b->getXYZ (e);
-            e.part = b;
-            entryPointers[i] = &e;
-            b = b->after;
-            i++;
-        }
-        NN.set (entryPointers);
-        NN.k = k ? k : INT_MAX;
+        float create = c->getP ();
+        // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it would have no effect.
+        if (create <= 0) continue;
+        if (create < 1  &&  create < uniform ()) continue;
+
+        c->enterSimulation ();
+        event->enqueue (c);
+        c->init ();
+
+        c = this->create ();
+        outer->setProbe (c);
     }
-    */
-
-    int Amin = getMin (0);
-    int Amax = getMax (0);
-    int Bmin = getMin (1);
-    int Bmax = getMax (1);
-
-    Part * c = this->create ();
-
-    // Scan AxB
-    Part * Alast = A->old;
-    Part * Blast = B->live.after;
-    bool minSatisfied = false;
-    while (! minSatisfied)
-    {
-        minSatisfied = true;
-
-        // New A with all of B
-        Part * a = A->live.after;
-        while (a != A->old)
-        {
-            c->setPart (0, a);
-            volatile int Acount;
-            if (Amax  ||  Amin) Acount = c->getCount (0);
-            if (Amax  &&  Acount >= Amax)  // early out: this part is already full, so skip
-            {
-                a = a->after;
-                continue;
-            }
-
-            // Select the subset of B
-            /*
-            if (doNN)
-            {
-                c->setPart (1, B->live.after);  // give a dummy B object, in case xyz call breaks rules about only accessing A
-                Vector3 xyz;
-                c->project (0, 1, xyz);
-                vector<MatrixAbstract<float> *> result;
-                NN.find (xyz, result);
-                int count = result.size ();
-                vector<MatrixAbstract<float> *>::iterator it;
-                for (it = result.begin (); it != result.end (); it++)
-                {
-                    Part * b = ((KDTreeEntry *) (*it))->part;
-
-                    c->setPart (1, b);
-                    if (Bmax  &&  c->getCount (1) >= Bmax) continue;  // no room in this B
-                    float create = c->getP (simulator);
-                    if (create <= 0  ||  create < 1  &&  create < uniform ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
-                    simulator.enqueue (c);
-                    c->init (simulator);
-                    Acount++;
-                    c = this->create ();
-                    c->setPart (0, a);
-
-                    if (Amax  &&  Acount >= Amax) break;  // stop scanning B once this A is full
-                }
-            }
-            else
-            */
-            {
-                Part * Bnext = Blast->before;  // will change if we make some connections
-                if (Bnext == &B->live) Bnext = Bnext->before;
-                Part * b = Blast;
-                do
-                {
-                    b = b->after;
-                    if (b == &B->live) b = b->after;
-
-                    c->setPart (1, b);
-                    if (Bmax  &&  c->getCount (1) >= Bmax) continue;  // no room in this B
-                    float create = c->getP ();
-                    if (create <= 0  ||  create < 1  &&  create < uniform ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
-                    c->enterSimulation ();
-                    a->getEvent ()->enqueue (c);
-                    c->init ();
-                    c = this->create ();
-                    c->setPart (0, a);
-                    Bnext = b;
-
-                    if (Amax)
-                    {
-                        if (++Acount >= Amax) break;  // stop scanning B once this A is full
-                    }
-                }
-                while (b != Blast);
-                Blast = Bnext;
-            }
-
-            //if (Amin  &&  Acount < Amin) minSatisfied = false;
-            a = a->after;
-        }
-
-        // New B with old A (new A x new B is already covered in case above)
-        if (A->old != &A->live)  // There exist some old A
-        {
-            Part * b = B->live.after;
-            while (b != B->old)
-            {
-                c->setPart (1, b);
-                int Bcount;
-                if (Bmax  ||  Bmin) Bcount = c->getCount (1);
-                if (Bmax  &&  Bcount >= Bmax)
-                {
-                    b = b->after;
-                    continue;
-                }
-
-                // TODO: the projection from A to B could be inverted, and another spatial search structure built.
-                // For now, we don't use spatial constraints.
-
-                Part * Anext;
-                if (Alast == A->old) Anext = A->live.before;
-                else                 Anext = Alast->before;
-                a = Alast;
-                do
-                {
-                    a = a->after;
-                    if (a == &A->live) a = A->old;
-
-                    c->setPart (0, a);
-                    if (Amax  &&  c->getCount (0) >= Amax) continue;
-                    float create = c->getP ();
-                    if (create <= 0  ||  create < 1  &&  create < uniform ()) continue;
-                    c->enterSimulation ();
-                    b->getEvent ()->enqueue (c);
-                    c->init ();
-                    c = this->create ();
-                    c->setPart (1, b);
-                    Anext = a;
-
-                    if (Bmax)
-                    {
-                        if (++Bcount >= Bmax) break;
-                    }
-                }
-                while (a != Alast);
-                Alast = Anext;
-
-                //if (Bmin  &&  Bcount < Bmin) minSatisfied = false;
-                b = b->after;
-            }
-        }
-
-        // Check if minimums have been satisfied for old parts. New parts in both A and B were checked above.
-        /*
-        if (Amin  &&  minSatisfied)
-        {
-            Part * a = A->old;
-            while (a != &A->live)
-            {
-                c->setPart (0, a);
-                if (c->getCount (0) < Amin)
-                {
-                    minSatisfied = false;
-                    break;
-                }
-                a = a->after;
-            }
-        }
-        if (Bmin  &&  minSatisfied)
-        {
-            Part * b = B->old;
-            while (b != &B->live)
-            {
-                c->setPart (1, b);
-                if (c->getCount (1) < Bmin)
-                {
-                    minSatisfied = false;
-                    break;
-                }
-                b = b->after;
-            }
-        }
-        */
-    }
-    delete c;
-    //delete [] entries;
+    delete c;  // The last created connection instance doesn't get used.
 }
 
 void
@@ -789,26 +795,89 @@ Population::clearNew ()
 {
 }
 
-int
-Population::getK (int i)
+ConnectIterator *
+Population::getIterators ()
 {
-    return 0;
+    vector<ConnectIterator *> iterators;
+    iterators.reserve (3);  // This is the largest number of endpoints we will usually have in practice.
+    bool nothingNew = true;
+    bool spatialFiltering = false;
+    int i = 0;
+    while (true)
+    {
+        ConnectIterator * it = getIterator (i++);  // Returns null if i is out of range for endpoints.
+        if (! it) break;
+        iterators.push_back (it);
+        it->size = it->instances->size ();
+        if (it->firstborn < it->size) nothingNew = false;
+        if (it->k > 0  ||  it->radius > 0) spatialFiltering = true;
+    }
+    if (nothingNew) return 0;
+
+    // Sort so that population with the most old entries is the outermost iterator.
+    // That allows the most number of old entries to be skipped.
+    // This is a simple in-place insertion sort ...
+    int count = iterators.size ();
+    for (int i = 1; i < count; i++)
+    {
+        for (int j = i; j > 0; j--)
+        {
+            ConnectIterator * A = iterators[j-1];
+            ConnectIterator * B = iterators[j  ];
+            if (A->firstborn >= B->firstborn) break;
+            iterators[j-1] = B;
+            iterators[j  ] = A;
+        }
+    }
+
+    if (spatialFiltering)
+    {
+        // Create shared $xyz value
+        Vector3 * xyz = new Vector3;
+        for (int i = 0; i < count; i++) iterators[i]->xyz = xyz;
+
+        // Ensure the innermost iterator be the one that best defines C.$xyz
+        // If connection defines its own $xyz, then this sorting operation has no effect.
+        int last = count - 1;
+        ConnectIterator * A = iterators[last];
+        int    bestIndex = last;
+        double bestRank  = A->rank;
+        for (int i = 0; i < last; i++)
+        {
+            A = iterators[i];
+            if (A->rank > bestRank)
+            {
+                bestIndex = i;
+                bestRank  = A->rank;
+            }
+        }
+        if (bestIndex != last)
+        {
+            A = iterators[bestIndex];
+            iterators.erase (iterators.begin () + bestIndex);
+            iterators.push_back (A);
+        }
+    }
+
+    for (int i = 1; i < count; i++)
+    {
+        ConnectIterator * A = iterators[i-1];
+        ConnectIterator * B = iterators[i  ];
+        A->permute   = B;
+        B->contained = true;
+        if (A->k > 0  ||  A->radius > 0)  // Note that NN structure won't be created on deepest iterator. TODO: Is this correct?
+        {
+            A->c = create ();
+            A->prepareNN ();
+            delete A->c;
+        }
+    }
+
+    return iterators[0];
 }
 
-int
-Population::getMax (int i)
-{
-    return 0;
-}
-
-int
-Population::getMin (int i)
-{
-    return 0;
-}
-
-float
-Population::getRadius (int i)
+ConnectIterator *
+Population::getIterator (int i)
 {
     return 0;
 }
@@ -835,8 +904,16 @@ Simulator::~Simulator ()
 }
 
 void
-Simulator::run ()
+Simulator::run (WrapperBase & wrapper)
 {
+    // Init cycle
+    EventStep * event = (EventStep *) currentEvent;
+    event->enqueue (&wrapper);  // no need for wrapper->enterSimulation()
+    wrapper.init ();
+    updatePopulations ();
+    event->requeue ();  // Only reinserts self if not empty.
+
+    // Regular simulation
     while (! queueEvent.empty ()  &&  ! stop)
     {
         currentEvent = queueEvent.top ();
@@ -860,8 +937,8 @@ Simulator::updatePopulations ()
     }
 
     // Clear new flag from populations that have requested it
-    //for (auto it : queueClearNew) it->clearNew ();
-    //queueClearNew.clear ();
+    for (auto it : queueClearNew) it->clearNew ();
+    queueClearNew.clear ();
 }
 
 void

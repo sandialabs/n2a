@@ -16,47 +16,6 @@ using namespace fl;
 using namespace std;
 
 
-// class Neighbor -------------------------------------------------------------
-
-Neighbor::~Neighbor ()
-{
-}
-
-
-// class Entry ----------------------------------------------------------------
-
-Neighbor::Entry::Entry (MatrixAbstract<float> * point, void * item)
-: point (point),
-  item (item)
-{
-}
-
-MatrixAbstract<float> *
-Neighbor::Entry::clone (bool deep) const
-{
-  if (deep) return new Entry (point->clone (true), item);
-  return new Entry (point, item);
-}
-
-int
-Neighbor::Entry::rows () const
-{
-  return point->rows ();
-}
-
-int
-Neighbor::Entry::columns () const
-{
-  return point->columns ();
-}
-
-void
-Neighbor::Entry::resize (const int rows, const int columns)
-{
-  point->resize (rows, columns);
-}
-
-
 // class KDTree ---------------------------------------------------------------
 
 KDTree::KDTree ()

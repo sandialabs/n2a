@@ -12,7 +12,6 @@ import java.util.List;
 import gov.sandia.n2a.backend.internal.InternalBackendData;
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventSource;
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventTarget;
-import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
@@ -56,7 +55,7 @@ public class BackendDataC
     // Ready-to-use handles for common $variables
     public Variable index;
     public Variable live;
-    public Variable n;  // only non-null if $n is actually stored as a member
+    public Variable n;
     public Variable p;
     public Variable t;
     public Variable dt;  // $t'
@@ -70,10 +69,6 @@ public class BackendDataC
     public boolean needGlobalPreserve;
     public boolean needGlobalFinalize;
     public boolean needGlobalFinalizeN;  // population finalize() should return live status based on $n
-    public boolean needK;
-    public boolean needMax;
-    public boolean needMin;
-    public boolean needRadius;
     public boolean needGlobalPath;  // need the path() function, which returns a unique string identifying the current instance
 
     public boolean needLocalCtor;
@@ -89,8 +84,7 @@ public class BackendDataC
     public List<String> accountableEndpoints = new ArrayList<String> ();
     public boolean refcount;
     public boolean trackInstances;
-    public boolean hasProjectFrom;
-    public boolean hasProjectTo;
+    public boolean hasProject;
     public boolean canGrowOrDie;  // via $p or $type
     public boolean canResize;     // via $n
 
@@ -327,16 +321,6 @@ public class BackendDataC
             if (allTemporary) list.clear ();
         }
 
-        if (s.connectionBindings != null)
-        {
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                Variable       v = s.find (new Variable (c.alias + ".$max"));
-                if (v == null) v = s.find (new Variable (c.alias + ".$min"));
-                if (v != null) accountableEndpoints.add (c.alias);
-            }
-        }
-
         refcount            = s.referenced  &&  s.canDie ();
         needGlobalPreserve  = globalIntegrated.size () > 0  ||  globalDerivativePreserve.size () > 0  ||  globalBufferedExternalWriteDerivative.size () > 0;
         needGlobalDtor      = needGlobalPreserve  ||  globalDerivative.size () > 0;
@@ -347,32 +331,22 @@ public class BackendDataC
         needGlobalFinalizeN = s.container == null  &&  (canResize  ||  canGrowOrDie);
         needGlobalFinalize  = globalBufferedExternal.size () > 0  ||  needGlobalFinalizeN  ||  (canResize  &&  (canGrowOrDie  ||  ! n.hasAttribute ("initOnly")));
 
+        if (! canResize  &&  canGrowOrDie  &&  n != null  &&  n.hasUsers ())
+        {
+            // This is a flaw in the analysis process that needs to be fixed.
+            // See note in InternalBackendData for details.
+            Backend.err.get ().println ("WARNING: $n can change (due to structural dynamics) but it was detected as a constant. Equations that depend on $n may give incorrect results.");
+        }
+
         if (s.connectionBindings != null)
         {
             for (ConnectionBinding c : s.connectionBindings)
             {
-                Variable v = s.find (new Variable (c.alias + ".$k"));
-                EquationEntry e = null;
-                if (v != null) e = v.equations.first ();
-                if (e != null) needK = true;
+                Variable       v = s.find (new Variable (c.alias + ".$max"));
+                if (v == null) v = s.find (new Variable (c.alias + ".$min"));
+                if (v != null) accountableEndpoints.add (c.alias);
 
-                v = s.find (new Variable (c.alias + ".$max"));
-                e = null;
-                if (v != null) e = v.equations.first ();
-                if (e != null) needMax = true;
-
-                v = s.find (new Variable (c.alias + ".$min"));
-                e = null;
-                if (v != null) e = v.equations.first ();
-                if (e != null) needMin = true;
-
-                v = s.find (new Variable (c.alias + ".$radius"));
-                e = null;
-                if (v != null) e = v.equations.first ();
-                if (e != null) needRadius = true;
-
-                if (s.find (new Variable (c.alias + ".$projectFrom")) != null) hasProjectFrom = true;
-                if (s.find (new Variable (c.alias + ".$projectTo"  )) != null) hasProjectTo   = true;
+                if (s.find (new Variable (c.alias + ".$project")) != null) hasProject = true;
             }
         }
 
@@ -390,6 +364,7 @@ public class BackendDataC
 
         int flagCount = eventTargets.size ();
         if (live != null  &&  ! live.hasAny (new String[] {"constant", "accessor"})) liveFlag = flagCount++;
+        if (trackInstances  &&  s.connected) newborn = flagCount++;
         if      (flagCount == 0 ) flagType = "";
         else if (flagCount <= 8 ) flagType = "uint8_t";
         else if (flagCount <= 16) flagType = "uint16_t";
