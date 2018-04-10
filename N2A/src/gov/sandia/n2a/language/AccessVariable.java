@@ -121,14 +121,12 @@ public class AccessVariable extends Operator
         return name;
     }
 
-    public int compareTo (Operator that)
+    public boolean equals (Object that)
     {
-        Class<? extends Operator> thisClass = getClass ();
-        Class<? extends Operator> thatClass = that.getClass ();
-        if (! thisClass.equals (thatClass)) return thisClass.hashCode () - thatClass.hashCode ();
-
-        // Same class as us, so compare operands
+        if (! (that instanceof AccessVariable)) return false;
         AccessVariable a = (AccessVariable) that;
-        return name.compareTo (a.name);
+
+        if (reference != null  &&  a.reference != null) return reference.variable == a.reference.variable;
+        return name.equals (a.name);
     }
 }

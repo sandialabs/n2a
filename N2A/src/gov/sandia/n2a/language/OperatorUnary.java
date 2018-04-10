@@ -70,14 +70,10 @@ public class OperatorUnary extends Operator
         operand.render (renderer);
     }
 
-    public int compareTo (Operator that)
+    public boolean equals (Object that)
     {
-        Class<? extends Operator> thisClass = getClass ();
-        Class<? extends Operator> thatClass = that.getClass ();
-        if (! thisClass.equals (thatClass)) return thisClass.hashCode () - thatClass.hashCode ();
-
-        // Same class as us, so compare operands
+        if (! (that instanceof OperatorUnary)) return false;
         OperatorUnary o = (OperatorUnary) that;
-        return operand.compareTo (o.operand);
+        return operand.equals (o.operand);
     }
 }

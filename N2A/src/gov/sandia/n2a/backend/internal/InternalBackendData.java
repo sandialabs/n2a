@@ -292,7 +292,7 @@ public class InternalBackendData
 
         public boolean equals (Object that)
         {
-            return event.compareTo (((EventTarget) that).event) == 0;
+            return event.equals (((EventTarget) that).event);
         }
     }
 

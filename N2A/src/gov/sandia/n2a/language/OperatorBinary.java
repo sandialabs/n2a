@@ -91,7 +91,7 @@ public class OperatorBinary extends Operator
         useParens = false;
         if (operand1 instanceof OperatorBinary  ||  operand1 instanceof OperatorUnary)
         {
-            useParens =    precedence () < operand1.precedence ()   // read "<" as "comes before" rather than "less"
+            useParens =    precedence () < operand1.precedence ()
                         ||    precedence () == operand1.precedence ()
                            && associativity () == Associativity.LEFT_TO_RIGHT;
         }
@@ -100,16 +100,13 @@ public class OperatorBinary extends Operator
         if (useParens) renderer.result.append (")");
     }
 
-    public int compareTo (Operator that)
+    public boolean equals (Object that)
     {
-        Class<? extends Operator> thisClass = getClass ();
-        Class<? extends Operator> thatClass = that.getClass ();
-        if (! thisClass.equals (thatClass)) return thisClass.hashCode () - thatClass.hashCode ();
-
-        // Same class as us, so compare operands
+        if (! (that instanceof OperatorBinary)) return false;
         OperatorBinary o = (OperatorBinary) that;
-        int difference = operand0.compareTo (o.operand0);
-        if (difference != 0) return difference;
-        return operand1.compareTo (o.operand1);
+
+        // TODO: For commutative operators, test all possible orderings.
+        // Commutative operators may become a proper subclass of OperatorBinary.
+        return operand0.equals (o.operand0)  &&  operand1.equals (o.operand1);
     }
 }

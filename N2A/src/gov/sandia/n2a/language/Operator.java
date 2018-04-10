@@ -59,7 +59,7 @@ import gov.sandia.n2a.plugins.PluginManager;
 import java.util.List;
 import java.util.TreeMap;
 
-public class Operator implements Cloneable, Comparable<Operator>
+public class Operator implements Cloneable
 {
     public interface Factory extends ExtensionPoint
     {
@@ -191,14 +191,6 @@ public class Operator implements Cloneable, Comparable<Operator>
     public String toString ()
     {
         return "unknown";
-    }
-
-    public int compareTo (Operator that)
-    {
-        Class<? extends Operator> thisClass = getClass ();
-        Class<? extends Operator> thatClass = that.getClass ();
-        if (thisClass.equals (thatClass)) return 0;
-        return thisClass.hashCode () - thatClass.hashCode ();
     }
 
 

@@ -1344,77 +1344,165 @@ public class JobC extends Thread
         // Population getIterator
         if (s.connectionBindings != null)
         {
-            // Approach: supplement the runtime ConnectIterator ctor by directly filling some members
-            // It may eventually become necessary to create subclasses.
+            class ConnectionHolder
+            {
+                public Operator      k;
+                public Operator      min;
+                public Operator      max;
+                public Operator      radius;
+                public boolean       hasProject;
+                public EquationSet   endpoint;
+                public List<Integer> indices = new ArrayList<Integer> ();
+                public List<Object>  resolution;
+
+                public boolean equivalent (Operator a, Operator b)
+                {
+                    if (a == b) return true;
+                    if (a == null  ||  b == null) return false;
+                    return a.equals (b);
+                }
+
+                public boolean equals (Object o)
+                {
+                    ConnectionHolder that = (ConnectionHolder) o;  // This is a safe assumption, since this is a local class.
+                    return    equivalent (k,      that.k)
+                           && equivalent (min,    that.min)
+                           && equivalent (max,    that.max)
+                           && equivalent (radius, that.radius)
+                           && hasProject == that.hasProject
+                           && endpoint   == that.endpoint;
+                }
+
+                public void emit ()
+                {
+                    for (Integer index : indices)
+                    {
+                        result.append ("    case " + index + ":\n");
+                    }
+                    result.append ("    {\n");
+                    result.append ("      result = new ConnectIterator (i);\n");
+
+                    boolean testK      = false;
+                    boolean testRadius = false;
+                    boolean constantKR = false;
+
+                    if (k != null)
+                    {
+                        result.append ("      result->k = ");
+                        k.render (context);
+                        result.append (";\n");
+                        testK = true;
+                        if (k instanceof Constant)
+                        {
+                            Constant c = (Constant) k;
+                            if (c.value instanceof Scalar  &&  ((Scalar) c.value).value != 0) constantKR = true;
+                        }
+                    }
+                    if (max != null)
+                    {
+                        result.append ("      result->Max = ");
+                        max.render (context);
+                        result.append (";\n");
+                    }
+                    if (min != null)
+                    {
+                        result.append ("      result->Min = ");
+                        min.render (context);
+                        result.append (";\n");
+                    }
+                    if (radius != null)
+                    {
+                        result.append ("      result->radius = ");
+                        radius.render (context);
+                        result.append (";\n");
+                        testRadius = true;
+                        if (radius instanceof Constant)
+                        {
+                            Constant c = (Constant) radius;
+                            if (c.value instanceof Scalar  &&  ((Scalar) c.value).value != 0) constantKR = true;
+                        }
+                    }
+                    if (hasProject)
+                    {
+                        result.append ("      result->rank += 1;");
+                    }
+                    if (constantKR)
+                    {
+                        result.append ("      result->rank -= 2;\n");
+                    }
+                    else
+                    {
+                        if (testK)
+                        {
+                            if (testRadius)
+                            {
+                                result.append ("      if (result->k > 0  ||  result->radius > 0) result->rank -= 2;\n");
+                            }
+                            else
+                            {
+                                result.append ("      if (result->k > 0) result->rank -= 2;\n");
+                            }
+                        }
+                        else if (testRadius)
+                        {
+                            result.append ("      if (result->radius > 0) result->rank -= 2;\n");
+                        }
+                    }
+
+                    assembleInstances (s, "", resolution, 0, "      ", result);
+
+                    result.append ("      break;\n");
+                    result.append ("    }\n");
+                }
+            }
+
+            List<ConnectionHolder> connections = new ArrayList<ConnectionHolder> ();
+            for (ConnectionBinding c : s.connectionBindings)
+            {
+                ConnectionHolder h = new ConnectionHolder ();
+
+                Variable v = s.find (new Variable (c.alias + ".$k"));
+                EquationEntry e = null;
+                if (v != null) e = v.equations.first ();
+                if (e != null) h.k = e.expression;
+
+                v = s.find (new Variable (c.alias + ".$max"));
+                e = null;
+                if (v != null) e = v.equations.first ();
+                if (e != null) h.max = e.expression;
+
+                v = s.find (new Variable (c.alias + ".$min"));
+                e = null;
+                if (v != null) e = v.equations.first ();
+                if (e != null) h.min = e.expression;
+
+                v = s.find (new Variable (c.alias + ".$radius"));
+                e = null;
+                if (v != null) e = v.equations.first ();
+                if (e != null) h.radius = e.expression;
+
+                h.hasProject = s.find (new Variable (c.alias + ".$project")) != null;
+                h.endpoint = c.endpoint;
+
+                int i = connections.indexOf (h);
+                if (i < 0)
+                {
+                    connections.add (h);
+                    h.resolution = c.resolution;
+                }
+                else
+                {
+                    h = connections.get (i);
+                }
+                h.indices.add (c.index);
+            }
 
             result.append ("ConnectIterator * " + ns + "getIterator (int i)\n");
             result.append ("{\n");
             result.append ("  ConnectIterator * result = 0;\n");
             result.append ("  switch (i)\n");
             result.append ("  {\n");
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                result.append ("    case " + c.index + ":\n");
-                result.append ("    {\n");
-                result.append ("      result = new ConnectIterator (i);\n");
-
-                boolean hasKR = false;
-                Variable v = s.find (new Variable (c.alias + ".$k"));
-                EquationEntry e = null;
-                if (v != null) e = v.equations.first ();
-                if (e != null)
-                {
-                    result.append ("      result->k = ");
-                    e.expression.render (context);
-                    result.append (";\n");
-                    hasKR = true;
-                }
-
-                v = s.find (new Variable (c.alias + ".$max"));
-                e = null;
-                if (v != null) e = v.equations.first ();
-                if (e != null)
-                {
-                    result.append ("      result->Max = ");
-                    e.expression.render (context);
-                    result.append (";\n");
-                }
-
-                v = s.find (new Variable (c.alias + ".$min"));
-                e = null;
-                if (v != null) e = v.equations.first ();
-                if (e != null)
-                {
-                    result.append ("      result->Min = ");
-                    e.expression.render (context);
-                    result.append (";\n");
-                }
-
-                v = s.find (new Variable (c.alias + ".$radius"));
-                e = null;
-                if (v != null) e = v.equations.first ();
-                if (e != null)
-                {
-                    result.append ("      result->radius = ");
-                    e.expression.render (context);
-                    result.append (";\n");
-                    hasKR = true;
-                }
-
-                if (s.find (new Variable (c.alias + ".$project")) != null)
-                {
-                    result.append ("      result->rank += 1;");
-                }
-                if (hasKR)
-                {
-                    result.append ("      if (result->k > 0  ||  result->radius > 0) result->rank -= 2;\n");
-                }
-
-                assembleInstances (s, "", c.resolution, 0, "      ", result);
-
-                result.append ("      break;\n");
-                result.append ("    }\n");
-            }
+            for (ConnectionHolder h : connections) h.emit ();
             result.append ("  }\n");
             result.append ("  return result;\n");
             result.append ("}\n");
@@ -3496,7 +3584,7 @@ public class JobC extends Thread
         @param depth Position in the resolution array of our next step.
         @param prefix Spaces to insert in front of each line to maintain nice indenting.
     **/
-    public void assembleInstances (EquationSet current, String pointer, ArrayList<Object> resolution, int depth, String prefix, StringBuilder result)
+    public void assembleInstances (EquationSet current, String pointer, List<Object> resolution, int depth, String prefix, StringBuilder result)
     {
         int last = resolution.size () - 1;
         for (int i = depth; i <= last; i++)

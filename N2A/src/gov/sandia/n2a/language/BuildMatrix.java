@@ -246,21 +246,16 @@ public class BuildMatrix extends Operator
         return renderer.result.toString ();
     }
 
-    public int compareTo (Operator that)
+    public boolean equals (Object that)
     {
-        Class<? extends Operator> thisClass = getClass ();
-        Class<? extends Operator> thatClass = that.getClass ();
-        if (! thisClass.equals (thatClass)) return thisClass.hashCode () - thatClass.hashCode ();
-
-        // Same class as us, so compare operands
+        if (! (that instanceof BuildMatrix)) return false;
         BuildMatrix B = (BuildMatrix) that;
+
         int columns = operands.length;
-        int difference = columns - B.operands.length;
-        if (difference != 0) return difference;
-        if (columns == 0) return 0;
+        if (columns != B.operands.length) return false;
+        if (columns == 0) return true;
         int rows = operands[0].length;
-        difference = rows - B.operands[0].length;
-        if (difference != 0) return difference;
+        if (rows != B.operands[0].length) return false;
 
         for (int c = 0; c < columns; c++)
         {
@@ -269,13 +264,12 @@ public class BuildMatrix extends Operator
                 Operator a =   operands[c][r];
                 Operator b = B.operands[c][r];
                 if (a == b) continue;  // generally only true if both a and b are null
-                if (a == null) return -1;
-                if (b == null) return 1;
-                difference = a.compareTo (b);
-                if (difference != 0) return difference;
+                if (a == null) return false;
+                if (b == null) return false;
+                if (! a.equals (b)) return false;
             }
         }
 
-        return 0;
+        return true;
     }
 }

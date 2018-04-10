@@ -69,13 +69,10 @@ public class Constant extends Operator
         return value.toString ();
     }
 
-    public int compareTo (Operator that)
+    public boolean equals (Object that)
     {
-        Class<? extends Operator> thisClass = getClass ();
-        Class<? extends Operator> thatClass = that.getClass ();
-        if (! thisClass.equals (thatClass)) return thisClass.hashCode () - thatClass.hashCode ();
-
+        if (! (that instanceof Constant)) return false;
         Constant c = (Constant) that;
-        return value.compareTo (c.value);
+        return value.equals (c.value);
     }
 }
