@@ -42,20 +42,17 @@ public:
     class Query
     {
     public:
-        int                                               k;
-        float                                             radius;
-        const fl::MatrixAbstract<float> *                 point;
-        std::multimap<float, fl::MatrixAbstract<float> *> sorted;
-        std::multimap<float, Node *>                      queue;
+        int                                 k;
+        float                               radius;
+        const Vector3 *                     point;
+        std::multimap<float, KDTreeEntry *> sorted;
+        std::multimap<float, Node *>        queue;
     };
 
     class Node
     {
     public:
-        virtual ~Node ()
-        {
-        }
-
+        virtual ~Node () {}
         virtual void search (float distance, Query & q) const = 0;
 #       ifndef N2A_SPINNAKER
         virtual void dump (std::ostream & out, const String & pad = "") const = 0;
@@ -127,7 +124,7 @@ public:
     class Leaf : public Node
     {
     public:
-        std::vector<fl::MatrixAbstract<float> *> points;
+        std::vector<KDTreeEntry *> points;
 
         virtual void search (float distance, Query & q) const
         {
@@ -135,7 +132,7 @@ public:
             int dimensions = points[0]->rows ();
             for (int i = 0; i < count; i++)
             {
-                fl::MatrixAbstract<float> * p = points[i];
+                KDTreeEntry * p = points[i];
 
                 // Measure distance using early-out method. Might save operations in
                 // high-dimensional spaces.
@@ -156,7 +153,7 @@ public:
                 q.sorted.insert (std::make_pair (total, p));
                 if (q.sorted.size () > q.k)
                 {
-                    std::multimap<float, fl::MatrixAbstract<float> *>::iterator it = q.sorted.end ();
+                    std::multimap<float, KDTreeEntry *>::iterator it = q.sorted.end ();
                     it--;  // it is one past end of collection, so we must back up one step
                     q.sorted.erase (it);
                 }
@@ -203,18 +200,16 @@ public:
         root = 0;
     }
 
-    void set  (const std::vector<fl::MatrixAbstract<float> *> & data)
+    void set (std::vector<KDTreeEntry *> & data)
     {
-        std::vector<fl::MatrixAbstract<float> *> temp = data;
-
-        int dimensions = temp[0]->rows ();
+        int dimensions = data[0]->rows ();
         lo.resize (dimensions);
         hi.resize (dimensions);
         lo.clear ( INFINITY);
         hi.clear (-INFINITY);
 
-        std::vector<fl::MatrixAbstract<float> *>::iterator t = temp.begin ();
-        for (; t != temp.end (); t++)
+        std::vector<KDTreeEntry *>::iterator t = data.begin ();
+        for (; t != data.end (); t++)
         {
             float * a = &(**t)[0];
             float * l = &lo[0];
@@ -230,10 +225,10 @@ public:
             }
         }
 
-        root = construct (temp);
+        root = construct (data);
     }
 
-    void find (const fl::MatrixAbstract<float> & query, std::vector<fl::MatrixAbstract<float> *> & result) const
+    void find (const Vector3 & query, std::vector<KDTreeEntry *> & result) const
     {
         // Determine distance of query from bounding rectangle for entire tree
         int dimensions = query.rows ();
@@ -246,9 +241,9 @@ public:
 
         // Recursively collect closest points
         Query q;
-        q.k          = k;
-        q.radius     = radius * radius;  // this may shrink monotonically once we find enough neighbors
-        q.point      = &query;
+        q.k      = k;
+        q.radius = radius * radius;  // this may shrink monotonically once we find enough neighbors
+        q.point  = &query;
 
         float oneEpsilon = (1 + epsilon) * (1 + epsilon);
         q.queue.insert (std::make_pair (distance, root));
@@ -267,7 +262,7 @@ public:
         // Transfer results to vector. No need to limit number of results, becaus this has
         // already been done by Leaf::search().
         result.reserve (q.sorted.size ());
-        std::multimap<float, fl::MatrixAbstract<float> *>::iterator sit;
+        std::multimap<float, KDTreeEntry *>::iterator sit;
         for (sit = q.sorted.begin (); sit != q.sorted.end (); sit++)
         {
             result.push_back (sit->second);
@@ -289,7 +284,7 @@ public:
 #   endif
 
     /// Recursively construct a tree that handles the given volume of points.
-    Node * construct (std::vector<fl::MatrixAbstract<float> *> & points)
+    Node * construct (std::vector<KDTreeEntry *> & points)
     {
         int count = points.size ();
         if (count == 0)
@@ -319,9 +314,9 @@ public:
             }
             sort (points, d);
             int cut = count / 2;
-            std::vector<fl::MatrixAbstract<float> *>::iterator b = points.begin ();
-            std::vector<fl::MatrixAbstract<float> *>::iterator c = b + cut;
-            std::vector<fl::MatrixAbstract<float> *>::iterator e = points.end ();
+            std::vector<KDTreeEntry *>::iterator b = points.begin ();
+            std::vector<KDTreeEntry *>::iterator c = b + cut;
+            std::vector<KDTreeEntry *>::iterator e = points.end ();
 
             Branch * result = new Branch;
             result->dimension = d;
@@ -330,7 +325,7 @@ public:
             result->mid = (**c)[d];
 
             hi[d] = result->mid;
-            std::vector<fl::MatrixAbstract<float> *> tempPoints (b, c);
+            std::vector<KDTreeEntry *> tempPoints (b, c);
             result->lowNode = construct (tempPoints);
             hi[d] = result->hi;
 
@@ -345,10 +340,10 @@ public:
     }
 
     /// rearrange points so they are in ascending order along the given dimension
-    void sort (std::vector<fl::MatrixAbstract<float> *> & points, int dimension)
+    void sort (std::vector<KDTreeEntry *> & points, int dimension)
     {
-        std::multimap<float, fl::MatrixAbstract<float> *> sorted;
-        std::vector<fl::MatrixAbstract<float> *>::iterator it = points.begin ();
+        std::multimap<float, KDTreeEntry *> sorted;
+        std::vector<KDTreeEntry *>::iterator it = points.begin ();
         for (; it != points.end (); it++)
         {
             sorted.insert (std::make_pair ((**it)[dimension], *it));
@@ -356,7 +351,7 @@ public:
 
         points.clear ();
         points.reserve (sorted.size ());
-        std::multimap<float, fl::MatrixAbstract<float> *>::iterator sit = sorted.begin ();
+        std::multimap<float, KDTreeEntry *>::iterator sit = sorted.begin ();
         for (; sit != sorted.end (); sit++)
         {
             points.push_back (sit->second);

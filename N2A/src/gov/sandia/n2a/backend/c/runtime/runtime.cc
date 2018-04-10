@@ -544,7 +544,8 @@ ConnectIterator::prepareNN ()
     //else NN->radius is INFINITY
 
     entries = new KDTreeEntry[size];
-    vector<MatrixAbstract<float> *> pointers (size);
+    vector<KDTreeEntry *> pointers;
+    pointers.reserve (size);
     for (int i = 0; i < size; i++)
     {
         p = (*instances)[i];
@@ -555,7 +556,7 @@ ConnectIterator::prepareNN ()
         // c should already be assigned by caller, but not via setProbe()
         c->setPart (index, p);
         c->getProject (index, e);
-        pointers[i] = &e;
+        pointers.push_back (&e);
     }
     NN->set (pointers);
 }
@@ -586,12 +587,12 @@ ConnectIterator::reset (bool newOnly)
     this->newOnly = newOnly;
     if (NN)
     {
-        vector<MatrixAbstract<float> *> result;
+        vector<KDTreeEntry *> result;
         NN->find (*xyz, result);
         count = result.size ();
         filtered.resize (count);
         int j = 0;
-        for (auto e : result) filtered[j++] = ((KDTreeEntry *) e)->part;
+        for (KDTreeEntry * e : result) filtered[j++] = e->part;
         i = 0;
     }
     else
@@ -787,6 +788,7 @@ Population::connect ()
         outer->setProbe (c);
     }
     delete c;  // The last created connection instance doesn't get used.
+    delete outer;  // Automatically deletes inner iterators as well.
 }
 
 void
