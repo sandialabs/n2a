@@ -1,18 +1,11 @@
 #include "runtime.h"
 
-// Rather than build separate object files and link into an archive, we simply merge all
-// the code into a monolithic source and compile in one pass. This simplifies the process.
-
-// Template implementations first, before any "using namespace" statements
 #include "fl/Matrix.tcc"
 #include "fl/MatrixFixed.tcc"
 #include "fl/Vector.tcc"
 
-// Regular sources, which are allowed to have "using namespace" statements
-#ifdef N2A_SPINNAKER
-# include "nosys.cc"
-#endif
-#include "io.cc"
+using namespace fl;
+using namespace std;
 
 template class MatrixAbstract<float>;
 template class Matrix<float>;

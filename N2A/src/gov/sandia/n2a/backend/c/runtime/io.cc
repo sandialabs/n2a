@@ -1,8 +1,7 @@
+#include "nosys.h"
 #include "io.h"
-#include "fl/math.h"
 
 #include <fstream>
-
 
 using namespace fl;
 using namespace std;

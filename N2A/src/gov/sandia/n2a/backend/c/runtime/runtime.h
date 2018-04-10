@@ -1,14 +1,8 @@
-#ifndef backend_c_runtime_h
-#define backend_c_runtime_h
+#ifndef n2a_runtime_h
+#define n2a_runtime_h
 
 
-#ifdef N2A_SPINNAKER
-# define N2A_THROW(message) rt_error (RTE_ABORT);
-# include "nosys.h"
-#else
-# define N2A_THROW(message) throw message;
-#endif
-
+#include "nosys.h"
 #include "io.h"
 #include "String.h"
 #include "KDTree.h"

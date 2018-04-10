@@ -66,7 +66,6 @@ public class JobC extends Thread
 
     public Path jobDir;
     public Path runtimeDir;
-    public Path runtime;  // Object file containing runtime code
     public Path gcc;
 
     // These values are unique across the whole simulation, so they go here rather than BackendDataC.
@@ -96,7 +95,6 @@ public class JobC extends Thread
             Path resourceDir = Paths.get (AppData.properties.get ("resourceDir"));
             gcc              = Paths.get (AppData.state.getOrDefault ("BackendC", "gcc", "g++"));
             runtimeDir       = resourceDir.resolve ("cruntime");
-            runtime          = runtimeDir.resolve ("runtime.o");
             rebuildRuntime ();
 
             model = new EquationSet (job);
@@ -142,17 +140,18 @@ public class JobC extends Thread
         boolean changed = false;
         if (needRuntime)
         {
-            if (unpackRuntime (JobC.class, runtimeDir, "",   "runtime.cc", "runtime.h", "io.cc", "io.h", "KDTree.h", "String.h")) changed = true;
+            if (unpackRuntime (JobC.class, runtimeDir, "",   "io.cc", "io.h", "KDTree.h", "nosys.h", "runtime.cc", "runtime.h", "String.h")) changed = true;
             if (unpackRuntime (JobC.class, runtimeDir, "fl", "math.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "pointer.h", "Vector.tcc")) changed = true;
             needRuntime = false;   // Stop checking files for this session.
         }
 
         // Compile runtime
-        if (changed  ||  ! Files.exists (runtime))
+        for (String stem : new String[] {"runtime", "io"})
         {
-            Path source = runtimeDir.resolve ("runtime.cc");
-
-            Path out = runCommand (gcc.toString (), "-c", "-O3", "-std=c++11", "-I" + runtimeDir, "-o", runtime.toString (), source.toString ());
+            Path object = runtimeDir.resolve (stem + ".o");
+            if (! changed  &&  Files.exists (object)) continue;
+            Path source = runtimeDir.resolve (stem + ".cc");
+            Path out = runCommand (gcc.toString (), "-c", "-O3", "-std=c++11", "-I" + runtimeDir, "-o", object.toString (), source.toString ());
             Files.delete (out);
         }
     }
@@ -184,7 +183,14 @@ public class JobC extends Thread
         String stem = source.getFileName ().toString ().split ("\\.", 2)[0];
         Path binary = source.getParent ().resolve (stem + ".bin");
 
-        Path out = runCommand (gcc.toString (), "-O3", "-std=c++11", "-I" + runtimeDir, runtime.toString (), "-o", binary.toString (), source.toString ());
+        Path out = runCommand
+        (
+            gcc.toString (), "-O3", "-std=c++11",
+            "-I" + runtimeDir,
+            runtimeDir.resolve ("runtime.o").toString (),
+            runtimeDir.resolve ("io.o"     ).toString (),
+            "-o", binary.toString (), source.toString ()
+        );
         Files.delete (out);
 
         return binary;
