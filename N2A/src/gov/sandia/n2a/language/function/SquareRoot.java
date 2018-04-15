@@ -6,10 +6,13 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.function;
 
+import gov.sandia.n2a.eqset.Equality;
+import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.operator.Power;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Matrix;
@@ -50,6 +53,15 @@ public class SquareRoot extends Function
             );
         }
         throw new EvaluationException ("type mismatch");
+    }
+
+    public void solve (Equality statement) throws EvaluationException
+    {
+        statement.lhs = operands[0];
+        Power square = new Power ();
+        square.operand0 = statement.rhs;
+        square.operand1 = new Constant (2);
+        statement.rhs = square;
     }
 
     public String toString ()

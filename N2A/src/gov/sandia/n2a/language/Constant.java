@@ -27,6 +27,11 @@ public class Constant extends Operator
         this.value = value;
     }
 
+    public Constant (double value)
+    {
+        this.value = new Scalar (value);
+    }
+
     @SuppressWarnings("unchecked")
     public void getOperandsFrom (SimpleNode node)
     {

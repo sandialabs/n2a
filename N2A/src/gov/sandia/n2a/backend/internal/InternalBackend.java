@@ -245,6 +245,7 @@ public class InternalBackend extends Backend
         e.setAttributesLive ();
         e.forceTemporaryStorageForSpecials ();
         e.determineTypes ();
+        e.findConnectionMatrix ();
         e.determineDuration ();
 
         prepareToRun (e);

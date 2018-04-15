@@ -59,6 +59,22 @@ public class Divide extends OperatorBinary
         return operand0.eval (context).divide (operand1.eval (context));
     }
 
+    public Operator inverse (Operator lhs, Operator rhs, boolean right)
+    {
+        if (right)
+        {
+            Multiply result = new Multiply ();
+            result.operand0 = rhs;
+            result.operand1 = lhs;
+            return result;
+        }
+
+        Divide result = new Divide ();
+        result.operand0 = lhs;
+        result.operand1 = rhs;
+        return result;
+    }
+
     public String toString ()
     {
         return "/";

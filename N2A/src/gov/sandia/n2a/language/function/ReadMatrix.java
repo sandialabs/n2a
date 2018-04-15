@@ -45,10 +45,10 @@ public class ReadMatrix extends Function
         return true;
     }
 
-    public Type eval (Instance context)
+    public Matrix open (Instance context)
     {
         Simulator simulator = Simulator.getSimulator (context);
-        if (simulator == null) return new Scalar (0);  // absence of simulator indicates analysis phase, so opening files is unnecessary
+        if (simulator == null) return null;  // absence of simulator indicates analysis phase, so opening files is unnecessary
 
         String path = ((Text) operands[0].eval (context)).value;
         Matrix A = simulator.matrices.get (path);
@@ -57,6 +57,13 @@ public class ReadMatrix extends Function
             A = Matrix.factory (new File (path).getAbsoluteFile ());
             simulator.matrices.put (path, A);
         }
+        return A;
+    }
+
+    public Type eval (Instance context)
+    {
+        Matrix A = open (context);
+        if (A == null) return new Scalar (0);
 
         String mode = "";
         int lastParm = operands.length - 1;

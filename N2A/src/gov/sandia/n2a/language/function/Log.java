@@ -1,11 +1,12 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.language.function;
 
+import gov.sandia.n2a.eqset.Equality;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -50,6 +51,15 @@ public class Log extends Function
             );
         }
         throw new EvaluationException ("type mismatch");
+    }
+
+    public void solve (Equality statement) throws EvaluationException
+    {
+        statement.lhs = operands[0];
+        Exp exp = new Exp ();
+        exp.operands = new Operator[1];
+        exp.operands[0] = statement.rhs;
+        statement.rhs = exp;
     }
 
     public String toString ()

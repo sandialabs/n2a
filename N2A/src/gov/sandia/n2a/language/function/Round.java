@@ -1,11 +1,12 @@
 /*
-Copyright 2016 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.language.function;
 
+import gov.sandia.n2a.eqset.Equality;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -47,6 +48,13 @@ public class Round extends Function
             });
         }
         throw new EvaluationException ("type mismatch");
+    }
+
+    public void solve (Equality statement) throws EvaluationException
+    {
+        // Pretend that the round() operation does not change the value much,
+        // so simply strip it off.
+        statement.lhs = operands[0];
     }
 
     public String toString ()

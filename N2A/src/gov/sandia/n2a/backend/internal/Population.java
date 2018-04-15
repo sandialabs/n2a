@@ -12,11 +12,13 @@ import java.util.TreeSet;
 
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
+import gov.sandia.n2a.eqset.EquationSet.ConnectionMatrix;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
+import gov.sandia.n2a.language.type.Matrix.IteratorNonzero;
 import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
 
@@ -183,11 +185,17 @@ public class Population extends Instance
         return true;
     }
 
-    public class ConnectIterator
+    public interface ConnectIterator
+    {
+        public boolean setProbe (Part probe);  // Return value is used primarily by ConnectPopulation to implement $max
+        public boolean next ();                // Fills endpoints of probe with next combination. Returns false if no more combinations are available.
+    }
+
+    public class ConnectPopulation implements ConnectIterator
     {
         public int                 index;
         public boolean             newOnly;        // Filter out old instances. Only an iterator with index==0 can set this true.
-        public ConnectIterator     permute;
+        public ConnectPopulation   permute;
         public boolean             contained;      // Another iterator holds us in its permute reference.
         public int                 max;
         public int                 connectedCount; // position in p.valuesFloat of $count for this connection
@@ -214,7 +222,7 @@ public class Population extends Instance
         public InternalBackendData cbed;
         public double              rank;  // heuristic value indicating how good a candidate this endpoint is to determine C.$xyz
 
-        public ConnectIterator (int index, ConnectionBinding target, InternalBackendData cbed, Simulator simulator)
+        public ConnectPopulation (int index, ConnectionBinding target, InternalBackendData cbed, Simulator simulator)
         {
             this.index     = index;
             this.cbed      = cbed;
@@ -476,24 +484,94 @@ public class Population extends Instance
         }
     }
 
-    public void connect (Simulator simulator)
+    public class ConnectMatrix implements ConnectIterator
+    {
+        public ConnectionMatrix    cm;
+        public ArrayList<Part>     rows;
+        public ArrayList<Part>     cols;
+        public Part                c;
+        public Part                dummy;  // Pre-loaded with arbitrary intance from rows and cols. Used to evaluate mappings back to indices. Provides access to population variables.
+        public IteratorNonzero     it;
+        public int                 rowCount;
+        public int                 colCount;
+        public InternalBackendData Abed;
+        public InternalBackendData Bbed;
+
+        public ConnectMatrix (ConnectionMatrix cm, ConnectPopulation rowIterator, ConnectPopulation colIterator)
+        {
+            this.cm   = cm;
+            rows = rowIterator.instances;
+            cols = colIterator.instances;
+            rowCount = rows.size ();
+            colCount = cols.size ();
+
+            Part A = rows.get (0);
+            Part B = cols.get (0);
+            Abed = (InternalBackendData) A.equations.backendData;
+            Bbed = (InternalBackendData) B.equations.backendData;
+
+            dummy = new Part (equations, (Part) container);
+            dummy.setPart (0, A);
+            dummy.setPart (1, B);
+            dummy.resolve ();
+        }
+
+        public boolean setProbe (Part probe)
+        {
+            c = probe;
+            if (it == null) it = cm.A.open (c).getIteratorNonzero ();  // If A can't open, we're dead anyway, so don't bother checking for null pointer.
+            return false;
+        }
+
+        public boolean next ()
+        {
+            while (it.next () != null)
+            {
+                int a = cm.rowMapping.getIndex (dummy, it.getRow ());
+                int b = cm.colMapping.getIndex (dummy, it.getColumn ());
+                if (a < 0  ||  a >= rowCount  ||  b < 0  ||  b >= colCount) continue;
+                Part A = rows.get (a);
+                Part B = cols.get (b);
+                if (A.valuesFloat[Abed.newborn] != 0  ||  B.valuesFloat[Bbed.newborn] != 0)
+                {
+                    c.setPart (0, A);
+                    c.setPart (1, B);
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
+    public ConnectIterator getIterators (Simulator simulator)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
 
         int count = equations.connectionBindings.size ();
-        ArrayList<ConnectIterator> iterators = new ArrayList<ConnectIterator> (count);
+        ArrayList<ConnectPopulation> iterators = new ArrayList<ConnectPopulation> (count);
         boolean nothingNew = true;
         boolean spatialFiltering = false;
         for (int i = 0; i < count; i++)
         {
             ConnectionBinding target = equations.connectionBindings.get (i);
-            ConnectIterator it = new ConnectIterator (i, target, bed, simulator);
-            if (it.instances == null  ||  it.instances.size () == 0) return;  // Nothing to connect. This should never happen.
+            ConnectPopulation it = new ConnectPopulation (i, target, bed, simulator);
+            if (it.instances == null  ||  it.instances.size () == 0) return null;  // Nothing to connect. This should never happen.
             iterators.add (it);
             if (it.firstborn < it.size) nothingNew = false;
             if (it.k > 0  ||  it.radius > 0) spatialFiltering = true;
         }
-        if (nothingNew) return;
+        if (nothingNew) return null;
+
+        ConnectionMatrix cm = equations.connectionMatrix;
+        if (cm != null)  // Use sparse-matrix optimization
+        {
+            // TODO: Guard against deep paths to populations. The row and column collections should each be a simple list from a single population.
+            ConnectMatrix result;
+            ConnectionBinding A = equations.connectionBindings.get (0);
+            if (A == cm.rows) result = new ConnectMatrix (cm, iterators.get (0), iterators.get (1));
+            else              result = new ConnectMatrix (cm, iterators.get (1), iterators.get (0));
+            return result;
+        }
 
         // Sort so that population with the most old entries is the outermost iterator.
         // That allows the most number of old entries to be skipped.
@@ -502,8 +580,8 @@ public class Population extends Instance
         {
             for (int j = i; j > 0; j--)
             {
-                ConnectIterator A = iterators.get (j-1);
-                ConnectIterator B = iterators.get (j);
+                ConnectPopulation A = iterators.get (j-1);
+                ConnectPopulation B = iterators.get (j);
                 if (A.firstborn >= B.firstborn) break;
                 iterators.set (j-1, B);
                 iterators.set (j,   A);
@@ -519,7 +597,7 @@ public class Population extends Instance
             if (bed.xyz == null  ||  bed.xyz.equations.size () == 0)  // connection's own $xyz is not defined, so must get it from some $project
             {
                 int last = count - 1;
-                ConnectIterator A = iterators.get (last);
+                ConnectPopulation A = iterators.get (last);
                 int    bestIndex = last;
                 double bestRank  = A.rank;
                 for (int i = 0; i < last; i++)
@@ -541,13 +619,18 @@ public class Population extends Instance
 
         for (int i = 1; i < count; i++)
         {
-            ConnectIterator A = iterators.get (i-1);
-            ConnectIterator B = iterators.get (i);
+            ConnectPopulation A = iterators.get (i-1);
+            ConnectPopulation B = iterators.get (i);
             A.permute   = B;
             B.contained = true;
             if (A.k > 0  ||  A.radius > 0) A.prepareNN ();
         }
 
+        return iterators.get (0);
+    }
+
+    public void connect (Simulator simulator)
+    {
         // TODO: implement $min, or consider eliminating it from the language
         // $max is easy, but $min requires one or more forms of expensive accounting to do correctly.
         // Problems include:
@@ -559,7 +642,8 @@ public class Population extends Instance
         // However, this is more difficult to implement for any but the outer loop. Could implement an
         // outer loop for each of the other populations, just for fulfilling $min.
 
-        ConnectIterator outer = iterators.get (0);
+        ConnectIterator outer = getIterators (simulator);
+        if (outer == null) return;
         Part c = new Part (equations, (Part) container);
         outer.setProbe (c);
         while (outer.next ())

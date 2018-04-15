@@ -21,6 +21,7 @@ import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Output;
+import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.operator.GE;
 import gov.sandia.n2a.language.operator.GT;
 import gov.sandia.n2a.language.operator.LE;
@@ -71,6 +72,7 @@ public class EquationSet implements Comparable<EquationSet>
     public boolean                             lethalConnection;       // indicates we are a connection, and one of the parts we connect to can die
     public boolean                             lethalContainer;        // our parent could die
     public boolean                             referenced;             // Some other equation set writes to one of our variables. If we can die, then exercise care not to reuse this part while other parts are still writing to it. Otherwise our reincarnated part might get written with values from our previous life.
+    public ConnectionMatrix                    connectionMatrix;       // If non-null, this is a connection whose existence depends primarily on elements of a matrix.
     public Object                              backendData;            // holder for extra data associated with each equation set by a given backend
 
     public static class ConnectionBinding
@@ -118,6 +120,77 @@ public class EquationSet implements Comparable<EquationSet>
         {
             if (that instanceof AccountableConnection) return compareTo ((AccountableConnection) that) == 0;
             return false;
+        }
+    }
+
+    public class ConnectionMatrix
+    {
+        public ReadMatrix A;
+
+        // Bindings for populations associated with the rows/columns of the matrix.
+        public ConnectionBinding rows;
+        public ConnectionBinding cols;
+
+        // Mappings from row/column position to $index of respective population.
+        public Equality rowMapping;
+        public Equality colMapping;
+
+        public ConnectionMatrix (ReadMatrix A)
+        {
+            this.A = A;
+            if (A.operands.length < 3) return;
+            AccessVariable av1 = endpoint (A.operands[1]);
+            AccessVariable av2 = endpoint (A.operands[2]);
+            if (av1 == null  ||  av2 == null) return;
+
+            rows = findConnection (av1.reference);
+            cols = findConnection (av2.reference);
+            if (rows == null  ||  cols == null) return;
+
+            rowMapping = new Equality (A.operands[1], av1);
+            rowMapping.solve ();
+            if (rowMapping.lhs != rowMapping.target) rowMapping = null;
+            colMapping = new Equality (A.operands[2], av2);
+            colMapping.solve ();
+            if (colMapping.lhs != colMapping.target) colMapping = null;
+        }
+
+        /**
+            Utility function for identifying connection endpoints implied in ReadMatrix parameters.
+        **/
+        public AccessVariable endpoint (Operator op)
+        {
+            class IndexVisitor extends Visitor
+            {
+                public AccessVariable found;
+                public boolean visit (Operator op)
+                {
+                    if (op instanceof AccessVariable)
+                    {
+                        AccessVariable av = (AccessVariable) op;
+                        if (av.name.contains ("$index"))
+                        {
+                            found = av;
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+            }
+            IndexVisitor iv = new IndexVisitor ();
+            op.visit (iv);
+            return iv.found;  // can be null
+        }
+
+        public ConnectionBinding findConnection (VariableReference r)
+        {
+            // As a connection, the first ConnectionBinding we encounter in the resolution path should be
+            // our own reference to the endpoint.
+            for (Object o : r.resolution)
+            {
+                if (o instanceof ConnectionBinding) return (ConnectionBinding) o;
+            }
+            return null;
         }
     }
 
@@ -2255,6 +2328,113 @@ public class EquationSet implements Comparable<EquationSet>
             if (c.endpoint.accountableConnections == null) c.endpoint.accountableConnections = new TreeSet<AccountableConnection> ();
             c.endpoint.accountableConnections.add (new AccountableConnection (this, c.alias));  // Only adds if it is not already there.
         }
+    }
+
+    /**
+        Detects if $p depends on a sparse matrix.
+        Depends on results of: determineTypes() and clearVariables() -- To provide fake values.
+    **/
+    public void findConnectionMatrix ()
+    {
+        for (EquationSet s : parts)
+        {
+            s.findConnectionMatrix ();
+        }
+
+        if (connectionBindings == null) return;  // Only do this on connections
+        if (connectionBindings.size () != 2) return;  // Only check binary connections
+        Variable p = find (new Variable ("$p", 0));
+        if (p == null) return;
+
+        // Determine which equation fires during connect phase
+        Instance instance = new Instance ()
+        {
+            public Type get (Variable v)
+            {
+                // TODO: implement phase indicator $connect. In that case, we would have $connect=1, $live=0, $init=0
+                if (v.name.equals ("$live")) return new Scalar (0);
+                if (v.name.equals ("$init")) return new Scalar (1);
+                return v.type;
+            }
+        };
+        Operator predicate = null;
+        for (EquationEntry e : p.equations)  // Scan for first equation whose condition is nonzero
+        {
+            if (e.condition == null)
+            {
+                predicate = e.expression;
+                break;
+            }
+            Object doit = e.condition.eval (instance);
+            if (doit instanceof Scalar  &&  ((Scalar) doit).value != 0)
+            {
+                predicate = e.expression;
+                break;
+            }
+        }
+
+        // Detect if equation or direct dependency contains a ReadMatrix function
+        class ContainsTransformer extends Transformer
+        {
+            public ReadMatrix found;
+            public int        countFound;
+            public int        countVariable;
+            public Operator transform (Operator op)
+            {
+                if (op instanceof ReadMatrix)
+                {
+                    found = (ReadMatrix) op;
+                    countFound++;
+                    return op;
+                }
+                if (op instanceof AccessVariable)
+                {
+                    // It is possible to be a little more liberal by recursively descending a tree
+                    // of temporary variables, but right now there is no use-case for it.
+
+                    countVariable++;
+                    AccessVariable av = (AccessVariable) op;
+                    Variable v = av.reference.variable;
+                    if (v.container != p.container) return op;  // Stop descent. We only examine one level of dependencies, regardless of whether one matches our criteria or not.
+                    if (! v.hasAttribute ("temporary")) return op;
+                    if (v.equations.size () != 1) return op;
+                    EquationEntry e = v.equations.first ();
+                    if (e.condition != null) return op;
+                    if (e.expression instanceof ReadMatrix)
+                    {
+                        found = (ReadMatrix) e.expression;
+                        countFound++;
+                        countVariable--;
+                        return found;  // Replace temporary variable with its equivalent ReadMatrix call.
+                    }
+                    return op;
+                }
+                return null;
+            }
+        }
+        ContainsTransformer ct = new ContainsTransformer ();
+        Operator p2 = predicate.deepCopy ();
+        p2.transform (ct);
+        if (ct.countFound != 1  ||  ct.countVariable != 0) return;  // Must have exactly one ReadMatrix surrounded by only constants.
+
+        // Check if zero elements in matrix prevent connection.
+        // During analysis (like now), there is no simulator object available. This causes ReadMatrix to return 0.
+        // If that results in $p evaluating to constant 0, and $p is a sufficiently simple expression,
+        // then only non-zero elements will produce connections.
+        try
+        {
+            Type result = p2.eval (instance);
+            if (! (result instanceof Scalar)) return;
+            if (((Scalar) result).value != 0) return;
+        }
+        catch (EvaluationException e)
+        {
+            return;
+        }
+
+        // Construct
+        ConnectionMatrix cm = new ConnectionMatrix (ct.found);
+        if (cm.rowMapping != null  &&  cm.colMapping != null) connectionMatrix = cm;
     }
 
     public String getNamedValue (String name)

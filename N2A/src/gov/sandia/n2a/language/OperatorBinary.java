@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language;
 
+import gov.sandia.n2a.eqset.Equality;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.parse.SimpleNode;
 
@@ -98,6 +99,25 @@ public class OperatorBinary extends Operator
         if (useParens) renderer.result.append ("(");
         operand1.render (renderer);
         if (useParens) renderer.result.append (")");
+    }
+
+    public void solve (Equality statement) throws EvaluationException
+    {
+        if (operand0.contains (statement.target))  // need left-inverse
+        {
+            statement.rhs = inverse (operand1, statement.rhs, false);
+            statement.lhs = operand0;
+        }
+        else  // need right-inverse
+        {
+            statement.rhs = inverse (operand0, statement.rhs, true);
+            statement.lhs = operand1;
+        }
+    }
+
+    public Operator inverse (Operator lhs, Operator rhs, boolean right) throws EvaluationException
+    {
+        throw new EvaluationException ("Can't invert this operator.");
     }
 
     public boolean equals (Object that)

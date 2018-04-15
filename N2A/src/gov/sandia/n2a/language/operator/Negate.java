@@ -6,6 +6,8 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.operator;
 
+import gov.sandia.n2a.eqset.Equality;
+import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorUnary;
 import gov.sandia.n2a.language.Type;
@@ -42,6 +44,13 @@ public class Negate extends OperatorUnary
     public Type eval (Instance context)
     {
         return operand.eval (context).negate ();
+    }
+
+    public void solve (Equality statement) throws EvaluationException
+    {
+        statement.lhs = operand;
+        operand = statement.rhs;
+        statement.rhs = this;
     }
 
     public String toString ()

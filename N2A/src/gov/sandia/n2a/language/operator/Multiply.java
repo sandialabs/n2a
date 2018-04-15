@@ -80,6 +80,14 @@ public class Multiply extends OperatorBinary
         return operand0.eval (context).multiply (operand1.eval (context));
     }
 
+    public Operator inverse (Operator lhs, Operator rhs, boolean right)
+    {
+        Divide result = new Divide ();
+        result.operand0 = rhs;
+        result.operand1 = lhs;
+        return result;
+    }
+
     public String toString ()
     {
         return "*";

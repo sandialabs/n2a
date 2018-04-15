@@ -139,6 +139,19 @@ public class EquationEntry implements Comparable<EquationEntry>
         if (     ifString.isEmpty ())        return  1;
         if (that.ifString.isEmpty ())        return -1;
 
+        boolean thisInit =      ifString.contains ("$init");
+        boolean thatInit = that.ifString.contains ("$init");
+        if (thisInit)
+        {
+            if (! thatInit)              return -1;
+            if (ifString.length () == 5) return  1;
+        }
+        if (thatInit)
+        {
+            if (! thisInit)                   return  1;
+            if (that.ifString.length () == 5) return -1;
+        }
+
         boolean thisPreLive =      ifString.contains ("!$live")  ||       ifString.contains ("$live==0");
         boolean thatPreLive = that.ifString.contains ("!$live")  ||  that.ifString.contains ("$live==0");
         if (thisPreLive)
@@ -152,19 +165,6 @@ public class EquationEntry implements Comparable<EquationEntry>
             if (! thisPreLive)                return  1;
             if (that.ifString.length () == 6) return -1;
             if (that.ifString.length () == 8) return -1;
-        }
-
-        boolean thisInit =      ifString.contains ("$init");
-        boolean thatInit = that.ifString.contains ("$init");
-        if (thisInit)
-        {
-            if (! thatInit)              return -1;
-            if (ifString.length () == 5) return  1;
-        }
-        if (thatInit)
-        {
-            if (! thisInit)                   return  1;
-            if (that.ifString.length () == 5) return -1;
         }
 
         int diff = that.ifString.length () - ifString.length ();  // as a heuristic, sort longer ifStrings first

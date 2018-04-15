@@ -172,7 +172,7 @@ public class Input extends Function
 
                 H.time = time;
                 H.epsilon = Math.sqrt (Math.ulp (1.0));  // sqrt (epsilon for time representation (currently double)), about 1e-8
-                if (simulator.currentEvent instanceof EventStep) H.epsilon = Math.min (H.epsilon, ((EventStep) simulator.currentEvent).dt / 1000);
+                if (time  &&  simulator.currentEvent instanceof EventStep) H.epsilon = Math.min (H.epsilon, ((EventStep) simulator.currentEvent).dt / 1000);
 
                 simulator.inputs.put (path, H);
             }

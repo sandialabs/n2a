@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -12,6 +12,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.StringWriter;
+import java.util.Iterator;
 
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Type;
@@ -418,5 +419,85 @@ public abstract class Matrix extends Type
             return 0;
         }
         throw new EvaluationException ("type mismatch");
+    }
+
+    /**
+        Unlike the usual Iterator interface, we promise that next() will return null
+        when all elements are consumed, rather than throw an exception.
+    **/
+    public static interface IteratorNonzero extends Iterator<Double>
+    {
+        public int getRow ();
+        public int getColumn ();
+    }
+
+    /**
+        Returns non-zero elements in column-major order, while skipping all zero elements.
+    **/
+    public static class IteratorSkip implements IteratorNonzero
+    {
+        protected Matrix A;
+        protected int rows; // cached value from A
+        protected int columns;
+
+        protected double value;
+        protected int    row = -1; // of value
+        protected int    column;
+
+        protected double nextValue;
+        protected int    nextRow = -1;
+        protected int    nextColumn;
+
+        public IteratorSkip (Matrix A)
+        {
+            this.A = A;
+            rows = A.rows ();
+            columns = A.columns ();
+            getNext ();
+        }
+
+        public void getNext ()
+        {
+            for (; nextColumn < columns; nextColumn++)
+            {
+                while (true)
+                {
+                    if (++nextRow >= rows) break;
+                    nextValue = A.get (nextRow, nextColumn);
+                    if (nextValue != 0) return;
+                }
+                nextRow = -1;
+            }
+        }
+
+        public boolean hasNext ()
+        {
+            return nextRow >= 0;
+        }
+
+        public Double next ()
+        {
+            if (nextRow < 0) return null;
+            value  = nextValue;
+            row    = nextRow;
+            column = nextColumn;
+            getNext ();
+            return value;
+        }
+
+        public int getRow ()
+        {
+            return row;
+        }
+
+        public int getColumn ()
+        {
+            return column;
+        }
+    }
+
+    public IteratorNonzero getIteratorNonzero ()
+    {
+        return new IteratorSkip (this);
     }
 }

@@ -14,6 +14,7 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
 
@@ -316,5 +317,63 @@ public class MatrixSparse extends Matrix
             result = Math.pow (result, 1 / n);
         }
         return result;
+    }
+
+    public static class IteratorSparse implements IteratorNonzero
+    {
+        protected MatrixSparse                    A;
+        protected int                             columns;
+
+        protected Iterator<Entry<Integer,Double>> it;
+        protected double                          value;
+        protected int                             row;
+        protected int                             column;
+
+        public IteratorSparse (MatrixSparse A)
+        {
+            this.A = A;
+            columns = A.columns ();
+            if (columns > 0)
+            {
+                HashMap<Integer,Double> rows = A.data.get (0);
+                if (rows != null) it = rows.entrySet ().iterator ();
+            }
+        }
+
+        public boolean hasNext ()
+        {
+            while (true)
+            {
+                if (it != null  &&  it.hasNext ()) return true;
+                if (++column >= columns) return false;
+                HashMap<Integer,Double> rows = A.data.get (column);
+                if (rows == null) it = null;
+                else              it = rows.entrySet ().iterator ();
+            }
+        }
+
+        public Double next ()
+        {
+            if (! hasNext ()) return null;
+            Entry<Integer,Double> e = it.next ();
+            row = e.getKey ();
+            value = e.getValue ();
+            return value;
+        }
+
+        public int getRow ()
+        {
+            return row;
+        }
+
+        public int getColumn ()
+        {
+            return column;
+        }
+    }
+
+    public IteratorNonzero getIteratorNonzero ()
+    {
+        return new IteratorSparse (this);
     }
 }

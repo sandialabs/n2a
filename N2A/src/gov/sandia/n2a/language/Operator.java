@@ -1,11 +1,12 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.language;
 
+import gov.sandia.n2a.eqset.Equality;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.function.AbsoluteValue;
 import gov.sandia.n2a.language.function.Cosine;
@@ -186,6 +187,34 @@ public class Operator implements Cloneable
         // internal simulator with an equivalent capability. Thus, generic functions are
         // not allowed. Every legitimate function must be defined by an extension.
         throw new EvaluationException ("Operator not implemented.");
+    }
+
+    public void solve (Equality statement) throws EvaluationException
+    {
+        throw new EvaluationException ("Can't solve for this operator.");
+    }
+
+    /**
+        Utility function to determine whether this operator tree contains the given object.
+    **/
+    public boolean contains (Operator target)
+    {
+        class ContainsVisitor extends Visitor
+        {
+            public boolean found;
+            public boolean visit (Operator op)
+            {
+                if (op == target)
+                {
+                    found = true;
+                    return false;
+                }
+                return true;
+            }
+        }
+        ContainsVisitor cv = new ContainsVisitor ();
+        visit (cv);
+        return cv.found;
     }
 
     public String toString ()
