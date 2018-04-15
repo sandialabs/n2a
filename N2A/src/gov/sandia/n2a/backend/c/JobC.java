@@ -3104,13 +3104,6 @@ public class JobC extends Thread
                     Input i = (Input) op;
                     if (i.operands[0] instanceof Constant)
                     {
-                        String inputName = inputNames.get (i.operands[0].toString ());
-                        if (! context.global)
-                        {
-                            // Read $t' as an lvalue, to ensure we get any newly-set frequency.
-                            context.result.append (pad + inputName + "->epsilon = " + resolve (context.bed.dt.reference, context, true) + " / 1000;\n");
-                        }
-
                         // Detect time flag
                         String mode = "";
                         if (i.operands.length > 3)
@@ -3124,7 +3117,27 @@ public class JobC extends Thread
                         }
                         if (mode.contains ("time"))
                         {
+                            String inputName = inputNames.get (i.operands[0].toString ());
                             context.result.append (pad + inputName + "->time = true;\n");
+                            if (! context.global)
+                            {
+                                if (context.bed.dt == null)
+                                {
+                                    // Create a fake $t'. Alternative is to enforce dependency of Input on $t'.
+                                    Variable dt = new Variable ("$t", 1);
+                                    dt.container = context.part;
+                                    dt.reference = new VariableReference ();
+                                    dt.reference.variable = dt;
+                                    dt.addAttribute ("preexistent");
+
+                                    context.result.append (pad + inputName + "->epsilon = " + resolve (dt.reference, context, false) + " / 1000;\n");
+                                }
+                                else
+                                {
+                                    // Read $t' as an lvalue, to ensure we get any newly-set frequency.
+                                    context.result.append (pad + inputName + "->epsilon = " + resolve (context.bed.dt.reference, context, true) + " / 1000;\n");
+                                }
+                            }
                         }
                     }
                     return true;
@@ -3220,11 +3233,6 @@ public class JobC extends Thread
                         String inputName = inputNames.get (i);
                         String stringName = stringNames.get (i.operands[0]);
                         context.result.append (pad + "InputHolder * " + inputName + " = inputHelper (" + stringName + ");\n");
-                        if (! context.global)
-                        {
-                            // Read $t' as an lvalue, to ensure we get any newly-set frequency.
-                            context.result.append (pad + inputName + "->epsilon = " + resolve (context.bed.dt.reference, context, true) + " / 1000;\n");
-                        }
 
                         // Detect time flag
                         String mode = "";
@@ -3240,6 +3248,23 @@ public class JobC extends Thread
                         if (mode.contains ("time"))
                         {
                             context.result.append (pad + inputName + "->time = true;\n");
+                            if (! context.global)
+                            {
+                                if (context.bed.dt == null)
+                                {
+                                    Variable dt = new Variable ("$t", 1);
+                                    dt.container = context.part;
+                                    dt.reference = new VariableReference ();
+                                    dt.reference.variable = dt;
+                                    dt.addAttribute ("preexistent");
+
+                                    context.result.append (pad + inputName + "->epsilon = " + resolve (dt.reference, context, false) + " / 1000;\n");
+                                }
+                                else
+                                {
+                                    context.result.append (pad + inputName + "->epsilon = " + resolve (context.bed.dt.reference, context, true) + " / 1000;\n");
+                                }
+                            }
                         }
                     }
                     return true;  // I/O functions can be nested

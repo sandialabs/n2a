@@ -514,6 +514,7 @@ ConnectIterator::ConnectIterator (int index)
 
     rank        = 0;
     explicitXYZ = false;
+    xyz         = 0;
     NN          = 0;
     entries     = 0;
 }
@@ -521,7 +522,7 @@ ConnectIterator::ConnectIterator (int index)
 ConnectIterator::~ConnectIterator ()
 {
     if (permute) delete permute;
-    else if (xyz) delete xyz;  // The innermost iterator is responsible for destructing xyz.
+    else if (xyz) delete xyz;  // The innermost iterator is responsible for destructing xyz. Otherwise, permute and xyz are not related at all.
     if (NN) delete NN;
     if (entries) delete[] entries;
     if (instances  &&  deleteInstances) delete instances;
