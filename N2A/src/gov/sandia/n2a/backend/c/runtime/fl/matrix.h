@@ -23,6 +23,7 @@ for details.
 
 #include <complex>
 #include <vector>
+#include <map>
 #ifndef N2A_SPINNAKER
 # include <iostream>
 # include <sstream>
@@ -545,6 +546,48 @@ namespace fl
 	Vector (Pointer & that, const int rows = -1);  ///< Share memory block with that.  rows == -1 means infer number from size of memory
 
 	virtual void resize (const int rows, const int columns = 1);  ///< Converts all requests to a single column with height of requested rows * requested columns.
+  };
+
+  /**
+     Stores only nonzero elements.  Assumes that every column has at least
+     one non-zero entry, so stores a structure for every column.  This is
+     a trade-off between time and space (as always).  If the matrix is
+     extremely sparse (not all columns used), then a sparse structure for
+     holding the column structures would be better.
+  **/
+  template<class T>
+  class SHARED MatrixSparse : public MatrixAbstract<T>
+  {
+  public:
+    MatrixSparse ();
+    MatrixSparse (const int rows, const int columns);
+    MatrixSparse (const MatrixAbstract<T> & that);
+    virtual ~MatrixSparse ();
+    virtual uint32_t classID () const;
+
+    virtual MatrixAbstract<T> * clone (bool deep = false) const;
+    virtual void copyFrom (const MatrixAbstract<T> & that, bool deep = true);
+    using MatrixAbstract<T>::copyFrom;
+
+    void set (const int row, const int column, const T value);  ///< If value is non-zero, creates element if not already there; if value is zero, removes element if it exists.
+    virtual T & operator () (const int row, const int column) const;
+    virtual int rows () const;
+    virtual int columns () const;
+    virtual void resize (const int rows, const int columns = 1);  ///< Changing number of rows has no effect at all.  Changing number of columns resizes column list.
+
+    virtual void clear (const T scalar = (T) 0);  ///< Completely ignore the value of scalar, and simply delete all data.
+    virtual double norm (double n) const;
+    virtual MatrixResult<T> transposeSquare () const;
+    virtual MatrixResult<T> transposeTimes (const MatrixAbstract<T> & B) const;
+    using MatrixAbstract<T>::transposeTimes;
+
+    virtual MatrixResult<T>  operator * (const MatrixAbstract<T> & B) const;
+    using MatrixAbstract<T>::operator *;
+    virtual MatrixResult<T>  operator - (const MatrixAbstract<T> & B) const;
+    using MatrixAbstract<T>::operator -;
+
+    int rows_;
+    fl::PointerStruct< std::vector< std::map<int, T> > > data;
   };
 
 

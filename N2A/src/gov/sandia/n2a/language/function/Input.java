@@ -84,7 +84,7 @@ public class Input extends Function
                     String line = stream.readLine ();
                     if (line != null  &&  ! line.isEmpty ())
                     {
-                        String[] columns = line.split ("\\s");
+                        String[] columns = line.split ("\\s", -1);  // -1 means that trailing tabs/spaces will produce additional columns. We assume that every tab/space is placed intentionally to indicate a column.
                         columnCount = Math.max (columnCount, columns.length);
 
                         // Decide whether this is a header row or a value row

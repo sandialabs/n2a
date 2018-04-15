@@ -273,6 +273,50 @@ public:
         return result;
     }
 
+    void trim ()
+    {
+        if (top == memory) return;
+        char * first = memory;
+        while (first < top  &&  (*first == ' '  ||  *first == '\t'  ||  *first == '\n')) first++;
+        char * last = top - 1;
+        while (last >= memory  &&  (*last == ' '  ||  *last == '\t'  ||  *last == '\n')) last--;
+        if (first > memory)  // Move trimmed sting down to start of memory block ...
+        {
+            char * i = first;
+            char * j = memory;
+            while (i <= last) *j++ = *i++;
+            top = j;  // ... and adjust end marker.
+            *top = 0;
+        }
+        else  // Only adjust end marker.
+        {
+            top = last + 1;
+        }
+    }
+
+    size_t find (const char * pattern, size_t pos, size_t n) const
+    {
+        int available = top - memory;
+        if (n == 0) return pos <= available ? pos : npos;  // The empty pattern will always match exactly where it's at, unless it's off the end of the target string.
+        char * start = memory + pos;
+        char * last  = top - n;  // the last place we could start scanning
+        while (start <= last)
+        {
+            char *       i   = start;
+            const char * j   = pattern;
+            const char * end = pattern + n;
+            while (j < end  &&  *i == *j) {i++; j++;}
+            if (j >= end) return start - memory;
+            start++;
+        }
+        return npos;
+    }
+
+    size_t find (const String & pattern, size_t pos = 0) const noexcept
+    {
+        return find (pattern.memory, pos, pattern.top - pattern.memory);
+    }
+
     size_t find_first_of (const char * pattern, size_t pos = 0) const
     {
         if (memory == top  ||  ! pattern) return npos;
@@ -329,11 +373,28 @@ inline std::istream & getline (std::istream & in, String & result, char delimite
         c = rdbuf->snextc ();
     }
     if (c == delimiter) rdbuf->snextc ();  // Could cause stream bad, but by not using another streambuf function (sbumpc), we may reduce object file size slightly.
+    else if (c < 0) in.setstate (std::istream::eofbit);
     int remaining = b - buffer;
     if (remaining) result.append (buffer, remaining);
 }
 
 #endif
+
+inline void split (const String & source, const String & delimiter, String & first, String & second)
+{
+    int index = source.find (delimiter);
+    if (index == String::npos)
+    {
+        first = source;
+        second.clear ();
+    }
+    else
+    {
+        String temp = source;  // Make a copy of source, in case source is also one of the destination strings.
+        first = temp.substr (0, index);
+        second = temp.substr (index + delimiter.size ());
+    }
+}
 
 namespace std
 {

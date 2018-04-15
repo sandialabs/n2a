@@ -20,13 +20,18 @@ public:
 };
 extern Holder * holderHelper (std::vector<Holder *> & holders, const String & fileName, Holder * oldHandle);
 
-class MatrixInput : public Holder, public fl::Matrix<float>
+class MatrixInput : public Holder
 {
 public:
-    MatrixInput (const String & fileName);
+    fl::MatrixAbstract<float> * A;  // Will be either Matrix or MatrixSparse, determined by matrixHelper when reading the file.
 
-    float get    (float row, float column);
-    float getRaw (float row, float column);
+    MatrixInput (const String & fileName);
+    virtual ~MatrixInput ();
+
+    float get     (float row, float column);
+    float getRaw  (float row, float column);
+    int   rows    ();
+    int   columns ();
 };
 extern MatrixInput * matrixHelper (const String & fileName, MatrixInput * oldHandle = 0);
 

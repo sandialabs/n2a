@@ -1,10 +1,13 @@
 #include "nosys.h"
 #include "io.h"
 
+#include "fl/MatrixSparse.tcc"
 #include <fstream>
 
 using namespace fl;
 using namespace std;
+
+template class Matrix<float>;
 
 
 // Holder --------------------------------------------------------------------
@@ -24,49 +27,55 @@ Holder::~Holder ()
 MatrixInput::MatrixInput (const String & fileName)
 :   Holder (fileName)
 {
+    A = 0;
+}
+
+MatrixInput::~MatrixInput ()
+{
+    if (A) delete A;
 }
 
 float
 MatrixInput::get (float row, float column)
 {
     // Just assume handle is good.
-    int lastRow    = rows_    - 1;
-    int lastColumn = columns_ - 1;
+    int lastRow    = A->rows ()    - 1;
+    int lastColumn = A->columns () - 1;
     row    *= lastRow;
     column *= lastColumn;
     int r = (int) floor (row);
     int c = (int) floor (column);
     if (r < 0)
     {
-        if      (c <  0         ) return (*this)(0,0         );
-        else if (c >= lastColumn) return (*this)(0,lastColumn);
+        if      (c <  0         ) return (*A)(0,0         );
+        else if (c >= lastColumn) return (*A)(0,lastColumn);
         else
         {
             float b = column - c;
-            return (1 - b) * (*this)(0,c) + b * (*this)(0,c+1);
+            return (1 - b) * (*A)(0,c) + b * (*A)(0,c+1);
         }
     }
     else if (r >= lastRow)
     {
-        if      (c <  0         ) return (*this)(lastRow,0         );
-        else if (c >= lastColumn) return (*this)(lastRow,lastColumn);
+        if      (c <  0         ) return (*A)(lastRow,0         );
+        else if (c >= lastColumn) return (*A)(lastRow,lastColumn);
         else
         {
             float b = column - c;
-            return (1 - b) * (*this)(lastRow,c) + b * (*this)(lastRow,c+1);
+            return (1 - b) * (*A)(lastRow,c) + b * (*A)(lastRow,c+1);
         }
     }
     else
     {
         float a = row - r;
         float a1 = 1 - a;
-        if      (c <  0         ) return a1 * (*this)(r,0         ) + a * (*this)(r+1,0         );
-        else if (c >= lastColumn) return a1 * (*this)(r,lastColumn) + a * (*this)(r+1,lastColumn);
+        if      (c <  0         ) return a1 * (*A)(r,0         ) + a * (*A)(r+1,0         );
+        else if (c >= lastColumn) return a1 * (*A)(r,lastColumn) + a * (*A)(r+1,lastColumn);
         else
         {
             float b = column - c;
-            return   (1 - b) * (a1 * (*this)(r,c  ) + a * (*this)(r+1,c  ))
-                   +      b  * (a1 * (*this)(r,c+1) + a * (*this)(r+1,c+1));
+            return   (1 - b) * (a1 * (*A)(r,c  ) + a * (*A)(r+1,c  ))
+                   +      b  * (a1 * (*A)(r,c+1) + a * (*A)(r+1,c+1));
         }
     }
 }
@@ -74,13 +83,27 @@ MatrixInput::get (float row, float column)
 float
 MatrixInput::getRaw (float row, float column)
 {
+    int rows = A->rows ();
+    int cols = A->columns ();
     int r = (int) row;
     int c = (int) column;
-    if      (r <  0       ) r = 0;
-    else if (r >= rows_   ) r = rows_    - 1;
-    if      (c <  0       ) c = 0;
-    else if (c >= columns_) c = columns_ - 1;
-    return (*this)(r,c);
+    if      (r <  0   ) r = 0;
+    else if (r >= rows) r = rows - 1;
+    if      (c <  0   ) c = 0;
+    else if (c >= cols) c = cols - 1;
+    return (*A)(r,c);
+}
+
+int
+MatrixInput::rows ()
+{
+    return A->rows ();
+}
+
+int
+MatrixInput::columns ()
+{
+    return A->columns ();
 }
 
 vector<Holder *> matrixMap;
@@ -95,13 +118,47 @@ matrixHelper (const String & fileName, MatrixInput * oldHandle)
         matrixMap.push_back (handle);
 
         ifstream ifs (fileName.c_str ());
-        ifs >> (*handle);
         if (! ifs.good ()) cerr << "Failed to open matrix file: " << fileName << endl;
-        else if (handle->rows () == 0  ||  handle->columns () == 0)
+        String line;
+        getline (ifs, line);
+        if (line == "Sparse")  // Homegrown sparse matrix format
+        {
+            MatrixSparse<float> * S = new MatrixSparse<float>;
+            handle->A = S;
+            while (ifs.good ())
+            {
+                getline (ifs, line);
+                line.trim ();
+                if (line.empty ()) continue;
+
+                String value;
+                split (line, ",", value, line);
+                value.trim ();
+                int row = atoi (value.c_str ());
+
+                split (line, ",", value, line);
+                value.trim ();
+                int col = atoi (value.c_str ());
+
+                line.trim ();
+                float element = atof (line.c_str ());
+
+                if (element) S->set (row, col, element);
+            }
+        }
+        else  // Dense matrix
+        {
+            handle->A = new Matrix<float>;
+            // Re-open file to ensure that we get the first line.
+            ifs.close ();
+            ifs.open (fileName.c_str ());
+            ifs >> (*handle->A);
+        }
+        if (handle->rows () == 0  ||  handle->columns () == 0)
         {
             cerr << "Ill-formed matrix in file: " << fileName << endl;
-            handle->resize (1, 1);  // fallback matrix
-            handle->clear ();       // set to 0
+            handle->A->resize (1, 1);  // fallback matrix
+            handle->A->clear ();       // set to 0
         }
     }
     return handle;
