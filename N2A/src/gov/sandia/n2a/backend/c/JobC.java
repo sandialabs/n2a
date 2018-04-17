@@ -14,6 +14,7 @@ import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.EquationSet.Conversion;
 import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
+import gov.sandia.n2a.eqset.EquationSet.ConnectionMatrix;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.execenvs.HostSystem;
@@ -615,9 +616,13 @@ public class JobC extends Thread
         {
             result.append ("  virtual void clearNew ();\n");
         }
+        if (s.connectionMatrix != null)
+        {
+            result.append ("  virtual ConnectIterator * getIterators ();\n");
+        }
         if (s.connectionBindings != null)
         {
-            result.append ("  virtual ConnectIterator * getIterator (int i);\n");
+            result.append ("  virtual ConnectPopulation * getIterator (int i);\n");
         }
         if (bed.needGlobalPath)
         {
@@ -841,6 +846,10 @@ public class JobC extends Thread
         if (bed.newborn >= 0)
         {
             result.append ("  virtual bool getNewborn ();\n");
+        }
+        if (s.connectionMatrix != null)
+        {
+            result.append ("  virtual int mapIndex (int i, int rc);\n");
         }
         if (bed.eventTargets.size () > 0)
         {
@@ -1342,6 +1351,25 @@ public class JobC extends Thread
             result.append ("\n");
         }
 
+        // Population getIterators
+        if (s.connectionMatrix != null)
+        {
+            result.append ("ConnectIterator * " + ns + "getIterators ()\n");
+            result.append ("{\n");
+
+            ConnectionMatrix cm = s.connectionMatrix;
+            result.append ("  ConnectPopulation * rows = getIterator (" + cm.rows.index + ");\n");
+            result.append ("  ConnectPopulation * cols = getIterator (" + cm.cols.index + ");\n");
+
+            String matrixName = matrixNames.get (cm.A.operands[0].toString ());
+            result.append ("  IteratorNonzero * it = " + matrixName + "->getIterator ();\n");
+
+            result.append ("  Part * dummy = create ();\n");
+            result.append ("  return new ConnectMatrix (rows, cols, it, dummy);\n");
+            result.append ("}\n");
+            result.append ("\n");
+        }
+
         // Population getIterator
         if (s.connectionBindings != null)
         {
@@ -1381,7 +1409,7 @@ public class JobC extends Thread
                         result.append ("    case " + index + ":\n");
                     }
                     result.append ("    {\n");
-                    result.append ("      result = new ConnectIterator (i);\n");
+                    result.append ("      result = new ConnectPopulation (i);\n");
 
                     boolean testK      = false;
                     boolean testRadius = false;
@@ -1451,6 +1479,7 @@ public class JobC extends Thread
                     }
 
                     assembleInstances (s, "", resolution, 0, "      ", result);
+                    result.append ("      result->size = result->instances->size ();\n");
 
                     result.append ("      break;\n");
                     result.append ("    }\n");
@@ -1498,9 +1527,9 @@ public class JobC extends Thread
                 h.indices.add (c.index);
             }
 
-            result.append ("ConnectIterator * " + ns + "getIterator (int i)\n");
+            result.append ("ConnectPopulation * " + ns + "getIterator (int i)\n");
             result.append ("{\n");
-            result.append ("  ConnectIterator * result = 0;\n");
+            result.append ("  ConnectPopulation * result = 0;\n");
             result.append ("  switch (i)\n");
             result.append ("  {\n");
             for (ConnectionHolder h : connections) h.emit ();
@@ -2419,6 +2448,34 @@ public class JobC extends Thread
             liveValue.value = 1;
 
             s.setInit (0);
+        }
+
+        // Unit mapIndex
+        if (s.connectionMatrix != null)
+        {
+            result.append ("int " + ns + "mapIndex (int i, int rc)\n");
+            result.append ("{\n");
+
+            Variable rc = new Variable ("rc", 0);
+            rc.reference = new VariableReference ();
+            rc.reference.variable = rc;
+            rc.container = s;
+            rc.addAttribute ("preexistent");
+            AccessVariable av = new AccessVariable ();
+            av.reference = rc.reference;
+
+            ConnectionMatrix cm = s.connectionMatrix;
+            cm.rowMapping.replaceRC (av);
+            cm.colMapping.replaceRC (av);
+
+            result.append ("  if (i == 0) return ");
+            cm.rowMapping.rhs.render (context);
+            result.append (";\n");
+            result.append ("  return ");
+            cm.colMapping.rhs.render (context);
+            result.append (";\n");
+            result.append ("}\n");
+            result.append ("\n");
         }
 
         // Unit getNewborn
@@ -3448,9 +3505,9 @@ public class JobC extends Thread
         BackendDataC bed = (BackendDataC) r.variable.container.backendData;  // NOT context.bed !
         if (r.variable.hasAttribute ("preexistent"))
         {
-            if (! lvalue)
+            if (r.variable.name.equals ("$t"))
             {
-                if (r.variable.name.equals ("$t"))
+                if (! lvalue)
                 {
                     if      (r.variable.order == 0) name = "simulator.currentEvent->t";
                     else if (r.variable.order == 1)
@@ -3460,12 +3517,12 @@ public class JobC extends Thread
                     }
                     // TODO: what about higher orders of $t?
                 }
-                else
-                {
-                    return "simulator." + r.variable.name.substring (1);  // strip the $ and expect it to be a member of simulator
-                }
+                // for lvalue, fall through to the main case below
             }
-            // for lvalue, fall through to the main case below
+            else
+            {
+                return r.variable.name;  // most likely a local variable, for example "rc" in mapIndex()
+            }
         }
         if (r.variable.name.equals ("$live"))
         {

@@ -35,6 +35,8 @@ class Part;
 class PartTime;
 class Wrapper;
 class ConnectIterator;
+class ConnectPopulation;
+class ConnectMatrix;
 class Population;
 class Simulator;
 class Integrator;
@@ -125,6 +127,7 @@ public:
     virtual Part * getPart    (int i);                ///< @return Pointer to the instance of population i.
     virtual int    getCount   (int i);                ///< @return Number of connections of this type attached to the part indexed by i.
     virtual void   getProject (int i, Vector3 & xyz); ///< Determine position of endpoint i as projected into this connection's space. Default is the endpoint's own $xyz.
+    virtual int    mapIndex   (int i, int rc);        ///< Converts matrix index to population $index. Generally, rows map to endpoint 0 and columns to endpoint 1.
     virtual bool   getNewborn ();                     ///< @return The value of the newborn flag (or false if it doesn't exist in this part). Unlike the above, this is a direct function of the endpoint.
 
     // Accessors for $variables
@@ -179,16 +182,24 @@ public:
     virtual void addToMembers       ();
 };
 
+class ConnectIterator
+{
+public:
+    virtual ~ConnectIterator ();
+    virtual bool setProbe (Part * probe) = 0; ///< Sets up the next connection instance to have its endpoints configured. Return value is used primarily by ConnectPopulation to implement $max.
+    virtual bool next     () = 0;             ///< Fills probe with next permutation. Returns false if no more permutations are available.
+};
+
 /**
     Enumerates all instances that can act as a particular connection endpoint.
     Handles deep paths to multiple populations, appending them into a single contiguous list.
     When nested, this class is responsible for destructing its inner iterators.
 **/
-class ConnectIterator
+class ConnectPopulation : public ConnectIterator
 {
 public:
     int                   index;      ///< of endpoint, for use with accessors
-    ConnectIterator *     permute;
+    ConnectPopulation *   permute;
     bool                  contained;  ///< Another iterator holds us in its permute reference.
     std::vector<Part *> * instances;
     bool                  deleteInstances;
@@ -218,14 +229,30 @@ public:
     KDTree *      NN;          ///< "nearest neighbor" search class
     KDTreeEntry * entries;     ///< A dynamically-allocated array
 
-    ConnectIterator (int index);
-    ~ConnectIterator ();
+    ConnectPopulation (int index);
+    virtual ~ConnectPopulation ();
 
-    void prepareNN ();
-    bool setProbe  (Part * probe); ///< @return true If we need to advance to the next instance. This happens when p has reached its max number of connections.
-    void reset     (bool newOnly);
-    bool old       ();             ///< Indicates that all iterators from this level down return a part that is old.
-    bool next      ();             ///< Fills probe with next permutation. Returns false if no more permutations are available.
+    void         prepareNN ();
+    virtual bool setProbe  (Part * probe); ///< @return true If we need to advance to the next instance. This happens when p has reached its max number of connections.
+    void         reset     (bool newOnly);
+    bool         old       ();             ///< Indicates that all iterators from this level down return a part that is old.
+    virtual bool next      ();
+};
+
+class ConnectMatrix : public ConnectIterator
+{
+public:
+    ConnectPopulation * rows;
+    ConnectPopulation * cols;
+    IteratorNonzero   * it;
+    Part              * dummy; ///< Temporary connection used to evaluate index mappings.
+    Part              * c;
+
+    ConnectMatrix (ConnectPopulation * rows, ConnectPopulation * cols, IteratorNonzero * it, Part * dummy);
+    virtual ~ConnectMatrix ();
+
+    virtual bool setProbe (Part * probe);
+    virtual bool next     ();
 };
 
 /**
@@ -256,10 +283,10 @@ public:
     virtual int    getN     ();
 
     // Connections
-    virtual void              connect      (); ///< For a connection population, evaluate each possible connection (or some well-defined subset thereof).
-    virtual void              clearNew     (); ///< Reset newborn index
-    virtual ConnectIterator * getIterators (); ///< Assembles one or more nested iterators in an optimal manner and returns the outermost one.
-    virtual ConnectIterator * getIterator  (int i);
+    virtual void                connect      (); ///< For a connection population, evaluate each possible connection (or some well-defined subset thereof).
+    virtual void                clearNew     (); ///< Reset newborn index
+    virtual ConnectIterator *   getIterators (); ///< Assembles one or more nested iterators in an optimal manner and returns the outermost one.
+    virtual ConnectPopulation * getIterator  (int i);
 };
 
 /**

@@ -29,6 +29,7 @@ import gov.sandia.n2a.language.operator.LT;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
+import gov.sandia.n2a.language.type.Text;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.parms.Parameter;
@@ -2416,6 +2417,9 @@ public class EquationSet implements Comparable<EquationSet>
         Operator p2 = predicate.deepCopy ();
         p2.transform (ct);
         if (ct.countFound != 1  ||  ct.countVariable != 0) return;  // Must have exactly one ReadMatrix surrounded by only constants.
+        if (ct.found.operands.length < 3) return;  // Must have a file name, a row and a column specifier
+        if (! (ct.found.operands[0] instanceof Constant)) return;  // File name must be constant
+        if (! (((Constant) ct.found.operands[0]).value instanceof Text)) return;  // File name must be a string
 
         // Check if zero elements in matrix prevent connection.
         // During analysis (like now), there is no simulator object available. This causes ReadMatrix to return 0.

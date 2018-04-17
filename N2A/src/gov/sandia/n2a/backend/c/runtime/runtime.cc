@@ -312,6 +312,12 @@ Part::getProject (int i, Vector3 & xyz)
     getPart (i)->getXYZ (xyz);
 }
 
+int
+Part::mapIndex (int i, int rc)
+{
+    return 0;
+}
+
 bool
 Part::getNewborn ()
 {
@@ -493,7 +499,14 @@ WrapperBase::addToMembers ()
 
 // class ConnectIterator -----------------------------------------------------
 
-ConnectIterator::ConnectIterator (int index)
+ConnectIterator::~ConnectIterator ()
+{
+}
+
+
+// class ConnectPopulation ---------------------------------------------------
+
+ConnectPopulation::ConnectPopulation (int index)
 :   index (index)
 {
     permute         = 0;
@@ -519,7 +532,7 @@ ConnectIterator::ConnectIterator (int index)
     entries     = 0;
 }
 
-ConnectIterator::~ConnectIterator ()
+ConnectPopulation::~ConnectPopulation ()
 {
     if (permute) delete permute;
     else if (xyz) delete xyz;  // The innermost iterator is responsible for destructing xyz. Otherwise, permute and xyz are not related at all.
@@ -529,7 +542,7 @@ ConnectIterator::~ConnectIterator ()
 }
 
 void
-ConnectIterator::prepareNN ()
+ConnectPopulation::prepareNN ()
 {
     NN = new KDTree ();
     if (k > 0) NN->k = k;
@@ -556,7 +569,7 @@ ConnectIterator::prepareNN ()
 }
 
 bool
-ConnectIterator::setProbe (Part * probe)
+ConnectPopulation::setProbe (Part * probe)
 {
     c = probe;
     bool result = false;
@@ -576,7 +589,7 @@ ConnectIterator::setProbe (Part * probe)
 }
 
 void
-ConnectIterator::reset (bool newOnly)
+ConnectPopulation::reset (bool newOnly)
 {
     this->newOnly = newOnly;
     if (NN)
@@ -600,7 +613,7 @@ ConnectIterator::reset (bool newOnly)
 }
 
 bool
-ConnectIterator::old ()
+ConnectPopulation::old ()
 {
     if (p->getNewborn ()) return false;
     if (permute) return permute->old ();
@@ -608,7 +621,7 @@ ConnectIterator::old ()
 }
 
 bool
-ConnectIterator::next ()
+ConnectPopulation::next ()
 {
     while (true)
     {
@@ -682,6 +695,53 @@ ConnectIterator::next ()
             return true;
         }
     }
+}
+
+
+// class ConnectMatrix -------------------------------------------------------
+
+ConnectMatrix::ConnectMatrix (ConnectPopulation * rows, ConnectPopulation * cols, IteratorNonzero * it, Part * dummy)
+:   rows  (rows),
+    cols  (cols),
+    it    (it),
+    dummy (dummy)
+{
+    dummy->setPart (0, (*rows->instances)[0]);
+    dummy->setPart (1, (*cols->instances)[0]);
+}
+
+ConnectMatrix::~ConnectMatrix ()
+{
+    delete rows;
+    delete cols;
+    delete it;
+    delete dummy;
+}
+
+bool
+ConnectMatrix::setProbe (Part * probe)
+{
+    c = probe;
+}
+
+bool
+ConnectMatrix::next ()
+{
+    while (it->next ())
+    {
+        int a = dummy->mapIndex (0, it->row);
+        int b = dummy->mapIndex (1, it->column);
+        if (a < 0  ||  a >= rows->size  ||  b < 0  ||  b >= cols->size) continue;
+        Part * A = (*rows->instances)[a];
+        Part * B = (*cols->instances)[b];
+        if (A->getNewborn ()  ||  B->getNewborn ())
+        {
+            c->setPart (0, A);
+            c->setPart (1, B);
+            return true;
+        }
+    }
+    return false;
 }
 
 
@@ -793,17 +853,16 @@ Population::clearNew ()
 ConnectIterator *
 Population::getIterators ()
 {
-    vector<ConnectIterator *> iterators;
+    vector<ConnectPopulation *> iterators;
     iterators.reserve (3);  // This is the largest number of endpoints we will usually have in practice.
     bool nothingNew = true;
     bool spatialFiltering = false;
     int i = 0;
     while (true)
     {
-        ConnectIterator * it = getIterator (i++);  // Returns null if i is out of range for endpoints.
+        ConnectPopulation * it = getIterator (i++);  // Returns null if i is out of range for endpoints.
         if (! it) break;
         iterators.push_back (it);
-        it->size = it->instances->size ();
         if (it->firstborn < it->size) nothingNew = false;
         if (it->k > 0  ||  it->radius > 0) spatialFiltering = true;
     }
@@ -817,8 +876,8 @@ Population::getIterators ()
     {
         for (int j = i; j > 0; j--)
         {
-            ConnectIterator * A = iterators[j-1];
-            ConnectIterator * B = iterators[j  ];
+            ConnectPopulation * A = iterators[j-1];
+            ConnectPopulation * B = iterators[j  ];
             if (A->firstborn >= B->firstborn) break;
             iterators[j-1] = B;
             iterators[j  ] = A;
@@ -834,7 +893,7 @@ Population::getIterators ()
         // Ensure the innermost iterator be the one that best defines C.$xyz
         // If connection defines its own $xyz, then this sorting operation has no effect.
         int last = count - 1;
-        ConnectIterator * A = iterators[last];
+        ConnectPopulation * A = iterators[last];
         int    bestIndex = last;
         double bestRank  = A->rank;
         for (int i = 0; i < last; i++)
@@ -856,8 +915,8 @@ Population::getIterators ()
 
     for (int i = 1; i < count; i++)
     {
-        ConnectIterator * A = iterators[i-1];
-        ConnectIterator * B = iterators[i  ];
+        ConnectPopulation * A = iterators[i-1];
+        ConnectPopulation * B = iterators[i  ];
         A->permute   = B;
         B->contained = true;
         if (A->k > 0  ||  A->radius > 0)  // Note that NN structure won't be created on deepest iterator. TODO: Is this correct?
@@ -871,7 +930,7 @@ Population::getIterators ()
     return iterators[0];
 }
 
-ConnectIterator *
+ConnectPopulation *
 Population::getIterator (int i)
 {
     return 0;

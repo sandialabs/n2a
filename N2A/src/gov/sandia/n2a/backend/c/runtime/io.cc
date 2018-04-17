@@ -22,6 +22,79 @@ Holder::~Holder ()
 }
 
 
+// class IteratorSkip --------------------------------------------------------
+
+IteratorSkip::IteratorSkip (Matrix<float> * A)
+:   A (A)
+{
+    row    = -1;
+    column = 0;
+    value  = 0;
+
+    nextRow    = -1;
+    nextColumn = 0;
+    nextValue  = 0;
+    getNext ();
+}
+
+bool
+IteratorSkip::next ()
+{
+    if (nextRow < 0) return false;
+    value  = nextValue;
+    row    = nextRow;
+    column = nextColumn;
+    getNext ();
+    return true;
+}
+
+void
+IteratorSkip::getNext ()
+{
+    for (; nextColumn < A->columns_; nextColumn++)
+    {
+        while (true)
+        {
+            if (++nextRow >= A->rows_) break;
+            nextValue = (*A)(nextRow,nextColumn);
+            if (nextValue != 0) return;
+        }
+        nextRow = -1;
+    }
+}
+
+
+// class IteratorSparse ------------------------------------------------------
+
+IteratorSparse::IteratorSparse (fl::MatrixSparse<float> * A)
+:   A (A)
+{
+    row    = 0;
+    column = 0;
+    value  = 0;
+
+    columns = (*A->data).size ();
+    if (columns > 0) it = (*A->data)[0].begin ();
+}
+
+bool
+IteratorSparse::next ()
+{
+    if (columns == 0) return false;
+    while (true)
+    {
+        if (it != (*A->data)[column].end ()) break;
+        if (++column >= columns) return false;
+        it = (*A->data)[column].begin ();
+    }
+
+    row   = it->first;
+    value = it->second;
+    it++;
+    return true;
+}
+
+
 // MatrixInput ---------------------------------------------------------------
 
 MatrixInput::MatrixInput (const String & fileName)
@@ -104,6 +177,13 @@ int
 MatrixInput::columns ()
 {
     return A->columns ();
+}
+
+IteratorNonzero *
+MatrixInput::getIterator ()
+{
+    if (A->classID () & MatrixSparseID) return new IteratorSparse ((MatrixSparse<float> *) A);
+    return new IteratorSkip ((Matrix<float> *) A);
 }
 
 vector<Holder *> matrixMap;

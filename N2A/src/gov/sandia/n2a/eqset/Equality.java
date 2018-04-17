@@ -10,6 +10,7 @@ import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 
@@ -44,5 +45,20 @@ public class Equality
     {
         ((Scalar) rc.value).value = i;
         return (int) Math.round (((Scalar) rhs.eval (context)).value);
+    }
+
+    /**
+        Directly substitute replacement for rc in rhs.
+    **/
+    public void replaceRC (Operator replacement)
+    {
+        rhs = rhs.transform (new Transformer ()
+        {
+            public Operator transform (Operator op)
+            {
+                if (op == rc) return replacement;
+                return null;
+            }
+        });
     }
 }

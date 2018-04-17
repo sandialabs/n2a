@@ -499,9 +499,9 @@ public class Population extends Instance
 
         public ConnectMatrix (ConnectionMatrix cm, ConnectPopulation rowIterator, ConnectPopulation colIterator)
         {
-            this.cm   = cm;
-            rows = rowIterator.instances;
-            cols = colIterator.instances;
+            this.cm  = cm;
+            rows     = rowIterator.instances;
+            cols     = colIterator.instances;
             rowCount = rows.size ();
             colCount = cols.size ();
 

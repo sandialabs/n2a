@@ -20,6 +20,41 @@ public:
 };
 extern Holder * holderHelper (std::vector<Holder *> & holders, const String & fileName, Holder * oldHandle);
 
+class IteratorNonzero
+{
+public:
+    int   row;
+    int   column;
+    float value;
+
+    virtual bool next () = 0;  // Advances to next nonzero element. Returns false if no more are available.
+};
+
+class IteratorSkip : public IteratorNonzero
+{
+public:
+    fl::Matrix<float> * A;
+    int   nextRow;
+    int   nextColumn;
+    float nextValue;
+
+    IteratorSkip (fl::Matrix<float> * A);
+
+    virtual bool next ();
+    void         getNext ();
+};
+
+class IteratorSparse : public IteratorNonzero
+{
+public:
+    fl::MatrixSparse<float> *     A;
+    int                           columns;
+    std::map<int,float>::iterator it;
+
+    IteratorSparse (fl::MatrixSparse<float> * A);
+    virtual bool next ();
+};
+
 class MatrixInput : public Holder
 {
 public:
@@ -32,6 +67,8 @@ public:
     float getRaw  (float row, float column);
     int   rows    ();
     int   columns ();
+
+    IteratorNonzero * getIterator ();  // Returns an object that iterates over nonzero elements of A.
 };
 extern MatrixInput * matrixHelper (const String & fileName, MatrixInput * oldHandle = 0);
 
