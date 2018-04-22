@@ -95,9 +95,11 @@ public class BackendDataC
     public List<EventSource> eventSources    = new ArrayList<EventSource> ();
     public List<Variable>    eventReferences = new ArrayList<Variable> ();
 
-    public String flagType = "";  // empty string indicates that flags are not required
+    public String localFlagType = "";  // empty string indicates that flags are not required
     public int    liveFlag = -1;  // -1 means $live is not stored
     public int    newborn  = -1;
+    public String globalFlagType = "";
+    public int    clearNew = -1;
 
     public void analyzeEvents (final EquationSet s)
     {
@@ -365,14 +367,27 @@ public class BackendDataC
         int flagCount = eventTargets.size ();
         if (live != null  &&  ! live.hasAny (new String[] {"constant", "accessor"})) liveFlag = flagCount++;
         if (trackInstances  &&  s.connected) newborn = flagCount++;
-        if      (flagCount == 0 ) flagType = "";
-        else if (flagCount <= 8 ) flagType = "uint8_t";
-        else if (flagCount <= 16) flagType = "uint16_t";
-        else if (flagCount <= 32) flagType = "uint32_t";
-        else if (flagCount <= 64) flagType = "uint64_t";
+        if      (flagCount == 0 ) localFlagType = "";
+        else if (flagCount <= 8 ) localFlagType = "uint8_t";
+        else if (flagCount <= 16) localFlagType = "uint16_t";
+        else if (flagCount <= 32) localFlagType = "uint32_t";
+        else if (flagCount <= 64) localFlagType = "uint64_t";
         else
         {
-            Backend.err.get ().println ("ERROR: Too many flags to fit in basic integer type");
+            Backend.err.get ().println ("ERROR: Too many local flags to fit in basic integer type");
+            throw new Backend.AbortRun ();
+        }
+
+        flagCount = 0;
+        if (trackInstances  &&  s.connected) clearNew = flagCount++;
+        if      (flagCount == 0 ) globalFlagType = "";
+        else if (flagCount <= 8 ) globalFlagType = "uint8_t";
+        else if (flagCount <= 16) globalFlagType = "uint16_t";
+        else if (flagCount <= 32) globalFlagType = "uint32_t";
+        else if (flagCount <= 64) globalFlagType = "uint64_t";
+        else
+        {
+            Backend.err.get ().println ("ERROR: Too many global flags to fit in basic integer type");
             throw new Backend.AbortRun ();
         }
 

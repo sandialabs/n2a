@@ -9,9 +9,7 @@
 
 #include <functional>
 #include <queue>
-#include <set>
 #include <vector>
-#include <map>
 
 
 // General functions ---------------------------------------------------------
@@ -329,7 +327,7 @@ public:
     priorityQueue                             queueEvent;    ///< Pending events in time order.
     std::vector<std::pair<Population *, int>> queueResize;   ///< Populations that need to change $n after the current cycle completes.
     std::queue<Population *>                  queueConnect;  ///< Connection populations that want to construct or recheck their instances after all populations are resized in current cycle.
-    std::set<Population *>                    queueClearNew; ///< Populations whose newborn index needs to be reset.
+    std::vector<Population *>                 queueClearNew; ///< Populations whose newborn index needs to be reset.
     std::vector<EventStep *>                  periods;
     Integrator *                              integrator;
     bool                                      stop;

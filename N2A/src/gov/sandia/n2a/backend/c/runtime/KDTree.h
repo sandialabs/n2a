@@ -18,7 +18,7 @@ the U.S. Government retains certain rights in this software.
 #include "fl/matrix.h"
 
 #include <vector>
-#include <map>
+#include <queue>
 
 
 typedef fl::MatrixFixed<float,3,1> Vector3;
@@ -38,15 +38,36 @@ public:
 
     class Node;
 
+    typedef std::pair<float, Node *>        PairNode;
+    typedef std::pair<float, KDTreeEntry *> PairEntry;
+
+    class Reverse
+    {
+    public:
+        bool operator() (const PairNode & a, const PairNode & b) const
+        {
+            return a.first > b.first;
+        }
+    };
+
+    class Forward
+    {
+    public:
+        bool operator() (const PairEntry & a, const PairEntry & b) const
+        {
+            return a.first < b.first;
+        }
+    };
+
     /// Helper class for passing search-related info down the tree.
     class Query
     {
     public:
-        int                                 k;
-        float                               radius;
-        const Vector3 *                     point;
-        std::multimap<float, KDTreeEntry *> sorted;
-        std::multimap<float, Node *>        queue;
+        int             k;
+        float           radius;
+        const Vector3 * point;
+        std::priority_queue<PairEntry, std::vector<PairEntry>, Forward> sorted;
+        std::priority_queue<PairNode,  std::vector<PairNode>,  Reverse> queue;
     };
 
     class Node
@@ -88,7 +109,7 @@ public:
                 {
                     float oldOffset = std::max (lo - qmid, 0.0f);
                     distance += newOffset * newOffset - oldOffset * oldOffset;
-                    q.queue.insert (std::make_pair (distance, highNode));
+                    q.queue.push (std::make_pair (distance, highNode));
                 }
             }
             else  // newOffset >= 0, so highNode is closer
@@ -98,7 +119,7 @@ public:
                 {
                     float oldOffset = std::max (qmid - hi, 0.0f);
                     distance += newOffset * newOffset - oldOffset * oldOffset;
-                    q.queue.insert (std::make_pair (distance, lowNode));
+                    q.queue.push (std::make_pair (distance, lowNode));
                 }
             }
         }
@@ -150,14 +171,9 @@ public:
                 }
 
                 if (total >= q.radius) continue;
-                q.sorted.insert (std::make_pair (total, p));
-                if (q.sorted.size () > q.k)
-                {
-                    std::multimap<float, KDTreeEntry *>::iterator it = q.sorted.end ();
-                    it--;  // it is one past end of collection, so we must back up one step
-                    q.sorted.erase (it);
-                }
-                if (q.sorted.size () == q.k) q.radius = std::min (q.radius, q.sorted.rbegin ()->first);
+                q.sorted.push (std::make_pair (total, p));
+                if (q.sorted.size () > q.k) q.sorted.pop ();
+                if (q.sorted.size () == q.k) q.radius = std::min (q.radius, q.sorted.top ().first);
             }
         }
 
@@ -246,14 +262,14 @@ public:
         q.point  = &query;
 
         float oneEpsilon = (1 + epsilon) * (1 + epsilon);
-        q.queue.insert (std::make_pair (distance, root));
+        q.queue.push (std::make_pair (distance, root));
         int visited = 0;
         while (q.queue.size ())
         {
-            std::multimap<float, Node *>::iterator it = q.queue.begin ();
-            distance = it->first;
-            Node * n = it->second;
-            q.queue.erase (it);
+            const PairNode & it = q.queue.top ();
+            distance = it.first;
+            Node * n = it.second;
+            q.queue.pop ();
             if (distance * oneEpsilon > q.radius) break;
             n->search (distance, q);
             if (++visited >= maxNodes) break;
@@ -261,11 +277,12 @@ public:
 
         // Transfer results to vector. No need to limit number of results, becaus this has
         // already been done by Leaf::search().
-        result.reserve (q.sorted.size ());
-        std::multimap<float, KDTreeEntry *>::iterator sit;
-        for (sit = q.sorted.begin (); sit != q.sorted.end (); sit++)
+        int count = q.sorted.size ();
+        result.resize (count);
+        for (int i = count - 1; i >= 0; i--)
         {
-            result.push_back (sit->second);
+            result[i] = q.sorted.top ().second;
+            q.sorted.pop ();
         }
     }
 
@@ -339,22 +356,22 @@ public:
         }
     }
 
-    /// rearrange points so they are in ascending order along the given dimension
+    /// Rearrange points so they are in ascending order along the given dimension.
     void sort (std::vector<KDTreeEntry *> & points, int dimension)
     {
-        std::multimap<float, KDTreeEntry *> sorted;
+        // Effectively we do a heap sort, since priority_queue is typically implemented with a heap structure.
+        std::priority_queue<PairEntry, std::vector<PairEntry>, Forward> sorted;
         std::vector<KDTreeEntry *>::iterator it = points.begin ();
         for (; it != points.end (); it++)
         {
-            sorted.insert (std::make_pair ((**it)[dimension], *it));
+            sorted.push (std::make_pair ((**it)[dimension], *it));
         }
 
-        points.clear ();
-        points.reserve (sorted.size ());
-        std::multimap<float, KDTreeEntry *>::iterator sit = sorted.begin ();
-        for (; sit != sorted.end (); sit++)
+        int count = sorted.size ();
+        for (int i = count - 1; i >= 0; i--)
         {
-            points.push_back (sit->second);
+            points[i] = sorted.top ().second;
+            sorted.pop ();
         }
     }
 };

@@ -551,6 +551,11 @@ public class JobC extends Thread
         {
             result.append ("  String " + columnName + ";\n");
         }
+        if (! bed.globalFlagType.isEmpty ())
+        {
+            // This should come last, because it can affect alignment.
+            result.append ("  " + bed.globalFlagType + " flags;\n");
+        }
         result.append ("\n");
 
         // Population functions
@@ -746,10 +751,9 @@ public class JobC extends Thread
                 result.append ("  float eventTime" + et.timeIndex + ";\n");
             }
         }
-        if (! bed.flagType.isEmpty ())
+        if (! bed.localFlagType.isEmpty ())
         {
-            // This should come last, because it can affect alignment.
-            result.append ("  " + bed.flagType + " flags;\n");
+            result.append ("  " + bed.localFlagType + " flags;\n");
         }
         result.append ("\n");
 
@@ -978,7 +982,7 @@ public class JobC extends Thread
                 result.append ("  }\n");
                 if (bed.newborn >= 0)
                 {
-                    result.append ("  p->flags = (" + bed.flagType + ") 0x1 << " + bed.newborn + ";\n");
+                    result.append ("  p->flags = (" + bed.localFlagType + ") 0x1 << " + bed.newborn + ";\n");
                     result.append ("  firstborn = min (firstborn, p->__24index);\n");
                 }
             }
@@ -1014,6 +1018,11 @@ public class JobC extends Thread
         {
             result.append ("  " + mangle ("next_", v) + clearAccumulator (v, context) + ";\n");
         }
+        if (! bed.globalFlagType.isEmpty ())
+        {
+            result.append ("  flags = 0;\n");
+        }
+
         //   declare buffer variables
         for (Variable v : bed.globalBufferedInternal)
         {
@@ -1340,11 +1349,12 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "clearNew ()\n");
             result.append ("{\n");
+            result.append ("  flags &= ~((" + bed.globalFlagType + ") 0x1 << " + bed.clearNew + ");\n");  // Reset our clearNew flag
             result.append ("  int count = instances.size ();\n");
             result.append ("  for (int i = firstborn; i < count; i++)\n");
             result.append ("  {\n");
             result.append ("    " + prefix (s) + " * p = instances[i];\n");
-            result.append ("    if (p) p->flags &= ~((" + bed.flagType + ") 0x1 << " + bed.newborn + ");\n");
+            result.append ("    if (p) p->flags &= ~((" + bed.localFlagType + ") 0x1 << " + bed.newborn + ");\n");
             result.append ("  }\n");
             result.append ("  firstborn = count;\n");
             result.append ("}\n");
@@ -1656,7 +1666,7 @@ public class JobC extends Thread
             // tag part as dead
             if (bed.liveFlag >= 0)  // $live is stored in this part
             {
-                result.append ("  flags &= ~((" + bed.flagType + ") 0x1 << " + bed.liveFlag + ");\n");
+                result.append ("  flags &= ~((" + bed.localFlagType + ") 0x1 << " + bed.liveFlag + ");\n");
             }
 
             // instance counting
@@ -1744,17 +1754,17 @@ public class JobC extends Thread
                     result.append ("  eventTime" + et.timeIndex + " = 10;\n");  // Normal values are modulo 1 second. This initial value guarantees no match.
                 }
             }
-            if (! bed.flagType.isEmpty ())
+            if (! bed.localFlagType.isEmpty ())
             {
                 if (bed.liveFlag >= 0)
                 {
                     if (bed.newborn >= 0)
                     {
-                        result.append ("  flags |= (" + bed.flagType + ") 0x1 << " + bed.liveFlag + ";\n");
+                        result.append ("  flags |= (" + bed.localFlagType + ") 0x1 << " + bed.liveFlag + ";\n");
                     }
                     else
                     {
-                        result.append ("  flags = (" + bed.flagType + ") 0x1 << " + bed.liveFlag + ";\n");
+                        result.append ("  flags = (" + bed.localFlagType + ") 0x1 << " + bed.liveFlag + ";\n");
                     }
                 }
                 else
@@ -1941,7 +1951,7 @@ public class JobC extends Thread
             // Early-out if we are already dead
             if (bed.liveFlag >= 0)  // $live is stored in this part
             {
-                result.append ("  if (! (flags & (" + bed.flagType + ") 0x1 << " + bed.liveFlag + ")) return false;\n");  // early-out if we are already dead, to avoid another call to die()
+                result.append ("  if (! (flags & (" + bed.localFlagType + ") 0x1 << " + bed.liveFlag + ")) return false;\n");  // early-out if we are already dead, to avoid another call to die()
             }
 
             // Preemptively fetch current event
@@ -2010,7 +2020,7 @@ public class JobC extends Thread
             int eventCount = bed.eventTargets.size ();
             if (eventCount > 0)
             {
-                result.append ("  flags &= ~(" + bed.flagType + ") 0 << " + eventCount + ";\n");
+                result.append ("  flags &= ~(" + bed.localFlagType + ") 0 << " + eventCount + ";\n");
             }
 
             // Finalize variables
@@ -2483,7 +2493,7 @@ public class JobC extends Thread
         {
             result.append ("bool " + ns + "getNewborn ()\n");
             result.append ("{\n");
-            result.append ("  return flags & (" + bed.flagType + ") 0x1 << " + bed.newborn + ";\n");
+            result.append ("  return flags & (" + bed.localFlagType + ") 0x1 << " + bed.newborn + ";\n");
             result.append ("}\n");
             result.append ("\n");
         }
@@ -2693,7 +2703,7 @@ public class JobC extends Thread
 
             result.append ("void " + ns + "setLatch (int i)\n");
             result.append ("{\n");
-            result.append ("  flags |= (" + bed.flagType + ") 0x1 << i;\n");
+            result.append ("  flags |= (" + bed.localFlagType + ") 0x1 << i;\n");
             result.append ("}\n");
             result.append ("\n");
 
@@ -3533,8 +3543,8 @@ public class JobC extends Thread
             }
             else  // not "constant" or "accessor", so must be direct access
             {
-                if (logical) return "(" + containers + "flags & (" + bed.flagType + ") 0x1 << " + bed.liveFlag + ")";
-                else return "((" + containers + "flags & (" + bed.flagType + ") 0x1 << " + bed.liveFlag + ") ? 1 : 0)";
+                if (logical) return "(" + containers + "flags & (" + bed.localFlagType + ") 0x1 << " + bed.liveFlag + ")";
+                else return "((" + containers + "flags & (" + bed.localFlagType + ") 0x1 << " + bed.liveFlag + ") ? 1 : 0)";
             }
         }
         else if (r.variable.hasAttribute ("accessor"))
@@ -3727,10 +3737,15 @@ public class JobC extends Thread
         // Schedule the population to have its newborn flags cleared.
         // We assume that any newborn flags along the path to this population are either unimportant
         // or will get cleared elsewhere.
+        BackendDataC bed = (BackendDataC) current.backendData;
+        result.append (prefix + "if (! (" + pointer + "flags & (" + bed.globalFlagType + ") 0x1 << " + bed.clearNew + "))\n");
+        result.append (prefix + "{\n");
+        result.append (prefix + "  " + pointer + "flags |= (" + bed.globalFlagType + ") 0x1 << " + bed.clearNew + ";\n");
         pointer = stripDereference (pointer);
         if (pointer.isEmpty ()) pointer = "this";
         else                    pointer = "& " + pointer;
-        result.append (prefix + "simulator.clearNew (" + pointer + ");\n");
+        result.append (prefix + "  simulator.clearNew (" + pointer + ");\n");
+        result.append (prefix + "}\n");
     }
 
     public void findPathToContainer (EquationSet s)
@@ -3902,7 +3917,7 @@ public class JobC extends Thread
                 Event e = (Event) op;
                 // The cast to bool gets rid of the specific numeric value from flags.
                 // If used in a numeric expression, it should convert to either 1 or 0.
-                result.append ("((bool) (flags & (" + bed.flagType + ") 0x1 << " + e.eventType.valueIndex + "))");
+                result.append ("((bool) (flags & (" + bed.localFlagType + ") 0x1 << " + e.eventType.valueIndex + "))");
                 return true;
             }
             if (op instanceof ReadMatrix)

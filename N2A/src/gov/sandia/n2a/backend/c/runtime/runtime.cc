@@ -1050,7 +1050,7 @@ Simulator::connect (Population * population)
 void
 Simulator::clearNew (Population * population)
 {
-    queueClearNew.insert (population);
+    queueClearNew.push_back (population);
 }
 
 
