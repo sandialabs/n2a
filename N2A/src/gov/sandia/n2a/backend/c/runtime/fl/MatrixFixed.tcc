@@ -55,69 +55,6 @@ namespace fl
 	return result;
   }
 
-  template<class T>
-  void
-  geev (const MatrixFixed<T,2,2> & A, Matrix<T> & eigenvalues, bool destroyA)
-  {
-	// a = 1  :)
-	T b = A.data[0][0] + A.data[1][1];  // trace
-	T c = A.data[0][0] * A.data[1][1] - A.data[0][1] * A.data[1][0];  // determinant
-	T b4c = b * b - 4 * c;
-	if (b4c < 0) N2A_THROW ("geev: 2x2 matrix has immaginary eigenvalues, which we are not equipped to handle");
-	if (b4c > 0) b4c = sqrt (b4c);
-
-	eigenvalues.resize (2, 1);
-	eigenvalues (0, 0) = (b - b4c) / 2;
-	eigenvalues (1, 0) = (b + b4c) / 2;
-  }
-
-  template<class T>
-  void
-  geev (const MatrixFixed<T,2,2> & A, Matrix<T> & eigenvalues, Matrix<T> & eigenvectors, bool destroyA)
-  {
-	T b = A.data[0][0] + A.data[1][1];  // trace
-	T c = A.data[0][0] * A.data[1][1] - A.data[0][1] * A.data[1][0];  // determinant
-	T b4c = b * b - 4 * c;
-	if (b4c < 0) N2A_THROW ("geev: 2x2 matrix has immaginary eigenvalues, which we are not equipped to handle");
-	if (b4c > 0) b4c = sqrt (b4c);
-
-	eigenvalues.resize (2, 1);
-	eigenvalues[0] = (b - b4c) / 2;
-	eigenvalues[1] = (b + b4c) / 2;
-
-	eigenvectors.resize (2, 2);
-	if (A.data[0][1] != 0)
-	{
-	  T e00 = eigenvalues[0] - A.data[1][1];
-	  T e10 =                  A.data[0][1];
-	  T e01 = eigenvalues[1] - A.data[1][1];
-	  // e11 = e10
-	  T norm = sqrt (e00 * e00 + e10 * e10);
-	  eigenvectors(0,0) = e00 / norm;
-	  eigenvectors(1,0) = e10 / norm;
-	  norm = sqrt (e01 * e01 + e10 * e10);
-	  eigenvectors(0,1) = e01 / norm;
-	  eigenvectors(1,1) = e10 / norm;
-	}
-	else if (A.data[1][0] != 0)
-	{
-	  T e00 =                  A.data[1][0];
-	  T e10 = eigenvalues[0] - A.data[0][0];
-	  // e01 = e00
-	  T e11 = eigenvalues[1] - A.data[0][0];
-	  T norm = sqrt (e00 * e00 + e10 * e10);
-	  eigenvectors(0,0) = e00 / norm;
-	  eigenvectors(1,0) = e10 / norm;
-	  norm = sqrt (e00 * e00 + e11 * e11);
-	  eigenvectors(0,1) = e00 / norm;
-	  eigenvectors(1,1) = e11 / norm;
-	}
-	else
-	{
-	  eigenvectors.identity ();
-	}
-  }
-
 
   // class MatrixFixed<T,3,3> -------------------------------------------------
 
@@ -177,13 +114,6 @@ namespace fl
   }
 
   template<class T, int R, int C>
-  MatrixAbstract<T> *
-  MatrixFixed<T,R,C>::clone (bool deep) const
-  {
-	return new MatrixFixed<T,R,C> (*this);
-  }
-
-  template<class T, int R, int C>
   void
   MatrixFixed<T,R,C>::copyFrom (const MatrixAbstract<T> & that, bool deep)
   {
@@ -225,39 +155,6 @@ namespace fl
   MatrixFixed<T,R,C>::resize (const int rows, const int columns)
   {
 	assert (rows == R  &&  columns == C);
-  }
-
-  template<class T, int R, int C>
-  MatrixResult<T>
-  MatrixFixed<T,R,C>::row (const int r) const
-  {
-	return new MatrixStrided<T> (Pointer ((void *) data, R * C * sizeof (T)), r, 1, C, 1, C);
-  }
-
-  template<class T, int R, int C>
-  MatrixResult<T>
-  MatrixFixed<T,R,C>::column (const int c) const
-  {
-	return new MatrixStrided<T> (Pointer ((void *) data, R * C * sizeof (T)), c * C, R, 1, 1, C);
-  }
-
-  template<class T, int R, int C>
-  MatrixResult<T>
-  MatrixFixed<T,R,C>::region (const int firstRow, const int firstColumn, int lastRow, int lastColumn) const
-  {
-	if (lastRow < 0)
-	{
-	  lastRow = R - 1;
-	}
-	if (lastColumn < 0)
-	{
-	  lastColumn = C - 1;
-	}
-	int offset  = firstColumn * C + firstRow;
-	int rows    = lastRow    - firstRow    + 1;
-	int columns = lastColumn - firstColumn + 1;
-
-	return new MatrixStrided<T> (Pointer ((void *) data, R * C * sizeof (T)), offset, rows, columns, 1, C);
   }
 
   template<class T, int R, int C>
@@ -354,26 +251,6 @@ namespace fl
 	T * end     = o + R * C;
 	while (o < end) *o++ = *i++ / scalar;
 	return result;
-  }
-
-  template<class T, int R, int C>
-  MatrixAbstract<T> &
-  MatrixFixed<T,R,C>::operator *= (const T scalar)
-  {
-	T * i = (T *) data;
-	T * end = i + R * C;
-	while (i < end) *i++ *= scalar;
-	return *this;
-  }
-
-  template<class T, int R, int C>
-  MatrixAbstract<T> &
-  MatrixFixed<T,R,C>::operator /= (const T scalar)
-  {
-	T * i = (T *) data;
-	T * end = i + R * C;
-	while (i < end) *i++ /= scalar;
-	return *this;
   }
 }
 
