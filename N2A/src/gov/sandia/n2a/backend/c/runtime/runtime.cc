@@ -1,15 +1,7 @@
 #include "runtime.h"
 
-#include "fl/Matrix.tcc"
-#include "fl/MatrixFixed.tcc"
-#include "fl/Vector.tcc"
-
 using namespace fl;
 using namespace std;
-
-template class MatrixAbstract<float>;
-template class Matrix<float>;
-template class MatrixFixed<float,3,1>;
 
 
 // General functions ---------------------------------------------------------
@@ -33,19 +25,19 @@ uniform (const MatrixAbstract<float> & sigma)
     int cols = sigma.columns ();
     if (cols == 1)
     {
-        Vector<float> * result = new Vector<float> (rows);
+        Matrix<float> * result = new Matrix<float> (rows);
         for (int i = 0; i < rows; i++) (*result)[i] = uniform (sigma(i,0));
         return result;
     }
     else if (rows == 1)
     {
-        Vector<float> * result = new Vector<float> (cols);
+        Matrix<float> * result = new Matrix<float> (cols);
         for (int i = 0; i < cols; i++) (*result)[i] = uniform (sigma(0,i));
         return result;
     }
     else
     {
-        Vector<float> temp (cols);
+        Matrix<float> temp (cols);
         for (int i = 0; i < cols; i++) temp[i] = uniform ();
         return sigma * temp;
     }
@@ -92,19 +84,19 @@ gaussian (const MatrixAbstract<float> & sigma)
     int cols = sigma.columns ();
     if (cols == 1)
     {
-        Vector<float> * result = new Vector<float> (rows);
+        Matrix<float> * result = new Matrix<float> (rows);
         for (int i = 0; i < rows; i++) (*result)[i] = gaussian (sigma(i,0));
         return result;
     }
     else if (rows == 1)
     {
-        Vector<float> * result = new Vector<float> (cols);
+        Matrix<float> * result = new Matrix<float> (cols);
         for (int i = 0; i < cols; i++) (*result)[i] = gaussian (sigma(0,i));
         return result;
     }
     else
     {
-        Vector<float> temp (cols);
+        Matrix<float> temp (cols);
         for (int i = 0; i < cols; i++) temp[i] = gaussian ();
         return sigma * temp;
     }

@@ -1,13 +1,23 @@
 #include "nosys.h"
 #include "io.h"
 
+#include "fl/Matrix.tcc"
+#include "fl/MatrixFixed.tcc"
 #include "fl/MatrixSparse.tcc"
+
 #include <fstream>
 
 using namespace fl;
 using namespace std;
 
+template class MatrixAbstract<float>;
 template class Matrix<float>;
+template class MatrixSparse<float>;
+template class MatrixFixed<float,3,1>;
+namespace fl
+{
+  template SHARED std::istream & operator >> (std::istream & stream, MatrixAbstract<float> & A);
+}
 
 
 // Holder --------------------------------------------------------------------

@@ -186,8 +186,8 @@ public:
     };
 
     Node * root;
-    fl::Vector<float> lo;
-    fl::Vector<float> hi;
+    Vector3 lo;
+    Vector3 hi;
 
     int   bucketSize;
     int   k;
