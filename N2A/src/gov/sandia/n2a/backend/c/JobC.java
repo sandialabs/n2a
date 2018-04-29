@@ -621,12 +621,9 @@ public class JobC extends Thread
         {
             result.append ("  virtual void clearNew ();\n");
         }
-        if (s.connectionMatrix != null)
-        {
-            result.append ("  virtual ConnectIterator * getIterators ();\n");
-        }
         if (s.connectionBindings != null)
         {
+            result.append ("  virtual ConnectIterator * getIterators ();\n");
             result.append ("  virtual ConnectPopulation * getIterator (int i);\n");
         }
         if (bed.needGlobalPath)
@@ -1362,25 +1359,6 @@ public class JobC extends Thread
         }
 
         // Population getIterators
-        if (s.connectionMatrix != null)
-        {
-            result.append ("ConnectIterator * " + ns + "getIterators ()\n");
-            result.append ("{\n");
-
-            ConnectionMatrix cm = s.connectionMatrix;
-            result.append ("  ConnectPopulation * rows = getIterator (" + cm.rows.index + ");\n");
-            result.append ("  ConnectPopulation * cols = getIterator (" + cm.cols.index + ");\n");
-
-            String matrixName = matrixNames.get (cm.A.operands[0].toString ());
-            result.append ("  IteratorNonzero * it = " + matrixName + "->getIterator ();\n");
-
-            result.append ("  Part * dummy = create ();\n");
-            result.append ("  return new ConnectMatrix (rows, cols, it, dummy);\n");
-            result.append ("}\n");
-            result.append ("\n");
-        }
-
-        // Population getIterator
         if (s.connectionBindings != null)
         {
             class ConnectionHolder
@@ -1419,7 +1397,14 @@ public class JobC extends Thread
                         result.append ("    case " + index + ":\n");
                     }
                     result.append ("    {\n");
-                    result.append ("      result = new ConnectPopulation (i);\n");
+                    if (k == null  &&  radius == null)
+                    {
+                        result.append ("      result = new ConnectPopulation (i);\n");
+                    }
+                    else
+                    {
+                        result.append ("      result = new ConnectPopulationNN (i);\n");  // Pulls in KDTree dependencies, for full NN support.
+                    }
 
                     boolean testK      = false;
                     boolean testRadius = false;
@@ -1471,16 +1456,13 @@ public class JobC extends Thread
                     }
                     else
                     {
-                        if (testK)
+                        if (testK  &&  testRadius)
                         {
-                            if (testRadius)
-                            {
-                                result.append ("      if (result->k > 0  ||  result->radius > 0) result->rank -= 2;\n");
-                            }
-                            else
-                            {
-                                result.append ("      if (result->k > 0) result->rank -= 2;\n");
-                            }
+                            result.append ("      if (result->k > 0  ||  result->radius > 0) result->rank -= 2;\n");
+                        }
+                        else if (testK)
+                        {
+                            result.append ("      if (result->k > 0) result->rank -= 2;\n");
                         }
                         else if (testRadius)
                         {
@@ -1497,6 +1479,7 @@ public class JobC extends Thread
             }
 
             List<ConnectionHolder> connections = new ArrayList<ConnectionHolder> ();
+            boolean needNN = false;  // TODO: Should determine this across the entire simulation, so that only one of getIteratorsSimple() or getIteratorsNN() is linked.
             for (ConnectionBinding c : s.connectionBindings)
             {
                 ConnectionHolder h = new ConnectionHolder ();
@@ -1535,7 +1518,39 @@ public class JobC extends Thread
                     h = connections.get (i);
                 }
                 h.indices.add (c.index);
+
+                if (h.k != null  ||  h.radius != null) needNN = true;
             }
+
+
+            result.append ("ConnectIterator * " + ns + "getIterators ()\n");
+            result.append ("{\n");
+            if (s.connectionMatrix == null)
+            {
+                if (needNN)
+                {
+                    result.append ("  return getIteratorsNN ();\n");
+                }
+                else
+                {
+                    result.append ("  return getIteratorsSimple ();\n");
+                }
+            }
+            else
+            {
+                ConnectionMatrix cm = s.connectionMatrix;
+                result.append ("  ConnectPopulation * rows = getIterator (" + cm.rows.index + ");\n");
+                result.append ("  ConnectPopulation * cols = getIterator (" + cm.cols.index + ");\n");
+
+                String matrixName = matrixNames.get (cm.A.operands[0].toString ());
+                result.append ("  IteratorNonzero * it = " + matrixName + "->getIterator ();\n");
+
+                result.append ("  Part * dummy = create ();\n");
+                result.append ("  return new ConnectMatrix (rows, cols, it, dummy);\n");
+            }
+            result.append ("}\n");
+            result.append ("\n");
+
 
             result.append ("ConnectPopulation * " + ns + "getIterator (int i)\n");
             result.append ("{\n");

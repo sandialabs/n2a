@@ -232,9 +232,23 @@ public:
 
     void         prepareNN ();
     virtual bool setProbe  (Part * probe); ///< @return true If we need to advance to the next instance. This happens when p has reached its max number of connections.
-    void         reset     (bool newOnly);
+    virtual void reset     (bool newOnly);
     bool         old       ();             ///< Indicates that all iterators from this level down return a part that is old.
     virtual bool next      ();
+};
+
+/**
+    Isolates KDTree link dependencies.
+    Most of the KDTree-related members are in our superclass, but they do not
+    trigger linkage. Our dtor and reset() contain code that does trigger linkage.
+**/
+class ConnectPopulationNN : public ConnectPopulation
+{
+public:
+    ConnectPopulationNN (int index);
+    virtual ~ConnectPopulationNN ();
+
+    virtual void reset (bool newOnly);
 };
 
 class ConnectMatrix : public ConnectIterator
@@ -281,10 +295,12 @@ public:
     virtual int    getN     ();
 
     // Connections
-    virtual void                connect      (); ///< For a connection population, evaluate each possible connection (or some well-defined subset thereof).
-    virtual void                clearNew     (); ///< Reset newborn index
-    virtual ConnectIterator *   getIterators (); ///< Assembles one or more nested iterators in an optimal manner and returns the outermost one.
-    virtual ConnectPopulation * getIterator  (int i);
+    virtual void                connect            (); ///< For a connection population, evaluate each possible connection (or some well-defined subset thereof).
+    virtual void                clearNew           (); ///< Reset newborn index
+    virtual ConnectIterator *   getIterators       (); ///< Assembles one or more nested iterators in an optimal manner and returns the outermost one.
+    ConnectIterator *           getIteratorsSimple (); ///< Implementation of getIterators() without nearest-neighbor search.
+    ConnectIterator *           getIteratorsNN     (); ///< Implementation of getIterators() which uses KDTree for nearest-neighbor search.
+    virtual ConnectPopulation * getIterator        (int i);
 };
 
 /**

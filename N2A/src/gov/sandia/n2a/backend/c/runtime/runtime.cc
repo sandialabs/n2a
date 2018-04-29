@@ -528,7 +528,6 @@ ConnectPopulation::~ConnectPopulation ()
 {
     if (permute) delete permute;
     else if (xyz) delete xyz;  // The innermost iterator is responsible for destructing xyz. Otherwise, permute and xyz are not related at all.
-    if (NN) delete NN;
     if (entries) delete[] entries;
     if (instances  &&  deleteInstances) delete instances;
 }
@@ -584,23 +583,10 @@ void
 ConnectPopulation::reset (bool newOnly)
 {
     this->newOnly = newOnly;
-    if (NN)
-    {
-        vector<KDTreeEntry *> result;
-        NN->find (*xyz, result);
-        count = result.size ();
-        filtered.resize (count);
-        int j = 0;
-        for (KDTreeEntry * e : result) filtered[j++] = e->part;
-        i = 0;
-    }
-    else
-    {
-        if (newOnly) count = size - firstborn;
-        else         count = size;
-        if (count > 1) i = (int) round (uniform () * (count - 1));
-        else           i = 0;
-    }
+    if (newOnly) count = size - firstborn;
+    else         count = size;
+    if (count > 1) i = (int) round (uniform () * (count - 1));
+    else           i = 0;
     stop = i + count;
 }
 
@@ -687,6 +673,43 @@ ConnectPopulation::next ()
             return true;
         }
     }
+}
+
+
+// class ConnectPopulationNN -------------------------------------------------
+
+ConnectPopulationNN::ConnectPopulationNN (int index)
+:   ConnectPopulation (index)
+{
+}
+
+ConnectPopulationNN::~ConnectPopulationNN ()
+{
+    if (NN) delete NN;
+}
+
+void
+ConnectPopulationNN::reset (bool newOnly)
+{
+    this->newOnly = newOnly;
+    if (NN)
+    {
+        vector<KDTreeEntry *> result;
+        NN->find (*xyz, result);
+        count = result.size ();
+        filtered.resize (count);
+        int j = 0;
+        for (KDTreeEntry * e : result) filtered[j++] = e->part;
+        i = 0;
+    }
+    else
+    {
+        if (newOnly) count = size - firstborn;
+        else         count = size;
+        if (count > 1) i = (int) round (uniform () * (count - 1));
+        else           i = 0;
+    }
+    stop = i + count;
 }
 
 
@@ -844,6 +867,55 @@ Population::clearNew ()
 
 ConnectIterator *
 Population::getIterators ()
+{
+    return 0;
+}
+
+ConnectIterator *
+Population::getIteratorsSimple ()
+{
+    vector<ConnectPopulation *> iterators;
+    iterators.reserve (3);  // This is the largest number of endpoints we will usually have in practice.
+    bool nothingNew = true;
+    int i = 0;
+    while (true)
+    {
+        ConnectPopulation * it = getIterator (i++);  // Returns null if i is out of range for endpoints.
+        if (! it) break;
+        iterators.push_back (it);
+        if (it->firstborn < it->size) nothingNew = false;
+    }
+    if (nothingNew) return 0;
+
+    // Sort so that population with the most old entries is the outermost iterator.
+    // That allows the most number of old entries to be skipped.
+    // This is a simple in-place insertion sort ...
+    int count = iterators.size ();
+    for (int i = 1; i < count; i++)
+    {
+        for (int j = i; j > 0; j--)
+        {
+            ConnectPopulation * A = iterators[j-1];
+            ConnectPopulation * B = iterators[j  ];
+            if (A->firstborn >= B->firstborn) break;
+            iterators[j-1] = B;
+            iterators[j  ] = A;
+        }
+    }
+
+    for (int i = 1; i < count; i++)
+    {
+        ConnectPopulation * A = iterators[i-1];
+        ConnectPopulation * B = iterators[i  ];
+        A->permute   = B;
+        B->contained = true;
+    }
+
+    return iterators[0];
+}
+
+ConnectIterator *
+Population::getIteratorsNN ()
 {
     vector<ConnectPopulation *> iterators;
     iterators.reserve (3);  // This is the largest number of endpoints we will usually have in practice.
