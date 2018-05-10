@@ -1725,6 +1725,120 @@ public class EquationSet implements Comparable<EquationSet>
         return changed;
     }
 
+    public void determineExponents (double duration)
+    {
+        ExponentVisitor ev = new ExponentVisitor (duration);
+        determineExponentsInit (ev);
+
+        boolean all = false;
+        int wait = 1;
+        List<Variable> overflows = new ArrayList<Variable> ();
+        while (true)
+        {
+            System.out.println ("-----------------------------------------------------------------");
+            System.out.println ("top of loop " + all + " " + wait);
+            int exponentTime = ev.maxTime ();
+            if (! determineExponentsEval (overflows, all  &&  wait-- <= 0, exponentTime)) break;
+            if (! all) all = allExponentsDetermined ();
+            dumpExponents ();
+        }
+
+        if (overflows.size () > 0)
+        {
+            PrintStream err = Backend.err.get ();
+            err.println ("WARNING: Possible fixed-point overflow. Add a hint (fp=max_absolute_value) to each of these variables:");
+            for (Variable v : overflows)
+            {
+                err.println ("  " + v.container.prefix () + "." + v.nameString ());
+            }
+        }
+
+        dumpExponents ();
+    }
+
+    /**
+        Prepares operation trees for exponent analysis, and also stores list of $t' occurrences.
+    **/
+    public static class ExponentVisitor
+    {
+        public int exponentTime;
+        public List<Variable> dt = new ArrayList<Variable> ();  // All distinct occurrences of $t' in the model (zero or one per equation set)
+
+        public ExponentVisitor (double duration)
+        {
+            if (duration == 0) exponentTime = Integer.MIN_VALUE;
+            else               exponentTime = (int) Math.floor (Math.log (duration) / Math.log (2));
+        }
+
+        public int maxTime ()
+        {
+            // If duration was specified, simply return it.
+            if (exponentTime != Integer.MIN_VALUE) return exponentTime;
+
+            int min = Integer.MAX_VALUE;
+            for (Variable v : dt) min = Math.min (min, v.exponent);
+            if (min == Integer.MAX_VALUE) return 1;  // If no value of $t' has been set yet, estimate duration as 1s.
+
+            return min + 20;  // +20 allows one million timesteps, each with 10 bit resolution
+        }
+    }
+
+    public void determineExponentsInit (ExponentVisitor ev)
+    {
+        for (Variable v : variables)
+        {
+            Variable r = v.reference.variable;
+            if (r.name.equals ("$t")  &&  r.order == 1  &&  ! ev.dt.contains (r)) ev.dt.add (r);
+        }
+        for (EquationSet s : parts) s.determineExponentsInit (ev);
+    }
+
+    public boolean allExponentsDetermined ()
+    {
+        for (Variable v : variables)
+        {
+            if (v.exponent == Integer.MIN_VALUE)
+            {
+                System.out.println ("  undetermined: " + v.container.prefix () + "." + v.nameString ());
+                return false;
+            }
+        }
+        for (EquationSet s : parts)
+        {
+            if (s.allExponentsDetermined () == false) return false;
+        }
+        return true;
+    }
+
+    public boolean determineExponentsEval (List<Variable> overflows, boolean all, int exponentTime)
+    {
+        boolean changed = false;
+        for (final Variable v : variables)
+        {
+            if (all  &&  v.exponentLast == Integer.MIN_VALUE) v.exponentLast = v.exponent;
+            if (v.determineExponent (exponentTime))
+            {
+                System.out.println ("  " + v.container.prefix () + "." + v.nameString ());
+                changed = true;
+                if (all  &&  ! overflows.contains (v)) overflows.add (v);
+            }
+        }
+        for (EquationSet s : parts)
+        {
+            if (s.determineExponentsEval (overflows, all, exponentTime)) changed = true;
+        }
+        return changed;
+    }
+
+    /**
+        For debugging fixed-point analysis
+    **/
+    public void dumpExponents ()
+    {
+        for (Variable v : variables) v.dumpExponents ();
+        for (EquationSet s : parts) s.dumpExponents ();
+    }
+
     /**
         Set initial value in Variable.type, so we can use it as backup when stored value is null.
     **/

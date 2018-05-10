@@ -1,11 +1,12 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.language.function;
 
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -32,6 +33,27 @@ public class Grid extends Function
                 return new Grid ();
             }
         };
+    }
+
+    public void determineExponent (Variable from)
+    {
+        int last = Math.min (3, operands.length);
+        for (int i = 0; i <= last; i++)
+        {
+            Operator op = operands[i];
+            op.exponentNext = op.exponent;
+            op.determineExponent (from);
+        }
+
+        boolean raw = false;
+        if (operands.length >= 5)
+        {
+            Type mode = operands[4].eval (null);
+            if (mode instanceof Text  &&  ((Text) mode).value.contains ("raw")) raw = true;
+        }
+
+        if (raw) updateExponent (from, MSB);
+        else     updateExponent (from, -1);  // Output is always in (0,1). That is, it never actually reaches 1.
     }
 
     public Type eval (Instance context) throws EvaluationException

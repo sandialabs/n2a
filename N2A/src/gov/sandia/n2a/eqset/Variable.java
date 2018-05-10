@@ -59,7 +59,9 @@ public class Variable implements Comparable<Variable>
     public List<Variable>               before;     // Variables that must be evaluated after us. Generally the same as uses, unless we are a temporary, in which case the ordering is reversed. Note EquationSet.ordered
     public Variable                     visited;    // Points to the previous variable visited on the current path. Used to prevent infinite recursion. Only works on a single thread.
     public int                          priority;   // For evaluation order.
-    public boolean                      changed;    // Indicates that simplify() touched one or more equations in a way that merits another pass.
+    public boolean                      changed;    // Indicates that analysis touched one or more equations in a way that merits another pass.
+    public int                          exponent     = Integer.MIN_VALUE; // For fixed point: power of most significant bit expected to be stored by this variable. The initial value of MIN_VALUE indicates unknown.
+    public int                          exponentLast = Integer.MIN_VALUE; // For fixed point: value of exponent to be fed into equations when this variable is referenced. Prevents infinite loop of growing exponent. When MIN_VALUE, use regular exponent instead.
 
     // Internal backend
     // TODO: put this in a beckendData field, similar to EquationSet.backendData. The problem with this is the extra overhead to unpack the object.
@@ -492,6 +494,82 @@ public class Variable implements Comparable<Variable>
         return null;
     }
 
+    public boolean determineExponent (int exponentTime)
+    {
+        // User-specified exponent overrides any calculated value.
+        String magnitude = getNamedValue ("fp");
+        if (! magnitude.isEmpty ())
+        {
+            if (exponent != Integer.MIN_VALUE) return false;
+            try
+            {
+                Type result = Operator.parse (magnitude).eval (null);
+                if (result instanceof Scalar)
+                {
+                    exponent = (int) Math.floor (Math.log (((Scalar) result).value) / Math.log (2));  // log base 2
+                    return true;
+                }
+            }
+            catch (ParseException e) {}
+        }
+
+        int exponentNew = exponent;
+        changed = false;
+
+        if (name.equals ("$t")  &&  order == 0)
+        {
+            exponentNew = exponentTime;
+        }
+        else if (name.equals ("$index"))
+        {
+            exponentNew = Operator.MSB;
+        }
+        else if (name.equals ("$init")  ||  name.equals ("$live"))
+        {
+            exponentNew = 0;  // boolean
+        }
+        else
+        {
+            for (EquationEntry e : equations)
+            {
+                if (e.expression != null)
+                {
+                    e.expression.exponentNext = exponent;
+                    e.expression.determineExponent (this);
+                    exponentNew = Math.max (exponentNew, e.expression.exponent);
+                }
+                if (e.condition != null)
+                {
+                    e.condition.exponentNext = 0;  // boolean value only needs 1 bit
+                    e.condition.determineExponent (this);
+                    // Condition does not directly affect value stored in variable.
+                }
+            }
+            if (derivative != null) exponentNew = Math.max (exponentNew, derivative.exponent);  // Assuming a simulation that lasts 1s, the derivative is exactly the same magnitude as the integrated value. Longer simulations will probably need a hinted value.
+        }
+        if (exponentNew != exponent)
+        {
+            exponent = exponentNew;
+            changed = true;
+        }
+        return changed;
+    }
+
+    public void dumpExponents ()
+    {
+        System.out.println (container.prefix () + "." + nameString () + " " + exponent);
+        for (EquationEntry e : equations)
+        {
+            System.out.println ("  equation");
+            if (e.expression != null) e.expression.dumpExponents ("    ");
+            if (e.condition != null)
+            {
+                System.out.println ("    @:");
+                e.condition .dumpExponents ("    ");
+            }
+        }
+    }
+
     /**
         Record what other variables this variable depends on.
     **/
@@ -884,8 +962,8 @@ public class Variable implements Comparable<Variable>
     }
 
     /**
-        Warning: This function is only suitable for sorting variables within a single equation set.
-        Don't rely on the Comparable interface to handle identity across sets.
+        Warning: This function is does not distinguish between equation sets. It merely matches name and order.
+        This function is not consistent with equals, so use containers with caution.
     **/
     public int compareTo (Variable that)
     {
@@ -895,11 +973,22 @@ public class Variable implements Comparable<Variable>
         return 0;
     }
 
+    /**
+        Two variables are equal if they have the same container, name and order.
+        Order can be set to no-care with a value of -1.
+        Container to be set to no-care with a value of null.
+        Name and order are handled by compareTo().
+    **/
     @Override
-    public boolean equals (Object that)
+    public boolean equals (Object o)
     {
-        if (this == that) return true;
-        if (that instanceof Variable) return compareTo ((Variable) that) == 0;
+        if (this == o) return true;
+        if (o instanceof Variable)
+        {
+            Variable that = (Variable) o;
+            if (container != null  &&  that.container != null  &&  container != that.container) return false;
+            return compareTo (that) == 0;
+        }
         return false;
     }
 }

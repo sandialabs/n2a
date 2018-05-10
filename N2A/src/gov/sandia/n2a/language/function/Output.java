@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -62,6 +62,28 @@ public class Output extends Function
     public boolean canBeConstant ()
     {
         return false;
+    }
+
+    /**
+        Depends on determineVariableName() to ensure that file name is in operands[0].
+    **/
+    public void determineExponent (Variable from)
+    {
+        Operator op = operands[1];
+        op.exponentNext = exponentNext;
+        op.determineExponent (from);
+        updateExponent (from, op.exponent);
+
+        if (operands.length >= 3)
+        {
+            boolean raw = false;
+            if (operands.length > 3) raw = ((Text) ((Constant) operands[3]).value).value.contains ("raw");
+
+            op = operands[2];
+            if (raw) op.exponentNext = MSB;  // pure integer
+            else     op.exponentNext = op.exponent;  // It is possible for a column name to be number without being a raw column number.
+            op.determineExponent (from);
+        }
     }
 
     public static class Holder

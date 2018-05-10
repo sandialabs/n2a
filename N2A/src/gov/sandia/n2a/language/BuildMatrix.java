@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -171,6 +171,26 @@ public class BuildMatrix extends Operator
             return new Constant (A);
         }
         return this;
+    }
+
+    public void determineExponent (Variable from)
+    {
+        int cols = operands.length;
+        if (cols == 0) return;
+        int rows = operands[0].length;
+        if (rows == 0) return;
+
+        int max = Integer.MIN_VALUE;
+        for (Operator[] c : operands)
+        {
+            for (Operator e : c)
+            {
+                e.exponentNext = exponentNext;
+                e.determineExponent (from);
+                max = Math.max (max, e.exponent);
+            }
+        }
+        updateExponent (from, max);
     }
 
     public void render (Renderer renderer)

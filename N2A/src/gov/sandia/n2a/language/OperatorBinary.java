@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -68,6 +68,14 @@ public class OperatorBinary extends Operator
             return new Constant (eval (null));
         }
         return this;
+    }
+
+    public void dumpExponents (String pad)
+    {
+        //System.out.println (pad + this + " " + exponentNext + " " + exponent);
+        System.out.println (pad + this + " " + exponent);
+        operand0.dumpExponents (pad + "  ");
+        operand1.dumpExponents (pad + "  ");
     }
 
     public void render (Renderer renderer)

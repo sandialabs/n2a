@@ -54,6 +54,7 @@ import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.parse.ASTOperator;
 import gov.sandia.n2a.language.parse.ExpressionParser;
 import gov.sandia.n2a.language.type.Instance;
+import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
 
@@ -62,6 +63,12 @@ import java.util.TreeMap;
 
 public class Operator implements Cloneable
 {
+    // Fixed-point
+    // TODO: use libfixmath in C backend
+    public static int MSB   = 30;                // Power of most significant bit in machine word. Generally, last bit below the sign bit.
+    public int exponent     = Integer.MIN_VALUE; // Power of MSB of output of this operator.
+    public int exponentNext = Integer.MIN_VALUE; // Power of MSB required by operator that contains us. Used to determine shifts.
+
     public interface Factory extends ExtensionPoint
     {
         public String   name ();  ///< Unique string for searching in the table of registered operators. Used explicitly by parser.
@@ -148,6 +155,51 @@ public class Operator implements Cloneable
         return this;
     }
 
+    public void determineExponent (Variable from)
+    {
+    }
+
+    public void dumpExponents (String pad)
+    {
+        //System.out.println (pad + this + " " + exponentNext + " " + exponent);
+        System.out.println (pad + this + " " + exponent);
+    }
+
+    /**
+        Utility routine for determineExponent(Variable).
+    **/
+    public void updateExponent (Variable from, int exponentNew)
+    {
+        if (exponentNew == exponent) return;
+        exponent = exponentNew;
+        from.changed = true;
+    }
+
+    public int getExponentHint (String mode, int defaultValue)
+    {
+        for (String p : mode.split (","))
+        {
+            if (p.startsWith ("fp"))
+            {
+                String magnitude = "";
+                String[] pieces = p.split ("=", 2);
+                if (pieces.length > 1) magnitude = pieces[1].trim ();
+                if (magnitude.isEmpty ()) return MSB / 2 - 1;  // Q16.16, or equivalent
+                try
+                {
+                    Type value = parse (magnitude).eval (null);
+                    if (value instanceof Scalar)  // This test shouldn't be necessary.
+                    {
+                        return (int) Math.floor (Math.log (((Scalar) value).value) / Math.log (2));  // log base 2
+                    }
+                }
+                catch (ParseException e) {}
+                break;
+            }
+        }
+        return defaultValue;
+    }
+
     /**
         Remove the dependency of "from" on each variable accessed within the expression tree. 
     **/
@@ -187,6 +239,29 @@ public class Operator implements Cloneable
         // internal simulator with an equivalent capability. Thus, generic functions are
         // not allowed. Every legitimate function must be defined by an extension.
         throw new EvaluationException ("Operator not implemented.");
+    }
+
+    /**
+        Extract the value of a string constant without using eval().
+        If this is not a constant, then return "".
+        If this is not a string, then return the string equivalent of the constant.
+    **/
+    public String getString ()
+    {
+        if (! (this instanceof Constant)) return "";
+        return ((Constant) this).value.toString ();
+    }
+
+    /**
+        Extract the value of a scalar constant without using eval().
+        If this is not a scalar constant, then return 0.
+    **/
+    public double getDouble ()
+    {
+        if (! (this instanceof Constant)) return 0;
+        Type value = ((Constant) this).value;
+        if (value instanceof Scalar) return ((Scalar) value).value;
+        return 0;
     }
 
     public void solve (Equality statement) throws EvaluationException

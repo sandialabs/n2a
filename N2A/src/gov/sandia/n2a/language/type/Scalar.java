@@ -400,6 +400,12 @@ public class Scalar extends Type
         return this;
     }
 
+    public int getExponent ()
+    {
+        if (value == 0) return Integer.MIN_VALUE;
+        return Math.getExponent (value);
+    }
+
     public static String print (double d)
     {
         double epsilon = Math.ulp (1);  // Even though this is stored as double, it is really a single-precision epsilon

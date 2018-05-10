@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -9,6 +9,7 @@ package gov.sandia.n2a.language.function;
 import java.util.Random;
 
 import gov.sandia.n2a.backend.internal.Simulator;
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -39,6 +40,14 @@ public class Gaussian extends Function
     public boolean canBeConstant ()
     {
         return false;
+    }
+
+    public void determineExponent (Variable from)
+    {
+        // The largest Gaussian PRNG output is determined by the bit precision of the underlying
+        // uniform PRNG output. The Box-Muller implementation in the C Backend runtime will not
+        // exceed 6.66 standard deviations when using 32 bits uniform numbers. Thus, 8 std is safe.
+        updateExponent (from, 3);
     }
 
     public Type eval (Instance context) throws EvaluationException

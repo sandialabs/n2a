@@ -29,11 +29,13 @@ import gov.sandia.n2a.language.Split;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Event;
+import gov.sandia.n2a.language.function.Exp;
 import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.ReadMatrix;
+import gov.sandia.n2a.language.function.Tangent;
 import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.operator.Power;
@@ -69,6 +71,8 @@ public class JobC extends Thread
     public Path runtimeDir;
     public Path gcc;
 
+    public boolean fixedPoint;
+
     // These values are unique across the whole simulation, so they go here rather than BackendDataC.
     // Where possible, the key is a String. Otherwise, it is an Operator which is specific to one expression.
     public HashMap<Object,String> matrixNames = new HashMap<Object,String> ();
@@ -98,9 +102,10 @@ public class JobC extends Thread
             runtimeDir       = resourceDir.resolve ("cruntime");
             rebuildRuntime ();
 
+            fixedPoint = job.getOrDefault ("$metadata", "backend.c.type", "float").equals ("int");
+
             model = new EquationSet (job);
             digestModel ();
-            model.determineDuration ();
             String duration = model.getNamedValue ("duration");
             if (! duration.isEmpty ()) job.set ("$metadata", "duration", duration);
 
@@ -245,7 +250,7 @@ public class JobC extends Thread
         model.determineOrder ();
         model.findDerivative ();
         model.addAttribute ("global",      0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
-        model.addAttribute ("preexistent", 0, true,  new String[] {"$t'", "$t"});
+        model.addAttribute ("preexistent", 0, true,  new String[] {"$index", "$t'", "$t"});  // Technically, $index is not pre-existent, but rather always receives special handling which has the same effect.
         model.makeConstantDtInitOnly ();
         model.findInitOnly ();  // propagate initOnly through ASTs
         model.purgeInitOnlyTemporary ();
@@ -254,6 +259,14 @@ public class JobC extends Thread
         model.forceTemporaryStorageForSpecials ();
         findLiveReferences (model);
         model.determineTypes ();
+        model.determineDuration ();
+        if (fixedPoint)
+        {
+            double duration = 0;
+            String durationString = model.getNamedValue ("duration");
+            if (! durationString.isEmpty ()) duration = Double.valueOf (durationString);
+            model.determineExponents (duration);
+        }
         model.findConnectionMatrix ();
         analyzeEvents (model);
         analyze (model);
@@ -3530,23 +3543,28 @@ public class JobC extends Thread
         BackendDataC bed = (BackendDataC) r.variable.container.backendData;  // NOT context.bed !
         if (r.variable.hasAttribute ("preexistent"))
         {
-            if (r.variable.name.equals ("$t"))
+            String vname = r.variable.name;
+            if (vname.startsWith ("$"))
             {
-                if (! lvalue)
+                if (vname.equals ("$t"))
                 {
-                    if      (r.variable.order == 0) name = "simulator.currentEvent->t";
-                    else if (r.variable.order == 1)
+                    if (! lvalue)
                     {
-                        if (context.hasEvent) name = "event->dt";
-                        else                  name = "getEvent ()->dt";
+                        int vorder = r.variable.order;
+                        if      (vorder == 0) name = "simulator.currentEvent->t";
+                        else if (vorder == 1)
+                        {
+                            if (context.hasEvent) name = "event->dt";
+                            else                  name = "getEvent ()->dt";
+                        }
+                        // TODO: what about higher orders of $t?
                     }
-                    // TODO: what about higher orders of $t?
+                    // for lvalue, fall through to the main case below
                 }
-                // for lvalue, fall through to the main case below
             }
             else
             {
-                return r.variable.name;  // most likely a local variable, for example "rc" in mapIndex()
+                return vname;  // most likely a local variable, for example "rc" in mapIndex()
             }
         }
         if (r.variable.name.equals ("$live"))
@@ -3885,6 +3903,14 @@ public class JobC extends Thread
                 }
                 return true;
             }
+            if (op instanceof Exp)  // Prevent fp hint from being emitted into c code.
+            {
+                Exp e = (Exp) op;
+                result.append ("exp (");
+                e.operands[0].render (this);
+                result.append (")");
+                return true;
+            }
             if (op instanceof Power)
             {
                 Power p = (Power) op;
@@ -3892,6 +3918,14 @@ public class JobC extends Thread
                 p.operand0.render (this);
                 result.append (", ");
                 p.operand1.render (this);
+                result.append (")");
+                return true;
+            }
+            if (op instanceof Tangent)  // Prevent fp hint from being emitted into c code.
+            {
+                Tangent t = (Tangent) op;
+                result.append ("tan (");
+                t.operands[0].render (this);
                 result.append (")");
                 return true;
             }

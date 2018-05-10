@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -61,6 +61,20 @@ public class OperatorUnary extends Operator
             return new Constant (eval (null));
         }
         return this;
+    }
+
+    public void determineExponent (Variable from)
+    {
+        operand.exponentNext = exponentNext;
+        operand.determineExponent (from);
+        updateExponent (from, operand.exponent);
+    }
+
+    public void dumpExponents (String pad)
+    {
+        //System.out.println (pad + this + " " + exponentNext + " " + exponent);
+        System.out.println (pad + this + " " + exponent);
+        operand.dumpExponents (pad + "  ");
     }
 
     public void render (Renderer renderer)

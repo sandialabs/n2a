@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.function;
 
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -30,6 +31,14 @@ public class Sine extends Function
                 return new Sine ();
             }
         };
+    }
+
+    public void determineExponent (Variable from)
+    {
+        Operator op = operands[0];
+        op.exponentNext = op.exponent;
+        op.determineExponent (from);
+        updateExponent (from, 0);  // Largest absolute value is 1
     }
 
     public Type eval (Instance context)

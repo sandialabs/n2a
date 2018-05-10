@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -106,6 +106,26 @@ public class Function extends Operator
             for (int i = 0; i < operands.length; i++) operands[i] = operands[i].simplify (from);
         }
         return this;
+    }
+
+    public void determineExponent (Variable from)
+    {
+        int max = Integer.MIN_VALUE;
+        for (int i = 0; i < operands.length; i++)
+        {
+            Operator op = operands[i];
+            op.exponentNext = exponentNext;
+            op.determineExponent (from);
+            max = Math.max (exponent, op.exponent);
+        }
+        updateExponent (from, max);
+    }
+
+    public void dumpExponents (String pad)
+    {
+        //System.out.println (pad + this + " " + exponentNext + " " + exponent);
+        System.out.println (pad + this + " " + exponent);
+        for (int i = 0; i < operands.length; i++) operands[i].dumpExponents (pad + "  ");
     }
 
     public void render (Renderer renderer)

@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -19,6 +19,7 @@ import java.util.TreeMap;
 
 import gov.sandia.n2a.backend.internal.EventStep;
 import gov.sandia.n2a.backend.internal.Simulator;
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
@@ -55,6 +56,19 @@ public class Input extends Function
     public boolean canBeInitOnly ()
     {
         return true;
+    }
+
+    public void determineExponent (Variable from)
+    {
+        super.determineExponent (from);
+
+        int exponentNew = MSB / 2 - 1;  // generally this will be Q16.16
+
+        String mode;
+        if (operands.length > 3) mode = operands[3].getString ();
+        else                     mode = operands[1].getString ();
+        exponentNew = getExponentHint (mode, exponentNew);
+        updateExponent (from, exponentNew);
     }
 
     public static class Holder

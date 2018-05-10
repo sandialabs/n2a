@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.function;
 
 import gov.sandia.n2a.eqset.Equality;
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -31,6 +32,18 @@ public class Log extends Function
                 return new Log ();
             }
         };
+    }
+
+    public void determineExponent (Variable from)
+    {
+        Operator op = operands[0];
+        op.exponentNext = op.exponent;
+        op.determineExponent (from);
+
+        if (op.exponent == Integer.MIN_VALUE) return;
+        double m = Math.pow (2, op.exponent + 1) - 1;  // magnitude of the input
+        double a = Math.log (m);  // magnitude of the answer
+        updateExponent (from, (int) Math.floor (Math.log (a) / Math.log (2)));
     }
 
     public Type eval (Instance context)

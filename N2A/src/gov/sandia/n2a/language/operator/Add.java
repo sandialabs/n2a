@@ -63,6 +63,27 @@ public class Add extends OperatorBinary
         return this;
     }
 
+    public void determineExponent (Variable from)
+    {
+        operand0.exponentNext = exponent - 1;
+        operand1.exponentNext = exponent - 1;
+        operand0.determineExponent (from);
+        operand1.determineExponent (from);
+
+        if (operand0.exponent != Integer.MIN_VALUE  &&  operand1.exponent != Integer.MIN_VALUE)
+        {
+            updateExponent (from, Math.max (operand0.exponent, operand1.exponent) + 1);
+        }
+        else if (operand0.exponent != Integer.MIN_VALUE)
+        {
+            updateExponent (from, operand0.exponent);
+        }
+        else if (operand1.exponent != Integer.MIN_VALUE)
+        {
+            updateExponent (from, operand1.exponent);
+        }
+    }
+
     public Type eval (Instance context)
     {
         return operand0.eval (context).add (operand1.eval (context));

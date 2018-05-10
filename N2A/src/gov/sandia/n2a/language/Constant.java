@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -8,6 +8,7 @@ package gov.sandia.n2a.language;
 
 import javax.measure.Unit;
 
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
@@ -55,6 +56,12 @@ public class Constant extends Operator
         {
             value = (Type) o;
         }
+    }
+
+    public void determineExponent (Variable from)
+    {
+        if (exponent != Integer.MIN_VALUE) return;  // already done
+        updateExponent (from, value.getExponent ());
     }
 
     public void render (Renderer renderer)

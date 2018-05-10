@@ -1,3 +1,9 @@
+/*
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Under the terms of Contract DE-NA0003525 with NTESS,
+the U.S. Government retains certain rights in this software.
+*/
+
 package gov.sandia.n2a.language;
 
 /**
@@ -112,6 +118,11 @@ public abstract class Type implements Comparable<Type>
     public Type transpose () throws EvaluationException
     {
         throw new EvaluationException ("Operation not supported on this type.");
+    }
+
+    public int getExponent ()
+    {
+        return Integer.MIN_VALUE;
     }
 
     public boolean betterThan (Type that)

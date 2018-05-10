@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.function;
 
 import gov.sandia.n2a.eqset.Equality;
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -31,6 +32,27 @@ public class Exp extends Function
                 return new Exp ();
             }
         };
+    }
+
+    public void determineExponent (Variable from)
+    {
+        Operator op = operands[0];
+        op.exponentNext = op.exponent;
+        op.determineExponent (from);
+
+        // let o = op.exponent
+        // let m = 2^(o+1)-1   (magnitude of op)
+        // let p = our exponent (the effective output of this function)
+        // for op >= 0:
+        //     p = floor (log2 (e^m)) = floor (ln (e^m) / ln (2)) = floor (m / ln (2))
+        // for op < 0:
+        //     User must specify magnitude, because all we can calculate is the smallest possible output,
+        //     and even that is only possible if the user gives a hint the the sign is negative.
+
+        int exponentNew = Integer.MIN_VALUE;
+        if (op.exponent != Integer.MIN_VALUE) exponentNew = (int) Math.floor ((Math.pow (2, op.exponent + 1) - 1) / Math.log (2));
+        if (operands.length >= 2) exponentNew = getExponentHint (operands[1].getString (), exponentNew);
+        updateExponent (from, exponentNew);
     }
 
     public Type eval (Instance context)

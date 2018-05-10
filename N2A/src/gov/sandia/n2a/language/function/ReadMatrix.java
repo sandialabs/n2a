@@ -9,6 +9,7 @@ package gov.sandia.n2a.language.function;
 import java.io.File;
 
 import gov.sandia.n2a.backend.internal.Simulator;
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
@@ -43,6 +44,27 @@ public class ReadMatrix extends Function
     public boolean canBeInitOnly ()
     {
         return true;
+    }
+
+    public void determineExponent (Variable from)
+    {
+        String mode = "";
+        int lastParm = operands.length - 1;
+        if (lastParm > 0) mode = operands[lastParm].getString ();
+        boolean raw = mode.contains ("raw");
+
+        lastParm = Math.min (lastParm, 2);
+        for (int i = 1; i <= lastParm; i++)
+        {
+            Operator op = operands[i];
+            if (raw) op.exponentNext = MSB;
+            else     op.exponentNext = op.exponent;
+            op.determineExponent (from);
+        }
+
+        int exponentNew = MSB / 2 - 1;  // Q16.16
+        exponentNew = getExponentHint (mode, exponentNew);
+        updateExponent (from, exponentNew);
     }
 
     public Matrix open (Instance context)

@@ -29,4 +29,37 @@ public class Comparison extends OperatorBinary
 
         return this;
     }
+
+    public void determineExponent (Variable from)
+    {
+        int next = Math.max (operand0.exponent, operand1.exponent);
+        operand0.exponentNext = next;
+        operand1.exponentNext = next;
+        operand0.determineExponent (from);
+        operand1.determineExponent (from);
+        updateExponent (from, 0);
+
+        // Any time a variable is compared to a value, it is a clue about the expected range of the variable.
+        // The following two blocks apply this heuristic.
+
+        if (operand0 instanceof AccessVariable)
+        {
+            Variable v = ((AccessVariable) operand0).reference.variable;
+            if (v.exponent < operand1.exponent  &&  ! v.hasAttribute ("preexistent"))
+            {
+                v.exponent = operand1.exponent;
+                from.changed = true;  // Probably "from" is not the variable changing, but this is sufficient to signal that some change happened.
+            }
+        }
+
+        if (operand1 instanceof AccessVariable)
+        {
+            Variable v = ((AccessVariable) operand1).reference.variable;
+            if (v.exponent < operand0.exponent  &&  ! v.hasAttribute ("preexistent"))
+            {
+                v.exponent = operand0.exponent;
+                from.changed = true;
+            }
+        }
+    }
 }

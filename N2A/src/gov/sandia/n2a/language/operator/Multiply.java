@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -73,6 +73,20 @@ public class Multiply extends OperatorBinary
         }
         from.changed = false;
         return this;
+    }
+
+    public void determineExponent (Variable from)
+    {
+        operand0.exponentNext = operand0.exponent;
+        operand1.exponentNext = operand1.exponent;
+        operand0.determineExponent (from);
+        operand1.determineExponent (from);
+
+        if (operand0.exponent != Integer.MIN_VALUE  &&  operand1.exponent != Integer.MIN_VALUE)
+        {
+            updateExponent (from, operand0.exponent + operand1.exponent + 1);
+        }
+        // else don't to propagate a bad guess. Instead, hope that better information arrives in next cycle.
     }
 
     public Type eval (Instance context)

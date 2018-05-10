@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -97,6 +97,21 @@ public class AccessElement extends Function
             }
         }
         return this;
+    }
+
+    public void determineExponent (Variable from)
+    {
+        Operator v = operands[0];
+        v.exponentNext = exponentNext;
+        v.determineExponent (from);
+        updateExponent (from, Math.max (exponent, v.exponent));
+
+        for (int i = 1; i < operands.length; i++)
+        {
+            Operator op = operands[i];
+            op.exponentNext = MSB;  // forces pure integer
+            op.determineExponent (from);
+        }
     }
 
     public void render (Renderer renderer)

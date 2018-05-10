@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -109,6 +109,13 @@ public class AccessVariable extends Operator
             from.changed = true;
         }
         return this;
+    }
+
+    public void determineExponent (Variable from)
+    {
+        Variable v = reference.variable;
+        if (v.exponentLast != Integer.MIN_VALUE) updateExponent (from, v.exponentLast);
+        else                                     updateExponent (from, v.exponent);
     }
 
     public Type eval (Instance instance)
