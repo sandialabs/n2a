@@ -38,7 +38,7 @@ public class Sine extends Function
         Operator op = operands[0];
         op.exponentNext = op.exponent;
         op.determineExponent (from);
-        updateExponent (from, 0);  // Largest absolute value is 1
+        updateExponent (from, 0, MSB);  // Largest absolute value is 1
     }
 
     public Type eval (Instance context)

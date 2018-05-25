@@ -104,7 +104,7 @@ public class AccessElement extends Function
         Operator v = operands[0];
         v.exponentNext = exponentNext;
         v.determineExponent (from);
-        updateExponent (from, Math.max (exponent, v.exponent));
+        updateExponent (from, v.exponent, v.center);
 
         for (int i = 1; i < operands.length; i++)
         {

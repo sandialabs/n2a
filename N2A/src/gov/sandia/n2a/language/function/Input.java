@@ -62,13 +62,11 @@ public class Input extends Function
     {
         super.determineExponent (from);
 
-        int exponentNew = MSB / 2 - 1;  // generally this will be Q16.16
-
         String mode;
         if (operands.length > 3) mode = operands[3].getString ();
         else                     mode = operands[1].getString ();
-        exponentNew = getExponentHint (mode, exponentNew);
-        updateExponent (from, exponentNew);
+        int exponentNew = getExponentHint (mode, MSB / 2 - 1);
+        updateExponent (from, exponentNew, MSB / 2 + 1);
     }
 
     public static class Holder

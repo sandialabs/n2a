@@ -120,11 +120,6 @@ public abstract class Type implements Comparable<Type>
         throw new EvaluationException ("Operation not supported on this type.");
     }
 
-    public int getExponent ()
-    {
-        return Integer.MIN_VALUE;
-    }
-
     public boolean betterThan (Type that)
     {
         return false;

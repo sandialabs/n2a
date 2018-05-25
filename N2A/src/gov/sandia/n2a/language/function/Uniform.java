@@ -49,11 +49,11 @@ public class Uniform extends Function
             Operator op = operands[0];
             op.exponentNext = op.exponent;
             op.determineExponent (from);
-            updateExponent (from, op.exponent);
+            updateExponent (from, op.exponent, op.center);
         }
         else
         {
-            updateExponent (from, 0);  // Largest absolute value is 1
+            updateExponent (from, 0, MSB);  // Largest absolute value is 1
         }
     }
 

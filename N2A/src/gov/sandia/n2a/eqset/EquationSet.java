@@ -1815,7 +1815,11 @@ public class EquationSet implements Comparable<EquationSet>
         boolean changed = false;
         for (final Variable v : variables)
         {
-            if (all  &&  v.exponentLast == Integer.MIN_VALUE) v.exponentLast = v.exponent;
+            if (all  &&  v.exponentLast == Integer.MIN_VALUE)
+            {
+                v.exponentLast = v.exponent;
+                v.centerLast   = v.center;
+            }
             if (v.determineExponent (exponentTime))
             {
                 System.out.println ("  " + v.container.prefix () + "." + v.nameString ());

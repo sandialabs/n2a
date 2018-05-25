@@ -135,6 +135,8 @@ public class BuildMatrix extends Operator
 
         Matrix A = new MatrixDense (rows, cols);  // potential constant to replace us
         boolean isConstant = true;  // any element that is not constant will change this to false
+        int cent = 0;  // for fixed-point analysis
+        int pow  = 0;
         for (int c = 0; c < cols; c++)
         {
             for (int r = 0; r < rows; r++)
@@ -150,8 +152,31 @@ public class BuildMatrix extends Operator
                     {
                         if (operands[c][r] instanceof Constant)
                         {
-                            Type o = ((Constant) operands[c][r]).value;
-                            if      (o instanceof Scalar) A.set (r, c, ((Scalar) o).value);
+                            Constant op = (Constant) operands[c][r];
+                            Type o = op.value;
+                            if (o instanceof Scalar)
+                            {
+                                double v = ((Scalar) o).value;
+                                A.set (r, c, v);
+
+                                int tempCent = MSB / 2 + 1;
+                                if (v == 0)
+                                {
+                                    pow += MSB - tempCent;
+                                }
+                                else
+                                {
+                                    int e = Math.getExponent (v);
+                                    if (op.unitValue != null)
+                                    {
+                                        int bits = (int) Math.ceil (op.unitValue.digits * Math.log (10) / Math.log (2));
+                                        tempCent = Math.max (tempCent, bits);
+                                        tempCent = Math.min (tempCent, MSB);
+                                    }
+                                    pow += e + MSB - tempCent;
+                                }
+                                cent += tempCent;
+                            }
                             else if (o instanceof Text  ) A.set (r, c, Double.valueOf (((Text) o).value));
                             else if (o instanceof Matrix) A.set (r, c, ((Matrix) o).get (0, 0));
                             else throw new EvaluationException ("Can't construct matrix element from the given type.");
@@ -168,7 +193,13 @@ public class BuildMatrix extends Operator
         if (isConstant)
         {
             from.changed = true;
-            return new Constant (A);
+            Constant result = new Constant (A);
+            int count = rows * cols;
+            cent /= count;
+            pow  /= count;
+            result.center   = cent;
+            result.exponent = pow + MSB - cent;
+            return result;
         }
         return this;
     }
@@ -180,17 +211,23 @@ public class BuildMatrix extends Operator
         int rows = operands[0].length;
         if (rows == 0) return;
 
-        int max = Integer.MIN_VALUE;
+        int cent = 0;
+        int pow  = 0;
         for (Operator[] c : operands)
         {
             for (Operator e : c)
             {
                 e.exponentNext = exponentNext;
                 e.determineExponent (from);
-                max = Math.max (max, e.exponent);
+                cent += e.center;
+                pow  += e.exponent - Operator.MSB + e.center;
             }
         }
-        updateExponent (from, max);
+        int count = rows * cols;
+        cent /= count;
+        pow  /= count;
+        pow += Operator.MSB - cent;
+        updateExponent (from, pow, cent);
     }
 
     public void render (Renderer renderer)

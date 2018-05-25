@@ -37,7 +37,7 @@ public class Comparison extends OperatorBinary
         operand1.exponentNext = next;
         operand0.determineExponent (from);
         operand1.determineExponent (from);
-        updateExponent (from, 0);
+        updateExponent (from, MSB, 0);  // Output is boolean, so treat as integer.
 
         // Any time a variable is compared to a value, it is a clue about the expected range of the variable.
         // The following two blocks apply this heuristic.
@@ -45,9 +45,9 @@ public class Comparison extends OperatorBinary
         if (operand0 instanceof AccessVariable)
         {
             Variable v = ((AccessVariable) operand0).reference.variable;
-            if (v.exponent < operand1.exponent  &&  ! v.hasAttribute ("preexistent"))
+            if (! v.hasAttribute ("preexistent")  &&  (v.bound == null  ||  v.bound.centerPower () < operand1.centerPower ()))
             {
-                v.exponent = operand1.exponent;
+                v.bound = operand1;
                 from.changed = true;  // Probably "from" is not the variable changing, but this is sufficient to signal that some change happened.
             }
         }
@@ -55,9 +55,9 @@ public class Comparison extends OperatorBinary
         if (operand1 instanceof AccessVariable)
         {
             Variable v = ((AccessVariable) operand1).reference.variable;
-            if (v.exponent < operand0.exponent  &&  ! v.hasAttribute ("preexistent"))
+            if (! v.hasAttribute ("preexistent")  &&  (v.bound == null  ||  v.bound.centerPower () < operand0.centerPower ()))
             {
-                v.exponent = operand0.exponent;
+                v.bound = operand0;
                 from.changed = true;
             }
         }

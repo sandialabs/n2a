@@ -43,9 +43,10 @@ public class SquareRoot extends Function
         op.determineExponent (from);
 
         if (op.exponent == Integer.MIN_VALUE) return;
-        int exponentNext = op.exponent / 2;
-        if (op.exponent < 0) exponentNext += op.exponent % 2;  // round down
-        updateExponent (from, exponentNext);
+        int pow = op.centerPower () / 2;
+        int centerNext   = MSB / 2 + 1;
+        int exponentNext = pow + MSB - centerNext;
+        updateExponent (from, exponentNext, centerNext);
     }
 
     public Type eval (Instance context)

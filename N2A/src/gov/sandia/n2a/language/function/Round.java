@@ -40,7 +40,7 @@ public class Round extends Function
         if (op.exponent < MSB  &&  op.exponent >= 0) op.exponentNext = op.exponent;  // Only numbers in this range can actually be rounded.
         else                                         op.exponentNext = exponentNext; // Otherwise, just pass through.
         op.determineExponent (from);
-        updateExponent (from, op.exponent);
+        updateExponent (from, op.exponent, op.center);
     }
 
     public Type eval (Instance context)

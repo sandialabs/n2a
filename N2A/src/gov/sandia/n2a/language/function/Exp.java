@@ -40,19 +40,24 @@ public class Exp extends Function
         op.exponentNext = op.exponent;
         op.determineExponent (from);
 
-        // let o = op.exponent
-        // let m = 2^(o+1)-1   (magnitude of op)
-        // let p = our exponent (the effective output of this function)
+        // let o = power of op.center
+        // let m = o^2 = magnitude of op.center
+        // let p = power of our center (the effective output of this function)
         // for op >= 0:
-        //     p = floor (log2 (e^m)) = floor (ln (e^m) / ln (2)) = floor (m / ln (2))
+        //     p = floor (log2 (e^m)) = floor (ln (e^m) / ln (2)) = floor (m / ln (2));
         // for op < 0:
-        //     User must specify magnitude, because all we can calculate is the smallest possible output,
-        //     and even that is only possible if the user gives a hint the the sign is negative.
+        //     User must specify magnitude, since we don't try to predict sign.
 
         int exponentNew = Integer.MIN_VALUE;
-        if (op.exponent != Integer.MIN_VALUE) exponentNew = (int) Math.floor ((Math.pow (2, op.exponent + 1) - 1) / Math.log (2));
+        if (op.exponent != Integer.MIN_VALUE)
+        {
+            int o = op.centerPower ();
+            double m = Math.pow (2, o);
+            int pow = (int) Math.floor (m / Math.log (2));  // power of our output center
+            exponentNew = pow + MSB / 2 - 1;
+        }
         if (operands.length >= 2) exponentNew = getExponentHint (operands[1].getString (), exponentNew);
-        updateExponent (from, exponentNew);
+        updateExponent (from, exponentNew, MSB / 2 + 1);  // typically Q16.16
     }
 
     public Type eval (Instance context)

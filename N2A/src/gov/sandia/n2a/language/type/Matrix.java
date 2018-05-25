@@ -251,22 +251,6 @@ public abstract class Matrix extends Type
         return result;
     }
 
-    public int getExponent ()
-    {
-        int result = Integer.MIN_VALUE;
-        int rows    = rows ();
-        int columns = columns ();
-        for (int c = 0; c < columns; c++)
-        {
-            for (int r = 0; r < rows; r++)
-            {
-                double e = get (r, c);
-                result = Math.max (result, Math.getExponent (e));
-            }
-        }
-        return result;
-    }
-
     public Type visit (Visitor visitor)
     {
         int w = columns ();

@@ -72,18 +72,19 @@ public class Output extends Function
         Operator op = operands[1];
         op.exponentNext = exponentNext;
         op.determineExponent (from);
-        updateExponent (from, op.exponent);
 
         if (operands.length >= 3)
         {
-            boolean raw = false;
-            if (operands.length > 3) raw = ((Text) ((Constant) operands[3]).value).value.contains ("raw");
-
             op = operands[2];
-            if (raw) op.exponentNext = MSB;  // pure integer
-            else     op.exponentNext = op.exponent;  // It is possible for a column name to be number without being a raw column number.
+            op.exponentNext = op.exponent;
+            if (operands.length > 3  &&  operands[3].getString ().contains ("raw"))
+            {
+                op.exponentNext = MSB;  // pure integer
+            }
             op.determineExponent (from);
         }
+
+        updateExponent (from, op.exponent, op.center);
     }
 
     public static class Holder

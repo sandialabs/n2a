@@ -114,8 +114,8 @@ public class AccessVariable extends Operator
     public void determineExponent (Variable from)
     {
         Variable v = reference.variable;
-        if (v.exponentLast != Integer.MIN_VALUE) updateExponent (from, v.exponentLast);
-        else                                     updateExponent (from, v.exponent);
+        if (v.exponentLast != Integer.MIN_VALUE) updateExponent (from, v.exponentLast, v.centerLast);
+        else                                     updateExponent (from, v.exponent,     v.center);
     }
 
     public Type eval (Instance instance)

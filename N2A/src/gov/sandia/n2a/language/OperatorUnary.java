@@ -67,7 +67,7 @@ public class OperatorUnary extends Operator
     {
         operand.exponentNext = exponentNext;
         operand.determineExponent (from);
-        updateExponent (from, operand.exponent);
+        updateExponent (from, operand.exponent, operand.center);
     }
 
     public void dumpExponents (String pad)

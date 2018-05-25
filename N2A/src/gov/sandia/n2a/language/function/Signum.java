@@ -38,7 +38,7 @@ public class Signum extends Function
         Operator op = operands[0];
         op.exponentNext = op.exponent;
         op.determineExponent (from);
-        updateExponent (from, 0);
+        updateExponent (from, MSB, 0);
     }
 
     public Type eval (Instance context)

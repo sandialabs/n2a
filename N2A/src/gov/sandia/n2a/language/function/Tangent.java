@@ -41,7 +41,7 @@ public class Tangent extends Function
 
         int exponentNew = MSB / 2 - 1;  // Q16.16
         if (operands.length >= 2) exponentNew = getExponentHint (operands[1].getString (), exponentNew);
-        updateExponent (from, exponentNew);
+        updateExponent (from, exponentNew, MSB / 2 + 1);
     }
 
     public Type eval (Instance context)

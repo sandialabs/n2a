@@ -44,7 +44,7 @@ public class NOT extends OperatorUnary
     {
         operand.exponentNext = operand.exponent;
         operand.determineExponent (from);
-        updateExponent (from, 0);
+        updateExponent (from, MSB, 0);
     }
 
     public Type eval (Instance context)

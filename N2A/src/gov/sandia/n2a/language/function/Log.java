@@ -40,10 +40,16 @@ public class Log extends Function
         op.exponentNext = op.exponent;
         op.determineExponent (from);
 
+        // let o = power of center of operand
+        // let p = power of center of result
+        // p = log2(log(2^o)) = log2(o*log(2)) = log2(o)+log2(log(2)) < log2(o)+1
+
         if (op.exponent == Integer.MIN_VALUE) return;
-        double m = Math.pow (2, op.exponent + 1) - 1;  // magnitude of the input
-        double a = Math.log (m);  // magnitude of the answer
-        updateExponent (from, (int) Math.floor (Math.log (a) / Math.log (2)));
+        int o = op.exponent - MSB + op.center;  // power of center
+        int p = (int) Math.floor (Math.log (o) / Math.log (2)) + 1;
+        int centerNew   = MSB / 2 + 1;
+        int exponentNew = p + MSB - centerNew;
+        updateExponent (from, exponentNew, centerNew);
     }
 
     public Type eval (Instance context)

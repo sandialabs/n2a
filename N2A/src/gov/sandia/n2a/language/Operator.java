@@ -65,9 +65,34 @@ public class Operator implements Cloneable
 {
     // Fixed-point
     // TODO: use libfixmath in C backend
-    public static int MSB   = 30;                // Power of most significant bit in machine word. Generally, last bit below the sign bit.
-    public int exponent     = Integer.MIN_VALUE; // Power of MSB of output of this operator.
-    public int exponentNext = Integer.MIN_VALUE; // Power of MSB required by operator that contains us. Used to determine shifts.
+    /**
+        Zero-based index of most significant bit in the machine word.
+        Generally, the bit immediately following the sign bit.
+    **/
+    public static int MSB = 30;
+    /**
+        The power of bit that occupies the MSB position, before any shift to prepare value for use by the next operator.
+        In the fixed-point analysis implemented by Operator, all bits are fractional just like IEEE floats,
+        and we keep track of the power of the most significant bit, just like the IEEE float exponent.
+        In the case of a simple integer, exponent is equal to MSB.
+        Integer.MIN_VALUE means undefined.
+        We expect that the fixed-point implementation will do saturation checks, so we don't accommodate
+        the largest possible output of each operation, only the median.
+        Ideally, only the lower half of the available bits will be occupied.
+    **/
+    public int exponent = Integer.MIN_VALUE;
+    /**
+        Zero-based index of median magnitude, the functional equivalent of the "one" position in the machine word.
+        For numbers with a range of magnitudes, this will generally be MSB/2+1 (equivalent to Q16.16 format).
+        It is expected that at least half the time, all nonzero bits are below this position in the word.
+        Simple integers, on the other hand, with set this to 0, and all their nonzero bits are at or above this position.
+    **/
+    public int center = MSB / 2 + 1;
+    /**
+        The power of bit that occupies the MSB position, as required by the operator that contains us.
+        Used to determine shifts.
+    **/
+    public int exponentNext = Integer.MIN_VALUE;
 
     public interface Factory extends ExtensionPoint
     {
@@ -168,11 +193,11 @@ public class Operator implements Cloneable
     /**
         Utility routine for determineExponent(Variable).
     **/
-    public void updateExponent (Variable from, int exponentNew)
+    public void updateExponent (Variable from, int exponentNew, int centerNew)
     {
-        if (exponentNew == exponent) return;
+        if (exponentNew != exponent  ||  centerNew != center) from.changed = true;
         exponent = exponentNew;
-        from.changed = true;
+        center   = centerNew;
     }
 
     public int getExponentHint (String mode, int defaultValue)
@@ -198,6 +223,11 @@ public class Operator implements Cloneable
             }
         }
         return defaultValue;
+    }
+
+    public int centerPower ()
+    {
+        return exponent - MSB + center;
     }
 
     /**

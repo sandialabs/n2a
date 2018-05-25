@@ -56,22 +56,25 @@ public class Subtract extends OperatorBinary
 
     public void determineExponent (Variable from)
     {
-        operand0.exponentNext = exponent - 1;
-        operand1.exponentNext = exponent - 1;
+        operand0.exponentNext = exponent;
+        operand1.exponentNext = exponent;
         operand0.determineExponent (from);
         operand1.determineExponent (from);
 
         if (operand0.exponent != Integer.MIN_VALUE  &&  operand1.exponent != Integer.MIN_VALUE)
         {
-            updateExponent (from, Math.max (operand0.exponent, operand1.exponent) + 1);
+            int pow  = (operand0.centerPower () + operand1.centerPower ()) / 2;
+            int cent = (operand0.center + operand1.center) / 2;
+            pow += MSB - cent;
+            updateExponent (from, pow, cent);
         }
         else if (operand0.exponent != Integer.MIN_VALUE)
         {
-            updateExponent (from, operand0.exponent);
+            updateExponent (from, operand0.exponent, operand0.center);
         }
         else if (operand1.exponent != Integer.MIN_VALUE)
         {
-            updateExponent (from, operand1.exponent);
+            updateExponent (from, operand1.exponent, operand1.center);
         }
     }
 

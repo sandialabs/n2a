@@ -58,27 +58,33 @@ public class Norm extends Function
         Matrix A = (Matrix) op1.eval (instance);
         int Asize = A.rows () * A.columns ();
 
-        int exponentNext = Integer.MIN_VALUE;
+        int centerNext   = center;
+        int exponentNext = exponent;
         if (op1.exponent != Integer.MIN_VALUE)
         {
             // For n==1 (sum of elements), which is the most expensive in terms of bits.
-            exponentNext = op1.exponent + (int) Math.floor (Math.log (Asize) / Math.log (2));
+            int shift = (int) Math.floor (Math.log (Asize) / Math.log (2));
+            centerNext   = op1.center   + shift;
+            exponentNext = op1.exponent + shift;
         }
         if (op0 instanceof Constant)
         {
             double n = ((Scalar) ((Constant) op0).value).value;
             if (n == 0)
             {
-                exponentNext = (int) Math.floor (Math.log (Asize) / Math.log (2));
+                // Result is an integer
+                centerNext   = 0;
+                exponentNext = MSB;
             }
             else if (Double.isInfinite (n))
             {
+                centerNext   = op1.center;
                 exponentNext = op1.exponent;
             }
             // It would be nice to have some way to interpolate between the 3 bounding cases.
         }
 
-        updateExponent (from, exponentNext);
+        updateExponent (from, exponentNext, centerNext);
     }
 
     public Type eval (Instance context)

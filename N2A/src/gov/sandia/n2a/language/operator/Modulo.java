@@ -41,7 +41,7 @@ public class Modulo extends OperatorBinary
         operand1.exponentNext = operand1.exponent;
         operand0.determineExponent (from);
         operand1.determineExponent (from);
-        updateExponent (from, operand1.exponent);
+        updateExponent (from, operand1.exponent, operand1.center);
     }
 
     public Type eval (Instance context)

@@ -15,4 +15,5 @@ public class UnitValue
 {
     public double  value;
     public Unit<?> unit;
+    public int     digits;  // number of digits in the textual form of the constant (base 10)
 }

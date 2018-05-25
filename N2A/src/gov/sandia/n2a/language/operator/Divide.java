@@ -63,7 +63,10 @@ public class Divide extends OperatorBinary
 
         if (operand0.exponent != Integer.MIN_VALUE  &&  operand1.exponent != Integer.MIN_VALUE)
         {
-            updateExponent (from, operand0.exponent - operand1.exponent);
+            int cent = MSB / 2 + 1;
+            int pow = operand0.centerPower () - operand1.centerPower ();
+            pow += MSB - cent;
+            updateExponent (from, pow, cent);
         }
         // else don't to propagate a bad guess. Instead, hope that better information arrives in next cycle.
     }

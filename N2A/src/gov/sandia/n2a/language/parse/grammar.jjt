@@ -376,6 +376,10 @@ void Constant() #Constant : {Token t; Token u; String unitName = "";}
             else if (image.equals ("∞"   )) result.value = Double.POSITIVE_INFINITY;
             else if (image.equals (".nan")) result.value = Double.NaN;
             else                            result.value = Double.parseDouble (t.image);
+            image = image.split ("e")[0];  // Get rid of exponent
+            result.digits = image.length ();
+            if (image.contains ("-")) result.digits--;
+            if (image.contains (".")) result.digits--;
         }
         catch (NumberFormatException e)
         {

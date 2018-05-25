@@ -61,7 +61,30 @@ public class Constant extends Operator
     public void determineExponent (Variable from)
     {
         if (exponent != Integer.MIN_VALUE) return;  // already done
-        updateExponent (from, value.getExponent ());
+        if (value instanceof Scalar)
+        {
+            double v = ((Scalar) value).value;
+            int exponentNew;
+            int centerNew = MSB / 2 + 1;
+            if (v == 0)
+            {
+                exponentNew = MSB - centerNew;
+            }
+            else
+            {
+                int e = Math.getExponent (v);
+                if (unitValue != null)
+                {
+                    int bits = (int) Math.ceil (unitValue.digits * Math.log (10) / Math.log (2));
+                    centerNew = Math.max (centerNew, bits);
+                    centerNew = Math.min (centerNew, MSB);
+                }
+                exponentNew = e + MSB - centerNew;
+            }
+            updateExponent (from, exponentNew, centerNew);
+        }
+        // Matrix constants are built by BuildMatrix with their exponent and center values set correctly.
+        // Text and reference types are simply ignored (and should have exponent=Integer.MIN_VALUE).
     }
 
     public void render (Renderer renderer)

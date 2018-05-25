@@ -46,8 +46,8 @@ public class Gaussian extends Function
     {
         // The largest Gaussian PRNG output is determined by the bit precision of the underlying
         // uniform PRNG output. The Box-Muller implementation in the C Backend runtime will not
-        // exceed 6.66 standard deviations when using 32 bits uniform numbers. Thus, 8 std is safe.
-        updateExponent (from, 3);
+        // exceed 6.66 standard deviations when using 32 bits uniform numbers. Thus, 7 std is safe.
+        updateExponent (from, 2, MSB - 2);
     }
 
     public Type eval (Instance context) throws EvaluationException

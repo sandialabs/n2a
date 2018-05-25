@@ -60,8 +60,13 @@ public class Variable implements Comparable<Variable>
     public Variable                     visited;    // Points to the previous variable visited on the current path. Used to prevent infinite recursion. Only works on a single thread.
     public int                          priority;   // For evaluation order.
     public boolean                      changed;    // Indicates that analysis touched one or more equations in a way that merits another pass.
-    public int                          exponent     = Integer.MIN_VALUE; // For fixed point: power of most significant bit expected to be stored by this variable. The initial value of MIN_VALUE indicates unknown.
-    public int                          exponentLast = Integer.MIN_VALUE; // For fixed point: value of exponent to be fed into equations when this variable is referenced. Prevents infinite loop of growing exponent. When MIN_VALUE, use regular exponent instead.
+
+    // fixed-point analysis
+    public int                          exponent     = Integer.MIN_VALUE; // power of most significant bit expected to be stored by this variable. The initial value of MIN_VALUE indicates unknown.
+    public int                          exponentLast = Integer.MIN_VALUE; // value of exponent to be fed into equations when this variable is referenced. Prevents infinite loop of growing exponent. When MIN_VALUE, use regular exponent instead.
+    public int                          center       = Operator.MSB / 2 + 1;
+    public int                          centerLast   = center;
+    public Operator                     bound;                            // The expression that imposes the largest magnitude on this variable. May be null.
 
     // Internal backend
     // TODO: put this in a beckendData field, similar to EquationSet.backendData. The problem with this is the extra overhead to unpack the object.
@@ -500,7 +505,7 @@ public class Variable implements Comparable<Variable>
         String magnitude = getNamedValue ("fp");
         if (! magnitude.isEmpty ())
         {
-            if (exponent != Integer.MIN_VALUE) return false;
+            if (exponent != Integer.MIN_VALUE) return false;  // Already processed the hint.
             try
             {
                 Type result = Operator.parse (magnitude).eval (null);
@@ -514,44 +519,106 @@ public class Variable implements Comparable<Variable>
         }
 
         int exponentNew = exponent;
+        int centerNew   = center;
         changed = false;
 
         if (name.equals ("$t")  &&  order == 0)
         {
             exponentNew = exponentTime;
+            centerNew   = Operator.MSB - 19;  // allows 20 bits to accumulate $t', about 1 million time steps
         }
         else if (name.equals ("$index"))
         {
             exponentNew = Operator.MSB;
+            centerNew   = 0;
         }
         else if (name.equals ("$init")  ||  name.equals ("$live"))
         {
-            exponentNew = 0;  // boolean
+            // boolean is same as integer with a value of 1 or 0
+            exponentNew = Operator.MSB;
+            centerNew   = 0;
         }
         else
         {
+            // There are three sources of information on size of variable:
+            // 1) Direct equations -- Give specific values, particularly initial values.
+            // 2) Derivative -- Assuming 1 second of simulation, the derivative is about the same size as max integrated value.
+            // 3) Comparisons -- indicate a bound on how large the variable can become
+            // How to combine these?
+
+            // For center, we need to know the median of possible values.
+            // Very likely, one equation will fire most of the time, and we should simply use its center.
+            // However, there's no good way to estimate that, so assume all equations fire with equal frequency
+            // and take an average of their centers.
+            int pow   = 0;
+            int cent  = 0;
+            int count = 0;
             for (EquationEntry e : equations)
             {
                 if (e.expression != null)
                 {
                     e.expression.exponentNext = exponent;
                     e.expression.determineExponent (this);
-                    exponentNew = Math.max (exponentNew, e.expression.exponent);
+                    pow  += e.expression.exponent - Operator.MSB + e.expression.center;  // power of the center bit
+                    cent += e.expression.center;  // position of the center bit
+                    count++;
                 }
                 if (e.condition != null)
                 {
-                    e.condition.exponentNext = 0;  // boolean value only needs 1 bit
+                    e.condition.exponentNext = e.condition.exponent;
                     e.condition.determineExponent (this);
                     // Condition does not directly affect value stored in variable.
                 }
             }
-            if (derivative != null) exponentNew = Math.max (exponentNew, derivative.exponent);  // Assuming a simulation that lasts 1s, the derivative is exactly the same magnitude as the integrated value. Longer simulations will probably need a hinted value.
+            if (count > 0)
+            {
+                cent /= count;
+                pow  /= count;
+            }
+
+            // A derivative will almost always dominate any equations on the variable itself.
+            if (derivative == null)
+            {
+                if (count > 0)
+                {
+                    centerNew   = cent;
+                    exponentNew = pow + Operator.MSB - cent;
+                }
+            }
+            else
+            {
+                if (count > 0)
+                {
+                    // Attempt to balance both initial and integrated values.
+                    // If they are too far apart, this will fail and there is really nothing we can do about it.
+                    int d = derivative.exponent - Operator.MSB + derivative.center;  // Power of derivative center
+                    int avg = (d + pow) / 2;
+                    centerNew   = Operator.MSB / 2 + 1;
+                    exponentNew = avg - centerNew + Operator.MSB;
+                }
+                else
+                {
+                    centerNew   = derivative.center;
+                    exponentNew = derivative.exponent;
+                }
+            }
+
+            // Apply bound, if it exists.
+            if (bound != null)
+            {
+                int b = bound.exponent;  // For expressions, which have variable magnitude.
+                if (bound instanceof Constant) b -= Operator.MSB + bound.center;  // Constants have exactly one magnitude, so use it directly.
+                if (b > exponentNew)  // Ensure we can accommodate max magnitude.
+                {
+                    centerNew  -= b - exponentNew;
+                    exponentNew = b;
+                }
+            }
         }
-        if (exponentNew != exponent)
-        {
-            exponent = exponentNew;
-            changed = true;
-        }
+
+        if (exponentNew != exponent  ||  centerNew != center) changed = true;
+        exponent = exponentNew;
+        center   = centerNew;
         return changed;
     }
 

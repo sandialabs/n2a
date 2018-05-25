@@ -45,7 +45,7 @@ public class Event extends Function
         Operator cond = operands[0];
         cond.exponentNext = Math.max (cond.exponentNext, cond.exponent);  // exponentNext determines the magnitude of the temporary used to detect changes. Thus, it should increase monotonically.
         cond.determineExponent (from);
-        updateExponent (from, 0);  // Boolean value only needs 1 bit
+        updateExponent (from, MSB, 0);  // boolean, so treat as integer
     }
 
     public Type eval (Instance context)

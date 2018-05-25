@@ -57,14 +57,14 @@ public class ReadMatrix extends Function
         for (int i = 1; i <= lastParm; i++)
         {
             Operator op = operands[i];
-            if (raw) op.exponentNext = MSB;
+            if (raw) op.exponentNext = MSB;  // We expect an integer.
             else     op.exponentNext = op.exponent;
             op.determineExponent (from);
         }
 
         int exponentNew = MSB / 2 - 1;  // Q16.16
         exponentNew = getExponentHint (mode, exponentNew);
-        updateExponent (from, exponentNew);
+        updateExponent (from, exponentNew, MSB / 2 + 1);
     }
 
     public Matrix open (Instance context)

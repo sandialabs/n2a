@@ -110,15 +110,27 @@ public class Function extends Operator
 
     public void determineExponent (Variable from)
     {
-        int max = Integer.MIN_VALUE;
+        int cent  = 0;
+        int pow   = 0;
+        int count = 0;
         for (int i = 0; i < operands.length; i++)
         {
             Operator op = operands[i];
             op.exponentNext = exponentNext;
             op.determineExponent (from);
-            max = Math.max (exponent, op.exponent);
+            if (op.exponent != Integer.MIN_VALUE)
+            {
+                cent += op.center;
+                pow  += op.centerPower ();
+                count++;
+            }
         }
-        updateExponent (from, max);
+        if (count > 0)
+        {
+            cent /= count;
+            pow   = pow / count + MSB - cent;
+            updateExponent (from, pow, cent);
+        }
     }
 
     public void dumpExponents (String pad)
