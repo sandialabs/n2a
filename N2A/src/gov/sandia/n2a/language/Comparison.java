@@ -32,12 +32,24 @@ public class Comparison extends OperatorBinary
 
     public void determineExponent (Variable from)
     {
-        int next = Math.max (operand0.exponent, operand1.exponent);
+        int next;
+        if (operand0.exponent != UNKNOWN  &&  operand1.exponent != UNKNOWN)
+        {
+            next = (operand0.exponent + operand1.exponent) / 2;
+        }
+        else
+        {
+            next = Math.max (operand0.exponent, operand1.exponent);  // UNKNOWN is less than any valid value.
+        }
         operand0.exponentNext = next;
         operand1.exponentNext = next;
+
         operand0.determineExponent (from);
         operand1.determineExponent (from);
-        updateExponent (from, MSB, 0);  // Output is boolean, so treat as integer.
+        alignExponent (from);
+        int centerNew   = MSB / 2;
+        int exponentNew = MSB - centerNew;
+        updateExponent (from, exponentNew, centerNew);
 
         // Any time a variable is compared to a value, it is a clue about the expected range of the variable.
         // The following two blocks apply this heuristic.

@@ -58,33 +58,95 @@ public class Constant extends Operator
         }
     }
 
+    /**
+        Constants are constructed so that center points to the most-significant bit of the value.
+
+        TODO: Determine significant digits for scalar constants that lack unitValue.
+        This can happen, for example, if a constant is calculated from other values during
+        EquationSet.findConstants(). May also need to address this in BuildMatrix.
+    **/
     public void determineExponent (Variable from)
     {
-        if (exponent != Integer.MIN_VALUE) return;  // already done
+        if (exponent != UNKNOWN) return;  // already done
         if (value instanceof Scalar)
         {
             double v = ((Scalar) value).value;
-            int exponentNew;
-            int centerNew = MSB / 2 + 1;
-            if (v == 0)
+            int centerNew = MSB / 2;
+            if (unitValue != null)
             {
-                exponentNew = MSB - centerNew;
+                int bits = (int) Math.ceil (unitValue.digits * Math.log (10) / Math.log (2));
+                centerNew = Math.max (centerNew, bits - 1);
+                centerNew = Math.min (centerNew, MSB);
             }
-            else
-            {
-                int e = Math.getExponent (v);
-                if (unitValue != null)
-                {
-                    int bits = (int) Math.ceil (unitValue.digits * Math.log (10) / Math.log (2));
-                    centerNew = Math.max (centerNew, bits);
-                    centerNew = Math.min (centerNew, MSB);
-                }
-                exponentNew = e + MSB - centerNew;
-            }
+            int e = 0;
+            if (v != 0) e = Math.getExponent (v);
+            int exponentNew = e + MSB - centerNew;
             updateExponent (from, exponentNew, centerNew);
         }
         // Matrix constants are built by BuildMatrix with their exponent and center values set correctly.
         // Text and reference types are simply ignored (and should have exponent=Integer.MIN_VALUE).
+    }
+
+    /**
+        Adjusts this constant so it better aligns with another operand.
+    **/
+    public void determineExponent (Variable from, int exponentOther)
+    {
+        int shift = exponentOther - exponent;
+        if (exponent < exponentOther)  // need right shift (positive)
+        {
+            int z = trailingZeros ();
+            z += center - 23;  // 23 is position of implied msb of mantissa
+            z = Math.max (z, 0);
+            shift = Math.min (shift, z);
+        }
+        else if (exponentOther < exponent)  // need left shift (negative)
+        {
+            int z = MSB - center;
+            shift = Math.max (shift, -z);
+        }
+        int exponentNew = exponent + shift;
+        int centerNew   = center   - shift;
+        updateExponent (from, exponentNew, centerNew);
+    }
+
+    public int trailingZeros ()
+    {
+        if (! (value instanceof Scalar)) return 0;
+        float v = (float) ((Scalar) value).value;
+        if (v == 0) return Integer.MAX_VALUE;  // entire mantissa is zeros, so shift as much as desired
+
+        int result = 0;
+        int bits = Float.floatToRawIntBits (v) | 0x800000;  // Forced the implied first bit of mantissa to be 1, to stop iteration.
+        while ((bits & 0x1) == 0)
+        {
+            result++;
+            bits >>= 1;
+        }
+        return result;
+    }
+
+    public void dumpExponents (String pad)
+    {
+        super.dumpExponents (pad);
+
+        /*
+        if (exponent == UNKNOWN) return;
+        if (value instanceof Scalar)
+        {
+            double v = ((Scalar) value).value;
+            System.out.print (pad + " ");
+            if (unitValue != null)
+            {
+                int bits = (int) Math.ceil (unitValue.digits * Math.log (10) / Math.log (2));
+                System.out.print (" bits=" + bits + " digits=" + unitValue.digits);
+            }
+            int e = 0;
+            if (v != 0) e = Math.getExponent (v);
+            System.out.print (" e=" + e);
+            System.out.println ();
+        }
+        */
     }
 
     public void render (Renderer renderer)

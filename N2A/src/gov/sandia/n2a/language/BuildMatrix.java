@@ -135,8 +135,9 @@ public class BuildMatrix extends Operator
 
         Matrix A = new MatrixDense (rows, cols);  // potential constant to replace us
         boolean isConstant = true;  // any element that is not constant will change this to false
-        int cent = 0;  // for fixed-point analysis
-        int pow  = 0;
+        int cent  = 0;  // for fixed-point analysis
+        int pow   = 0;
+        int count = 0;
         for (int c = 0; c < cols; c++)
         {
             for (int r = 0; r < rows; r++)
@@ -159,23 +160,19 @@ public class BuildMatrix extends Operator
                                 double v = ((Scalar) o).value;
                                 A.set (r, c, v);
 
-                                int tempCent = MSB / 2 + 1;
-                                if (v == 0)
+                                if (v != 0)
                                 {
-                                    pow += MSB - tempCent;
-                                }
-                                else
-                                {
-                                    int e = Math.getExponent (v);
+                                    int tempCent = MSB / 2;
                                     if (op.unitValue != null)
                                     {
                                         int bits = (int) Math.ceil (op.unitValue.digits * Math.log (10) / Math.log (2));
-                                        tempCent = Math.max (tempCent, bits);
+                                        tempCent = Math.max (tempCent, bits - 1);
                                         tempCent = Math.min (tempCent, MSB);
                                     }
-                                    pow += e + MSB - tempCent;
+                                    cent += tempCent;
+                                    pow  += Math.getExponent (v);
+                                    count++;
                                 }
-                                cent += tempCent;
                             }
                             else if (o instanceof Text  ) A.set (r, c, Double.valueOf (((Text) o).value));
                             else if (o instanceof Matrix) A.set (r, c, ((Matrix) o).get (0, 0));
@@ -194,11 +191,18 @@ public class BuildMatrix extends Operator
         {
             from.changed = true;
             Constant result = new Constant (A);
-            int count = rows * cols;
-            cent /= count;
-            pow  /= count;
-            result.center   = cent;
-            result.exponent = pow + MSB - cent;
+            if (count > 0)
+            {
+                cent /= count;
+                pow  /= count;
+                result.center   = cent;
+                result.exponent = pow + MSB - cent;
+            }
+            else
+            {
+                result.center   = MSB / 2;
+                result.exponent = MSB - result.center;
+            }
             return result;
         }
         return this;
@@ -211,23 +215,55 @@ public class BuildMatrix extends Operator
         int rows = operands[0].length;
         if (rows == 0) return;
 
-        int cent = 0;
-        int pow  = 0;
+        int cent  = 0;
+        int pow   = 0;
+        int count = 0;
         for (Operator[] c : operands)
         {
             for (Operator e : c)
             {
                 e.exponentNext = exponentNext;
                 e.determineExponent (from);
-                cent += e.center;
-                pow  += e.exponent - Operator.MSB + e.center;
+                if (! (e instanceof Constant)  ||  e.getDouble () != 0)  // avoid counting zeros
+                {
+                    cent += e.center;
+                    pow  += e.centerPower ();
+                    count++;
+                }
             }
         }
-        int count = rows * cols;
-        cent /= count;
-        pow  /= count;
-        pow += Operator.MSB - cent;
+        if (count > 0)
+        {
+            cent /= count;
+            pow  /= count;
+            pow += MSB - cent;
+        }
+        else
+        {
+            cent = MSB / 2;
+            pow  = MSB - cent;
+        }
         updateExponent (from, pow, cent);
+    }
+
+    public void dumpExponents (String pad)
+    {
+        super.dumpExponents (pad);
+
+        int columns = operands.length;
+        if (columns == 0) return;
+        int rows = operands[0].length;
+
+        pad += "  ";
+        for (int c = 0; c < columns; c++)
+        {
+            for (int r = 0; r < rows; r++)
+            {
+                if (operands[c][r] == null) continue;
+                System.out.println (pad + r + "," + c + ": ");
+                operands[c][r].dumpExponents (pad + "  ");
+            }
+        }
     }
 
     public void render (Renderer renderer)

@@ -38,7 +38,9 @@ public class Signum extends Function
         Operator op = operands[0];
         op.exponentNext = op.exponent;
         op.determineExponent (from);
-        updateExponent (from, MSB, 0);
+        int centerNew   = MSB / 2;
+        int exponentNew = MSB - centerNew;
+        updateExponent (from, exponentNew, centerNew);
     }
 
     public Type eval (Instance context)

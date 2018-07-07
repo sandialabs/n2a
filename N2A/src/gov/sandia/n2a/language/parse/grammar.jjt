@@ -377,9 +377,11 @@ void Constant() #Constant : {Token t; Token u; String unitName = "";}
             else if (image.equals (".nan")) result.value = Double.NaN;
             else                            result.value = Double.parseDouble (t.image);
             image = image.split ("e")[0];  // Get rid of exponent
+            image = image.replace ("-", "");
+            image = image.replace (".", "");
+            while (image.startsWith ("0")) image = image.substring (1);
+            while (image.endsWith   ("0")) image = image.substring (0, image.length () - 1);
             result.digits = image.length ();
-            if (image.contains ("-")) result.digits--;
-            if (image.contains (".")) result.digits--;
         }
         catch (NumberFormatException e)
         {

@@ -72,8 +72,7 @@ public class OperatorUnary extends Operator
 
     public void dumpExponents (String pad)
     {
-        //System.out.println (pad + this + " " + exponentNext + " " + exponent);
-        System.out.println (pad + this + " " + exponent);
+        super.dumpExponents (pad);
         operand.dumpExponents (pad + "  ");
     }
 

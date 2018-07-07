@@ -76,7 +76,7 @@ public class AccessVariable extends Operator
         {
             from.removeDependencyOn (v);
             from.changed = true;
-            return e.expression;
+            return e.expression.deepCopy ();
         }
 
         // Attempt to simplify expression, and maybe get a Constant
@@ -114,8 +114,8 @@ public class AccessVariable extends Operator
     public void determineExponent (Variable from)
     {
         Variable v = reference.variable;
-        if (v.exponentLast != Integer.MIN_VALUE) updateExponent (from, v.exponentLast, v.centerLast);
-        else                                     updateExponent (from, v.exponent,     v.center);
+        if (v.exponentLast != UNKNOWN) updateExponent (from, v.exponentLast, v.centerLast);
+        else                           updateExponent (from, v.exponent,     v.center);
     }
 
     public Type eval (Instance instance)

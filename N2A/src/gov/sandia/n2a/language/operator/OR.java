@@ -73,7 +73,9 @@ public class OR extends OperatorBinary
         operand1.exponentNext = operand1.exponent;
         operand0.determineExponent (from);
         operand1.determineExponent (from);
-        updateExponent (from, MSB, 0);
+        int centerNew   = MSB / 2;
+        int exponentNew = MSB - centerNew;
+        updateExponent (from, exponentNew, centerNew);
     }
 
     public Type eval (Instance context)

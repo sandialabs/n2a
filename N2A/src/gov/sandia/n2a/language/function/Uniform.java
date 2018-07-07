@@ -53,7 +53,7 @@ public class Uniform extends Function
         }
         else
         {
-            updateExponent (from, 0, MSB);  // Largest absolute value is 1
+            updateExponent (from, 0, MSB - 2);  // Largest absolute value is 1
         }
     }
 

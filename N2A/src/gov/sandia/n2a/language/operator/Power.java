@@ -13,6 +13,7 @@ import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.function.Log;
 import gov.sandia.n2a.language.type.Instance;
+import gov.sandia.n2a.language.type.Scalar;
 
 public class Power extends OperatorBinary
 {
@@ -42,6 +43,25 @@ public class Power extends OperatorBinary
         return 3;
     }
 
+    public Operator simplify (Variable from)
+    {
+        Operator result = super.simplify (from);
+        if (result != this) return result;
+
+        if (operand1 instanceof Constant)
+        {
+            Type c1 = ((Constant) operand1).value;
+            if (c1 instanceof Scalar  &&  ((Scalar) c1).value == 1)
+            {
+                from.changed = true;
+                return operand0;
+            }
+            // It would be nice to simplify out x^0. However, if x==0 at runtime, the correct answer is NaN rather than 1.
+            // Since we can't know x ahead of time, and NaN may be important to correct processing, we don't touch that case.
+        }
+        return this;
+    }
+
     public void determineExponent (Variable from)
     {
         operand0.exponentNext = operand0.exponent;
@@ -54,7 +74,7 @@ public class Power extends OperatorBinary
         // See notes on Exp.determineExponent()
         // If the second operand is negative, the user must specify a hint, which requires the use of pow() instead.
 
-        if (operand0.exponent != Integer.MIN_VALUE  &&  operand1.exponent != Integer.MIN_VALUE)
+        if (operand0.exponent != UNKNOWN  &&  operand1.exponent != UNKNOWN)
         {
             double log2b = 0;
             if (operand0 instanceof Constant)
@@ -71,10 +91,11 @@ public class Power extends OperatorBinary
             if (operand1 instanceof Constant) a = operand1.getDouble ();
             else                              a = Math.pow (2, operand1.centerPower ());
 
-            int exponentNew;
-            if (log2b == 0  ||  a == 0) exponentNew = MSB / 2 - 1;
-            else                        exponentNew = (int) Math.floor (a * log2b);
-            updateExponent (from, exponentNew, MSB / 2 + 1);
+            int centerNew   = MSB / 2;
+            int exponentNew = 0;
+            if (log2b != 0  &&  a != 0) exponentNew = (int) Math.floor (a * log2b);
+            exponentNew += MSB - centerNew;
+            updateExponent (from, exponentNew, centerNew);
         }
     }
 

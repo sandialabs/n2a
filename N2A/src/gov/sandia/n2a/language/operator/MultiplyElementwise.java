@@ -72,9 +72,9 @@ public class MultiplyElementwise extends OperatorBinary
         operand0.determineExponent (from);
         operand1.determineExponent (from);
 
-        if (operand0.exponent != Integer.MIN_VALUE  &&  operand1.exponent != Integer.MIN_VALUE)
+        if (operand0.exponent != UNKNOWN  &&  operand1.exponent != UNKNOWN)
         {
-            int cent = MSB / 2 + 1;
+            int cent = MSB / 2;
             int pow = operand0.centerPower () + operand1.centerPower ();
             pow += MSB - cent;
             updateExponent (from, pow, cent);

@@ -44,10 +44,10 @@ public class Log extends Function
         // let p = power of center of result
         // p = log2(log(2^o)) = log2(o*log(2)) = log2(o)+log2(log(2)) < log2(o)+1
 
-        if (op.exponent == Integer.MIN_VALUE) return;
-        int o = op.exponent - MSB + op.center;  // power of center
+        if (op.exponent == UNKNOWN) return;
+        int o = op.centerPower ();
         int p = (int) Math.floor (Math.log (o) / Math.log (2)) + 1;
-        int centerNew   = MSB / 2 + 1;
+        int centerNew   = MSB / 2;
         int exponentNew = p + MSB - centerNew;
         updateExponent (from, exponentNew, centerNew);
     }

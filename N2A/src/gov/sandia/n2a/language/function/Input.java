@@ -65,8 +65,9 @@ public class Input extends Function
         String mode;
         if (operands.length > 3) mode = operands[3].getString ();
         else                     mode = operands[1].getString ();
-        int exponentNew = getExponentHint (mode, MSB / 2 - 1);
-        updateExponent (from, exponentNew, MSB / 2 + 1);
+        int centerNew   = MSB / 2;
+        int exponentNew = getExponentHint (mode, 0) + MSB - centerNew;
+        updateExponent (from, exponentNew, centerNew);
     }
 
     public static class Holder

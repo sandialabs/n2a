@@ -65,9 +65,10 @@ public class Operator implements Cloneable
 {
     // Fixed-point
     // TODO: use libfixmath in C backend
+    public static int UNKNOWN = Integer.MIN_VALUE;
     /**
         Zero-based index of most significant bit in the machine word.
-        Generally, the bit immediately following the sign bit.
+        Generally, the bit immediately below the sign bit.
     **/
     public static int MSB = 30;
     /**
@@ -75,24 +76,23 @@ public class Operator implements Cloneable
         In the fixed-point analysis implemented by Operator, all bits are fractional just like IEEE floats,
         and we keep track of the power of the most significant bit, just like the IEEE float exponent.
         In the case of a simple integer, exponent is equal to MSB.
-        Integer.MIN_VALUE means undefined.
         We expect that the fixed-point implementation will do saturation checks, so we don't accommodate
         the largest possible output of each operation, only the median.
         Ideally, only the lower half of the available bits will be occupied.
     **/
-    public int exponent = Integer.MIN_VALUE;
+    public int exponent = UNKNOWN;
     /**
-        Zero-based index of median magnitude, the functional equivalent of the "one" position in the machine word.
-        For numbers with a range of magnitudes, this will generally be MSB/2+1 (equivalent to Q16.16 format).
-        It is expected that at least half the time, all nonzero bits are below this position in the word.
-        Simple integers, on the other hand, with set this to 0, and all their nonzero bits are at or above this position.
+        Zero-based index of median magnitude.
+        For numbers with a range of magnitudes, this will generally be MSB/2 (equivalent to Q16.16 format).
+        It is expected that about half the time, all nonzero bits are at or below this position in the word.
+        Simple integers, on the other hand, will set this to 0, and all their nonzero bits are at or above this position.
     **/
-    public int center = MSB / 2 + 1;
+    public int center = MSB / 2;
     /**
         The power of bit that occupies the MSB position, as required by the operator that contains us.
         Used to determine shifts.
     **/
-    public int exponentNext = Integer.MIN_VALUE;
+    public int exponentNext = UNKNOWN;
 
     public interface Factory extends ExtensionPoint
     {
@@ -123,15 +123,14 @@ public class Operator implements Cloneable
 
     public Operator deepCopy ()
     {
-        Operator result = null;
         try
         {
-            result = (Operator) this.clone ();
+            return (Operator) this.clone ();
         }
         catch (CloneNotSupportedException e)
         {
+            return null;
         }
-        return result;
     }
 
     public enum Associativity
@@ -186,8 +185,12 @@ public class Operator implements Cloneable
 
     public void dumpExponents (String pad)
     {
-        //System.out.println (pad + this + " " + exponentNext + " " + exponent);
-        System.out.println (pad + this + " " + exponent);
+        System.out.print (pad + this + " (");
+        if (exponentNext == UNKNOWN) System.out.print ("unknown,");
+        else                         System.out.print (exponentNext + ",");
+        if (exponent == UNKNOWN) System.out.print ("unknown");
+        else                     System.out.print (exponent + "," + center);
+        System.out.println (")");
     }
 
     /**
@@ -200,6 +203,10 @@ public class Operator implements Cloneable
         center   = centerNew;
     }
 
+    /**
+        The hint is expected to be a median magnitude, that is, a center power.
+        A reasonable default is 0, which produces Q16.16 numbers.
+    **/
     public int getExponentHint (String mode, int defaultValue)
     {
         for (String p : mode.split (","))
@@ -209,14 +216,12 @@ public class Operator implements Cloneable
                 String magnitude = "";
                 String[] pieces = p.split ("=", 2);
                 if (pieces.length > 1) magnitude = pieces[1].trim ();
-                if (magnitude.isEmpty ()) return MSB / 2 - 1;  // Q16.16, or equivalent
+                if (magnitude.isEmpty ()) return 0;
                 try
                 {
-                    Type value = parse (magnitude).eval (null);
-                    if (value instanceof Scalar)  // This test shouldn't be necessary.
-                    {
-                        return (int) Math.floor (Math.log (((Scalar) value).value) / Math.log (2));  // log base 2
-                    }
+                    double value = parse (magnitude).getDouble ();
+                    if (value <= 0) return 0;
+                    return (int) Math.floor (Math.log (value) / Math.log (2));  // log base 2
                 }
                 catch (ParseException e) {}
                 break;
@@ -283,7 +288,7 @@ public class Operator implements Cloneable
     }
 
     /**
-        Extract the value of a scalar constant without using eval().
+        Extracts the value of a scalar constant without using eval().
         If this is not a scalar constant, then return 0.
     **/
     public double getDouble ()
@@ -292,6 +297,15 @@ public class Operator implements Cloneable
         Type value = ((Constant) this).value;
         if (value instanceof Scalar) return ((Scalar) value).value;
         return 0;
+    }
+
+    /**
+        Determines if this is a scalar constant without using eval().
+    **/
+    public boolean isScalar ()
+    {
+        if (! (this instanceof Constant)) return false;
+        return ((Constant) this).value instanceof Scalar;
     }
 
     public void solve (Equality statement) throws EvaluationException

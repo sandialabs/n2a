@@ -12,6 +12,7 @@ import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
+import gov.sandia.n2a.language.type.Scalar;
 
 /**
     Function equivalent of Power operator.
@@ -35,6 +36,26 @@ public class Pow extends Function
         };
     }
 
+    public Operator simplify (Variable from)
+    {
+        Operator result = super.simplify (from);
+        if (result != this) return result;
+
+        Operator o1 = operands[1];
+        if (o1 instanceof Constant)
+        {
+            Type c1 = ((Constant) o1).value;
+            if (c1 instanceof Scalar  &&  ((Scalar) c1).value == 1)
+            {
+                from.changed = true;
+                return operands[0];
+            }
+            // It would be nice to simplify out x^0. However, if x==0 at runtime, the correct answer is NaN rather than 1.
+            // Since we can't know x ahead of time, and NaN may be important to correct processing, we don't touch that case.
+        }
+        return this;
+    }
+
     public void determineExponent (Variable from)
     {
         Operator operand0 = operands[0];
@@ -50,8 +71,9 @@ public class Pow extends Function
         // See notes on Exp.determineExponent()
         // If the second operand is negative, the user must specify a hint.
 
-        int exponentNew = Integer.MIN_VALUE;
-        if (operand0.exponent != Integer.MIN_VALUE  &&  operand1.exponent != Integer.MIN_VALUE)
+        int centerNew   = MSB / 2;
+        int exponentNew = UNKNOWN;
+        if (operand0.exponent != UNKNOWN  &&  operand1.exponent != UNKNOWN)
         {
             double log2b = 0;
             if (operand0 instanceof Constant)
@@ -61,18 +83,22 @@ public class Pow extends Function
             }
             else
             {
-                log2b = operand0.exponent - MSB + operand0.center;
+                log2b = operand0.centerPower ();
             }
 
             double a;
             if (operand1 instanceof Constant) a = operand1.getDouble ();
             else                              a = Math.pow (2, operand1.centerPower ());
 
-            if (log2b == 0  ||  a == 0) exponentNew = MSB / 2 - 1;
-            else                        exponentNew = (int) Math.floor (a * log2b);
+            exponentNew = 0;
+            if (log2b != 0  &&  a != 0) exponentNew = (int) Math.floor (a * log2b);
         }
         if (operands.length >= 3) exponentNew = getExponentHint (operands[2].getString (), exponentNew);
-        updateExponent (from, exponentNew, MSB / 2 + 1);
+        if (exponentNew != UNKNOWN)
+        {
+            exponentNew += MSB - centerNew;
+            updateExponent (from, exponentNew, centerNew);
+        }
     }
 
     public Type eval (Instance context)

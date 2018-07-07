@@ -62,9 +62,9 @@ public class Variable implements Comparable<Variable>
     public boolean                      changed;    // Indicates that analysis touched one or more equations in a way that merits another pass.
 
     // fixed-point analysis
-    public int                          exponent     = Integer.MIN_VALUE; // power of most significant bit expected to be stored by this variable. The initial value of MIN_VALUE indicates unknown.
-    public int                          exponentLast = Integer.MIN_VALUE; // value of exponent to be fed into equations when this variable is referenced. Prevents infinite loop of growing exponent. When MIN_VALUE, use regular exponent instead.
-    public int                          center       = Operator.MSB / 2 + 1;
+    public int                          exponent     = Operator.UNKNOWN; // power of most significant bit expected to be stored by this variable. The initial value of MIN_VALUE indicates unknown.
+    public int                          exponentLast = Operator.UNKNOWN; // value of exponent to be fed into equations when this variable is referenced. Prevents infinite loop of growing exponent. When MIN_VALUE, use regular exponent instead.
+    public int                          center       = Operator.MSB / 2;
     public int                          centerLast   = center;
     public Operator                     bound;                            // The expression that imposes the largest magnitude on this variable. May be null.
 
@@ -321,7 +321,7 @@ public class Variable implements Comparable<Variable>
                     if (e0.compareTo (e1) == 0)  // Condition strings are exactly the same. TODO: compare ASTs for actual logic equivalence.
                     {
                         e = new EquationEntry (this, "");
-                        e.condition = e0.condition;
+                        if (e0.condition != null) e.condition = e0.condition.deepCopy ();
                     }
                     else if (e0.condition == null)
                     {
@@ -329,33 +329,33 @@ public class Variable implements Comparable<Variable>
                         // If so, then only those equations should be merged, so skip this one.
                         if (find (e1) != null) continue;
                         e = new EquationEntry (this, "");
-                        e.condition = e1.condition;
+                        if (e1.condition != null) e.condition = e1.condition.deepCopy ();
                     }
                     else if (e1.condition == null)
                     {
                         // Check if e0.condition exists in v.equations
                         if (v.find (e0) != null) continue;
                         e = new EquationEntry (this, "");
-                        e.condition = e0.condition;
+                        if (e0.condition != null) e.condition = e0.condition.deepCopy ();
                     }
                     else
                     {
                         e = new EquationEntry (this, "");
                         AND and = new AND ();
                         e.condition = and;
-                        and.operand0 = e0.condition;
-                        and.operand1 = e1.condition;
+                        and.operand0 = e0.condition.deepCopy ();
+                        and.operand1 = e1.condition.deepCopy ();
                     }
                     if (e.condition != null) e.ifString = e.condition.render ();
 
                     // merge expressions
                     if (e0.expression == null)
                     {
-                        e.expression = e1.expression;  // which could also be null
+                        if (e1.expression != null) e.expression = e1.expression.deepCopy ();
                     }
                     else if (e1.expression == null)
                     {
-                        e.expression = e0.expression;
+                        if (e0.expression != null) e.expression = e0.expression.deepCopy ();
                     }
                     else  // Both expressions exist
                     {
@@ -371,14 +371,14 @@ public class Variable implements Comparable<Variable>
                         }
                         if (op != null)
                         {
-                            op.operand0 = e0.expression;
-                            op.operand1 = e1.expression;
+                            op.operand0 = e0.expression.deepCopy ();
+                            op.operand1 = e1.expression.deepCopy ();
                             e.expression = op;
                         }
                         else if (f != null)
                         {
-                            f.operands[0] = e0.expression;
-                            f.operands[1] = e1.expression;
+                            f.operands[0] = e0.expression.deepCopy ();
+                            f.operands[1] = e1.expression.deepCopy ();
                             e.expression = f;
                         }
                     }
@@ -505,38 +505,38 @@ public class Variable implements Comparable<Variable>
         String magnitude = getNamedValue ("fp");
         if (! magnitude.isEmpty ())
         {
-            if (exponent != Integer.MIN_VALUE) return false;  // Already processed the hint.
+            if (exponent != Operator.UNKNOWN) return false;  // Already processed the hint.
             try
             {
-                Type result = Operator.parse (magnitude).eval (null);
-                if (result instanceof Scalar)
-                {
-                    exponent = (int) Math.floor (Math.log (((Scalar) result).value) / Math.log (2));  // log base 2
-                    return true;
-                }
+                double value = Operator.parse (magnitude).getDouble ();
+                if (value <= 0) exponent = 0;
+                else            exponent = (int) Math.floor (Math.log (value) / Math.log (2));  // log2 (value)
+                center    = Operator.MSB / 2;
+                exponent += Operator.MSB - center;
+                return true;
             }
             catch (ParseException e) {}
         }
 
-        int exponentNew = exponent;
         int centerNew   = center;
+        int exponentNew = exponent;
         changed = false;
 
         if (name.equals ("$t")  &&  order == 0)
         {
+            centerNew   = Operator.MSB - 1;  // Half the time, the msb won't be set. The other half, it will.
             exponentNew = exponentTime;
-            centerNew   = Operator.MSB - 19;  // allows 20 bits to accumulate $t', about 1 million time steps
         }
-        else if (name.equals ("$index"))
+        else if (name.equals ("$index"))  // The only variable that is stored as a pure integer.
         {
-            exponentNew = Operator.MSB;
             centerNew   = 0;
+            exponentNew = Operator.MSB;
         }
         else if (name.equals ("$init")  ||  name.equals ("$live"))
         {
-            // boolean is same as integer with a value of 1 or 0
-            exponentNew = Operator.MSB;
-            centerNew   = 0;
+            // Booleans are stored as regular floats.
+            centerNew   = Operator.MSB / 2;
+            exponentNew = Operator.MSB - centerNew;
         }
         else
         {
@@ -559,9 +559,12 @@ public class Variable implements Comparable<Variable>
                 {
                     e.expression.exponentNext = exponent;
                     e.expression.determineExponent (this);
-                    pow  += e.expression.exponent - Operator.MSB + e.expression.center;  // power of the center bit
-                    cent += e.expression.center;  // position of the center bit
-                    count++;
+                    if (e.expression.exponent != Operator.UNKNOWN)  // Only count equations that have known values of exponent and center.
+                    {
+                        pow  += e.expression.centerPower ();  // power of the center bit
+                        cent += e.expression.center;       // position of the center bit
+                        count++;
+                    }
                 }
                 if (e.condition != null)
                 {
@@ -577,7 +580,7 @@ public class Variable implements Comparable<Variable>
             }
 
             // A derivative will almost always dominate any equations on the variable itself.
-            if (derivative == null)
+            if (derivative == null  ||  derivative.exponent == Operator.UNKNOWN)
             {
                 if (count > 0)
                 {
@@ -591,10 +594,10 @@ public class Variable implements Comparable<Variable>
                 {
                     // Attempt to balance both initial and integrated values.
                     // If they are too far apart, this will fail and there is really nothing we can do about it.
-                    int d = derivative.exponent - Operator.MSB + derivative.center;  // Power of derivative center
+                    int d = derivative.exponent - Operator.MSB + derivative.center;  // Power of derivative center. See Operator.centerPower().
                     int avg = (d + pow) / 2;
-                    centerNew   = Operator.MSB / 2 + 1;
-                    exponentNew = avg - centerNew + Operator.MSB;
+                    centerNew   = Operator.MSB / 2;
+                    exponentNew = avg + Operator.MSB - centerNew;
                 }
                 else
                 {
@@ -604,14 +607,35 @@ public class Variable implements Comparable<Variable>
             }
 
             // Apply bound, if it exists.
-            if (bound != null)
+            if (bound != null  &&  bound.exponent != Operator.UNKNOWN)
             {
-                int b = bound.exponent;  // For expressions, which have variable magnitude.
-                if (bound instanceof Constant) b -= Operator.MSB + bound.center;  // Constants have exactly one magnitude, so use it directly.
-                if (b > exponentNew)  // Ensure we can accommodate max magnitude.
+                if (exponentNew == Operator.UNKNOWN)
                 {
-                    centerNew  -= b - exponentNew;
-                    exponentNew = b;
+                    centerNew   = bound.center;
+                    exponentNew = bound.exponent;
+                }
+                else
+                {
+                    int b = bound.exponent;  // For expressions, which have variable magnitude.
+                    if (bound instanceof Constant) b = bound.centerPower ();  // Constants have exactly one magnitude (and center is always shifted to hold it), so use directly.
+                    if (b > exponentNew)  // Ensure we can accommodate max magnitude.
+                    {
+                        centerNew  -= b - exponentNew;
+                        exponentNew = b;
+                    }
+                }
+            }
+
+            // Special cases
+            if (name.equals ("$t")  &&  order == 1)  // $t'
+            {
+                // Align with $t
+                centerNew += exponentTime - exponentNew;
+                exponentNew = exponentTime;
+                if (centerNew < 0  ||  centerNew > Operator.MSB)
+                {
+                    Backend.err.get ().println ("ERROR: not enough fixed-point resolution for given $t'");
+                    throw new Backend.AbortRun ();
                 }
             }
         }
@@ -624,7 +648,22 @@ public class Variable implements Comparable<Variable>
 
     public void dumpExponents ()
     {
-        System.out.println (container.prefix () + "." + nameString () + " " + exponent);
+        System.out.print (container.prefix () + "." + nameString () + " (");
+        if (exponent == Operator.UNKNOWN)
+        {
+            System.out.print ("unknown");
+        }
+        else
+        {
+            System.out.print (exponent + "," + center);
+        }
+        System.out.print (")");
+        if (exponentLast != Operator.UNKNOWN)
+        {
+            System.out.print (" last (" + exponentLast + "," + centerLast + ")");
+        }
+        System.out.println ();
+
         for (EquationEntry e : equations)
         {
             System.out.println ("  equation");

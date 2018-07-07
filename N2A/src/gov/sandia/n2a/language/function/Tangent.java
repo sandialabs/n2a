@@ -39,9 +39,11 @@ public class Tangent extends Function
         op.exponentNext = op.exponent;
         op.determineExponent (from);
 
-        int exponentNew = MSB / 2 - 1;  // Q16.16
+        int centerNew   = MSB / 2;
+        int exponentNew = 0;
         if (operands.length >= 2) exponentNew = getExponentHint (operands[1].getString (), exponentNew);
-        updateExponent (from, exponentNew, MSB / 2 + 1);
+        exponentNew += MSB - centerNew;
+        updateExponent (from, exponentNew, centerNew);
     }
 
     public Type eval (Instance context)

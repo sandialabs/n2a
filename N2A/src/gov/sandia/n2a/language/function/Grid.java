@@ -52,8 +52,8 @@ public class Grid extends Function
             if (mode instanceof Text  &&  ((Text) mode).value.contains ("raw")) raw = true;
         }
 
-        if (raw) updateExponent (from, MSB, 0);   // integer
-        else     updateExponent (from, -1,  MSB); // Since output never quite reaches 1, all bits can be fractional.
+        if (raw) updateExponent (from, MSB, 0);       // integer
+        else     updateExponent (from, -1,  MSB - 1); // Since output never quite reaches 1, all bits can be fractional.
     }
 
     public Type eval (Instance context) throws EvaluationException

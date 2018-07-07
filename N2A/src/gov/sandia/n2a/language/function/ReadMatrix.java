@@ -62,9 +62,9 @@ public class ReadMatrix extends Function
             op.determineExponent (from);
         }
 
-        int exponentNew = MSB / 2 - 1;  // Q16.16
-        exponentNew = getExponentHint (mode, exponentNew);
-        updateExponent (from, exponentNew, MSB / 2 + 1);
+        int centerNew   = MSB / 2;
+        int exponentNew = getExponentHint (mode, 0) + MSB - centerNew;
+        updateExponent (from, exponentNew, centerNew);
     }
 
     public Matrix open (Instance context)

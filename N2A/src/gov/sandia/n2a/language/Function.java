@@ -118,7 +118,7 @@ public class Function extends Operator
             Operator op = operands[i];
             op.exponentNext = exponentNext;
             op.determineExponent (from);
-            if (op.exponent != Integer.MIN_VALUE)
+            if (op.exponent != UNKNOWN)
             {
                 cent += op.center;
                 pow  += op.centerPower ();
@@ -135,8 +135,7 @@ public class Function extends Operator
 
     public void dumpExponents (String pad)
     {
-        //System.out.println (pad + this + " " + exponentNext + " " + exponent);
-        System.out.println (pad + this + " " + exponent);
+        super.dumpExponents (pad);
         for (int i = 0; i < operands.length; i++) operands[i].dumpExponents (pad + "  ");
     }
 

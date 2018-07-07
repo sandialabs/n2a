@@ -70,10 +70,20 @@ public class OperatorBinary extends Operator
         return this;
     }
 
+    /**
+        Adjusts a constant operand so it better aligns with the non-constant operand.
+        Directly modifies the fixed-point configuration of the constant.
+    **/
+    public void alignExponent (Variable from)
+    {
+        if (operand0.exponent == UNKNOWN  ||  operand1.exponent == UNKNOWN) return;
+        if      (operand0.isScalar ()) ((Constant) operand0).determineExponent (from, operand1.exponent);
+        else if (operand1.isScalar ()) ((Constant) operand1).determineExponent (from, operand0.exponent);
+    }
+
     public void dumpExponents (String pad)
     {
-        //System.out.println (pad + this + " " + exponentNext + " " + exponent);
-        System.out.println (pad + this + " " + exponent);
+        super.dumpExponents (pad);
         operand0.dumpExponents (pad + "  ");
         operand1.dumpExponents (pad + "  ");
     }

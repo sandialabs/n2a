@@ -1731,14 +1731,16 @@ public class EquationSet implements Comparable<EquationSet>
         determineExponentsInit (ev);
 
         boolean all = false;
-        int wait = 1;
+        int wait = 0;
         List<Variable> overflows = new ArrayList<Variable> ();
         while (true)
         {
             System.out.println ("-----------------------------------------------------------------");
             System.out.println ("top of loop " + all + " " + wait);
             int exponentTime = ev.maxTime ();
-            if (! determineExponentsEval (overflows, all  &&  wait-- <= 0, exponentTime)) break;
+            if (all) wait--;
+            else     wait++;
+            if (! determineExponentsEval (overflows, all  &&  wait < 0, exponentTime)) break;
             if (! all) all = allExponentsDetermined ();
             dumpExponents ();
         }
@@ -1746,7 +1748,7 @@ public class EquationSet implements Comparable<EquationSet>
         if (overflows.size () > 0)
         {
             PrintStream err = Backend.err.get ();
-            err.println ("WARNING: Possible fixed-point overflow. Add a hint (fp=max_absolute_value) to each of these variables:");
+            err.println ("WARNING: Possible fixed-point overflow. Add a hint (fp=median_value) to each of these variables:");
             for (Variable v : overflows)
             {
                 err.println ("  " + v.container.prefix () + "." + v.nameString ());
@@ -1766,20 +1768,20 @@ public class EquationSet implements Comparable<EquationSet>
 
         public ExponentVisitor (double duration)
         {
-            if (duration == 0) exponentTime = Integer.MIN_VALUE;
+            if (duration == 0) exponentTime = Operator.UNKNOWN;
             else               exponentTime = (int) Math.floor (Math.log (duration) / Math.log (2));
         }
 
         public int maxTime ()
         {
             // If duration was specified, simply return it.
-            if (exponentTime != Integer.MIN_VALUE) return exponentTime;
+            if (exponentTime != Operator.UNKNOWN) return exponentTime;
 
             int min = Integer.MAX_VALUE;
             for (Variable v : dt) min = Math.min (min, v.exponent);
             if (min == Integer.MAX_VALUE) return 1;  // If no value of $t' has been set yet, estimate duration as 1s.
 
-            return min + 20;  // +20 allows one million timesteps, each with 10 bit resolution
+            return min + 20;  // +20 allows one million minimally-sized timesteps, each with 10 bit resolution
         }
     }
 
@@ -1797,7 +1799,7 @@ public class EquationSet implements Comparable<EquationSet>
     {
         for (Variable v : variables)
         {
-            if (v.exponent == Integer.MIN_VALUE)
+            if (v.exponent == Operator.UNKNOWN)
             {
                 System.out.println ("  undetermined: " + v.container.prefix () + "." + v.nameString ());
                 return false;
@@ -1815,7 +1817,7 @@ public class EquationSet implements Comparable<EquationSet>
         boolean changed = false;
         for (final Variable v : variables)
         {
-            if (all  &&  v.exponentLast == Integer.MIN_VALUE)
+            if (all  &&  v.exponentLast == Operator.UNKNOWN)
             {
                 v.exponentLast = v.exponent;
                 v.centerLast   = v.center;

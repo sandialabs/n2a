@@ -46,18 +46,22 @@ public class Exp extends Function
         // for op >= 0:
         //     p = floor (log2 (e^m)) = floor (ln (e^m) / ln (2)) = floor (m / ln (2));
         // for op < 0:
-        //     User must specify magnitude, since we don't try to predict sign.
+        //     User must specify magnitude via fp hint, since we don't try to predict sign.
 
-        int exponentNew = Integer.MIN_VALUE;
-        if (op.exponent != Integer.MIN_VALUE)
+        int centerNew   = MSB / 2;
+        int exponentNew = UNKNOWN;
+        if (op.exponent != UNKNOWN)
         {
             int o = op.centerPower ();
             double m = Math.pow (2, o);
-            int pow = (int) Math.floor (m / Math.log (2));  // power of our output center
-            exponentNew = pow + MSB / 2 - 1;
+            exponentNew = (int) Math.floor (m / Math.log (2));  // center power of our output
         }
         if (operands.length >= 2) exponentNew = getExponentHint (operands[1].getString (), exponentNew);
-        updateExponent (from, exponentNew, MSB / 2 + 1);  // typically Q16.16
+        if (exponentNew != UNKNOWN)
+        {
+            exponentNew += MSB - centerNew;
+            updateExponent (from, exponentNew, centerNew);
+        }
     }
 
     public Type eval (Instance context)

@@ -69,19 +69,21 @@ public class Add extends OperatorBinary
         operand1.exponentNext = exponent;
         operand0.determineExponent (from);
         operand1.determineExponent (from);
+        alignExponent (from);
 
-        if (operand0.exponent != Integer.MIN_VALUE  &&  operand1.exponent != Integer.MIN_VALUE)
+        if (operand0.exponent != UNKNOWN  &&  operand1.exponent != UNKNOWN)
         {
-            int pow  = (operand0.centerPower () + operand1.centerPower ()) / 2;
-            int cent = (operand0.center + operand1.center) / 2;
-            pow += MSB - cent;
+            int pow = (operand0.exponent + operand1.exponent) / 2;
+            int c0 = operand0.center - (pow - operand0.exponent);
+            int c1 = operand1.center - (pow - operand1.exponent);
+            int cent = Math.max (c0, c1);
             updateExponent (from, pow, cent);
         }
-        else if (operand0.exponent != Integer.MIN_VALUE)
+        else if (operand0.exponent != UNKNOWN)
         {
             updateExponent (from, operand0.exponent, operand0.center);
         }
-        else if (operand1.exponent != Integer.MIN_VALUE)
+        else if (operand1.exponent != UNKNOWN)
         {
             updateExponent (from, operand1.exponent, operand1.center);
         }
