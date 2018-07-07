@@ -121,14 +121,14 @@ public class Function extends Operator
             if (op.exponent != UNKNOWN)
             {
                 cent += op.center;
-                pow  += op.centerPower ();
+                pow  += op.exponent;
                 count++;
             }
         }
         if (count > 0)
         {
             cent /= count;
-            pow   = pow / count + MSB - cent;
+            pow  /= count;
             updateExponent (from, pow, cent);
         }
     }

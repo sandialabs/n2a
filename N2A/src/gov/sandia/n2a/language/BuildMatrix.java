@@ -227,7 +227,7 @@ public class BuildMatrix extends Operator
                 if (! (e instanceof Constant)  ||  e.getDouble () != 0)  // avoid counting zeros
                 {
                     cent += e.center;
-                    pow  += e.centerPower ();
+                    pow  += e.exponent;
                     count++;
                 }
             }
@@ -236,7 +236,6 @@ public class BuildMatrix extends Operator
         {
             cent /= count;
             pow  /= count;
-            pow += MSB - cent;
         }
         else
         {

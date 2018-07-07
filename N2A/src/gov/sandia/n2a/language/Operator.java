@@ -211,7 +211,7 @@ public class Operator implements Cloneable
     {
         for (String p : mode.split (","))
         {
-            if (p.startsWith ("fp"))
+            if (p.startsWith ("median"))
             {
                 String magnitude = "";
                 String[] pieces = p.split ("=", 2);

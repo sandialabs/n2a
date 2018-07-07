@@ -1748,7 +1748,7 @@ public class EquationSet implements Comparable<EquationSet>
         if (overflows.size () > 0)
         {
             PrintStream err = Backend.err.get ();
-            err.println ("WARNING: Possible fixed-point overflow. Add a hint (fp=median_value) to each of these variables:");
+            err.println ("WARNING: Unstable fixed-point range. Add a hint (median=median_absolute_value) to these variables:");
             for (Variable v : overflows)
             {
                 err.println ("  " + v.container.prefix () + "." + v.nameString ());

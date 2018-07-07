@@ -502,7 +502,7 @@ public class Variable implements Comparable<Variable>
     public boolean determineExponent (int exponentTime)
     {
         // User-specified exponent overrides any calculated value.
-        String magnitude = getNamedValue ("fp");
+        String magnitude = getNamedValue ("median");
         if (! magnitude.isEmpty ())
         {
             if (exponent != Operator.UNKNOWN) return false;  // Already processed the hint.
@@ -561,8 +561,8 @@ public class Variable implements Comparable<Variable>
                     e.expression.determineExponent (this);
                     if (e.expression.exponent != Operator.UNKNOWN)  // Only count equations that have known values of exponent and center.
                     {
-                        pow  += e.expression.centerPower ();  // power of the center bit
-                        cent += e.expression.center;       // position of the center bit
+                        cent += e.expression.center;
+                        pow  += e.expression.exponent;
                         count++;
                     }
                 }
@@ -585,24 +585,22 @@ public class Variable implements Comparable<Variable>
                 if (count > 0)
                 {
                     centerNew   = cent;
-                    exponentNew = pow + Operator.MSB - cent;
+                    exponentNew = pow;
                 }
             }
             else
             {
-                if (count > 0)
-                {
-                    // Attempt to balance both initial and integrated values.
-                    // If they are too far apart, this will fail and there is really nothing we can do about it.
-                    int d = derivative.exponent - Operator.MSB + derivative.center;  // Power of derivative center. See Operator.centerPower().
-                    int avg = (d + pow) / 2;
-                    centerNew   = Operator.MSB / 2;
-                    exponentNew = avg + Operator.MSB - centerNew;
-                }
-                else
+                if (count == 0)
                 {
                     centerNew   = derivative.center;
                     exponentNew = derivative.exponent;
+                }
+                else
+                {
+                    // Attempt to balance both initial and integrated values.
+                    // If they are too far apart, this will fail and there is really nothing we can do about it.
+                    centerNew   = (cent + derivative.center  ) / 2;
+                    exponentNew = (pow  + derivative.exponent) / 2;
                 }
             }
 
@@ -630,7 +628,7 @@ public class Variable implements Comparable<Variable>
             if (name.equals ("$t")  &&  order == 1)  // $t'
             {
                 // Align with $t
-                centerNew += exponentTime - exponentNew;
+                centerNew  -= exponentTime - exponentNew;
                 exponentNew = exponentTime;
                 if (centerNew < 0  ||  centerNew > Operator.MSB)
                 {
