@@ -15,15 +15,15 @@
 // General functions ---------------------------------------------------------
 // See the N2A language reference for details.
 
-extern float                   uniform ();
-extern float                   uniform (float sigma);
-extern fl::MatrixResult<float> uniform (const fl::MatrixAbstract<float> & sigma);
+float                   uniform ();
+float                   uniform (float sigma);
+fl::MatrixResult<float> uniform (const fl::MatrixAbstract<float> & sigma);
 
-extern float                   gaussian ();
-extern float                   gaussian (float sigma);
-extern fl::MatrixResult<float> gaussian (const fl::MatrixAbstract<float> & sigma);
+float                   gaussian ();
+float                   gaussian (float sigma);
+fl::MatrixResult<float> gaussian (const fl::MatrixAbstract<float> & sigma);
 
-extern fl::MatrixResult<float> grid (int i, int nx, int ny = 1, int nz = 1);
+fl::MatrixResult<float> grid (int i, int nx, int ny = 1, int nz = 1);
 
 
 // Simulation classes --------------------------------------------------------
@@ -140,7 +140,7 @@ public:
     virtual void  finalizeEvent ();  ///< Does finalize on any external references touched by some event in this part.
 };
 
-extern void removeMonitor (std::vector<Part *> & partList, Part * part);
+void removeMonitor (std::vector<Part *> & partList, Part * part);
 
 /**
     Supports ability to dequeue and move to a different simulation period.
@@ -348,8 +348,6 @@ public:
     Integrator *                              integrator;
     bool                                      stop;
     Event *                                   currentEvent;
-    enum {BEFORE, DURING, AFTER};
-    int                                       eventMode = DURING;
 
     Simulator ();
     ~Simulator ();

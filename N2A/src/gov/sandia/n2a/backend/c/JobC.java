@@ -8,6 +8,7 @@ package gov.sandia.n2a.backend.c;
 
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventSource;
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventTarget;
+import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.EquationEntry;
@@ -18,27 +19,18 @@ import gov.sandia.n2a.eqset.EquationSet.ConnectionMatrix;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.execenvs.HostSystem;
-import gov.sandia.n2a.language.AccessElement;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.BuildMatrix;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
-import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Split;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
-import gov.sandia.n2a.language.function.Event;
-import gov.sandia.n2a.language.function.Exp;
-import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Input;
-import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.ReadMatrix;
-import gov.sandia.n2a.language.function.Tangent;
-import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.Add;
-import gov.sandia.n2a.language.operator.Power;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
@@ -71,7 +63,8 @@ public class JobC extends Thread
     public Path runtimeDir;
     public Path gcc;
 
-    public boolean fixedPoint;
+    public String numericType;
+    public int    eventMode;
 
     // These values are unique across the whole simulation, so they go here rather than BackendDataC.
     // Where possible, the key is a String. Otherwise, it is an Operator which is specific to one expression.
@@ -102,12 +95,18 @@ public class JobC extends Thread
             runtimeDir       = resourceDir.resolve ("cruntime");
             rebuildRuntime ();
 
-            fixedPoint = job.getOrDefault ("$metadata", "backend.c.type", "float").equals ("int");
+            numericType = job.get ("$metadata", "backend.c.type");
+            if (! numericType.equals ("int")  &&  ! numericType.equals ("double")) numericType = "float";  // Only three supported options.
 
             model = new EquationSet (job);
             digestModel ();
             String duration = model.getNamedValue ("duration");
             if (! duration.isEmpty ()) job.set ("$metadata", "duration", duration);
+
+            eventMode = Simulator.DURING;
+            String e = job.get ("$metadata", "backend.internal.event");  // TODO: Need naming convention for parameters shared by more than one backend.
+            if (e.equals ("after"))  eventMode = Simulator.AFTER;
+            if (e.equals ("before")) eventMode = Simulator.BEFORE;
 
             model.setInit (0);
             System.out.println (model.dump (false));
@@ -260,7 +259,7 @@ public class JobC extends Thread
         findLiveReferences (model);
         model.determineTypes ();
         model.determineDuration ();
-        if (fixedPoint)
+        if (numericType.equals ("int"))
         {
             double duration = 0;
             String durationString = model.getNamedValue ("duration");
@@ -377,8 +376,8 @@ public class JobC extends Thread
                         int cols = A.columns ();
                         String matrixName = "Matrix" + matrixNames.size ();
                         matrixNames.put (op, matrixName);
-                        if (rows == 3  &&  cols == 1) result.append ("Vector3 " + matrixName + " = Matrix<float>");
-                        else                          result.append ("Matrix<float> " + matrixName);
+                        if (rows == 3  &&  cols == 1) result.append ("Vector3 " + matrixName + " = Matrix<" + numericType + ">");
+                        else                          result.append ("Matrix<" + numericType + "> " + matrixName);
                         result.append (" (\"" + A + "\");\n");
                     }
                     return false;  // Don't try to descend tree from here
@@ -626,8 +625,8 @@ public class JobC extends Thread
         if (bed.globalDerivative.size () > 0)
         {
             result.append ("  virtual void pushDerivative ();\n");
-            result.append ("  virtual void multiplyAddToStack (float scalar);\n");
-            result.append ("  virtual void multiply (float scalar);\n");
+            result.append ("  virtual void multiplyAddToStack (" + numericType + " scalar);\n");
+            result.append ("  virtual void multiply (" + numericType + " scalar);\n");
             result.append ("  virtual void addToMembers ();\n");
         }
         if (bed.newborn >= 0)
@@ -728,7 +727,7 @@ public class JobC extends Thread
         }
         if (bed.lastT)
         {
-            result.append ("  float lastT;\n");  // $lastT is for internal use only, so no need for __24 prefix.
+            result.append ("  " + numericType + " lastT;\n");  // $lastT is for internal use only, so no need for __24 prefix.
         }
         for (Variable v : bed.localMembers)
         {
@@ -754,11 +753,11 @@ public class JobC extends Thread
         {
             if (et.track != null  &&  et.track.name.startsWith ("eventAux"))
             {
-                result.append ("  float " + et.track.name + ";\n");
+                result.append ("  " + numericType + " " + et.track.name + ";\n");
             }
             if (et.timeIndex >= 0)
             {
-                result.append ("  float eventTime" + et.timeIndex + ";\n");
+                result.append ("  " + numericType + " eventTime" + et.timeIndex + ";\n");
             }
         }
         if (! bed.localFlagType.isEmpty ())
@@ -782,7 +781,7 @@ public class JobC extends Thread
         }
         if (s.container == null)
         {
-            result.append ("  virtual void setPeriod (float dt);\n");
+            result.append ("  virtual void setPeriod (" + numericType + " dt);\n");
         }
         if (bed.needLocalDie)
         {
@@ -829,13 +828,13 @@ public class JobC extends Thread
         if (bed.localDerivative.size () > 0  ||  s.parts.size () > 0)
         {
             result.append ("  virtual void pushDerivative ();\n");
-            result.append ("  virtual void multiplyAddToStack (float scalar);\n");
-            result.append ("  virtual void multiply (float scalar);\n");
+            result.append ("  virtual void multiplyAddToStack (" + numericType + " scalar);\n");
+            result.append ("  virtual void multiply (" + numericType + " scalar);\n");
             result.append ("  virtual void addToMembers ();\n");
         }
         if (bed.live != null  &&  ! bed.live.hasAttribute ("constant"))
         {
-            result.append ("  virtual float getLive ();\n");
+            result.append ("  virtual " + numericType + " getLive ();\n");
         }
         if (s.connectionBindings == null)
         {
@@ -848,7 +847,7 @@ public class JobC extends Thread
         {
             if (bed.p != null)
             {
-                result.append ("  virtual float getP ();\n");
+                result.append ("  virtual " + numericType + " getP ();\n");
             }
             if (bed.hasProject)
             {
@@ -870,7 +869,7 @@ public class JobC extends Thread
             result.append ("  virtual bool eventTest (int i);\n");
             if (bed.needLocalEventDelay)
             {
-                result.append ("  virtual float eventDelay (int i);\n");
+                result.append ("  virtual " + numericType + " eventDelay (int i);\n");
             }
             result.append ("  virtual void setLatch (int i);\n");
             if (bed.eventReferences.size () > 0)
@@ -905,7 +904,9 @@ public class JobC extends Thread
     {
         for (EquationSet p : s.parts) generateDefinitions (p, result);
 
-        CRenderer context = new CRenderer (result, s);
+        RendererC context;
+        if (numericType.equals ("int")) context = new RendererCfp (this, result, s);
+        else                            context = new RendererC   (this, result, s);
         BackendDataC bed = (BackendDataC) s.backendData;
 
         // -------------------------------------------------------------------
@@ -1079,7 +1080,7 @@ public class JobC extends Thread
             result.append ("{\n");
             result.append ("  EventStep * event = getEvent ();\n");
             context.hasEvent = true;
-            result.append ("  float dt = event->dt;\n");
+            result.append ("  " + numericType + " dt = event->dt;\n");
             result.append ("  if (preserve)\n");
             result.append ("  {\n");
             for (Variable v : bed.globalIntegrated)
@@ -1321,7 +1322,7 @@ public class JobC extends Thread
             result.append ("\n");
 
             // Population multiplyAddToStack
-            result.append ("void " + ns + "multiplyAddToStack (float scalar)\n");
+            result.append ("void " + ns + "multiplyAddToStack (" + numericType + " scalar)\n");
             result.append ("{\n");
             for (Variable v : bed.globalDerivative)
             {
@@ -1331,7 +1332,7 @@ public class JobC extends Thread
             result.append ("\n");
 
             // Population multiply
-            result.append ("void " + ns + "multiply (float scalar)\n");
+            result.append ("void " + ns + "multiply (" + numericType + " scalar)\n");
             result.append ("{\n");
             for (Variable v : bed.globalDerivative)
             {
@@ -1677,7 +1678,7 @@ public class JobC extends Thread
         // Unit setPeriod
         if (s.container == null)  // instance of top-level population, so set period on wrapper whenever our period changes
         {
-            result.append ("void " + ns + "setPeriod (float dt)\n");
+            result.append ("void " + ns + "setPeriod (" + numericType + " dt)\n");
             result.append ("{\n");
             result.append ("  PartTime::setPeriod (dt);\n");
             result.append ("  if (container->visitor->event != visitor->event) container->setPeriod (dt);\n");
@@ -1903,13 +1904,13 @@ public class JobC extends Thread
             {
                 if (bed.lastT)
                 {
-                    result.append ("  float dt = simulator.currentEvent->t - lastT;\n");
+                    result.append ("  " + numericType + " dt = simulator.currentEvent->t - lastT;\n");
                 }
                 else
                 {
                     result.append ("  EventStep * event = getEvent ();\n");
                     context.hasEvent = true;
-                    result.append ("  float dt = event->dt;\n");
+                    result.append ("  " + numericType + " dt = event->dt;\n");
                 }
                 // Note the resolve() call on the left-hand-side below has lvalue==false.
                 // Integration always takes place in the primary storage of a variable.
@@ -2305,7 +2306,7 @@ public class JobC extends Thread
             result.append ("\n");
 
             // Unit multiplyAddToStack
-            result.append ("void " + ns + "multiplyAddToStack (float scalar)\n");
+            result.append ("void " + ns + "multiplyAddToStack (" + numericType + " scalar)\n");
             result.append ("{\n");
             for (Variable v : bed.localDerivative)
             {
@@ -2319,7 +2320,7 @@ public class JobC extends Thread
             result.append ("\n");
 
             // Unit multiply
-            result.append ("void " + ns + "multiply (float scalar)\n");
+            result.append ("void " + ns + "multiply (" + numericType + " scalar)\n");
             result.append ("{\n");
             for (Variable v : bed.localDerivative)
             {
@@ -2529,7 +2530,7 @@ public class JobC extends Thread
         // Unit getLive
         if (bed.live != null  &&  ! bed.live.hasAttribute ("constant"))
         {
-            result.append ("float " + ns + "getLive ()\n");
+            result.append (numericType + " " + ns + "getLive ()\n");
             result.append ("{\n");
             if (! bed.live.hasAttribute ("accessor"))  // "accessor" indicates whether or not $value is actually stored
             {
@@ -2564,7 +2565,7 @@ public class JobC extends Thread
         {
             if (bed.p != null)
             {
-                result.append ("float " + ns + "getP ()\n");
+                result.append (numericType + " " + ns + "getP ()\n");
                 result.append ("{\n");
 
                 s.setInit (1);
@@ -2649,15 +2650,15 @@ public class JobC extends Thread
                 }
                 if (et.edge != EventTarget.NONZERO)
                 {
-                    result.append ("      float before = " + resolve (et.track.reference, context, false) + ";\n");
+                    result.append ("      " + numericType + " before = " + resolve (et.track.reference, context, false) + ";\n");
                 }
                 if (et.trackOne)  // This is a single variable, so check its value directly.
                 {
-                    result.append ("      float after = " + resolve (et.track.reference, context, true) + ";\n");
+                    result.append ("      " + numericType + " after = " + resolve (et.track.reference, context, true) + ";\n");
                 }
                 else  // This is an expression, so use our private auxiliary variable.
                 {
-                    result.append ("      float after = ");
+                    result.append ("      " + numericType + " after = ");
                     et.event.operands[0].render (context);
                     result.append (";\n");
                     if (et.edge != EventTarget.NONZERO)
@@ -2674,7 +2675,14 @@ public class JobC extends Thread
                             // Note that other trigger types don't need this because they set the auxiliary variable,
                             // so the next test in the same cycle will no longer see change.
                             result.append ("      if (after == 0) return false;\n");
-                            result.append ("      float moduloTime = (float) fmod (simulator.currentEvent->t, 1);\n");  // Wrap time at 1 second, to fit in float precision.
+                            if (numericType.equals ("int"))
+                            {
+                                result.append ("      " + numericType + " moduloTime = simulator.currentEvent->t;\n");  // No need for modulo arithmetic. Rather, int time should be wrapped elsewhere.
+                            }
+                            else  // float, double
+                            {
+                                result.append ("      " + numericType + " moduloTime = (" + numericType + ") fmod (simulator.currentEvent->t, 1);\n");  // Wrap time at 1 second, to fit in float precision.
+                            }
                             result.append ("      if (eventTime" + et.timeIndex + " == moduloTime) return false;\n");
                             result.append ("      eventTime" + et.timeIndex + " = moduloTime;\n");
                             result.append ("      return true;\n");
@@ -2702,7 +2710,7 @@ public class JobC extends Thread
 
             if (bed.needLocalEventDelay)
             {
-                result.append ("float " + ns + "eventDelay (int i)\n");
+                result.append (numericType + " " + ns + "eventDelay (int i)\n");
                 result.append ("{\n");
                 result.append ("  switch (i)\n");
                 result.append ("  {\n");
@@ -2717,7 +2725,7 @@ public class JobC extends Thread
                     {
                         multiconditional (v, context, "      ");
                     }
-                    result.append ("      float result = ");
+                    result.append ("      " + numericType + " result = ");
                     et.event.operands[1].render (context);
                     result.append (";\n");
                     result.append ("      if (result < 0) return -1;\n");
@@ -2894,7 +2902,7 @@ public class JobC extends Thread
         }
     }
 
-    public void eventGenerate (String pad, EventTarget et, CRenderer context, boolean multi)
+    public void eventGenerate (String pad, EventTarget et, RendererC context, boolean multi)
     {
         String eventSpike = "EventSpike";
         if (multi) eventSpike += "Multi";
@@ -2917,27 +2925,14 @@ public class JobC extends Thread
             else
             {
                 // Is delay an quantum number of $t' steps?
+                result.append (pad + numericType + " delay = " + context.print (et.delay, context.bed.t.exponent) + ";\n");
                 result.append (pad + eventSpike + " * spike;\n");
-                result.append (pad + "float delay = " + context.print (et.delay) + ";\n");
-                result.append (pad + "float ratio = delay / event->dt;\n");
-                result.append (pad + "int step = (int) round (ratio);\n");
-                result.append (pad + "if (abs (ratio - step) < 1e-3)\n");  // Is delay close enough to a time-quantum?
-                result.append (pad + "{\n");
-                result.append (pad + "  if (simulator.eventMode == Simulator::DURING) spike = new " + eventSpikeLatch + ";\n");
-                result.append (pad + "  else spike = new " + eventSpike + ";\n");
-                result.append (pad + "  if (simulator.eventMode == Simulator::AFTER) delay = (step + 1e-6) * event->dt;\n");
-                result.append (pad + "  else delay = (step - 1e-6) * event->dt;\n");
-                result.append (pad + "}\n");
-                result.append (pad + "else\n");
-                result.append (pad + "{\n");
-                result.append (pad + "  spike = new " + eventSpike + ";\n");
-                result.append (pad + "}\n");
-                result.append (pad + "spike->t = event->t + delay;\n");
+                eventGenerate (pad, et, context, eventSpike, eventSpikeLatch);
             }
         }
         else  // delay must be evaluated, so emit tests at C level
         {
-            result.append (pad + "float delay = p->eventDelay (" + et.valueIndex + ");\n");
+            result.append (pad + numericType + " delay = p->eventDelay (" + et.valueIndex + ");\n");
             result.append (pad + eventSpike + " * spike;\n");
             result.append (pad + "if (delay < 0)\n");
             result.append (pad + "{\n");
@@ -2951,20 +2946,7 @@ public class JobC extends Thread
             result.append (pad + "}\n");
             result.append (pad + "else\n");
             result.append (pad + "{\n");
-            result.append (pad + "  float ratio = delay / event->dt;\n");
-            result.append (pad + "  int step = (int) round (ratio);\n");
-            result.append (pad + "  if (abs (ratio - step) < 1e-3)\n");  // Is delay close enough to a time-quantum?
-            result.append (pad + "  {\n");
-            result.append (pad + "    if (simulator.eventMode == Simulator::DURING) spike = new " + eventSpikeLatch + ";\n");
-            result.append (pad + "    else spike = new " + eventSpike + ";\n");
-            result.append (pad + "    if (simulator.eventMode == Simulator::AFTER) delay = (step + 1e-6) * event->dt;\n");
-            result.append (pad + "    else delay = (step - 1e-6) * event->dt;\n");
-            result.append (pad + "  }\n");
-            result.append (pad + "  else\n");
-            result.append (pad + "  {\n");
-            result.append (pad + "    spike = new " + eventSpike + ";\n");
-            result.append (pad + "  }\n");
-            result.append (pad + "  spike->t = event->t + delay;\n");
+            eventGenerate (pad + "  ", et, context, eventSpike, eventSpikeLatch);
             result.append (pad + "}\n");
         }
 
@@ -2974,7 +2956,63 @@ public class JobC extends Thread
         result.append (pad + "simulator.queueEvent.push (spike);\n");
     }
 
-    public void multiconditional (Variable v, CRenderer context, String pad) throws Exception
+    public void eventGenerate (String pad, EventTarget et, RendererC context, String eventSpike, String eventSpikeLatch)
+    {
+        StringBuilder result = context.result;
+
+        // Is delay close enough to a time-quantum?
+        if (numericType.equals ("int"))
+        {
+            result.append (pad + "int step = (delay + event->dt / 2) / event->dt;\n");
+            result.append (pad + "int quantizedTime = step * event->dt;\n");
+            result.append (pad + "if (quantizedTime == delay)\n");  // All fractional bits are zero. Usually there are no more than 10 fractional bits (~1/1000 of a time step).
+        }
+        else
+        {
+            result.append (pad + numericType + " ratio = delay / event->dt;\n");
+            result.append (pad + "int step = (int) round (ratio);\n");
+            result.append (pad + "if (abs (ratio - step) < 1e-3)\n");
+        }
+        result.append (pad + "{\n");
+        if (eventMode == Simulator.DURING)
+        {
+            result.append (pad + "  spike = new " + eventSpikeLatch + ";\n");
+        }
+        else
+        {
+            result.append (pad + "  spike = new " + eventSpike + ";\n");
+        }
+        if (eventMode == Simulator.AFTER)
+        {
+            if (numericType.equals ("int"))
+            {
+                result.append (pad + "  delay = quantizedTime + 1;\n");
+            }
+            else
+            {
+                result.append (pad + "  delay = (step + 1e-6) * event->dt;\n");
+            }
+        }
+        else
+        {
+            if (numericType.equals ("int"))
+            {
+                result.append (pad + "  delay = quantizedTime - 1;\n");
+            }
+            else
+            {
+                result.append (pad + "  delay = (step - 1e-6) * event->dt;\n");
+            }
+        }
+        result.append (pad + "}\n");
+        result.append (pad + "else\n");
+        result.append (pad + "{\n");
+        result.append (pad + "  spike = new " + eventSpike + ";\n");
+        result.append (pad + "}\n");
+        result.append (pad + "spike->t = event->t + delay;\n");
+    }
+
+    public void multiconditional (Variable v, RendererC context, String pad) throws Exception
     {
         boolean init = context.part.getInit ();
         boolean isType = v.name.equals ("$type");
@@ -3116,7 +3154,7 @@ public class JobC extends Thread
         }
     }
 
-    public void renderEquation (CRenderer context, EquationEntry e)
+    public void renderEquation (RendererC context, EquationEntry e)
     {
         if (e.variable.hasAttribute ("dummy"))
         {
@@ -3154,7 +3192,7 @@ public class JobC extends Thread
         context.result.append (";\n");
     }
 
-    public void prepareStaticObjects (Operator op, final CRenderer context, final String pad) throws Exception
+    public void prepareStaticObjects (Operator op, final RendererC context, final String pad) throws Exception
     {
         Visitor visitor = new Visitor ()
         {
@@ -3247,7 +3285,7 @@ public class JobC extends Thread
     /**
         Build complex sub-expressions into a single local variable that can be referenced by the equation.
     **/
-    public void prepareDynamicObjects (Operator op, final CRenderer context, final boolean init, final String pad) throws Exception
+    public void prepareDynamicObjects (Operator op, final RendererC context, final boolean init, final String pad) throws Exception
     {
         // Pass 1 -- Strings and matrix expressions
         Visitor visitor1 = new Visitor ()
@@ -3263,7 +3301,7 @@ public class JobC extends Thread
                     String matrixName = "Matrix" + matrixNames.size ();
                     matrixNames.put (m, matrixName);
                     if (rows == 3  &&  cols == 1) context.result.append (pad + "Vector3 " + matrixName + ";\n");
-                    else                          context.result.append (pad + "Matrix<float> " + matrixName + " (" + rows + ", " + cols + ");\n");
+                    else                          context.result.append (pad + "Matrix<" + numericType + "> " + matrixName + " (" + rows + ", " + cols + ");\n");
                     for (int r = 0; r < rows; r++)
                     {
                         if (cols == 1)
@@ -3443,16 +3481,16 @@ public class JobC extends Thread
         return result.toString ();
     }
 
-    public static String type (Variable v)
+    public String type (Variable v)
     {
         if (v.type instanceof Matrix)
         {
             Matrix m = (Matrix) v.type;
             if (m.columns () == 1  &&  m.rows () == 3) return "Vector3";
-            return "Matrix<float>";
+            return "Matrix<" + numericType + ">";
         }
         if (v.type instanceof Text) return "String";
-        return "float";
+        return numericType;
     }
 
     public static String zero (Variable v) throws Exception
@@ -3467,9 +3505,9 @@ public class JobC extends Thread
         }
     }
 
-    public static String clear (Variable v, double value, CRenderer context) throws Exception
+    public static String clear (Variable v, double value, RendererC context) throws Exception
     {
-        String p = context.print (value);
+        String p = context.print (value, v.exponent);
         if      (v.type instanceof Scalar) return " = " + p;
         else if (v.type instanceof Matrix) return ".clear (" + p + ")";
         else if (v.type instanceof Text  ) return ".clear (" + p + ")";
@@ -3480,7 +3518,7 @@ public class JobC extends Thread
         }
     }
 
-    public static String clearAccumulator (Variable v, CRenderer context) throws Exception
+    public static String clearAccumulator (Variable v, RendererC context) throws Exception
     {
         switch (v.assignment)
         {
@@ -3505,7 +3543,7 @@ public class JobC extends Thread
         return result;
     }
 
-    public String resolve (VariableReference r, CRenderer context, boolean lvalue)
+    public String resolve (VariableReference r, RendererC context, boolean lvalue)
     {
         return resolve (r, context, lvalue, "", false);
     }
@@ -3517,7 +3555,7 @@ public class JobC extends Thread
         @param base Injects a pointer at the beginning of the resolution path.
         @param logical The intended use is in a boolean expression, such as an if-test.
     **/
-    public String resolve (VariableReference r, CRenderer context, boolean lvalue, String base, boolean logical)
+    public String resolve (VariableReference r, RendererC context, boolean lvalue, String base, boolean logical)
     {
         if (r == null  ||  r.variable == null) return "unresolved";
 
@@ -3608,7 +3646,7 @@ public class JobC extends Thread
         Compute a series of pointers to get from current part to r.
         Result does not include the variable name itself.
     **/
-    public String resolveContainer (VariableReference r, CRenderer context, String base)
+    public String resolveContainer (VariableReference r, RendererC context, String base)
     {
         String containers = base;
         EquationSet current = context.part;
@@ -3857,270 +3895,6 @@ public class JobC extends Thread
                 findLiveReferences (c.endpoint, resolution, touched, localReference, true);
                 resolution.remove (resolution.size () - 1);
             }
-        }
-    }
-
-    class CRenderer extends Renderer
-    {
-        public EquationSet part;
-        public BackendDataC bed;
-        public boolean global;  ///< Whether this is in the population object (true) or a part object (false)
-        public boolean hasEvent;  ///< Indicates that event has been retrieved within current scope.
-
-        public CRenderer (StringBuilder result, EquationSet part)
-        {
-            super (result);
-            this.part = part;
-            bed = (BackendDataC) part.backendData;
-        }
-
-        public boolean render (Operator op)
-        {
-            // TODO: for "3 letter" functions (sin, cos, pow, etc) on matrices, render as visitor which produces a matrix result
-            if (op instanceof AccessVariable)
-            {
-                AccessVariable av = (AccessVariable) op;
-                result.append (resolve (av.reference, this, false));
-                return true;
-            }
-            if (op instanceof AccessElement)
-            {
-                AccessElement ae = (AccessElement) op;
-                ae.operands[0].render (this);
-                if (ae.operands.length == 2)
-                {
-                    result.append ("[");
-                    ae.operands[1].render (this);
-                    result.append ("]");
-                }
-                else if (ae.operands.length == 3)
-                {
-                    result.append ("(");
-                    ae.operands[1].render (this);
-                    result.append (",");
-                    ae.operands[2].render (this);
-                    result.append (")");
-                }
-                return true;
-            }
-            if (op instanceof Exp)  // Prevent fp hint from being emitted into c code.
-            {
-                Exp e = (Exp) op;
-                result.append ("exp (");
-                e.operands[0].render (this);
-                result.append (")");
-                return true;
-            }
-            if (op instanceof Power)
-            {
-                Power p = (Power) op;
-                result.append ("pow (");
-                p.operand0.render (this);
-                result.append (", ");
-                p.operand1.render (this);
-                result.append (")");
-                return true;
-            }
-            if (op instanceof Tangent)  // Prevent fp hint from being emitted into c code.
-            {
-                Tangent t = (Tangent) op;
-                result.append ("tan (");
-                t.operands[0].render (this);
-                result.append (")");
-                return true;
-            }
-            if (op instanceof Norm)
-            {
-                Norm n = (Norm) op;
-                result.append ("(");
-                n.operands[1].render (this);
-                result.append (").norm (");
-                n.operands[0].render (this);
-                result.append (")");
-                return true;
-            }
-            if (op instanceof Gaussian)
-            {
-                Gaussian g = (Gaussian) op;
-                result.append ("gaussian (");
-                if (g.operands.length > 0)
-                {
-                    g.operands[0].render (this);
-                }
-                result.append (")");
-                return true;
-            }
-            if (op instanceof Uniform)
-            {
-                Uniform u = (Uniform) op;
-                result.append ("uniform (");
-                if (u.operands.length > 0)
-                {
-                    u.operands[0].render (this);
-                }
-                result.append (")");
-                return true;
-            }
-            if (op instanceof Event)
-            {
-                Event e = (Event) op;
-                // The cast to bool gets rid of the specific numeric value from flags.
-                // If used in a numeric expression, it should convert to either 1 or 0.
-                result.append ("((bool) (flags & (" + bed.localFlagType + ") 0x1 << " + e.eventType.valueIndex + "))");
-                return true;
-            }
-            if (op instanceof ReadMatrix)
-            {
-                ReadMatrix r = (ReadMatrix) op;
-
-                String mode = "";
-                int lastParm = r.operands.length - 1;
-                if (lastParm > 0)
-                {
-                    if (r.operands[lastParm] instanceof Constant)
-                    {
-                        Constant c = (Constant) r.operands[lastParm];
-                        if (c.value instanceof Text)
-                        {
-                            mode = ((Text) c.value).value;
-                        }
-                    }
-                }
-
-                String matrixName;
-                if (r.operands[0] instanceof Constant) matrixName = matrixNames.get (r.operands[0].toString ());
-                else                                   matrixName = matrixNames.get (r);
-                result.append (matrixName + "->");
-                if (mode.equals ("rows"))
-                {
-                    result.append ("rows ()");
-                }
-                else if (mode.equals ("columns"))
-                {
-                    result.append ("columns ()");
-                }
-                else
-                {
-                    result.append ("get");
-                    if (mode.equals ("raw")) result.append ("Raw");
-                    result.append (" (");
-                    r.operands[1].render (this);
-                    result.append (", ");
-                    r.operands[2].render (this);
-                    result.append (")");
-                }
-                return true;
-            }
-            if (op instanceof Output)
-            {
-                Output o = (Output) op;
-                String outputName;
-                if (o.operands[0] instanceof Constant) outputName = outputNames.get (o.operands[0].toString ());
-                else                                   outputName = outputNames.get (o);
-                result.append (outputName + "->trace (simulator.currentEvent->t, ");
-
-                if (o.operands.length > 2)  // column name is explicit
-                {
-                    o.operands[2].render (this);
-                }
-                else  // column name is generated, so use prepared string value
-                {
-                    String stringName = stringNames.get (op);  // generated column name is associated with Output function itself, rather than one of its operands
-                    result.append (stringName);
-                }
-                result.append (", ");
-
-                o.operands[1].render (this);
-                result.append (")");
-                return true;
-            }
-            if (op instanceof Input)
-            {
-                Input i = (Input) op;
-                String inputName;
-                if (i.operands[0] instanceof Constant) inputName = inputNames.get (i.operands[0].toString ());
-                else                                   inputName = inputNames.get (i);
-
-                String mode = "";
-                if (i.operands.length > 3)
-                {
-                    mode = i.operands[3].toString ();  // just assuming it's a constant string
-                }
-                else if (i.operands[1] instanceof Constant)
-                {
-                    Constant c = (Constant) i.operands[1];
-                    if (c.value instanceof Text) mode = c.toString ();
-                }
-
-                if (mode.contains ("columns"))
-                {
-                    result.append (inputName + "->getColumns ()");
-                }
-                else
-                {
-                    Operator op1 = i.operands[1];
-                    Operator op2 = i.operands[2];
-                    result.append (inputName + "->get");
-                    if (   mode.contains ("raw")   // select raw mode, but only if column is not identified by a string
-                        && !stringNames.containsKey (op2)
-                        && !(op2 instanceof Constant  &&  ((Constant) op2).value instanceof Text))
-                    {
-                        result.append ("Raw");
-                    }
-                    result.append (" (");
-                    op1.render (this);
-                    result.append (", ");
-                    op2.render (this);
-                    result.append (")");
-                }
-
-                return true;
-            }
-            if (op instanceof Constant)
-            {
-                Constant c = (Constant) op;
-                Type o = c.value;
-                if (o instanceof Scalar)
-                {
-                    result.append (print (((Scalar) o).value));
-                    return true;
-                }
-                if (o instanceof Text)
-                {
-                    result.append ("\"" + o.toString () + "\"");
-                    return true;
-                }
-                if (o instanceof Matrix)
-                {
-                    result.append (matrixNames.get (op));
-                    return true;
-                }
-                return false;
-            }
-            if (op instanceof Add)
-            {
-                // Check if this is a string expression
-                String stringName = stringNames.get (op);
-                if (stringName != null)
-                {
-                    result.append (stringName);
-                    return true;
-                }
-                return false;
-            }
-            if (op instanceof BuildMatrix)
-            {
-                result.append (matrixNames.get (op));
-                return true;
-            }
-            return false;
-        }
-
-        public String print (double d)
-        {
-            String result = Scalar.print (d);
-            if ((int) d != d) result += "f";  // Tell C compiler that our type is float, not double. TODO: let user select numeric type of runtime
-            return result;
         }
     }
 }
