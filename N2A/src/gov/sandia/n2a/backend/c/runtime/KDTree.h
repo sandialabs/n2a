@@ -21,16 +21,21 @@ the U.S. Government retains certain rights in this software.
 #include <queue>
 
 
-typedef fl::MatrixFixed<float,3,1> Vector3;
-
-class Part;
-
-class KDTreeEntry : public Vector3
+template<class T>
+class Vector3 : public fl::MatrixFixed<T,3,1>
 {
-public:
-    Part * part;
 };
 
+template<class T> class Part;
+
+template<class T>
+class KDTreeEntry : public Vector3<T>
+{
+public:
+    Part<T> * part;
+};
+
+template<class T>
 class KDTree
 {
 public:
@@ -38,8 +43,8 @@ public:
 
     class Node;
 
-    typedef std::pair<float, Node *>        PairNode;
-    typedef std::pair<float, KDTreeEntry *> PairEntry;
+    typedef std::pair<T, Node *>           PairNode;
+    typedef std::pair<T, KDTreeEntry<T> *> PairEntry;
 
     class Reverse
     {
@@ -63,9 +68,9 @@ public:
     class Query
     {
     public:
-        int             k;
-        float           radius;
-        const Vector3 * point;
+        int                k;
+        T                  radius;
+        const Vector3<T> * point;
         std::priority_queue<PairEntry, std::vector<PairEntry>, Forward> sorted;
         std::priority_queue<PairNode,  std::vector<PairNode>,  Reverse> queue;
     };
@@ -74,7 +79,7 @@ public:
     {
     public:
         virtual ~Node () {}
-        virtual void search (float distance, Query & q) const = 0;
+        virtual void search (T distance, Query & q) const = 0;
 #       ifndef N2A_SPINNAKER
         virtual void dump (std::ostream & out, const String & pad = "") const = 0;
 #       endif
@@ -84,9 +89,9 @@ public:
     {
     public:
         int    dimension;
-        float  lo;        ///< Lowest value along the dimension
-        float  hi;        ///< Highest value along the dimension
-        float  mid;       ///< The cut point along the dimension
+        T      lo;        ///< Lowest value along the dimension
+        T      hi;        ///< Highest value along the dimension
+        T      mid;       ///< The cut point along the dimension
         Node * lowNode;   ///< below mid
         Node * highNode;  ///< above mid
 
@@ -96,10 +101,10 @@ public:
             delete highNode;
         }
 
-        virtual void search (float distance, Query & q) const
+        virtual void search (T distance, Query & q) const
         {
-            float qmid = (*q.point)[dimension];
-            float newOffset = qmid - mid;
+            T qmid = (*q.point)[dimension];
+            T newOffset = qmid - mid;
             if (newOffset < 0)  // lowNode is closer
             {
                 // We don't do any special testing on nearer node, because it has already been
@@ -107,7 +112,7 @@ public:
                 if (lowNode) lowNode->search (distance, q);
                 if (highNode)
                 {
-                    float oldOffset = std::max (lo - qmid, 0.0f);
+                    T oldOffset = std::max (lo - qmid, (T) 0);
                     distance += newOffset * newOffset - oldOffset * oldOffset;
                     q.queue.push (std::make_pair (distance, highNode));
                 }
@@ -117,7 +122,7 @@ public:
                 if (highNode) highNode->search (distance, q);
                 if (lowNode)
                 {
-                    float oldOffset = std::max (qmid - hi, 0.0f);
+                    T oldOffset = std::max (qmid - hi, (T) 0);
                     distance += newOffset * newOffset - oldOffset * oldOffset;
                     q.queue.push (std::make_pair (distance, lowNode));
                 }
@@ -145,28 +150,28 @@ public:
     class Leaf : public Node
     {
     public:
-        std::vector<KDTreeEntry *> points;
+        std::vector<KDTreeEntry<T> *> points;
 
-        virtual void search (float distance, Query & q) const
+        virtual void search (T distance, Query & q) const
         {
             int count = points.size ();
             int dimensions = points[0]->rows ();
             for (int i = 0; i < count; i++)
             {
-                KDTreeEntry * p = points[i];
+                KDTreeEntry<T> * p = points[i];
 
                 // Measure distance using early-out method. Might save operations in
                 // high-dimensional spaces.
                 // Here we make the assumption that the values are stored contiguously in
                 // memory.  This is a good place to check for bugs if using more exotic
                 // matrix types (not recommended).
-                float * x = &(*p)[0];
-                float * y = &(*q.point)[0];
-                float * end = x + dimensions;
-                float total = 0;
+                T * x = &(*p)[0];
+                T * y = &(*q.point)[0];
+                T * end = x + dimensions;
+                T total = 0;
                 while (x < end  &&  total < q.radius)
                 {
-                    float t = *x++ - *y++;
+                    T t = *x++ - *y++;
                     total += t * t;
                 }
 
@@ -186,14 +191,14 @@ public:
     };
 
     Node * root;
-    Vector3 lo;
-    Vector3 hi;
+    Vector3<T> lo;
+    Vector3<T> hi;
 
-    int   bucketSize;
-    int   k;
-    float radius;   ///< Maximum distance between query point and any result point. Initially set to INFINITY by constructor.
-    float epsilon;  ///< Nodes must have at least this much overlap with the current radius (which is always the lesser of the initial radius and the kth nearest neighbor).
-    int   maxNodes; ///< Expand no more than this number of nodes. Forces a search to be approximate rather than exhaustive.
+    int bucketSize;
+    int k;
+    T   radius;   ///< Maximum distance between query point and any result point. Initially set to INFINITY by constructor.
+    T   epsilon;  ///< Nodes must have at least this much overlap with the current radius (which is always the lesser of the initial radius and the kth nearest neighbor).
+    int maxNodes; ///< Expand no more than this number of nodes. Forces a search to be approximate rather than exhaustive.
 
     KDTree ()
     {
@@ -216,7 +221,7 @@ public:
         root = 0;
     }
 
-    void set (std::vector<KDTreeEntry *> & data)
+    void set (std::vector<KDTreeEntry<T> *> & data)
     {
         int dimensions = data[0]->rows ();
         lo.resize (dimensions);
@@ -224,13 +229,13 @@ public:
         lo.clear ( INFINITY);
         hi.clear (-INFINITY);
 
-        std::vector<KDTreeEntry *>::iterator t = data.begin ();
+        typename std::vector<KDTreeEntry<T> *>::iterator t = data.begin ();
         for (; t != data.end (); t++)
         {
-            float * a = &(**t)[0];
-            float * l = &lo[0];
-            float * h = &hi[0];
-            float * end = l + dimensions;
+            T * a = &(**t)[0];
+            T * l = &lo[0];
+            T * h = &hi[0];
+            T * end = l + dimensions;
             while (l < end)
             {
                 *l = std::min (*l, *a);
@@ -244,14 +249,14 @@ public:
         root = construct (data);
     }
 
-    void find (const Vector3 & query, std::vector<KDTreeEntry *> & result) const
+    void find (const Vector3<T> & query, std::vector<KDTreeEntry<T> *> & result) const
     {
         // Determine distance of query from bounding rectangle for entire tree
         int dimensions = query.rows ();
-        float distance = 0;
+        T distance = 0;
         for (int i = 0; i < dimensions; i++)
         {
-            float d = std::max (0.0f, lo[i] - query[i]) + std::max (0.0f, query[i] - hi[i]);
+            T d = std::max ((T) 0, lo[i] - query[i]) + std::max ((T) 0, query[i] - hi[i]);
             distance += d * d;
         }
 
@@ -261,7 +266,7 @@ public:
         q.radius = radius * radius;  // this may shrink monotonically once we find enough neighbors
         q.point  = &query;
 
-        float oneEpsilon = (1 + epsilon) * (1 + epsilon);
+        T oneEpsilon = (1 + epsilon) * (1 + epsilon);
         q.queue.push (std::make_pair (distance, root));
         int visited = 0;
         while (q.queue.size ())
@@ -301,7 +306,7 @@ public:
 #   endif
 
     /// Recursively construct a tree that handles the given volume of points.
-    Node * construct (std::vector<KDTreeEntry *> & points)
+    Node * construct (std::vector<KDTreeEntry<T> *> & points)
     {
         int count = points.size ();
         if (count == 0)
@@ -319,10 +324,10 @@ public:
             // todo: pass the split method as a function pointer
             int dimensions = lo.rows ();
             int d = 0;
-            float longest = 0;
+            T longest = 0;
             for (int i = 0; i < dimensions; i++)
             {
-                float length = hi[i] - lo[i];
+                T length = hi[i] - lo[i];
                 if (length > longest)
                 {
                     d = i;
@@ -331,9 +336,9 @@ public:
             }
             sort (points, d);
             int cut = count / 2;
-            std::vector<KDTreeEntry *>::iterator b = points.begin ();
-            std::vector<KDTreeEntry *>::iterator c = b + cut;
-            std::vector<KDTreeEntry *>::iterator e = points.end ();
+            typename std::vector<KDTreeEntry<T> *>::iterator b = points.begin ();
+            typename std::vector<KDTreeEntry<T> *>::iterator c = b + cut;
+            typename std::vector<KDTreeEntry<T> *>::iterator e = points.end ();
 
             Branch * result = new Branch;
             result->dimension = d;
@@ -342,7 +347,7 @@ public:
             result->mid = (**c)[d];
 
             hi[d] = result->mid;
-            std::vector<KDTreeEntry *> tempPoints (b, c);
+            std::vector<KDTreeEntry<T> *> tempPoints (b, c);
             result->lowNode = construct (tempPoints);
             hi[d] = result->hi;
 
@@ -357,11 +362,11 @@ public:
     }
 
     /// Rearrange points so they are in ascending order along the given dimension.
-    void sort (std::vector<KDTreeEntry *> & points, int dimension)
+    void sort (std::vector<KDTreeEntry<T> *> & points, int dimension)
     {
         // Effectively we do a heap sort, since priority_queue is typically implemented with a heap structure.
         std::priority_queue<PairEntry, std::vector<PairEntry>, Forward> sorted;
-        std::vector<KDTreeEntry *>::iterator it = points.begin ();
+        typename std::vector<KDTreeEntry<T> *>::iterator it = points.begin ();
         for (; it != points.end (); it++)
         {
             sorted.push (std::make_pair ((**it)[dimension], *it));

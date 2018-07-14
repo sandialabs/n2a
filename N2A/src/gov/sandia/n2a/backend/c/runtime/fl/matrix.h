@@ -125,7 +125,7 @@ namespace fl
 
 	// Higher level functions
 	virtual void            clear           (const T scalar = (T) 0);  ///< Set all elements to given value.
-	virtual T               norm            (float n) const;  ///< Generalized Frobenius norm: (sum_elements (element^n))^(1/n).  Effectively: INFINITY is max, 1 is sum, 2 is standard Frobenius norm.  n==0 is technically undefined, but we treat is as the count of non-zero elements.
+	virtual T               norm            (T n) const;  ///< Generalized Frobenius norm: (sum_elements (element^n))^(1/n).  Effectively: INFINITY is max, 1 is sum, 2 is standard Frobenius norm.  n==0 is technically undefined, but we treat is as the count of non-zero elements.
 	virtual MatrixResult<T> visit           (T (*function) (const T &)) const;  ///< Apply function() to each of our elements, and return the results in a new Matrix of equal size.
 	virtual MatrixResult<T> visit           (T (*function) (const T)) const;  ///< Apply function() to each of our elements, and return the results in a new Matrix of equal size.
 #	ifndef N2A_SPINNAKER
@@ -273,7 +273,7 @@ namespace fl
 	virtual void resize (const int rows, const int columns = 1)                {       result->resize (rows, columns);}
 
 	virtual void clear (const T scalar = (T) 0)                                {       result->clear (scalar);}
-	virtual T norm (float n) const                                             {return result->norm (n);}
+	virtual T norm (T n) const                                                 {return result->norm (n);}
 	virtual MatrixResult visit (T (*function) (const T &)) const               {return result->visit (function);}
 	virtual MatrixResult visit (T (*function) (const T)) const                 {return result->visit (function);}
 
@@ -368,7 +368,7 @@ namespace fl
 	virtual void resize (const int rows, const int columns = 1);  ///< Always sets strideC = rows.
 
 	virtual void clear (const T scalar = (T) 0);
-	virtual T norm (float n) const;
+	virtual T norm (T n) const;
 	virtual MatrixResult<T> visit (T (*function) (const T &)) const;
 	virtual MatrixResult<T> visit (T (*function) (const T)) const;
 
@@ -479,7 +479,7 @@ namespace fl
     virtual void resize (const int rows, const int columns = 1);  ///< Changing number of rows has no effect at all.  Changing number of columns resizes column list.
 
     virtual void clear (const T scalar = (T) 0);  ///< Completely ignore the value of scalar, and simply delete all data.
-    virtual double norm (double n) const;
+    virtual T norm (T n) const;
 
     virtual MatrixResult<T>  operator * (const MatrixAbstract<T> & B) const;
     using MatrixAbstract<T>::operator *;

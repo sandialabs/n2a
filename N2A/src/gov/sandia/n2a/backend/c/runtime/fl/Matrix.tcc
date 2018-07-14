@@ -99,11 +99,11 @@ namespace fl
 
   template<class T>
   T
-  MatrixAbstract<T>::norm (float n) const
+  MatrixAbstract<T>::norm (T n) const
   {
 	int h = rows ();
 	int w = columns ();
-	if (n == INFINITY)
+	if (n == (T) INFINITY)
 	{
 	  T result = (T) 0;
 	  for (int c = 0; c < w; c++)
@@ -115,7 +115,7 @@ namespace fl
 	  }
 	  return result;
 	}
-	else if (n == 0.0f)
+	else if (n == (T) 0)
 	{
 	  unsigned int result = 0;
 	  for (int c = 0; c < w; c++)
@@ -127,7 +127,7 @@ namespace fl
 	  }
 	  return (T) result;
 	}
-	else if (n == 1.0f)
+	else if (n == (T) 1)
 	{
 	  T result = (T) 0;
 	  for (int c = 0; c < w; c++)
@@ -139,7 +139,7 @@ namespace fl
 	  }
 	  return result;
 	}
-	else if (n == 2.0f)
+	else if (n == (T) 2)
 	{
 	  T result = (T) 0;
 	  for (int c = 0; c < w; c++)
@@ -767,12 +767,12 @@ namespace fl
 
   template<class T>
   T
-  MatrixStrided<T>::norm (float n) const
+  MatrixStrided<T>::norm (T n) const
   {
 	T * i = (T *) data + offset;
 	T * end = i + columns_ * strideC;
 	const int stepC = strideC - rows_ * strideR;
-	if (n == INFINITY)
+	if (n == (T) INFINITY)
 	{
 	  T result = (T) 0;
 	  while (i != end)
@@ -787,7 +787,7 @@ namespace fl
 	  }
 	  return result;
 	}
-	else if (n == 0.0f)
+	else if (n == (T) 0)
 	{
 	  unsigned int result = 0;
 	  while (i != end)
@@ -802,7 +802,7 @@ namespace fl
 	  }
 	  return (T) result;
 	}
-	else if (n == 1.0f)
+	else if (n == (T) 1)
 	{
 	  T result = (T) 0;
 	  while (i != end)
@@ -817,7 +817,7 @@ namespace fl
 	  }
 	  return result;
 	}
-	else if (n == 2.0f)
+	else if (n == (T) 2)
 	{
 #     ifdef HAVE_BLAS
 	  if (columns_ == 1)                 return nrm2 (rows_,            i, strideR);

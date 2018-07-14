@@ -63,7 +63,7 @@ public class JobC extends Thread
     public Path runtimeDir;
     public Path gcc;
 
-    public String numericType;
+    public String T;
     public int    eventMode;
 
     // These values are unique across the whole simulation, so they go here rather than BackendDataC.
@@ -89,14 +89,14 @@ public class JobC extends Thread
         {
             Files.createFile (jobDir.resolve ("started"));
 
+            T = job.get ("$metadata", "backend.c.type");
+            if (! T.equals ("int")  &&  ! T.equals ("double")) T = "float";  // Only three supported options.
+
             HostSystem env = HostSystem.get (job.getOrDefault ("$metadata", "host", "localhost"));
             Path resourceDir = Paths.get (AppData.properties.get ("resourceDir"));
             gcc              = Paths.get (AppData.state.getOrDefault ("BackendC", "gcc", "g++"));
             runtimeDir       = resourceDir.resolve ("cruntime");
             rebuildRuntime ();
-
-            numericType = job.get ("$metadata", "backend.c.type");
-            if (! numericType.equals ("int")  &&  ! numericType.equals ("double")) numericType = "float";  // Only three supported options.
 
             model = new EquationSet (job);
             digestModel ();
@@ -145,18 +145,37 @@ public class JobC extends Thread
         boolean changed = false;
         if (needRuntime)
         {
-            if (unpackRuntime (JobC.class, runtimeDir, "",   "io.cc", "io.h", "KDTree.h", "nosys.h", "runtime.cc", "runtime.h", "String.h")) changed = true;
+            if (unpackRuntime (JobC.class, runtimeDir, "",   "io.cc", "io.h", "io.tcc", "KDTree.h", "nosys.h", "runtime.cc", "runtime.h", "runtime.tcc", "String.h")) changed = true;
             if (unpackRuntime (JobC.class, runtimeDir, "fl", "math.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "MatrixSparse.tcc", "pointer.h")) changed = true;
             needRuntime = false;   // Stop checking files for this session.
         }
 
-        // Compile runtime
-        for (String stem : new String[] {"runtime", "io"})
+        String[] sources = new String[] {"runtime", "io"};
+        if (changed)
         {
-            Path object = runtimeDir.resolve (stem + ".o");
-            if (! changed  &&  Files.exists (object)) continue;
+            for (String type : new String[] {"float", "double", "int"})
+            {
+                for (String stem : sources)
+                {
+                    Files.deleteIfExists (runtimeDir.resolve (stem + "_" + type + ".o"));
+                }
+            }
+        }
+
+        // Compile runtime
+        for (String stem : sources)
+        {
+            Path object = runtimeDir.resolve (stem + "_" + T + ".o");
+            if (Files.exists (object)) continue;
             Path source = runtimeDir.resolve (stem + ".cc");
-            Path out = runCommand (gcc.toString (), "-c", "-O3", "-std=c++11", "-I" + runtimeDir, "-o", object.toString (), source.toString ());
+            Path out = runCommand
+            (
+                gcc.toString (), "-c", "-O3", "-std=c++11",
+                "-ffunction-sections", "-fdata-sections",
+                "-I" + runtimeDir,
+                "-Dn2a_T=" + T,
+                "-o", object.toString (), source.toString ()
+            );
             Files.delete (out);
         }
     }
@@ -191,9 +210,10 @@ public class JobC extends Thread
         Path out = runCommand
         (
             gcc.toString (), "-O3", "-std=c++11",
+            "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections",
             "-I" + runtimeDir,
-            runtimeDir.resolve ("runtime.o").toString (),
-            runtimeDir.resolve ("io.o"     ).toString (),
+            runtimeDir.resolve ("runtime_" + T + ".o").toString (),
+            runtimeDir.resolve ("io_"      + T + ".o").toString (),
             "-o", binary.toString (), source.toString ()
         );
         Files.delete (out);
@@ -259,7 +279,7 @@ public class JobC extends Thread
         findLiveReferences (model);
         model.determineTypes ();
         model.determineDuration ();
-        if (numericType.equals ("int"))
+        if (T.equals ("int"))
         {
             double duration = 0;
             String durationString = model.getNamedValue ("duration");
@@ -311,7 +331,7 @@ public class JobC extends Thread
         s.append ("class Wrapper;\n");
         s.append ("\n");
         generateDeclarations (model, s);
-        s.append ("class Wrapper : public WrapperBase\n");
+        s.append ("class Wrapper : public WrapperBase<" + T + ">\n");
         s.append ("{\n");
         s.append ("public:\n");
         s.append ("  " + prefix (model) + "_Population " + mangle (model.name) + ";\n");
@@ -332,9 +352,9 @@ public class JobC extends Thread
         s.append ("  {\n");
         String integrator = model.getNamedValue ("c.integrator", "Euler");
         if (! "Euler|RungeKutta".contains (integrator)) integrator = "Euler";
-        s.append ("    simulator.integrator = new " + integrator + ";\n");
+        s.append ("    Simulator<" + T + ">::instance.integrator = new " + integrator + "<" + T + ">;\n");
         s.append ("    Wrapper wrapper;\n");
-        s.append ("    simulator.run (wrapper);\n");
+        s.append ("    Simulator<" + T + ">::instance.run (wrapper);\n");
         s.append ("    outputClose ();\n");
         s.append ("  }\n");
         s.append ("  catch (const char * message)\n");
@@ -376,8 +396,8 @@ public class JobC extends Thread
                         int cols = A.columns ();
                         String matrixName = "Matrix" + matrixNames.size ();
                         matrixNames.put (op, matrixName);
-                        if (rows == 3  &&  cols == 1) result.append ("Vector3 " + matrixName + " = Matrix<" + numericType + ">");
-                        else                          result.append ("Matrix<" + numericType + "> " + matrixName);
+                        if (rows == 3  &&  cols == 1) result.append ("Vector3 " + matrixName + " = Matrix<" + T + ">");
+                        else                          result.append ("Matrix<" + T + "> " + matrixName);
                         result.append (" (\"" + A + "\");\n");
                     }
                     return false;  // Don't try to descend tree from here
@@ -417,7 +437,7 @@ public class JobC extends Thread
                                     {
                                         String matrixName = "Matrix" + matrixNames.size ();
                                         matrixNames.put (fileName, matrixName);
-                                        result.append ("MatrixInput * " + matrixName + " = matrixHelper (\"" + fileName + "\");\n");
+                                        result.append ("MatrixInput<" + T + "> * " + matrixName + " = matrixHelper<" + T + "> (\"" + fileName + "\");\n");
                                     }
                                 }
                                 else if (f instanceof Input)
@@ -426,7 +446,7 @@ public class JobC extends Thread
                                     {
                                         String inputName = "Input" + inputNames.size ();
                                         inputNames.put (fileName, inputName);
-                                        result.append ("InputHolder * " + inputName + " = inputHelper (\"" + fileName + "\");\n");
+                                        result.append ("InputHolder<" + T + "> * " + inputName + " = inputHelper<" + T + "> (\"" + fileName + "\");\n");
                                     }
                                 }
                                 else if (f instanceof Output)
@@ -435,7 +455,7 @@ public class JobC extends Thread
                                     {
                                         String outputName = "Output" + outputNames.size ();
                                         outputNames.put (fileName, outputName);
-                                        result.append ("OutputHolder * " + outputName + " = outputHelper (\"" + fileName + "\");\n");
+                                        result.append ("OutputHolder<" + T + "> * " + outputName + " = outputHelper<" + T + "> (\"" + fileName + "\");\n");
                                     }
                                 }
                             }
@@ -487,7 +507,7 @@ public class JobC extends Thread
         BackendDataC bed = (BackendDataC) s.backendData;
 
         // Population class header
-        result.append ("class " + prefix (s) + "_Population : public Population\n");
+        result.append ("class " + prefix (s) + "_Population : public Population<" + T + ">\n");
         result.append ("{\n");
         result.append ("public:\n");
 
@@ -579,13 +599,13 @@ public class JobC extends Thread
         {
             result.append ("  virtual ~" + prefix (s) + "_Population ();\n");
         }
-        result.append ("  virtual Part * create ();\n");
+        result.append ("  virtual Part<" + T + "> * create ();\n");
         if (bed.index != null  ||  bed.trackInstances)
         {
-            result.append ("  virtual void add (Part * part);\n");
+            result.append ("  virtual void add (Part<" + T + "> * part);\n");
             if (bed.trackInstances)
             {
-                result.append ("  virtual void remove (Part * part);\n");
+                result.append ("  virtual void remove (Part<" + T + "> * part);\n");
             }
         }
         result.append ("  virtual void init ();\n");
@@ -625,8 +645,8 @@ public class JobC extends Thread
         if (bed.globalDerivative.size () > 0)
         {
             result.append ("  virtual void pushDerivative ();\n");
-            result.append ("  virtual void multiplyAddToStack (" + numericType + " scalar);\n");
-            result.append ("  virtual void multiply (" + numericType + " scalar);\n");
+            result.append ("  virtual void multiplyAddToStack (" + T + " scalar);\n");
+            result.append ("  virtual void multiply (" + T + " scalar);\n");
             result.append ("  virtual void addToMembers ();\n");
         }
         if (bed.newborn >= 0)
@@ -635,8 +655,8 @@ public class JobC extends Thread
         }
         if (s.connectionBindings != null)
         {
-            result.append ("  virtual ConnectIterator * getIterators ();\n");
-            result.append ("  virtual ConnectPopulation * getIterator (int i);\n");
+            result.append ("  virtual ConnectIterator<" + T + "> * getIterators ();\n");
+            result.append ("  virtual ConnectPopulation<" + T + "> * getIterator (int i);\n");
         }
         if (bed.needGlobalPath)
         {
@@ -650,7 +670,7 @@ public class JobC extends Thread
         // -------------------------------------------------------------------
 
         // Unit class
-        result.append ("class " + prefix (s) + " : public PartTime\n");
+        result.append ("class " + prefix (s) + " : public PartTime<" + T + ">\n");
         result.append ("{\n");
         result.append ("public:\n");
 
@@ -727,7 +747,7 @@ public class JobC extends Thread
         }
         if (bed.lastT)
         {
-            result.append ("  " + numericType + " lastT;\n");  // $lastT is for internal use only, so no need for __24 prefix.
+            result.append ("  " + T + " lastT;\n");  // $lastT is for internal use only, so no need for __24 prefix.
         }
         for (Variable v : bed.localMembers)
         {
@@ -747,17 +767,17 @@ public class JobC extends Thread
         }
         for (EventSource es : bed.eventSources)
         {
-            result.append ("  std::vector<Part *> " + "eventMonitor_" + prefix (es.target.container) + ";\n");
+            result.append ("  std::vector<Part<" + T + "> *> " + "eventMonitor_" + prefix (es.target.container) + ";\n");
         }
         for (EventTarget et : bed.eventTargets)
         {
             if (et.track != null  &&  et.track.name.startsWith ("eventAux"))
             {
-                result.append ("  " + numericType + " " + et.track.name + ";\n");
+                result.append ("  " + T + " " + et.track.name + ";\n");
             }
             if (et.timeIndex >= 0)
             {
-                result.append ("  " + numericType + " eventTime" + et.timeIndex + ";\n");
+                result.append ("  " + T + " eventTime" + et.timeIndex + ";\n");
             }
         }
         if (! bed.localFlagType.isEmpty ())
@@ -781,7 +801,7 @@ public class JobC extends Thread
         }
         if (s.container == null)
         {
-            result.append ("  virtual void setPeriod (" + numericType + " dt);\n");
+            result.append ("  virtual void setPeriod (" + T + " dt);\n");
         }
         if (bed.needLocalDie)
         {
@@ -828,33 +848,33 @@ public class JobC extends Thread
         if (bed.localDerivative.size () > 0  ||  s.parts.size () > 0)
         {
             result.append ("  virtual void pushDerivative ();\n");
-            result.append ("  virtual void multiplyAddToStack (" + numericType + " scalar);\n");
-            result.append ("  virtual void multiply (" + numericType + " scalar);\n");
+            result.append ("  virtual void multiplyAddToStack (" + T + " scalar);\n");
+            result.append ("  virtual void multiply (" + T + " scalar);\n");
             result.append ("  virtual void addToMembers ();\n");
         }
         if (bed.live != null  &&  ! bed.live.hasAttribute ("constant"))
         {
-            result.append ("  virtual " + numericType + " getLive ();\n");
+            result.append ("  virtual " + T + " getLive ();\n");
         }
         if (s.connectionBindings == null)
         {
             if (bed.xyz != null)
             {
-                result.append ("  virtual void getXYZ (Vector3 & xyz);\n");
+                result.append ("  virtual void getXYZ (Vector3<" + T + "> & xyz);\n");
             }
         }
         else
         {
             if (bed.p != null)
             {
-                result.append ("  virtual " + numericType + " getP ();\n");
+                result.append ("  virtual " + T + " getP ();\n");
             }
             if (bed.hasProject)
             {
-                result.append ("  virtual void getProject (int i, Vector3 & xyz);\n");
+                result.append ("  virtual void getProject (int i, Vector3<" + T + "> & xyz);\n");
             }
-            result.append ("  virtual void setPart (int i, Part * part);\n");
-            result.append ("  virtual Part * getPart (int i);\n");
+            result.append ("  virtual void setPart (int i, Part<" + T + "> * part);\n");
+            result.append ("  virtual Part<" + T + "> * getPart (int i);\n");
         }
         if (bed.newborn >= 0)
         {
@@ -869,7 +889,7 @@ public class JobC extends Thread
             result.append ("  virtual bool eventTest (int i);\n");
             if (bed.needLocalEventDelay)
             {
-                result.append ("  virtual " + numericType + " eventDelay (int i);\n");
+                result.append ("  virtual " + T + " eventDelay (int i);\n");
             }
             result.append ("  virtual void setLatch (int i);\n");
             if (bed.eventReferences.size () > 0)
@@ -905,8 +925,8 @@ public class JobC extends Thread
         for (EquationSet p : s.parts) generateDefinitions (p, result);
 
         RendererC context;
-        if (numericType.equals ("int")) context = new RendererCfp (this, result, s);
-        else                            context = new RendererC   (this, result, s);
+        if (T.equals ("int")) context = new RendererCfp (this, result, s);
+        else                  context = new RendererC   (this, result, s);
         BackendDataC bed = (BackendDataC) s.backendData;
 
         // -------------------------------------------------------------------
@@ -966,7 +986,7 @@ public class JobC extends Thread
         }
 
         // Population create
-        result.append ("Part * " + ns + "create ()\n");
+        result.append ("Part<" + T + "> * " + ns + "create ()\n");
         result.append ("{\n");
         result.append ("  " + prefix (s) + " * p = new " + prefix (s) + ";\n");
         if (bed.pathToContainer == null) result.append ("  p->container = (" + prefix (s.container) + " *) container;\n");
@@ -977,7 +997,7 @@ public class JobC extends Thread
         // Population add / remove
         if (bed.index != null)
         {
-            result.append ("void " + ns + "add (Part * part)\n");
+            result.append ("void " + ns + "add (Part<" + T + "> * part)\n");
             result.append ("{\n");
             result.append ("  " + prefix (s) + " * p = (" + prefix (s) + " *) part;\n");
             if (bed.trackInstances)
@@ -1006,11 +1026,11 @@ public class JobC extends Thread
 
             if (bed.trackInstances)
             {
-                result.append ("void " + ns + "remove (Part * part)\n");
+                result.append ("void " + ns + "remove (Part<" + T + "> * part)\n");
                 result.append ("{\n");
                 result.append ("  " + prefix (s) + " * p = (" + prefix (s) + " *) part;\n");
                 result.append ("  instances[p->__24index] = 0;\n");
-                result.append ("  Population::remove (part);\n");
+                result.append ("  Population<" + T + ">::remove (part);\n");
                 result.append ("}\n");
                 result.append ("\n");
             }
@@ -1067,7 +1087,7 @@ public class JobC extends Thread
         //   make connections
         if (s.connectionBindings != null)
         {
-            result.append ("  simulator.connect (this);\n");  // queue to evaluate our connections
+            result.append ("  Simulator<" + T + ">::instance.connect (this);\n");  // queue to evaluate our connections
         }
         s.setInit (0);
         result.append ("};\n");
@@ -1078,9 +1098,9 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "integrate ()\n");
             result.append ("{\n");
-            result.append ("  EventStep * event = getEvent ();\n");
+            result.append ("  EventStep<" + T + "> * event = getEvent ();\n");
             context.hasEvent = true;
-            result.append ("  " + numericType + " dt = event->dt;\n");
+            result.append ("  " + T + " dt = event->dt;\n");
             result.append ("  if (preserve)\n");
             result.append ("  {\n");
             for (Variable v : bed.globalIntegrated)
@@ -1133,12 +1153,12 @@ public class JobC extends Thread
             {
                 if (bed.n.hasAttribute ("initOnly"))  // $n is explicitly assigned only once, so no need to monitor it for assigned values.
                 {
-                    result.append ("  simulator.resize (this, -1);\n");  // -1 means to update $n from n. This can only be done after other parts are finalized, as they may impose structural dynamics via $p or $type.
+                    result.append ("  Simulator<" + T + ">::instance.resize (this, -1);\n");  // -1 means to update $n from n. This can only be done after other parts are finalized, as they may impose structural dynamics via $p or $type.
                 }
                 else  // $n may be assigned during the regular update cycle, so we need to monitor it.
                 {
-                    result.append ("  if (" + mangle ("$n") + " != " + mangle ("next_", "$n") + ") simulator.resize (this, " + mangle ("next_", "$n") + ");\n");
-                    result.append ("  else simulator.resize (this, -1);\n");
+                    result.append ("  if (" + mangle ("$n") + " != " + mangle ("next_", "$n") + ") Simulator<" + T + ">::instance.resize (this, " + mangle ("next_", "$n") + ");\n");
+                    result.append ("  else Simulator<" + T + ">::instance.resize (this, -1);\n");
                 }
             }
 
@@ -1165,7 +1185,7 @@ public class JobC extends Thread
                             result.append ("  if (n == 0) return false;\n");
                             returnN = false;
                         }
-                        result.append ("  simulator.resize (this, " + mangle ("$n") + ");\n");
+                        result.append ("  Simulator<" + T + ">::instance.resize (this, " + mangle ("$n") + ");\n");
                     }
                 }
                 else  // $n is the only kind of structural dynamics, so simply do a resize() when needed
@@ -1177,7 +1197,7 @@ public class JobC extends Thread
                             result.append ("  if (n == 0) return false;\n");
                             returnN = false;
                         }
-                        result.append ("  if (n != (int) " + mangle ("$n") + ") simulator.resize (this, " + mangle ("$n") + ");\n");
+                        result.append ("  if (n != (int) " + mangle ("$n") + ") Simulator<" + T + ">::instance.resize (this, " + mangle ("$n") + ");\n");
                     }
                 }
             }
@@ -1208,7 +1228,7 @@ public class JobC extends Thread
                 result.append ("  }\n");
                 result.append ("\n");
             }
-            result.append ("  Population::resize (n);\n");
+            result.append ("  Population<" + T + ">::resize (n);\n");
             result.append ("\n");
             result.append ("  for (int i = instances.size () - 1; this->n > n  &&  i >= 0; i--)\n");
             result.append ("  {\n");
@@ -1322,7 +1342,7 @@ public class JobC extends Thread
             result.append ("\n");
 
             // Population multiplyAddToStack
-            result.append ("void " + ns + "multiplyAddToStack (" + numericType + " scalar)\n");
+            result.append ("void " + ns + "multiplyAddToStack (" + T + " scalar)\n");
             result.append ("{\n");
             for (Variable v : bed.globalDerivative)
             {
@@ -1332,7 +1352,7 @@ public class JobC extends Thread
             result.append ("\n");
 
             // Population multiply
-            result.append ("void " + ns + "multiply (" + numericType + " scalar)\n");
+            result.append ("void " + ns + "multiply (" + T + " scalar)\n");
             result.append ("{\n");
             for (Variable v : bed.globalDerivative)
             {
@@ -1413,11 +1433,11 @@ public class JobC extends Thread
                     result.append ("    {\n");
                     if (k == null  &&  radius == null)
                     {
-                        result.append ("      result = new ConnectPopulation (i);\n");
+                        result.append ("      result = new ConnectPopulation<" + T + "> (i);\n");
                     }
                     else
                     {
-                        result.append ("      result = new ConnectPopulationNN (i);\n");  // Pulls in KDTree dependencies, for full NN support.
+                        result.append ("      result = new ConnectPopulationNN<" + T + "> (i);\n");  // Pulls in KDTree dependencies, for full NN support.
                     }
 
                     boolean testK      = false;
@@ -1537,7 +1557,7 @@ public class JobC extends Thread
             }
 
 
-            result.append ("ConnectIterator * " + ns + "getIterators ()\n");
+            result.append ("ConnectIterator<" + T + "> * " + ns + "getIterators ()\n");
             result.append ("{\n");
             if (s.connectionMatrix == null)
             {
@@ -1553,22 +1573,22 @@ public class JobC extends Thread
             else
             {
                 ConnectionMatrix cm = s.connectionMatrix;
-                result.append ("  ConnectPopulation * rows = getIterator (" + cm.rows.index + ");\n");
-                result.append ("  ConnectPopulation * cols = getIterator (" + cm.cols.index + ");\n");
+                result.append ("  ConnectPopulation<" + T + "> * rows = getIterator (" + cm.rows.index + ");\n");
+                result.append ("  ConnectPopulation<" + T + "> * cols = getIterator (" + cm.cols.index + ");\n");
 
                 String matrixName = matrixNames.get (cm.A.operands[0].toString ());
-                result.append ("  IteratorNonzero * it = " + matrixName + "->getIterator ();\n");
+                result.append ("  IteratorNonzero<" + T + "> * it = " + matrixName + "->getIterator ();\n");
 
-                result.append ("  Part * dummy = create ();\n");
-                result.append ("  return new ConnectMatrix (rows, cols, it, dummy);\n");
+                result.append ("  Part<" + T + "> * dummy = create ();\n");
+                result.append ("  return new ConnectMatrix<" + T + "> (rows, cols, it, dummy);\n");
             }
             result.append ("}\n");
             result.append ("\n");
 
 
-            result.append ("ConnectPopulation * " + ns + "getIterator (int i)\n");
+            result.append ("ConnectPopulation<" + T + "> * " + ns + "getIterator (int i)\n");
             result.append ("{\n");
-            result.append ("  ConnectPopulation * result = 0;\n");
+            result.append ("  ConnectPopulation<" + T + "> * result = 0;\n");
             result.append ("  switch (i)\n");
             result.append ("  {\n");
             for (ConnectionHolder h : connections) h.emit ();
@@ -1678,9 +1698,9 @@ public class JobC extends Thread
         // Unit setPeriod
         if (s.container == null)  // instance of top-level population, so set period on wrapper whenever our period changes
         {
-            result.append ("void " + ns + "setPeriod (" + numericType + " dt)\n");
+            result.append ("void " + ns + "setPeriod (" + T + " dt)\n");
             result.append ("{\n");
-            result.append ("  PartTime::setPeriod (dt);\n");
+            result.append ("  PartTime<" + T + ">::setPeriod (dt);\n");
             result.append ("  if (container->visitor->event != visitor->event) container->setPeriod (dt);\n");
             result.append ("}\n");
             result.append ("\n");
@@ -1826,12 +1846,12 @@ public class JobC extends Thread
             // finalize $variables
             if (bed.localBuffered.contains (bed.dt))
             {
-                result.append ("  EventStep * event = getEvent ();\n");
+                result.append ("  EventStep<" + T + "> * event = getEvent ();\n");
                 context.hasEvent = true;
             }
             if (bed.lastT)
             {
-                result.append ("  lastT = simulator.currentEvent->t;\n");
+                result.append ("  lastT = Simulator<" + T + ">::instance.currentEvent->t;\n");
             }
             for (Variable v : bed.localBuffered)  // more than just localBufferedInternal, because we must finalize members as well
             {
@@ -1904,13 +1924,13 @@ public class JobC extends Thread
             {
                 if (bed.lastT)
                 {
-                    result.append ("  " + numericType + " dt = simulator.currentEvent->t - lastT;\n");
+                    result.append ("  " + T + " dt = Simulator<" + T + ">::instance.currentEvent->t - lastT;\n");
                 }
                 else
                 {
-                    result.append ("  EventStep * event = getEvent ();\n");
+                    result.append ("  EventStep<" + T + "> * event = getEvent ();\n");
                     context.hasEvent = true;
-                    result.append ("  " + numericType + " dt = event->dt;\n");
+                    result.append ("  " + T + " dt = event->dt;\n");
                 }
                 // Note the resolve() call on the left-hand-side below has lvalue==false.
                 // Integration always takes place in the primary storage of a variable.
@@ -1991,7 +2011,7 @@ public class JobC extends Thread
             }
             if (needT)
             {
-                result.append ("  EventStep * event = getEvent ();\n");
+                result.append ("  EventStep<" + T + "> * event = getEvent ();\n");
                 context.hasEvent = true;
             }
 
@@ -2055,7 +2075,7 @@ public class JobC extends Thread
             // Finalize variables
             if (bed.lastT)
             {
-                result.append ("  lastT = simulator.currentEvent.t;\n");
+                result.append ("  lastT = Simulator<" + T + ">::instance.currentEvent.t;\n");
             }
             for (Variable v : bed.localBufferedExternal)
             {
@@ -2135,11 +2155,11 @@ public class JobC extends Thread
                 if (bed.p.hasAttribute ("constant"))
                 {
                     double pvalue = ((Scalar) ((Constant) bed.p.equations.first ().expression).value).value;
-                    if (pvalue != 0) result.append ("  if (" + resolve (bed.p.reference, context, false) + " < uniform ())\n");
+                    if (pvalue != 0) result.append ("  if (" + resolve (bed.p.reference, context, false) + " < uniform<" + T + "> ())\n");
                 }
                 else
                 {
-                    result.append ("  if (" + mangle ("$p") + " == 0  ||  " + mangle ("$p") + " < 1  &&  " + mangle ("$p") + " < uniform ())\n");
+                    result.append ("  if (" + mangle ("$p") + " == 0  ||  " + mangle ("$p") + " < 1  &&  " + mangle ("$p") + " < uniform<" + T + "> ())\n");
                 }
                 result.append ("  {\n");
                 result.append ("    die ();\n");
@@ -2306,7 +2326,7 @@ public class JobC extends Thread
             result.append ("\n");
 
             // Unit multiplyAddToStack
-            result.append ("void " + ns + "multiplyAddToStack (" + numericType + " scalar)\n");
+            result.append ("void " + ns + "multiplyAddToStack (" + T + " scalar)\n");
             result.append ("{\n");
             for (Variable v : bed.localDerivative)
             {
@@ -2320,7 +2340,7 @@ public class JobC extends Thread
             result.append ("\n");
 
             // Unit multiply
-            result.append ("void " + ns + "multiply (" + numericType + " scalar)\n");
+            result.append ("void " + ns + "multiply (" + T + " scalar)\n");
             result.append ("{\n");
             for (Variable v : bed.localDerivative)
             {
@@ -2373,7 +2393,7 @@ public class JobC extends Thread
         // Unit getPart
         if (s.connectionBindings != null)
         {
-            result.append ("Part * " + ns + "getPart (int i)\n");
+            result.append ("Part<" + T + "> * " + ns + "getPart (int i)\n");
             result.append ("{\n");
             result.append ("  switch (i)\n");
             result.append ("  {\n");
@@ -2410,7 +2430,7 @@ public class JobC extends Thread
         // Unit getProject
         if (bed.hasProject)
         {
-            result.append ("void " + ns + "getProject (int i, Vector3 & xyz)\n");
+            result.append ("void " + ns + "getProject (int i, Vector3<" + T + "> & xyz)\n");
             result.append ("{\n");
 
             // $project is evaluated similar to $p. The phase is $init&&!$live (eventually replace with $connect)
@@ -2530,7 +2550,7 @@ public class JobC extends Thread
         // Unit getLive
         if (bed.live != null  &&  ! bed.live.hasAttribute ("constant"))
         {
-            result.append (numericType + " " + ns + "getLive ()\n");
+            result.append (T + " " + ns + "getLive ()\n");
             result.append ("{\n");
             if (! bed.live.hasAttribute ("accessor"))  // "accessor" indicates whether or not $value is actually stored
             {
@@ -2565,7 +2585,7 @@ public class JobC extends Thread
         {
             if (bed.p != null)
             {
-                result.append (numericType + " " + ns + "getP ()\n");
+                result.append (T + " " + ns + "getP ()\n");
                 result.append ("{\n");
 
                 s.setInit (1);
@@ -2609,7 +2629,7 @@ public class JobC extends Thread
             Variable xyz = s.find (new Variable ("$xyz", 0));
             if (xyz != null)
             {
-                result.append ("void " + ns + "getXYZ (Vector3 & xyz)\n");
+                result.append ("void " + ns + "getXYZ (Vector3<" + T + "> & xyz)\n");
                 result.append ("{\n");
                 // $xyz is either stored, "temporary", or "constant"
                 // If "temporary", then we compute it on the spot.
@@ -2650,15 +2670,15 @@ public class JobC extends Thread
                 }
                 if (et.edge != EventTarget.NONZERO)
                 {
-                    result.append ("      " + numericType + " before = " + resolve (et.track.reference, context, false) + ";\n");
+                    result.append ("      " + T + " before = " + resolve (et.track.reference, context, false) + ";\n");
                 }
                 if (et.trackOne)  // This is a single variable, so check its value directly.
                 {
-                    result.append ("      " + numericType + " after = " + resolve (et.track.reference, context, true) + ";\n");
+                    result.append ("      " + T + " after = " + resolve (et.track.reference, context, true) + ";\n");
                 }
                 else  // This is an expression, so use our private auxiliary variable.
                 {
-                    result.append ("      " + numericType + " after = ");
+                    result.append ("      " + T + " after = ");
                     et.event.operands[0].render (context);
                     result.append (";\n");
                     if (et.edge != EventTarget.NONZERO)
@@ -2675,13 +2695,13 @@ public class JobC extends Thread
                             // Note that other trigger types don't need this because they set the auxiliary variable,
                             // so the next test in the same cycle will no longer see change.
                             result.append ("      if (after == 0) return false;\n");
-                            if (numericType.equals ("int"))
+                            if (T.equals ("int"))
                             {
-                                result.append ("      " + numericType + " moduloTime = simulator.currentEvent->t;\n");  // No need for modulo arithmetic. Rather, int time should be wrapped elsewhere.
+                                result.append ("      " + T + " moduloTime = Simulator<" + T + ">::instance.currentEvent->t;\n");  // No need for modulo arithmetic. Rather, int time should be wrapped elsewhere.
                             }
                             else  // float, double
                             {
-                                result.append ("      " + numericType + " moduloTime = (" + numericType + ") fmod (simulator.currentEvent->t, 1);\n");  // Wrap time at 1 second, to fit in float precision.
+                                result.append ("      " + T + " moduloTime = (" + T + ") fmod (Simulator<" + T + ">::instance.currentEvent->t, 1);\n");  // Wrap time at 1 second, to fit in float precision.
                             }
                             result.append ("      if (eventTime" + et.timeIndex + " == moduloTime) return false;\n");
                             result.append ("      eventTime" + et.timeIndex + " = moduloTime;\n");
@@ -2710,7 +2730,7 @@ public class JobC extends Thread
 
             if (bed.needLocalEventDelay)
             {
-                result.append (numericType + " " + ns + "eventDelay (int i)\n");
+                result.append (T + " " + ns + "eventDelay (int i)\n");
                 result.append ("{\n");
                 result.append ("  switch (i)\n");
                 result.append ("  {\n");
@@ -2725,7 +2745,7 @@ public class JobC extends Thread
                     {
                         multiconditional (v, context, "      ");
                     }
-                    result.append ("      " + numericType + " result = ");
+                    result.append ("      " + T + " result = ");
                     et.event.operands[1].render (context);
                     result.append (";\n");
                     result.append ("      if (result < 0) return -1;\n");
@@ -2907,7 +2927,8 @@ public class JobC extends Thread
         String eventSpike = "EventSpike";
         if (multi) eventSpike += "Multi";
         else       eventSpike += "Single";
-        String eventSpikeLatch = eventSpike + "Latch";
+        String eventSpikeLatch = eventSpike + "Latch<" + T + ">";
+        eventSpike += "<" + T + ">";
 
         StringBuilder result = context.result;
         if (et.delay >= -1)  // delay is a constant, so do all tests at the Java level
@@ -2925,14 +2946,14 @@ public class JobC extends Thread
             else
             {
                 // Is delay an quantum number of $t' steps?
-                result.append (pad + numericType + " delay = " + context.print (et.delay, context.bed.t.exponent) + ";\n");
+                result.append (pad + T + " delay = " + context.print (et.delay, context.bed.t.exponent) + ";\n");
                 result.append (pad + eventSpike + " * spike;\n");
                 eventGenerate (pad, et, context, eventSpike, eventSpikeLatch);
             }
         }
         else  // delay must be evaluated, so emit tests at C level
         {
-            result.append (pad + numericType + " delay = p->eventDelay (" + et.valueIndex + ");\n");
+            result.append (pad + T + " delay = p->eventDelay (" + et.valueIndex + ");\n");
             result.append (pad + eventSpike + " * spike;\n");
             result.append (pad + "if (delay < 0)\n");
             result.append (pad + "{\n");
@@ -2953,7 +2974,7 @@ public class JobC extends Thread
         result.append (pad + "spike->latch = " + et.valueIndex + ";\n");
         if (multi) result.append (pad + "spike->targets = &eventMonitor_" + prefix (et.container) + ";\n");
         else       result.append (pad + "spike->target = p;\n");
-        result.append (pad + "simulator.queueEvent.push (spike);\n");
+        result.append (pad + "Simulator<" + T + ">::instance.queueEvent.push (spike);\n");
     }
 
     public void eventGenerate (String pad, EventTarget et, RendererC context, String eventSpike, String eventSpikeLatch)
@@ -2961,7 +2982,7 @@ public class JobC extends Thread
         StringBuilder result = context.result;
 
         // Is delay close enough to a time-quantum?
-        if (numericType.equals ("int"))
+        if (T.equals ("int"))
         {
             result.append (pad + "int step = (delay + event->dt / 2) / event->dt;\n");
             result.append (pad + "int quantizedTime = step * event->dt;\n");
@@ -2969,7 +2990,7 @@ public class JobC extends Thread
         }
         else
         {
-            result.append (pad + numericType + " ratio = delay / event->dt;\n");
+            result.append (pad + T + " ratio = delay / event->dt;\n");
             result.append (pad + "int step = (int) round (ratio);\n");
             result.append (pad + "if (abs (ratio - step) < 1e-3)\n");
         }
@@ -2984,24 +3005,24 @@ public class JobC extends Thread
         }
         if (eventMode == Simulator.AFTER)
         {
-            if (numericType.equals ("int"))
+            if (T.equals ("int"))
             {
                 result.append (pad + "  delay = quantizedTime + 1;\n");
             }
             else
             {
-                result.append (pad + "  delay = (step + 1e-6) * event->dt;\n");
+                result.append (pad + "  delay = (step + (" + T + ") 1e-6) * event->dt;\n");
             }
         }
         else
         {
-            if (numericType.equals ("int"))
+            if (T.equals ("int"))
             {
                 result.append (pad + "  delay = quantizedTime - 1;\n");
             }
             else
             {
-                result.append (pad + "  delay = (step - 1e-6) * event->dt;\n");
+                result.append (pad + "  delay = (step - (" + T + ") 1e-6) * event->dt;\n");
             }
         }
         result.append (pad + "}\n");
@@ -3300,8 +3321,8 @@ public class JobC extends Thread
 
                     String matrixName = "Matrix" + matrixNames.size ();
                     matrixNames.put (m, matrixName);
-                    if (rows == 3  &&  cols == 1) context.result.append (pad + "Vector3 " + matrixName + ";\n");
-                    else                          context.result.append (pad + "Matrix<" + numericType + "> " + matrixName + " (" + rows + ", " + cols + ");\n");
+                    if (rows == 3  &&  cols == 1) context.result.append (pad + "Vector3<" + T + "> " + matrixName + ";\n");
+                    else                          context.result.append (pad + "Matrix<" + T + "> " + matrixName + " (" + rows + ", " + cols + ");\n");
                     for (int r = 0; r < rows; r++)
                     {
                         if (cols == 1)
@@ -3355,7 +3376,7 @@ public class JobC extends Thread
                     {
                         String matrixName = matrixNames.get (r);
                         String stringName = stringNames.get (r.operands[0]);
-                        context.result.append (pad + "MatrixInput * " + matrixName + " = matrixHelper (" + stringName + ");\n");
+                        context.result.append (pad + "MatrixInput<" + T + "> * " + matrixName + " = matrixHelper<" + T + "> (" + stringName + ");\n");
                     }
                     return false;
                 }
@@ -3366,7 +3387,7 @@ public class JobC extends Thread
                     {
                         String inputName = inputNames.get (i);
                         String stringName = stringNames.get (i.operands[0]);
-                        context.result.append (pad + "InputHolder * " + inputName + " = inputHelper (" + stringName + ");\n");
+                        context.result.append (pad + "InputHolder<" + T + "> * " + inputName + " = inputHelper<" + T + "> (" + stringName + ");\n");
 
                         // Detect time flag
                         String mode = "";
@@ -3410,7 +3431,7 @@ public class JobC extends Thread
                     {
                         String outputName = outputNames.get (o);
                         String stringName = stringNames.get (o.operands[0]);
-                        context.result.append (pad + "OutputHolder * " + outputName + " = outputHelper (" + stringName + ");\n");
+                        context.result.append (pad + "OutputHolder<" + T + "> * " + outputName + " = outputHelper<" + T + "> (" + stringName + ");\n");
 
                         // Detect raw flag
                         if (o.operands.length > 3)
@@ -3486,11 +3507,11 @@ public class JobC extends Thread
         if (v.type instanceof Matrix)
         {
             Matrix m = (Matrix) v.type;
-            if (m.columns () == 1  &&  m.rows () == 3) return "Vector3";
-            return "Matrix<" + numericType + ">";
+            if (m.columns () == 1  &&  m.rows () == 3) return "Vector3<" + T + ">";
+            return "Matrix<" + T + ">";
         }
         if (v.type instanceof Text) return "String";
-        return numericType;
+        return T;
     }
 
     public static String zero (Variable v) throws Exception
@@ -3589,7 +3610,7 @@ public class JobC extends Thread
                     if (! lvalue)
                     {
                         int vorder = r.variable.order;
-                        if      (vorder == 0) name = "simulator.currentEvent->t";
+                        if      (vorder == 0) name = "Simulator<" + T + ">::instance.currentEvent->t";
                         else if (vorder == 1)
                         {
                             if (context.hasEvent) name = "event->dt";
@@ -3770,7 +3791,7 @@ public class JobC extends Thread
 
                         if (depth == 0)
                         {
-                            result.append (prefix + "result->instances = new vector<Part *>;\n");
+                            result.append (prefix + "result->instances = new vector<Part<" + T + "> *>;\n");
                             result.append (prefix + "result->deleteInstances = true;\n");
                         }
                         String it = "it" + i;
@@ -3797,7 +3818,7 @@ public class JobC extends Thread
         if (depth == 0)  // No enumerations occurred during the resolution, so simply reference the existing list of instances.
         {
             result.append (prefix + "result->firstborn = " + pointer + "firstborn;\n");
-            result.append (prefix + "result->instances = (vector<Part *> *) & " + pointer + "instances;\n");
+            result.append (prefix + "result->instances = (vector<Part<" + T + "> *> *) & " + pointer + "instances;\n");
         }
         else  // Enumerations occurred, so append instances to our own list.
         {
@@ -3815,7 +3836,7 @@ public class JobC extends Thread
         pointer = stripDereference (pointer);
         if (pointer.isEmpty ()) pointer = "this";
         else                    pointer = "& " + pointer;
-        result.append (prefix + "  simulator.clearNew (" + pointer + ");\n");
+        result.append (prefix + "  Simulator<" + T + ">::instance.clearNew (" + pointer + ");\n");
         result.append (prefix + "}\n");
     }
 

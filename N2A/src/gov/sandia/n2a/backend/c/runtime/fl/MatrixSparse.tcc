@@ -183,27 +183,27 @@ namespace fl
   }
 
   template<class T>
-  double
-  MatrixSparse<T>::norm (double n) const
+  T
+  MatrixSparse<T>::norm (T n) const
   {
 	int w = data->size ();
 
-	if (n == INFINITY)
+	if (n == (T) INFINITY)
 	{
-	  double result = 0;
+	  T result = 0;
 	  for (int c = 0; c < w; c++)
 	  {
 		std::map<int,T> & C = (*data)[c];
 		typename std::map<int,T>::iterator i = C.begin ();
 		while (i != C.end ())
 		{
-		  result = std::max ((double) std::abs (i->second), result);
+		  result = std::max ((T) std::abs (i->second), result);
 		  i++;
 		}
 	  }
 	  return result;
 	}
-	else if (n == 0)
+	else if (n == (T) 0)
 	{
 	  unsigned int result = 0;
 	  for (int c = 0; c < w; c++)
@@ -221,9 +221,9 @@ namespace fl
 	  }
 	  return result;
 	}
-	else if (n == 1)
+	else if (n == (T) 1)
 	{
-	  double result = 0;
+	  T result = 0;
 	  for (int c = 0; c < w; c++)
 	  {
 		std::map<int,T> & C = (*data)[c];
@@ -236,9 +236,9 @@ namespace fl
 	  }
 	  return result;
 	}
-	else if (n == 2)
+	else if (n == (T) 2)
 	{
-	  double result = 0;
+	  T result = 0;
 	  for (int c = 0; c < w; c++)
 	  {
 		std::map<int,T> & C = (*data)[c];
@@ -253,14 +253,14 @@ namespace fl
 	}
 	else
 	{
-	  double result = 0;
+	  T result = 0;
 	  for (int c = 0; c < w; c++)
 	  {
 		std::map<int,T> & C = (*data)[c];
 		typename std::map<int,T>::iterator i = C.begin ();
 		while (i != C.end ())
 		{
-		  result += std::pow ((double) std::abs (i->second), n);
+		  result += std::pow ((T) std::abs (i->second), n);
 		  i++;
 		}
 	  }

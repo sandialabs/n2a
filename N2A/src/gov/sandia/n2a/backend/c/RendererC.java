@@ -113,7 +113,7 @@ public class RendererC extends Renderer
         if (op instanceof Gaussian)
         {
             Gaussian g = (Gaussian) op;
-            result.append ("gaussian (");
+            result.append ("gaussian<" + job.T + "> (");
             if (g.operands.length > 0)
             {
                 g.operands[0].render (this);
@@ -124,7 +124,7 @@ public class RendererC extends Renderer
         if (op instanceof Uniform)
         {
             Uniform u = (Uniform) op;
-            result.append ("uniform (");
+            result.append ("uniform<" + job.T + "> (");
             if (u.operands.length > 0)
             {
                 u.operands[0].render (this);
@@ -188,7 +188,7 @@ public class RendererC extends Renderer
             String outputName;
             if (o.operands[0] instanceof Constant) outputName = job.outputNames.get (o.operands[0].toString ());
             else                                   outputName = job.outputNames.get (o);
-            result.append (outputName + "->trace (simulator.currentEvent->t, ");
+            result.append (outputName + "->trace (Simulator<" + job.T + ">::instance.currentEvent->t, ");
 
             if (o.operands.length > 2)  // column name is explicit
             {
@@ -290,7 +290,7 @@ public class RendererC extends Renderer
     public String print (double d, int exponent)
     {
         String result = Scalar.print (d);
-        if ((int) d != d  &&  job.numericType.equals ("float")) result += "f";  // Tell C compiler that our type is float, not double.
+        if ((int) d != d  &&  job.T.equals ("float")) result += "f";  // Tell C compiler that our type is float, not double.
         return result;
     }
 }
