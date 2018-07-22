@@ -1800,7 +1800,7 @@ public class ImportJob extends XMLutility
         String ionChannel = part.get ("ionChannel");
 
         part.clear ("ionChannel");
-        NameMap nameMap = partMap.importMap ("ionChannel");  // There is only one internal part for all ion-channel-related components in NeuroML. It includes both individual channels and populations/densities.
+        NameMap nameMap = partMap.importMap ("ionChannel");  // There is only one internal part for all ion-channel-related components from NeuroML. It includes both individual channels and populations/densities.
         remap (part, nameMap);
 
         // multiple inheritance, combining the ion channel with the given mix-in
@@ -3741,7 +3741,7 @@ public class ImportJob extends XMLutility
                     nameMap.inheritContainers (partMap);
                     nameMap.buildContainerMappings ();
                 }
-                nameMap.dump ();
+                //nameMap.dump ();
                 pp.rename.putAll (nameMap.inward);
 
                 // Avoid hiding names from containers
@@ -3759,7 +3759,7 @@ public class ImportJob extends XMLutility
                     targets.add (newName);
                 }
             }
-            if (part.child ("t") == null) pp.rename.put ("t", "$t");  // If t is locally defined, then it is not the same as $t.
+            if (part.child ("t") == null) pp.rename.put ("t", "$t");  // If t is not locally defined, then it is the same as $t.
 
             pp.process (part);
         }
