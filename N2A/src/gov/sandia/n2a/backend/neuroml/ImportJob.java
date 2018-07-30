@@ -1267,7 +1267,7 @@ public class ImportJob extends XMLutility
                         }
                         break;
                     case "resistivity":
-                        property.set ("resistivity", biophysicalUnits (getAttribute (p, "value")));
+                        property.set ("ρ", biophysicalUnits (getAttribute (p, "value")));
                         break;
                 }
             }

@@ -261,21 +261,16 @@ public class ExportJob extends XMLutility
         String inherit = source.get ("$inherit");
         if (type.equals ("network"))
         {
-            new Network (source);
+            Network network = new Network (source);
+            networks.add (network);
         }
         else if (type.equals ("cell")  ||  type.equals ("segment")  ||  type.contains ("Cell"))
         {
             AbstractCell cell = addCell (source, true);
-            if (cell.populationSize > 1)
+            if (cell.populationSize > 1)  // Wrap cell in a network
             {
-                // Wrap cell in a network
-                Element network = addElement ("network", elements);
-                network.setAttribute ("id", "N2A_Network" + networks.size ());   // todo: create a real network object
-                Element population = doc.createElement ("population");
-                network.appendChild (population);
-                population.setAttribute ("id", source.key ());
-                population.setAttribute ("component", cell.id);
-                population.setAttribute ("size", String.valueOf (cell.populationSize));
+                Network network = new Network (source.key (), cell);
+                networks.add (network);
             }
         }
         else if (type.contains ("Input")  ||  type.contains ("Generator")  ||  type.contains ("Clamp")  ||  type.contains ("spikeArray")  ||  type.contains ("PointCurrent"))
@@ -308,6 +303,20 @@ public class ExportJob extends XMLutility
         List<Element>          networkElements = new ArrayList<Element> ();
         Map<String,Population> populations     = new TreeMap<String,Population> ();
         List<Space>            spaces          = new ArrayList<Space> ();
+
+        public Network (String populationID, AbstractCell cell)
+        {
+            id = "N2A_Network" + networks.size ();
+
+            Element network = addElement ("network", elements);
+            network.setAttribute ("id", id);
+
+            Element population = doc.createElement ("population");
+            network.appendChild (population);
+            population.setAttribute ("id",        populationID);
+            population.setAttribute ("component", cell.id);
+            population.setAttribute ("size",      String.valueOf (cell.populationSize));
+        }
 
         public Network (MPart source)
         {
@@ -844,6 +853,7 @@ public class ExportJob extends XMLutility
         MPart   source;
         MNode   base    = new MVolatile ();
         boolean electrical;  // A hint about context. Shouldn't change identity.
+        boolean usedInCell;  // This is a Coupling between segments in a single cell model, and thus should not be emitted. (Parameter overrides, such as to G, are not supported in this case.)
 
         public Synapse (MPart source, boolean electrical)
         {
@@ -882,6 +892,8 @@ public class ExportJob extends XMLutility
 
         public void append ()
         {
+            if (usedInCell) return;
+
             if (! chainID.isEmpty ())  // We have embedded input, so the main synapse will be emitted elsewhere.
             {
                 input (source, elements, this);
@@ -1213,8 +1225,24 @@ public class ExportJob extends XMLutility
             EquationSet part = getEquations (source);
             if (source.get ("$metadata", "backend.lems.part").equals ("segment"))  // segment pretending to be a cell (such as HH)
             {
-                blocks.add (new SegmentBlock (part));
-                // TODO: process peer Coupling parts into segment parent-child relationships
+                Map<String,SegmentBlock> blockNames = new TreeMap<String,SegmentBlock> ();  // for easy lookup by name
+                SegmentBlock sb = new SegmentBlock (part);
+                blocks.add (sb);
+                blockNames.put (part.name, sb);
+                segments.addAll (sb.segments);
+
+                // Process peer Coupling parts into segment parent-child relationships
+                for (EquationSet c : part.container.parts)
+                {
+                    if (c == part) continue;
+                    if (c.connectionBindings == null  ||  c.connectionBindings.size () != 2) continue;
+                    if (! c.source.get ("$inherit").contains ("Coupling")) continue;
+                    if (! c.source.get ("A").equals (part.name)) continue;
+                    if (! c.source.get ("B").equals (part.name)) continue;
+                    Synapse s = addSynapse ((MPart) c.source, true);
+                    s.usedInCell = true;
+                    connectSegments (c, blockNames);
+                }
             }
             else  // conventional cell
             {
@@ -1233,49 +1261,22 @@ public class ExportJob extends XMLutility
                 {
                     if (c.connectionBindings == null  ||  c.connectionBindings.size () != 2) continue;
                     if (! c.source.get ("$inherit").contains ("Coupling")) continue;
-                    SegmentBlock A = blockNames.get (c.source.get ("A"));  // parent
-                    SegmentBlock B = blockNames.get (c.source.get ("B"));  // child
-                    if (A == null  ||  B == null) continue;  // This should never happen for imported models, but user-made models could be ill-formed.
-
-                    Variable p = c.find (new Variable ("$p", 0));
-                    if (p == null)
-                    {
-                        // Absent $p indicates all-to-all, which NeuroML can only represent if A is a singleton
-                        Segment a = A.segments.get (0);
-                        for (int Bindex = 0; Bindex < B.segments.size (); Bindex++)
-                        {
-                            Segment b = B.segments.get (Bindex);
-                            a.addChild (b);
-                        }
-                    }
-                    else
-                    {
-                        ConnectionContext cc = new ConnectionContext ();
-                        for (cc.Aindex = 0; cc.Aindex < A.segments.size (); cc.Aindex++)
-                        {
-                            Segment a = A.segments.get (cc.Aindex);
-                            for (cc.Bindex = 0; cc.Bindex < B.segments.size (); cc.Bindex++)
-                            {
-                                Segment b = B.segments.get (cc.Bindex);
-                                if (((Scalar) p.eval (cc)).value == 1) a.addChild (b);
-                            }
-                        }
-                    }
+                    connectSegments (c, blockNames);
                 }
-
-                // Assign segment IDs based on parent-child relationships
-                int index = 0;
-                for (Segment s : segments)
-                {
-                    if (s.parent == null) index = s.assignID (index);
-                }
-
-                // Sort segments by ID, so they get appended in a pleasing manner.
-                TreeMap<Integer,Segment> sorted = new TreeMap<Integer,Segment> ();
-                for (Segment s : segments) sorted.put (s.id, s);
-                int i = 0;
-                for (Segment s : sorted.values ()) segments.set (i++, s);
             }
+
+            // Assign segment IDs based on parent-child relationships
+            int index = 0;
+            for (Segment s : segments)
+            {
+                if (s.parent == null) index = s.assignID (index);
+            }
+
+            // Sort segments by ID, so they get appended in a pleasing manner.
+            TreeMap<Integer,Segment> sorted = new TreeMap<Integer,Segment> ();
+            for (Segment s : segments) sorted.put (s.id, s);
+            int i = 0;
+            for (Segment s : sorted.values ()) segments.set (i++, s);
 
             // Emit segments and groups
             for (SegmentBlock sb : blocks) sb.append ();
@@ -1314,6 +1315,38 @@ public class ExportJob extends XMLutility
 
             // Collate
             sequencer.append (cell, cellElements);
+        }
+
+        public void connectSegments (EquationSet c, Map<String,SegmentBlock> blockNames)
+        {
+            SegmentBlock A = blockNames.get (c.source.get ("A"));  // parent
+            SegmentBlock B = blockNames.get (c.source.get ("B"));  // child
+            if (A == null  ||  B == null) return;  // This should never happen for imported models, but user-made models could be ill-formed.
+
+            Variable p = c.find (new Variable ("$p", 0));
+            if (p == null)
+            {
+                // Absent $p indicates all-to-all, which NeuroML can only represent if A is a singleton
+                Segment a = A.segments.get (0);
+                for (int Bindex = 0; Bindex < B.segments.size (); Bindex++)
+                {
+                    Segment b = B.segments.get (Bindex);
+                    a.addChild (b);
+                }
+            }
+            else
+            {
+                ConnectionContext cc = new ConnectionContext ();
+                for (cc.Aindex = 0; cc.Aindex < A.segments.size (); cc.Aindex++)
+                {
+                    Segment a = A.segments.get (cc.Aindex);
+                    for (cc.Bindex = 0; cc.Bindex < B.segments.size (); cc.Bindex++)
+                    {
+                        Segment b = B.segments.get (cc.Bindex);
+                        if (((Scalar) p.eval (cc)).value == 1) a.addChild (b);
+                    }
+                }
+            }
         }
 
         public String mapID (String blockName, String index)
@@ -1477,7 +1510,7 @@ public class ExportJob extends XMLutility
                 }
 
                 //   resistivity
-                value = getLocalProperty ("resistivity", block);
+                value = getLocalProperty ("ρ", block);
                 if (! value.isEmpty ())
                 {
                     addUnique (new PropertyMembrane (intra, "resistivity", value));
@@ -2334,24 +2367,11 @@ public class ExportJob extends XMLutility
                 // We need to check two things:
                 // * Has the variable been overridden after it was declared in the base part?
                 // * Is it an expression or a constant?
-                // An override that is an expression should trigger a LEMS extension part.
                 // A constant that is either overridden or required should be emitted here.
+                // An override that is an expression should trigger a LEMS extension part.
 
-                boolean expression = true;
-                String value = p.get ();
                 Variable v = partEquations.find (new Variable (key));
-                try
-                {
-                    Type evalue = v.eval (context);  // This could convert an expression to a constant.
-                    // TODO: if it is a simple AccessVariable, then it shouldn't be viewed as an expression.
-                    Operator op = Operator.parse (value);
-                    if (op instanceof Constant)
-                    {
-                        Type dvalue = ((Constant) op).value;  // "direct" value
-                        expression = ! evalue.equals (dvalue);
-                    }
-                }
-                catch (Exception e) {}
+                boolean constant = v.hasAttribute ("constant");
 
                 boolean overridden = p.isFromTopDocument ()  ||  isOverride (part.get ("$inherit").replace ("\"", ""), key);
 
@@ -2359,9 +2379,26 @@ public class ExportJob extends XMLutility
                 if (name.isEmpty ()) name = key;
                 boolean required = sequencer.isRequired (result, name);
 
-                if (required  ||  (overridden  &&  ! expression))
+                if (required  ||  (overridden  &&  constant))
                 {
-                    result.setAttribute (name, biophysicalUnits (p.get ()));  // biophysicalUnits() should return strings (non-numbers) unmodified
+                    String value = p.get ();
+                    if (constant)
+                    {
+                        try
+                        {
+                            Operator op = v.equations.first ().expression;  // Simplified expression
+                            if (! (op instanceof Constant))  // This is a more complicated expression, so render the equivalent constant.
+                            {
+                                value = op.eval (context).toString ();
+                            }
+                        }
+                        catch (Exception e) {}
+                    }
+                    result.setAttribute (name, biophysicalUnits (value));  // biophysicalUnits() should return strings (non-numbers) unmodified
+                }
+                else if (overridden)  // implies not constant (that is, an expression)
+                {
+                    // TODO: emit LEMS extension part
                 }
             }
         }
