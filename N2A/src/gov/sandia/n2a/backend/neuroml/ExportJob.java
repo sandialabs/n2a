@@ -16,6 +16,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.TreeMap;
+
+import javax.measure.Dimension;
 import javax.measure.IncommensurableException;
 import javax.measure.UnconvertibleException;
 import javax.measure.Unit;
@@ -60,17 +62,21 @@ public class ExportJob extends XMLutility
     public String      modelName;
     public EquationSet equations;
 
-    public List<Element>      elements = new ArrayList<Element> ();
-    public List<IonChannel>   channels = new ArrayList<IonChannel> ();
-    public List<Synapse>      synapses = new ArrayList<Synapse> ();
-    public List<AbstractCell> cells    = new ArrayList<AbstractCell> ();
-    public List<Network>      networks = new ArrayList<Network> ();
-    public int                countConcentration;
-    public int                countInput;
+    public List<Element>       elements = new ArrayList<Element> ();
+    public List<IonChannel>    channels = new ArrayList<IonChannel> ();
+    public List<Synapse>       synapses = new ArrayList<Synapse> ();
+    public List<AbstractCell>  cells    = new ArrayList<AbstractCell> ();
+    public List<Network>       networks = new ArrayList<Network> ();
+    public int                 countConcentration;
+    public int                 countInput;
+    public Map<Unit<?>,String> unitsUsed = new HashMap<Unit<?>,String> ();
+    public boolean             pureLEMS     = true;  // Indicates that no NeuroML parts were emitted.
+    public boolean             requiresLEMS = false; // Indicates that some elements were emitted that are not permitted in neuroml documents, so must upgrade to lems document.
 
-    public static Map<Unit<?>,String> nmlUnits = new HashMap<Unit<?>,String> ();
-    public static Unit<?> um = UCUM.parse ("um");
-    public static double baseRatio = Math.log (10) / Math.log (2);  // log_2 (10), how many binary digits it takes to represent one decimal digit
+    public static Map<Unit<?>,String>   unitsNML      = new HashMap<Unit<?>,String> ();
+    public static Map<Dimension,String> dimensionsNML = new HashMap<Dimension,String> ();
+    public static Unit<?>               um            = UCUM.parse ("um");
+    public static double                baseRatio     = Math.log (10) / Math.log (2);  // log_2 (10), how many binary digits it takes to represent one decimal digit
 
     static
     {
@@ -105,7 +111,37 @@ public class ExportJob extends XMLutility
             "S_per_V", "nS_per_mV",
             "mol_per_m_per_A_per_s", "mol_per_cm_per_uA_per_ms"
         };
-        for (String u : nmlDefined) nmlUnits.put (UCUM.parse (cleanupUnits (u)), u);
+        for (String u : nmlDefined) unitsNML.put (UCUM.parse (cleanupUnits (u)), u);
+
+        addDimension ("s",         "time");
+        addDimension ("/s",        "per_time");
+        addDimension ("V",         "voltage");
+        addDimension ("/V",        "per_voltage");
+        addDimension ("S",         "conductance");
+        addDimension ("S/m2",      "conductanceDensity");
+        addDimension ("F",         "capacitance");
+        addDimension ("F/m2",      "specificCapacitance");
+        addDimension ("Ohm",       "resistance");
+        addDimension ("Ohm.m",     "resistivity");
+        addDimension ("C",         "charge");
+        addDimension ("C/mol",     "charge_per_mole");
+        addDimension ("A",         "current");
+        addDimension ("A/m2",      "currentDensity");
+        addDimension ("m",         "length");
+        addDimension ("m2",        "area");
+        addDimension ("m3",        "volume");
+        addDimension ("mol/m3",    "concentration");
+        addDimension ("mol",       "substance");
+        addDimension ("m/s",       "permeability");
+        addDimension ("Cel",       "temperature");
+        addDimension ("J/K/mol",   "idealGasConstant");
+        addDimension ("S/V",       "conductance_per_voltage");
+        addDimension ("mol/m/A/s", "rho_factor");
+    }
+
+    public static void addDimension (String unitName, String dimensionName)
+    {
+        dimensionsNML.put (UCUM.parse (unitName).getDimension (), dimensionName);
     }
 
     public ExportJob (PartMap partMap, Sequencer sequencer)
@@ -244,13 +280,21 @@ public class ExportJob extends XMLutility
 
         for (IonChannel ic : channels) ic.append ();
         for (Synapse s: synapses) s.append ();
+        appendUnits (! pureLEMS);
 
         // Collate
-        Element root = doc.createElement ("neuroml");
+        Element root = doc.createElement (requiresLEMS ? "lems" : "neuroml");
         root.setAttribute ("id", modelName);
-        root.setAttribute ("xmlns",              "http://www.neuroml.org/schema/neuroml2");
-        root.setAttribute ("xmlns:xsi",          "http://www.w3.org/2001/XMLSchema-instance");
-        root.setAttribute ("xsi:schemaLocation", "http://www.neuroml.org/schema/neuroml2 ../Schemas/NeuroML2/NeuroML_v2beta4.xsd");
+        if (requiresLEMS)
+        {
+            // TODO: Include NeuroML definition files for LEMS
+        }
+        else
+        {
+            root.setAttribute ("xmlns",              "http://www.neuroml.org/schema/neuroml2");
+            root.setAttribute ("xmlns:xsi",          "http://www.w3.org/2001/XMLSchema-instance");
+            root.setAttribute ("xsi:schemaLocation", "http://www.neuroml.org/schema/neuroml2 ../Schemas/NeuroML2/NeuroML_v2beta4.xsd");
+        }
         sequencer.append (root, elements);
         doc.appendChild (root);
     }
@@ -261,11 +305,13 @@ public class ExportJob extends XMLutility
         String inherit = source.get ("$inherit");
         if (type.equals ("network"))
         {
+            pureLEMS = false;
             Network network = new Network (source);
             networks.add (network);
         }
         else if (type.equals ("cell")  ||  type.equals ("segment")  ||  type.contains ("Cell"))
         {
+            pureLEMS = false;
             AbstractCell cell = addCell (source, true);
             if (cell.populationSize > 1)  // Wrap cell in a network
             {
@@ -275,15 +321,18 @@ public class ExportJob extends XMLutility
         }
         else if (type.contains ("Input")  ||  type.contains ("Generator")  ||  type.contains ("Clamp")  ||  type.contains ("spikeArray")  ||  type.contains ("PointCurrent"))
         {
+            pureLEMS = false;
             input (source, elements, null);
         }
         else if (type.contains ("Synapse"))
         {
+            pureLEMS = false;
             Synapse s = addSynapse (source, false);
             s.id = source.key ();
         }
         else if (inherit.contains ("Coupling"))
         {
+            pureLEMS = false;
             Synapse s = addSynapse (source, true);
             s.id = source.key ();
         }
@@ -293,6 +342,7 @@ public class ExportJob extends XMLutility
         }
         else
         {
+            // TODO: add a check if the part is defined by NeuroML. If so, pureLEMS=false.
             genericPart (source, elements);
         }
     }
@@ -2525,6 +2575,7 @@ public class ExportJob extends XMLutility
         catch (Exception error)
         {
         }
+        unitsUsed.put (um, "um");
 
         return print (v);  // no unit string at end of number, because morphology units are always in um
     }
@@ -2559,15 +2610,17 @@ public class ExportJob extends XMLutility
         }
 
         // Determine power in numberString itself
-        double power = 1; 
+        double power = 1;
         if (v != 0) power = Math.pow (10, Math.floor ((Math.getExponent (v) + 1) / baseRatio));
 
         // Find closest matching unit
-        Entry<Unit<?>,String> closest      = null;
-        Entry<Unit<?>,String> closestAbove = null;  // like closest, but only ratios >= 1
-        double closestRatio      = Double.POSITIVE_INFINITY;
-        double closestAboveRatio = Double.POSITIVE_INFINITY;
-        for (Entry<Unit<?>,String> e : nmlUnits.entrySet ())
+        Unit<?> closest      = null;
+        Unit<?> closestAbove = null;  // like closest, but only ratios >= 1
+        double  closestRatio      = Double.POSITIVE_INFINITY;
+        double  closestAboveRatio = Double.POSITIVE_INFINITY;
+        String  closestString      = "";
+        String  closestAboveString = "";
+        for (Entry<Unit<?>,String> e : unitsNML.entrySet ())
         {
             Unit<?> u = e.getKey ();
             if (u.isCompatible (unit))
@@ -2584,14 +2637,16 @@ public class ExportJob extends XMLutility
                     {
                         if (ratio < closestAboveRatio)
                         {
-                            closestAboveRatio = ratio;
-                            closestAbove = e;
+                            closestAboveRatio  = ratio;
+                            closestAbove       = e.getKey ();
+                            closestAboveString = e.getValue ();
                         }
                     }
                     if (ratio < closestRatio)
                     {
-                        closestRatio = ratio;
-                        closest = e;
+                        closestRatio  = ratio;
+                        closest       = e.getKey ();
+                        closestString = e.getValue ();
                     }
                 }
                 catch (UnconvertibleException | IncommensurableException e1)
@@ -2601,19 +2656,91 @@ public class ExportJob extends XMLutility
         }
         if (closest == null)
         {
-            // TODO: Add to LEMS Dimension/Unit sections
-            return value;  // completely give up on conversion
+            closest       = unit;
+            closestString = unitString;
         }
-        if (closestAboveRatio <= 1000 + epsilon) closest = closestAbove;
+        else if (closestAboveRatio <= 1000 + epsilon)
+        {
+            closest       = closestAbove;
+            closestString = closestAboveString;
+        }
+        unitsUsed.put (closest, closestString);
 
         try
         {
-            UnitConverter converter = unit.getConverterToAny (closest.getKey ());
+            UnitConverter converter = unit.getConverterToAny (closest);
             v = converter.convert (v);
         }
         catch (Exception error)
         {
         }
-        return print (v) + closest.getValue ();
+        return print (v) + closestString;
+    }
+
+    public void appendUnits (boolean assumeNML)
+    {
+        Map<String,Dimension> dimensionsUsed = new HashMap<String,Dimension> ();
+        for (Entry<Unit<?>,String> e : unitsUsed.entrySet ())
+        {
+            Unit<?> key = e.getKey ();
+            if (assumeNML  &&  unitsNML.containsKey (key)) continue;
+
+            String    symbol        = e.getValue ();
+            Dimension dimension     = key.getDimension ();
+            String    dimensionName = dimensionsNML.get (dimension);
+            if (dimensionName == null)  // Not a standard NML dimension
+            {
+                dimensionName = dimension.toString ();
+                dimensionsUsed.put (dimensionName, dimension);
+            }
+            else if (! assumeNML)  // Is a standard NML dimension, so only add if don't have NML dimensions available.
+            {
+                dimensionsUsed.put (dimensionName, dimension);
+            }
+
+            Element unit = addElement ("Unit", elements);
+            unit.setAttribute ("symbol",    symbol);
+            unit.setAttribute ("dimension", dimensionName);
+
+            // Determine offset
+            Unit systemUnit = key.getSystemUnit ();
+            UnitConverter converter = key.getConverterTo (systemUnit);
+            double offset = converter.convert (new Integer (0)).doubleValue ();
+            if (offset != 0) unit.setAttribute ("offset", String.valueOf (offset));
+
+            // Determine power*scale
+            double scale = converter.convert (new Integer (1)).doubleValue () - offset;
+            int power = (int) Math.round (Math.log (scale) / Math.log (10));
+            if (Math.abs (scale - Math.pow (10, power)) < epsilon)
+            {
+                unit.setAttribute ("power", String.valueOf (power));
+            }
+            else
+            {
+                unit.setAttribute ("scale", String.valueOf (scale));
+            }
+        }
+
+        for (Entry<String,Dimension> d : dimensionsUsed.entrySet ())
+        {
+            String    name  = d.getKey ();
+            Dimension value = d.getValue ();
+
+            Element dimension = addElement ("Dimension", elements);
+            dimension.setAttribute ("name", name);
+            Map<? extends Dimension,Integer> bases = value.getBaseDimensions ();
+            if (bases == null)
+            {
+                Map<Dimension,Integer> temp = new HashMap<Dimension,Integer> ();
+                temp.put (value, 1);
+                bases = temp;
+            }
+            for (Entry<? extends Dimension,Integer> e : bases.entrySet ())
+            {
+                String base = e.getKey ().toString ().substring (1, 2).toLowerCase ();
+                if (base.equals ("θ")) base = "k";
+                dimension.setAttribute (base, e.getValue ().toString ());
+            }
+        }
     }
 }

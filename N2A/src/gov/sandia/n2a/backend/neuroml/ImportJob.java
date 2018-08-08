@@ -78,8 +78,7 @@ public class ImportJob extends XMLutility
     Map<String,Network>         networks        = new HashMap<String,Network> ();
     Map<String,ComponentType>   components      = new HashMap<String,ComponentType> ();
     Map<String,TreeSet<String>> aliases         = new HashMap<String,TreeSet<String>> ();
-
-    Map<String,Unit<?>> dimensions    = new TreeMap<String,Unit<?>> ();  // Declared dimension names
+    Map<String,Unit<?>>         dimensions      = new TreeMap<String,Unit<?>> ();  // Declared dimension names
 
     public ImportJob (PartMap partMap)
     {
