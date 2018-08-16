@@ -10,16 +10,19 @@ import gov.sandia.n2a.eqset.Equality;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.parse.SimpleNode;
 
-public class OperatorBinary extends Operator
+public class OperatorBinary extends Operator implements OperatorArithmetic
 {
     public Operator operand0;
     public Operator operand1;
+    protected Type type;
 
     public void getOperandsFrom (SimpleNode node) throws ParseException
     {
         if (node.jjtGetNumChildren () != 2) throw new Error ("AST for operator has unexpected form");
         operand0 = Operator.getFrom ((SimpleNode) node.jjtGetChild (0));
         operand1 = Operator.getFrom ((SimpleNode) node.jjtGetChild (1));
+        operand0.parent = this;
+        operand1.parent = this;
     }
 
     public Operator deepCopy ()
@@ -30,6 +33,8 @@ public class OperatorBinary extends Operator
             result = (OperatorBinary) this.clone ();
             result.operand0 = operand0.deepCopy ();
             result.operand1 = operand1.deepCopy ();
+            result.operand0.parent = result;
+            result.operand1.parent = result;
         }
         catch (CloneNotSupportedException e)
         {
@@ -65,7 +70,9 @@ public class OperatorBinary extends Operator
         if (operand0 instanceof Constant  &&  operand1 instanceof Constant)
         {
             from.changed = true;
-            return new Constant (eval (null));
+            Operator result = new Constant (eval (null));
+            result.parent = parent;
+            return result;
         }
         return this;
     }
@@ -91,32 +98,46 @@ public class OperatorBinary extends Operator
     public void render (Renderer renderer)
     {
         if (renderer.render (this)) return;
+        render (renderer, " " + toString () + " ");
+    }
 
+    public void render (Renderer renderer, String middle)
+    {
         // Left-hand child
-        boolean useParens = false;
-        if (operand0 instanceof OperatorBinary  ||  operand0 instanceof OperatorUnary)
+        boolean needParens = false;
+        if (operand0 instanceof OperatorArithmetic)
         {
-            useParens =    precedence () < operand0.precedence ()   // read "<" as "comes before" rather than "less"
-                        ||    precedence () == operand0.precedence ()
-                           && associativity () == Associativity.RIGHT_TO_LEFT;
+            needParens =    precedence () < operand0.precedence ()   // read "<" as "comes before" rather than "less"
+                         ||    precedence () == operand0.precedence ()
+                            && associativity () == Associativity.RIGHT_TO_LEFT;
         }
-        if (useParens) renderer.result.append ("(");
+        if (needParens) renderer.result.append ("(");
         operand0.render (renderer);
-        if (useParens) renderer.result.append (")");
+        if (needParens) renderer.result.append (")");
 
-        renderer.result.append (" " + toString () + " ");
+        renderer.result.append (middle);
 
         // Right-hand child
-        useParens = false;
-        if (operand1 instanceof OperatorBinary  ||  operand1 instanceof OperatorUnary)
+        needParens = false;
+        if (operand1 instanceof OperatorArithmetic)
         {
-            useParens =    precedence () < operand1.precedence ()
-                        ||    precedence () == operand1.precedence ()
-                           && associativity () == Associativity.LEFT_TO_RIGHT;
+            needParens =    precedence () < operand1.precedence ()
+                         ||    precedence () == operand1.precedence ()
+                            && associativity () == Associativity.LEFT_TO_RIGHT;
         }
-        if (useParens) renderer.result.append ("(");
+        if (needParens) renderer.result.append ("(");
         operand1.render (renderer);
-        if (useParens) renderer.result.append (")");
+        if (needParens) renderer.result.append (")");
+    }
+
+    public Type getType ()
+    {
+        if (type != null) return type;
+        Type a = operand0.getType ();
+        Type b = operand1.getType ();
+        if (a.betterThan (b)) type = a;
+        else                  type = b;
+        return type;
     }
 
     public void solve (Equality statement) throws EvaluationException

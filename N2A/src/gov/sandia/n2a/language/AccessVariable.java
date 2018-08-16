@@ -76,7 +76,9 @@ public class AccessVariable extends Operator
         {
             from.removeDependencyOn (v);
             from.changed = true;
-            return e.expression.deepCopy ();
+            Operator result = e.expression.deepCopy ();
+            result.parent = parent;
+            return result;
         }
 
         // Attempt to simplify expression, and maybe get a Constant
@@ -92,6 +94,7 @@ public class AccessVariable extends Operator
         {
             from.removeDependencyOn (v);
             from.changed = true;
+            e.expression.parent = parent;
             return e.expression;
         }
         if (e.expression instanceof AccessVariable)  // Our variable is simply an alias for another variable, so grab the other variable instead.
@@ -116,6 +119,11 @@ public class AccessVariable extends Operator
         Variable v = reference.variable;
         if (v.exponentLast != UNKNOWN) updateExponent (from, v.exponentLast, v.centerLast);
         else                           updateExponent (from, v.exponent,     v.center);
+    }
+
+    public Type getType ()
+    {
+        return reference.variable.type;
     }
 
     public Type eval (Instance instance)

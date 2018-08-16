@@ -44,12 +44,25 @@ public class Gaussian extends Function
 
     public void determineExponent (Variable from)
     {
-        // The largest Gaussian PRNG output is determined by the bit precision of the underlying
-        // uniform PRNG output. The Box-Muller implementation in the C Backend runtime will not
-        // exceed 6.66 standard deviations when using 32 bits uniform numbers. Thus, 7 std is safe.
-        // log2(7)~=2.81, so magnitude of msb is 2
-        // Since about 68% of all results are less than 1 sigma, center can point to bit holding 2^-1.
-        updateExponent (from, 2, MSB - 3);
+        if (operands.length > 0)
+        {
+            Operator op = operands[0];
+            op.exponentNext = exponentNext;
+            op.determineExponent (from);
+            if (op.exponent != UNKNOWN)
+            {
+                updateExponent (from, op.exponent, op.center);
+            }
+        }
+        else
+        {
+            // The largest Gaussian PRNG output is determined by the bit precision of the underlying
+            // uniform PRNG output. The Box-Muller implementation in the C Backend runtime will not
+            // exceed 6.66 standard deviations when using 32-bit uniform numbers. Thus, 7 std is safe.
+            // log2(7)~=2.81, so magnitude of msb is 2
+            // Since about 68% of all results are less than 1 sigma, center can point to bit holding 2^-1.
+            updateExponent (from, 2, MSB - 3);
+        }
     }
 
     public Type eval (Instance context) throws EvaluationException

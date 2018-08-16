@@ -38,6 +38,7 @@ public class BuildMatrix extends Operator
             if (row instanceof ASTConstant)
             {
                 operands[0][r] = Operator.getFrom (row);
+                operands[0][r].parent = this;
             }
             else
             {
@@ -45,6 +46,7 @@ public class BuildMatrix extends Operator
                 for (int c = 0; c < currentCols; c++)
                 {
                     operands[c][r] = Operator.getFrom ((SimpleNode) row.jjtGetChild (c));
+                    operands[c][r].parent = this;
                 }
             }
         }
@@ -63,7 +65,9 @@ public class BuildMatrix extends Operator
             {
                 for (int r = 0; r < rows; r++)
                 {
-                    if (operands[c][r] != null) result.operands[c][r] = operands[c][r].deepCopy ();
+                    if (operands[c][r] == null) continue;
+                    result.operands[c][r] = operands[c][r].deepCopy ();
+                    result.operands[c][r].parent = result;
                 }
             }
         }
@@ -191,6 +195,7 @@ public class BuildMatrix extends Operator
         {
             from.changed = true;
             Constant result = new Constant (A);
+            result.parent = parent;
             if (count > 0)
             {
                 cent /= count;
@@ -299,6 +304,11 @@ public class BuildMatrix extends Operator
             renderer.result.append (";");
         }
         renderer.result.append ("]");
+    }
+
+    public Type getType ()
+    {
+        return new MatrixDense ();
     }
 
     public Type eval (Instance context) throws EvaluationException

@@ -48,6 +48,7 @@ public class Subtract extends OperatorBinary
             if (c1 instanceof Scalar  &&  ((Scalar) c1).value == 0)
             {
                 from.changed = true;
+                operand0.parent = parent;
                 return operand0;
             }
         }

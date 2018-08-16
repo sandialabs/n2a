@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -52,6 +52,7 @@ public class ReadMatrix extends Function
         int lastParm = operands.length - 1;
         if (lastParm > 0) mode = operands[lastParm].getString ();
         boolean raw = mode.contains ("raw");
+        boolean RC  = mode.contains ("rows")  ||  mode.contains ("columns");
 
         lastParm = Math.min (lastParm, 2);
         for (int i = 1; i <= lastParm; i++)
@@ -62,9 +63,16 @@ public class ReadMatrix extends Function
             op.determineExponent (from);
         }
 
-        int centerNew   = MSB / 2;
-        int exponentNew = getExponentHint (mode, 0) + MSB - centerNew;
-        updateExponent (from, exponentNew, centerNew);
+        if (RC)
+        {
+            updateExponent (from, MSB, 0);  // Return an integer
+        }
+        else
+        {
+            int centerNew   = MSB / 2;
+            int exponentNew = getExponentHint (mode, 0) + MSB - centerNew;
+            updateExponent (from, exponentNew, centerNew);
+        }
     }
 
     public Matrix open (Instance context)
@@ -80,6 +88,11 @@ public class ReadMatrix extends Function
             simulator.matrices.put (path, A);
         }
         return A;
+    }
+
+    public Type getType ()
+    {
+        return new Scalar ();
     }
 
     public Type eval (Instance context)

@@ -23,7 +23,8 @@ template<class T> T                   gaussian ();
 template<class T> T                   gaussian (T sigma);
 template<class T> fl::MatrixResult<T> gaussian (const fl::MatrixAbstract<T> & sigma);
 
-template<class T> fl::MatrixResult<T> grid (int i, int nx, int ny = 1, int nz = 1);
+template<class T> fl::MatrixResult<T> grid    (int i, int nx = 1, int ny = 1, int nz = 1);
+template<class T> fl::MatrixResult<T> gridRaw (int i, int nx = 1, int ny = 1, int nz = 1);
 
 
 // Simulation classes --------------------------------------------------------

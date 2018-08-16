@@ -49,7 +49,10 @@ public class Uniform extends Function
             Operator op = operands[0];
             op.exponentNext = op.exponent;
             op.determineExponent (from);
-            updateExponent (from, op.exponent, op.center);
+            if (op.exponent != UNKNOWN)
+            {
+                updateExponent (from, op.exponent, op.center);
+            }
         }
         else
         {

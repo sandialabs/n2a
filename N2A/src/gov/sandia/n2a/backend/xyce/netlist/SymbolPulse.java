@@ -65,7 +65,7 @@ public class SymbolPulse extends Symbol
         catch (NullPointerException exception)
         {
             lo = new Constant (new Scalar (0));
-            lo = new Constant (new Scalar (1));
+            hi = new Constant (new Scalar (1));
         }
 
         // Determine time offset

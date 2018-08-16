@@ -10,13 +10,19 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorBinary;
+import gov.sandia.n2a.language.ParseException;
+import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.function.Log;
+import gov.sandia.n2a.language.parse.ASTList;
+import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 
 public class Power extends OperatorBinary
 {
+    String hint;
+
     public static Factory factory ()
     {
         return new Factory ()
@@ -33,14 +39,40 @@ public class Power extends OperatorBinary
         };
     }
 
+    public void getOperandsFrom (SimpleNode node) throws ParseException
+    {
+        if (node.jjtGetNumChildren () == 1)
+        {
+            Object o = node.jjtGetChild (0);
+            if (! (o instanceof ASTList)) throw new Error ("AST for function has unexpected form");
+            node = (SimpleNode) o;
+            hint = "";  // This is in function form, so force all processing to be pow()
+        }
+        int count = node.jjtGetNumChildren ();
+        if (count >= 2)
+        {
+            operand0 = Operator.getFrom ((SimpleNode) node.jjtGetChild (0));
+            operand1 = Operator.getFrom ((SimpleNode) node.jjtGetChild (1));
+            if (count > 2)       hint = ((SimpleNode) node.jjtGetChild (2)).jjtGetValue ().toString ();
+            operand0.parent = this;
+            operand1.parent = this;
+        }
+        else
+        {
+            throw new Error ("AST for function has unexpected form");
+        }
+    }
+
     public Associativity associativity ()
     {
-        return Associativity.RIGHT_TO_LEFT;  // TODO: need to implement this in the parser
+        if (hint == null) return Associativity.RIGHT_TO_LEFT;  // for ^
+        return Associativity.LEFT_TO_RIGHT;  // for pow()
     }
 
     public int precedence ()
     {
-        return 3;
+        if (hint == null) return 3;  // for ^
+        return 1;  // for pow()
     }
 
     public Operator simplify (Variable from)
@@ -54,6 +86,7 @@ public class Power extends OperatorBinary
             if (c1 instanceof Scalar  &&  ((Scalar) c1).value == 1)
             {
                 from.changed = true;
+                operand0.parent = parent;
                 return operand0;
             }
             // It would be nice to simplify out x^0. However, if x==0 at runtime, the correct answer is NaN rather than 1.
@@ -69,11 +102,14 @@ public class Power extends OperatorBinary
         operand0.determineExponent (from);
         operand1.determineExponent (from);
 
+        // This operator is b^a, where b is the base and a is the power.
         // let p = base 2 power of our result
         // p = log2(b^a) = a*log2(b)
         // See notes on Exp.determineExponent()
         // If the second operand is negative, the user must specify a hint, which requires the use of pow() instead.
 
+        int centerNew   = MSB / 2;
+        int exponentNew = UNKNOWN;
         if (operand0.exponent != UNKNOWN  &&  operand1.exponent != UNKNOWN)
         {
             double log2b = 0;
@@ -91,11 +127,31 @@ public class Power extends OperatorBinary
             if (operand1 instanceof Constant) a = operand1.getDouble ();
             else                              a = Math.pow (2, operand1.centerPower ());
 
-            int centerNew   = MSB / 2;
-            int exponentNew = 0;
+            exponentNew = 0;
             if (log2b != 0  &&  a != 0) exponentNew = (int) Math.floor (a * log2b);
+        }
+        if (hint != null) exponentNew = getExponentHint (hint, exponentNew);
+        if (exponentNew != UNKNOWN)
+        {
             exponentNew += MSB - centerNew;
             updateExponent (from, exponentNew, centerNew);
+        }
+    }
+
+    public void render (Renderer renderer)
+    {
+        if (hint == null)  // render as ^
+        {
+            super.render (renderer);
+        }
+        else  // render as pow()
+        {
+            if (renderer.render (this)) return;
+            renderer.result.append ("pow(");
+            operand0.render (renderer);
+            renderer.result.append (", ");
+            operand1.render (renderer);
+            renderer.result.append (", \"" + hint + "\")");
         }
     }
 
@@ -127,6 +183,7 @@ public class Power extends OperatorBinary
 
     public String toString ()
     {
-        return "^";
+        if (hint == null) return "^";
+        return "pow";
     }
 }

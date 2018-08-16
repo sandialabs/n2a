@@ -206,6 +206,11 @@ public class Input extends Function
         return H;
     }
 
+    public Type getType ()
+    {
+        return new Scalar ();
+    }
+
     public Type eval (Instance context)
     {
         Type op1 = operands[1].eval (context);

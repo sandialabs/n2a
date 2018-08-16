@@ -37,15 +37,12 @@ public class Norm extends Function
 
     public void determineExponent (Variable from)
     {
-        for (int i = 0; i < operands.length; i++)
-        {
-            Operator op = operands[i];
-            op.exponentNext = op.exponent;
-            op.determineExponent (from);
-        }
-
         Operator op0 = operands[0];  // n
         Operator op1 = operands[1];  // A
+        op0.exponentNext = Operator.MSB / 2;
+        op1.exponentNext = op1.exponent;
+        op0.determineExponent (from);
+        op1.determineExponent (from);
 
         Instance instance = new Instance ()
         {
@@ -85,6 +82,11 @@ public class Norm extends Function
         }
 
         updateExponent (from, exponentNew, centerNew);
+    }
+
+    public Type getType ()
+    {
+        return new Scalar ();
     }
 
     public Type eval (Instance context)

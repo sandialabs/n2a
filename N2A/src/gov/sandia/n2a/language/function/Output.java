@@ -208,6 +208,11 @@ public class Output extends Function
         }
     }
 
+    public Type getType ()
+    {
+        return new Scalar ();
+    }
+
     public Type eval (Instance context)
     {
         Type result = operands[1].eval (context);

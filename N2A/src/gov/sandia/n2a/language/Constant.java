@@ -156,6 +156,11 @@ public class Constant extends Operator
         else                       renderer.result.append (value.toString ());
     }
 
+    public Type getType ()
+    {
+        return value;
+    }
+
     public Type eval (Instance context)
     {
         return value;

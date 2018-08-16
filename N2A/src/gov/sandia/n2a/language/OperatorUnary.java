@@ -9,14 +9,16 @@ package gov.sandia.n2a.language;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.parse.SimpleNode;
 
-public class OperatorUnary extends Operator
+public class OperatorUnary extends Operator implements OperatorArithmetic
 {
     public Operator operand;
+    protected Type type;
 
     public void getOperandsFrom (SimpleNode node) throws ParseException
     {
         if (node.jjtGetNumChildren () != 1) throw new Error ("AST for operator has unexpected form");
         operand = Operator.getFrom ((SimpleNode) node.jjtGetChild (0));
+        operand.parent = this;
     }
 
     public Operator deepCopy ()
@@ -26,6 +28,7 @@ public class OperatorUnary extends Operator
         {
             result = (OperatorUnary) this.clone ();
             result.operand = operand.deepCopy ();
+            result.operand.parent = result;
         }
         catch (CloneNotSupportedException e)
         {
@@ -58,7 +61,9 @@ public class OperatorUnary extends Operator
         if (operand instanceof Constant)
         {
             from.changed = true;
-            return new Constant (eval (null));
+            Operator result = new Constant (eval (null));
+            result.parent = parent;
+            return result;
         }
         return this;
     }
@@ -81,6 +86,12 @@ public class OperatorUnary extends Operator
         if (renderer.render (this)) return;
         renderer.result.append (toString ());
         operand.render (renderer);
+    }
+
+    public Type getType ()
+    {
+        if (type == null) type = operand.getType ();
+        return type;
     }
 
     public boolean equals (Object that)

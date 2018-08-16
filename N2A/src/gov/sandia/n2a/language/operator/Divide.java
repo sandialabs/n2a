@@ -48,6 +48,7 @@ public class Divide extends OperatorBinary
             if (c1 instanceof Scalar  &&  ((Scalar) c1).value == 1)
             {
                 from.changed = true;
+                operand0.parent = parent;
                 return operand0;
             }
         }

@@ -61,8 +61,15 @@ import gov.sandia.n2a.plugins.PluginManager;
 import java.util.List;
 import java.util.TreeMap;
 
+/**
+    Base class of the abstract syntax tree (AST) hierarchy for our expression language.
+    To simplify the automatic generation of a parser, this AST is kept separate from the
+    node classes created by JavaCC.
+**/
 public class Operator implements Cloneable
 {
+    public Operator parent;  // The AST node that contains this one. If null, then this is the root node.
+
     // Fixed-point
     // TODO: use libfixmath in C backend
     public static int UNKNOWN = Integer.MIN_VALUE;
@@ -268,6 +275,11 @@ public class Operator implements Cloneable
         renderer.result.append (toString ());
     }
 
+    public Type getType ()
+    {
+        throw new EvaluationException ("getType() not implemented.");
+    }
+
     public Type eval (Instance context) throws EvaluationException
     {
         // If an external simulator provides a function, then its backend must provide the
@@ -374,6 +386,7 @@ public class Operator implements Cloneable
         register (Tangent      .factory ());
         register (Output       .factory ());
         register (Uniform      .factory ());
+        operators.put ("pow", Power.factory ());  // hack to map pow() function to ^ operator
 
         // Operators
         register (Add                .factory ());

@@ -9,6 +9,7 @@ package gov.sandia.n2a.language;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.parse.ASTList;
 import gov.sandia.n2a.language.parse.SimpleNode;
+import gov.sandia.n2a.language.type.Scalar;
 
 public class Function extends Operator
 {
@@ -27,7 +28,11 @@ public class Function extends Operator
         ASTList l = (ASTList) o;
         int count = l.jjtGetNumChildren ();
         operands = new Operator[count];
-        for (int i = 0; i < count; i++) operands[i] = Operator.getFrom ((SimpleNode) l.jjtGetChild (i));
+        for (int i = 0; i < count; i++)
+        {
+            operands[i] = Operator.getFrom ((SimpleNode) l.jjtGetChild (i));
+            operands[i].parent = this;
+        }
     }
 
     public Operator deepCopy ()
@@ -36,7 +41,11 @@ public class Function extends Operator
         try
         {
             result = (Function) this.clone ();
-            for (int i = 0; i < operands.length; i++) result.operands[i] = operands[i].deepCopy ();
+            for (int i = 0; i < operands.length; i++)
+            {
+                result.operands[i] = operands[i].deepCopy ();
+                result.operands[i].parent = result;
+            }
         }
         catch (CloneNotSupportedException e)
         {
@@ -98,7 +107,9 @@ public class Function extends Operator
             if (constant)
             {
                 from.changed = true;
-                return new Constant (eval (null));  // A function should report canBeConstant() true only if null is safe to pass here.
+                Operator result = new Constant (eval (null));  // A function should report canBeConstant() true only if null is safe to pass here.
+                result.parent = parent;
+                return result;
             }
         }
         else
@@ -149,6 +160,12 @@ public class Function extends Operator
             if (a < operands.length - 1) renderer.result.append (", ");
         }
         renderer.result.append (")");
+    }
+
+    public Type getType ()
+    {
+        if (operands == null  ||  operands.length == 0) return new Scalar ();
+        return operands[0].getType ();
     }
 
     public boolean equals (Object that)

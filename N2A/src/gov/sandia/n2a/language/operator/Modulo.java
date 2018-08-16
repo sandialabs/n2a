@@ -37,11 +37,30 @@ public class Modulo extends OperatorBinary
 
     public void determineExponent (Variable from)
     {
+        // TODO: it might be worth shifting a few bits to align the operands, because that case is cheap to compute.
         operand0.exponentNext = operand0.exponent;
         operand1.exponentNext = operand1.exponent;
         operand0.determineExponent (from);
         operand1.determineExponent (from);
-        updateExponent (from, operand1.exponent, operand1.center);
+
+        if (operand0.exponent != UNKNOWN  &&  operand1.exponent != UNKNOWN)
+        {
+            // The most precise answer is smaller than the magnitude of either operand.
+            int center0 = operand0.centerPower ();
+            int center1 = operand1.centerPower ();
+            int cent = MSB / 2;
+            int pow  = Math.min (center0, center1);
+            pow += MSB - cent;
+            updateExponent (from, pow, cent);
+        }
+        else if (operand0.exponent != UNKNOWN)
+        {
+            updateExponent (from, operand0.exponent, operand0.center);
+        }
+        else  // operand1.exponent != UNKNOWN
+        {
+            updateExponent (from, operand1.exponent, operand1.center);
+        }
     }
 
     public Type eval (Instance context)

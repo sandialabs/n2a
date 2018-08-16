@@ -42,18 +42,25 @@ public class Multiply extends OperatorBinary
         Operator result = super.simplify (from);
         if (result != this) return result;
 
-        from.changed = true;  // This will be reversed below if we don't actually make a change.
         if (operand0 instanceof Constant)
         {
             Type c0 = ((Constant) operand0).value;
             if (c0 instanceof Scalar)
             {
                 double value = ((Scalar) c0).value;
-                if (value == 1) return operand1;
+                if (value == 1)
+                {
+                    from.changed = true;
+                    operand1.parent = parent;
+                    return operand1;
+                }
                 if (value == 0)
                 {
                     operand1.releaseDependencies (from);
-                    return new Constant (new Scalar (0));
+                    from.changed = true;
+                    result = new Constant (0);
+                    result.parent = parent;
+                    return result;
                 }
             }
         }
@@ -63,15 +70,22 @@ public class Multiply extends OperatorBinary
             if (c1 instanceof Scalar)
             {
                 double value = ((Scalar) c1).value;
-                if (value == 1) return operand0;
+                if (value == 1)
+                {
+                    from.changed = true;
+                    operand0.parent = parent;
+                    return operand0;
+                }
                 if (value == 0)
                 {
                     operand0.releaseDependencies (from);
-                    return new Constant (new Scalar (0));
+                    from.changed = true;
+                    result = new Constant (0);
+                    result.parent = parent;
+                    return result;
                 }
             }
         }
-        from.changed = false;
         return this;
     }
 

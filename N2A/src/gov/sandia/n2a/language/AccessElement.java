@@ -27,9 +27,11 @@ public class AccessElement extends Function
         operands = new Operator[count+1];
         String value = node.jjtGetValue ().toString ();
         operands[0] = new AccessVariable (value.substring (0, value.length () - 2));  // Remove "()" from the end of name.
+        operands[0].parent = this;
         for (int i = 0; i < count; i++)
         {
             operands[i+1] = Operator.getFrom ((SimpleNode) l.jjtGetChild (i));
+            operands[i+1].parent = this;
         }
     }
 
@@ -39,6 +41,7 @@ public class AccessElement extends Function
         if (operands.length == 1)
         {
             from.changed = true;
+            operands[0].parent = parent;
             return operands[0];
         }
 
@@ -68,7 +71,9 @@ public class AccessElement extends Function
             if (c.value instanceof Matrix)
             {
                 from.changed = true;
-                return new Constant (new Scalar (((Matrix) c.value).get (row, col)));
+                Operator result = new Constant (new Scalar (((Matrix) c.value).get (row, col)));
+                result.parent = parent;
+                return result;
             }
         }
         else
@@ -90,6 +95,7 @@ public class AccessElement extends Function
                             from.changed = true;
                             e.expression.releaseDependencies (from);
                             if (e.condition != null) e.condition.releaseDependencies (from);
+                            element.parent = parent;
                             return element;
                         }
                     }
@@ -129,6 +135,11 @@ public class AccessElement extends Function
             }
         }
         renderer.result.append (")");
+    }
+
+    public Type getType ()
+    {
+        return new Scalar ();
     }
 
     public Type eval (Instance instance)

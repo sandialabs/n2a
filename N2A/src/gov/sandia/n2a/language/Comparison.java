@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -10,7 +10,7 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.type.Scalar;
 
-public class Comparison extends OperatorBinary
+public class Comparison extends OperatorBinary implements OperatorLogical
 {
     public Operator simplify (Variable from)
     {
@@ -24,7 +24,9 @@ public class Comparison extends OperatorBinary
             from.changed = true;
             releaseDependencies (from);
             operand0 = operand1 = new Constant (new Scalar (0));
-            return new Constant (eval (null));
+            result = new Constant (eval (null));
+            result.parent = parent;
+            return result;
         }
 
         return this;
@@ -73,5 +75,11 @@ public class Comparison extends OperatorBinary
                 from.changed = true;
             }
         }
+    }
+
+    public Type getType ()
+    {
+        if (type == null) type = new Scalar ();
+        return type;
     }
 }

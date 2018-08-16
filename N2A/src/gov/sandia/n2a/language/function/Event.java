@@ -50,6 +50,11 @@ public class Event extends Function
         updateExponent (from, pow, cent);
     }
 
+    public Type getType ()
+    {
+        return new Scalar ();
+    }
+
     public Type eval (Instance context)
     {
         if (eventType != null)  // This check is necessary because eval() can be called outside of Internal simulator.

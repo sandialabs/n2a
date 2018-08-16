@@ -15,7 +15,8 @@ template n2a_T                   gaussian ();
 template n2a_T                   gaussian (n2a_T sigma);
 template fl::MatrixResult<n2a_T> gaussian (const fl::MatrixAbstract<n2a_T> & sigma);
 
-template fl::MatrixResult<n2a_T> grid (int i, int nx, int ny = 1, int nz = 1);
+template fl::MatrixResult<n2a_T> grid    (int i, int nx, int ny, int nz);
+template fl::MatrixResult<n2a_T> gridRaw (int i, int nx, int ny, int nz);
 
 
 // I/O -----------------------------------------------------------------------

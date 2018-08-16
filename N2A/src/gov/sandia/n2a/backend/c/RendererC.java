@@ -11,16 +11,20 @@ import gov.sandia.n2a.language.AccessElement;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.BuildMatrix;
 import gov.sandia.n2a.language.Constant;
+import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Exp;
 import gov.sandia.n2a.language.function.Gaussian;
+import gov.sandia.n2a.language.function.Grid;
 import gov.sandia.n2a.language.function.Input;
+import gov.sandia.n2a.language.function.Log;
 import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.ReadMatrix;
+import gov.sandia.n2a.language.function.SquareRoot;
 import gov.sandia.n2a.language.function.Tangent;
 import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.Add;
@@ -36,6 +40,7 @@ public class RendererC extends Renderer
     public BackendDataC bed;
     public boolean      global;   ///< Whether this is in the population object (true) or a part object (false)
     public boolean      hasEvent; ///< Indicates that event has been retrieved within current scope.
+    public boolean      useExponent;  ///< Some functions have extra parameters in fixed-point mode. Rather than duplicate rendering code, we tack on the extra parameters here.
 
     public RendererC (JobC job, StringBuilder result, EquationSet part)
     {
@@ -48,6 +53,18 @@ public class RendererC extends Renderer
     public boolean render (Operator op)
     {
         // TODO: for "3 letter" functions (sin, cos, pow, etc) on matrices, render as visitor which produces a matrix result
+
+        if (op instanceof Add)
+        {
+            // Check if this is a string expression
+            String stringName = job.stringNames.get (op);
+            if (stringName != null)
+            {
+                result.append (stringName);
+                return true;
+            }
+            return false;
+        }
         if (op instanceof AccessVariable)
         {
             AccessVariable av = (AccessVariable) op;
@@ -74,12 +91,26 @@ public class RendererC extends Renderer
             }
             return true;
         }
-        if (op instanceof Exp)  // Prevent fp hint from being emitted into c code.
+        if (op instanceof BuildMatrix)
+        {
+            result.append (job.matrixNames.get (op));
+            return true;
+        }
+        if (op instanceof Exp)
         {
             Exp e = (Exp) op;
             result.append ("exp (");
             e.operands[0].render (this);
+            if (useExponent) result.append (", " + e.operands[0].exponentNext + ", " + e.exponentNext);
             result.append (")");
+            return true;
+        }
+        if (op instanceof Log)
+        {
+            Log l = (Log) op;
+            result.append ("log (");
+            l.operands[0].render (this);
+            if (useExponent) result.append (", " + l.operands[0].exponentNext + ", " + l.exponentNext + ")");
             return true;
         }
         if (op instanceof Power)
@@ -89,24 +120,40 @@ public class RendererC extends Renderer
             p.operand0.render (this);
             result.append (", ");
             p.operand1.render (this);
+            if (useExponent) result.append (", " + op.exponentNext);
             result.append (")");
             return true;
         }
-        if (op instanceof Tangent)  // Prevent fp hint from being emitted into c code.
+        if (op instanceof SquareRoot)
+        {
+            SquareRoot s = (SquareRoot) op;
+            result.append ("sqrt (");
+            s.operands[0].render (this);
+            if (useExponent) result.append (", " + s.operands[0].exponentNext + ", " + s.exponentNext + ")");
+            return true;
+        }
+        if (op instanceof Tangent)
         {
             Tangent t = (Tangent) op;
             result.append ("tan (");
             t.operands[0].render (this);
+            if (useExponent) result.append (", " + t.operands[0].exponentNext + ", " + t.exponentNext);
             result.append (")");
             return true;
         }
         if (op instanceof Norm)
         {
             Norm n = (Norm) op;
-            result.append ("(");
-            n.operands[1].render (this);
-            result.append (").norm (");
+
+            Operator A = n.operands[1];
+            boolean needParens = ! (A instanceof Function);
+            if (needParens) result.append ("(");
+            A.render (this);
+            if (needParens) result.append (")");
+
+            result.append (".norm (");
             n.operands[0].render (this);
+            if (useExponent) result.append (", " + A.exponentNext + ", " + n.exponentNext);
             result.append (")");
             return true;
         }
@@ -117,7 +164,9 @@ public class RendererC extends Renderer
             if (g.operands.length > 0)
             {
                 g.operands[0].render (this);
+                if (useExponent) result.append (", ");
             }
+            if (useExponent) result.append (g.exponentNext);  // operand should match our exponentNext
             result.append (")");
             return true;
         }
@@ -129,6 +178,7 @@ public class RendererC extends Renderer
             {
                 u.operands[0].render (this);
             }
+            if (useExponent) result.append (u.exponentNext);
             result.append (")");
             return true;
         }
@@ -138,6 +188,26 @@ public class RendererC extends Renderer
             // The cast to bool gets rid of the specific numeric value from flags.
             // If used in a numeric expression, it should convert to either 1 or 0.
             result.append ("((bool) (flags & (" + bed.localFlagType + ") 0x1 << " + e.eventType.valueIndex + "))");
+            return true;
+        }
+        if (op instanceof Grid)
+        {
+            Grid g = (Grid) op;
+            boolean raw = g.operands.length >= 5  &&  g.operands[4].getString ().contains ("raw");
+
+            result.append ("grid");
+            if (raw) result.append ("Raw");
+            result.append ("<" + job.T + "> (");
+
+            int count = Math.min (4, g.operands.length);
+            if (count > 0) g.operands[0].render (this);
+            for (int i = 1; i < count; i++)
+            {
+                result.append (", ");
+                g.operands[i].render (this);
+            }
+
+            result.append (")");
             return true;
         }
         if (op instanceof ReadMatrix)
@@ -161,23 +231,28 @@ public class RendererC extends Renderer
             String matrixName;
             if (r.operands[0] instanceof Constant) matrixName = job.matrixNames.get (r.operands[0].toString ());
             else                                   matrixName = job.matrixNames.get (r);
-            result.append (matrixName + "->");
+            int shift = r.exponent - r.exponentNext;
             if (mode.equals ("rows"))
             {
-                result.append ("rows ()");
+                if (useExponent  &&  shift != 0) result.append ("(");
+                result.append (matrixName + "->rows ()");
+                if (useExponent  &&  shift != 0) result.append (printShift (shift) + ")");
             }
             else if (mode.equals ("columns"))
             {
-                result.append ("columns ()");
+                if (useExponent  &&  shift != 0) result.append ("(");
+                result.append (matrixName + "->columns ()");
+                if (useExponent  &&  shift != 0) result.append (printShift (shift) + ")");
             }
             else
             {
-                result.append ("get");
+                result.append (matrixName + "->get");
                 if (mode.equals ("raw")) result.append ("Raw");
                 result.append (" (");
                 r.operands[1].render (this);
                 result.append (", ");
                 r.operands[2].render (this);
+                if (useExponent) result.append (", " + r.exponentNext);
                 result.append (")");
             }
             return true;
@@ -202,6 +277,7 @@ public class RendererC extends Renderer
             result.append (", ");
 
             o.operands[1].render (this);
+            if (useExponent) result.append (", " + o.operands[1].exponentNext);
             result.append (")");
             return true;
         }
@@ -225,7 +301,7 @@ public class RendererC extends Renderer
 
             if (mode.contains ("columns"))
             {
-                result.append (inputName + "->getColumns ()");
+                result.append (inputName + "->getColumns ()");  // TODO: does this need exponent?
             }
             else
             {
@@ -242,6 +318,7 @@ public class RendererC extends Renderer
                 op1.render (this);
                 result.append (", ");
                 op2.render (this);
+                if (useExponent) result.append (", " + i.exponentNext);
                 result.append (")");
             }
 
@@ -268,23 +345,14 @@ public class RendererC extends Renderer
             }
             return false;
         }
-        if (op instanceof Add)
-        {
-            // Check if this is a string expression
-            String stringName = job.stringNames.get (op);
-            if (stringName != null)
-            {
-                result.append (stringName);
-                return true;
-            }
-            return false;
-        }
-        if (op instanceof BuildMatrix)
-        {
-            result.append (job.matrixNames.get (op));
-            return true;
-        }
         return false;
+    }
+
+    public String printShift (int shift)
+    {
+        if (shift == 0) return "";
+        if (shift > 0) return " << " +  shift;
+        else           return " >> " + -shift;
     }
 
     public String print (double d, int exponent)

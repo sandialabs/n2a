@@ -56,6 +56,11 @@ public class Grid extends Function
         else     updateExponent (from, -1,  MSB - 1); // Since output never quite reaches 1, all bits can be fractional.
     }
 
+    public Type getType ()
+    {
+        return new MatrixDense ();
+    }
+
     public Type eval (Instance context) throws EvaluationException
     {
         // collect parameters into arrays

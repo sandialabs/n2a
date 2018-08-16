@@ -10,11 +10,12 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorBinary;
+import gov.sandia.n2a.language.OperatorLogical;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 
-public class OR extends OperatorBinary
+public class OR extends OperatorBinary implements OperatorLogical
 {
     public static Factory factory ()
     {
@@ -49,8 +50,10 @@ public class OR extends OperatorBinary
             {
                 from.changed = true;
                 double value = ((Scalar) c0).value;
-                if (value == 0) return operand1;
-                else            return new Constant (new Scalar (1));
+                if (value == 0) result = operand1;
+                else            result = new Constant (1);
+                result.parent = parent;
+                return result;
             }
         }
         else if (operand1 instanceof Constant)
@@ -60,8 +63,10 @@ public class OR extends OperatorBinary
             {
                 from.changed = true;
                 double value = ((Scalar) c1).value;
-                if (value == 0) return operand0;
-                else            return new Constant (new Scalar (1));
+                if (value == 0) result = operand0;
+                else            result = new Constant (1);
+                result.parent = parent;
+                return result;
             }
         }
         return this;

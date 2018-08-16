@@ -8,11 +8,12 @@ package gov.sandia.n2a.language.operator;
 
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.OperatorLogical;
 import gov.sandia.n2a.language.OperatorUnary;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 
-public class NOT extends OperatorUnary
+public class NOT extends OperatorUnary implements OperatorLogical
 {
     public static Factory factory ()
     {
