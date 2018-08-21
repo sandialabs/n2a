@@ -47,7 +47,7 @@ public class Uniform extends Function
         if (operands.length > 0)
         {
             Operator op = operands[0];
-            op.exponentNext = op.exponent;
+            op.exponentNext = exponentNext;
             op.determineExponent (from);
             if (op.exponent != UNKNOWN)
             {
@@ -56,7 +56,7 @@ public class Uniform extends Function
         }
         else
         {
-            updateExponent (from, 0, MSB - 2);  // Largest absolute value is 1
+            updateExponent (from, -1, MSB);  // Current implementation never quite reaches 1, only [0,1).
         }
     }
 

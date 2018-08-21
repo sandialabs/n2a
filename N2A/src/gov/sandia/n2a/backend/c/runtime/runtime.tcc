@@ -4,6 +4,9 @@
 
 #include "runtime.h"
 #include "fl/matrix.h"
+#ifdef n2a_FP
+# include "fixedpoint.h"
+#endif
 
 
 // General functions ---------------------------------------------------------
@@ -94,13 +97,13 @@ gaussian (const fl::MatrixAbstract<T> & sigma)
     if (cols == 1)
     {
         fl::Matrix<T> * result = new fl::Matrix<T> (rows);
-        for (int i = 0; i < rows; i++) (*result)[i] = gaussian<T> (sigma(i,0));
+        for (int i = 0; i < rows; i++) (*result)[i] = gaussian (sigma(i,0));
         return result;
     }
     else if (rows == 1)
     {
         fl::Matrix<T> * result = new fl::Matrix<T> (cols);
-        for (int i = 0; i < cols; i++) (*result)[i] = gaussian<T> (sigma(0,i));
+        for (int i = 0; i < cols; i++) (*result)[i] = gaussian (sigma(0,i));
         return result;
     }
     else
@@ -110,6 +113,77 @@ gaussian (const fl::MatrixAbstract<T> & sigma)
         return sigma * temp;
     }
 }
+
+#ifdef n2a_FP
+
+template<>
+int
+uniform ()
+{
+#if RAND_MAX == 2147483647
+    return rand ();  // This version can never actually reach 1, only [0,1). However, this shouldn't make any algorithmic difference to callers.
+#else
+# error Need support for unique size of RAND_MAX
+#endif
+}
+
+template<>
+int
+uniform (int sigma)
+{
+    return (int64_t) uniform<int> () * sigma >> 31;  // ones bit of uniform draw is at MSB+1
+}
+
+// Box-Muller method (polar variant) for Gaussian random numbers.
+// Although this method can return very large values, we limit it to strictly
+// less than 8 std (3 bits above the decimal point). Result exponent=2.
+template<>
+int
+gaussian ()
+{
+    static bool haveNextGaussian = false;
+    static int nextGaussian;
+
+    if (haveNextGaussian)
+    {
+        haveNextGaussian = false;
+        return nextGaussian;
+    }
+    else
+    {
+        const int half  = 0x40000000; // 0.5, with exponent=-1
+        const int one   = 0x10000;    // exponent=14
+        const int small = 0x8;        // Too small for the division that creates multiplier. exponent=14
+        int v1, v2, s;
+        do
+        {
+            v1 = half - uniform<int> ();   // 0.5 - u; Then implicitly double by treating exponent as 0 rather than -1.
+            v2 = half - uniform<int> ();
+            // Squaring v puts exponent=0 at bit 60
+            // Down-shift puts exponent=14 at bit 30.
+            // We could keep more bits, but this approach is better conditioned.
+            s = (int64_t) v1 * v1 + (int64_t) v2 * v2 >> 44;  // MSB + 14
+        }
+        while (s >= one || s <= small);
+        // log (s, 14, 14) / s -- Raw result of division has exponent=MSB
+        // Median absolute value of result is near 1 (ln(0.5)/0.5~=-1.4), so we want center power of 0, for exponent=15.
+        // Ideal shift is 15(=MSB-15), to put exponent=15 at bit 30.
+        // We also multiply by 2, so claim exponent=16.
+        int multiplier = sqrt (((int64_t) log (s, 14, 14) << 15) / -s, 16, 14);  // multiplier has exponent=14; v1 and v2 have exponent=0
+        nextGaussian = (int64_t) v2 * multiplier >> 18;  // MSB-12; product has exponent=14 at bit 60; shift so exponent=2 at bit 30
+        haveNextGaussian = true;
+        return         (int64_t) v1 * multiplier >> 18;
+    }
+}
+
+template<>
+int
+gaussian (int sigma)
+{
+    return (int64_t) gaussian<int> () * sigma >> 28;   // ones bit of gaussian draw is at position MSB - 2
+}
+
+#endif
 
 template<class T>
 fl::MatrixResult<T>

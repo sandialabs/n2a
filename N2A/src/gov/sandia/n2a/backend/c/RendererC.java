@@ -99,61 +99,64 @@ public class RendererC extends Renderer
         if (op instanceof Exp)
         {
             Exp e = (Exp) op;
+            Operator a = e.operands[0];
             result.append ("exp (");
-            e.operands[0].render (this);
-            if (useExponent) result.append (", " + e.operands[0].exponentNext + ", " + e.exponentNext);
+            a.render (this);
+            if (useExponent) result.append (", " + a.exponentNext + ", " + e.exponentNext);
             result.append (")");
             return true;
         }
         if (op instanceof Log)
         {
             Log l = (Log) op;
+            Operator a = l.operands[0];
             result.append ("log (");
-            l.operands[0].render (this);
-            if (useExponent) result.append (", " + l.operands[0].exponentNext + ", " + l.exponentNext + ")");
+            a.render (this);
+            if (useExponent) result.append (", " + a.exponentNext + ", " + l.exponentNext + ")");
             return true;
         }
         if (op instanceof Power)
         {
             Power p = (Power) op;
+            Operator a = p.operand0;
+            Operator b = p.operand1;
             result.append ("pow (");
-            p.operand0.render (this);
+            a.render (this);
             result.append (", ");
-            p.operand1.render (this);
-            if (useExponent) result.append (", " + op.exponentNext);
+            b.render (this);
+            if (useExponent) result.append (", " + a.exponentNext + ", " + b.exponentNext + ", " + op.exponentNext);
             result.append (")");
             return true;
         }
         if (op instanceof SquareRoot)
         {
             SquareRoot s = (SquareRoot) op;
+            Operator a = s.operands[0];
             result.append ("sqrt (");
-            s.operands[0].render (this);
-            if (useExponent) result.append (", " + s.operands[0].exponentNext + ", " + s.exponentNext + ")");
+            a.render (this);
+            if (useExponent) result.append (", " + a.exponentNext + ", " + s.exponentNext + ")");
             return true;
         }
         if (op instanceof Tangent)
         {
             Tangent t = (Tangent) op;
+            Operator a = t.operands[0];
             result.append ("tan (");
-            t.operands[0].render (this);
-            if (useExponent) result.append (", " + t.operands[0].exponentNext + ", " + t.exponentNext);
+            a.render (this);
+            if (useExponent) result.append (", " + a.exponentNext + ", " + t.exponentNext);
             result.append (")");
             return true;
         }
         if (op instanceof Norm)
         {
             Norm n = (Norm) op;
-
             Operator A = n.operands[1];
             boolean needParens = ! (A instanceof Function);
             if (needParens) result.append ("(");
             A.render (this);
             if (needParens) result.append (")");
-
             result.append (".norm (");
             n.operands[0].render (this);
-            if (useExponent) result.append (", " + A.exponentNext + ", " + n.exponentNext);
             result.append (")");
             return true;
         }
@@ -164,9 +167,7 @@ public class RendererC extends Renderer
             if (g.operands.length > 0)
             {
                 g.operands[0].render (this);
-                if (useExponent) result.append (", ");
             }
-            if (useExponent) result.append (g.exponentNext);  // operand should match our exponentNext
             result.append (")");
             return true;
         }
@@ -178,7 +179,6 @@ public class RendererC extends Renderer
             {
                 u.operands[0].render (this);
             }
-            if (useExponent) result.append (u.exponentNext);
             result.append (")");
             return true;
         }

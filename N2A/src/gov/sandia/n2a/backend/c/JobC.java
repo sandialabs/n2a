@@ -39,8 +39,10 @@ import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
 
 import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.net.URL;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -90,7 +92,16 @@ public class JobC extends Thread
             Files.createFile (jobDir.resolve ("started"));
 
             T = job.get ("$metadata", "backend.c.type");
-            if (! T.equals ("int")  &&  ! T.equals ("double")) T = "float";  // Only three supported options.
+            if (T.startsWith ("int")  &&  T.length () > 3)
+            {
+                T = "int";
+                Backend.err.get ().println ("WARNING: Only supported integer type is 'int', which is assumed to be 32-bit.");
+            }
+            if (! T.equals ("int")  &&  ! T.equals ("double")  &&  ! T.equals ("float"))
+            {
+                T = "float";
+                Backend.err.get ().println ("WARNING: Unsupported numeric type. Defaulting to single-precision float.");
+            }
 
             HostSystem env = HostSystem.get (job.getOrDefault ("$metadata", "host", "localhost"));
             Path resourceDir = Paths.get (AppData.properties.get ("resourceDir"));
@@ -145,7 +156,7 @@ public class JobC extends Thread
         boolean changed = false;
         if (needRuntime)
         {
-            if (unpackRuntime (JobC.class, runtimeDir, "",   "io.cc", "io.h", "io.tcc", "KDTree.h", "nosys.h", "runtime.cc", "runtime.h", "runtime.tcc", "String.h")) changed = true;
+            if (unpackRuntime (JobC.class, runtimeDir, "",   "fixedpoint.cc", "fixedpoint.h", "io.cc", "io.h", "io.tcc", "KDTree.h", "nosys.h", "runtime.cc", "runtime.h", "runtime.tcc", "String.h")) changed = true;
             if (unpackRuntime (JobC.class, runtimeDir, "fl", "math.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "MatrixSparse.tcc", "pointer.h")) changed = true;
             needRuntime = false;   // Stop checking files for this session.
         }
@@ -153,13 +164,28 @@ public class JobC extends Thread
         String[] sources = new String[] {"runtime", "io"};
         if (changed)
         {
-            for (String type : new String[] {"float", "double", "int"})
+            DirectoryStream.Filter<Path> filter = new DirectoryStream.Filter<Path> ()
             {
-                for (String stem : sources)
+                public boolean accept (Path entry) throws IOException
                 {
-                    Files.deleteIfExists (runtimeDir.resolve (stem + "_" + type + ".o"));
+                    String name = entry.getFileName ().toString ();
+                    if (! name.endsWith (".o")) return false;
+                    for (String stem : sources) if (name.startsWith (stem + "_")) return true;
+                    return false;
                 }
+            };
+            try (DirectoryStream<Path> dir = Files.newDirectoryStream (runtimeDir, filter))
+            {
+                dir.forEach (file ->
+                {
+                    try
+                    {
+                        Files.delete (file);
+                    }
+                    catch (IOException e) {}  // Unfortunately, the Consumer interface does not permit exceptions to percolate up.
+                });
             }
+            catch (IOException e) {}
         }
 
         // Compile runtime
@@ -174,6 +200,7 @@ public class JobC extends Thread
                 "-ffunction-sections", "-fdata-sections",
                 "-I" + runtimeDir,
                 "-Dn2a_T=" + T,
+                (T.equals ("int") ? "-Dn2a_FP" : ""),
                 "-o", object.toString (), source.toString ()
             );
             Files.delete (out);
@@ -227,10 +254,18 @@ public class JobC extends Thread
         for (String s : command) System.out.print (s + " ");
         System.out.println ();
 
+        // Remove empty strings from command. This is a convenience to the caller,
+        // allowing arguments to be conditionally omitted with the ternary operator.
+        int count = 0;
+        for (String s : command) if (! s.isEmpty ()) count++;
+        String[] cleanedCommand = new String[count];
+        int i = 0;
+        for (String s : command) if (! s.isEmpty ()) cleanedCommand[i++] = s;
+
         Path out = jobDir.resolve ("compile.out");
         Path err = jobDir.resolve ("compile.err");
 
-        ProcessBuilder b = new ProcessBuilder (command);
+        ProcessBuilder b = new ProcessBuilder (cleanedCommand);
         b.redirectOutput (out.toFile ());  // Should truncate existing files.
         b.redirectError  (err.toFile ());
         Process p = b.start ();

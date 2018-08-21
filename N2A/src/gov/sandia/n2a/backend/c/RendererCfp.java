@@ -28,6 +28,7 @@ import gov.sandia.n2a.language.function.Signum;
 import gov.sandia.n2a.language.function.SquareRoot;
 import gov.sandia.n2a.language.function.Tangent;
 import gov.sandia.n2a.language.function.Uniform;
+import gov.sandia.n2a.language.operator.AND;
 import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.operator.Divide;
 import gov.sandia.n2a.language.operator.LT;
@@ -37,6 +38,7 @@ import gov.sandia.n2a.language.operator.MultiplyElementwise;
 import gov.sandia.n2a.language.operator.NOT;
 import gov.sandia.n2a.language.operator.Power;
 import gov.sandia.n2a.language.type.Matrix;
+import gov.sandia.n2a.language.type.Scalar;
 
 public class RendererCfp extends RendererC
 {
@@ -49,7 +51,6 @@ public class RendererCfp extends RendererC
         operatorsWithExponent.add (Gaussian  .class);
         operatorsWithExponent.add (Input     .class);
         operatorsWithExponent.add (Log       .class);
-        operatorsWithExponent.add (Norm      .class);
         operatorsWithExponent.add (Output    .class);
         operatorsWithExponent.add (Power     .class);
         operatorsWithExponent.add (ReadMatrix.class);
@@ -143,7 +144,9 @@ public class RendererCfp extends RendererC
                 }
                 else
                 {
-                    result.append ("(int32_t) ((int64_t) ");
+                    if (needDowncast (b)) result.append ("(int32_t) ");
+                    result.append ("(");
+                    if (needUpcast (b.operand0)) result.append ("(int64_t) ");
                     escalate (b);
                     result.append (printShift (shift));
                     result.append (")");
@@ -180,7 +183,9 @@ public class RendererCfp extends RendererC
                 {
                     if (shift > 0)
                     {
-                        result.append ("(int32_t) (((int64_t) ");
+                        if (needDowncast (d)) result.append ("(int32_t) ");
+                        result.append ("((");
+                        if (needUpcast (d.operand0)) result.append ("(int64_t) ");
                         // OperatorBinary.render() will add parentheses around operand0 if it has lower
                         // precedence than division. This includes the case where it has lower precedence
                         // than shift, so we are safe.
@@ -226,9 +231,9 @@ public class RendererCfp extends RendererC
             if (shift == 0) return super.render (op);
             if (op.getType () instanceof Matrix)
             {
-                result.append ("(");
+                result.append ("shift (" + shift + ", ");
                 escalate (op);
-                result.append (").shift (" + shift + ")");
+                result.append (")");
             }
             else
             {
@@ -267,22 +272,39 @@ public class RendererCfp extends RendererC
         if (op instanceof Floor)
         {
             Floor f = (Floor) op;
-            // Floor always sets operand[0].exponentNext to be same as f.exponentNext, so no shift is necessary.
-            if (f.exponentNext >= Operator.MSB)
+            Operator a = f.operands[0];
+            // Floor always sets operands[0].exponentNext to be same as f.exponentNext, so no shift is necessary.
+            if (f.exponentNext >= Operator.MSB)  // LSB is above decimal, so floor() operation is impossible.
             {
-                f.operands[0].render (this);
+                a.render (this);
             }
-            else if (f.exponentNext < 0)
+            else if (f.exponentNext < 0)  // All bits are below decimal
             {
                 result.append ("0");
             }
             else
             {
-                result.append ("floor (");
-                f.operands[0].render (this);
-                int decimalMask = 0x7FFFFFFF >> 31 - (Operator.MSB - f.exponentNext);
-                result.append (", " + decimalMask + ")");
+                // Mask off bits below the decimal point. This works for both positive and negative numbers.
+                int zeroes = Operator.MSB - f.exponentNext;
+                int decimalMask = 0xFFFFFFFF << zeroes;
+                boolean needParens = a.precedence () >= new AND ().precedence ();
+                result.append ("(");
+                if (needParens) result.append ("(");
+                a.render (this);
+                if (needParens) result.append (")");
+                result.append (" & " + decimalMask + ")");
             }
+            return true;
+        }
+        if (op instanceof Norm)
+        {
+            Norm n = (Norm) op;
+            Operator A = n.operands[1];
+            result.append ("norm (");
+            n.operands[0].render (this);
+            result.append (", ");
+            A.render (this);
+            result.append (", " + A.exponentNext + ", " + n.exponentNext + ")");
             return true;
         }
         if (op instanceof Round)
@@ -325,8 +347,9 @@ public class RendererCfp extends RendererC
 
             if (op.getType () instanceof Matrix)
             {
+                result.append ("shift (" + shift + ", ");
                 escalate (op);
-                result.append (".shift (" + shift + ")");
+                result.append (")");
             }
             else
             {
@@ -339,6 +362,24 @@ public class RendererCfp extends RendererC
         }
 
         return super.render (op);
+    }
+
+    public boolean needDowncast (Operator op)
+    {
+        if (op.parent == null) return false;
+        if (op.parent instanceof Multiply  ||  op.parent instanceof Divide)
+        {
+            OperatorBinary p = (OperatorBinary) op.parent;
+            if (op == p.operand0  &&  p.operand1.getType () instanceof Scalar) return false;
+        }
+        return true;
+    }
+
+    public boolean needUpcast (Operator operand0)  // parent must be either Multiply or Divide
+    {
+        // This function is only called when operand1 is a scalar.
+        if (operand0 instanceof Multiply  ||  operand0 instanceof Divide) return false;
+        return true;
     }
 
     public String print (double d, int exponent)
