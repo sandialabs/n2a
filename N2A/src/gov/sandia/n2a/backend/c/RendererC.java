@@ -102,7 +102,7 @@ public class RendererC extends Renderer
             Operator a = e.operands[0];
             result.append ("exp (");
             a.render (this);
-            if (useExponent) result.append (", " + a.exponentNext + ", " + e.exponentNext);
+            if (useExponent) result.append (", " + e.exponentNext);
             result.append (")");
             return true;
         }
@@ -124,7 +124,7 @@ public class RendererC extends Renderer
             a.render (this);
             result.append (", ");
             b.render (this);
-            if (useExponent) result.append (", " + a.exponentNext + ", " + b.exponentNext + ", " + op.exponentNext);
+            if (useExponent) result.append (", " + a.exponentNext + ", " + p.exponentNext);
             result.append (")");
             return true;
         }

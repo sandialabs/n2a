@@ -14,6 +14,7 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorArithmetic;
 import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.OperatorLogical;
+import gov.sandia.n2a.language.function.Cosine;
 import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Exp;
 import gov.sandia.n2a.language.function.Floor;
@@ -25,6 +26,7 @@ import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.function.Round;
 import gov.sandia.n2a.language.function.Signum;
+import gov.sandia.n2a.language.function.Sine;
 import gov.sandia.n2a.language.function.SquareRoot;
 import gov.sandia.n2a.language.function.Tangent;
 import gov.sandia.n2a.language.function.Uniform;
@@ -206,22 +208,23 @@ public class RendererCfp extends RendererC
         {
             Modulo m = (Modulo) op;
 
+            int shift = m.exponent - m.exponentNext;
             if (m.operand0.exponentNext == m.operand1.exponentNext)
             {
-                int shift = m.operand0.exponentNext - m.exponentNext;
                 if (shift == 0) return super.render (m);
                 result.append ("(");
                 escalate (m);
-                result.append (printShift (shift));
-                result.append (")");
+                result.append (printShift (shift) + ")");
             }
             else
             {
+                if (shift != 0) result.append ("(");
                 result.append ("mod (");
                 m.operand0.render (this);
                 result.append (", ");
                 m.operand1.render (this);
-                result.append (", " + m.operand0.exponentNext + ", " + m.operand1.exponentNext + ", " + m.exponentNext + ")");
+                result.append (", " + m.operand0.exponentNext + ", " + m.operand1.exponentNext + ")");
+                if (shift != 0) result.append (printShift (shift) + ")");
             }
             return true;
         }
@@ -252,6 +255,18 @@ public class RendererCfp extends RendererC
 
         // Functions
         // These are listed in alphabetical order, with a catch-all at the end.
+        if (op instanceof Cosine)
+        {
+            Cosine c = (Cosine) op;
+            Operator a = c.operands[0];
+            int shift = c.exponent - c.exponentNext;
+            if (shift != 0) result.append ("(");
+            result.append ("cos (");
+            a.render (this);
+            result.append (", " + a.exponentNext + ")");
+            if (shift != 0) result.append (printShift (shift) + ")");
+            return true;
+        }
         if (op instanceof Event)
         {
             if (op.parent instanceof OperatorLogical) return super.render (op);
@@ -340,7 +355,19 @@ public class RendererCfp extends RendererC
             result.append (" < 0 ? " + -one + ":" + one + ")");
             return true;
         }
-        if (op instanceof Function)  // AbsoluteValue, Cosine, Grid, Max, Min, Sine
+        if (op instanceof Sine)
+        {
+            Sine s = (Sine) op;
+            Operator a = s.operands[0];
+            int shift = s.exponent - s.exponentNext;
+            if (shift != 0) result.append ("(");
+            result.append ("sin (");
+            a.render (this);
+            result.append (", " + a.exponentNext + ")");
+            if (shift != 0) result.append (printShift (shift) + ")");
+            return true;
+        }
+        if (op instanceof Function)  // AbsoluteValue, Grid, Max, Min
         {
             int shift = op.exponent - op.exponentNext;
             if (shift == 0) return super.render (op);

@@ -38,7 +38,7 @@ public class Cosine extends Function
         Operator op = operands[0];
         op.exponentNext = op.exponent;
         op.determineExponent (from);
-        updateExponent (from, 0, MSB - 2); // Largest absolute value is 1
+        updateExponent (from, 1, MSB - 2);  // Largest absolute value is 1, but we allow one extra bit above the decimal for the convenience of the C implementation.
     }
 
     public Type eval (Instance context)

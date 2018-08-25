@@ -46,11 +46,9 @@ public class Modulo extends OperatorBinary
         if (operand0.exponent != UNKNOWN  &&  operand1.exponent != UNKNOWN)
         {
             // The most precise answer is smaller than the magnitude of either operand.
-            int center0 = operand0.centerPower ();
-            int center1 = operand1.centerPower ();
-            int cent = MSB / 2;
-            int pow  = Math.min (center0, center1);
-            pow += MSB - cent;
+            int pow         = Math.min (operand0.exponent, operand1.exponent);
+            int centerPower = Math.min (operand0.centerPower (), operand1.centerPower ());
+            int cent = MSB - (pow - centerPower);
             updateExponent (from, pow, cent);
         }
         else if (operand0.exponent != UNKNOWN)

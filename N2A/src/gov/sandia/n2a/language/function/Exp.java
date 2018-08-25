@@ -37,7 +37,7 @@ public class Exp extends Function
     public void determineExponent (Variable from)
     {
         Operator op = operands[0];
-        op.exponentNext = op.exponent;
+        op.exponentNext = 7;  // exp(n) rapidly explodes, so no benefit in allowing arbitrary magnitude. Instead, use those bits for precision.
         op.determineExponent (from);
 
         // let o = power of op.center

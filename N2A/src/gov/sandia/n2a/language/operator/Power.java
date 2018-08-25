@@ -17,7 +17,6 @@ import gov.sandia.n2a.language.function.Log;
 import gov.sandia.n2a.language.parse.ASTList;
 import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.type.Instance;
-import gov.sandia.n2a.language.type.Scalar;
 
 public class Power extends OperatorBinary
 {
@@ -80,25 +79,35 @@ public class Power extends OperatorBinary
         Operator result = super.simplify (from);
         if (result != this) return result;
 
-        if (operand1 instanceof Constant)
+        // Cases we cans simplify:
+        // 1^b = 1
+        // a^0 = 1
+        // a^1 = a
+        double c0 = -1;
+        double c1 = -1;
+        if (operand0 instanceof Constant) c0 = operand0.getDouble ();
+        if (operand1 instanceof Constant) c1 = operand1.getDouble ();
+        if (c0 == 1  ||  c1 == 0)
         {
-            Type c1 = ((Constant) operand1).value;
-            if (c1 instanceof Scalar  &&  ((Scalar) c1).value == 1)
-            {
-                from.changed = true;
-                operand0.parent = parent;
-                return operand0;
-            }
-            // It would be nice to simplify out x^0. However, if x==0 at runtime, the correct answer is NaN rather than 1.
-            // Since we can't know x ahead of time, and NaN may be important to correct processing, we don't touch that case.
+            from.changed = true;
+            result = new Constant (1);
+            result.parent = parent;
+            return result;
         }
+        if (c1 == 1)
+        {
+            from.changed = true;
+            operand0.parent = parent;
+            return operand0;
+        }
+
         return this;
     }
 
     public void determineExponent (Variable from)
     {
         operand0.exponentNext = operand0.exponent;
-        operand1.exponentNext = operand1.exponent;
+        operand1.exponentNext = MSB / 2;  // Exponentiation is very sensitive, so no benefit in allowing arbitrary size of input.
         operand0.determineExponent (from);
         operand1.determineExponent (from);
 
