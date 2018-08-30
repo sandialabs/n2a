@@ -156,8 +156,8 @@ public class JobC extends Thread
         boolean changed = false;
         if (needRuntime)
         {
-            if (unpackRuntime (JobC.class, runtimeDir, "",   "fixedpoint.cc", "fixedpoint.h", "io.cc", "io.h", "io.tcc", "KDTree.h", "nosys.h", "runtime.cc", "runtime.h", "runtime.tcc", "String.h")) changed = true;
-            if (unpackRuntime (JobC.class, runtimeDir, "fl", "math.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "MatrixSparse.tcc", "pointer.h")) changed = true;
+            if (unpackRuntime (JobC.class, runtimeDir, "",   "fixedpoint.cc", "fixedpoint.h", "io.cc", "io.h", "io.tcc", "KDTree.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "MatrixSparse.tcc", "nosys.h", "runtime.cc", "runtime.h", "runtime.tcc", "String.h")) changed = true;
+            if (unpackRuntime (JobC.class, runtimeDir, "fl", "math.h", "pointer.h")) changed = true;
             needRuntime = false;   // Stop checking files for this session.
         }
 
@@ -3552,7 +3552,7 @@ public class JobC extends Thread
     public static String zero (String name, Variable v) throws Exception
     {
         if      (v.type instanceof Scalar) return name + " = 0";
-        else if (v.type instanceof Matrix) return "fl::clear (" + name + ")";
+        else if (v.type instanceof Matrix) return "::clear (" + name + ")";
         else if (v.type instanceof Text  ) return name + ".clear ()";
         else
         {
@@ -3565,7 +3565,7 @@ public class JobC extends Thread
     {
         String p = context.print (value, v.exponent);
         if      (v.type instanceof Scalar) return name + " = " + p;
-        else if (v.type instanceof Matrix) return "fl::clear (" + name + ", " + p + ")";
+        else if (v.type instanceof Matrix) return "::clear (" + name + ", " + p + ")";
         else if (v.type instanceof Text  ) return name + ".clear ()";
         else
         {

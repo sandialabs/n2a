@@ -15,16 +15,16 @@
 // General functions ---------------------------------------------------------
 // See the N2A language reference for details.
 
-template<class T> T             uniform ();
-template<class T> T             uniform (T sigma);
-template<class T> fl::Matrix<T> uniform (const fl::MatrixAbstract<T> & sigma);
+template<class T> T          uniform ();
+template<class T> T          uniform (T sigma);
+template<class T> Matrix<T>  uniform (const MatrixAbstract<T> & sigma);
 
-template<class T> T             gaussian ();
-template<class T> T             gaussian (T sigma);
-template<class T> fl::Matrix<T> gaussian (const fl::MatrixAbstract<T> & sigma);
+template<class T> T          gaussian ();
+template<class T> T          gaussian (T sigma);
+template<class T> Matrix<T>  gaussian (const MatrixAbstract<T> & sigma);
 
-template<class T> Vector3<T>    grid    (int i, int nx = 1, int ny = 1, int nz = 1);
-template<class T> Vector3<T>    gridRaw (int i, int nx = 1, int ny = 1, int nz = 1);
+template<class T> Vector3<T> grid    (int i, int nx = 1, int ny = 1, int nz = 1);
+template<class T> Vector3<T> gridRaw (int i, int nx = 1, int ny = 1, int nz = 1);
 
 
 // Simulation classes --------------------------------------------------------

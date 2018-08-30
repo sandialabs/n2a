@@ -1,22 +1,21 @@
 #include "runtime.tcc"
 
 
-using namespace fl;
 using namespace std;
 
 
 // General functions ---------------------------------------------------------
 
-template n2a_T             uniform ();
-template n2a_T             uniform (n2a_T sigma);
-template fl::Matrix<n2a_T> uniform (const fl::MatrixAbstract<n2a_T> & sigma);
+template n2a_T          uniform ();
+template n2a_T          uniform (n2a_T sigma);
+template Matrix<n2a_T>  uniform (const MatrixAbstract<n2a_T> & sigma);
 
-template n2a_T             gaussian ();
-template n2a_T             gaussian (n2a_T sigma);
-template fl::Matrix<n2a_T> gaussian (const fl::MatrixAbstract<n2a_T> & sigma);
+template n2a_T          gaussian ();
+template n2a_T          gaussian (n2a_T sigma);
+template Matrix<n2a_T>  gaussian (const MatrixAbstract<n2a_T> & sigma);
 
-template Vector3<n2a_T>    grid    (int i, int nx, int ny, int nz);
-template Vector3<n2a_T>    gridRaw (int i, int nx, int ny, int nz);
+template Vector3<n2a_T> grid    (int i, int nx, int ny, int nz);
+template Vector3<n2a_T> gridRaw (int i, int nx, int ny, int nz);
 
 
 // I/O -----------------------------------------------------------------------

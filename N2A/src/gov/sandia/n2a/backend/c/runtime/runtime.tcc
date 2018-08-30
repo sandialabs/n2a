@@ -3,7 +3,7 @@
 
 
 #include "runtime.h"
-#include "fl/matrix.h"
+#include "matrix.h"
 #ifdef n2a_FP
 # include "fixedpoint.h"
 #endif
@@ -26,26 +26,26 @@ uniform (T sigma)
 }
 
 template<class T>
-fl::Matrix<T>
-uniform (const fl::MatrixAbstract<T> & sigma)
+Matrix<T>
+uniform (const MatrixAbstract<T> & sigma)
 {
     int rows = sigma.rows ();
     int cols = sigma.columns ();
     if (cols == 1)
     {
-        fl::Matrix<T> result (rows);
+        Matrix<T> result (rows);
         for (int i = 0; i < rows; i++) result[i] = uniform (sigma(i,0));
         return result;
     }
     else if (rows == 1)
     {
-        fl::Matrix<T> result (cols);
+        Matrix<T> result (cols);
         for (int i = 0; i < cols; i++) result[i] = uniform (sigma(0,i));
         return result;
     }
     else
     {
-        fl::Matrix<T> temp (cols);
+        Matrix<T> temp (cols);
         for (int i = 0; i < cols; i++) temp[i] = uniform<T> ();
         return sigma * temp;
     }
@@ -89,26 +89,26 @@ gaussian (T sigma)
 }
 
 template<class T>
-fl::Matrix<T>
-gaussian (const fl::MatrixAbstract<T> & sigma)
+Matrix<T>
+gaussian (const MatrixAbstract<T> & sigma)
 {
     int rows = sigma.rows ();
     int cols = sigma.columns ();
     if (cols == 1)
     {
-        fl::Matrix<T> result (rows);
+        Matrix<T> result (rows);
         for (int i = 0; i < rows; i++) result[i] = gaussian (sigma(i,0));
         return result;
     }
     else if (rows == 1)
     {
-        fl::Matrix<T> result (cols);
+        Matrix<T> result (cols);
         for (int i = 0; i < cols; i++) result[i] = gaussian (sigma(0,i));
         return result;
     }
     else
     {
-        fl::Matrix<T> temp (cols);
+        Matrix<T> temp (cols);
         for (int i = 0; i < cols; i++) temp[i] = gaussian<T> ();
         return sigma * temp;
     }

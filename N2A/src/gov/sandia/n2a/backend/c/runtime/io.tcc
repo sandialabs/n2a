@@ -11,7 +11,7 @@
 // class IteratorSkip --------------------------------------------------------
 
 template<class T>
-IteratorSkip<T>::IteratorSkip (fl::Matrix<T> * A)
+IteratorSkip<T>::IteratorSkip (Matrix<T> * A)
 :   A (A)
 {
     this->row    = -1;
@@ -56,7 +56,7 @@ IteratorSkip<T>::getNext ()
 // class IteratorSparse ------------------------------------------------------
 
 template<class T>
-IteratorSparse<T>::IteratorSparse (fl::MatrixSparse<T> * A)
+IteratorSparse<T>::IteratorSparse (MatrixSparse<T> * A)
 :   A (A)
 {
     this->row    = 0;
@@ -180,8 +180,8 @@ template<class T>
 IteratorNonzero<T> *
 MatrixInput<T>::getIterator ()
 {
-    if (A->classID () & MatrixSparseID) return new IteratorSparse<T> ((fl::MatrixSparse<T> *) A);
-    return new IteratorSkip<T> ((fl::Matrix<T> *) A);
+    if (A->classID () & MatrixSparseID) return new IteratorSparse<T> ((MatrixSparse<T> *) A);
+    return new IteratorSkip<T> ((Matrix<T> *) A);
 }
 
 std::vector<Holder *> matrixMap;
@@ -222,7 +222,7 @@ matrixHelper (const String & fileName, MatrixInput<T> * oldHandle)
         getline (ifs, line);
         if (line == "Sparse")  // Homegrown sparse matrix format
         {
-            fl::MatrixSparse<T> * S = new fl::MatrixSparse<T>;
+            MatrixSparse<T> * S = new MatrixSparse<T>;
             handle->A = S;
             while (ifs.good ())
             {
@@ -326,7 +326,7 @@ matrixHelper (const String & fileName, MatrixInput<T> * oldHandle)
             const int rows = temp.size ();
             if (transpose)
             {
-                fl::Matrix<T> * A = new fl::Matrix<T> (columns, rows);
+                Matrix<T> * A = new Matrix<T> (columns, rows);
                 handle->A = A;
                 clear (*A);
                 for (int r = 0; r < rows; r++)
@@ -340,7 +340,7 @@ matrixHelper (const String & fileName, MatrixInput<T> * oldHandle)
             }
             else
             {
-                fl::Matrix<T> * A = new fl::Matrix<T> (rows, columns);
+                Matrix<T> * A = new Matrix<T> (rows, columns);
                 handle->A = A;
                 clear (*A);
                 for (int r = 0; r < rows; r++)
@@ -357,7 +357,7 @@ matrixHelper (const String & fileName, MatrixInput<T> * oldHandle)
         {
             std::cerr << "Ill-formed matrix in file: " << fileName << std::endl;
             delete handle->A;
-            handle->A = new fl::Matrix<T> (1, 1);
+            handle->A = new Matrix<T> (1, 1);
             clear (*handle->A); // set to 0
         }
     }

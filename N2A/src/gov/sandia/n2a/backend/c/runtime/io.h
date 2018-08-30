@@ -4,7 +4,7 @@
 
 #include "nosys.h"
 #include "String.h"
-#include "fl/matrix.h"
+#include "matrix.h"
 
 #include <vector>
 #include <unordered_map>
@@ -36,12 +36,12 @@ template<class T>
 class IteratorSkip : public IteratorNonzero<T>
 {
 public:
-    fl::Matrix<T> * A;
+    Matrix<T> * A;
     int nextRow;
     int nextColumn;
     T   nextValue;
 
-    IteratorSkip (fl::Matrix<T> * A);
+    IteratorSkip (Matrix<T> * A);
 
     virtual bool next ();
     void         getNext ();
@@ -51,11 +51,11 @@ template<class T>
 class IteratorSparse : public IteratorNonzero<T>
 {
 public:
-    fl::MatrixSparse<T> *              A;
+    MatrixSparse<T> *                  A;
     int                                columns;
     typename std::map<int,T>::iterator it;
 
-    IteratorSparse (fl::MatrixSparse<T> * A);
+    IteratorSparse (MatrixSparse<T> * A);
     virtual bool next ();
 };
 
@@ -63,7 +63,7 @@ template<class T>
 class MatrixInput : public Holder
 {
 public:
-    fl::MatrixAbstract<T> * A;  // Will be either Matrix or MatrixSparse, determined by matrixHelper when reading the file.
+    MatrixAbstract<T> * A;  // Will be either Matrix or MatrixSparse, determined by matrixHelper when reading the file.
 
     MatrixInput (const String & fileName);
     virtual ~MatrixInput ();

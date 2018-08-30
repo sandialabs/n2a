@@ -15,14 +15,14 @@ the U.S. Government retains certain rights in this software.
 #define kdtree_h
 
 
-#include "fl/matrix.h"
+#include "matrix.h"
 
 #include <vector>
 #include <queue>
 
 
 template<class T>
-class Vector3 : public fl::MatrixFixed<T,3,1>
+class Vector3 : public MatrixFixed<T,3,1>
 {
 };
 
@@ -223,8 +223,8 @@ public:
 
     void set (std::vector<KDTreeEntry<T> *> & data)
     {
-        fl::clear (lo,  INFINITY);
-        fl::clear (hi, -INFINITY);
+        ::clear (lo,  INFINITY);
+        ::clear (hi, -INFINITY);
 
         typename std::vector<KDTreeEntry<T> *>::iterator t = data.begin ();
         for (; t != data.end (); t++)
