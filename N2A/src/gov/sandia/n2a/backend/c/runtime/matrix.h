@@ -15,7 +15,6 @@ the U.S. Government retains certain rights in this software.
 #define n2a_matrix_h
 
 
-#include "fl/math.h"
 #include "fl/pointer.h"
 
 #include <vector>

@@ -4,6 +4,7 @@
 
 #include "runtime.h"
 #include "matrix.h"
+#include <limits.h>
 #ifdef n2a_FP
 # include "fixedpoint.h"
 #endif

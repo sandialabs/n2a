@@ -1,9 +1,6 @@
 #include "fixedpoint.h"
 
 
-using namespace fl;
-
-
 inline int
 multiplyRound (int a, int b, int shift)
 {

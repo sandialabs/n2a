@@ -2,7 +2,7 @@
 #define n2a_fixedpoint_h
 
 
-#include "fl/matrix.h"
+#include "matrix.h"
 
 
 #define FP_MSB    30
@@ -30,17 +30,17 @@ int tan   (int a,        int exponentA,                int exponentResult);
 
 // Extended operations on Matrix<int> ----------------------------------------
 
-fl::MatrixResult<int> shift               (int shift, fl::Matrix<int> A);
-int                   norm                (int n,     fl::Matrix<int> A, int exponentA, int exponentResult);
+Matrix<int> shift               (int shift, Matrix<int> A);
+int         norm                (int n,     Matrix<int> A, int exponentA, int exponentResult);
 
-fl::MatrixResult<int> multiply            (fl::Matrix<int> A, fl::Matrix<int> B, int shift);
-fl::MatrixResult<int> multiply            (fl::Matrix<int> A, int b,             int shift);
-fl::MatrixResult<int> multiply            (int a,             fl::Matrix<int> B, int shift);
-fl::MatrixResult<int> multiplyElementwise (fl::Matrix<int> A, fl::Matrix<int> B, int shift);
+Matrix<int> multiply            (Matrix<int> A, Matrix<int> B, int shift);
+Matrix<int> multiply            (Matrix<int> A, int b,         int shift);
+Matrix<int> multiply            (int a,         Matrix<int> B, int shift);
+Matrix<int> multiplyElementwise (Matrix<int> A, Matrix<int> B, int shift);
 
-fl::MatrixResult<int> divide              (fl::Matrix<int> A, fl::Matrix<int> B, int shift);
-fl::MatrixResult<int> divide              (fl::Matrix<int> A, int b,             int shift);
-fl::MatrixResult<int> divide              (int a,             fl::Matrix<int> B, int shift);
+Matrix<int> divide              (Matrix<int> A, Matrix<int> B, int shift);
+Matrix<int> divide              (Matrix<int> A, int b,         int shift);
+Matrix<int> divide              (int a,         Matrix<int> B, int shift);
 
 
 #endif

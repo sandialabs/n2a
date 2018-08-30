@@ -5,6 +5,7 @@
 #include "io.h"
 
 #include <fstream>
+#include <cmath>
 #include <stdlib.h>
 
 

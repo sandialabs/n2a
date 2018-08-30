@@ -19,6 +19,8 @@ the U.S. Government retains certain rights in this software.
 
 #include <vector>
 #include <queue>
+#include <cmath>
+#include <limits.h>
 
 
 template<class T>
