@@ -26,21 +26,21 @@ uniform (T sigma)
 }
 
 template<class T>
-fl::MatrixResult<T>
+fl::Matrix<T>
 uniform (const fl::MatrixAbstract<T> & sigma)
 {
     int rows = sigma.rows ();
     int cols = sigma.columns ();
     if (cols == 1)
     {
-        fl::Matrix<T> * result = new fl::Matrix<T> (rows);
-        for (int i = 0; i < rows; i++) (*result)[i] = uniform (sigma(i,0));
+        fl::Matrix<T> result (rows);
+        for (int i = 0; i < rows; i++) result[i] = uniform (sigma(i,0));
         return result;
     }
     else if (rows == 1)
     {
-        fl::Matrix<T> * result = new fl::Matrix<T> (cols);
-        for (int i = 0; i < cols; i++) (*result)[i] = uniform (sigma(0,i));
+        fl::Matrix<T> result (cols);
+        for (int i = 0; i < cols; i++) result[i] = uniform (sigma(0,i));
         return result;
     }
     else
@@ -89,21 +89,21 @@ gaussian (T sigma)
 }
 
 template<class T>
-fl::MatrixResult<T>
+fl::Matrix<T>
 gaussian (const fl::MatrixAbstract<T> & sigma)
 {
     int rows = sigma.rows ();
     int cols = sigma.columns ();
     if (cols == 1)
     {
-        fl::Matrix<T> * result = new fl::Matrix<T> (rows);
-        for (int i = 0; i < rows; i++) (*result)[i] = gaussian (sigma(i,0));
+        fl::Matrix<T> result (rows);
+        for (int i = 0; i < rows; i++) result[i] = gaussian (sigma(i,0));
         return result;
     }
     else if (rows == 1)
     {
-        fl::Matrix<T> * result = new fl::Matrix<T> (cols);
-        for (int i = 0; i < cols; i++) (*result)[i] = gaussian (sigma(0,i));
+        fl::Matrix<T> result (cols);
+        for (int i = 0; i < cols; i++) result[i] = gaussian (sigma(0,i));
         return result;
     }
     else
@@ -186,32 +186,32 @@ gaussian (int sigma)
 #endif
 
 template<class T>
-fl::MatrixResult<T>
+Vector3<T>
 grid (int i, int nx, int ny, int nz)
 {
     int sx = ny * nz;  // stride x
 
     // compute xyz in stride order
-    Vector3<T> * result = new Vector3<T>;
-    (*result)[0] = ((i / sx) + 0.5f) / nx;  // (i / sx) is an integer operation, so remainder is truncated.
+    Vector3<T> result;
+    result[0] = ((i / sx) + 0.5f) / nx;  // (i / sx) is an integer operation, so remainder is truncated.
     i %= sx;
-    (*result)[1] = ((i / nz) + 0.5f) / ny;
-    (*result)[2] = ((i % nz) + 0.5f) / nz;
+    result[1] = ((i / nz) + 0.5f) / ny;
+    result[2] = ((i % nz) + 0.5f) / nz;
     return result;
 }
 
 template<class T>
-fl::MatrixResult<T>
+Vector3<T>
 gridRaw (int i, int nx, int ny, int nz)
 {
     int sx = ny * nz;  // stride x
 
     // compute xyz in stride order
-    Vector3<T> * result = new Vector3<T>;
-    (*result)[0] = i / sx;
+    Vector3<T> result;
+    result[0] = i / sx;
     i %= sx;
-    (*result)[1] = i / nz;
-    (*result)[2] = i % nz;
+    result[1] = i / nz;
+    result[2] = i % nz;
     return result;
 }
 

@@ -53,6 +53,7 @@ public class RendererCfp extends RendererC
         operatorsWithExponent.add (Gaussian  .class);
         operatorsWithExponent.add (Input     .class);
         operatorsWithExponent.add (Log       .class);
+        operatorsWithExponent.add (Norm      .class);
         operatorsWithExponent.add (Output    .class);
         operatorsWithExponent.add (Power     .class);
         operatorsWithExponent.add (ReadMatrix.class);
@@ -309,17 +310,6 @@ public class RendererCfp extends RendererC
                 if (needParens) result.append (")");
                 result.append (" & " + decimalMask + ")");
             }
-            return true;
-        }
-        if (op instanceof Norm)
-        {
-            Norm n = (Norm) op;
-            Operator A = n.operands[1];
-            result.append ("norm (");
-            n.operands[0].render (this);
-            result.append (", ");
-            A.render (this);
-            result.append (", " + A.exponentNext + ", " + n.exponentNext + ")");
             return true;
         }
         if (op instanceof Round)

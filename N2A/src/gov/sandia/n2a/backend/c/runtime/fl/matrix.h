@@ -21,7 +21,6 @@ for details.
 #include "fl/math.h"
 #include "fl/pointer.h"
 
-#include <complex>
 #include <vector>
 #include <map>
 #ifndef N2A_SPINNAKER
@@ -29,62 +28,15 @@ for details.
 # include <sstream>
 #endif
 
-#undef SHARED
-#ifdef _MSC_VER
-#  ifdef flNumeric_EXPORTS
-#    define SHARED __declspec(dllexport)
-#  else
-#    define SHARED __declspec(dllimport)
-#  endif
-#else
-#  define SHARED
-#endif
-
-
-/**
-   @file
-   The linear algebra package has the following goals:
-   <ul>
-   <li>Be simple and straightforward for a programmer to use. It should be
-   easy to express most common linear algebra calculations using
-   overloaded operators.
-   <li>Work seamlessly with LAPACK. To this end, storage is always column
-   major.
-   <li>Be lightweight to compile. We avoid putting much implementation in
-   the headers, even though we are using templates.
-   <li>Be lightweight at run-time.  Eg: shallow copy semantics, and only a
-   couple of variables that need to be copied.  Should limit total copying
-   to 16 bytes or less.
-   </ul>
-
-   In general, the implementation does not protect you from shooting yourself
-   in the foot. Specifically, there is no range checking or verification
-   that memory addresses are valid. All these do is make a bug easier to
-   find (rather than eliminate it), and they cost at runtime. In cases
-   where there is some legitimate interpretation of bizarre parameter values,
-   we assume the programmer meant that interpretation and plow on.
-**/
-
 
 namespace fl
 {
-  // Forward declarations
-  template<class T> class MatrixResult;
-  template<class T> class Matrix;
-  template<class T> class MatrixStrided;
-
   // Matrix class ID constants
-  // This is a hack to avoid the cost of dynamic_cast.
-  #define MatrixAbstractID  0x001
-  #define MatrixResultID    0x002
-  #define MatrixStridedID   0x004
-  #define MatrixID          0x008
-  #define MatrixPackedID    0x010
-  #define MatrixSparseID    0x020
-  #define MatrixIdentityID  0x040
-  #define MatrixDiagonalID  0x080
-  #define MatrixFixedID     0x100
-  #define MatrixBlockID     0x200
+  // This is a hack to avoid the cost of RTTI.
+  #define MatrixStridedID   0x1
+  #define MatrixID          0x2
+  #define MatrixFixedID     0x4
+  #define MatrixSparseID    0x8
 
 
   // Matrix general interface -------------------------------------------------
@@ -95,210 +47,48 @@ namespace fl
 	 matrices are the most common case.
   **/
   template<class T>
-  class SHARED MatrixAbstract
+  class MatrixAbstract
   {
   public:
 	virtual ~MatrixAbstract ();
-	virtual uint32_t classID () const;  ///< @return A bitvector indicating all the classes to which this object can be cast.  Hack to avoid the cost of dynamic_cast.
-
-	/**
-	   Copy data from another matrix.
-	   @param deep Indicates that all levels of associated data must be
-	   duplicated.  There are some exceptions to this for views.
-	   If false, then the copy is equivalent to operator =.
-	   Generally that is a shallow copy, but each class is free to determine
-	   semantics, and those semantics may vary depending on the class of the
-	   source matrix.
-	**/
-	virtual void copyFrom (const MatrixAbstract  & that, bool deep = true);
-	        void copyFrom (const MatrixResult<T> & that, bool deep = true) {copyFrom (*that.result, deep);}
+	virtual uint32_t classID () const = 0;  ///< @return A bitvector indicating all the classes to which this object can be cast.  Hack to avoid the cost of dynamic_cast.
 
 	// Structural functions
 	// These are the core functions in terms of which most other functions can
-	// be implemented.  To some degree, they abstract away the actual storage
-	// structure of the matrix.
+	// be implemented.  They abstract away the actual storage structure of the matrix.
 	virtual T &  operator () (const int row, const int column) const = 0;  ///< Element accesss
 	virtual T &  operator [] (const int row) const;  ///< Element access, treating us as a vector.
-	virtual int  rows        () const;
-	virtual int  columns     () const;
-	virtual void resize      (const int rows, const int columns = 1) = 0;  ///< Change number of rows and columns.  Does not preserve data.
-
-	// Higher level functions
-	virtual void            clear           (const T scalar = (T) 0);  ///< Set all elements to given value.
-	virtual T               norm            (T n) const;  ///< Generalized Frobenius norm: (sum_elements (element^n))^(1/n).  Effectively: INFINITY is max, 1 is sum, 2 is standard Frobenius norm.  n==0 is technically undefined, but we treat is as the count of non-zero elements.
-	virtual MatrixResult<T> visit           (T (*function) (const T &)) const;  ///< Apply function() to each of our elements, and return the results in a new Matrix of equal size.
-	virtual MatrixResult<T> visit           (T (*function) (const T)) const;  ///< Apply function() to each of our elements, and return the results in a new Matrix of equal size.
-#	ifndef N2A_SPINNAKER
-	const char *            toString        (std::string & buffer) const;  ///< Convenience funtion.  Same output as operator <<
-#	endif
-
-	// Basic operations
-
-	virtual bool operator == (const MatrixAbstract & B) const;  ///< Two matrices are equal if they have the same shape and the same elements.
-	        bool operator == (const MatrixResult<T> & B) const {return operator == (*B.result);}
-	bool operator != (const MatrixAbstract & B) const
-	{
-	  return ! ((*this) == B);
-	}
-
-	virtual MatrixResult<T> operator ! () const;  ///< Invert matrix if square, otherwise create pseudo-inverse.
-	virtual MatrixResult<T> operator ~ () const;  ///< Transpose matrix.
-
-	virtual MatrixResult<T> operator ^ (const MatrixAbstract  & B) const;  ///< View both matrices as vectors and return cross product.  (Is there a better definition that covers 2D matrices?)
-	        MatrixResult<T> operator ^ (const MatrixResult<T> & B) const {return operator ^ (*B.result);}
-	virtual MatrixResult<T> operator & (const MatrixAbstract  & B) const;  ///< Elementwise multiplication.  The prettiest name for this operator would be ".*", but that is not overloadable.
-	        MatrixResult<T> operator & (const MatrixResult<T> & B) const {return operator & (*B.result);}
-	virtual MatrixResult<T> operator * (const MatrixAbstract  & B) const;  ///< Multiply matrices: this * B
-	        MatrixResult<T> operator * (const MatrixResult<T> & B) const {return operator * (*B.result);}
-	virtual MatrixResult<T> operator * (const T scalar)            const;  ///< Multiply each element by scalar
-	virtual MatrixResult<T> operator / (const MatrixAbstract  & B) const;  ///< Elementwise division.  Could mean this * !B, but such expressions are done other ways in linear algebra.
-	        MatrixResult<T> operator / (const MatrixResult<T> & B) const {return operator / (*B.result);}
-	virtual MatrixResult<T> operator / (const T scalar)            const;  ///< Divide each element by scalar
-	virtual MatrixResult<T> operator + (const MatrixAbstract  & B) const;  ///< Elementwise sum.
-	        MatrixResult<T> operator + (const MatrixResult<T> & B) const {return operator + (*B.result);}
-	virtual MatrixResult<T> operator + (const T scalar)            const;  ///< Add scalar to each element
-	virtual MatrixResult<T> operator - (const MatrixAbstract  & B) const;  ///< Elementwise difference.
-	        MatrixResult<T> operator - (const MatrixResult<T> & B) const {return operator - (*B.result);}
-	virtual MatrixResult<T> operator - (const T scalar)            const;  ///< Subtract scalar from each element
-
-	// Global Data
-	static int displayWidth;  ///< Number of character positions per cell to use when printing out matrix.
-	static int displayPrecision;  ///< Number of significant digits to output.
+	virtual int  rows        () const = 0;
+	virtual int  columns     () const = 0;
   };
 
-  template<class T>
-  MatrixResult<T> operator * (const T scalar, const MatrixAbstract<T> & A)
+  template<class T> class Matrix;
+
+  template<class T> void      clear (      MatrixAbstract<T> & A, const T scalar = (T) 0);    ///< Set all elements to given value.
+  template<class T> T         norm  (const MatrixAbstract<T> & A, T n);                       ///< Generalized Frobenius norm: (sum_elements (element^n))^(1/n).  Effectively: INFINITY is max, 1 is sum, 2 is standard Frobenius norm.  n==0 is technically undefined, but we treat is as the count of non-zero elements.
+  template<class T> Matrix<T> visit (const MatrixAbstract<T> & A, T (*function) (const T &)); ///< Apply function() to each element, and return the results in a new Matrix of equal size.
+  template<class T> Matrix<T> visit (const MatrixAbstract<T> & A, T (*function) (const T));   ///< Apply function() to each element, and return the results in a new Matrix of equal size.
+
+  template<class T> bool operator == (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);  ///< Two matrices are equal if they have the same shape and the same elements.
+  template<class T> bool operator != (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
   {
-	return A * scalar;
+    return ! (A == B);
   }
 
-  template<class T>
-  MatrixResult<T> operator - (const MatrixAbstract<T> & A)
-  {
-	return A * (T) -1;
-  }
+  template<class T> Matrix<T> operator ^ (const MatrixAbstract<T> & A, const MatrixAbstract<T>  & B); ///< View both matrices as vectors and return cross product.  (Is there a better definition that covers 2D matrices?)
+  template<class T> Matrix<T> operator & (const MatrixAbstract<T> & A, const MatrixAbstract<T>  & B); ///< Elementwise multiplication.  The prettiest name for this operator would be ".*", but that is not overloadable.
+  template<class T> Matrix<T> operator * (const MatrixAbstract<T> & A, const MatrixAbstract<T>  & B); ///< Multiply matrices: this * B
+  template<class T> Matrix<T> operator * (const MatrixAbstract<T> & A, const T scalar);               ///< Multiply each element by scalar
+  template<class T> Matrix<T> operator / (const MatrixAbstract<T> & A, const MatrixAbstract<T>  & B); ///< Elementwise division.  Could mean this * !B, but such expressions are done other ways in linear algebra.
+  template<class T> Matrix<T> operator / (const MatrixAbstract<T> & A, const T scalar);               ///< Divide each element by scalar
+  template<class T> Matrix<T> operator + (const MatrixAbstract<T> & A, const MatrixAbstract<T>  & B); ///< Elementwise sum.
+  template<class T> Matrix<T> operator + (const MatrixAbstract<T> & A, const T scalar);               ///< Add scalar to each element
+  template<class T> Matrix<T> operator - (const MatrixAbstract<T> & A, const MatrixAbstract<T>  & B); ///< Elementwise difference.
+  template<class T> Matrix<T> operator - (const MatrixAbstract<T> & A, const T scalar);               ///< Subtract scalar from each element
 
 #ifndef N2A_SPINNAKER
-
-  template<class T>
-  SHARED std::string elementToString (const T & value);
-
-  template<class T>
-  SHARED T elementFromString (const std::string & value);
-
-  /**
-	 Print human readable matrix to stream.  Formatted to be readable by
-	 operator >> (istream, Matrix).
-  **/
-  template<class T>
-  SHARED std::ostream &
-  operator << (std::ostream & stream, const MatrixAbstract<T> & A);
-
-  /**
-	 Load human-readable matrix from stream.  Format rules:
-	 <ul>
-	 <li>All matrices begin with "[" and end with "]".  Everything before the
-	 first "[" is ignored.  However, if a "~" occurs anywhere before the
-	 first "[", then the matrix is transposed.
-	 <li>Rows end with a LF character or a ";" (or both).
-	 <li>The number of columns equals the longest row.
-	 <li>Rows containing less than the full number of columns will be filled
-	 out with zeros.
-	 <li>All characters between a "#" and a LF character are ignored.
-	 <li>Empty lines are ignored.  Equivalently, rows containing no elements
-	 are ignored.  Note that the value zero counts as an element, so a row of
-	 zeros can be created by simply putting a "0" on a line by itself.
-	 </ul>
-  **/
-  template<class T>
-  SHARED std::istream &
-  operator >> (std::istream & stream, MatrixAbstract<T> & A);
-
-  /**
-	 Load human-readable matrix from string.  Follows same rules as
-	 operator >> (istream, Matrix).
-	 @todo This function may prove to be unecessay, given the existence of
-	 Matrix<T>::Matrix(const string &).
-  **/
-  template<class T>
-  SHARED MatrixAbstract<T> &
-  operator << (MatrixAbstract<T> & A, const std::string & source);
-
+  template<class T> std::ostream & operator << (std::ostream & stream, const MatrixAbstract<T> & A);  ///< Print human readable matrix to stream.
 #endif
-
-  /**
-	 An adapter that allows a function to return a matrix created on the heap
-	 and guarantee that it will be destroyed in the calling function.
-   **/
-  template<class T>
-  class MatrixResult : public MatrixAbstract<T>
-  {
-  public:
-	MatrixResult (MatrixAbstract<T> * result) : result (result)                {}
-	MatrixResult (const MatrixResult<T> & that) : result (that.result)         {const_cast<MatrixResult &> (that).result = 0;}  // TODO: make this into a move ctor
-	virtual ~MatrixResult ()                                                   {delete result;}
-	virtual uint32_t classID () const                                          {return MatrixAbstractID | MatrixResultID;}
-
-	MatrixAbstract<T> * relinquish ()
-	{
-	  MatrixAbstract<T> * temp = result;
-	  result = 0;
-	  return temp;
-	}
-
-	virtual void copyFrom (const MatrixAbstract<T> & that, bool deep = true)   {       result->copyFrom (that,         deep);}
-	virtual void copyFrom (const MatrixResult      & that, bool deep = true)   {       result->copyFrom (*that.result, deep);}
-	MatrixAbstract<T> & operator = (const MatrixResult & that)                 {       result->copyFrom (*that.result, true); return *result;}
-	MatrixAbstract<T> & operator = (const MatrixAbstract<T> & that)            {       result->copyFrom (that,         true); return *result;}
-	template<class T2>
-	MatrixAbstract<T> & operator = (const MatrixAbstract<T2> & that)
-	{
-	  int h = that.rows ();
-	  int w = that.columns ();
-	  result->resize (h, w);
-	  for (int c = 0; c < w; c++)
-	  {
-		for (int r = 0; r < h; r++)
-		{
-		  (*result)(r,c) = (T) that(r,c);
-		}
-	  }
-	  return *result;
-	}
-
-	virtual T & operator () (const int row, const int column) const            {return (*result)(row,column);}
-	virtual T & operator [] (const int row) const                              {return (*result)[row];}
-	virtual int rows () const                                                  {return result->rows ();}
-	virtual int columns () const                                               {return result->columns ();}
-	virtual void resize (const int rows, const int columns = 1)                {       result->resize (rows, columns);}
-
-	virtual void clear (const T scalar = (T) 0)                                {       result->clear (scalar);}
-	virtual T norm (T n) const                                                 {return result->norm (n);}
-	virtual MatrixResult visit (T (*function) (const T &)) const               {return result->visit (function);}
-	virtual MatrixResult visit (T (*function) (const T)) const                 {return result->visit (function);}
-
-	virtual MatrixResult operator ! () const                                   {return !(*result);}
-	virtual MatrixResult operator ~ () const                                   {return ~(*result);}
-
-	virtual MatrixResult operator ^ (const MatrixAbstract<T> & B) const        {return *result ^ B;}
-	        MatrixResult operator ^ (const MatrixResult      & B) const        {return *result ^ *B.result;}
-	virtual MatrixResult operator & (const MatrixAbstract<T> & B) const        {return *result & B;}
-	        MatrixResult operator & (const MatrixResult      & B) const        {return *result & *B.result;}
-	virtual MatrixResult operator * (const MatrixAbstract<T> & B) const        {return *result * B;}
-	        MatrixResult operator * (const MatrixResult      & B) const        {return *result * *B.result;}
-	virtual MatrixResult operator * (const T scalar) const                     {return *result * scalar;}
-	virtual MatrixResult operator / (const MatrixAbstract<T> & B) const        {return *result / B;}
-	        MatrixResult operator / (const MatrixResult      & B) const        {return *result / *B.result;}
-	virtual MatrixResult operator / (const T scalar) const                     {return *result / scalar;}
-	virtual MatrixResult operator + (const MatrixAbstract<T> & B) const        {return *result + B;}
-	        MatrixResult operator + (const MatrixResult      & B) const        {return *result + *B.result;}
-	virtual MatrixResult operator + (const T scalar) const                     {return *result + scalar;}
-	virtual MatrixResult operator - (const MatrixAbstract<T> & B) const        {return *result - B;}
-	        MatrixResult operator - (const MatrixResult      & B) const        {return *result - *B.result;}
-	virtual MatrixResult operator - (const T scalar) const                     {return *result - scalar;}
-
-	MatrixAbstract<T> * result;  ///< We always take responsibility for destroying "result".
-  };
 
 
   // Concrete matrices  -------------------------------------------------------
@@ -316,141 +106,102 @@ namespace fl
 	 will not allocate memory if they exceed the current storage size.
   **/
   template<class T>
-  class SHARED MatrixStrided : public MatrixAbstract<T>
+  class MatrixStrided : public MatrixAbstract<T>
   {
   public:
-	MatrixStrided ();  ///< Mainly for the convenience of Matrix constructors.  Generally, you will not directly construct an instance of this class.
-	MatrixStrided (const MatrixAbstract<T> & that);
-	template<class T2>
-	MatrixStrided (const MatrixAbstract<T2> & that)
-	{
-	  int h = that.rows ();
-	  int w = that.columns ();
-
-	  // Equivalent to Matrix::resize(h,w).  We can't use our own resize(),
-	  // because it does not actually allocate memory.
-	  data.grow (w * h * sizeof (T));
-	  offset   = 0;
-	  rows_    = h;
-	  columns_ = w;
-	  strideR  = 1;
-	  strideC  = h;
-
-	  T * i = (T *) data;
-	  for (int c = 0; c < w; c++)
-	  {
-		for (int r = 0; r < h; r++)
-		{
-		  *i++ = (T) that(r,c);
-		}
-	  }
-	}
-	MatrixStrided (const Pointer & that, const int offset, const int rows, const int columns, const int strideR, const int strideC);
-	void detach ();  ///< Set the state of this matrix as if it has no data.  Releases (but only frees if appropriate) any memory.
-	virtual uint32_t classID () const;
-
-	virtual void copyFrom (const MatrixAbstract<T> & that, bool deep = true);
-	using MatrixAbstract<T>::copyFrom;
-
-	virtual T & operator () (const int row, const int column) const
-	{
-	  return ((T *) this->data)[offset + column * this->strideC + row * this->strideR];
-	}
-	/**
-	   Guarantees correctness only for the first column, unless rows() == strideC.
-	 **/
-	virtual T & operator [] (const int row) const
-	{
-	  return ((T *) this->data)[offset + row * strideR];
-	}
-	virtual int rows () const;
-	virtual int columns () const;
-	virtual void resize (const int rows, const int columns = 1);  ///< Always sets strideC = rows.
-
-	virtual void clear (const T scalar = (T) 0);
-	virtual T norm (T n) const;
-	virtual MatrixResult<T> visit (T (*function) (const T &)) const;
-	virtual MatrixResult<T> visit (T (*function) (const T)) const;
-
-	virtual MatrixResult<T> operator ~ () const;
-
-	virtual MatrixResult<T>  operator & (const MatrixAbstract<T> & B) const;
-	using MatrixAbstract<T>::operator &;
-	virtual MatrixResult<T>  operator * (const MatrixAbstract<T> & B) const;
-	using MatrixAbstract<T>::operator *;
-	virtual MatrixResult<T>  operator * (const T scalar) const;
-	virtual MatrixResult<T>  operator / (const MatrixAbstract<T> & B) const;
-	using MatrixAbstract<T>::operator /;
-	virtual MatrixResult<T>  operator / (const T scalar) const;
-	virtual MatrixResult<T>  operator + (const MatrixAbstract<T> & B) const;
-	using MatrixAbstract<T>::operator +;
-	virtual MatrixResult<T>  operator + (const T scalar) const;
-	virtual MatrixResult<T>  operator - (const MatrixAbstract<T> & B) const;
-	using MatrixAbstract<T>::operator -;
-	virtual MatrixResult<T>  operator - (const T scalar) const;
-
-	// Data
-	Pointer data;
-	int offset;
-	int rows_;
-	int columns_;
-	int strideR;  ///< Number of elements between start of each row in memory.
-	int strideC;  ///< Number of elements between start of each column in memory.  Equivalent to "leading dimension" in LAPACK parlance.  Could be in terms of bytes, like PixelBufferPacked::stride, but the need for this is very unlikely, so not worth the programming effort.
+	virtual T * base    () const = 0; ///< Address of first element.
+	virtual int strideR () const = 0; ///< Number of elements between start of each row in memory.
+	virtual int strideC () const = 0; ///< Number of elements between start of each column in memory. Equivalent to "leading dimension" in LAPACK parlance.
   };
 
+  template<class T> void      clear (      MatrixStrided<T> & A, const T scalar = (T) 0);
+  template<class T> T         norm  (const MatrixStrided<T> & A, T n);
+  template<class T> Matrix<T> visit (const MatrixStrided<T> & A, T (*function) (const T &));
+  template<class T> Matrix<T> visit (const MatrixStrided<T> & A, T (*function) (const T));
+
+  template<class T> Matrix<T> operator & (const MatrixStrided<T> & A, const MatrixAbstract<T> & B);
+  template<class T> Matrix<T> operator * (const MatrixStrided<T> & A, const MatrixAbstract<T> & B);
+  template<class T> Matrix<T> operator * (const MatrixStrided<T> & A, const T scalar);
+  template<class T> Matrix<T> operator * (const T scalar,             const MatrixStrided<T> & A) {return A * scalar;}
+  template<class T> Matrix<T> operator / (const MatrixStrided<T> & A, const MatrixAbstract<T> & B);
+  template<class T> Matrix<T> operator / (const MatrixStrided<T> & A, const T scalar);
+  template<class T> Matrix<T> operator / (const T scalar,             const MatrixStrided<T> & A);
+  template<class T> Matrix<T> operator + (const MatrixStrided<T> & A, const MatrixAbstract<T> & B);
+  template<class T> Matrix<T> operator + (const MatrixStrided<T> & A, const T scalar);
+  template<class T> Matrix<T> operator + (const T scalar,             const MatrixStrided<T> & A) {return A + scalar;}
+  template<class T> Matrix<T> operator - (const MatrixStrided<T> & A, const MatrixAbstract<T> & B);
+  template<class T> Matrix<T> operator - (const MatrixStrided<T> & A, const T scalar);
+  template<class T> Matrix<T> operator - (const T scalar,             const MatrixStrided<T> & A);
+
   template<class T>
-  class SHARED Matrix : public MatrixStrided<T>
+  class Matrix : public MatrixStrided<T>
   {
   public:
-	Matrix ();
+    Pointer data;
+    int offset;
+    int rows_;
+    int columns_;
+    int strideR_;
+    int strideC_;
+
+    Matrix ();
 	Matrix (const int rows, const int columns = 1);
 	Matrix (const MatrixAbstract<T> & that);
-	template<class T2> Matrix (const MatrixAbstract<T2> & that) : MatrixStrided<T> (that) {}
-#	ifndef N2A_SPINNAKER
-	Matrix (const std::string & source);
-#	endif
-	Matrix (T * that, const int rows, const int columns = 1);  ///< Attach to memory block pointed to by that
-	Matrix (Pointer & that, const int rows = -1, const int columns = 1);  ///< Share memory block with that.  rows == -1 or columns == -1 means infer number from size of memory.  At least one of {rows, columns} must be positive.
+    Matrix (const Pointer & that, const int offset, const int rows, const int columns, const int strideR, const int strideC);
 	virtual uint32_t classID () const;
 
-	virtual void copyFrom (const MatrixAbstract<T> & that, bool deep = true);
-	using MatrixStrided<T>::copyFrom;
+	void resize (const int rows, const int columns = 1);  ///< Subroutine of constructors.
 
-	virtual T & operator () (const int row, const int column) const
-	{
-	  return ((T *) this->data)[column * this->strideC + row];
-	}
-	virtual T & operator [] (const int row) const
-	{
-	  return ((T *) this->data)[row];
-	}
-	virtual void resize (const int rows, const int columns = 1);  ///< Always sets strideC = rows.
-
-	virtual Matrix reshape (const int rows, const int columns = 1, bool inPlace = false) const;
-
-	virtual void clear (const T scalar = (T) 0);
+    virtual T & operator () (const int row, const int column) const
+    {
+      return ((T *) data)[offset + column * strideC_ + row * strideR_];
+    }
+    virtual T & operator [] (const int row) const  ///< Only works for the first column, unless rows == strideC.
+    {
+      return ((T *) data)[offset + row * strideR_];
+    }
+    virtual int rows    () const;
+    virtual int columns () const;
+    virtual T * base    () const;
+    virtual int strideR () const;
+    virtual int strideC () const;
   };
 
-  /**
-	 Vector is "syntactic sugar" for a Matrix with only one column.
-  **/
-  template<class T>
-  class SHARED Vector : public Matrix<T>
+  template<class T> Matrix<T> operator ~ (const Matrix<T> & A);
+
+  template<class T, int R, int C>
+  class MatrixFixed : public MatrixStrided<T>
   {
   public:
-	Vector ();
-	Vector (const int rows);
-	Vector (const MatrixAbstract<T> & that);
-	template<class T2> Vector (const MatrixAbstract<T2> & that) : Matrix<T> (that) {this->strideC = this->rows_ = this->rows_ * this->columns_; this->columns_ = 1;}
-	Vector (const Matrix<T> & that);
-#	ifndef N2A_SPINNAKER
-	Vector (const std::string & source);
-#	endif
-	Vector (T * that, const int rows);  ///< Attach to memory block pointed to by that
-	Vector (Pointer & that, const int rows = -1);  ///< Share memory block with that.  rows == -1 means infer number from size of memory
+    T data[C][R];
 
-	virtual void resize (const int rows, const int columns = 1);  ///< Converts all requests to a single column with height of requested rows * requested columns.
+    MatrixFixed ();
+    MatrixFixed (const MatrixAbstract<T> & that);
+    virtual uint32_t classID () const;
+
+    virtual T & operator () (const int row, const int column) const
+    {
+      return (T &) data[column][row];
+    }
+    virtual T & operator [] (const int row) const
+    {
+      return ((T *) data)[row];
+    }
+    virtual int rows    () const;
+    virtual int columns () const;
+    virtual T * base    () const;
+    virtual int strideR () const;
+    virtual int strideC () const;
   };
+
+  template<class T>               MatrixFixed<T,2,2> operator ! (const MatrixFixed<T,2,2> & A);
+  template<class T>               MatrixFixed<T,3,3> operator ! (const MatrixFixed<T,3,3> & A);
+  template<class T, int R, int C> MatrixFixed<T,C,R> operator ~ (const MatrixFixed<T,R,C> & A);
+  template<class T, int R, int C> MatrixFixed<T,R,C> operator * (const MatrixFixed<T,R,C> & A, const T scalar);
+  template<class T, int R, int C> MatrixFixed<T,R,C> operator / (const MatrixFixed<T,R,C> & A, const T scalar);
+
+  template<class T> T det (const MatrixFixed<T,2,2> & A);
+  template<class T> T det (const MatrixFixed<T,3,3> & A);
 
   /**
      Stores only nonzero elements.  Assumes that every column has at least
@@ -460,96 +211,22 @@ namespace fl
      holding the column structures would be better.
   **/
   template<class T>
-  class SHARED MatrixSparse : public MatrixAbstract<T>
+  class MatrixSparse : public MatrixAbstract<T>
   {
   public:
+    int rows_;
+    fl::PointerStruct< std::vector< std::map<int, T> > > data;
+
     MatrixSparse ();
     MatrixSparse (const int rows, const int columns);
     MatrixSparse (const MatrixAbstract<T> & that);
-    virtual ~MatrixSparse ();
     virtual uint32_t classID () const;
-
-    virtual void copyFrom (const MatrixAbstract<T> & that, bool deep = true);
-    using MatrixAbstract<T>::copyFrom;
 
     void set (const int row, const int column, const T value);  ///< If value is non-zero, creates element if not already there; if value is zero, removes element if it exists.
     virtual T & operator () (const int row, const int column) const;
     virtual int rows () const;
     virtual int columns () const;
-    virtual void resize (const int rows, const int columns = 1);  ///< Changing number of rows has no effect at all.  Changing number of columns resizes column list.
-
-    virtual void clear (const T scalar = (T) 0);  ///< Completely ignore the value of scalar, and simply delete all data.
-    virtual T norm (T n) const;
-
-    virtual MatrixResult<T>  operator * (const MatrixAbstract<T> & B) const;
-    using MatrixAbstract<T>::operator *;
-    virtual MatrixResult<T>  operator - (const MatrixAbstract<T> & B) const;
-    using MatrixAbstract<T>::operator -;
-
-    int rows_;
-    fl::PointerStruct< std::vector< std::map<int, T> > > data;
   };
-
-
-  // Small Matrix classes -----------------------------------------------------
-
-  // There are two reasons for making small Matrix classes.
-  // 1) Avoid overhead of managing memory.
-  // 2) Certain numerical operations (such as computing eigenvalues) have
-  //    direct implementations in small matrix sizes (particularly 2x2).
-
-  template<class T, int R, int C>
-  class MatrixFixed : public MatrixAbstract<T>
-  {
-  public:
-	MatrixFixed ();
-	template<class T2>
-	MatrixFixed (const MatrixAbstract<T2> & that)
-	{
-	  const int h = std::min (that.rows (),    R);
-	  const int w = std::min (that.columns (), C);
-	  for (int c = 0; c < w; c++)
-	  {
-		for (int r = 0; r < h; r++)
-		{
-		  data[c][r] = (T) that(r,c);
-		}
-	  }
-	}
-	virtual uint32_t classID () const;
-
-	virtual void copyFrom (const MatrixAbstract<T> & that, bool deep = true);
-	using MatrixAbstract<T>::copyFrom;
-
-	virtual T & operator () (const int row, const int column) const
-	{
-	  return (T &) data[column][row];
-	}
-	virtual T & operator [] (const int row) const
-	{
-	  return ((T *) data)[row];
-	}
-	virtual int rows () const;
-	virtual int columns () const;
-	virtual void resize (const int rows = R, const int columns = C);
-
-	virtual MatrixResult<T> operator ! () const;
-	virtual MatrixResult<T> operator ~ () const;
-
-	virtual MatrixResult<T>  operator * (const MatrixAbstract<T> & B) const;
-	using MatrixAbstract<T>::operator *;
-	virtual MatrixResult<T>  operator * (const T scalar) const;
-	virtual MatrixResult<T>  operator / (const T scalar) const;
-
-	// Data
-	T data[C][R];
-  };
-
-  template<class T>
-  SHARED T det (const MatrixFixed<T,2,2> & A);
-
-  template<class T>
-  SHARED T det (const MatrixFixed<T,3,3> & A);
 }
 
 

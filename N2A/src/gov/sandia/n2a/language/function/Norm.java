@@ -37,10 +37,10 @@ public class Norm extends Function
 
     public void determineExponent (Variable from)
     {
-        Operator op0 = operands[0];  // n
-        Operator op1 = operands[1];  // A
-        op0.exponentNext = Operator.MSB / 2;
-        op1.exponentNext = op1.exponent;
+        Operator op0 = operands[0];  // A
+        Operator op1 = operands[1];  // n
+        op0.exponentNext = op0.exponent;
+        op1.exponentNext = Operator.MSB / 2;
         op0.determineExponent (from);
         op1.determineExponent (from);
 
@@ -52,21 +52,21 @@ public class Norm extends Function
                 return r.variable.type;
             }
         };
-        Matrix A = (Matrix) op1.eval (instance);
+        Matrix A = (Matrix) op0.eval (instance);
         int Asize = A.rows () * A.columns ();
 
         int centerNew   = center;
         int exponentNew = exponent;
-        if (op1.exponent != UNKNOWN)
+        if (op0.exponent != UNKNOWN)
         {
             // For n==1 (sum of elements), which is the most expensive in terms of bits.
             int shift = (int) Math.floor (Math.log (Asize) / Math.log (2));
-            centerNew   = op1.center   - shift;
-            exponentNew = op1.exponent + shift;
+            centerNew   = op0.center   - shift;
+            exponentNew = op0.exponent + shift;
         }
-        if (op0 instanceof Constant)
+        if (op1 instanceof Constant)
         {
-            double n = ((Scalar) ((Constant) op0).value).value;
+            double n = op1.getDouble ();
             if (n == 0)
             {
                 // Result is an integer
@@ -75,8 +75,8 @@ public class Norm extends Function
             }
             else if (Double.isInfinite (n))
             {
-                centerNew   = op1.center;
-                exponentNew = op1.exponent;
+                centerNew   = op0.center;
+                exponentNew = op0.exponent;
             }
             // It would be nice to have some way to interpolate between the 3 bounding cases.
         }
@@ -91,8 +91,8 @@ public class Norm extends Function
 
     public Type eval (Instance context)
     {
-        double n = ((Scalar) operands[0].eval (context)).value;
-        Matrix A =  (Matrix) operands[1].eval (context);
+        Matrix A =  (Matrix) operands[0].eval (context);
+        double n = ((Scalar) operands[1].eval (context)).value;
         return new Scalar (A.norm (n));
     }
 

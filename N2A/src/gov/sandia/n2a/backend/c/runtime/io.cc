@@ -11,11 +11,11 @@ using namespace std;
 
 template class MatrixAbstract<n2a_T>;
 template class Matrix<n2a_T>;
-template class MatrixSparse<n2a_T>;
 template class MatrixFixed<n2a_T,3,1>;
+template class MatrixSparse<n2a_T>;
 namespace fl
 {
-    template SHARED std::istream & operator >> (std::istream & stream, MatrixAbstract<n2a_T>  & A);
+    template std::ostream & operator << (std::ostream & stream, const MatrixAbstract<n2a_T> & A);
 }
 
 template class IteratorNonzero<n2a_T>;

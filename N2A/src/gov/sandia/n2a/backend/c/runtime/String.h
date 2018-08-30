@@ -249,6 +249,11 @@ public:
         return *this;
     }
 
+    String & operator+= (char that)
+    {
+        return append (&that, 1);
+    }
+
     String & operator+= (int that)
     {
         char buffer[16];
@@ -277,9 +282,9 @@ public:
     {
         if (top == memory) return;
         char * first = memory;
-        while (first < top  &&  (*first == ' '  ||  *first == '\t'  ||  *first == '\n')) first++;
+        while (first < top  &&  (*first == ' '  ||  *first == '\t'  ||  *first == '\r'  ||  *first == '\n')) first++;
         char * last = top - 1;
-        while (last >= memory  &&  (*last == ' '  ||  *last == '\t'  ||  *last == '\n')) last--;
+        while (last >= memory  &&  (*last == ' '  ||  *last == '\t'  ||  *last == '\r'  ||  *last == '\n')) last--;
         if (first > memory)  // Move trimmed sting down to start of memory block ...
         {
             char * i = first;

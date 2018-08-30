@@ -91,11 +91,11 @@ public class JobC extends Thread
         {
             Files.createFile (jobDir.resolve ("started"));
 
-            T = job.get ("$metadata", "backend.c.type");
+            T = job.getOrDefault ("$metadata", "backend.c.type", "float");
             if (T.startsWith ("int")  &&  T.length () > 3)
             {
                 T = "int";
-                Backend.err.get ().println ("WARNING: Only supported integer type is 'int', which is assumed to be 32-bit.");
+                Backend.err.get ().println ("WARNING: Only supported integer type is 'int', which is assumed to be signed 32-bit.");
             }
             if (! T.equals ("int")  &&  ! T.equals ("double")  &&  ! T.equals ("float"))
             {
@@ -1078,11 +1078,11 @@ public class JobC extends Thread
         //   Zero out members
         for (Variable v : bed.globalMembers)
         {
-            result.append ("  " + mangle (v) + zero (v) + ";\n");
+            result.append ("  " + zero (mangle (v), v) + ";\n");
         }
         for (Variable v : bed.globalBufferedExternal)
         {
-            result.append ("  " + mangle ("next_", v) + clearAccumulator (v, context) + ";\n");
+            result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
         }
         if (! bed.globalFlagType.isEmpty ())
         {
@@ -1107,7 +1107,7 @@ public class JobC extends Thread
         //   clear variables that may be written externally before first finalize()
         for (Variable v : bed.globalBufferedExternalWrite)
         {
-            result.append ("  " + mangle ("next_", v) + clearAccumulator (v, context) + ";\n");
+            result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
         }
         //   create instances
         if (bed.n != null)
@@ -1203,7 +1203,7 @@ public class JobC extends Thread
             }
             for (Variable v : bed.globalBufferedExternalWrite)
             {
-                result.append ("  " + mangle ("next_", v) + clearAccumulator (v, context) + ";\n");
+                result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
             }
 
             // Return value is generally ignored, except for top-level population.
@@ -1316,7 +1316,7 @@ public class JobC extends Thread
             }
             for (Variable v : bed.globalBufferedExternalWriteDerivative)
             {
-                result.append ("  " + mangle ("next_", v) + clearAccumulator (v, context) + ";\n");
+                result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
             }
             result.append ("};\n");
             result.append ("\n");
@@ -1339,7 +1339,7 @@ public class JobC extends Thread
             for (Variable v : bed.globalBufferedExternalWriteDerivative)
             {
                 result.append ("  preserve->" + mangle ("next_", v) + " = " + mangle ("next_", v) + ";\n");
-                result.append ("  " + mangle ("next_", v) + clearAccumulator (v, context) + ";\n");
+                result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
             }
             result.append ("};\n");
             result.append ("\n");
@@ -1724,7 +1724,7 @@ public class JobC extends Thread
             result.append ("{\n");
             for (Variable v : bed.localMembers)
             {
-                result.append ("  " + mangle (v) + zero (v) + ";\n");
+                result.append ("  " + zero (mangle (v), v) + ";\n");
             }
             result.append ("}\n");
             result.append ("\n");
@@ -1825,7 +1825,7 @@ public class JobC extends Thread
 
             for (Variable v : bed.localBufferedExternal)
             {
-                result.append ("  " + mangle ("next_", v) + clearAccumulator (v, context) + ";\n");
+                result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
             }
             for (EventTarget et : bed.eventTargets)
             {
@@ -1916,7 +1916,7 @@ public class JobC extends Thread
             // clear variables that may be written externally before first finalize()
             for (Variable v : bed.localBufferedExternalWrite)
             {
-                result.append ("  " + mangle ("next_", v) + clearAccumulator (v, context) + ";\n");
+                result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
             }
 
             // instance counting
@@ -2125,7 +2125,7 @@ public class JobC extends Thread
             }
             for (Variable v : bed.localBufferedExternalWrite)
             {
-                result.append ("  " + mangle ("next_", v) + clearAccumulator (v, context) + ";\n");
+                result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
             }
 
             if (bed.type != null)
@@ -2274,7 +2274,7 @@ public class JobC extends Thread
             }
             for (Variable v : bed.localBufferedExternalWriteDerivative)
             {
-                result.append ("  " + mangle ("next_", v) + clearAccumulator (v, context) + ";\n");
+                result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
             }
             // contained populations
             for (EquationSet e : s.parts)
@@ -2304,7 +2304,7 @@ public class JobC extends Thread
                 for (Variable v : bed.localBufferedExternalWriteDerivative)
                 {
                     result.append ("  preserve->" + mangle ("next_", v) + " = " + mangle ("next_", v) + ";\n");
-                    result.append ("  " + mangle ("next_", v) + clearAccumulator (v, context) + ";\n");
+                    result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
                 }
             }
             for (EquationSet e : s.parts)
@@ -2811,20 +2811,20 @@ public class JobC extends Thread
                     {
                         case Variable.ADD:
                             result.append (" += " + buffered + ";\n");
-                            result.append ("  " + buffered + zero (v) + ";\n");
+                            result.append ("  " + zero (buffered, v) + ";\n");
                             break;
                         case Variable.MULTIPLY:
                         case Variable.DIVIDE:
                             result.append (" *= " + buffered + ";\n");
-                            result.append ("  " + buffered + clear (v, 1, context) + ";\n");
+                            result.append ("  " + clear (buffered, v, 1, context) + ";\n");
                             break;
                         case Variable.MIN:
                             result.append (" = min (" + current + ", " + buffered + ");\n");  // TODO: Write elementwise min() and max() for matrices.
-                            result.append ("  " + buffered + clear (v, Double.POSITIVE_INFINITY, context) + ";\n");
+                            result.append ("  " + clear (buffered, v, Double.POSITIVE_INFINITY, context) + ";\n");
                             break;
                         case Variable.MAX:
                             result.append (" = max (" + current + ", " + buffered + ");\n");
-                            result.append ("  " + buffered + clear (v, Double.NEGATIVE_INFINITY, context) + ";\n");
+                            result.append ("  " + clear (buffered, v, Double.NEGATIVE_INFINITY, context) + ";\n");
                             break;
                         default:  // REPLACE
                             result.append (" = " + buffered + ";\n");
@@ -3549,11 +3549,11 @@ public class JobC extends Thread
         return T;
     }
 
-    public static String zero (Variable v) throws Exception
+    public static String zero (String name, Variable v) throws Exception
     {
-        if      (v.type instanceof Scalar) return " = 0";
-        else if (v.type instanceof Matrix) return ".clear ()";
-        else if (v.type instanceof Text  ) return ".clear ()";
+        if      (v.type instanceof Scalar) return name + " = 0";
+        else if (v.type instanceof Matrix) return "fl::clear (" + name + ")";
+        else if (v.type instanceof Text  ) return name + ".clear ()";
         else
         {
             Backend.err.get ().println ("Unknown Type");
@@ -3561,12 +3561,12 @@ public class JobC extends Thread
         }
     }
 
-    public static String clear (Variable v, double value, RendererC context) throws Exception
+    public static String clear (String name, Variable v, double value, RendererC context) throws Exception
     {
         String p = context.print (value, v.exponent);
-        if      (v.type instanceof Scalar) return " = " + p;
-        else if (v.type instanceof Matrix) return ".clear (" + p + ")";
-        else if (v.type instanceof Text  ) return ".clear (" + p + ")";
+        if      (v.type instanceof Scalar) return name + " = " + p;
+        else if (v.type instanceof Matrix) return "fl::clear (" + name + ", " + p + ")";
+        else if (v.type instanceof Text  ) return name + ".clear ()";
         else
         {
             Backend.err.get ().println ("Unknown Type");
@@ -3574,16 +3574,16 @@ public class JobC extends Thread
         }
     }
 
-    public static String clearAccumulator (Variable v, RendererC context) throws Exception
+    public static String clearAccumulator (String name, Variable v, RendererC context) throws Exception
     {
         switch (v.assignment)
         {
             case Variable.MULTIPLY:
-            case Variable.DIVIDE:   return clear (v, 1, context);
-            case Variable.MIN:      return clear (v, Double.POSITIVE_INFINITY, context);
-            case Variable.MAX:      return clear (v, Double.NEGATIVE_INFINITY, context);
+            case Variable.DIVIDE:   return clear (name, v, 1, context);
+            case Variable.MIN:      return clear (name, v, Double.POSITIVE_INFINITY, context);
+            case Variable.MAX:      return clear (name, v, Double.NEGATIVE_INFINITY, context);
             case Variable.ADD:
-            default:                return zero (v);
+            default:                return zero (name, v);
         }
     }
 

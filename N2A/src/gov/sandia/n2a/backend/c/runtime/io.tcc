@@ -5,6 +5,7 @@
 #include "io.h"
 
 #include <fstream>
+#include <stdlib.h>
 
 
 // class IteratorSkip --------------------------------------------------------
@@ -185,6 +186,26 @@ MatrixInput<T>::getIterator ()
 
 std::vector<Holder *> matrixMap;
 
+template<class T> T elementFromString (const String & element);
+
+template<>
+double elementFromString (const String & element)
+{
+    return atof (element.c_str ());
+}
+
+template<>
+float elementFromString (const String & element)
+{
+    return (float) atof (element.c_str ());
+}
+
+template<>
+int elementFromString (const String & element)
+{
+    return atoi (element.c_str ());
+}
+
 template<class T>
 MatrixInput<T> *
 matrixHelper (const String & fileName, MatrixInput<T> * oldHandle)
@@ -226,17 +247,118 @@ matrixHelper (const String & fileName, MatrixInput<T> * oldHandle)
         }
         else  // Dense matrix
         {
-            handle->A = new fl::Matrix<T>;
+            // TODO: This version is inefficient. Copy code from java implementation.
+
             // Re-open file to ensure that we get the first line.
             ifs.close ();
             ifs.open (fileName.c_str ());
-            ifs >> (*handle->A);
+
+            std::vector<std::vector<T> > temp;
+            int columns = 0;
+            bool transpose = false;
+
+            // Scan for opening "["
+            char token;
+            do
+            {
+                ifs.get (token);
+                if (token == '~') transpose = true;
+            }
+            while (token != '['  &&  ifs.good ());
+
+            // Read rows until closing "]"
+            String line;
+            bool comment = false;
+            bool done = false;
+            while (ifs.good ()  &&  ! done)
+            {
+                ifs.get (token);
+
+                bool processLine = false;
+                switch (token)
+                {
+                    case '\r':
+                        break;  // ignore CR characters
+                    case '#':
+                        comment = true;
+                        break;
+                    case '\n':
+                        comment = false;
+                    case ';':
+                        if (! comment) processLine = true;
+                        break;
+                    case ']':
+                        if (! comment)
+                        {
+                            done = true;
+                            processLine = true;
+                        }
+                        break;
+                    default:
+                        if (! comment) line += token;
+                }
+
+                if (processLine)
+                {
+                    std::vector<T> row;
+                    String element;
+                    line.trim ();
+                    while (line.size ())
+                    {
+                        int position = line.find_first_of (", \t");
+                        element = line.substr (0, position);
+                        row.push_back (elementFromString<T> (element));
+                        if (position == String::npos) break;
+                        line = line.substr (position);
+                        line.trim ();
+                    }
+                    int c = row.size ();
+                    if (c)
+                    {
+                        temp.push_back (row);
+                        columns = std::max (columns, c);
+                    }
+                    line.clear ();
+                }
+            }
+
+            // Assign elements to A.
+            const int rows = temp.size ();
+            if (transpose)
+            {
+                fl::Matrix<T> * A = new fl::Matrix<T> (columns, rows);
+                handle->A = A;
+                clear (*A);
+                for (int r = 0; r < rows; r++)
+                {
+                    std::vector<T> & row = temp[r];
+                    for (int c = 0; c < row.size (); c++)
+                    {
+                        (*A)(c,r) = row[c];
+                    }
+                }
+            }
+            else
+            {
+                fl::Matrix<T> * A = new fl::Matrix<T> (rows, columns);
+                handle->A = A;
+                clear (*A);
+                for (int r = 0; r < rows; r++)
+                {
+                    std::vector<T> & row = temp[r];
+                    for (int c = 0; c < row.size (); c++)
+                    {
+                        (*A)(r,c) = row[c];
+                    }
+                }
+            }
         }
-        if (handle->rows () == 0  ||  handle->columns () == 0)
+        if (handle->A->rows () == 0  ||  handle->A->columns () == 0)
         {
             std::cerr << "Ill-formed matrix in file: " << fileName << std::endl;
-            handle->A->resize (1, 1);  // fallback matrix
-            handle->A->clear ();       // set to 0
+            delete handle->A;
+            handle->A = new fl::Matrix<T> (1, 1);
+            clear (*handle->A); // set to 0
         }
     }
     return handle;

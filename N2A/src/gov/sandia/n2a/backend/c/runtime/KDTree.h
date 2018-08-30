@@ -223,19 +223,16 @@ public:
 
     void set (std::vector<KDTreeEntry<T> *> & data)
     {
-        int dimensions = data[0]->rows ();
-        lo.resize (dimensions);
-        hi.resize (dimensions);
-        lo.clear ( INFINITY);
-        hi.clear (-INFINITY);
+        fl::clear (lo,  INFINITY);
+        fl::clear (hi, -INFINITY);
 
         typename std::vector<KDTreeEntry<T> *>::iterator t = data.begin ();
         for (; t != data.end (); t++)
         {
-            T * a = &(**t)[0];
-            T * l = &lo[0];
-            T * h = &hi[0];
-            T * end = l + dimensions;
+            T * a = (*t)->base ();
+            T * l = lo.base ();
+            T * h = hi.base ();
+            T * end = l + 3;  // 3 dimensions
             while (l < end)
             {
                 *l = std::min (*l, *a);

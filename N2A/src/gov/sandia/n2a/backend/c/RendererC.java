@@ -11,7 +11,6 @@ import gov.sandia.n2a.language.AccessElement;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.BuildMatrix;
 import gov.sandia.n2a.language.Constant;
-import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Type;
@@ -115,6 +114,18 @@ public class RendererC extends Renderer
             if (useExponent) result.append (", " + a.exponentNext + ", " + l.exponentNext + ")");
             return true;
         }
+        if (op instanceof Norm)
+        {
+            Norm n = (Norm) op;
+            Operator A = n.operands[0];
+            result.append ("norm (");
+            A.render (this);
+            result.append (", ");
+            n.operands[1].render (this);
+            if (useExponent) result.append (", " + A.exponentNext + ", " + n.exponentNext);
+            result.append (")");
+            return true;
+        }
         if (op instanceof Power)
         {
             Power p = (Power) op;
@@ -144,19 +155,6 @@ public class RendererC extends Renderer
             result.append ("tan (");
             a.render (this);
             if (useExponent) result.append (", " + a.exponentNext + ", " + t.exponentNext);
-            result.append (")");
-            return true;
-        }
-        if (op instanceof Norm)
-        {
-            Norm n = (Norm) op;
-            Operator A = n.operands[1];
-            boolean needParens = ! (A instanceof Function);
-            if (needParens) result.append ("(");
-            A.render (this);
-            if (needParens) result.append (")");
-            result.append (".norm (");
-            n.operands[0].render (this);
             result.append (")");
             return true;
         }
