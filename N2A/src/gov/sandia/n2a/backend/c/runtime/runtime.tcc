@@ -135,13 +135,13 @@ gaussian (int sigma)
 #endif
 
 template<class T>
-Vector3<T>
+MatrixFixed<T,3,1>
 grid (int i, int nx, int ny, int nz)
 {
     int sx = ny * nz;  // stride x
 
     // compute xyz in stride order
-    Vector3<T> result;
+    MatrixFixed<T,3,1> result;
     result[0] = ((i / sx) + 0.5f) / nx;  // (i / sx) is an integer operation, so remainder is truncated.
     i %= sx;
     result[1] = ((i / nz) + 0.5f) / ny;
@@ -150,13 +150,13 @@ grid (int i, int nx, int ny, int nz)
 }
 
 template<class T>
-Vector3<T>
+MatrixFixed<T,3,1>
 gridRaw (int i, int nx, int ny, int nz)
 {
     int sx = ny * nz;  // stride x
 
     // compute xyz in stride order
-    Vector3<T> result;
+    MatrixFixed<T,3,1> result;
     result[0] = i / sx;
     i %= sx;
     result[1] = i / nz;
@@ -333,7 +333,7 @@ Part<T>::getCount (int i)
 
 template<class T>
 void
-Part<T>::getProject (int i, Vector3<T> & xyz)
+Part<T>::getProject (int i, MatrixFixed<T,3,1> & xyz)
 {
     getPart (i)->getXYZ (xyz);
 }
@@ -368,7 +368,7 @@ Part<T>::getP ()
 
 template<class T>
 void
-Part<T>::getXYZ (Vector3<T> & xyz)
+Part<T>::getXYZ (MatrixFixed<T,3,1> & xyz)
 {
     xyz[0] = 0;
     xyz[1] = 0;
@@ -606,15 +606,15 @@ ConnectPopulation<T>::prepareNN ()
     if (radius > 0) NN->radius = radius;
     //else NN->radius is INFINITY
 
-    entries = new KDTreeEntry<T>[size];
-    std::vector<KDTreeEntry<T> *> pointers;
+    entries = new typename KDTree<T>::Entry[size];
+    std::vector<typename KDTree<T>::Entry *> pointers;
     pointers.reserve (size);
     for (int i = 0; i < size; i++)
     {
         p = (*instances)[i];
         if (! p) continue;
 
-        KDTreeEntry<T> & e = entries[i];
+        typename KDTree<T>::Entry & e = entries[i];
         e.part = p;
         // c should already be assigned by caller, but not via setProbe()
         c->setPart (index, p);
@@ -766,12 +766,12 @@ ConnectPopulationNN<T>::reset (bool newOnly)
     this->newOnly = newOnly;
     if (this->NN)
     {
-        std::vector<KDTreeEntry<T> *> result;
+        std::vector<typename KDTree<T>::Entry *> result;
         this->NN->find (*this->xyz, result);
         this->count = result.size ();
         this->filtered.resize (this->count);
         int j = 0;
-        for (KDTreeEntry<T> * e : result) this->filtered[j++] = e->part;
+        for (auto e : result) this->filtered[j++] = e->part;
         this->i = 0;
     }
     else
@@ -1039,7 +1039,7 @@ Population<T>::getIteratorsNN ()
     if (spatialFiltering)
     {
         // Create shared $xyz value
-        Vector3<T> * xyz = new Vector3<T>;
+        MatrixFixed<T,3,1> * xyz = new MatrixFixed<T,3,1>;
         for (int i = 0; i < count; i++) iterators[i]->xyz = xyz;
 
         // Ensure the innermost iterator be the one that best defines C.$xyz

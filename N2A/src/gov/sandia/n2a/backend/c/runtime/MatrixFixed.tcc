@@ -90,6 +90,14 @@ MatrixFixed<T,R,C>::MatrixFixed ()
 }
 
 template<class T, int R, int C>
+MatrixFixed<T,R,C>::MatrixFixed (std::initializer_list<T> elements)
+{
+    T * d = data[0];
+    for (auto e : elements) *d++ = e;
+    // No guard against overrun or underrun. Of the two, overrun is worse.
+}
+
+template<class T, int R, int C>
 MatrixFixed<T,R,C>::MatrixFixed (const MatrixAbstract<T> & that)
 {
     int h = std::min (R, that.rows ());

@@ -427,9 +427,17 @@ public class JobC extends Thread
                         int cols = A.columns ();
                         String matrixName = "Matrix" + matrixNames.size ();
                         matrixNames.put (op, matrixName);
-                        if (rows == 3  &&  cols == 1) result.append ("Vector3 " + matrixName + " = Matrix<" + T + ">");
-                        else                          result.append ("Matrix<" + T + "> " + matrixName);
-                        result.append (" (\"" + A + "\");\n");
+                        result.append ("MatrixFixed<" + T + "," + rows + "," + cols + ">" + matrixName + " = {");
+                        String initializer = "";
+                        for (int c = 0; c < cols; c++)
+                        {
+                            for (int r = 0; r < rows; r++)
+                            {
+                                initializer += A.get (r, c) + ", ";
+                            }
+                        }
+                        if (initializer.length () > 2) initializer = initializer.substring (0, initializer.length () - 2);
+                        result.append (initializer + "};\n");
                     }
                     return false;  // Don't try to descend tree from here
                 }
@@ -891,7 +899,7 @@ public class JobC extends Thread
         {
             if (bed.xyz != null)
             {
-                result.append ("  virtual void getXYZ (Vector3<" + T + "> & xyz);\n");
+                result.append ("  virtual void getXYZ (MatrixFixed<" + T + ",3,1> & xyz);\n");
             }
         }
         else
@@ -902,7 +910,7 @@ public class JobC extends Thread
             }
             if (bed.hasProject)
             {
-                result.append ("  virtual void getProject (int i, Vector3<" + T + "> & xyz);\n");
+                result.append ("  virtual void getProject (int i, MatrixFixed<" + T + ",3,1> & xyz);\n");
             }
             result.append ("  virtual void setPart (int i, Part<" + T + "> * part);\n");
             result.append ("  virtual Part<" + T + "> * getPart (int i);\n");
@@ -2461,7 +2469,7 @@ public class JobC extends Thread
         // Unit getProject
         if (bed.hasProject)
         {
-            result.append ("void " + ns + "getProject (int i, Vector3<" + T + "> & xyz)\n");
+            result.append ("void " + ns + "getProject (int i, MatrixFixed<" + T + ",3,1> & xyz)\n");
             result.append ("{\n");
 
             // $project is evaluated similar to $p. The phase is $init&&!$live (eventually replace with $connect)
@@ -2660,7 +2668,7 @@ public class JobC extends Thread
             Variable xyz = s.find (new Variable ("$xyz", 0));
             if (xyz != null)
             {
-                result.append ("void " + ns + "getXYZ (Vector3<" + T + "> & xyz)\n");
+                result.append ("void " + ns + "getXYZ (MatrixFixed<" + T + ",3,1> & xyz)\n");
                 result.append ("{\n");
                 // $xyz is either stored, "temporary", or "constant"
                 // If "temporary", then we compute it on the spot.
@@ -3352,8 +3360,7 @@ public class JobC extends Thread
 
                     String matrixName = "Matrix" + matrixNames.size ();
                     matrixNames.put (m, matrixName);
-                    if (rows == 3  &&  cols == 1) context.result.append (pad + "Vector3<" + T + "> " + matrixName + ";\n");
-                    else                          context.result.append (pad + "Matrix<" + T + "> " + matrixName + " (" + rows + ", " + cols + ");\n");
+                    context.result.append (pad + "MatrixFixed<" + T + "," + rows + "," + cols + "> " + matrixName + ";\n");
                     for (int r = 0; r < rows; r++)
                     {
                         if (cols == 1)
@@ -3538,8 +3545,7 @@ public class JobC extends Thread
         if (v.type instanceof Matrix)
         {
             Matrix m = (Matrix) v.type;
-            if (m.columns () == 1  &&  m.rows () == 3) return "Vector3<" + T + ">";
-            return "Matrix<" + T + ">";
+            return "MatrixFixed<" + T + "," + m.rows () + "," + m.columns () + ">";
         }
         if (v.type instanceof Text) return "String";
         return T;

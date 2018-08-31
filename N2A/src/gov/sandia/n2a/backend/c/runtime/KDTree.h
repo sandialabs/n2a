@@ -23,19 +23,7 @@ the U.S. Government retains certain rights in this software.
 #include <limits.h>
 
 
-template<class T>
-class Vector3 : public MatrixFixed<T,3,1>
-{
-};
-
 template<class T> class Part;
-
-template<class T>
-class KDTreeEntry : public Vector3<T>
-{
-public:
-    Part<T> * part;
-};
 
 template<class T>
 class KDTree
@@ -43,10 +31,18 @@ class KDTree
 public:
     // Note: All the inner classes are defined first, then the main class members come at the bottom of this file.
 
+    typedef MatrixFixed<T,3,1> Vector3;
+
+    class Entry : public Vector3
+    {
+    public:
+        Part<T> * part;
+    };
+
     class Node;
 
-    typedef std::pair<T, Node *>           PairNode;
-    typedef std::pair<T, KDTreeEntry<T> *> PairEntry;
+    typedef std::pair<T, Node *>  PairNode;
+    typedef std::pair<T, Entry *> PairEntry;
 
     class Reverse
     {
@@ -70,9 +66,9 @@ public:
     class Query
     {
     public:
-        int                k;
-        T                  radius;
-        const Vector3<T> * point;
+        int             k;
+        T               radius;
+        const Vector3 * point;
         std::priority_queue<PairEntry, std::vector<PairEntry>, Forward> sorted;
         std::priority_queue<PairNode,  std::vector<PairNode>,  Reverse> queue;
     };
@@ -152,7 +148,7 @@ public:
     class Leaf : public Node
     {
     public:
-        std::vector<KDTreeEntry<T> *> points;
+        std::vector<Entry *> points;
 
         virtual void search (T distance, Query & q) const
         {
@@ -160,7 +156,7 @@ public:
             int dimensions = points[0]->rows ();
             for (int i = 0; i < count; i++)
             {
-                KDTreeEntry<T> * p = points[i];
+                Entry * p = points[i];
 
                 // Measure distance using early-out method. Might save operations in
                 // high-dimensional spaces.
@@ -193,8 +189,8 @@ public:
     };
 
     Node * root;
-    Vector3<T> lo;
-    Vector3<T> hi;
+    Vector3 lo;
+    Vector3 hi;
 
     int bucketSize;
     int k;
@@ -223,12 +219,12 @@ public:
         root = 0;
     }
 
-    void set (std::vector<KDTreeEntry<T> *> & data)
+    void set (std::vector<Entry *> & data)
     {
         ::clear (lo,  INFINITY);
         ::clear (hi, -INFINITY);
 
-        typename std::vector<KDTreeEntry<T> *>::iterator t = data.begin ();
+        typename std::vector<Entry *>::iterator t = data.begin ();
         for (; t != data.end (); t++)
         {
             T * a = (*t)->base ();
@@ -248,7 +244,7 @@ public:
         root = construct (data);
     }
 
-    void find (const Vector3<T> & query, std::vector<KDTreeEntry<T> *> & result) const
+    void find (const Vector3 & query, std::vector<Entry *> & result) const
     {
         // Determine distance of query from bounding rectangle for entire tree
         int dimensions = query.rows ();
@@ -305,7 +301,7 @@ public:
 #   endif
 
     /// Recursively construct a tree that handles the given volume of points.
-    Node * construct (std::vector<KDTreeEntry<T> *> & points)
+    Node * construct (std::vector<Entry *> & points)
     {
         int count = points.size ();
         if (count == 0)
@@ -335,9 +331,9 @@ public:
             }
             sort (points, d);
             int cut = count / 2;
-            typename std::vector<KDTreeEntry<T> *>::iterator b = points.begin ();
-            typename std::vector<KDTreeEntry<T> *>::iterator c = b + cut;
-            typename std::vector<KDTreeEntry<T> *>::iterator e = points.end ();
+            typename std::vector<Entry *>::iterator b = points.begin ();
+            typename std::vector<Entry *>::iterator c = b + cut;
+            typename std::vector<Entry *>::iterator e = points.end ();
 
             Branch * result = new Branch;
             result->dimension = d;
@@ -346,7 +342,7 @@ public:
             result->mid = (**c)[d];
 
             hi[d] = result->mid;
-            std::vector<KDTreeEntry<T> *> tempPoints (b, c);
+            std::vector<Entry *> tempPoints (b, c);
             result->lowNode = construct (tempPoints);
             hi[d] = result->hi;
 
@@ -361,11 +357,11 @@ public:
     }
 
     /// Rearrange points so they are in ascending order along the given dimension.
-    void sort (std::vector<KDTreeEntry<T> *> & points, int dimension)
+    void sort (std::vector<Entry *> & points, int dimension)
     {
         // Effectively we do a heap sort, since priority_queue is typically implemented with a heap structure.
         std::priority_queue<PairEntry, std::vector<PairEntry>, Forward> sorted;
-        typename std::vector<KDTreeEntry<T> *>::iterator it = points.begin ();
+        typename std::vector<Entry *>::iterator it = points.begin ();
         for (; it != points.end (); it++)
         {
             sorted.push (std::make_pair ((**it)[dimension], *it));

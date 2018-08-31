@@ -55,8 +55,8 @@ template<class T, int R, int C> MatrixFixed<T,R,1> gaussian (const MatrixFixed<T
     return sigma * temp;
 }
 
-template<class T> Vector3<T> grid    (int i, int nx = 1, int ny = 1, int nz = 1);
-template<class T> Vector3<T> gridRaw (int i, int nx = 1, int ny = 1, int nz = 1);
+template<class T> MatrixFixed<T,3,1> grid    (int i, int nx = 1, int ny = 1, int nz = 1);
+template<class T> MatrixFixed<T,3,1> gridRaw (int i, int nx = 1, int ny = 1, int nz = 1);
 
 
 // Simulation classes --------------------------------------------------------
@@ -155,17 +155,17 @@ public:
     virtual bool isFree          (); ///< @return true if the part is ready to use, false if the we are still waiting on other parts that reference us.
 
     // Connection-specific accessors
-    virtual void      setPart    (int i, Part<T> * part);   ///< Assign the instance of population i referenced by this connection.
-    virtual Part<T> * getPart    (int i);                   ///< @return Pointer to the instance of population i.
-    virtual int       getCount   (int i);                   ///< @return Number of connections of this type attached to the part indexed by i.
-    virtual void      getProject (int i, Vector3<T> & xyz); ///< Determine position of endpoint i as projected into this connection's space. Default is the endpoint's own $xyz.
-    virtual int       mapIndex   (int i, int rc);           ///< Converts matrix index to population $index. Generally, rows map to endpoint 0 and columns to endpoint 1.
-    virtual bool      getNewborn ();                        ///< @return The value of the newborn flag (or false if it doesn't exist in this part). Unlike the above, this is a direct function of the endpoint.
+    virtual void      setPart    (int i, Part<T> * part);           ///< Assign the instance of population i referenced by this connection.
+    virtual Part<T> * getPart    (int i);                           ///< @return Pointer to the instance of population i.
+    virtual int       getCount   (int i);                           ///< @return Number of connections of this type attached to the part indexed by i.
+    virtual void      getProject (int i, MatrixFixed<T,3,1> & xyz); ///< Determine position of endpoint i as projected into this connection's space. Default is the endpoint's own $xyz.
+    virtual int       mapIndex   (int i, int rc);                   ///< Converts matrix index to population $index. Generally, rows map to endpoint 0 and columns to endpoint 1.
+    virtual bool      getNewborn ();                                ///< @return The value of the newborn flag (or false if it doesn't exist in this part). Unlike the above, this is a direct function of the endpoint.
 
     // Accessors for $variables
-    virtual T    getLive ();                 ///< @return 1 if we are in normal simulation. 0 if we have died. Default is 1.
-    virtual T    getP    ();                 ///< Default is 1 (always create)
-    virtual void getXYZ  (Vector3<T> & xyz); ///< Default is [0;0;0].
+    virtual T    getLive ();                         ///< @return 1 if we are in normal simulation. 0 if we have died. Default is 1.
+    virtual T    getP    ();                         ///< Default is 1 (always create)
+    virtual void getXYZ  (MatrixFixed<T,3,1> & xyz); ///< Default is [0;0;0].
 
     // Events
     virtual bool eventTest  (int i);
@@ -259,11 +259,11 @@ public:
     T   radius;
 
     // Nearest-neighbor filtering
-    T                rank;        ///< heuristic value indicating how good a candidate this endpoint is to determine C.$xyz
-    bool             explicitXYZ; ///< c explicitly defines $xyz, which takes precedence over any $project value
-    Vector3<T> *     xyz;         ///< C.$xyz (that is, probe $xyz), shared by all iterators
-    KDTree<T> *      NN;          ///< "nearest neighbor" search class
-    KDTreeEntry<T> * entries;     ///< A dynamically-allocated array
+    T                             rank;        ///< heuristic value indicating how good a candidate this endpoint is to determine C.$xyz
+    bool                          explicitXYZ; ///< c explicitly defines $xyz, which takes precedence over any $project value
+    typename KDTree<T>::Vector3 * xyz;         ///< C.$xyz (that is, probe $xyz), shared by all iterators
+    KDTree<T> *                   NN;          ///< "nearest neighbor" search class
+    typename KDTree<T>::Entry *   entries;     ///< A dynamically-allocated array
 
     ConnectPopulation (int index);
     virtual ~ConnectPopulation ();

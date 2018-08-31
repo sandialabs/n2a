@@ -7,14 +7,15 @@ using namespace std;
 
 // General functions ---------------------------------------------------------
 
-template class MatrixFixed<n2a_T,3,1>;  // Same as Vector3<T>
+template class MatrixFixed<n2a_T,3,1>;
 
 template n2a_T          uniform ();
 template n2a_T          uniform (n2a_T sigma);
 template n2a_T          gaussian ();
 template n2a_T          gaussian (n2a_T sigma);
-template Vector3<n2a_T> grid    (int i, int nx, int ny, int nz);
-template Vector3<n2a_T> gridRaw (int i, int nx, int ny, int nz);
+
+template MatrixFixed<n2a_T,3,1> grid    (int i, int nx, int ny, int nz);
+template MatrixFixed<n2a_T,3,1> gridRaw (int i, int nx, int ny, int nz);
 
 
 // I/O -----------------------------------------------------------------------

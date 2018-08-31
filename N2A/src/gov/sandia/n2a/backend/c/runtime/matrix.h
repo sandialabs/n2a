@@ -165,6 +165,7 @@ public:
     T data[C][R];
 
     MatrixFixed ();
+    MatrixFixed (std::initializer_list<T> elements);  ///< In column-major order
     MatrixFixed (const MatrixAbstract<T> & that);
     virtual uint32_t classID () const;
 
