@@ -156,8 +156,7 @@ public class JobC extends Thread
         boolean changed = false;
         if (needRuntime)
         {
-            if (unpackRuntime (JobC.class, runtimeDir, "",   "fixedpoint.cc", "fixedpoint.h", "io.cc", "io.h", "io.tcc", "KDTree.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "MatrixSparse.tcc", "nosys.h", "runtime.cc", "runtime.h", "runtime.tcc", "String.h")) changed = true;
-            if (unpackRuntime (JobC.class, runtimeDir, "fl", "pointer.h")) changed = true;
+            if (unpackRuntime (JobC.class, runtimeDir, "fixedpoint.cc", "fixedpoint.h", "io.cc", "io.h", "io.tcc", "KDTree.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "MatrixSparse.tcc", "nosys.h", "pointer.h", "runtime.cc", "runtime.h", "runtime.tcc", "String.h")) changed = true;
             needRuntime = false;   // Stop checking files for this session.
         }
 
@@ -207,18 +206,15 @@ public class JobC extends Thread
         }
     }
 
-    public boolean unpackRuntime (Class<?> from, Path runtimeDir, String suffix, String... names) throws Exception
+    public boolean unpackRuntime (Class<?> from, Path runtimeDir, String... names) throws Exception
     {
         boolean changed = false;
-        Path dir = runtimeDir.resolve (suffix);
-        Files.createDirectories (dir);
-        String root = "runtime/";
-        if (! suffix.isEmpty ()) root += suffix + "/";
+        Files.createDirectories (runtimeDir);
         for (String s : names)
         {
-            URL url = from.getResource (root + s);
+            URL url = from.getResource ("runtime/" + s);
             long resourceModified = url.openConnection ().getLastModified ();
-            Path f = dir.resolve (s);
+            Path f = runtimeDir.resolve (s);
             long fileModified = HostSystem.lastModified (f);
             if (resourceModified > fileModified)
             {
