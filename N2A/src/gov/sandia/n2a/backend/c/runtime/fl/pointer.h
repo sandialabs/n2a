@@ -44,6 +44,8 @@ namespace fl
   class Pointer
   {
   public:
+	typedef std::atomic_uint RefCount;
+
 	Pointer ()
 	{
 	  memory = 0;
@@ -57,7 +59,7 @@ namespace fl
 
 	Pointer (void * that, ptrdiff_t size = 0)
 	{
-	  memory = (Counts *) that;
+	  memory = (RefCount *) that;
 	  metaData = size;
 	}
 
@@ -98,7 +100,7 @@ namespace fl
 	void attach (void * that, ptrdiff_t size = 0)
 	{
 	  detach ();
-	  memory = (Counts *) that;
+	  memory = (RefCount *) that;
 	  metaData = size;
 	}
 
@@ -109,10 +111,7 @@ namespace fl
 		Pointer temp (that);  // force refcount up on memory block
 		if (that.memory == memory) detach ();  // the enemy is us...
 		ptrdiff_t size = temp.size ();
-		if (size < 0)
-		{
-			N2A_THROW ("Don't know size of block to copy");
-		}
+		if (size < 0) N2A_THROW ("Don't know size of block to copy");
 		grow (size);
 		memcpy (memory, temp.memory, size);
 	  }
@@ -140,10 +139,10 @@ namespace fl
 	{
 	  if (metaData < 0)
 	  {
-		if (memory[-1].size >= size) return;
+		if (-metaData >= size) return;
 		detach ();
 	  }
-	  else if (metaData >= size)  // note:  metaData >= 0 at this point
+	  else if (metaData >= size)
 	  {
 		return;
 	  }
@@ -152,25 +151,20 @@ namespace fl
 
 	void clear ()  // Erase block of memory
 	{
-	  if      (metaData < 0) memset (memory, 0, memory[-1].size);
-	  else if (metaData > 0) memset (memory, 0, metaData);
-	  else
-	  {
-		  N2A_THROW ("Don't know size of block to clear");
-	  }
+	  if (metaData == 0) N2A_THROW ("Don't know size of block to clear");
+	  memset (memory, 0, abs (metaData));
 	}
 
 	int32_t refcount () const
 	{
-	  if (metaData < 0) return memory[-1].refcount;
+	  if (metaData < 0) return memory[-1];
 	  return -1;
 	}
 
 	ptrdiff_t size () const
 	{
-	  if      (metaData < 0) return memory[-1].size;
-	  else if (metaData > 0) return metaData;
-	  return -1;
+	  if (metaData == 0) return -1;
+	  return abs (metaData);
 	}
 
 	template <class T>
@@ -198,11 +192,11 @@ namespace fl
 	{
 	  if (metaData < 0)
 	  {
-		if (--memory[-1].refcount == 0)
+		if (--memory[-1] == 0)
 		{
 		  // Technically, we should not use delete (memory - 1), because it was
 		  // allocated with malloc(), not new.
-		  (memory - 1)->~Counts ();  // placement dtor, in case atomic_uint needs destruction
+		  (memory - 1)->~RefCount ();  // placement dtor, in case atomic_uint needs destruction
 		  free (memory - 1);
 		}
 	  }
@@ -221,19 +215,18 @@ namespace fl
 	{
 	  memory = that.memory;
 	  metaData = that.metaData;
-	  if (metaData < 0) memory[-1].refcount++;
+	  if (metaData < 0) memory[-1]++;
 	}
 
 	void allocate (ptrdiff_t size)
 	{
-	  memory = (Counts *) malloc (sizeof (Counts) + size);
+	  memory = (RefCount *) malloc (sizeof (RefCount) + size);
 	  if (memory)
 	  {
 		memory = & memory[1];
-		new (memory - 1) Counts ();  // in case atomic_uint needs construction
-		memory[-1].refcount = 1;
-		memory[-1].size     = size;
-		metaData = -1;
+		new (memory - 1) RefCount ();  // in case atomic_uint needs construction
+		memory[-1] = 1;
+		metaData = -size;
 	  }
 	  else
 	  {
@@ -242,24 +235,19 @@ namespace fl
 	  }
 	}
 
-	struct Counts
-	{
-	  std::atomic_uint refcount;
-	  ptrdiff_t        size;  ///< Actual size of block, not including this structure. Partially redundant with metadata field.
-	};
-	Counts * memory;  ///< Pointer to block in heap. Must be offset and typecast to access managed data.
+	RefCount * memory;  ///< Pointer to block in heap. Must be offset and typecast to access managed data.
 
 	/**
 	   This field is partially redundant with Counts::size. It allows us
 	   to wrap blocks of memory owned by other code.
-	   metaData < 0 indicates memory is a special pointer we constructed.
-	   There is meta data associated with the pointer, and all "smart" pointer
-	   functions are available.  This is the only time that we can (and must)
-	   delete memory.
 	   metaData == 0 indicates either memory == 0 or we don't know how big the
-	   block is.
-	   metaData > 0 indicates the actual size of the block, and that we don't
-	   own it.
+	   block is. Otherwise, the absolute value of metaData gives the actual
+	   size of the memory block, not including the prepended refcount.
+	   metaData < 0 indicates memory is a special pointer we constructed.
+	   A refcount is associated with the pointer, and all "smart" pointer
+	   functions are available. This is the only time that we can (and must)
+	   delete memory.
+	   metaData > 0 indicates that we don't own the block.
 	**/
 	ptrdiff_t metaData;
 
