@@ -47,13 +47,9 @@ public:
     virtual ~MatrixAbstract ();
     virtual uint32_t classID () const = 0;  ///< @return A bitvector indicating all the classes to which this object can be cast.  Hack to avoid the cost of dynamic_cast.
 
-    // Structural functions
-    // These are the core functions in terms of which most other functions can
-    // be implemented.  They abstract away the actual storage structure of the matrix.
-    virtual T &  operator () (const int row, const int column) const = 0;  ///< Element accesss
-    virtual T &  operator [] (const int row) const;  ///< Element access, treating us as a vector.
-    virtual int  rows        () const = 0;
-    virtual int  columns     () const = 0;
+    virtual T & operator () (const int row, const int column) const = 0;  ///< Element accesss
+    virtual int rows        () const = 0;
+    virtual int columns     () const = 0;
 };
 
 template<class T> class Matrix;
@@ -69,7 +65,6 @@ template<class T> bool operator != (const MatrixAbstract<T> & A, const MatrixAbs
     return ! (A == B);
 }
 
-template<class T> Matrix<T> operator ^ (const MatrixAbstract<T> & A, const MatrixAbstract<T>  & B); ///< View both matrices as vectors and return cross product.  (Is there a better definition that covers 2D matrices?)
 template<class T> Matrix<T> operator & (const MatrixAbstract<T> & A, const MatrixAbstract<T>  & B); ///< Elementwise multiplication.  The prettiest name for this operator would be ".*", but that is not overloadable.
 template<class T> Matrix<T> operator * (const MatrixAbstract<T> & A, const MatrixAbstract<T>  & B); ///< Multiply matrices: this * B
 template<class T> Matrix<T> operator * (const MatrixAbstract<T> & A, const T scalar);               ///< Multiply each element by scalar
@@ -150,7 +145,7 @@ public:
     {
         return ((T *) data)[offset + column * strideC_ + row * strideR_];
     }
-    virtual T & operator [] (const int row) const  ///< Only works for the first column, unless rows == strideC.
+    T & operator [] (const int row) const  ///< Only works for the first column, unless rows == strideC.
     {
         return ((T *) data)[offset + row * strideR_];
     }
@@ -177,7 +172,7 @@ public:
     {
         return (T &) data[column][row];
     }
-    virtual T & operator [] (const int row) const
+    T & operator [] (const int row) const
     {
         return ((T *) data)[row];
     }
@@ -188,14 +183,25 @@ public:
     virtual int strideC () const;
 };
 
-template<class T>               MatrixFixed<T,2,2> operator ! (const MatrixFixed<T,2,2> & A);
-template<class T>               MatrixFixed<T,3,3> operator ! (const MatrixFixed<T,3,3> & A);
-template<class T, int R, int C> MatrixFixed<T,C,R> operator ~ (const MatrixFixed<T,R,C> & A);
-template<class T, int R, int C> MatrixFixed<T,R,C> operator * (const MatrixFixed<T,R,C> & A, const T scalar);
-template<class T, int R, int C> MatrixFixed<T,R,C> operator / (const MatrixFixed<T,R,C> & A, const T scalar);
-
-template<class T> T det (const MatrixFixed<T,2,2> & A);
+template<class T> T det (const MatrixFixed<T,2,2> & A);  ///< Subroutine for operator !
 template<class T> T det (const MatrixFixed<T,3,3> & A);
+
+template<class T>                      MatrixFixed<T,2,2> operator ! (const MatrixFixed<T,2,2> & A);
+template<class T>                      MatrixFixed<T,3,3> operator ! (const MatrixFixed<T,3,3> & A);
+template<class T, int R, int C>        MatrixFixed<T,C,R> operator ~ (const MatrixFixed<T,R,C> & A);
+template<class T, int R, int C>        MatrixFixed<T,R,C> operator & (const MatrixFixed<T,R,C> & A, const MatrixFixed<T,R,C> & B);
+template<class T, int R, int C, int O> MatrixFixed<T,R,C> operator * (const MatrixFixed<T,R,O> & A, const MatrixFixed<T,O,C> & B);
+template<class T, int R, int C>        MatrixFixed<T,R,C> operator * (const MatrixFixed<T,R,C> & A, const T scalar);
+template<class T, int R, int C>        MatrixFixed<T,R,C> operator * (const T scalar,               const MatrixFixed<T,R,C> & A) {return A * scalar;}
+template<class T, int R, int C>        MatrixFixed<T,R,C> operator / (const MatrixFixed<T,R,C> & A, const MatrixFixed<T,R,C> & B);
+template<class T, int R, int C>        MatrixFixed<T,R,C> operator / (const MatrixFixed<T,R,C> & A, const T scalar);
+template<class T, int R, int C>        MatrixFixed<T,R,C> operator / (const T scalar,               const MatrixFixed<T,R,C> & A);
+template<class T, int R, int C>        MatrixFixed<T,R,C> operator + (const MatrixFixed<T,R,C> & A, const MatrixFixed<T,R,C> & B);
+template<class T, int R, int C>        MatrixFixed<T,R,C> operator + (const MatrixFixed<T,R,C> & A, const T scalar);
+template<class T, int R, int C>        MatrixFixed<T,R,C> operator + (const T scalar,               const MatrixFixed<T,R,C> & A) {return A + scalar;}
+template<class T, int R, int C>        MatrixFixed<T,R,C> operator - (const MatrixFixed<T,R,C> & A, const MatrixFixed<T,R,C> & B);
+template<class T, int R, int C>        MatrixFixed<T,R,C> operator - (const MatrixFixed<T,R,C> & A, const T scalar);
+template<class T, int R, int C>        MatrixFixed<T,R,C> operator - (const T scalar,               const MatrixFixed<T,R,C> & A);
 
 /**
     Stores only nonzero elements.  Assumes that every column has at least

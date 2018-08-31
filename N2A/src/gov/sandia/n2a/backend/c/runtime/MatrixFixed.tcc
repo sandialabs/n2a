@@ -172,13 +172,72 @@ operator ~ (const MatrixFixed<T,R,C> & A)
 
 template<class T, int R, int C>
 MatrixFixed<T,R,C>
+operator & (const MatrixFixed<T,R,C> & A, const MatrixFixed<T,R,C> & B)
+{
+    MatrixFixed<T,R,C> result;
+    const T * a   = A.data[0];
+    const T * b   = B.data[0];
+    T *       r   = result.data[0];
+    T *       end = r + R * C;
+    while (r < end) *r++ = *a++ * *b++;
+    return result;
+}
+
+template<class T, int R, int C, int O>
+MatrixFixed<T,R,C>
+operator * (const MatrixFixed<T,R,O> & A, const MatrixFixed<T,O,C> & B)
+{
+    MatrixFixed<T,R,C> result;
+    const T * aa  = A.data[0];
+    const T * b   = B.data[0];
+    T *       r   = result.data[0];
+    T *       end = r + R * C;
+    while (r < end)
+    {
+        const T * a = aa;
+        T * columnEnd = r + R;
+        while (r < columnEnd)
+        {
+            register T element = (T) 0;
+            const T * i = a;
+            const T * j = b;
+            const T * rowEnd = j + O;
+            while (j != rowEnd)
+            {
+                element += (*i) * (*j);
+                i += R;
+                j++;
+            }
+            *r++ = element;
+            a++;
+        }
+        b += O;
+    }
+    return result;
+}
+
+template<class T, int R, int C>
+MatrixFixed<T,R,C>
 operator * (const MatrixFixed<T,R,C> & A, const T scalar)
 {
     MatrixFixed<T,R,C> result;
-    const T * i = A.data[0];
-    T * o       = result.data[0];
-    T * end     = o + R * C;
-    while (o < end) *o++ = *i++ * scalar;
+    const T * a   = A.data[0];
+    T *       r   = result.data[0];
+    T *       end = r + R * C;
+    while (r < end) *r++ = *a++ * scalar;
+    return result;
+}
+
+template<class T, int R, int C>
+MatrixFixed<T,R,C>
+operator / (const MatrixFixed<T,R,C> & A, const MatrixFixed<T,R,C> & B)
+{
+    MatrixFixed<T,R,C> result;
+    const T * a   = A.data[0];
+    const T * b   = B.data[0];
+    T *       r   = result.data[0];
+    T *       end = r + R * C;
+    while (r < end) *r++ = *a++ / *b++;
     return result;
 }
 
@@ -187,10 +246,84 @@ MatrixFixed<T,R,C>
 operator / (const MatrixFixed<T,R,C> & A, const T scalar)
 {
     MatrixFixed<T,R,C> result;
-    const T * i = A.data[0];
-    T * o       = result.data[0];
-    T * end     = o + R * C;
-    while (o < end) *o++ = *i++ / scalar;
+    const T * a   = A.data[0];
+    T *       r   = result.data[0];
+    T *       end = r + R * C;
+    while (r < end) *r++ = *a++ / scalar;
+    return result;
+}
+
+template<class T, int R, int C>
+MatrixFixed<T,R,C>
+operator / (const T scalar, const MatrixFixed<T,R,C> & A)
+{
+    MatrixFixed<T,R,C> result;
+    const T * a   = A.data[0];
+    T *       r   = result.data[0];
+    T *       end = r + R * C;
+    while (r < end) *r++ = scalar / *a++;
+    return result;
+}
+
+template<class T, int R, int C>
+MatrixFixed<T,R,C>
+operator + (const MatrixFixed<T,R,C> & A, const MatrixFixed<T,R,C> & B)
+{
+    MatrixFixed<T,R,C> result;
+    const T * a   = A.data[0];
+    const T * b   = B.data[0];
+    T *       r   = result.data[0];
+    T *       end = r + R * C;
+    while (r < end) *r++ = *a++ + *b++;
+    return result;
+}
+
+template<class T, int R, int C>
+MatrixFixed<T,R,C>
+operator + (const MatrixFixed<T,R,C> & A, const T scalar)
+{
+    MatrixFixed<T,R,C> result;
+    const T * a   = A.data[0];
+    T *       r   = result.data[0];
+    T *       end = r + R * C;
+    while (r < end) *r++ = *a++ + scalar;
+    return result;
+}
+
+template<class T, int R, int C>
+MatrixFixed<T,R,C>
+operator - (const MatrixFixed<T,R,C> & A, const MatrixFixed<T,R,C> & B)
+{
+    MatrixFixed<T,R,C> result;
+    const T * a   = A.data[0];
+    const T * b   = B.data[0];
+    T *       r   = result.data[0];
+    T *       end = r + R * C;
+    while (r < end) *r++ = *a++ - *b++;
+    return result;
+}
+
+template<class T, int R, int C>
+MatrixFixed<T,R,C>
+operator - (const MatrixFixed<T,R,C> & A, const T scalar)
+{
+    MatrixFixed<T,R,C> result;
+    const T * a   = A.data[0];
+    T *       r   = result.data[0];
+    T *       end = r + R * C;
+    while (r < end) *r++ = *a++ - scalar;
+    return result;
+}
+
+template<class T, int R, int C>
+MatrixFixed<T,R,C>
+operator - (const T scalar, const MatrixFixed<T,R,C> & A)
+{
+    MatrixFixed<T,R,C> result;
+    const T * a   = A.data[0];
+    T *       r   = result.data[0];
+    T *       end = r + R * C;
+    while (r < end) *r++ = scalar - *a++;
     return result;
 }
 

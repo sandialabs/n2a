@@ -15,13 +15,45 @@
 // General functions ---------------------------------------------------------
 // See the N2A language reference for details.
 
-template<class T> T          uniform ();
-template<class T> T          uniform (T sigma);
-template<class T> Matrix<T>  uniform (const MatrixAbstract<T> & sigma);
+template<class T> T                         uniform ();
+template<class T> T                         uniform (T sigma);
+template<class T, int R> MatrixFixed<T,R,1> uniform (const MatrixFixed<T,R,1> & sigma)
+{
+    MatrixFixed<T,R,1> result;
+    const T * s = sigma.base ();
+    T *       r = result.base ();
+    T *       end = r + R;
+    while (r < end) *r++ = uniform (*s++);
+    return result;
+}
+template<class T, int R, int C> MatrixFixed<T,R,1> uniform (const MatrixFixed<T,R,C> & sigma)
+{
+    MatrixFixed<T,C,1> temp;
+    T * t   = temp.base ();
+    T * end = t + C;
+    while (t < end) *t++ = uniform<T> ();
+    return sigma * temp;
+}
 
-template<class T> T          gaussian ();
-template<class T> T          gaussian (T sigma);
-template<class T> Matrix<T>  gaussian (const MatrixAbstract<T> & sigma);
+template<class T> T                         gaussian ();
+template<class T> T                         gaussian (T sigma);
+template<class T, int R> MatrixFixed<T,R,1> gaussian (const MatrixFixed<T,R,1> & sigma)
+{
+    MatrixFixed<T,R,1> result;
+    const T * s = sigma.base ();
+    T *       r = result.base ();
+    T *       end = r + R;
+    while (r < end) *r++ = gaussian (*s++);
+    return result;
+}
+template<class T, int R, int C> MatrixFixed<T,R,1> gaussian (const MatrixFixed<T,R,C> & sigma)
+{
+    MatrixFixed<T,C,1> temp;
+    T * t   = temp.base ();
+    T * end = t + C;
+    while (t < end) *t++ = gaussian<T> ();
+    return sigma * temp;
+}
 
 template<class T> Vector3<T> grid    (int i, int nx = 1, int ny = 1, int nz = 1);
 template<class T> Vector3<T> gridRaw (int i, int nx = 1, int ny = 1, int nz = 1);

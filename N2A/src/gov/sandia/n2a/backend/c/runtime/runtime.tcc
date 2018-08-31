@@ -26,32 +26,6 @@ uniform (T sigma)
     return sigma * rand () / RAND_MAX;
 }
 
-template<class T>
-Matrix<T>
-uniform (const MatrixAbstract<T> & sigma)
-{
-    int rows = sigma.rows ();
-    int cols = sigma.columns ();
-    if (cols == 1)
-    {
-        Matrix<T> result (rows);
-        for (int i = 0; i < rows; i++) result[i] = uniform (sigma(i,0));
-        return result;
-    }
-    else if (rows == 1)
-    {
-        Matrix<T> result (cols);
-        for (int i = 0; i < cols; i++) result[i] = uniform (sigma(0,i));
-        return result;
-    }
-    else
-    {
-        Matrix<T> temp (cols);
-        for (int i = 0; i < cols; i++) temp[i] = uniform<T> ();
-        return sigma * temp;
-    }
-}
-
 // Box-Muller method (polar variant) for Gaussian random numbers.
 template<class T>
 T
@@ -87,32 +61,6 @@ T
 gaussian (T sigma)
 {
     return sigma * gaussian<T> ();
-}
-
-template<class T>
-Matrix<T>
-gaussian (const MatrixAbstract<T> & sigma)
-{
-    int rows = sigma.rows ();
-    int cols = sigma.columns ();
-    if (cols == 1)
-    {
-        Matrix<T> result (rows);
-        for (int i = 0; i < rows; i++) result[i] = gaussian (sigma(i,0));
-        return result;
-    }
-    else if (rows == 1)
-    {
-        Matrix<T> result (cols);
-        for (int i = 0; i < cols; i++) result[i] = gaussian (sigma(0,i));
-        return result;
-    }
-    else
-    {
-        Matrix<T> temp (cols);
-        for (int i = 0; i < cols; i++) temp[i] = gaussian<T> ();
-        return sigma * temp;
-    }
 }
 
 #ifdef n2a_FP

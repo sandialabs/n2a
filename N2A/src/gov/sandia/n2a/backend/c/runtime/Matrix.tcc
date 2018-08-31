@@ -27,14 +27,6 @@ MatrixAbstract<T>::~MatrixAbstract ()
 }
 
 template<class T>
-T &
-MatrixAbstract<T>::operator [] (const int row) const
-{
-    const int h = rows ();
-    return (*this) (row / h, row % h);
-}
-
-template<class T>
 void
 clear (MatrixAbstract<T> & A, const T scalar)
 {
@@ -147,21 +139,6 @@ operator == (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
         }
     }
     return true;
-}
-
-template<class T>
-Matrix<T>
-operator ^ (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
-{
-    // This version is only good for 3 element vectors.  Need to choose
-    // a cross-product hack for higher dimensions
-
-    Matrix<T> result (3);
-    result[0] = A[1] * B[2] - A[2] * B[1];
-    result[1] = A[2] * B[0] - A[0] * B[2];
-    result[2] = A[0] * B[1] - A[1] * B[0];
-
-    return result;
 }
 
 template<class T>
