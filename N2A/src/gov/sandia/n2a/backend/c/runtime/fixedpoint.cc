@@ -37,7 +37,7 @@ exp (int a, int exponentResult)
     {
         int shift = 1 - exponentResult;  // FP_E exponent=1
         if (shift < 0) return FP_E >> -shift;
-        if (shift > 0) return FP_INF;  // +infinity; Up-shifting FP_E is nonsense, since it already uses all the bits.
+        if (shift > 0) return INFINITY;  // Up-shifting FP_E is nonsense, since it already uses all the bits.
         return FP_E;
     }
 
@@ -93,9 +93,9 @@ exp (int a, int exponentResult)
         }
         if (shift > 0)
         {
-            if (shift > FP_MSB) return FP_INF;
+            if (shift > FP_MSB) return INFINITY;
             temp <<= shift;
-            if (temp > FP_INF) return FP_INF;
+            if (temp > INFINITY) return INFINITY;
             return temp;
         }
         return temp;
@@ -110,7 +110,7 @@ exp (int a, int exponentResult)
         }
         if (shift > 0)
         {
-            if (shift > FP_MSB) return FP_INF;
+            if (shift > FP_MSB) return INFINITY;
             // Don't bother trapping overflow with 32-bit math. Our fixed-point analysis should keep numbers in range in any case.
             return result <<= shift;
         }
@@ -130,8 +130,8 @@ log (int a, int exponentA, int exponentResult)
 int
 log2 (int a, int exponentA, int exponentResult)
 {
-    if (a <  0) return FP_NAN;
-    if (a == 0) return -FP_INF;
+    if (a <  0) return NAN;
+    if (a == 0) return -INFINITY;
 
     // If a<1, then the result is -log2(1/a)
     bool negate = false;
@@ -210,7 +210,7 @@ int
 mod (int a, int b, int exponentA, int exponentB)
 {
     if (a == 0) return 0;
-    if (b == 0) return FP_NAN;
+    if (b == 0) return NAN;
 
     // All computations are positive, and remainder is always positive.
     if (a < 0) a = -a;
@@ -255,6 +255,80 @@ mod (int a, int b, int exponentA, int exponentB)
 }
 
 int
+norm (const MatrixStrided<int> & A, int n, int exponentA, int exponentResult)
+{
+    const int exponentN = 15;
+
+    int * a   = A.base ();
+    int * end = a + A.rows () * A.columns ();  // Assumes MatrixFixed, so that elements are dense in memory.
+    int result = 0;
+
+    if (n == INFINITY)
+    {
+        while (a < end) result = std::max (std::abs (*a++), result);
+        int shift = exponentA - exponentResult;
+        if (shift > 0) return result <<  shift;
+        if (shift < 0) return result >> -shift;
+        return result;
+    }
+    if (n == 0)
+    {
+        while (a < end) if (*a++) result++;
+        int shift = FP_MSB - exponentResult;
+        if (shift > 0) return result <<  shift;
+        if (shift < 0) return result >> -shift;
+        return result;
+    }
+    if (n == 0x1 << exponentN)
+    {
+        while (a < end) result += std::abs (*a++);
+        int shift = exponentA - exponentResult;
+        if (shift > 0) return result <<  shift;
+        if (shift < 0) return result >> -shift;
+        return result;
+    }
+
+    // Fully general form
+    // "result" will hold the sum, and exponentA will hold exponentSum when done.
+    int root;  // exponent=15
+    if (n == 0x2 << exponentN)
+    {
+        root = 0x4000;  // 0.5
+        exponentA = exponentA * 2 - FP_MSB;  // raw result of squaring elements of A
+        register uint64_t sum = 0;
+        while (a < end)
+        {
+            int t = *a++;
+            sum += (int64_t) t * t;
+        }
+        while (sum > INFINITY)
+        {
+            sum >>= 1;
+            exponentA++;
+        }
+        result = sum;  // truncate to 32 bits
+    }
+    else
+    {
+        // for root:
+        // raw division = exponentOne-exponentN+MSB = MSB-MSB/2+MSB
+        // want exponentN, so shift = raw-exponentN = (MSB-MSB/2+MSB)-MSB/2 = MSB
+        root = (0x1 << FP_MSB) / n;
+
+        // for exponentSum:
+        // assume center of A = MSB/2
+        // center power of A = centerA = exponentA - MSB/2
+        // center power of one term = centerTerm = centerA*n
+        // want center of term at MSB/2, so exponentSum = centerTerm+MSB/2 = (exponentA-MSB/2)*n+MSB/2 = exponentA*n+(1-n)*MSB/2
+        int exponentSum = ((exponentA - FP_MSB2) * n >> exponentN) + FP_MSB2;
+
+        while (a < end) result += pow (std::abs (*a++), n, exponentA, exponentSum);
+        exponentA = exponentSum;
+    }
+    return pow (result, root, exponentA, exponentResult);
+}
+
+int
 pow (int a, int b, int exponentA, int exponentResult)
 {
     // exponentB = 15
@@ -275,30 +349,30 @@ pow (int a, int b, int exponentA, int exponentResult)
     }
     else
     {
-        if (a == FP_NAN  ||  b == FP_NAN) return FP_NAN;
+        if (a == NAN  ||  b == NAN) return NAN;
         if (a == 0)
         {
             if (b > 0) return 0;
-            return FP_INF;
+            return INFINITY;
         }
-        if (a == FP_INF  ||  a == -FP_INF)
+        if (a == INFINITY  ||  a == -INFINITY)
         {
             if (b < 0) return 0;
-            if (a < 0  &&  ! (b & 0x7FFF)  &&  b & 0x8000) return -FP_INF;  // negative infinity to the power of an odd integer
-            return FP_INF;
+            if (a < 0  &&  ! (b & 0x7FFF)  &&  b & 0x8000) return -INFINITY;  // negative infinity to the power of an odd integer
+            return INFINITY;
         }
-        if (b == FP_INF  ||  b == -FP_INF)
+        if (b == INFINITY  ||  b == -INFINITY)
         {
             int absa = a > 0 ? a : -a;
             if (absa > one)
             {
-                if (b > 0) return FP_INF;
+                if (b > 0) return INFINITY;
                 return 0;
             }
             else if (absa < one)
             {
                 if (b > 0) return 0;
-                return FP_INF;
+                return INFINITY;
             }
             else
             {
@@ -315,7 +389,7 @@ pow (int a, int b, int exponentA, int exponentResult)
             }
             else  // non-integer
             {
-                return FP_NAN;
+                return NAN;
             }
         }
 
@@ -324,8 +398,8 @@ pow (int a, int b, int exponentA, int exponentResult)
             // raw multiply = exponentB+7-MSB at bit 30
             // shift = (exponentB+7-MSB)-7 = exponentB-MSB = -15
             int64_t temp = (int64_t) b * log (a, exponentA, 7) >> 15;
-            if (temp >  FP_INF) return FP_INF;
-            if (temp < -FP_INF) return 0;
+            if (temp >  INFINITY) return INFINITY;
+            if (temp < -INFINITY) return 0;
             blna = temp;
         }
     }
@@ -337,7 +411,7 @@ pow (int a, int b, int exponentA, int exponentResult)
 int
 sqrt (int a, int exponentA, int exponentResult)
 {
-    if (a < 0) return FP_NAN;
+    if (a < 0) return NAN;
 
     // Simple approach: apply the identity a^0.5=e^(ln(a^0.5))=e^(0.5*ln(a))
     //int l = log (a, exponentA, MSB/2) >> 1;

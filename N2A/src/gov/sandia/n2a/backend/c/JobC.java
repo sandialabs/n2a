@@ -156,7 +156,7 @@ public class JobC extends Thread
         boolean changed = false;
         if (needRuntime)
         {
-            if (unpackRuntime (JobC.class, runtimeDir, "fixedpoint.cc", "fixedpoint.h", "io.cc", "io.h", "io.tcc", "KDTree.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "MatrixSparse.tcc", "nosys.h", "pointer.h", "runtime.cc", "runtime.h", "runtime.tcc", "String.h")) changed = true;
+            if (unpackRuntime (JobC.class, runtimeDir, "fixedpoint.cc", "fixedpoint.h", "fixedpoint.tcc", "io.cc", "io.h", "io.tcc", "KDTree.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "MatrixSparse.tcc", "nosys.h", "pointer.h", "runtime.cc", "runtime.h", "runtime.tcc", "String.h")) changed = true;
             needRuntime = false;   // Stop checking files for this session.
         }
 

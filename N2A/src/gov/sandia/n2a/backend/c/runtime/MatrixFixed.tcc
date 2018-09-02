@@ -212,9 +212,8 @@ operator * (const MatrixFixed<T,R,O> & A, const MatrixFixed<T,O,C> & B)
             const T * rowEnd = j + O;
             while (j != rowEnd)
             {
-                element += (*i) * (*j);
+                element += (*i) * (*j++);
                 i += R;
-                j++;
             }
             *r++ = element;
             a++;

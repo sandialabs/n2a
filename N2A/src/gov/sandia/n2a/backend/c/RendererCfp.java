@@ -132,27 +132,56 @@ public class RendererCfp extends RendererC
             {
                 if (b.getType () instanceof Matrix)
                 {
-                    if (b instanceof Multiply  ||  b.operand0.isScalar ()  ||  b.operand1.isScalar ())
+                    if (shift > 0)
                     {
-                        result.append ("multiply (");
+                        result.append ("shiftUp (");
+                        escalate (b);
+                        result.append (", " + shift + ")");
                     }
-                    else  // MultiplyElementwise and both operands are matrices
+                    else
                     {
-                        result.append ("multiplyElementwise (");
+                        if (b instanceof Multiply  ||  b.operand0.isScalar ()  ||  b.operand1.isScalar ())
+                        {
+                            result.append ("multiply (");
+                        }
+                        else  // MultiplyElementwise and both operands are matrices
+                        {
+                            result.append ("multiplyElementwise (");
+                        }
+                        if (b.operand0.isScalar ())
+                        {
+                            // Always put the scalar in second position, so we need only one form of multiply().
+                            b.operand1.render (this);
+                            result.append (", ");
+                            b.operand0.render (this);
+                        }
+                        else
+                        {
+                            b.operand0.render (this);
+                            result.append (", ");
+                            b.operand1.render (this);
+                        }
+                        result.append (", " + -shift + ")");
                     }
-                    b.operand0.render (this);
-                    result.append (", ");
-                    b.operand1.render (this);
-                    result.append (", " + shift + ")");
                 }
                 else
                 {
-                    if (needDowncast (b)) result.append ("(int32_t) ");
-                    result.append ("(");
-                    if (needUpcast (b.operand0)) result.append ("(int64_t) ");
-                    escalate (b);
-                    result.append (printShift (shift));
-                    result.append (")");
+                    if (shift > 0)
+                    {
+                        result.append ("(");
+                        escalate (b);
+                        result.append (" << " + shift);
+                        result.append (")");
+                    }
+                    else
+                    {
+                        if (! parentAccepts64bit (b)) result.append ("(int32_t) ");
+                        result.append ("(");
+                        if (! provides64bit (b.operand0)) result.append ("(int64_t) ");
+                        escalate (b);
+                        result.append (" >> " + -shift);
+                        result.append (")");
+                    }
                 }
             }
             return true;
@@ -175,20 +204,28 @@ public class RendererCfp extends RendererC
             {
                 if (d.getType () instanceof Matrix)
                 {
-                    // See integer case below for how divide() will distribute shift between pre- and post-division.
-                    result.append ("divide (");
-                    d.operand0.render (this);
-                    result.append (", ");
-                    d.operand1.render (this);
-                    result.append (", " + shift + ")");
+                    if (shift > 0)
+                    {
+                        result.append ("divide (");
+                        d.operand0.render (this);
+                        result.append (", ");
+                        d.operand1.render (this);
+                        result.append (", " + shift + ")");
+                    }
+                    else
+                    {
+                        result.append ("shiftDown (");
+                        escalate (d);
+                        result.append (", " + -shift + ")");
+                    }
                 }
                 else
                 {
                     if (shift > 0)
                     {
-                        if (needDowncast (d)) result.append ("(int32_t) ");
+                        if (! parentAccepts64bit (d)) result.append ("(int32_t) ");
                         result.append ("((");
-                        if (needUpcast (d.operand0)) result.append ("(int64_t) ");
+                        if (! provides64bit (d.operand0)) result.append ("(int64_t) ");
                         // OperatorBinary.render() will add parentheses around operand0 if it has lower
                         // precedence than division. This includes the case where it has lower precedence
                         // than shift, so we are safe.
@@ -235,9 +272,10 @@ public class RendererCfp extends RendererC
             if (shift == 0) return super.render (op);
             if (op.getType () instanceof Matrix)
             {
-                result.append ("shift (" + shift + ", ");
+                if (shift > 0) result.append ("shiftUp (");
+                else           result.append ("shiftDown (");
                 escalate (op);
-                result.append (")");
+                result.append (", " + Math.abs (shift) + ")");
             }
             else
             {
@@ -364,9 +402,10 @@ public class RendererCfp extends RendererC
 
             if (op.getType () instanceof Matrix)
             {
-                result.append ("shift (" + shift + ", ");
+                if (shift > 0) result.append ("shiftUp (");
+                else           result.append ("shiftDown (");
                 escalate (op);
-                result.append (")");
+                result.append (", " + Math.abs (shift) + ")");
             }
             else
             {
@@ -381,22 +420,44 @@ public class RendererCfp extends RendererC
         return super.render (op);
     }
 
-    public boolean needDowncast (Operator op)
+    /**
+        The given operator uses 64-bit in order to preserve precision.
+        The result can remain in 64-bit if that is useful to the parent operator.
+    **/
+    public boolean provides64bit (Operator op)
     {
-        if (op.parent == null) return false;
+        if (! (op.getType () instanceof Scalar)) return false;
+        // At this point, both operands should be scalars.
+        if (op instanceof Multiply)
+        {
+            OperatorBinary b = (OperatorBinary) op;
+            int exponentRaw = b.operand0.exponentNext + b.operand1.exponentNext - Operator.MSB;
+            int shift = exponentRaw - b.exponentNext;
+            return shift < 0;  // only use 64-bit when we downshift the raw result
+        }
+        if (op instanceof Divide)
+        {
+            OperatorBinary b = (OperatorBinary) op;
+            int exponentRaw = b.operand0.exponentNext - b.operand1.exponentNext + Operator.MSB;
+            int shift = exponentRaw - b.exponentNext;
+            return shift > 0;  // only use 64-bit when we upshift the raw result
+        }
+        return false;
+    }
+
+    /**
+        The parent of the given operator either requires 64-bit, or the given operator is the top
+        node, effectively making the variable its parent.
+    **/
+    public boolean parentAccepts64bit (Operator op)
+    {
+        if (op.parent == null) return true;
         if (op.parent instanceof Multiply  ||  op.parent instanceof Divide)
         {
             OperatorBinary p = (OperatorBinary) op.parent;
-            if (op == p.operand0  &&  p.operand1.getType () instanceof Scalar) return false;
+            if (op == p.operand0) return provides64bit (p);
         }
-        return true;
-    }
-
-    public boolean needUpcast (Operator operand0)  // parent must be either Multiply or Divide
-    {
-        // This function is only called when operand1 is a scalar.
-        if (operand0 instanceof Multiply  ||  operand0 instanceof Divide) return false;
-        return true;
+        return false;
     }
 
     public String print (double d, int exponent)
