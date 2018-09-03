@@ -71,7 +71,6 @@ public class Operator implements Cloneable
     public Operator parent;  // The AST node that contains this one. If null, then this is the root node.
 
     // Fixed-point
-    // TODO: use libfixmath in C backend
     public static int UNKNOWN = Integer.MIN_VALUE;
     /**
         Zero-based index of most significant bit in the machine word.
@@ -90,7 +89,7 @@ public class Operator implements Cloneable
     public int exponent = UNKNOWN;
     /**
         Zero-based index of median magnitude.
-        For numbers with a range of magnitudes, this will generally be MSB/2 (equivalent to Q16.16 format).
+        For numbers with a range of magnitudes, this will generally be MSB/2 (equivalent to Q16.15 format).
         It is expected that about half the time, all nonzero bits are at or below this position in the word.
         Simple integers, on the other hand, will set this to 0, and all their nonzero bits are at or above this position.
     **/

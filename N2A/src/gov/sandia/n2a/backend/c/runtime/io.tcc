@@ -7,6 +7,9 @@
 #include <fstream>
 #include <cmath>
 #include <stdlib.h>
+#ifdef n2a_FP
+#include "fixedpoint.h"
+#endif
 
 
 // class IteratorSkip --------------------------------------------------------
@@ -148,6 +151,59 @@ MatrixInput<T>::get (T row, T column)
     }
 }
 
+#ifdef n2a_FP
+
+template<>
+int
+MatrixInput<int>::get (int row, int column)  // row and column have exponent=0
+{
+    // Just assume handle is good.
+    int lastRow    = A->rows ()    - 1;  // exponent=MSB
+    int lastColumn = A->columns () - 1;
+    int64_t scaledRow    = row    * lastRow;   // raw exponent = 0+MSB-MSB = 0
+    int64_t scaledColumn = column * lastColumn;
+    int r = scaledRow    >> FP_MSB;  // to turn raw result into integer, shift = 0-MSB = -MSB
+    int c = scaledColumn >> FP_MSB;
+    if (r < 0)
+    {
+        if      (c <  0         ) return (*A)(0,0         );
+        else if (c >= lastColumn) return (*A)(0,lastColumn);
+        else
+        {
+            int b = scaledColumn & 0x3FFFFFFF;  // fractional part, with exponent = 0 (same as raw exponent)
+            int b1 = (1 << FP_MSB) - b;
+            return (int64_t) b1 * (*A)(0,c) + (int64_t) b * (*A)(0,c+1) >> FP_MSB;
+        }
+    }
+    else if (r >= lastRow)
+    {
+        if      (c <  0         ) return (*A)(lastRow,0         );
+        else if (c >= lastColumn) return (*A)(lastRow,lastColumn);
+        else
+        {
+            int b = scaledColumn & 0x3FFFFFFF;
+            int b1 = (1 << FP_MSB) - b;
+            return (int64_t) b1 * (*A)(lastRow,c) + (int64_t) b * (*A)(lastRow,c+1) >> FP_MSB;
+        }
+    }
+    else
+    {
+        int a = scaledRow & 0x3FFFFFFF;
+        int a1 = (1 << FP_MSB) - a;
+        if      (c <  0         ) return (int64_t) a1 * (*A)(r,0         ) + (int64_t) a * (*A)(r+1,0         ) >> FP_MSB;
+        else if (c >= lastColumn) return (int64_t) a1 * (*A)(r,lastColumn) + (int64_t) a * (*A)(r+1,lastColumn) >> FP_MSB;
+        else
+        {
+            int b = scaledColumn & 0x3FFFFFFF;
+            int b1 = (1 << FP_MSB) - b;
+            return   b1 * ((int64_t) a1 * (*A)(r,c  ) + (int64_t) a * (*A)(r+1,c  ) >> FP_MSB)
+                   + b  * ((int64_t) a1 * (*A)(r,c+1) + (int64_t) a * (*A)(r+1,c+1) >> FP_MSB) >> FP_MSB;
+        }
+    }
+}
+
+#endif
+
 template<class T>
 T
 MatrixInput<T>::getRaw (T row, T column)
@@ -187,29 +243,38 @@ MatrixInput<T>::getIterator ()
 
 std::vector<Holder *> matrixMap;
 
-template<class T> T elementFromString (const String & element);
+#ifdef n2a_FP
 
-template<>
-double elementFromString (const String & element)
+inline int
+convert (String input, int exponent)
 {
-    return atof (element.c_str ());
+    const double d = atof (input.c_str ());
+    if (d == 0) return 0;
+    if (std::isnan (d)) return NAN;
+    bool negate = d < 0;
+    if (std::isinf (d))
+    {
+        if (negate) return -INFINITY;
+        return              INFINITY;
+    }
+
+    int64_t bits = *(int64_t *) &d;
+    int e = (int) ((bits >> 52) & 0x7FF) - 1023;
+    bits |= 0x10000000000000l;  // set implied msb of mantissa (bit 52) to 1
+    bits &= 0x1FFFFFFFFFFFFFl;  // clear sign and exponent bits
+    if (negate) bits = -bits;
+    return bits >> 52 - FP_MSB + exponent - e;
 }
 
-template<>
-float elementFromString (const String & element)
-{
-    return (float) atof (element.c_str ());
-}
-
-template<>
-int elementFromString (const String & element)
-{
-    return atoi (element.c_str ());
-}
+#endif
 
 template<class T>
 MatrixInput<T> *
-matrixHelper (const String & fileName, MatrixInput<T> * oldHandle)
+#ifdef n2a_FP
+matrixHelper (const String & fileName, int exponent, MatrixInput<T> * oldHandle)
+#else
+matrixHelper (const String & fileName,               MatrixInput<T> * oldHandle)
+#endif
 {
     MatrixInput<T> * handle = (MatrixInput<T> *) holderHelper (matrixMap, fileName, oldHandle);
     if (! handle)
@@ -241,20 +306,23 @@ matrixHelper (const String & fileName, MatrixInput<T> * oldHandle)
                 int col = atoi (value.c_str ());
 
                 line.trim ();
-                T element = atof (line.c_str ());
+#               ifdef n2a_FP
+                T element = convert (line, exponent);
+#               else
+                T element = (T) atof (line.c_str ());
+#               endif
 
                 if (element) S->set (row, col, element);
             }
         }
         else  // Dense matrix
         {
-            // TODO: This version is inefficient. Copy code from java implementation.
-
             // Re-open file to ensure that we get the first line.
             ifs.close ();
             ifs.open (fileName.c_str ());
 
-            std::vector<std::vector<T> > temp;
+            std::vector<std::vector<T>> temp;
+            std::vector<T> row;
             int columns = 0;
             bool transpose = false;
 
@@ -268,8 +336,7 @@ matrixHelper (const String & fileName, MatrixInput<T> * oldHandle)
             while (token != '['  &&  ifs.good ());
 
             // Read rows until closing "]"
-            String line;
-            bool comment = false;
+            String buffer;
             bool done = false;
             while (ifs.good ()  &&  ! done)
             {
@@ -280,46 +347,52 @@ matrixHelper (const String & fileName, MatrixInput<T> * oldHandle)
                 {
                     case '\r':
                         break;  // ignore CR characters
-                    case '#':
-                        comment = true;
-                        break;
-                    case '\n':
-                        comment = false;
-                    case ';':
-                        if (! comment) processLine = true;
-                        break;
-                    case ']':
-                        if (! comment)
+                    case ' ':
+                    case '\t':
+                        if (buffer.size () == 0) break;  // ignore leading whitespace (equivalent to trim)
+                    case ',':
+                        // Process element
+                        if (buffer.size () == 0)
                         {
-                            done = true;
-                            processLine = true;
+                            row.push_back (0);
+                        }
+                        else
+                        {
+#                           ifdef n2a_FP
+                            row.push_back (convert (buffer, exponent));
+#                           else
+                            row.push_back ((T) atof (buffer.c_str ()));
+#                           endif
+                            buffer.clear ();
                         }
                         break;
+                    case ']':
+                        done = true;
+                    case ';':
+                    case '\n':
+                    {
+                        // Process any final element
+                        if (buffer.size () > 0)
+                        {
+#                           ifdef n2a_FP
+                            row.push_back (convert (buffer, exponent));
+#                           else
+                            row.push_back ((T) atof (buffer.c_str ()));
+#                           endif
+                            buffer.clear ();
+                        }
+                        // Process line
+                        int c = row.size ();
+                        if (c > 0)
+                        {
+                            temp.push_back (row);  // Duplicates row, rather than saving a reference to it, so row can be reused.
+                            columns = std::max (columns, c);
+                            row.clear ();
+                        }
+                        break;
+                    }
                     default:
-                        if (! comment) line += token;
-                }
-
-                if (processLine)
-                {
-                    std::vector<T> row;
-                    String element;
-                    line.trim ();
-                    while (line.size ())
-                    {
-                        int position = line.find_first_of (", \t");
-                        element = line.substr (0, position);
-                        row.push_back (elementFromString<T> (element));
-                        if (position == String::npos) break;
-                        line = line.substr (position);
-                        line.trim ();
-                    }
-                    int c = row.size ();
-                    if (c)
-                    {
-                        temp.push_back (row);
-                        columns = std::max (columns, c);
-                    }
-                    line.clear ();
+                        buffer += token;
                 }
             }
 
@@ -384,14 +457,8 @@ InputHolder<T>::InputHolder (const String & fileName)
     time          = false;
     epsilon       = (T) 1e-6;
 
-    if (fileName.empty ())
-    {
-        in = &std::cin;
-    }
-    else
-    {
-        in = new std::ifstream (fileName.c_str ());
-    }
+    if (fileName.empty ()) in = &std::cin;
+    else                   in = new std::ifstream (fileName.c_str ());
 }
 
 template<class T>
@@ -470,7 +537,21 @@ InputHolder<T>::getRow (T row)
                 {
                     int j = line.find_first_of (" \t", i);
                     if (j == String::npos) j = line.size ();
-                    if (j > i) nextValues[index] = atof (line.substr (i, j - i).c_str ());
+#                   ifdef n2a_FP
+                    if (j > i)
+                    {
+                        if (time  &&  timeColumnSet  &&  index == timeColumn)
+                        {
+                            nextValues[index] = convert (line.substr (i, j - i), exponentTime);
+                        }
+                        else
+                        {
+                            nextValues[index] = convert (line.substr (i, j - i), exponent);
+                        }
+                    }
+#                   else
+                    if (j > i) nextValues[index] = (T) atof (line.substr (i, j - i).c_str ());
+#                   endif
                     else       nextValues[index] = 0;
                     i = j + 1;
                 }
@@ -544,6 +625,41 @@ InputHolder<T>::get (T row, T column)
     }
     return (1 - b) * currentValues[c] + b * currentValues[d];
 }
+
+#ifdef n2a_FP
+
+template<>
+int
+InputHolder<int>::get (int row, int column)
+{
+    getRow (row);
+    int lastColumn = currentCount - 1;
+    int64_t scaledColumn;
+    if (time) scaledColumn = (int64_t) column * (lastColumn - 1);  // time column is not included in interpolation
+    else      scaledColumn = (int64_t) column *  lastColumn;
+    int c = scaledColumn >> FP_MSB;
+    int d = c + 1;
+    if (time)
+    {
+        if (c >= timeColumn) c++;  // Implicitly, d will also be >= timeColumn.
+        if (d >= timeColumn) d++;
+    }
+    if (c < 0)
+    {
+        if (time  &&  timeColumn == 0  &&  currentCount > 1) return currentValues[1];
+        return currentValues[0];
+    }
+    if (c >= lastColumn)
+    {
+        if (time  &&  timeColumn == lastColumn  &&  currentCount > 1) return currentValues[lastColumn-1];
+        return currentValues[lastColumn];
+    }
+    int b = scaledColumn & 0x3FFFFFFF;
+    int b1 = (1 << FP_MSB) - b;
+    return (int64_t) b1 * currentValues[c] + (int64_t) b * currentValues[d] >> FP_MSB;
+}
+
+#endif
 
 template<class T>
 T
@@ -633,27 +749,43 @@ OutputHolder<T>::trace (T now)
 
 template<class T>
 void
+#ifdef n2a_FP
+OutputHolder<T>::trace (T now, const String & column, T rawValue, int exponent)
+#else
 OutputHolder<T>::trace (T now, const String & column, T value)
+#endif
 {
     trace (now);
+
+#   ifdef n2a_FP
+    float value = (float) rawValue / pow (2.0f, FP_MSB - exponent);
+#   endif
 
     std::unordered_map<String, int>::iterator result = columnMap.find (column);
     if (result == columnMap.end ())
     {
         columnMap[column] = columnValues.size ();
-        columnValues.push_back (value);
+        columnValues.push_back ((float) value);
     }
     else
     {
-        columnValues[result->second] = value;
+        columnValues[result->second] = (float) value;
     }
 }
 
 template<class T>
 void
+#ifdef n2a_FP
+OutputHolder<T>::trace (T now, T column, T rawValue, int exponent)
+#else
 OutputHolder<T>::trace (T now, T column, T value)
+#endif
 {
     trace (now);
+
+#   ifdef n2a_FP
+    float value = (float) rawValue / pow (2.0f, FP_MSB - exponent);
+#   endif
 
     char buffer[32];
     int index = (int) round (column);  // "raw" is the most likely case, so preemptively convert to int
@@ -670,11 +802,11 @@ OutputHolder<T>::trace (T now, T column, T value)
             columnValues.resize (index, NAN);  // add any missing columns before the one we are about to create
         }
         columnMap[columnName] = columnValues.size ();
-        columnValues.push_back (value);
+        columnValues.push_back ((float) value);
     }
     else
     {
-        columnValues[result->second] = value;
+        columnValues[result->second] = (float) value;
     }
 }
 
@@ -711,10 +843,10 @@ OutputHolder<T>::writeTrace ()
     // Write values
     for (int i = 0; i <= last; i++)
     {
-        T & c = columnValues[i];
+        float & c = columnValues[i];
         if (! std::isnan (c)) (*out) << c;
         if (i < last) (*out) << "\t";
-        c = (T) NAN;
+        c = NAN;
     }
     (*out) << std::endl;
 

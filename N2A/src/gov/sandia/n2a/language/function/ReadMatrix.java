@@ -59,7 +59,7 @@ public class ReadMatrix extends Function
         {
             Operator op = operands[i];
             if (raw) op.exponentNext = MSB;  // We expect an integer.
-            else     op.exponentNext = op.exponent;
+            else     op.exponentNext = 0;    // We expect a number in [0,1], with some provision for going slightly out of bounds.
             op.determineExponent (from);
         }
 

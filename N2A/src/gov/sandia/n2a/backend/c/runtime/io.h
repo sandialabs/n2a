@@ -75,7 +75,11 @@ public:
 
     IteratorNonzero<T> * getIterator ();  // Returns an object that iterates over nonzero elements of A.
 };
-template<class T> extern MatrixInput<T> * matrixHelper (const String & fileName, MatrixInput<T> * oldHandle = 0);
+#ifdef n2a_FP
+template<class T> extern MatrixInput<T> * matrixHelper (const String & fileName, int exponent, MatrixInput<T> * oldHandle = 0);
+#else
+template<class T> extern MatrixInput<T> * matrixHelper (const String & fileName,               MatrixInput<T> * oldHandle = 0);
+#endif
 
 template<class T>
 class InputHolder : public Holder
@@ -94,6 +98,10 @@ public:
     bool                           timeColumnSet;
     bool                           time;     ///< mode
     T                              epsilon;  ///< for time values
+#   ifdef n2a_FP
+    int                            exponent;  ///< of value returned by get()
+    int                            exponentTime;
+#   endif
 
     InputHolder (const String & fileName);
     virtual ~InputHolder ();
@@ -113,7 +121,7 @@ public:
     bool                           raw; ///< Indicates that column is an exact index.
     std::ostream *                 out;
     std::unordered_map<String,int> columnMap;
-    std::vector<T>                 columnValues;
+    std::vector<float>             columnValues;
     int                            columnsPrevious; ///< Number of columns written in previous cycle.
     bool                           traceReceived;   ///< Indicates that at least one column was touched during the current cycle.
     T                              t;
@@ -122,8 +130,13 @@ public:
     virtual ~OutputHolder ();
 
     void trace (T now);  ///< Subroutine for other trace() functions.
+#   ifdef n2a_FP
+    void trace (T now, const String & column, T value, int exponent);
+    void trace (T now, T              column, T value, int exponent);
+#   else
     void trace (T now, const String & column, T value);
     void trace (T now, T              column, T value);
+#   endif
     void writeTrace ();
 };
 template<class T> extern OutputHolder<T> * outputHelper (const String & fileName, OutputHolder<T> * oldHandle = 0);

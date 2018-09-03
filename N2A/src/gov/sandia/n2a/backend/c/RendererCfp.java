@@ -9,6 +9,7 @@ package gov.sandia.n2a.backend.c;
 import java.util.HashSet;
 
 import gov.sandia.n2a.eqset.EquationSet;
+import gov.sandia.n2a.language.BuildMatrix;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorArithmetic;
@@ -446,12 +447,13 @@ public class RendererCfp extends RendererC
     }
 
     /**
-        The parent of the given operator either requires 64-bit, or the given operator is the top
-        node, effectively making the variable its parent.
+        The parent of the given operator either requires 64-bit, or it is the final assignment
+        to a 32-bit variable and the downcast is implied.
     **/
     public boolean parentAccepts64bit (Operator op)
     {
-        if (op.parent == null) return true;
+        if (op.parent == null) return true;  // Assignment to variable
+        if (op.parent instanceof BuildMatrix) return true;  // Assignment to element of matrix
         if (op.parent instanceof Multiply  ||  op.parent instanceof Divide)
         {
             OperatorBinary p = (OperatorBinary) op.parent;
@@ -464,16 +466,18 @@ public class RendererCfp extends RendererC
     {
         if (d == 0) return "0";
         if (Double.isNaN (d)) return String.valueOf (Integer.MIN_VALUE);
+        boolean negate = d < 0;
         if (Double.isInfinite (d))
         {
-            if (d < 0) return String.valueOf (Integer.MIN_VALUE + 1);
-            return            String.valueOf (Integer.MAX_VALUE);
+            if (negate) return String.valueOf (Integer.MIN_VALUE + 1);
+            return             String.valueOf (Integer.MAX_VALUE);
         }
 
         long bits = Double.doubleToLongBits (d);
         int  e    = Math.getExponent (d);
-        bits |=   0x10000000000000l;  // set implied msb of mantissa (bit 52) to 1
-        bits &= 0x801FFFFFFFFFFFFFl;  // clear exponent bits
+        bits |= 0x10000000000000l;  // set implied msb of mantissa (bit 52) to 1
+        bits &= 0x1FFFFFFFFFFFFFl;  // clear sign and exponent bits
+        if (negate) bits = -bits;
         bits >>= 52 - Operator.MSB + exponent - e;
         return Integer.toString ((int) bits);
     }

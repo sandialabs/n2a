@@ -20,6 +20,7 @@ import gov.sandia.n2a.language.Split;
 import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
+import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.operator.GE;
@@ -39,6 +40,7 @@ import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -1738,9 +1740,11 @@ public class EquationSet implements Comparable<EquationSet>
             System.out.println ("-----------------------------------------------------------------");
             System.out.println ("top of loop " + all + " " + wait);
             int exponentTime = ev.maxTime ();
+            boolean changed = ev.updateInputs ();
             if (all) wait--;
             else     wait++;
-            if (! determineExponentsEval (overflows, all  &&  wait < 0, exponentTime)) break;
+            if (determineExponentsEval (overflows, all  &&  wait < 0, exponentTime)) changed = true;
+            if (! changed) break;
             if (! all) all = allExponentsDetermined ();
             dumpExponents ();
         }
@@ -1759,12 +1763,13 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
-        Prepares operation trees for exponent analysis, and also stores list of $t' occurrences.
+        Stores lists of objects needed for global agreement on time exponents.
     **/
     public static class ExponentVisitor
     {
-        public int exponentTime;
+        public int exponentTime;  // of overall simulation
         public List<Variable> dt = new ArrayList<Variable> ();  // All distinct occurrences of $t' in the model (zero or one per equation set)
+        public HashMap<Object,ArrayList<Input>> inputs = new HashMap<Object,ArrayList<Input>> ();  // Inputs that have "time" flag must agree on exponentTime.
 
         public ExponentVisitor (double duration)
         {
@@ -1783,6 +1788,38 @@ public class EquationSet implements Comparable<EquationSet>
 
             return min + 20;  // +20 allows one million minimally-sized timesteps, each with 10 bit resolution
         }
+
+        public boolean updateInputs ()
+        {
+            boolean changed = false;
+            for (ArrayList<Input> list : inputs.values ())
+            {
+                int count = 0;
+                int pow = 0;
+                for (Input i : list)
+                {
+                    Operator operand1 = i.operands[1];
+                    if (operand1.exponent != Operator.UNKNOWN)
+                    {
+                        count++;
+                        pow += operand1.exponent;
+                    }
+                }
+                if (count > 0)
+                {
+                    pow /= count;
+                    for (Input i : list)
+                    {
+                        if (i.exponentTime != pow)
+                        {
+                            i.exponentTime = pow;
+                            changed = true;
+                        }
+                    }
+                }
+            }
+            return changed;
+        }
     }
 
     public void determineExponentsInit (ExponentVisitor ev)
@@ -1791,6 +1828,47 @@ public class EquationSet implements Comparable<EquationSet>
         {
             Variable r = v.reference.variable;
             if (r.name.equals ("$t")  &&  r.order == 1  &&  ! ev.dt.contains (r)) ev.dt.add (r);
+
+            v.visit (new Visitor ()
+            {
+                public boolean visit (Operator op)
+                {
+                    if (op instanceof Input)
+                    {
+                        Input i = (Input) op;
+                        if (i.operands.length >= 4)
+                        {
+                            if (i.operands[3].getString ().contains ("time"))
+                            {
+                                Object key = null;
+                                Operator path = i.operands[0];
+                                if (path instanceof Constant)
+                                {
+                                    key = path.getString ();
+                                }
+                                else if (path instanceof AccessVariable)
+                                {
+                                    key = ((AccessVariable) path).reference.variable;
+                                }
+                                // TODO: should also find a way to turn more complicated expressions into keys.
+                                // For example, "bob"+$index should compare equal if it appears in two separate
+                                // input() statements.
+                                if (key != null)
+                                {
+                                    ArrayList<Input> list = ev.inputs.get (key);
+                                    if (list == null)
+                                    {
+                                        list = new ArrayList<Input> ();
+                                        ev.inputs.put (key, list);
+                                    }
+                                    list.add (i);
+                                }
+                            }
+                        }
+                    }
+                    return true;
+                }
+            });
         }
         for (EquationSet s : parts) s.determineExponentsInit (ev);
     }

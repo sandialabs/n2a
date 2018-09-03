@@ -31,6 +31,7 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 public class Input extends Function
 {
     public boolean timeWarning;
+    public int     exponentTime = UNKNOWN;  // For C backend with integer math. The exponent used to convert time values to integer, both from the input file and from the caller.
 
     public static Factory factory ()
     {
@@ -60,14 +61,38 @@ public class Input extends Function
 
     public void determineExponent (Variable from)
     {
-        super.determineExponent (from);
+        String mode = "";
+        int lastParm = operands.length - 1;
+        if (lastParm > 0) mode = operands[lastParm].getString ();
+        boolean raw     = mode.contains ("raw");
+        boolean columns = mode.contains ("columns");
+        boolean time    = mode.contains ("time");
 
-        String mode;
-        if (operands.length > 3) mode = operands[3].getString ();
-        else                     mode = operands[1].getString ();
-        int centerNew   = MSB / 2;
-        int exponentNew = getExponentHint (mode, 0) + MSB - centerNew;
-        updateExponent (from, exponentNew, centerNew);
+        if (lastParm >= 1)
+        {
+            Operator op = operands[1];
+            if (time) op.exponentNext = exponentTime;
+            else      op.exponentNext = MSB;  // We expect an integer.
+            op.determineExponent (from);
+        }
+        if (lastParm >= 2)
+        {
+            Operator op = operands[2];
+            if (raw) op.exponentNext = MSB;  // We expect an integer.
+            else     op.exponentNext = 0;    // We expect a number in [0,1], with some provision for going slightly out of bounds.
+            op.determineExponent (from);
+        }
+
+        if (columns)
+        {
+            updateExponent (from, MSB, 0);  // Return an integer
+        }
+        else
+        {
+            int centerNew   = MSB / 2;
+            int exponentNew = getExponentHint (mode, 0) + MSB - centerNew;
+            updateExponent (from, exponentNew, centerNew);
+        }
     }
 
     public static class Holder

@@ -229,18 +229,16 @@ public class RendererC extends Renderer
             String matrixName;
             if (r.operands[0] instanceof Constant) matrixName = job.matrixNames.get (r.operands[0].toString ());
             else                                   matrixName = job.matrixNames.get (r);
+
             int shift = r.exponent - r.exponentNext;
+            if (useExponent  &&  shift != 0) result.append ("(");
             if (mode.equals ("rows"))
             {
-                if (useExponent  &&  shift != 0) result.append ("(");
                 result.append (matrixName + "->rows ()");
-                if (useExponent  &&  shift != 0) result.append (printShift (shift) + ")");
             }
             else if (mode.equals ("columns"))
             {
-                if (useExponent  &&  shift != 0) result.append ("(");
                 result.append (matrixName + "->columns ()");
-                if (useExponent  &&  shift != 0) result.append (printShift (shift) + ")");
             }
             else
             {
@@ -250,9 +248,10 @@ public class RendererC extends Renderer
                 r.operands[1].render (this);
                 result.append (", ");
                 r.operands[2].render (this);
-                if (useExponent) result.append (", " + r.exponentNext);
                 result.append (")");
             }
+            if (useExponent  &&  shift != 0) result.append (printShift (shift) + ")");
+
             return true;
         }
         if (op instanceof Output)
@@ -277,6 +276,7 @@ public class RendererC extends Renderer
             o.operands[1].render (this);
             if (useExponent) result.append (", " + o.operands[1].exponentNext);
             result.append (")");
+
             return true;
         }
         if (op instanceof Input)
@@ -297,9 +297,11 @@ public class RendererC extends Renderer
                 if (c.value instanceof Text) mode = c.toString ();
             }
 
+            int shift = i.exponent - i.exponentNext;
+            if (useExponent  &&  shift != 0) result.append ("(");
             if (mode.contains ("columns"))
             {
-                result.append (inputName + "->getColumns ()");  // TODO: does this need exponent?
+                result.append (inputName + "->getColumns ()");
             }
             else
             {
@@ -316,9 +318,9 @@ public class RendererC extends Renderer
                 op1.render (this);
                 result.append (", ");
                 op2.render (this);
-                if (useExponent) result.append (", " + i.exponentNext);
                 result.append (")");
             }
+            if (useExponent  &&  shift != 0) result.append (printShift (shift) + ")");
 
             return true;
         }

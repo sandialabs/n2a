@@ -156,21 +156,26 @@ public class JobC extends Thread
         boolean changed = false;
         if (needRuntime)
         {
-            if (unpackRuntime (JobC.class, runtimeDir, "fixedpoint.cc", "fixedpoint.h", "fixedpoint.tcc", "io.cc", "io.h", "io.tcc", "KDTree.h", "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "MatrixSparse.tcc", "nosys.h", "pointer.h", "runtime.cc", "runtime.h", "runtime.tcc", "String.h")) changed = true;
+            changed = unpackRuntime
+            (
+                JobC.class, runtimeDir,
+                "fixedpoint.cc", "fixedpoint.h", "fixedpoint.tcc",
+                "io.cc", "io.h", "io.tcc",
+                "KDTree.h", "String.h",
+                "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "MatrixSparse.tcc", "pointer.h",
+                "nosys.h",
+                "runtime.cc", "runtime.h", "runtime.tcc"
+            );
             needRuntime = false;   // Stop checking files for this session.
         }
 
-        String[] sources = new String[] {"runtime", "io"};
         if (changed)
         {
             DirectoryStream.Filter<Path> filter = new DirectoryStream.Filter<Path> ()
             {
                 public boolean accept (Path entry) throws IOException
                 {
-                    String name = entry.getFileName ().toString ();
-                    if (! name.endsWith (".o")) return false;
-                    for (String stem : sources) if (name.startsWith (stem + "_")) return true;
-                    return false;
+                    return entry.getFileName ().toString ().endsWith (".o");
                 }
             };
             try (DirectoryStream<Path> dir = Files.newDirectoryStream (runtimeDir, filter))
@@ -188,6 +193,10 @@ public class JobC extends Thread
         }
 
         // Compile runtime
+        ArrayList<String> sources = new ArrayList<String> ();
+        sources.add ("runtime");
+        sources.add ("io");
+        if (T.equals ("int")) sources.add ("fixedpoint");
         for (String stem : sources)
         {
             Path object = runtimeDir.resolve (stem + "_" + T + ".o");
@@ -235,8 +244,11 @@ public class JobC extends Thread
             gcc.toString (), "-O3", "-std=c++11",
             "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections",
             "-I" + runtimeDir,
+            "-Dn2a_T=" + T,
+            (T.equals ("int") ? "-Dn2a_FP" : ""),
             runtimeDir.resolve ("runtime_" + T + ".o").toString (),
             runtimeDir.resolve ("io_"      + T + ".o").toString (),
+            (T.equals ("int") ? runtimeDir.resolve ("fixedpoint_" + T + ".o").toString () : ""),
             "-o", binary.toString (), source.toString ()
         );
         Files.delete (out);
@@ -410,8 +422,11 @@ public class JobC extends Thread
     {
         for (EquationSet p : s.parts) generateStatic (p, result);
 
-        // Generate static definitions
         final BackendDataC bed = (BackendDataC) s.backendData;
+        RendererC context;
+        if (T.equals ("int")) context = new RendererCfp (this, result, s);
+        else                  context = new RendererC   (this, result, s);
+
         class CheckStatic extends Visitor
         {
             public boolean global;
@@ -433,7 +448,7 @@ public class JobC extends Thread
                         {
                             for (int r = 0; r < rows; r++)
                             {
-                                initializer += A.get (r, c) + ", ";
+                                initializer += context.print (A.get (r, c), op.exponent) + ", ";
                             }
                         }
                         if (initializer.length () > 2) initializer = initializer.substring (0, initializer.length () - 2);
@@ -3298,21 +3313,23 @@ public class JobC extends Thread
                     Input i = (Input) op;
                     if (i.operands[0] instanceof Constant)
                     {
+                        String inputName = inputNames.get (i.operands[0].toString ());
+                        if (T.equals ("int"))
+                        {
+                            context.result.append (pad + inputName + "->exponent = " + i.exponent + ";\n");
+                        }
+
                         // Detect time flag
                         String mode = "";
-                        if (i.operands.length > 3)
-                        {
-                            mode = i.operands[3].toString ();  // just assuming it's a constant string
-                        }
-                        else if (i.operands[1] instanceof Constant)
-                        {
-                            Constant c = (Constant) i.operands[1];
-                            if (c.value instanceof Text) mode = c.toString ();
-                        }
+                        int lastParm = i.operands.length - 1;
+                        if (lastParm > 0) mode = i.operands[lastParm].getString ();
                         if (mode.contains ("time"))
                         {
-                            String inputName = inputNames.get (i.operands[0].toString ());
                             context.result.append (pad + inputName + "->time = true;\n");
+                            if (T.equals ("int"))
+                            {
+                                context.result.append (pad + inputName + "->exponentTime = " + i.exponentTime + ";\n");
+                            }
                             if (! context.global)
                             {
                                 if (context.bed.dt == null)
@@ -3414,7 +3431,7 @@ public class JobC extends Thread
                     {
                         String matrixName = matrixNames.get (r);
                         String stringName = stringNames.get (r.operands[0]);
-                        context.result.append (pad + "MatrixInput<" + T + "> * " + matrixName + " = matrixHelper<" + T + "> (" + stringName + ");\n");
+                        context.result.append (pad + "MatrixInput<" + T + "> * " + matrixName + " = matrixHelper<" + T + "> (" + stringName + ", " + r.exponent + ");\n");
                     }
                     return false;
                 }
@@ -3426,6 +3443,10 @@ public class JobC extends Thread
                         String inputName = inputNames.get (i);
                         String stringName = stringNames.get (i.operands[0]);
                         context.result.append (pad + "InputHolder<" + T + "> * " + inputName + " = inputHelper<" + T + "> (" + stringName + ");\n");
+                        if (T.equals ("int"))
+                        {
+                            context.result.append (pad + inputName + "->exponent = " + i.exponent + ";\n");
+                        }
 
                         // Detect time flag
                         String mode = "";
@@ -3441,6 +3462,10 @@ public class JobC extends Thread
                         if (mode.contains ("time"))
                         {
                             context.result.append (pad + inputName + "->time = true;\n");
+                            if (T.equals ("int"))
+                            {
+                                context.result.append (pad + inputName + "->exponentTime = " + i.exponentTime + ";\n");
+                            }
                             if (! context.global)
                             {
                                 if (context.bed.dt == null)
