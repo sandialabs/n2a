@@ -161,23 +161,29 @@ public class RendererC extends Renderer
         if (op instanceof Gaussian)
         {
             Gaussian g = (Gaussian) op;
+            int shift = op.exponent - op.exponentNext;
+            if (useExponent  &&  shift != 0) result.append ("(");
             result.append ("gaussian<" + job.T + "> (");
             if (g.operands.length > 0)
             {
                 g.operands[0].render (this);
             }
             result.append (")");
+            if (useExponent  &&  shift != 0) result.append (printShift (shift) + ")");
             return true;
         }
         if (op instanceof Uniform)
         {
             Uniform u = (Uniform) op;
+            int shift = op.exponent - op.exponentNext;
+            if (useExponent  &&  shift != 0) result.append ("(");
             result.append ("uniform<" + job.T + "> (");
             if (u.operands.length > 0)
             {
                 u.operands[0].render (this);
             }
             result.append (")");
+            if (useExponent  &&  shift != 0) result.append (printShift (shift) + ")");
             return true;
         }
         if (op instanceof Event)

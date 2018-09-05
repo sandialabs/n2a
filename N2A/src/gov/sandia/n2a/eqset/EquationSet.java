@@ -1739,7 +1739,7 @@ public class EquationSet implements Comparable<EquationSet>
         {
             System.out.println ("-----------------------------------------------------------------");
             System.out.println ("top of loop " + all + " " + wait);
-            int exponentTime = ev.maxTime ();
+            int exponentTime = ev.updateTime ();
             boolean changed = ev.updateInputs ();
             if (all) wait--;
             else     wait++;
@@ -1777,14 +1777,23 @@ public class EquationSet implements Comparable<EquationSet>
             else               exponentTime = (int) Math.floor (Math.log (duration) / Math.log (2));
         }
 
-        public int maxTime ()
+        public int updateTime ()
         {
             // If duration was specified, simply return it.
             if (exponentTime != Operator.UNKNOWN) return exponentTime;
 
             int min = Integer.MAX_VALUE;
-            for (Variable v : dt) min = Math.min (min, v.exponent);
-            if (min == Integer.MAX_VALUE) return 1;  // If no value of $t' has been set yet, estimate duration as 1s.
+            for (Variable v : dt)
+            {
+                for (EquationEntry e : v.equations)
+                {
+                    if (e.expression != null  &&  e.expression.exponent != Operator.UNKNOWN)
+                    {
+                        min = Math.min (min, e.expression.centerPower ());
+                    }
+                }
+            }
+            if (min == Integer.MAX_VALUE) return 0;  // If no value of $t' has been set yet, estimate duration as 1s, and $t has exponent=0.
 
             return min + 20;  // +20 allows one million minimally-sized timesteps, each with 10 bit resolution
         }
@@ -1826,9 +1835,11 @@ public class EquationSet implements Comparable<EquationSet>
     {
         for (Variable v : variables)
         {
+            // Collect all $t'
             Variable r = v.reference.variable;
             if (r.name.equals ("$t")  &&  r.order == 1  &&  ! ev.dt.contains (r)) ev.dt.add (r);
 
+            // Collect all input() calls which use "time" mode.
             v.visit (new Visitor ()
             {
                 public boolean visit (Operator op)

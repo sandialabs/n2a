@@ -128,8 +128,8 @@ public:
     virtual void snapshot           ();         ///< save all members trashed by integration
     virtual void restore            ();         ///< restore all members trashed by integration
     virtual void pushDerivative     ();         ///< push D0; D0 = members
-    virtual void multiplyAddToStack (T scalar); ///< D0 += members * scalar
-    virtual void multiply           (T scalar); ///< members *= scalar
+    virtual void multiplyAddToStack (T scalar); ///< D0 += members * scalar; for fixed-point, exponentScalar=1
+    virtual void multiply           (T scalar); ///< members *= scalar; for fixed-point, exponentScalar=1
     virtual void addToMembers       ();         ///< members += D0; pop D0
 
     // Generic metadata

@@ -301,6 +301,7 @@ public class JobC extends Thread
         model.findIntegrated ();
         model.resolveLHS ();
         model.resolveRHS ();
+        addImplicitDependencies (model);
         model.findConstants ();
         model.determineTraceVariableName ();
         model.removeUnused ();  // especially get rid of unneeded $variables created by addSpecials()
@@ -334,10 +335,131 @@ public class JobC extends Thread
         analyze (model);
     }
 
+    public void addImplicitDependencies (EquationSet s)
+    {
+        for (EquationSet p : s.parts)
+        {
+            addImplicitDependencies (p);
+        }
+    
+        final Variable dt = s.find (new Variable ("$t", 1));
+
+        class VisitorDt extends Visitor
+        {
+            public Variable from;
+            public boolean visit (Operator op)
+            {
+                if (op instanceof Input)
+                {
+                    Input i = (Input) op;
+                    String mode = "";
+                    int lastParm = i.operands.length - 1;
+                    if (lastParm > 0) mode = i.operands[lastParm].getString ();
+                    if (mode.contains ("time")  &&  ! from.hasAttribute ("global")  &&  ! T.equals ("int"))
+                    {
+                        from.addDependencyOn (dt);
+                    }
+                }
+                else if (op instanceof Output)
+                {
+                    if (T.equals ("int")) from.addDependencyOn (dt);
+                }
+                return true;
+            }
+        }
+        VisitorDt visitor = new VisitorDt ();
+    
+        for (Variable v : s.variables)
+        {
+            visitor.from = v;
+            v.visit (visitor);
+            if (v.derivative != null) v.addDependencyOn (dt);
+        }
+    }
+
     public void createBackendData (EquationSet s)
     {
         if (! (s.backendData instanceof BackendDataC)) s.backendData = new BackendDataC ();
         for (EquationSet p : s.parts) createBackendData (p);
+    }
+
+    public void findPathToContainer (EquationSet s)
+    {
+        for (EquationSet p : s.parts)
+        {
+            findPathToContainer (p);
+        }
+
+        if (s.connectionBindings != null)
+        {
+            for (ConnectionBinding c : s.connectionBindings)
+            {
+                if (c.endpoint.container == s.container)
+                {
+                    BackendDataC bed = (BackendDataC) s.backendData;
+                    bed.pathToContainer = c.alias;
+                    break;
+                }
+            }
+        }
+    }
+
+    public void findLiveReferences (EquationSet s)
+    {
+        for (EquationSet p : s.parts)
+        {
+            findLiveReferences (p);
+        }
+
+        if (s.lethalConnection  ||  s.lethalContainer)
+        {
+            ArrayList<Object>         resolution     = new ArrayList<Object> ();
+            NavigableSet<EquationSet> touched        = new TreeSet<EquationSet> ();
+            if (! (s.backendData instanceof BackendDataC)) s.backendData = new BackendDataC ();
+            findLiveReferences (s, resolution, touched, ((BackendDataC) s.backendData).localReference, false);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public void findLiveReferences (EquationSet s, ArrayList<Object> resolution, NavigableSet<EquationSet> touched, List<VariableReference> localReference, boolean terminate)
+    {
+        if (terminate)
+        {
+            Variable live = s.find (new Variable ("$live"));
+            if (live == null  ||  live.hasAttribute ("constant")) return;
+            if (live.hasAttribute ("initOnly"))
+            {
+                if (touched.add (s))
+                {
+                    VariableReference result = new VariableReference ();
+                    result.variable = live;
+                    result.resolution = (ArrayList<Object>) resolution.clone ();
+                    localReference.add (result);
+                    s.referenced = true;
+                }
+                return;
+            }
+            // The third possibility is "accessor", in which case we fall through ...
+        }
+
+        // Recurse up to container
+        if (s.lethalContainer)
+        {
+            resolution.add (s.container);
+            findLiveReferences (s.container, resolution, touched, localReference, true);
+            resolution.remove (resolution.size () - 1);
+        }
+
+        // Recurse into connections
+        if (s.lethalConnection)
+        {
+            for (ConnectionBinding c : s.connectionBindings)
+            {
+                resolution.add (c);
+                findLiveReferences (c.endpoint, resolution, touched, localReference, true);
+                resolution.remove (resolution.size () - 1);
+            }
+        }
     }
 
     public void analyzeEvents (EquationSet s) throws Backend.AbortRun
@@ -1136,7 +1258,9 @@ public class JobC extends Thread
                 Backend.err.get ().println ("$n is not applicable to connections");
                 throw new Backend.AbortRun ();
             }
-            result.append ("  resize (" + resolve (bed.n.reference, context, false) + ");\n");
+            result.append ("  resize (" + resolve (bed.n.reference, context, false));
+            if (context.useExponent) result.append (context.printShift (bed.n.exponent - Operator.MSB));
+            result.append (");\n");
         }
         //   make connections
         if (s.connectionBindings != null)
@@ -1159,14 +1283,30 @@ public class JobC extends Thread
             result.append ("  {\n");
             for (Variable v : bed.globalIntegrated)
             {
-                result.append ("    " + resolve (v.reference, context, false) + " = preserve->" + mangle (v) + " + " + resolve (v.derivative.reference, context, false) + " * dt;\n");
+                result.append ("    " + resolve (v.reference, context, false) + " = preserve->" + mangle (v) + " + ");
+                if (T.equals ("int"))
+                {
+                    result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + context.printShift (bed.dt.exponent - Operator.MSB) + ");\n");
+                }
+                else
+                {
+                    result.append (                      resolve (v.derivative.reference, context, false) + " * dt;\n");
+                }
             }
             result.append ("  }\n");
             result.append ("  else\n");
             result.append ("  {\n");
             for (Variable v : bed.globalIntegrated)
             {
-                result.append ("    " + resolve (v.reference, context, false) + " += " + resolve (v.derivative.reference, context, false) + " * dt;\n");
+                result.append ("    " + resolve (v.reference, context, false) + " += ");
+                if (T.equals ("int"))
+                {
+                    result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + context.printShift (bed.dt.exponent - Operator.MSB) + ");\n");
+                }
+                else
+                {
+                    result.append (                      resolve (v.derivative.reference, context, false) + " * dt;\n");
+                }
             }
             result.append ("  }\n");
             context.hasEvent = false;
@@ -1211,7 +1351,9 @@ public class JobC extends Thread
                 }
                 else  // $n may be assigned during the regular update cycle, so we need to monitor it.
                 {
-                    result.append ("  if (" + mangle ("$n") + " != " + mangle ("next_", "$n") + ") Simulator<" + T + ">::instance.resize (this, " + mangle ("next_", "$n") + ");\n");
+                    result.append ("  if (" + mangle ("$n") + " != " + mangle ("next_", "$n") + ") Simulator<" + T + ">::instance.resize (this, " + mangle ("next_", "$n"));
+                    if (context.useExponent) result.append (context.printShift (bed.n.exponent - Operator.MSB));
+                    result.append (");\n");
                     result.append ("  else Simulator<" + T + ">::instance.resize (this, -1);\n");
                 }
             }
@@ -1239,7 +1381,9 @@ public class JobC extends Thread
                             result.append ("  if (n == 0) return false;\n");
                             returnN = false;
                         }
-                        result.append ("  Simulator<" + T + ">::instance.resize (this, " + mangle ("$n") + ");\n");
+                        result.append ("  Simulator<" + T + ">::instance.resize (this, " + mangle ("$n"));
+                        if (context.useExponent) result.append (context.printShift (bed.n.exponent - Operator.MSB));
+                        result.append (");\n");
                     }
                 }
                 else  // $n is the only kind of structural dynamics, so simply do a resize() when needed
@@ -1251,7 +1395,10 @@ public class JobC extends Thread
                             result.append ("  if (n == 0) return false;\n");
                             returnN = false;
                         }
-                        result.append ("  if (n != (int) " + mangle ("$n") + ") Simulator<" + T + ">::instance.resize (this, " + mangle ("$n") + ");\n");
+                        result.append ("  int floorN = ");
+                        if (context.useExponent) result.append (mangle ("$n") + context.printShift (bed.n.exponent - Operator.MSB) + ";");
+                        else                     result.append ("(int) " + mangle ("$n"));
+                        result.append ("  if (n != floorN) Simulator<" + T + ">::instance.resize (this, floorN);\n");
                     }
                 }
             }
@@ -1400,7 +1547,15 @@ public class JobC extends Thread
             result.append ("{\n");
             for (Variable v : bed.globalDerivative)
             {
-                result.append ("  stackDerivative->" + mangle (v) + " += " + mangle (v) + " * scalar;\n");
+                result.append ("  stackDerivative->" + mangle (v) + " += ");
+                if (T.equals ("int"))
+                {
+                    result.append ("(int) ((int64_t) " + mangle (v) + " * scalar >> " + (Operator.MSB - 1) + ");\n");
+                }
+                else
+                {
+                    result.append (                      mangle (v) + " * scalar;\n");
+                }
             }
             result.append ("};\n");
             result.append ("\n");
@@ -1410,7 +1565,14 @@ public class JobC extends Thread
             result.append ("{\n");
             for (Variable v : bed.globalDerivative)
             {
-                result.append ("  " + mangle (v) + " *= scalar;\n");
+                if (T.equals ("int"))
+                {
+                    result.append ("  " + mangle (v) + " = (int64_t) " + mangle (v) + " * scalar >> " + (Operator.MSB - 1) + ";\n");
+                }
+                else
+                {
+                    result.append ("  " + mangle (v) + " *= scalar;\n");
+                }
             }
             result.append ("};\n");
             result.append ("\n");
@@ -1992,14 +2154,30 @@ public class JobC extends Thread
                 result.append ("  {\n");
                 for (Variable v : bed.localIntegrated)
                 {
-                    result.append ("    " + resolve (v.reference, context, false) + " = preserve->" + mangle (v) + " + " + resolve (v.derivative.reference, context, false) + " * dt;\n");
+                    result.append ("    " + resolve (v.reference, context, false) + " = preserve->" + mangle (v) + " + ");
+                    if (T.equals ("int"))
+                    {
+                        result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + context.printShift (bed.dt.exponent - Operator.MSB) + ");\n");
+                    }
+                    else
+                    {
+                        result.append (                      resolve (v.derivative.reference, context, false) + " * dt;\n");
+                    }
                 }
                 result.append ("  }\n");
                 result.append ("  else\n");
                 result.append ("  {\n");
                 for (Variable v : bed.localIntegrated)
                 {
-                    result.append ("    " + resolve (v.reference, context, false) + " += " + resolve (v.derivative.reference, context, false) + " * dt;\n");
+                    result.append ("    " + resolve (v.reference, context, false) + " += ");
+                    if (T.equals ("int"))
+                    {
+                        result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + context.printShift (bed.dt.exponent - Operator.MSB) + ");\n");
+                    }
+                    else
+                    {
+                        result.append (                      resolve (v.derivative.reference, context, false) + " * dt;\n");
+                    }
                 }
                 result.append ("  }\n");
             }
@@ -2209,11 +2387,18 @@ public class JobC extends Thread
                 if (bed.p.hasAttribute ("constant"))
                 {
                     double pvalue = ((Scalar) ((Constant) bed.p.equations.first ().expression).value).value;
-                    if (pvalue != 0) result.append ("  if (" + resolve (bed.p.reference, context, false) + " < uniform<" + T + "> ())\n");
+                    if (pvalue != 0)
+                    {
+                        result.append ("  if (" + resolve (bed.p.reference, context, false) + " < uniform<" + T + "> ()");
+                        if (context.useExponent) result.append (context.printShift (-1 - bed.p.exponent));  // -1 is hard-coded from the Uniform function.
+                        result.append (")\n");
+                    }
                 }
                 else
                 {
-                    result.append ("  if (" + mangle ("$p") + " == 0  ||  " + mangle ("$p") + " < 1  &&  " + mangle ("$p") + " < uniform<" + T + "> ())\n");
+                    result.append ("  if (" + mangle ("$p") + " == 0  ||  " + mangle ("$p") + " < " + context.print (1, bed.p.exponent) + "  &&  " + mangle ("$p") + " < uniform<" + T + "> ()");
+                    if (context.useExponent) result.append (context.printShift (-1 - bed.p.exponent));
+                    result.append (")\n");
                 }
                 result.append ("  {\n");
                 result.append ("    die ();\n");
@@ -2384,7 +2569,15 @@ public class JobC extends Thread
             result.append ("{\n");
             for (Variable v : bed.localDerivative)
             {
-                result.append ("  stackDerivative->" + mangle (v) + " += " + mangle (v) + " * scalar;\n");
+                result.append ("  stackDerivative->" + mangle (v) + " += ");
+                if (T.equals ("int"))
+                {
+                    result.append ("(int) ((int64_t) " + mangle (v) + " * scalar >> " + (Operator.MSB - 1) + ");\n");
+                }
+                else
+                {
+                    result.append (                      mangle (v) + " * scalar;\n");
+                }
             }
             for (EquationSet e : s.parts)
             {
@@ -2398,7 +2591,14 @@ public class JobC extends Thread
             result.append ("{\n");
             for (Variable v : bed.localDerivative)
             {
-                result.append ("  " + mangle (v) + " *= scalar;\n");
+                if (T.equals ("int"))
+                {
+                    result.append ("  " + mangle (v) + " = (int64_t) " + mangle (v) + " * scalar >> " + (Operator.MSB - 1) + ";\n");
+                }
+                else
+                {
+                    result.append ("  " + mangle (v) + " *= scalar;\n");
+                }
             }
             for (EquationSet e : s.parts)
             {
@@ -3269,6 +3469,7 @@ public class JobC extends Thread
 
     public void prepareStaticObjects (Operator op, final RendererC context, final String pad) throws Exception
     {
+        final BackendDataC bed = context.bed;
         Visitor visitor = new Visitor ()
         {
             public boolean visit (Operator op)
@@ -3290,20 +3491,16 @@ public class JobC extends Thread
                             context.result.append (pad + stringName + " = \"" + o.variableName + "\";\n");
                         }
                     }
-                    else if (o.operands.length > 3)  // mode flags are present
+                    if (o.operands[0] instanceof Constant)
                     {
-                        if (o.operands[0] instanceof Constant)
+                        String outputName = outputNames.get (o.operands[0].toString ());
+                        if (o.operands.length >= 4  &&  o.operands[3].getString ().contains ("raw"))
                         {
-                            // Detect raw flag
-                            Operator op3 = o.operands[3];
-                            if (op3 instanceof Constant)
-                            {
-                                if (op3.toString ().contains ("raw"))
-                                {
-                                    String outputName = outputNames.get (o.operands[0].toString ());
-                                    context.result.append (pad + outputName + "->raw = true;\n");
-                                }
-                            }
+                            context.result.append (pad + outputName + "->raw = true;\n");
+                        }
+                        if (T.equals ("int"))
+                        {
+                            context.result.append (pad + outputName + "->exponentTime = " + bed.dt.exponent + ";\n");
                         }
                     }
                     return true;  // Continue to drill down, because I/O functions can be nested.
@@ -3330,24 +3527,10 @@ public class JobC extends Thread
                             {
                                 context.result.append (pad + inputName + "->exponentTime = " + i.exponentTime + ";\n");
                             }
-                            if (! context.global)
+                            if (! context.global  &&  ! T.equals ("int"))  // Note: In the case of T==int, we don't need to set epsilon because it is already set to 1 by the constructor.
                             {
-                                if (context.bed.dt == null)
-                                {
-                                    // Create a fake $t'. Alternative is to enforce dependency of Input on $t'.
-                                    Variable dt = new Variable ("$t", 1);
-                                    dt.container = context.part;
-                                    dt.reference = new VariableReference ();
-                                    dt.reference.variable = dt;
-                                    dt.addAttribute ("preexistent");
-
-                                    context.result.append (pad + inputName + "->epsilon = " + resolve (dt.reference, context, false) + " / 1000;\n");
-                                }
-                                else
-                                {
-                                    // Read $t' as an lvalue, to ensure we get any newly-set frequency.
-                                    context.result.append (pad + inputName + "->epsilon = " + resolve (context.bed.dt.reference, context, true) + " / 1000;\n");
-                                }
+                                // Read $t' as an lvalue, to ensure we get any newly-set frequency.
+                                context.result.append (pad + inputName + "->epsilon = " + resolve (bed.dt.reference, context, true) + " / 1000;\n");
                             }
                         }
                     }
@@ -3364,6 +3547,8 @@ public class JobC extends Thread
     **/
     public void prepareDynamicObjects (Operator op, final RendererC context, final boolean init, final String pad) throws Exception
     {
+        final BackendDataC bed = context.bed;
+
         // Pass 1 -- Strings and matrix expressions
         Visitor visitor1 = new Visitor ()
         {
@@ -3419,7 +3604,7 @@ public class JobC extends Thread
         };
         op.visit (visitor1);
 
-        // Pass 2 -- Input functions
+        // Pass 2 -- I/O functions
         Visitor visitor2 = new Visitor ()
         {
             public boolean visit (Operator op)
@@ -3450,15 +3635,8 @@ public class JobC extends Thread
 
                         // Detect time flag
                         String mode = "";
-                        if (i.operands.length > 3)
-                        {
-                            mode = i.operands[3].toString ();  // just assuming it's a constant string
-                        }
-                        else if (i.operands[1] instanceof Constant)
-                        {
-                            Constant c = (Constant) i.operands[1];
-                            if (c.value instanceof Text) mode = c.toString ();
-                        }
+                        int lastParm = i.operands.length - 1;
+                        if (lastParm > 0) mode = i.operands[lastParm].getString ();
                         if (mode.contains ("time"))
                         {
                             context.result.append (pad + inputName + "->time = true;\n");
@@ -3466,22 +3644,9 @@ public class JobC extends Thread
                             {
                                 context.result.append (pad + inputName + "->exponentTime = " + i.exponentTime + ";\n");
                             }
-                            if (! context.global)
+                            if (! context.global  &&  ! T.equals ("int"))
                             {
-                                if (context.bed.dt == null)
-                                {
-                                    Variable dt = new Variable ("$t", 1);
-                                    dt.container = context.part;
-                                    dt.reference = new VariableReference ();
-                                    dt.reference.variable = dt;
-                                    dt.addAttribute ("preexistent");
-
-                                    context.result.append (pad + inputName + "->epsilon = " + resolve (dt.reference, context, false) + " / 1000;\n");
-                                }
-                                else
-                                {
-                                    context.result.append (pad + inputName + "->epsilon = " + resolve (context.bed.dt.reference, context, true) + " / 1000;\n");
-                                }
+                                context.result.append (pad + inputName + "->epsilon = " + resolve (bed.dt.reference, context, true) + " / 1000;\n");
                             }
                         }
                     }
@@ -3496,17 +3661,13 @@ public class JobC extends Thread
                         String stringName = stringNames.get (o.operands[0]);
                         context.result.append (pad + "OutputHolder<" + T + "> * " + outputName + " = outputHelper<" + T + "> (" + stringName + ");\n");
 
-                        // Detect raw flag
-                        if (o.operands.length > 3)
+                        if (o.operands.length >= 4  &&  o.operands[3].getString ().contains ("raw"))
                         {
-                            Operator op3 = o.operands[3];
-                            if (op3 instanceof Constant)
-                            {
-                                if (op3.toString ().contains ("raw"))
-                                {
-                                    context.result.append (pad + outputName + "->raw = true;\n");
-                                }
-                            }
+                            context.result.append (pad + outputName + "->raw = true;\n");
+                        }
+                        if (T.equals ("int"))
+                        {
+                            context.result.append (pad + outputName + "->exponentTime = " + bed.dt.exponent + ";\n");
                         }
                     }
                     return true;
@@ -3900,84 +4061,5 @@ public class JobC extends Thread
         else                    pointer = "& " + pointer;
         result.append (prefix + "  Simulator<" + T + ">::instance.clearNew (" + pointer + ");\n");
         result.append (prefix + "}\n");
-    }
-
-    public void findPathToContainer (EquationSet s)
-    {
-        for (EquationSet p : s.parts)
-        {
-            findPathToContainer (p);
-        }
-
-        if (s.connectionBindings != null)
-        {
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                if (c.endpoint.container == s.container)
-                {
-                    BackendDataC bed = (BackendDataC) s.backendData;
-                    bed.pathToContainer = c.alias;
-                    break;
-                }
-            }
-        }
-    }
-
-    public void findLiveReferences (EquationSet s)
-    {
-        for (EquationSet p : s.parts)
-        {
-            findLiveReferences (p);
-        }
-
-        if (s.lethalConnection  ||  s.lethalContainer)
-        {
-            ArrayList<Object>         resolution     = new ArrayList<Object> ();
-            NavigableSet<EquationSet> touched        = new TreeSet<EquationSet> ();
-            if (! (s.backendData instanceof BackendDataC)) s.backendData = new BackendDataC ();
-            findLiveReferences (s, resolution, touched, ((BackendDataC) s.backendData).localReference, false);
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    public void findLiveReferences (EquationSet s, ArrayList<Object> resolution, NavigableSet<EquationSet> touched, List<VariableReference> localReference, boolean terminate)
-    {
-        if (terminate)
-        {
-            Variable live = s.find (new Variable ("$live"));
-            if (live == null  ||  live.hasAttribute ("constant")) return;
-            if (live.hasAttribute ("initOnly"))
-            {
-                if (touched.add (s))
-                {
-                    VariableReference result = new VariableReference ();
-                    result.variable = live;
-                    result.resolution = (ArrayList<Object>) resolution.clone ();
-                    localReference.add (result);
-                    s.referenced = true;
-                }
-                return;
-            }
-            // The third possibility is "accessor", in which case we fall through ...
-        }
-
-        // Recurse up to container
-        if (s.lethalContainer)
-        {
-            resolution.add (s.container);
-            findLiveReferences (s.container, resolution, touched, localReference, true);
-            resolution.remove (resolution.size () - 1);
-        }
-
-        // Recurse into connections
-        if (s.lethalConnection)
-        {
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                resolution.add (c);
-                findLiveReferences (c.endpoint, resolution, touched, localReference, true);
-                resolution.remove (resolution.size () - 1);
-            }
-        }
     }
 }

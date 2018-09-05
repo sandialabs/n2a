@@ -628,13 +628,20 @@ public class Variable implements Comparable<Variable>
             if (name.equals ("$t")  &&  order == 1)  // $t'
             {
                 // Align with $t
-                centerNew  -= exponentTime - exponentNew;
-                exponentNew = exponentTime;
-                if (centerNew < 0  ||  centerNew > Operator.MSB)
+                if (exponentNew == Operator.UNKNOWN)
                 {
-                    Backend.err.get ().println ("ERROR: not enough fixed-point resolution for given $t'");
-                    throw new Backend.AbortRun ();
+                    centerNew = Operator.MSB - 20;
                 }
+                else
+                {
+                    centerNew -= exponentTime - exponentNew;
+                    if (centerNew < 0  ||  centerNew > Operator.MSB)
+                    {
+                        Backend.err.get ().println ("ERROR: not enough fixed-point resolution for given $t'");
+                        throw new Backend.AbortRun ();
+                    }
+                }
+                exponentNew = exponentTime;
             }
         }
 

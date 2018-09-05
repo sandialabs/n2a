@@ -70,7 +70,7 @@ int
 uniform ()
 {
 #if RAND_MAX == 2147483647
-    return rand ();  // This version can never actually reach 1, only [0,1). However, this shouldn't make any algorithmic difference to callers.
+    return rand ();  // exponent=-1; This version can never actually reach 1, only [0,1). However, this shouldn't make any algorithmic difference to callers.
 #else
 # error Need support for unique size of RAND_MAX
 #endif
@@ -80,7 +80,7 @@ template<>
 int
 uniform (int sigma)
 {
-    return (int64_t) uniform<int> () * sigma >> 31;  // ones bit of uniform draw is at MSB+1
+    return (int64_t) uniform<int> () * sigma >> 31;  // shift = -1 - MSB
 }
 
 // Box-Muller method (polar variant) for Gaussian random numbers.
@@ -652,7 +652,13 @@ ConnectPopulation<T>::reset (bool newOnly)
     this->newOnly = newOnly;
     if (newOnly) count = size - firstborn;
     else         count = size;
+#   ifdef n2a_FP
+    // raw multiply = -1+MSB-MSB = -1
+    // shift = -1 - MSB
+    if (count > 1) i = (int) round ((int64_t) uniform<T> () * (count - 1) >> FP_MSB + 1);
+#   else
     if (count > 1) i = (int) round (uniform<T> () * (count - 1));
+#   endif
     else           i = 0;
     stop = i + count;
 }
@@ -778,7 +784,11 @@ ConnectPopulationNN<T>::reset (bool newOnly)
     {
         if (newOnly) this->count = this->size - this->firstborn;
         else         this->count = this->size;
+#       ifdef n2a_FP
+        if (this->count > 1) this->i = (int) round ((int64_t) uniform<T> () * (this->count - 1) >> FP_MSB + 1);
+#       else
         if (this->count > 1) this->i = (int) round (uniform<T> () * (this->count - 1));
+#       endif
         else                 this->i = 0;
     }
     this->stop = this->i + this->count;
@@ -931,7 +941,11 @@ Population<T>::connect ()
         T create = c->getP ();
         // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it would have no effect.
         if (create <= 0) continue;
+#       ifdef n2a_FP
+        if (create < 1  &&  create < uniform<T> () >> 16) continue;
+#       else
         if (create < 1  &&  create < uniform<T> ()) continue;
+#       endif
 
         c->enterSimulation ();
         event->enqueue (c);
@@ -1100,7 +1114,11 @@ Simulator<T>::Simulator ()
     integrator = 0;
     stop = false;
 
+#   ifdef n2a_FP
+    EventStep<T> * event = new EventStep<T> (0, (1 << FP_MSB) / 10000);  // Works for exponentTime=0. For any other case, it is necessary for top-level part to call setPeriod().
+#   else
     EventStep<T> * event = new EventStep<T> ((T) 0, (T) 1e-4);
+#   endif
     currentEvent = event;
     periods.push_back (event);
 }
@@ -1296,6 +1314,76 @@ RungeKutta<T>::run (Event<T> & event)
         visitor->part->restore ();
     });
 }
+
+#ifdef n2a_FP
+
+template<>
+void
+RungeKutta<int>::run (Event<int> & event)
+{
+    // k1
+    event.visit ([](Visitor<int> * visitor)
+    {
+        visitor->part->snapshot ();
+        visitor->part->pushDerivative ();
+    });
+
+    // k2 and k3
+    EventStep<int> & es = (EventStep<int> &) event;
+    int t  = es.t;  // Save current values of t and dt
+    int dt = es.dt;
+    es.dt >>= 1;  // divide by 2
+    es.t   -= es.dt;  // t is the current point in time, so we must look backward half a timestep
+    for (int i = 0; i < 2; i++)
+    {
+        event.visit ([](Visitor<int> * visitor)
+        {
+            visitor->part->integrate ();
+        });
+        event.visit ([](Visitor<int> * visitor)
+        {
+            visitor->part->updateDerivative ();
+        });
+        event.visit ([](Visitor<int> * visitor)
+        {
+            visitor->part->finalizeDerivative ();
+            visitor->part->multiplyAddToStack (2 << FP_MSB - 1);  // exponent=1, just enough to hold the values used by RK4
+        });
+    }
+    es.dt = dt;  // restore original values
+    es.t  = t;
+
+    // k4
+    event.visit ([](Visitor<int> * visitor)
+    {
+        visitor->part->integrate ();
+    });
+    event.visit ([](Visitor<int> * visitor)
+    {
+        visitor->part->updateDerivative ();
+    });
+    event.visit ([](Visitor<int> * visitor)
+    {
+        visitor->part->finalizeDerivative ();
+        visitor->part->addToMembers ();  // clears stackDerivative
+    });
+
+    // finish
+    event.visit ([](Visitor<int> * visitor)
+    {
+        visitor->part->multiply ((1 << FP_MSB - 1) / 6);
+    });
+    event.visit ([](Visitor<int> * visitor)
+    {
+        visitor->part->integrate ();
+    });
+    event.visit ([](Visitor<int> * visitor)
+    {
+        visitor->part->restore ();
+    });
+}
+
+#endif
 
 
 // class EventStep -----------------------------------------------------------

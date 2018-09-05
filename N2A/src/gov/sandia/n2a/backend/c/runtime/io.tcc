@@ -455,7 +455,11 @@ InputHolder<T>::InputHolder (const String & fileName)
     timeColumn    = 0;
     timeColumnSet = false;
     time          = false;
+#   ifdef n2a_FP
+    epsilon       = 1;
+#   else
     epsilon       = (T) 1e-6;
+#   endif
 
     if (fileName.empty ()) in = &std::cin;
     else                   in = new std::ifstream (fileName.c_str ());
@@ -737,11 +741,19 @@ OutputHolder<T>::trace (T now)
         if (columnValues.empty ())  // slip $t into first column
         {
             columnMap["$t"] = 0;
+#           ifdef n2a_FP
+            columnValues.push_back ((float) t / pow (2.0f, FP_MSB - exponentTime));
+#           else
             columnValues.push_back (t);
+#           endif
         }
         else
         {
+#           ifdef n2a_FP
+            columnValues[0] = (float) t / pow (2.0f, FP_MSB - exponentTime);
+#           else
             columnValues[0] = t;
+#           endif
         }
         traceReceived = true;
     }
