@@ -226,9 +226,8 @@ public class InternalBackendData
                 if (result != null  &&  v.writeIndex >= 0) temp.set (v, result);
             }
 
-            double before;
-            if (edge == NONZERO) before = 0;  // just to silence error about uninitialized variable
-            else                 before = ((Scalar) temp.get (track.reference)).value;
+            double before = 0;
+            if (edge != NONZERO) before = ((Scalar) temp.get (track.reference)).value;
 
             double after;
             if (trackOne)  // This is a single variable, so check its value directly.
