@@ -127,7 +127,6 @@ public class Function extends Operator
         for (int i = 0; i < operands.length; i++)
         {
             Operator op = operands[i];
-            op.exponentNext = exponentNext;
             op.determineExponent (from);
             if (op.exponent != UNKNOWN)
             {
@@ -141,6 +140,16 @@ public class Function extends Operator
             cent /= count;
             pow  /= count;
             updateExponent (from, pow, cent);
+        }
+    }
+
+    public void determineExponentNext (Variable from)
+    {
+        for (int i = 0; i < operands.length; i++)
+        {
+            Operator op = operands[i];
+            op.exponentNext = exponentNext;
+            op.determineExponentNext (from);
         }
     }
 

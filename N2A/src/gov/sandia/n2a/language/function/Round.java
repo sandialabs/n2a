@@ -34,14 +34,13 @@ public class Round extends Function
         };
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponentNext (Variable from)
     {
         Operator op = operands[0];
         if (op.exponent < 0)        op.exponentNext = 0;  // Must have at least one bit above the decimal point in order to round.
         else if (op.exponent < MSB) op.exponentNext = op.exponent;  // Decimal point is visible, so we can process this.
         else                        op.exponentNext = exponentNext; // Otherwise, just pass through.
-        op.determineExponent (from);
-        updateExponent (from, op.exponent, op.center);
+        op.determineExponentNext (from);
     }
 
     public Type eval (Instance context)

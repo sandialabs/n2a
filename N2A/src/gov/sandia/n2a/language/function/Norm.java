@@ -39,8 +39,6 @@ public class Norm extends Function
     {
         Operator op0 = operands[0];  // A
         Operator op1 = operands[1];  // n
-        op0.exponentNext = op0.exponent;
-        op1.exponentNext = Operator.MSB / 2;
         op0.determineExponent (from);
         op1.determineExponent (from);
 
@@ -82,6 +80,16 @@ public class Norm extends Function
         }
 
         updateExponent (from, exponentNew, centerNew);
+    }
+
+    public void determineExponentNext (Variable from)
+    {
+        Operator op0 = operands[0];  // A
+        Operator op1 = operands[1];  // n
+        op0.exponentNext = op0.exponent;
+        op1.exponentNext = Operator.MSB / 2;
+        op0.determineExponentNext (from);
+        op1.determineExponentNext (from);
     }
 
     public Type getType ()

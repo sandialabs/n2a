@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.operator;
 
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorBinary;
@@ -67,15 +68,18 @@ public class Add extends OperatorBinary
 
     public void determineExponent (Variable from)
     {
-        operand0.exponentNext = exponent;
-        operand1.exponentNext = exponent;
         operand0.determineExponent (from);
         operand1.determineExponent (from);
-        alignExponent (from);
 
         if (operand0.exponent != UNKNOWN  &&  operand1.exponent != UNKNOWN)
         {
+            alignExponent (from);
+
             int pow = (operand0.exponent + operand1.exponent) / 2;
+            // Call an odd bit in favor of a naked variable rather than the expression on the other side of the comparison.
+            if      (operand0 instanceof AccessVariable  &&  Math.abs (pow - operand0.exponent) == 1) pow = operand0.exponent;
+            else if (operand1 instanceof AccessVariable  &&  Math.abs (pow - operand1.exponent) == 1) pow = operand1.exponent;
+
             int c0 = operand0.center - (pow - operand0.exponent);
             int c1 = operand1.center - (pow - operand1.exponent);
             int cent = Math.max (c0, c1);
@@ -89,6 +93,23 @@ public class Add extends OperatorBinary
         {
             updateExponent (from, operand1.exponent, operand1.center);
         }
+    }
+
+    public void determineExponentNext (Variable from)
+    {
+        int next = exponent;  // The default
+        if (parent == null)  // top-level operator, about to assign to a variable
+        {
+            if (   operand0 instanceof AccessVariable  &&  ((AccessVariable) operand0).reference.variable == from
+                || operand1 instanceof AccessVariable  &&  ((AccessVariable) operand1).reference.variable == from)
+            {
+                next = from.exponent;
+            }
+        }
+        operand0.exponentNext = next;
+        operand1.exponentNext = next;
+        operand0.determineExponentNext (from);
+        operand1.determineExponentNext (from);
     }
 
     public Type eval (Instance context)

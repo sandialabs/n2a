@@ -47,12 +47,8 @@ public class Gaussian extends Function
         if (operands.length > 0)
         {
             Operator op = operands[0];
-            op.exponentNext = exponentNext;
             op.determineExponent (from);
-            if (op.exponent != UNKNOWN)
-            {
-                updateExponent (from, op.exponent, op.center);
-            }
+            if (op.exponent != UNKNOWN) updateExponent (from, op.exponent, op.center);
         }
         else
         {

@@ -39,7 +39,6 @@ public class SquareRoot extends Function
     public void determineExponent (Variable from)
     {
         Operator op = operands[0];
-        op.exponentNext = op.exponent;
         op.determineExponent (from);
 
         if (op.exponent == UNKNOWN) return;
@@ -47,6 +46,13 @@ public class SquareRoot extends Function
         int centerNew   = MSB / 2;
         int exponentNew = pow + MSB - centerNew;
         updateExponent (from, exponentNew, centerNew);
+    }
+
+    public void determineExponentNext (Variable from)
+    {
+        Operator op = operands[0];
+        op.exponentNext = op.exponent;
+        op.determineExponentNext (from);
     }
 
     public Type eval (Instance context)

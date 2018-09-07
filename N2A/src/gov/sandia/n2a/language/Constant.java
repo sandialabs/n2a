@@ -92,21 +92,25 @@ public class Constant extends Operator
     **/
     public void determineExponent (Variable from, int exponentOther)
     {
-        int shift = exponentOther - exponent;
-        if (exponent < exponentOther)  // need right shift (positive)
+        int shift = exponent - exponentOther;
+        if (shift == 0) return;
+        if (shift < 0)  // down-shift
         {
-            int z = trailingZeros ();
-            z += center - 23;  // 23 is position of implied msb of mantissa
-            z = Math.max (z, 0);
-            shift = Math.min (shift, z);
-        }
-        else if (exponentOther < exponent)  // need left shift (negative)
-        {
-            int z = MSB - center;
+            // The mantissa of a float is 24 bits (1 implicit + 23 explicit).
+            // If this were aligned at MSB, we would have an extra (MSB+1)-24=MSB-23 zero bits beyond any zeros in the mantissa.
+            // Since the mantissa is actually aligned with center, we must subtract MSB-center bits from that count.
+            // available zero bits = zeros(mantissa)+MSB-23-(MSB-center) = zeros(mantissa)-23+center
+            int z = trailingZeros () - 23 + center;
+            z = Math.max (z, 0);  // Don't allow negative z. This could happen if we are truncating some bits (center is less than 23, but there are no trailing zeros).
             shift = Math.max (shift, -z);
         }
-        int exponentNew = exponent + shift;
-        int centerNew   = center   - shift;
+        else   // up-shift
+        {
+            int z = MSB - center;  // number of available (zero) bits to the left
+            shift = Math.min (shift, z);
+        }
+        int exponentNew = exponent - shift;
+        int centerNew   = center   + shift;
         updateExponent (from, exponentNew, centerNew);
     }
 

@@ -117,8 +117,9 @@ public class AccessVariable extends Operator
     public void determineExponent (Variable from)
     {
         Variable v = reference.variable;
-        if (v.exponentLast != UNKNOWN) updateExponent (from, v.exponentLast, v.centerLast);
-        else                           updateExponent (from, v.exponent,     v.center);
+        // Don't flag a change, because we are merely reflecting the current state of v.
+        exponent = v.exponent;
+        center   = v.center;
     }
 
     public Type getType ()

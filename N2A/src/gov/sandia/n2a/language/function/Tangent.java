@@ -36,7 +36,6 @@ public class Tangent extends Function
     public void determineExponent (Variable from)
     {
         Operator op = operands[0];
-        op.exponentNext = op.exponent;
         op.determineExponent (from);
 
         int centerNew   = MSB / 2;
@@ -44,6 +43,13 @@ public class Tangent extends Function
         if (operands.length >= 2) exponentNew = getExponentHint (operands[1].getString (), exponentNew);
         exponentNew += MSB - centerNew;
         updateExponent (from, exponentNew, centerNew);
+    }
+
+    public void determineExponentNext (Variable from)
+    {
+        Operator op = operands[0];
+        op.exponentNext = op.exponent;
+        op.determineExponentNext (from);
     }
 
     public Type eval (Instance context)

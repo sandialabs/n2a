@@ -108,15 +108,26 @@ public class AccessElement extends Function
     public void determineExponent (Variable from)
     {
         Operator v = operands[0];
-        v.exponentNext = exponentNext;
         v.determineExponent (from);
         updateExponent (from, v.exponent, v.center);
 
         for (int i = 1; i < operands.length; i++)
         {
+            operands[i].determineExponent (from);
+        }
+    }
+
+    public void determineExponentNext (Variable from)
+    {
+        Operator v = operands[0];
+        v.exponentNext = exponentNext;
+        v.determineExponentNext (from);
+
+        for (int i = 1; i < operands.length; i++)
+        {
             Operator op = operands[i];
             op.exponentNext = MSB;  // forces pure integer
-            op.determineExponent (from);
+            op.determineExponentNext (from);
         }
     }
 

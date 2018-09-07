@@ -37,9 +37,7 @@ public class Modulo extends OperatorBinary
 
     public void determineExponent (Variable from)
     {
-        // TODO: it might be worth shifting a few bits to align the operands, because that case is cheap to compute.
-        operand0.exponentNext = operand0.exponent;
-        operand1.exponentNext = operand1.exponent;
+        // TODO: it might be worth shifting a few bits (in a custom determineExponentNext) to align the operands, because that case is cheap to compute at runtime.
         operand0.determineExponent (from);
         operand1.determineExponent (from);
 

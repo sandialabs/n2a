@@ -64,24 +64,9 @@ public class Input extends Function
         String mode = "";
         int lastParm = operands.length - 1;
         if (lastParm > 0) mode = operands[lastParm].getString ();
-        boolean raw     = mode.contains ("raw");
         boolean columns = mode.contains ("columns");
-        boolean time    = mode.contains ("time");
 
-        if (lastParm >= 1)
-        {
-            Operator op = operands[1];
-            if (time) op.exponentNext = exponentTime;
-            else      op.exponentNext = MSB;  // We expect an integer.
-            op.determineExponent (from);
-        }
-        if (lastParm >= 2)
-        {
-            Operator op = operands[2];
-            if (raw) op.exponentNext = MSB;  // We expect an integer.
-            else     op.exponentNext = 0;    // We expect a number in [0,1], with some provision for going slightly out of bounds.
-            op.determineExponent (from);
-        }
+        for (int i = 1; i <= lastParm; i++) operands[i].determineExponent (from);
 
         if (columns)
         {
@@ -92,6 +77,30 @@ public class Input extends Function
             int centerNew   = MSB / 2;
             int exponentNew = getExponentHint (mode, 0) + MSB - centerNew;
             updateExponent (from, exponentNew, centerNew);
+        }
+    }
+
+    public void determineExponentNext (Variable from)
+    {
+        String mode = "";
+        int lastParm = operands.length - 1;
+        if (lastParm > 0) mode = operands[lastParm].getString ();
+        boolean raw  = mode.contains ("raw");
+        boolean time = mode.contains ("time");
+
+        if (lastParm >= 1)
+        {
+            Operator op = operands[1];
+            if (time) op.exponentNext = exponentTime;
+            else      op.exponentNext = MSB;  // We expect an integer.
+            op.determineExponentNext (from);
+        }
+        if (lastParm >= 2)
+        {
+            Operator op = operands[2];
+            if (raw) op.exponentNext = MSB;  // We expect an integer.
+            else     op.exponentNext = 0;    // We expect a number in [0,1], with some provision for going slightly out of bounds.
+            op.determineExponentNext (from);
         }
     }
 

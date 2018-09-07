@@ -106,8 +106,6 @@ public class Power extends OperatorBinary
 
     public void determineExponent (Variable from)
     {
-        operand0.exponentNext = operand0.exponent;
-        operand1.exponentNext = MSB / 2;  // Exponentiation is very sensitive, so no benefit in allowing arbitrary size of input.
         operand0.determineExponent (from);
         operand1.determineExponent (from);
 
@@ -145,6 +143,14 @@ public class Power extends OperatorBinary
             exponentNew += MSB - centerNew;
             updateExponent (from, exponentNew, centerNew);
         }
+    }
+
+    public void determineExponentNext (Variable from)
+    {
+        operand0.exponentNext = operand0.exponent;
+        operand1.exponentNext = MSB / 2;  // Exponentiation is very sensitive, so no benefit in allowing arbitrary size of input.
+        operand0.determineExponentNext (from);
+        operand1.determineExponentNext (from);
     }
 
     public void render (Renderer renderer)

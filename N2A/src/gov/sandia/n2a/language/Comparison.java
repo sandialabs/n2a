@@ -34,21 +34,9 @@ public class Comparison extends OperatorBinary implements OperatorLogical
 
     public void determineExponent (Variable from)
     {
-        int next;
-        if (operand0.exponent != UNKNOWN  &&  operand1.exponent != UNKNOWN)
-        {
-            next = (operand0.exponent + operand1.exponent) / 2;
-        }
-        else
-        {
-            next = Math.max (operand0.exponent, operand1.exponent);  // UNKNOWN is less than any valid value.
-        }
-        operand0.exponentNext = next;
-        operand1.exponentNext = next;
-
         operand0.determineExponent (from);
         operand1.determineExponent (from);
-        alignExponent (from);
+        if (operand0.exponent != UNKNOWN  ||  operand1.exponent != UNKNOWN) alignExponent (from);
         int centerNew   = MSB / 2;
         int exponentNew = MSB - centerNew;
         updateExponent (from, exponentNew, centerNew);
@@ -62,7 +50,7 @@ public class Comparison extends OperatorBinary implements OperatorLogical
             if (! v.hasAttribute ("preexistent")  &&  (v.bound == null  ||  v.bound.centerPower () < operand1.centerPower ()))
             {
                 v.bound = operand1;
-                from.changed = true;  // Probably "from" is not the variable changing, but this is sufficient to signal that some change happened.
+                from.changed = true;  // "from" is not necessarily the variable changing, but this is sufficient to signal that some change happened.
             }
         }
 
@@ -75,6 +63,19 @@ public class Comparison extends OperatorBinary implements OperatorLogical
                 from.changed = true;
             }
         }
+    }
+
+    public void determineExponentNext (Variable from)
+    {
+        int next = (operand0.exponent + operand1.exponent) / 2;
+        // Call an odd bit in favor of a naked variable rather than the expression on the other side of the comparison.
+        if      (operand0 instanceof AccessVariable  &&  Math.abs (next - operand0.exponent) == 1) next = operand0.exponent;
+        else if (operand1 instanceof AccessVariable  &&  Math.abs (next - operand1.exponent) == 1) next = operand1.exponent;
+
+        operand0.exponentNext = next;
+        operand1.exponentNext = next;
+        operand0.determineExponentNext (from);
+        operand1.determineExponentNext (from);
     }
 
     public Type getType ()

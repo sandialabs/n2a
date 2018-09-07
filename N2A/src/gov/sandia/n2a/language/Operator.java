@@ -189,6 +189,10 @@ public class Operator implements Cloneable
     {
     }
 
+    public void determineExponentNext (Variable from)
+    {
+    }
+
     public void dumpExponents (String pad)
     {
         System.out.print (pad + this + " (");

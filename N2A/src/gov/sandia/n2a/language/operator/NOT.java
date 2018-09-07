@@ -12,6 +12,7 @@ import gov.sandia.n2a.language.OperatorLogical;
 import gov.sandia.n2a.language.OperatorUnary;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
+import gov.sandia.n2a.language.type.Matrix;
 
 public class NOT extends OperatorUnary implements OperatorLogical
 {
@@ -43,11 +44,31 @@ public class NOT extends OperatorUnary implements OperatorLogical
 
     public void determineExponent (Variable from)
     {
-        operand.exponentNext = operand.exponent;
         operand.determineExponent (from);
-        int centerNew   = MSB / 2;
-        int exponentNew = MSB - centerNew;
-        updateExponent (from, exponentNew, centerNew);
+        if (operand.exponent == UNKNOWN) return;
+        if (operand.getType () instanceof Matrix)  // Matrix inverse
+        {
+            // matrix is A; inverse is !A
+            // The idea is that the individual elements of !A should roughly multiply with corresponding
+            // elements in A to produce scalars with magnitude around 1 (center power near 0).
+            // Alternately, elementwise 1/A should have same power as !A.
+            int cent = MSB / 2;
+            int pow = 0 - operand.centerPower ();  // See Divide class. We're treating this as 1/A, where 1 has center power 0.
+            pow += MSB - cent;
+            updateExponent (from, pow, cent);
+        }
+        else  // Logical not
+        {
+            int centerNew   = MSB / 2;
+            int exponentNew = MSB - centerNew;
+            updateExponent (from, exponentNew, centerNew);
+        }
+    }
+
+    public void determineExponentNext (Variable from)
+    {
+        operand.exponentNext = operand.exponent;
+        operand.determineExponentNext (from);
     }
 
     public Type eval (Instance context)

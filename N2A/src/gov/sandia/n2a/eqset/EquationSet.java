@@ -1731,34 +1731,38 @@ public class EquationSet implements Comparable<EquationSet>
     {
         ExponentVisitor ev = new ExponentVisitor (duration);
         determineExponentsInit (ev);
+        int limit = ev.depth * 2 + 2;  // One cycle for each variable to get initial exponent, and another cycle for each var to influence itself, plus a couple more for good measure. 
 
         boolean all = false;
-        int wait = 0;
         List<Variable> overflows = new ArrayList<Variable> ();
         while (true)
         {
             System.out.println ("-----------------------------------------------------------------");
-            System.out.println ("top of loop " + all + " " + wait);
+            System.out.println ("top of loop " + all + " " + limit);
             int exponentTime = ev.updateTime ();
             boolean changed = ev.updateInputs ();
-            if (all) wait--;
-            else     wait++;
-            if (determineExponentsEval (overflows, all  &&  wait < 0, exponentTime)) changed = true;
-            if (! changed) break;
-            if (! all) all = allExponentsDetermined ();
+            boolean finalPass = limit-- == 0;
+            if (determineExponentsEval (exponentTime, finalPass, overflows)) changed = true;
+            if (finalPass  ||  ! changed)
+            {
+                PrintStream err = Backend.err.get ();
+                if (overflows.size () > 0)  // Variable.exponent changed during the final cycle.
+                {
+                    err.println ("WARNING: Dubious magnitude. Add hint (median=median_absolute_value).");
+                    for (Variable v : overflows)
+                    {
+                        err.println ("  " + v.container.prefix () + "." + v.nameString ());
+                    }
+                }
+                else if (changed)  // Some equation changed, but it did not produce a change to Variable.exponent.
+                {
+                    err.println ("WARNING: Fixed-point analysis did not converge.");
+                }
+                break;
+            }
             dumpExponents ();
         }
-
-        if (overflows.size () > 0)
-        {
-            PrintStream err = Backend.err.get ();
-            err.println ("WARNING: Dubious magnitude. Add hint (median=median_absolute_value).");
-            for (Variable v : overflows)
-            {
-                err.println ("  " + v.container.prefix () + "." + v.nameString ());
-            }
-        }
-
+        determineExponentNext ();
         dumpExponents ();
     }
 
@@ -1767,6 +1771,7 @@ public class EquationSet implements Comparable<EquationSet>
     **/
     public static class ExponentVisitor
     {
+        public int depth;  // Largest number of equations in any equation set. It's unlikely that any dependency cycle will exceed this.
         public int exponentTime;  // of overall simulation
         public List<Variable> dt = new ArrayList<Variable> ();  // All distinct occurrences of $t' in the model (zero or one per equation set)
         public HashMap<Object,ArrayList<Input>> inputs = new HashMap<Object,ArrayList<Input>> ();  // Inputs that have "time" flag must agree on exponentTime.
@@ -1833,6 +1838,8 @@ public class EquationSet implements Comparable<EquationSet>
 
     public void determineExponentsInit (ExponentVisitor ev)
     {
+        ev.depth = Math.max (ev.depth, variables.size ());
+
         for (Variable v : variables)
         {
             // Collect all $t'
@@ -1884,45 +1891,39 @@ public class EquationSet implements Comparable<EquationSet>
         for (EquationSet s : parts) s.determineExponentsInit (ev);
     }
 
-    public boolean allExponentsDetermined ()
-    {
-        for (Variable v : variables)
-        {
-            if (v.exponent == Operator.UNKNOWN)
-            {
-                System.out.println ("  undetermined: " + v.container.prefix () + "." + v.nameString ());
-                return false;
-            }
-        }
-        for (EquationSet s : parts)
-        {
-            if (s.allExponentsDetermined () == false) return false;
-        }
-        return true;
-    }
-
-    public boolean determineExponentsEval (List<Variable> overflows, boolean all, int exponentTime)
+    public boolean determineExponentsEval (int exponentTime, boolean finalPass, List<Variable> overflows)
     {
         boolean changed = false;
-        for (final Variable v : variables)
+        for (Variable v : variables)
         {
-            if (all  &&  v.exponentLast == Operator.UNKNOWN)
-            {
-                v.exponentLast = v.exponent;
-                v.centerLast   = v.center;
-            }
+            int centerLast   = v.center;
+            int exponentLast = v.exponent;
             if (v.determineExponent (exponentTime))
             {
-                System.out.println ("  " + v.container.prefix () + "." + v.nameString ());
                 changed = true;
-                if (all  &&  ! overflows.contains (v)) overflows.add (v);
+                System.out.println ("  " + v.container.prefix () + "." + v.nameString ());
+                if (finalPass)
+                {
+                    v.center = centerLast;
+                    if (v.exponent != exponentLast)
+                    {
+                        v.exponent = exponentLast;
+                        if (! overflows.contains (v)) overflows.add (v);
+                    }
+                }
             }
         }
         for (EquationSet s : parts)
         {
-            if (s.determineExponentsEval (overflows, all, exponentTime)) changed = true;
+            if (s.determineExponentsEval (exponentTime, finalPass, overflows)) changed = true;
         }
         return changed;
+    }
+
+    public void determineExponentNext ()
+    {
+        for (EquationSet s : parts) s.determineExponentNext ();
+        for (Variable v : variables) v.determineExponentNext ();
     }
 
     /**

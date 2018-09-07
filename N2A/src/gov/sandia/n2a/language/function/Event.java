@@ -43,11 +43,17 @@ public class Event extends Function
     public void determineExponent (Variable from)
     {
         Operator cond = operands[0];
-        cond.exponentNext = Math.max (cond.exponentNext, cond.exponent);  // exponentNext determines the magnitude of the temporary used to detect changes. Thus, it should increase monotonically.
         cond.determineExponent (from);
         int cent = MSB / 2;
         int pow  = MSB - cent;
         updateExponent (from, pow, cent);
+    }
+
+    public void determineExponentNext (Variable from)
+    {
+        Operator cond = operands[0];
+        cond.exponentNext = cond.exponent;  // exponentNext determines the magnitude of the temporary used to detect changes.
+        cond.determineExponentNext (from);
     }
 
     public Type getType ()

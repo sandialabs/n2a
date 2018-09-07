@@ -82,8 +82,6 @@ public class AND extends OperatorBinary implements OperatorLogical
 
     public void determineExponent (Variable from)
     {
-        operand0.exponentNext = operand0.exponent;
-        operand1.exponentNext = operand1.exponent;
         operand0.determineExponent (from);
         operand1.determineExponent (from);
         int centerNew   = MSB / 2;

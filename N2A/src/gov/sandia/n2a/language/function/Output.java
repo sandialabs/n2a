@@ -70,21 +70,32 @@ public class Output extends Function
     public void determineExponent (Variable from)
     {
         Operator op = operands[1];
-        op.exponentNext = exponentNext;
         op.determineExponent (from);
+        if (operands.length >= 3) operands[2].determineExponent (from);
+        updateExponent (from, op.exponent, op.center);
+    }
 
+    public void determineExponentNext (Variable from)
+    {
+        // Value
+        Operator op = operands[1];
+        op.exponentNext = exponentNext;
+        op.determineExponentNext (from);
+
+        // Column identifier (name or index)
         if (operands.length >= 3)
         {
             op = operands[2];
-            op.exponentNext = op.exponent;
             if (operands.length > 3  &&  operands[3].getString ().contains ("raw"))
             {
-                op.exponentNext = MSB;  // pure integer
+                op.exponentNext = MSB;  // index, so pure integer
             }
-            op.determineExponent (from);
+            else
+            {
+                op.exponentNext = op.exponent;  // name; can be a string or a float
+            }
+            op.determineExponentNext (from);
         }
-
-        updateExponent (from, op.exponent, op.center);
     }
 
     public static class Holder

@@ -83,9 +83,16 @@ public class OperatorBinary extends Operator implements OperatorArithmetic
     **/
     public void alignExponent (Variable from)
     {
-        if (operand0.exponent == UNKNOWN  ||  operand1.exponent == UNKNOWN) return;
         if      (operand0.isScalar ()) ((Constant) operand0).determineExponent (from, operand1.exponent);
         else if (operand1.isScalar ()) ((Constant) operand1).determineExponent (from, operand0.exponent);
+    }
+
+    public void determineExponentNext (Variable from)
+    {
+        operand0.exponentNext = operand0.exponent;
+        operand1.exponentNext = operand1.exponent;
+        operand0.determineExponentNext (from);
+        operand1.determineExponentNext (from);
     }
 
     public void dumpExponents (String pad)

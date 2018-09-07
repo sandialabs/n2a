@@ -215,11 +215,6 @@ public class BuildMatrix extends Operator
 
     public void determineExponent (Variable from)
     {
-        int cols = operands.length;
-        if (cols == 0) return;
-        int rows = operands[0].length;
-        if (rows == 0) return;
-
         int cent  = 0;
         int pow   = 0;
         int count = 0;
@@ -227,7 +222,6 @@ public class BuildMatrix extends Operator
         {
             for (Operator e : c)
             {
-                e.exponentNext = exponentNext;
                 e.determineExponent (from);
                 if (! (e instanceof Constant)  ||  e.getDouble () != 0)  // avoid counting zeros
                 {
@@ -248,6 +242,18 @@ public class BuildMatrix extends Operator
             pow  = MSB - cent;
         }
         updateExponent (from, pow, cent);
+    }
+
+    public void determineExponentNext (Variable from)
+    {
+        for (Operator[] c : operands)
+        {
+            for (Operator e : c)
+            {
+                e.exponentNext = exponentNext;
+                e.determineExponentNext (from);
+            }
+        }
     }
 
     public void dumpExponents (String pad)

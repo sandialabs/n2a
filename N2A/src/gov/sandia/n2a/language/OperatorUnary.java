@@ -70,9 +70,14 @@ public class OperatorUnary extends Operator implements OperatorArithmetic
 
     public void determineExponent (Variable from)
     {
-        operand.exponentNext = exponentNext;
         operand.determineExponent (from);
         updateExponent (from, operand.exponent, operand.center);
+    }
+
+    public void determineExponentNext (Variable from)
+    {
+        operand.exponentNext = exponentNext;
+        operand.determineExponentNext (from);
     }
 
     public void dumpExponents (String pad)

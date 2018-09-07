@@ -62,11 +62,9 @@ public class Variable implements Comparable<Variable>
     public boolean                      changed;    // Indicates that analysis touched one or more equations in a way that merits another pass.
 
     // fixed-point analysis
-    public int                          exponent     = Operator.UNKNOWN; // power of most significant bit expected to be stored by this variable. The initial value of MIN_VALUE indicates unknown.
-    public int                          exponentLast = Operator.UNKNOWN; // value of exponent to be fed into equations when this variable is referenced. Prevents infinite loop of growing exponent. When MIN_VALUE, use regular exponent instead.
-    public int                          center       = Operator.MSB / 2;
-    public int                          centerLast   = center;
-    public Operator                     bound;                            // The expression that imposes the largest magnitude on this variable. May be null.
+    public int                          exponent = Operator.UNKNOWN; // power of most significant bit expected to be stored by this variable. The initial value of MIN_VALUE indicates unknown.
+    public int                          center   = Operator.MSB / 2;
+    public Operator                     bound;                       // The expression that imposes the largest magnitude on this variable. May be null.
 
     // Internal backend
     // TODO: put this in a beckendData field, similar to EquationSet.backendData. The problem with this is the extra overhead to unpack the object.
@@ -557,7 +555,6 @@ public class Variable implements Comparable<Variable>
             {
                 if (e.expression != null)
                 {
-                    e.expression.exponentNext = exponent;
                     e.expression.determineExponent (this);
                     if (e.expression.exponent != Operator.UNKNOWN)  // Only count equations that have known values of exponent and center.
                     {
@@ -568,7 +565,6 @@ public class Variable implements Comparable<Variable>
                 }
                 if (e.condition != null)
                 {
-                    e.condition.exponentNext = e.condition.exponent;
                     e.condition.determineExponent (this);
                     // Condition does not directly affect value stored in variable.
                 }
@@ -651,6 +647,23 @@ public class Variable implements Comparable<Variable>
         return changed;
     }
 
+    public void determineExponentNext ()
+    {
+        for (EquationEntry e : equations)
+        {
+            if (e.expression != null)
+            {
+                e.expression.exponentNext = exponent;
+                e.expression.determineExponentNext (this);
+            }
+            if (e.condition != null)
+            {
+                e.condition.exponentNext = e.condition.exponent;
+                e.condition.determineExponentNext (this);
+            }
+        }
+    }
+
     public void dumpExponents ()
     {
         System.out.print (container.prefix () + "." + nameString () + " (");
@@ -662,12 +675,7 @@ public class Variable implements Comparable<Variable>
         {
             System.out.print (exponent + "," + center);
         }
-        System.out.print (")");
-        if (exponentLast != Operator.UNKNOWN)
-        {
-            System.out.print (" last (" + exponentLast + "," + centerLast + ")");
-        }
-        System.out.println ();
+        System.out.println (")");
 
         for (EquationEntry e : equations)
         {

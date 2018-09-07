@@ -47,7 +47,6 @@ public class Uniform extends Function
         if (operands.length > 0)
         {
             Operator op = operands[0];
-            op.exponentNext = exponentNext;
             op.determineExponent (from);
             if (op.exponent != UNKNOWN)
             {
