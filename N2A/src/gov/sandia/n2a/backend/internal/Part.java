@@ -306,7 +306,7 @@ public class Part extends Instance
                     }
                     else
                     {
-                        // Is delay an quantum number of $t' steps?
+                        // Is delay a quantum number of $t' steps?
                         double ratio = delay / event.dt;
                         int    step  = (int) Math.round (ratio);
                         if (Math.abs (ratio - step) < 1e-3)
