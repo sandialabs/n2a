@@ -15,6 +15,7 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorArithmetic;
 import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.OperatorLogical;
+import gov.sandia.n2a.language.OperatorUnary;
 import gov.sandia.n2a.language.function.Cosine;
 import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Exp;
@@ -269,7 +270,10 @@ public class RendererCfp extends RendererC
         }
         if (op instanceof OperatorArithmetic)  // Add, Subtract, Negate, Transpose
         {
-            int shift = op.exponent - op.exponentNext;  // Assume our operands all match our exponent.
+            int exponentOperand;
+            if   (op instanceof OperatorBinary) exponentOperand = ((OperatorBinary) op).operand0.exponentNext;
+            else                                exponentOperand = ((OperatorUnary)  op).operand .exponentNext;
+            int shift = exponentOperand - op.exponentNext;
             if (shift == 0) return super.render (op);
             if (op.getType () instanceof Matrix)
             {

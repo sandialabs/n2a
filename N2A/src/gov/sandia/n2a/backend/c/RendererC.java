@@ -67,7 +67,10 @@ public class RendererC extends Renderer
         if (op instanceof AccessVariable)
         {
             AccessVariable av = (AccessVariable) op;
+            int shift = av.exponent - av.exponentNext;
+            if (useExponent  &&  shift != 0) result.append ("(");
             result.append (job.resolve (av.reference, this, false));
+            if (useExponent  &&  shift != 0) result.append (printShift (shift) + ")");
             return true;
         }
         if (op instanceof AccessElement)
