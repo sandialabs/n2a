@@ -8,6 +8,7 @@
 #include <cmath>
 #include <stdlib.h>
 #ifdef n2a_FP
+#include "runtime.h"   // For Event::exponent
 #include "fixedpoint.h"
 #endif
 
@@ -546,7 +547,7 @@ InputHolder<T>::getRow (T row)
                     {
                         if (time  &&  timeColumnSet  &&  index == timeColumn)
                         {
-                            nextValues[index] = convert (line.substr (i, j - i), exponentTime);
+                            nextValues[index] = convert (line.substr (i, j - i), Event<T>::exponent);
                         }
                         else
                         {
@@ -742,7 +743,7 @@ OutputHolder<T>::trace (T now)
         {
             columnMap["$t"] = 0;
 #           ifdef n2a_FP
-            columnValues.push_back ((float) t / pow (2.0f, FP_MSB - exponentTime));
+            columnValues.push_back ((float) t / pow (2.0f, FP_MSB - Event<T>::exponent));
 #           else
             columnValues.push_back (t);
 #           endif
@@ -750,7 +751,7 @@ OutputHolder<T>::trace (T now)
         else
         {
 #           ifdef n2a_FP
-            columnValues[0] = (float) t / pow (2.0f, FP_MSB - exponentTime);
+            columnValues[0] = (float) t / pow (2.0f, FP_MSB - Event<T>::exponent);
 #           else
             columnValues[0] = t;
 #           endif

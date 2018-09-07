@@ -337,9 +337,20 @@ public class JobC extends Thread
 
     public void addImplicitDependencies (EquationSet s)
     {
+        if (T.equals ("int"))
+        {
+            // Force top-level model to keep $t', so it can retrieve time exponent.
+            Variable dt = s.find (new Variable ("$t", 1));
+            dt.addUser (s);
+        }
+        addImplicitDependenciesRecursive (s);
+    }
+
+    public void addImplicitDependenciesRecursive (EquationSet s)
+    {
         for (EquationSet p : s.parts)
         {
-            addImplicitDependencies (p);
+            addImplicitDependenciesRecursive (p);
         }
     
         final Variable dt = s.find (new Variable ("$t", 1));
@@ -359,10 +370,6 @@ public class JobC extends Thread
                     {
                         from.addDependencyOn (dt);
                     }
-                }
-                else if (op instanceof Output)
-                {
-                    if (T.equals ("int")) from.addDependencyOn (dt);
                 }
                 return true;
             }
@@ -515,8 +522,14 @@ public class JobC extends Thread
         s.append ("{\n");
         s.append ("  try\n");
         s.append ("  {\n");
+        if (T.equals ("int"))
+        {
+            Variable dt = model.find (new Variable ("$t", 1));
+            s.append ("    Event<int>::exponent = " + dt.exponent + ";\n");
+        }
         String integrator = model.getNamedValue ("c.integrator", "Euler");
-        if (! "Euler|RungeKutta".contains (integrator)) integrator = "Euler";
+        if (integrator.equalsIgnoreCase ("RungeKutta")) integrator = "RungeKutta";
+        else                                            integrator = "Euler";
         s.append ("    Simulator<" + T + ">::instance.integrator = new " + integrator + "<" + T + ">;\n");
         s.append ("    Wrapper wrapper;\n");
         s.append ("    Simulator<" + T + ">::instance.run (wrapper);\n");
@@ -1284,9 +1297,13 @@ public class JobC extends Thread
             for (Variable v : bed.globalIntegrated)
             {
                 result.append ("    " + resolve (v.reference, context, false) + " = preserve->" + mangle (v) + " + ");
-                if (T.equals ("int"))
+                // For fixed-point:
+                // raw result = exponentDerivative+exponentTime-MSB
+                // shift = raw-exponentVariable = exponentDerivative+exponentTime-MSB-exponentVariable
+                int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
+                if (shift != 0  &&  T.equals ("int"))
                 {
-                    result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + context.printShift (bed.dt.exponent - Operator.MSB) + ");\n");
+                    result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + context.printShift (shift) + ");\n");
                 }
                 else
                 {
@@ -1299,9 +1316,10 @@ public class JobC extends Thread
             for (Variable v : bed.globalIntegrated)
             {
                 result.append ("    " + resolve (v.reference, context, false) + " += ");
-                if (T.equals ("int"))
+                int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
+                if (shift != 0  &&  T.equals ("int"))
                 {
-                    result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + context.printShift (bed.dt.exponent - Operator.MSB) + ");\n");
+                    result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + context.printShift (shift) + ");\n");
                 }
                 else
                 {
@@ -2155,9 +2173,10 @@ public class JobC extends Thread
                 for (Variable v : bed.localIntegrated)
                 {
                     result.append ("    " + resolve (v.reference, context, false) + " = preserve->" + mangle (v) + " + ");
-                    if (T.equals ("int"))
+                    int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
+                    if (shift != 0  &&  T.equals ("int"))
                     {
-                        result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + context.printShift (bed.dt.exponent - Operator.MSB) + ");\n");
+                        result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + context.printShift (shift) + ");\n");
                     }
                     else
                     {
@@ -2170,9 +2189,10 @@ public class JobC extends Thread
                 for (Variable v : bed.localIntegrated)
                 {
                     result.append ("    " + resolve (v.reference, context, false) + " += ");
-                    if (T.equals ("int"))
+                    int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
+                    if (shift != 0  &&  T.equals ("int"))
                     {
-                        result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + context.printShift (bed.dt.exponent - Operator.MSB) + ");\n");
+                        result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + context.printShift (shift) + ");\n");
                     }
                     else
                     {
@@ -3498,10 +3518,6 @@ public class JobC extends Thread
                         {
                             context.result.append (pad + outputName + "->raw = true;\n");
                         }
-                        if (T.equals ("int"))
-                        {
-                            context.result.append (pad + outputName + "->exponentTime = " + bed.dt.exponent + ";\n");
-                        }
                     }
                     return true;  // Continue to drill down, because I/O functions can be nested.
                 }
@@ -3523,10 +3539,6 @@ public class JobC extends Thread
                         if (mode.contains ("time"))
                         {
                             context.result.append (pad + inputName + "->time = true;\n");
-                            if (T.equals ("int"))
-                            {
-                                context.result.append (pad + inputName + "->exponentTime = " + i.exponentTime + ";\n");
-                            }
                             if (! context.global  &&  ! T.equals ("int"))  // Note: In the case of T==int, we don't need to set epsilon because it is already set to 1 by the constructor.
                             {
                                 // Read $t' as an lvalue, to ensure we get any newly-set frequency.
@@ -3640,10 +3652,6 @@ public class JobC extends Thread
                         if (mode.contains ("time"))
                         {
                             context.result.append (pad + inputName + "->time = true;\n");
-                            if (T.equals ("int"))
-                            {
-                                context.result.append (pad + inputName + "->exponentTime = " + i.exponentTime + ";\n");
-                            }
                             if (! context.global  &&  ! T.equals ("int"))
                             {
                                 context.result.append (pad + inputName + "->epsilon = " + resolve (bed.dt.reference, context, true) + " / 1000;\n");
@@ -3664,10 +3672,6 @@ public class JobC extends Thread
                         if (o.operands.length >= 4  &&  o.operands[3].getString ().contains ("raw"))
                         {
                             context.result.append (pad + outputName + "->raw = true;\n");
-                        }
-                        if (T.equals ("int"))
-                        {
-                            context.result.append (pad + outputName + "->exponentTime = " + bed.dt.exponent + ";\n");
                         }
                     }
                     return true;

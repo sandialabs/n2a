@@ -349,6 +349,9 @@ class Event
 {
 public:
     T t;
+#   ifdef n2a_FP
+    static int exponent;  ///< for time values
+#   endif
 
     virtual ~Event ();
 

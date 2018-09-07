@@ -1386,7 +1386,11 @@ RungeKutta<int>::run (Event<int> & event)
 #endif
 
 
-// class EventStep -----------------------------------------------------------
+// class Event ---------------------------------------------------------------
+
+#ifdef n2a_FP
+template<class T> int Event<T>::exponent;
+#endif
 
 template<class T>
 Event<T>::~Event ()

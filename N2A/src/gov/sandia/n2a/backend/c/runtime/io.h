@@ -100,7 +100,6 @@ public:
     T                              epsilon;  ///< for time values
 #   ifdef n2a_FP
     int                            exponent;  ///< of value returned by get()
-    int                            exponentTime;
 #   endif
 
     InputHolder (const String & fileName);
@@ -125,9 +124,6 @@ public:
     int                            columnsPrevious; ///< Number of columns written in previous cycle.
     bool                           traceReceived;   ///< Indicates that at least one column was touched during the current cycle.
     T                              t;
-#   ifdef n2a_FP
-    int                            exponentTime;
-#   endif
 
     OutputHolder (const String & fileName);
     virtual ~OutputHolder ();
