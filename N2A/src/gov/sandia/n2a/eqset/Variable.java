@@ -499,23 +499,6 @@ public class Variable implements Comparable<Variable>
 
     public boolean determineExponent (int exponentTime)
     {
-        // User-specified exponent overrides any calculated value.
-        String magnitude = getNamedValue ("median");
-        if (! magnitude.isEmpty ())
-        {
-            if (exponent != Operator.UNKNOWN) return false;  // Already processed the hint.
-            try
-            {
-                double value = Operator.parse (magnitude).getDouble ();
-                if (value <= 0) exponent = 0;
-                else            exponent = (int) Math.floor (Math.log (value) / Math.log (2));  // log2 (value)
-                center    = Operator.MSB / 2;
-                exponent += Operator.MSB - center;
-                return true;
-            }
-            catch (ParseException e) {}
-        }
-
         int centerNew   = center;
         int exponentNew = exponent;
         changed = false;
@@ -639,6 +622,22 @@ public class Variable implements Comparable<Variable>
                 }
                 exponentNew = exponentTime;
             }
+        }
+
+        // User-specified exponent overrides any calculated value.
+        String magnitude = getNamedValue ("median");
+        if (! magnitude.isEmpty ())
+        {
+            if (exponent != Operator.UNKNOWN) return changed;  // Already processed the hint.
+            try
+            {
+                double value = Operator.parse (magnitude).getDouble ();
+                int centerPower = 0;
+                if (value > 0) centerPower = (int) Math.floor (Math.log (value) / Math.log (2));  // log2 (value)
+                centerNew   = Operator.MSB / 2;
+                exponentNew = centerPower + Operator.MSB - centerNew;
+            }
+            catch (ParseException e) {}
         }
 
         if (exponentNew != exponent  ||  centerNew != center) changed = true;
