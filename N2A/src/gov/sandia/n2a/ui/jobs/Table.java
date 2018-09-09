@@ -9,6 +9,7 @@ package gov.sandia.n2a.ui.jobs;
 import java.awt.Component;
 import java.awt.FontMetrics;
 import java.io.File;
+import java.util.ArrayList;
 
 import javax.swing.JLabel;
 import javax.swing.JTable;
@@ -16,22 +17,37 @@ import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableColumnModel;
 
+import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.language.type.Scalar;
 
 public class Table extends OutputParser
 {
     int rows;
 
-    public Table (String path)
+    public Table (String path, boolean sorted)
     {
     	parse (new File (path), Double.NaN);
     	for (Column c : columns) rows = Math.max (rows, c.startRow + c.values.size ());
+
     	if (isXycePRN) columns.remove (0);  // get rid of Index column
     	int t = columns.indexOf (time);
     	if (t > 0)
     	{
     	    columns.remove (t);
     	    columns.add (0, time);
+    	}
+
+    	int count = columns.size ();
+    	if (sorted  &&  count > 1)
+    	{
+    	    // By using an MNode to sort, we get the columns in M order (numbers first, in truly numerical order, followed alphabetical order)
+    	    MVolatile mapping = new MVolatile ();
+    	    for (int i = 1; i < count; i++) mapping.set (columns.get (i).header, i);
+    	    ArrayList<Column> sortedColumns = new ArrayList<Column> (count);
+    	    sortedColumns.add (columns.get (0));
+    	    for (MNode m : mapping) sortedColumns.add (columns.get (m.getInt ()));
+    	    columns = sortedColumns;
     	}
     }
 

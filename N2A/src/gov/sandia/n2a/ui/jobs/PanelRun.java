@@ -270,6 +270,13 @@ public class PanelRun extends JPanel
         buttonTable.addActionListener (graphListener);
         buttonTable.setActionCommand ("Table");
 
+        JToggleButton buttonTableSorted = new JToggleButton (ImageUtil.getImage ("tableSorted.png"));
+        buttonTableSorted.setMargin (new Insets (2, 2, 2, 2));
+        buttonTableSorted.setFocusable (false);
+        buttonTableSorted.setToolTipText ("Display Table with Sorted Columns");
+        buttonTableSorted.addActionListener (graphListener);
+        buttonTableSorted.setActionCommand ("TableSorted");
+
         JToggleButton buttonGraph = new JToggleButton (ImageUtil.getImage ("analysis.gif"));
         buttonGraph.setMargin (new Insets (2, 2, 2, 2));
         buttonGraph.setFocusable (false);
@@ -287,6 +294,7 @@ public class PanelRun extends JPanel
         buttons = new ButtonGroup ();
         buttons.add (buttonText);
         buttons.add (buttonTable);
+        buttons.add (buttonTableSorted);
         buttons.add (buttonGraph);
         buttons.add (buttonRaster);
         buttonText.setSelected (true);
@@ -379,6 +387,7 @@ public class PanelRun extends JPanel
                             Lay.BL (buttonStop, "eb=20r"),
                             buttonText,
                             buttonTable,
+                            buttonTableSorted,
                             buttonGraph,
                             buttonRaster,
                             Lay.BL (buttonMonospace, "eb=20l20r"),
@@ -461,7 +470,12 @@ public class PanelRun extends JPanel
                         Component panel = null;
                         if (viz.equals ("Table"))
                         {
-                            Table table = new Table (path);
+                            Table table = new Table (path, false);
+                            panel = table.createVisualization ();
+                        }
+                        else if (viz.equals ("TableSorted"))
+                        {
+                            Table table = new Table (path, true);
                             panel = table.createVisualization ();
                         }
                         else if (viz.equals ("Graph"))
