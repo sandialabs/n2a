@@ -3054,9 +3054,22 @@ public class JobC extends Thread
                             break;
                         case Variable.MULTIPLY:
                         case Variable.DIVIDE:
-                            result.append (" *= " + buffered + ";\n");
+                        {
+                            // The current and buffered values of the variable have the same exponent.
+                            // raw = exponentV + exponentV - MSB
+                            // shift = raw - exponentV = exponentV - MSB
+                            int shift = v.exponent - Operator.MSB;
+                            if (shift != 0  &&  T.equals ("int"))
+                            {
+                                result.append (" = (int64_t) " + current + " * " + buffered + context.printShift (shift) + ";\n");
+                            }
+                            else
+                            {
+                                result.append (" *= " + buffered + ";\n");
+                            }
                             result.append ("  " + clear (buffered, v, 1, context) + ";\n");
                             break;
+                        }
                         case Variable.MIN:
                             result.append (" = min (" + current + ", " + buffered + ");\n");  // TODO: Write elementwise min() and max() for matrices.
                             result.append ("  " + clear (buffered, v, Double.POSITIVE_INFINITY, context) + ";\n");
@@ -3451,40 +3464,71 @@ public class JobC extends Thread
 
     public void renderEquation (RendererC context, EquationEntry e)
     {
+        StringBuilder result = context.result;
         if (e.variable.hasAttribute ("dummy"))
         {
             e.expression.render (context);
         }
         else
         {
-            context.result.append (resolve (e.variable.reference, context, true));
+            String LHS = resolve (e.variable.reference, context, true);
+            result.append (LHS);
+            int shift = 0;
             switch (e.variable.assignment)
             {
                 case Variable.REPLACE:
-                    context.result.append (" = ");
+                    result.append (" = ");
                     break;
                 case Variable.ADD:
-                    context.result.append (" += ");
+                    result.append (" += ");
                     break;
                 case Variable.MULTIPLY:
-                    context.result.append (" *= ");
+                    // raw exponent = exponentV + exponentExpression - MSB
+                    // shift = raw - exponentV = expnentExpression - MSB
+                    shift = e.expression.exponentNext - Operator.MSB;
+                    if (shift != 0  &&  T.equals ("int"))
+                    {
+                        if (shift < 0) result.append (" = (int64_t) " + LHS + " * ");
+                        else           result.append (" = "           + LHS + " * ");
+                    }
+                    else
+                    {
+                        result.append (" *= ");
+                    }
                     break;
                 case Variable.DIVIDE:
-                    context.result.append (" /= ");
+                    // raw = exponentV - exponentExpression + MSB
+                    // shift = raw - exponentV = MSB - exponentExpression
+                    shift = Operator.MSB - e.expression.exponentNext;
+                    if (shift != 0  &&  T.equals ("int"))
+                    {
+                        if (shift > 0) result.append (" = ((int64_t) " + LHS + context.printShift (shift) + ") / ");
+                        else           result.append (" = "            + LHS                              +  " / ");
+                    }
+                    else
+                    {
+                        result.append (" /= ");
+                    }
                     break;
                 case Variable.MIN:
-                    context.result.append (" = min (" + resolve (e.variable.reference, context, true) + ", ");
+                    result.append (" = min (" + LHS + ", ");
                     break;
                 case Variable.MAX:
-                    context.result.append (" = max (" + resolve (e.variable.reference, context, true) + ", ");
+                    result.append (" = max (" + LHS + ", ");
             }
+
             e.expression.render (context);
+
             if (e.variable.assignment == Variable.MAX  ||  e.variable.assignment == Variable.MIN)
             {
-                context.result.append (")");
+                result.append (")");
+            }
+            if (shift != 0  &&  T.equals ("int"))
+            {
+                result.append (context.printShift (shift));
             }
         }
-        context.result.append (";\n");
+        result.append (";\n");
     }
 
     public void prepareStaticObjects (Operator op, final RendererC context, final String pad) throws Exception

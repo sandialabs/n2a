@@ -531,8 +531,8 @@ public class Variable implements Comparable<Variable>
             // Very likely, one equation will fire most of the time, and we should simply use its center.
             // However, there's no good way to estimate that, so assume all equations fire with equal frequency
             // and take an average of their centers.
-            int pow   = 0;
             int cent  = 0;
+            int pow   = 0;
             int count = 0;
             for (EquationEntry e : equations)
             {
@@ -552,35 +552,64 @@ public class Variable implements Comparable<Variable>
                     // Condition does not directly affect value stored in variable.
                 }
             }
-            if (count > 0)
+            // Scan external references and see if any of them write to us. If so, then consider
+            // their exponents as well. For all combiner types, we simply contribute to the average center power.
+            // For multiplicative combiners (=* and =/), we only increment count once, regardless of how
+            // many external references there are. This has the effect of summing their powers, which
+            // accounts for the multiplication. However, this is only correct in the case of external singletons.
+            // It does not account for entire populations, and certainly not dynamic populations.
+            // Accounting for large populations could produce absurd results. Instead, we hope the user set
+            // the power to 0, which would allow an unbounded number of multiplications to stay in range.
+            if (usedBy != null)
             {
-                cent /= count;
-                pow  /= count;
+                boolean multiplicative = false;
+                for (Object o : usedBy)
+                {
+                    if (! (o instanceof Variable)) continue;
+                    Variable v = (Variable) o;
+                    if (v.reference == null  ||  v.reference.variable != this) continue;
+                    if (v.exponent == Operator.UNKNOWN) continue;
+                    if (v.assignment == MULTIPLY)
+                    {
+                        cent += v.center;
+                        pow  += v.exponent;
+                        multiplicative = true;
+                    }
+                    else if (v.assignment == DIVIDE)
+                    {
+                        int centerPower = v.exponent - Operator.MSB + v.center;
+                        centerPower *= -1;  // Negate to account for division 1/v
+                        cent += Operator.MSB / 2;  // Fix quotient center at MSB/2
+                        pow  += centerPower + Operator.MSB / 2;
+                        multiplicative = true;
+                    }
+                    else
+                    {
+                        cent += v.center;
+                        pow  += v.exponent;
+                        count++;
+                    }
+                }
+                if (multiplicative) count++;
             }
 
-            // A derivative will almost always dominate any equations on the variable itself.
-            if (derivative == null  ||  derivative.exponent == Operator.UNKNOWN)
+            if (count > 0)
             {
-                if (count > 0)
-                {
-                    centerNew   = cent;
-                    exponentNew = pow;
-                }
+                centerNew   = cent / count;
+                exponentNew = pow  / count;
             }
-            else
+            else if (derivative != null  &&  derivative.exponent != Operator.UNKNOWN)
             {
-                if (count == 0)
-                {
-                    centerNew   = derivative.center;
-                    exponentNew = derivative.exponent;
-                }
-                else
-                {
-                    // Attempt to balance both initial and integrated values.
-                    // If they are too far apart, this will fail and there is really nothing we can do about it.
-                    centerNew   = (cent + derivative.center  ) / 2;
-                    exponentNew = (pow  + derivative.exponent) / 2;
-                }
+                // A derivative is difficult to interpret, even for a human.
+                // Results are often better when we don't use this code.
+                // Here we assume 1 second of integration time, all moving in a constant direction.
+                // This is a bad assumption, as derivatives are usually intended to move the
+                // variable toward an attractor. If there is an automatic way to determine that
+                // attractor, we should use it instead. For example, if the expression contains
+                // something of the form (C-V), where C is a constant and V is us, then we can
+                // assume that C is the attractor.
+                centerNew   = derivative.center;
+                exponentNew = derivative.exponent;
             }
 
             // Apply bound, if it exists.
@@ -648,11 +677,19 @@ public class Variable implements Comparable<Variable>
 
     public void determineExponentNext ()
     {
+        int exponentTarget = exponent;
+        boolean multiplicative = false;
+        if (reference != null  &&  reference.variable != this)
+        {
+            exponentTarget = reference.variable.exponent;
+            multiplicative =  assignment == MULTIPLY  ||  assignment == DIVIDE;
+        }
         for (EquationEntry e : equations)
         {
             if (e.expression != null)
             {
-                e.expression.exponentNext = exponent;
+                if (multiplicative) e.expression.exponentNext = e.expression.exponent;
+                else                e.expression.exponentNext = exponentTarget;
                 e.expression.determineExponentNext (this);
             }
             if (e.condition != null)
@@ -683,7 +720,7 @@ public class Variable implements Comparable<Variable>
             if (e.condition != null)
             {
                 System.out.println ("    @:");
-                e.condition .dumpExponents ("    ");
+                e.condition.dumpExponents ("    ");
             }
         }
     }

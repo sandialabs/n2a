@@ -196,9 +196,8 @@ public class Operator implements Cloneable
     public void dumpExponents (String pad)
     {
         System.out.print (pad + this + " (");
-        if (exponentNext == UNKNOWN) System.out.print ("unknown,");
-        else                         System.out.print (exponentNext + ",");
-        if (exponent == UNKNOWN) System.out.print ("unknown");
+        if (exponentNext != UNKNOWN) System.out.print (exponentNext + ",");
+        if (exponent == UNKNOWN) System.out.print ("--");
         else                     System.out.print (exponent + "," + center);
         System.out.println (")");
     }

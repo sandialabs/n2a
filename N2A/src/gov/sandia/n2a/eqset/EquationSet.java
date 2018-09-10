@@ -980,7 +980,7 @@ public class EquationSet implements Comparable<EquationSet>
 
             // Check if $n==1
             if (! s.isSingleton ()) continue;
-            s.variables.remove (new Variable ("$n", 0));  // We don't want $n in the merged set.
+            while (s.variables.remove (new Variable ("$n")));  // We don't want $n in the merged set.
 
             // Don't merge if there are any conflicting $variables.
             boolean conflict = false;
@@ -1003,7 +1003,7 @@ public class EquationSet implements Comparable<EquationSet>
 
             //   Variables
             final TreeSet<String> names = new TreeSet<String> ();
-            for (Variable v : s.variables) names.add (v.name);
+            for (Variable v : s.variables) names.add (v.nameString ());
 
             class Prefixer extends Transformer
             {
@@ -1764,6 +1764,11 @@ public class EquationSet implements Comparable<EquationSet>
         }
         determineExponentNext ();
         dumpExponents ();
+
+        // List results of analysis to error stream
+        PrintStream ps = Backend.err.get ();
+        ps.println ("Results of fixed-point analysis (expected median, reported as 10^n):");
+        dumpMedians (ps);
     }
 
     /**
@@ -1894,8 +1899,9 @@ public class EquationSet implements Comparable<EquationSet>
     public boolean determineExponentsEval (int exponentTime, boolean finalPass, List<Variable> overflows)
     {
         boolean changed = false;
-        for (Variable v : variables)
+        for (int i = ordered.size () - 1; i >= 0; i--)  // Process variables in reverse of dependency order, to maximize propagation of information in each pass.
         {
+            Variable v = ordered.get (i);
             int centerLast   = v.center;
             int exponentLast = v.exponent;
             if (v.determineExponent (exponentTime))
@@ -1933,6 +1939,26 @@ public class EquationSet implements Comparable<EquationSet>
     {
         for (Variable v : variables) v.dumpExponents ();
         for (EquationSet s : parts) s.dumpExponents ();
+    }
+
+    public void dumpMedians (PrintStream ps)
+    {
+        double b2d = Math.log (10) / Math.log (2);  // bits per decimal digit
+        for (Variable v : variables)
+        {
+            if (v.hasAttribute ("dummy")) continue;
+
+            // Convert center power to an approximate decimal value.
+            int centerPower = v.exponent - Operator.MSB + v.center;
+            int base10 = (int) Math.floor (centerPower / b2d);
+
+            String fullName = prefix ();
+            if (! fullName.isEmpty ()) fullName += ".";
+            fullName += v.nameString ();
+
+            ps.println ("  " + base10 + "\t" + fullName);
+        }
+        for (EquationSet s : parts) s.dumpMedians (ps);
     }
 
     /**
@@ -2221,7 +2247,7 @@ public class EquationSet implements Comparable<EquationSet>
                 if (   u.container == this  // must be in same equation set for order to matter
                     && ! (u.name.equals (v.name)  &&  u.order == v.order + 1)  // must not be my derivative
                     && ! u.hasAttribute ("temporary")  // temporaries follow the opposite rule on ordering, so don't consider them here
-                    &&  ordered.indexOf (u) < index)  // and finally, is it actually ahead of me in the odering?
+                    &&  ordered.indexOf (u) < index)  // and finally, is it actually ahead of me in the ordering?
                 {
                     Backend.err.get ().println ("Cyclic dependency: " + v.name + " comes after " + u.name);
                     u.addAttribute ("cycle");  // must be buffered; otherwise we will get the "after" value rather than "before"
