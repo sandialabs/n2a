@@ -84,10 +84,6 @@ public class Variable implements Comparable<Variable>
     // Note that there is no =-, because the minus could be ambiguous with content of expression.
     // DIVIDE is redundant with MULTIPLY, but may make some expressions easier to write. Since they are compatible, no error will be flagged if they are used together.
 
-    public Variable ()
-    {
-    }
-
     public Variable (String name)
     {
         this (name, -1);

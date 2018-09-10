@@ -488,7 +488,7 @@ public class InternalBackendData
                                 {
                                     v.addAttribute ("externalRead");  // ensure it's buffered, so we can detect change
                                     et.trackOne = true;
-                                    et.track = new Variable ();  // just a holder for the reference
+                                    et.track = new Variable ("");  // just a holder for the reference
                                     et.track.reference = reference;
                                 }
                             }
