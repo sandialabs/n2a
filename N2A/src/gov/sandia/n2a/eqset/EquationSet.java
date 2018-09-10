@@ -1851,6 +1851,12 @@ public class EquationSet implements Comparable<EquationSet>
             Variable r = v.reference.variable;
             if (r.name.equals ("$t")  &&  r.order == 1  &&  ! ev.dt.contains (r)) ev.dt.add (r);
 
+            // Set v as the parent of all its equations
+            for (EquationEntry e : v.equations)
+            {
+                if (e.expression != null) e.expression.parent = v;
+            }
+
             // Collect all input() calls which use "time" mode.
             v.visit (new Visitor ()
             {

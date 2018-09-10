@@ -9,6 +9,7 @@ package gov.sandia.n2a.backend.c;
 import java.util.HashSet;
 
 import gov.sandia.n2a.eqset.EquationSet;
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.BuildMatrix;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -101,7 +102,7 @@ public class RendererCfp extends RendererC
         if (op instanceof OperatorLogical)
         {
             // Don't convert boolean to fixed-point except at the outermost expression. 
-            if (op.parent != null  &&  op.parent instanceof OperatorLogical) return super.render (op);
+            if (op.parent instanceof OperatorLogical) return super.render (op);
 
             result.append ("(");
             escalate (op);
@@ -456,7 +457,16 @@ public class RendererCfp extends RendererC
     **/
     public boolean parentAccepts64bit (Operator op)
     {
-        if (op.parent == null) return true;  // Assignment to variable
+        if (op.parent == null) return true;  // Don't care
+        if (op.parent instanceof Variable)  // Assignment to variable
+        {
+            // For the most part, assignment to variable will automatically truncate a 64-bit value.
+            // However, if it goes into an expression implementing a multiplicative combiner,
+            // then we should downcast to hint that the compiler use 32x32->64 bit machine code.
+            // On both x86 and ARM, there are single machine instructions for this.
+            Variable v = (Variable) op.parent;
+            return  v.assignment != Variable.MULTIPLY  &&  v.assignment != Variable.DIVIDE;
+        }
         if (op.parent instanceof BuildMatrix) return true;  // Assignment to element of matrix
         if (op.parent instanceof Multiply  ||  op.parent instanceof Divide)
         {

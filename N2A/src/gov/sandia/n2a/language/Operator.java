@@ -68,7 +68,7 @@ import java.util.TreeMap;
 **/
 public class Operator implements Cloneable
 {
-    public Operator parent;  // The AST node that contains this one. If null, then this is the root node.
+    public Object parent;  // The AST node that contains this one. If null or Variable, then this is the root node.
 
     // Fixed-point
     public static int UNKNOWN = Integer.MIN_VALUE;
