@@ -536,15 +536,31 @@ public class EquationSet implements Comparable<EquationSet>
                 return c.endpoint.resolveEquationSet (v, create);
             }
 
+            int vlength = v.name.length ();
             EquationSet down = findPart (v.name);
             if (down != null)
             {
                 int length = down.name.length ();
-                if (length == v.name.length ()) return null;  // This is a bare reference to a child part which has been flattened. Bare references are forbidden (see below for similar trap when dot is absent).
+                if (length == vlength) return null;  // This is a naked reference to a child part which has been flattened. Naked references are forbidden (see below for similar trap when dot is absent).
 
-                v.name = v.name.substring (length + 1);
+                v.name = v.name.substring (length + 1);  // skip the dot
                 v.reference.resolution.add (down);
                 return down.resolveEquationSet (v, create);
+            }
+
+            // Check if prefix matches this current equation set name.
+            // This is equivalent to referring the variable up to our container, which in turn finds that the prefix matches us.
+            // However, we don't want those extra steps in the resolution path.
+            if (v.name.startsWith (name))  // prefix matches
+            {
+                int length = name.length ();
+                if (length == vlength) return null;  // Naked reference to this equation set. Forbidden.
+                if (v.name.charAt (length) == '.')  // Legitimate name path.
+                {
+                    v.name = v.name.substring (length + 1);
+                    // Don't add this to the resolution path!
+                    return resolveEquationSet (v, create);
+                }
             }
         }
 
@@ -565,7 +581,7 @@ public class EquationSet implements Comparable<EquationSet>
         EquationSet part = parts.floor (new EquationSet (v.name));
         if (part != null  &&  part.name.equals (v.name))
         {
-            return null; // formally, we don't allow a bare reference to a child population
+            return null; // formally, we don't allow a naked reference to a child population
         }
 
         if (create)
@@ -667,12 +683,14 @@ public class EquationSet implements Comparable<EquationSet>
         {
             public Variable from;
             public LinkedList<String> unresolved;
+
             public String fromName ()
             {
                 String result = from.container.prefix ();
                 if (! result.isEmpty ()) result += ".";
                 return result + from.nameString ();
             }
+
             public Operator transform (Operator op)
             {
                 if (op instanceof AccessVariable)
@@ -919,7 +937,7 @@ public class EquationSet implements Comparable<EquationSet>
 
         // make sure no other orders of $n exist
         Variable n2 = variables.higher (n);
-        if (n2.name.equals ("$n")) return false;  // higher orders means $n is dynamic
+        if (n2 != null  &&  n2.name.equals ("$n")) return false;  // higher orders means $n is dynamic
 
         // check contents of $n
         if (n.assignment != Variable.REPLACE) return false;
