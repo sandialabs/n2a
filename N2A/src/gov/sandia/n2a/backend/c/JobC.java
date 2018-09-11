@@ -364,8 +364,8 @@ public class JobC extends Thread
                 {
                     Input i = (Input) op;
                     String mode = "";
-                    int lastParm = i.operands.length - 1;
-                    if (lastParm > 0) mode = i.operands[lastParm].getString ();
+                    if      (i.operands.length == 2) mode = i.operands[1].getString ();
+                    else if (i.operands.length >= 4) mode = i.operands[3].getString ();
                     if (mode.contains ("time")  &&  ! from.hasAttribute ("global")  &&  ! T.equals ("int"))
                     {
                         from.addDependencyOn (dt);
@@ -3369,7 +3369,7 @@ public class JobC extends Thread
                 String ifString;
                 if (haveIf)
                 {
-                    ifString = "elseif (";
+                    ifString = "else if (";
                 }
                 else
                 {
@@ -3578,8 +3578,8 @@ public class JobC extends Thread
 
                         // Detect time flag
                         String mode = "";
-                        int lastParm = i.operands.length - 1;
-                        if (lastParm > 0) mode = i.operands[lastParm].getString ();
+                        if      (i.operands.length == 2) mode = i.operands[1].getString ();
+                        else if (i.operands.length >= 4) mode = i.operands[3].getString ();
                         if (mode.contains ("time"))
                         {
                             context.result.append (pad + inputName + "->time = true;\n");
@@ -3691,8 +3691,8 @@ public class JobC extends Thread
 
                         // Detect time flag
                         String mode = "";
-                        int lastParm = i.operands.length - 1;
-                        if (lastParm > 0) mode = i.operands[lastParm].getString ();
+                        if      (i.operands.length == 2) mode = i.operands[1].getString ();
+                        else if (i.operands.length >= 4) mode = i.operands[3].getString ();
                         if (mode.contains ("time"))
                         {
                             context.result.append (pad + inputName + "->time = true;\n");
@@ -4093,7 +4093,7 @@ public class JobC extends Thread
         }
         else  // Enumerations occurred, so append instances to our own list.
         {
-            result.append (prefix + "if (result->firstborn == INT_MAX  &&  " + pointer + "firstborn < " + pointer + "instances.size ()) result->firstborn = result->instances.size () + " + pointer + "firstborn;\n");
+            result.append (prefix + "if (result->firstborn == INT_MAX  &&  " + pointer + "firstborn < " + pointer + "instances.size ()) result->firstborn = result->instances->size () + " + pointer + "firstborn;\n");
             result.append (prefix + "result->instances->insert (result->instances->end (), " + pointer + "instances.begin (), " + pointer + "instances.end ());\n");
         }
 

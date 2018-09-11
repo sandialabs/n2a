@@ -495,6 +495,7 @@ public class InternalBackendData
                             if (! et.trackOne  &&  et.edge != EventTarget.NONZERO)  // Expression, so create auxiliary variable. Aux not needed for NONZERO, because no change detection.
                             {
                                 et.track = new Variable ("eventAux" + targetIndex, 0);
+                                et.track.container = s;
                                 et.track.type = new Scalar (0);
                                 et.track.reference = new VariableReference ();
                                 et.track.reference.variable = et.track;

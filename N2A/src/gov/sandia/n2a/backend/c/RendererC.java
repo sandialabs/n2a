@@ -27,6 +27,7 @@ import gov.sandia.n2a.language.function.SquareRoot;
 import gov.sandia.n2a.language.function.Tangent;
 import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.Add;
+import gov.sandia.n2a.language.operator.Modulo;
 import gov.sandia.n2a.language.operator.Power;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
@@ -179,15 +180,8 @@ public class RendererC extends Renderer
             else                                   inputName = job.inputNames.get (i);
 
             String mode = "";
-            if (i.operands.length > 3)
-            {
-                mode = i.operands[3].toString ();  // just assuming it's a constant string
-            }
-            else if (i.operands[1] instanceof Constant)
-            {
-                Constant c = (Constant) i.operands[1];
-                if (c.value instanceof Text) mode = c.toString ();
-            }
+            if      (i.operands.length == 2) mode = i.operands[1].getString ();
+            else if (i.operands.length >= 4) mode = i.operands[3].getString ();
 
             int shift = i.exponent - i.exponentNext;
             if (useExponent  &&  shift != 0) result.append ("(");
@@ -223,6 +217,16 @@ public class RendererC extends Renderer
             result.append ("log (");
             a.render (this);
             if (useExponent) result.append (", " + a.exponentNext + ", " + l.exponentNext + ")");
+            return true;
+        }
+        if (op instanceof Modulo)
+        {
+            Modulo m = (Modulo) op;
+            result.append ("modFloor (");
+            m.operand0.render (this);
+            result.append (", ");
+            m.operand1.render (this);
+            result.append (")");
             return true;
         }
         if (op instanceof Norm)

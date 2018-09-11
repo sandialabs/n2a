@@ -15,6 +15,24 @@
 // General functions ---------------------------------------------------------
 // See the N2A language reference for details.
 
+template<class T> inline T modFloor (T a, T b)
+{
+    return a - std::floor (a / b) * b;
+}
+template<> inline int modFloor (int a, int b)
+{
+    int result = a % b;
+    if (result < 0)
+    {
+        if (b > 0) result += b;
+    }
+    else if (result > 0)
+    {
+        if (b < 0) result += b;
+    }
+    return result;
+}
+
 template<class T> T                         uniform ();
 template<class T> T                         uniform (T sigma);
 template<class T, int R> MatrixFixed<T,R,1> uniform (const MatrixFixed<T,R,1> & sigma)
