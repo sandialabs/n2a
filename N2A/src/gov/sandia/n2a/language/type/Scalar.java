@@ -134,7 +134,11 @@ public class Scalar extends Type
 
     public Type modulo (Type that) throws EvaluationException
     {
-        if (that instanceof Scalar) return new Scalar (value % ((Scalar) that).value);
+        if (that instanceof Scalar)
+        {
+            double b = ((Scalar) that).value;
+            return new Scalar (value - Math.floor (value / b) * b);
+        }
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
@@ -145,7 +149,8 @@ public class Scalar extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = value % B.get (r, c);
+                    double b = B.get (r, c);
+                    result.value[c][r] = value - Math.floor (value / b) * b;
                 }
             }
             return result;
