@@ -207,14 +207,24 @@ log2 (int a, int exponentA, int exponentResult)
 }
 
 int
-mod (int a, int b, int exponentA, int exponentB)
+modFloor (int a, int b, int exponentA, int exponentB)
 {
     if (a == 0) return 0;
     if (b == 0) return NAN;
 
     // All computations are positive, and remainder is always positive.
-    if (a < 0) a = -a;
-    if (b < 0) b = -b;
+    bool negateA = false;
+    bool negateB = false;
+    if (a < 0)
+    {
+        a = -a;
+        negateA = true;
+    }
+    if (b < 0)
+    {
+        b = -b;
+        negateB = true;
+    }
 
     // Strategy: Align a and b to have the same exponent, then use integer modulo (%).
     while (exponentB > exponentA  &&  (b & 0x40000000) == 0)
@@ -251,6 +261,8 @@ mod (int a, int b, int exponentA, int exponentB)
             }
         }
     }
+    if (negateA) a = b - a;
+    if (negateB) a = a - b;
     return a;
 }
 

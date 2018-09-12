@@ -260,7 +260,7 @@ public class RendererCfp extends RendererC
             else
             {
                 if (shift != 0) result.append ("(");
-                result.append ("mod (");
+                result.append ("modFloor (");
                 m.operand0.render (this);
                 result.append (", ");
                 m.operand1.render (this);

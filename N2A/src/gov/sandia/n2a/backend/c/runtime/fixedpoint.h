@@ -19,16 +19,16 @@
 
 // Transcendental functions --------------------------------------------------
 
-int cos   (int a,                               int exponentA);
-int exp   (int a,                                                             int exponentResult);  // exponentA=7
-int log   (int a,                               int exponentA,                int exponentResult);
-int log2  (int a,                               int exponentA,                int exponentResult);  // Use as a subroutine. Not directly available to user.
-int mod   (int a,                        int b, int exponentA, int exponentB); // exponentResult is promised to be min(exponentA,exponentB)
-int norm  (const MatrixStrided<int> & A, int n, int exponentA,                int exponentResult);  // exponentN=15
-int pow   (int a,                        int b, int exponentA,                int exponentResult);  // exponentB=15
-int sin   (int a,                               int exponentA);
-int sqrt  (int a,                               int exponentA,                int exponentResult);
-int tan   (int a,                               int exponentA,                int exponentResult);
+int cos      (int a,                               int exponentA);
+int exp      (int a,                                                             int exponentResult);  // exponentA=7
+int log      (int a,                               int exponentA,                int exponentResult);
+int log2     (int a,                               int exponentA,                int exponentResult);  // Use as a subroutine. Not directly available to user.
+int modFloor (int a,                        int b, int exponentA, int exponentB); // exponentResult is promised to be min(exponentA,exponentB)
+int norm     (const MatrixStrided<int> & A, int n, int exponentA,                int exponentResult);  // exponentN=15
+int pow      (int a,                        int b, int exponentA,                int exponentResult);  // exponentB=15
+int sin      (int a,                               int exponentA);
+int sqrt     (int a,                               int exponentA,                int exponentResult);
+int tan      (int a,                               int exponentA,                int exponentResult);
 
 
 // Extended operations on MatrixFixed<int,R,C> -------------------------------
