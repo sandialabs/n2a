@@ -492,7 +492,7 @@ sin (int a, int exponentA)
 {
     // Limit a to [0,pi/2)
     // To create 2PI, we lie about the exponent of FP_PI, increasing it by 1.
-    a = mod (a, FP_PI, exponentA, 2);  // exponent = min (exponentA, 2)
+    a = modFloor (a, FP_PI, exponentA, 2);  // exponent = min (exponentA, 2)
     int shift = exponentA - 2;
     if (shift < 0) a >>= -shift;
     const int PIat2 = FP_PI >> 1;  // FP_PI with exponent=2 rather than 1
