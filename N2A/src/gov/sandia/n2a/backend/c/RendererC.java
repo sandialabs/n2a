@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.backend.c;
 
 import gov.sandia.n2a.eqset.EquationSet;
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.AccessElement;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.BuildMatrix;
@@ -222,10 +223,12 @@ public class RendererC extends Renderer
         if (op instanceof Modulo)
         {
             Modulo m = (Modulo) op;
+            Operator a = m.operand0;
+            Operator b = m.operand1;
             result.append ("modFloor (");
-            m.operand0.render (this);
+            moduloParam (a);
             result.append (", ");
-            m.operand1.render (this);
+            moduloParam (b);
             result.append (")");
             return true;
         }
@@ -368,10 +371,39 @@ public class RendererC extends Renderer
         else           return " >> " + -shift;
     }
 
+    /**
+        Prints any target type (float, double, int) in as simple a form as possible.
+    **/
     public String print (double d, int exponent)
     {
         String result = Scalar.print (d);
         if ((int) d != d  &&  job.T.equals ("float")) result += "f";  // Tell C compiler that our type is float, not double.
         return result;
+    }
+
+    public void moduloParam (Operator a)
+    {
+        if (a.isScalar ())
+        {
+            double d = a.getDouble ();
+            result.append (String.valueOf (d));
+            if (job.T.equals ("float")) result.append ("f");
+            return;
+        }
+        if (a instanceof AccessVariable)
+        {
+            // Trap variables that are declared int
+            Variable v = ((AccessVariable) a).reference.variable;
+            if (v.name.equals ("$index")  ||  v.name.equals ("$n")  &&  v.hasAttribute ("initOnly"))
+            {
+                result.append ("(" + job.T + ") ");
+            }
+            a.render (this);
+            return;
+        }
+        // The general case
+        result.append ("(" + job.T + ") (");
+        a.render (this);
+        result.append (")");
     }
 }
