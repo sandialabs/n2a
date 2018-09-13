@@ -1248,6 +1248,10 @@ public class JobC extends Thread
         {
             result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
         }
+        if (bed.nInitOnly)  // $n is not stored, and therefore not buffered, so we need to declare a local variable to receive its value.
+        {
+            result.append ("  " + type (bed.n) + " " + mangle (bed.n) + ";\n");
+        }
         //   no separate $ and non-$ phases, because only $variables work at the population level
         for (Variable v : bed.globalInit)
         {
@@ -1271,7 +1275,7 @@ public class JobC extends Thread
                 Backend.err.get ().println ("$n is not applicable to connections");
                 throw new Backend.AbortRun ();
             }
-            result.append ("  resize (" + resolve (bed.n.reference, context, false));
+            result.append ("  resize (" + resolve (bed.n.reference, context, bed.nInitOnly));
             if (context.useExponent) result.append (context.printShift (bed.n.exponent - Operator.MSB));
             result.append (");\n");
         }
@@ -1363,17 +1367,11 @@ public class JobC extends Thread
 
             if (bed.canResize  &&  bed.n.derivative == null  &&  bed.canGrowOrDie)  // $n shares control with other specials, so must coordinate with them
             {
-                if (bed.n.hasAttribute ("initOnly"))  // $n is explicitly assigned only once, so no need to monitor it for assigned values.
-                {
-                    result.append ("  Simulator<" + T + ">::instance.resize (this, -1);\n");  // -1 means to update $n from n. This can only be done after other parts are finalized, as they may impose structural dynamics via $p or $type.
-                }
-                else  // $n may be assigned during the regular update cycle, so we need to monitor it.
-                {
-                    result.append ("  if (" + mangle ("$n") + " != " + mangle ("next_", "$n") + ") Simulator<" + T + ">::instance.resize (this, " + mangle ("next_", "$n"));
-                    if (context.useExponent) result.append (context.printShift (bed.n.exponent - Operator.MSB));
-                    result.append (");\n");
-                    result.append ("  else Simulator<" + T + ">::instance.resize (this, -1);\n");
-                }
+                // $n may be assigned during the regular update cycle, so we need to monitor it.
+                result.append ("  if (" + mangle ("$n") + " != " + mangle ("next_", "$n") + ") Simulator<" + T + ">::instance.resize (this, " + mangle ("next_", "$n"));
+                if (context.useExponent) result.append (context.printShift (bed.n.exponent - Operator.MSB));
+                result.append (");\n");
+                result.append ("  else Simulator<" + T + ">::instance.resize (this, -1);\n");
             }
 
             for (Variable v : bed.globalBufferedExternal)
@@ -1406,18 +1404,15 @@ public class JobC extends Thread
                 }
                 else  // $n is the only kind of structural dynamics, so simply do a resize() when needed
                 {
-                    if (! bed.n.hasAttribute ("initOnly"))
+                    if (returnN)
                     {
-                        if (returnN)
-                        {
-                            result.append ("  if (n == 0) return false;\n");
-                            returnN = false;
-                        }
-                        result.append ("  int floorN = ");
-                        if (context.useExponent) result.append (mangle ("$n") + context.printShift (bed.n.exponent - Operator.MSB) + ";");
-                        else                     result.append ("(int) " + mangle ("$n"));
-                        result.append ("  if (n != floorN) Simulator<" + T + ">::instance.resize (this, floorN);\n");
+                        result.append ("  if (n == 0) return false;\n");
+                        returnN = false;
                     }
+                    result.append ("  int floorN = ");
+                    if (context.useExponent) result.append (mangle ("$n") + context.printShift (bed.n.exponent - Operator.MSB) + ";");
+                    else                     result.append ("(int) " + mangle ("$n"));
+                    result.append ("  if (n != floorN) Simulator<" + T + ">::instance.resize (this, floorN);\n");
                 }
             }
 
@@ -3876,20 +3871,27 @@ public class JobC extends Thread
             String vname = r.variable.name;
             if (vname.startsWith ("$"))
             {
+                int vorder = r.variable.order;
                 if (vname.equals ("$t"))
                 {
                     if (! lvalue)
                     {
-                        int vorder = r.variable.order;
                         if      (vorder == 0) name = "Simulator<" + T + ">::instance.currentEvent->t";
                         else if (vorder == 1)
                         {
                             if (context.hasEvent) name = "event->dt";
                             else                  name = "getEvent ()->dt";
                         }
-                        // TODO: what about higher orders of $t?
+                        // Higher orders of $t should not be "preexistent". They are handled by the main case below.
                     }
                     // for lvalue, fall through to the main case below
+                }
+                else if (vname.equals ("$n"))
+                {
+                    if (! lvalue  &&  vorder == 0)
+                    {
+                        name = "n";
+                    }
                 }
             }
             else
@@ -3942,6 +3944,7 @@ public class JobC extends Thread
     {
         String containers = base;
         EquationSet current = context.part;
+        boolean global = context.global;
         int last = r.resolution.size () - 1;
         for (int i = 0; i <= last; i++)
         {
@@ -3955,6 +3958,7 @@ public class JobC extends Thread
                     {
                         // No need to cast the population instance, because it is explicitly typed
                         containers += mangle (s.name) + ".";
+                        global = true;
                     }
                     else  // descend to an instance of the population.
                     {
@@ -3975,11 +3979,13 @@ public class JobC extends Thread
 
                         // TODO: When part is a singleton, use a simple pointer rather than a vector of pointers
                         containers += mangle (s.name) + ".instances[0]->";
+                        global = false;
                     }
                 }
                 else  // ascend to our container
                 {
                     containers = containerOf (current, i == 0  &&  context.global, containers);
+                    global = false;
                 }
                 current = s;
             }
@@ -3988,13 +3994,15 @@ public class JobC extends Thread
                 ConnectionBinding c = (ConnectionBinding) o;
                 containers += mangle (c.alias) + "->";
                 current = c.endpoint;
+                global = false;
             }
         }
 
-        if (r.resolution.isEmpty ()  &&  r.variable.hasAttribute ("global")  &&  ! context.global)
+        if (r.variable.hasAttribute ("global")  &&  ! global)
         {
-            // This is a reference to a global variable in our own part.
+            // Must ascend to our container and then descend to our population object.
             containers = containerOf (current, false, containers);
+            containers += mangle (current.name) + ".";
         }
 
         return containers;
@@ -4002,17 +4010,15 @@ public class JobC extends Thread
 
     /**
         We either have direct access to our container, or we are a connection using indirect access through an endpoint.
-        Direct access is typed, but indirect access through a population requires a typecast.
+        @param global Indicates that the current context is a population class. Because Population::container
+        is declared as a generic part in runtime.h, access requires a typecast.
     **/
     public String containerOf (EquationSet s, boolean global, String base)
     {
         BackendDataC bed = (BackendDataC) s.backendData;
         if (bed.pathToContainer != null  &&  ! global) base += mangle (bed.pathToContainer) + "->";
         base += "container";
-        if (bed.pathToContainer != null  ||  global)
-        {
-            return "((" + prefix (s.container) + " *) " + base + ")->";
-        }
+        if (global) return "((" + prefix (s.container) + " *) " + base + ")->";
         return base + "->";
     }
 

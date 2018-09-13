@@ -87,6 +87,7 @@ public class BackendDataC
     public boolean hasProject;
     public boolean canGrowOrDie;  // via $p or $type
     public boolean canResize;     // via $n
+    public boolean nInitOnly;  // $n is "initOnly"; Can only be true when $n exists.
 
     public List<String> globalColumns = new ArrayList<String> ();
     public List<String> localColumns  = new ArrayList<String> ();
@@ -135,10 +136,15 @@ public class BackendDataC
             if (v.type != null) className = v.type.getClass ().getSimpleName ();
             System.out.println ("  " + v.nameString () + " " + v.attributeString () + " " + className);
 
-            if      (v.name.equals ("$n"    )  &&  v.order == 0) n     = v;
-            else if (v.name.equals ("$p"    )  &&  v.order == 0) p     = v;
+            if      (v.name.equals ("$p"    )  &&  v.order == 0) p     = v;
             else if (v.name.equals ("$type" )                  ) type  = v;
             else if (v.name.equals ("$xyz"  )  &&  v.order == 0) xyz   = v;
+            else if (v.name.equals ("$n"    )  &&  v.order == 0)
+            {
+                n = v;
+                nInitOnly = n.hasAttribute ("initOnly");
+                if (nInitOnly) n.addAttribute ("preexistent");  // In this special case we will directly use the current population count.
+            }
             else if (v.name.equals ("$index"))
             {
                 index = v;
