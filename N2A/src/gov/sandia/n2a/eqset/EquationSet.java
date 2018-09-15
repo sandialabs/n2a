@@ -929,15 +929,27 @@ public class EquationSet implements Comparable<EquationSet>
 
     /**
         Determines if this equation set has a fixed size of 1.
+        @param strict false indicates to make an exception for the top-level part, allowing
+        it to be a singleton even though it (most likely) uses $p to terminate simulation.
     **/
-    public boolean isSingleton ()
+    public boolean isSingleton (boolean strict)
     {
-        Variable n = find (new Variable ("$n", 0));
-        if (n == null) return true;  // We only do more work if $n exists. Non-existent $n is the same as $n==1
+        // No connections
+        // The population size of a connection depends on other objects, so can't be a singleton.
+        if (connectionBindings != null) return false;
 
-        // make sure no other orders of $n exist
-        Variable n2 = variables.higher (n);
-        if (n2 != null  &&  n2.name.equals ("$n")) return false;  // higher orders means $n is dynamic
+        // No structural dynamics
+        // These tests are good heuristics, but they're actually too strict.
+        // If $p is constant 1, then part won't die. (But then, why write that?)
+        // If $type always has exactly one instance of original part, then part remains a singleton.
+        if (find (new Variable ("$p")) != null  &&  (strict  ||  container != null)) return false;
+        if (find (new Variable ("$type")) != null) return false;
+        Variable n = new Variable ("$n", 0);
+        Variable nn = variables.higher (n);
+        if (nn != null  &&  nn.name.equals ("$n")) return false;  // higher orders means $n is dynamic
+
+        n = find (n);
+        if (n == null) return true;  // We only do more work if $n exists. Non-existent $n is the same as $n==1
 
         // check contents of $n
         if (n.assignment != Variable.REPLACE) return false;
@@ -997,8 +1009,8 @@ public class EquationSet implements Comparable<EquationSet>
             if (hasBackendMetadata) continue;
 
             // Check if $n==1
-            if (! s.isSingleton ()) continue;
-            while (s.variables.remove (new Variable ("$n")));  // We don't want $n in the merged set.
+            if (! s.isSingleton (true)) continue;
+            s.variables.remove (new Variable ("$n", 0));  // We don't want $n in the merged set. (Because s is singleton, no higher orders of $n exist in it.)
 
             // Don't merge if there are any conflicting $variables.
             boolean conflict = false;
@@ -1207,26 +1219,35 @@ public class EquationSet implements Comparable<EquationSet>
             v.add (e);
         }
 
-        v = new Variable ("$type", 0);
-        if (add (v))
+        if (connectionBindings == null  ||  connected)  // Either a compartment, or a connection that also happens to be the endpoint of another connection.
         {
-            v.equations = new TreeSet<EquationEntry> ();
-        }
+            boolean singleton = isSingleton (true);
 
-        if (connected  ||  connectionBindings == null)
-        {
             v = new Variable ("$index", 0);
             if (add (v))
             {
-                v.addAttribute ("initOnly");  // most backends will set $index before processing init equations
                 v.equations = new TreeSet<EquationEntry> ();
+                if (singleton)
+                {
+                    v.addAttribute ("constant");
+                    EquationEntry e = new EquationEntry (v, "");
+                    e.expression = new Constant (new Scalar (0));
+                    v.add (e);
+                }
+                else
+                {
+                    v.addAttribute ("initOnly");  // most backends will set $index before processing init equations
+                }
             }
             else
             {
                 v = find (v);
             }
-            if (connected) v.addUser (this);  // Force $index to exist for connection targets. Used for anti-indexing into list of instances.
+            if (connected  &&  ! singleton) v.addUser (this);  // Force $index to exist for connection targets. Used for anti-indexing into list of instances.
+        }
 
+        if (connectionBindings == null)
+        {
             v = new Variable ("$n", 0);
             if (add (v))
             {
@@ -1264,7 +1285,10 @@ public class EquationSet implements Comparable<EquationSet>
         for (Variable v : temp)
         {
             if (v.hasUsers ()  ||  v.hasAttribute ("externalWrite")) continue;
-            if (v.equations.size () > 0  &&  (v.name.startsWith ("$")  ||  v.name.contains (".$"))) continue;  // even if a $variable has no direct users, we must respect any statements about it
+
+            // Even if a $variable has no direct users, we must respect any statements about it.
+            // However, remove $index if it was created constant by addSpecials().
+            if (v.equations.size () > 0  &&  (v.name.startsWith ("$")  ||  v.name.contains (".$"))  &&  ! v.name.equals ("$index")) continue;
 
             // Scan AST for any special output functions.
             boolean output = false;

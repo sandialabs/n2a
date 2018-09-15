@@ -88,6 +88,7 @@ public class BackendDataC
     public boolean canGrowOrDie;  // via $p or $type
     public boolean canResize;     // via $n
     public boolean nInitOnly;  // $n is "initOnly"; Can only be true when $n exists.
+    public boolean singleton;  // $n=1
 
     public List<String> globalColumns = new ArrayList<String> ();
     public List<String> localColumns  = new ArrayList<String> ();
@@ -141,6 +142,14 @@ public class BackendDataC
             else if (v.name.equals ("$xyz"  )  &&  v.order == 0) xyz   = v;
             else if (v.name.equals ("$n"    )  &&  v.order == 0)
             {
+                if (s.connectionBindings != null)
+                {
+                    // It is an error to explicitly define $n on a connection,
+                    // which is the only way we can get to this point.
+                    Backend.err.get ().println ("$n is not applicable to connections");
+                    throw new Backend.AbortRun ();
+                }
+
                 n = v;
                 nInitOnly = n.hasAttribute ("initOnly");
                 if (nInitOnly) n.addAttribute ("preexistent");  // In this special case we will directly use the current population count.
@@ -330,9 +339,10 @@ public class BackendDataC
         }
 
         refcount            = s.referenced  &&  s.canDie ();
+        singleton           = s.isSingleton (true);
         needGlobalPreserve  = globalIntegrated.size () > 0  ||  globalDerivativePreserve.size () > 0  ||  globalBufferedExternalWriteDerivative.size () > 0;
         needGlobalDtor      = needGlobalPreserve  ||  globalDerivative.size () > 0;
-        needGlobalCtor      = needGlobalDtor  ||  index != null  ||  n != null;
+        needGlobalCtor      = needGlobalDtor  ||  (index != null  ||  n != null)  &&  ! singleton;
         canResize           = globalMembers.contains (n);  // Works correctly even if n is null.
         trackInstances      = s.connected  ||  s.needInstanceTracking  ||  canResize;
         canGrowOrDie        = s.lethalP  ||  s.lethalType  ||  s.canGrow ();
@@ -433,7 +443,7 @@ public class BackendDataC
     public void setLocalNeedPath (EquationSet s)
     {
         EquationSet c = s.container;
-        if (c == null  &&  s.isSingleton ()) return;  // Don't set flag, because we know that path() will return "".
+        if (c == null  &&  s.isSingleton (false)) return;  // Don't set flag, because we know that path() will return "".
         needLocalPath = true;
         setParentNeedPath (s);
     }

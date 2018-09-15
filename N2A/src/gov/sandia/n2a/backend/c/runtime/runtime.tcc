@@ -923,7 +923,7 @@ template<class T>
 int
 Population<T>::getN ()
 {
-    N2A_THROW ("getN not implemented");
+    return 1;
 }
 
 template<class T>

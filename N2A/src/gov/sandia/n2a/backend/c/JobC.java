@@ -736,21 +736,28 @@ public class JobC extends Thread
         }
 
         // Population variables
-        if (bed.n != null)
+        if (bed.singleton)
         {
-            result.append ("  int n;\n");
+            result.append ("  " + prefix (s) + " instance;\n");
         }
-        if (bed.trackInstances)
+        else
         {
-            result.append ("  vector<" + prefix (s) + " *> instances;\n");
-        }
-        else if (bed.index != null)  // The instances vector can supply the next index, so only declare nextIndex if instances was not declared.
-        {
-            result.append ("  int nextIndex;\n");
-        }
-        if (bed.newborn >= 0)
-        {
-            result.append ("  int firstborn;\n");
+            if (bed.n != null)
+            {
+                result.append ("  int n;\n");
+            }
+            if (bed.trackInstances)
+            {
+                result.append ("  vector<" + prefix (s) + " *> instances;\n");
+            }
+            else if (bed.index != null)  // The instances vector can supply the next index, so only declare nextIndex if instances was not declared.
+            {
+                result.append ("  int nextIndex;\n");
+            }
+            if (bed.newborn >= 0)
+            {
+                result.append ("  int firstborn;\n");
+            }
         }
         if (bed.globalDerivative.size () > 0)
         {
@@ -1128,17 +1135,20 @@ public class JobC extends Thread
         {
             result.append (ns + prefix (s) + "_Population ()\n");
             result.append ("{\n");
-            if (bed.n != null)
+            if (! bed.singleton)
             {
-                result.append ("  n = 0;\n");
-            }
-            if (! bed.trackInstances  &&  bed.index != null)
-            {
-                result.append ("  nextIndex = 0;\n");
-            }
-            if (bed.newborn >= 0)
-            {
-                result.append ("  firstborn = 0;\n");
+                if (bed.n != null)
+                {
+                    result.append ("  n = 0;\n");
+                }
+                if (! bed.trackInstances  &&  bed.index != null)
+                {
+                    result.append ("  nextIndex = 0;\n");
+                }
+                if (bed.newborn >= 0)
+                {
+                    result.append ("  firstborn = 0;\n");
+                }
             }
             if (bed.globalDerivative.size () > 0)
             {
@@ -1175,16 +1185,19 @@ public class JobC extends Thread
         }
 
         // Population create
-        result.append ("Part<" + T + "> * " + ns + "create ()\n");
-        result.append ("{\n");
-        result.append ("  " + prefix (s) + " * p = new " + prefix (s) + ";\n");
-        if (bed.pathToContainer == null) result.append ("  p->container = (" + prefix (s.container) + " *) container;\n");
-        result.append ("  return p;\n");
-        result.append ("}\n");
-        result.append ("\n");
+        if (! bed.singleton)  // In the case of a singleton, this will remain a pure virtual function, and throw an exception if called.
+        {
+            result.append ("Part<" + T + "> * " + ns + "create ()\n");
+            result.append ("{\n");
+            result.append ("  " + prefix (s) + " * p = new " + prefix (s) + ";\n");
+            if (bed.pathToContainer == null) result.append ("  p->container = (" + prefix (s.container) + " *) container;\n");
+            result.append ("  return p;\n");
+            result.append ("}\n");
+            result.append ("\n");
+        }
 
         // Population add / remove
-        if (bed.index != null)
+        if (bed.index != null  &&  ! bed.singleton)
         {
             result.append ("void " + ns + "add (Part<" + T + "> * part)\n");
             result.append ("{\n");
@@ -1242,7 +1255,6 @@ public class JobC extends Thread
         {
             result.append ("  flags = 0;\n");
         }
-
         //   declare buffer variables
         for (Variable v : bed.globalBufferedInternal)
         {
@@ -1268,16 +1280,20 @@ public class JobC extends Thread
             result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
         }
         //   create instances
-        if (bed.n != null)
+        if (bed.singleton)
         {
-            if (s.connectionBindings != null)
+            result.append ("  instance.enterSimulation ();\n");
+            result.append ("  container->getEvent ()->enqueue (&instance);\n");
+            result.append ("  instance.init ();\n");
+        }
+        else
+        {
+            if (bed.n != null)
             {
-                Backend.err.get ().println ("$n is not applicable to connections");
-                throw new Backend.AbortRun ();
+                result.append ("  resize (" + resolve (bed.n.reference, context, bed.nInitOnly));
+                if (context.useExponent) result.append (context.printShift (bed.n.exponent - Operator.MSB));
+                result.append (");\n");
             }
-            result.append ("  resize (" + resolve (bed.n.reference, context, bed.nInitOnly));
-            if (context.useExponent) result.append (context.printShift (bed.n.exponent - Operator.MSB));
-            result.append (");\n");
         }
         //   make connections
         if (s.connectionBindings != null)
@@ -1454,7 +1470,7 @@ public class JobC extends Thread
         }
 
         // Population getN
-        if (bed.n != null)
+        if (bed.n != null  &&  ! bed.singleton)
         {
             result.append ("int " + ns + "getN ()\n");
             result.append ("{\n");
@@ -1610,13 +1626,20 @@ public class JobC extends Thread
             result.append ("void " + ns + "clearNew ()\n");
             result.append ("{\n");
             result.append ("  flags &= ~((" + bed.globalFlagType + ") 0x1 << " + bed.clearNew + ");\n");  // Reset our clearNew flag
-            result.append ("  int count = instances.size ();\n");
-            result.append ("  for (int i = firstborn; i < count; i++)\n");
-            result.append ("  {\n");
-            result.append ("    " + prefix (s) + " * p = instances[i];\n");
-            result.append ("    if (p) p->flags &= ~((" + bed.localFlagType + ") 0x1 << " + bed.newborn + ");\n");
-            result.append ("  }\n");
-            result.append ("  firstborn = count;\n");
+            if (bed.singleton)
+            {
+                result.append ("  instance.flags &= ~((" + bed.localFlagType + ") 0x1 << " + bed.newborn + ");\n");
+            }
+            else
+            {
+                result.append ("  int count = instances.size ();\n");
+                result.append ("  for (int i = firstborn; i < count; i++)\n");
+                result.append ("  {\n");
+                result.append ("    " + prefix (s) + " * p = instances[i];\n");
+                result.append ("    if (p) p->flags &= ~((" + bed.localFlagType + ") 0x1 << " + bed.newborn + ");\n");
+                result.append ("  }\n");
+                result.append ("  firstborn = count;\n");
+            }
             result.append ("}\n");
             result.append ("\n");
         }
@@ -1827,6 +1850,7 @@ public class JobC extends Thread
             result.append ("\n");
         }
 
+        // Population path
         if (bed.needGlobalPath)
         {
             result.append ("void " + ns + "path (String & result)\n");
@@ -1862,9 +1886,14 @@ public class JobC extends Thread
             {
                 result.append ("  preserve = 0;\n");
             }
-            for (EquationSet e : s.parts)
+            for (EquationSet p : s.parts)
             {
-                result.append ("  " + mangle (e.name) + ".container = this;\n");
+                result.append ("  " + mangle (p.name) + ".container = this;\n");
+                BackendDataC pbed = (BackendDataC) p.backendData;
+                if (pbed.singleton)
+                {
+                    result.append ("  " + mangle (p.name) + ".instance.container = this;\n");
+                }
             }
             if (s.accountableConnections != null)
             {
@@ -1948,7 +1977,7 @@ public class JobC extends Thread
             }
 
             // instance counting
-            if (bed.n != null) result.append ("  container->" + mangle (s.name) + ".n--;\n");
+            if (bed.n != null  &&  ! bed.singleton) result.append ("  container->" + mangle (s.name) + ".n--;\n");
 
             for (String alias : bed.accountableEndpoints)
             {
@@ -1989,7 +2018,10 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "leaveSimulation ()\n");
             result.append ("{\n");
-            result.append ("  " + containerOf (s, false, "") + mangle (s.name) + ".remove (this);\n");
+            if (! bed.singleton)
+            {
+                result.append ("  " + containerOf (s, false, "") + mangle (s.name) + ".remove (this);\n");
+            }
             TreeSet<String> touched = new TreeSet<String> ();
             for (VariableReference r : bed.localReference)
             {
@@ -2114,7 +2146,7 @@ public class JobC extends Thread
             }
 
             // instance counting
-            if (bed.n != null) result.append ("  " + containerOf (s, false, "") + mangle (s.name) + ".n++;\n");
+            if (bed.n != null  &&  ! bed.singleton) result.append ("  " + containerOf (s, false, "") + mangle (s.name) + ".n++;\n");
 
             for (String alias : bed.accountableEndpoints)
             {
@@ -3960,25 +3992,15 @@ public class JobC extends Thread
                         containers += mangle (s.name) + ".";
                         global = true;
                     }
-                    else  // descend to an instance of the population.
+                    else  // descend to a singleton instance of the population.
                     {
-                        // We can only descend a chain of singletons.
-                        if (! s.isSingleton ())
+                        BackendDataC bed = (BackendDataC) s.backendData;
+                        if (! bed.singleton)
                         {
                             Backend.err.get ().println ("ERROR: Down-reference to population with more than one instance is ambiguous.");
                             throw new AbortRun ();
                         }
-
-                        BackendDataC bed = (BackendDataC) s.backendData;
-                        if (! bed.trackInstances)
-                        {
-                            // TODO: Add full support for down-references. Requires careful sequencing of object construction as well as a pointer to singleton instance.
-                            Backend.err.get ().println ("ERROR: Support for down-reference to singleton is not fully implemented.");
-                            throw new AbortRun ();
-                        }
-
-                        // TODO: When part is a singleton, use a simple pointer rather than a vector of pointers
-                        containers += mangle (s.name) + ".instances[0]->";
+                        containers += mangle (s.name) + ".instance.";
                         global = false;
                     }
                 }
@@ -4064,8 +4086,6 @@ public class JobC extends Thread
                     pointer += mangle (s.name) + ".";
                     if (i < last)  // Enumerate the instances of child population.
                     {
-                        // TODO: handle singleton
-
                         if (depth == 0)
                         {
                             result.append (prefix + "result->instances = new vector<Part<" + T + "> *>;\n");
@@ -4092,21 +4112,41 @@ public class JobC extends Thread
 
         // "pointer" now references the target population.
         // Collect its instances.
-        if (depth == 0)  // No enumerations occurred during the resolution, so simply reference the existing list of instances.
+        BackendDataC bed = (BackendDataC) current.backendData;
+        if (bed.singleton)
         {
-            result.append (prefix + "result->firstborn = " + pointer + "firstborn;\n");
-            result.append (prefix + "result->instances = (vector<Part<" + T + "> *> *) & " + pointer + "instances;\n");
+            result.append (prefix + "bool newborn = " + pointer + "instance.flags & (" + bed.localFlagType + ") 0x1 << " + bed.newborn + ";\n");
+            if (depth == 0)  // No enumerations occurred during the resolution, so no list was created.
+            {
+                result.append (prefix + "if (newborn) result->firstborn = 0;\n");
+                result.append (prefix + "result->instances = new vector<Part<" + T + "> *> (1);\n");
+                result.append (prefix + "result->deleteInstances = true;\n");
+            }
+            else  // Enumerations occurred, so we are already accumulating a list.
+            {
+                result.append (prefix + "if (result->firstborn == INT_MAX  &&  newborn) result->firstborn = result->instances->size ();\n");
+            }
+            result.append (prefix + "result->instances->push_back (& " + pointer + "instance);\n");
         }
-        else  // Enumerations occurred, so append instances to our own list.
+        else
         {
-            result.append (prefix + "if (result->firstborn == INT_MAX  &&  " + pointer + "firstborn < " + pointer + "instances.size ()) result->firstborn = result->instances->size () + " + pointer + "firstborn;\n");
-            result.append (prefix + "result->instances->insert (result->instances->end (), " + pointer + "instances.begin (), " + pointer + "instances.end ());\n");
+            if (depth == 0)
+            {
+                // Simply reference the existing list of instances.
+                result.append (prefix + "result->firstborn = " + pointer + "firstborn;\n");
+                result.append (prefix + "result->instances = (vector<Part<" + T + "> *> *) & " + pointer + "instances;\n");
+            }
+            else
+            {
+                // Append instances to accumulating list.
+                result.append (prefix + "if (result->firstborn == INT_MAX  &&  " + pointer + "firstborn < " + pointer + "instances.size ()) result->firstborn = result->instances->size () + " + pointer + "firstborn;\n");
+                result.append (prefix + "result->instances->insert (result->instances->end (), " + pointer + "instances.begin (), " + pointer + "instances.end ());\n");
+            }
         }
 
         // Schedule the population to have its newborn flags cleared.
         // We assume that any newborn flags along the path to this population are either unimportant
         // or will get cleared elsewhere.
-        BackendDataC bed = (BackendDataC) current.backendData;
         result.append (prefix + "if (! (" + pointer + "flags & (" + bed.globalFlagType + ") 0x1 << " + bed.clearNew + "))\n");
         result.append (prefix + "{\n");
         result.append (prefix + "  " + pointer + "flags |= (" + bed.globalFlagType + ") 0x1 << " + bed.clearNew + ";\n");
