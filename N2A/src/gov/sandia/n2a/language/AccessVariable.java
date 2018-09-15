@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language;
 
 import gov.sandia.n2a.eqset.EquationEntry;
+import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.parse.SimpleNode;
@@ -70,7 +71,7 @@ public class AccessVariable extends Operator
             if (! (e.condition instanceof Constant)) return this;
             // Check for nonzero constant
             Type value = ((Constant) e.condition).value;
-            if (! (value instanceof Scalar)  ||  ((Scalar) value).value == 0) return this;  // This second condition should be eliminated by Variable.simplify(), but until it is, don't do anything here.
+            if (! (value instanceof Scalar)  ||  ((Scalar) value).value == 0) return this;
         }
         if (e.expression instanceof Constant)
         {
@@ -94,8 +95,9 @@ public class AccessVariable extends Operator
         {
             from.removeDependencyOn (v);
             from.changed = true;
-            e.expression.parent = parent;
-            return e.expression;
+            Operator result = e.expression.deepCopy ();
+            result.parent = parent;
+            return result;
         }
         if (e.expression instanceof AccessVariable)  // Our variable is simply an alias for another variable, so grab the other variable instead.
         {
@@ -103,13 +105,35 @@ public class AccessVariable extends Operator
             Variable v2 = av.reference.variable;
             if (v2 == v) return this;
             if (v2.hasAttribute ("temporary")  &&  v2.container != from.container) return this;  // Can't reference a temporary outside the current equation set.
-            // Note: Folding an aliased variable will very likely remove one or more steps of delay in the movement of values through an equation set.
-            // This might go against the user's intention. The folding can be blocked by adding a condition
-            reference = av.reference;
-            name      = av.reference.variable.nameString ();
+
+            // Fold aliased variable
             from.removeDependencyOn (v);
             from.addDependencyOn (v2);
             from.changed = true;
+            name = av.reference.variable.nameString ();
+            reference.variable = v2;
+            //   Merge resolution paths
+            //   Our current resolution path should end with the equation set that contains v.
+            //   Thus, any resolution from v to v2 could simply be tacked onto the end.
+            //   However, we want to avoid doubling back. This occurs if our penultimate
+            //   resolution step matches the first step of v2's path. In that case,
+            //   delete both our last step and the first step from v2's path.
+            int last = reference.resolution.size () - 1;
+            for (Object o2 : av.reference.resolution)
+            {
+                if (last > 0)
+                {
+                    Object o = reference.resolution.get (last - 1);
+                    if (o instanceof ConnectionBinding) o = ((ConnectionBinding) o).endpoint;
+                    if (o == o2)
+                    {
+                        reference.resolution.remove (last--);
+                        continue;  // Keeps from adding the next step from v2's path.
+                    }
+                    last = 0;  // Stop checking
+                }
+                reference.resolution.add (o2);
+            }
         }
         return this;
     }

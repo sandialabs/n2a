@@ -867,6 +867,13 @@ Population<T>::~Population ()
 }
 
 template<class T>
+Part<T> *
+Population<T>::create ()
+{
+    return 0;
+}
+
+template<class T>
 void
 Population<T>::add (Part<T> * part)
 {

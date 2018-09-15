@@ -346,7 +346,7 @@ public:
     virtual ~Population ();  ///< Deletes all parts on our dead list.
 
     // Instance management
-    virtual Part<T> * create   () = 0;           ///< Construct an instance of the kind of part this population holds. Caller is fully responsible for lifespan of result, unless it gives the part to us via add().
+    virtual Part<T> * create   ();               ///< Construct an instance of the kind of part this population holds. Caller is fully responsible for lifespan of result, unless it gives the part to us via add().
     virtual void      add      (Part<T> * part); ///< The given part is going onto a simulator queue, but we may also account for it in other ways.
     virtual void      remove   (Part<T> * part); ///< Move part to dead list, and update any other accounting for the part.
     virtual Part<T> * allocate ();               ///< If a dead part is available, re-use it. Otherwise, create and add a new part.

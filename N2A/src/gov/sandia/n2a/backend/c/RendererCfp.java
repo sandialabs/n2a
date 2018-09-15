@@ -8,7 +8,6 @@ package gov.sandia.n2a.backend.c;
 
 import java.util.HashSet;
 
-import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.BuildMatrix;
 import gov.sandia.n2a.language.Function;
@@ -65,9 +64,9 @@ public class RendererCfp extends RendererC
         operatorsWithExponent.add (Uniform   .class);
     }
 
-    public RendererCfp (JobC job, StringBuilder result, EquationSet part)
+    public RendererCfp (JobC job, StringBuilder result)
     {
-        super (job, result, part);
+        super (job, result);
         useExponent = true;  // Turn on emission of fixed-point parameters in superclass.
     }
 

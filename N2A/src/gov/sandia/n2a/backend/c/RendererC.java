@@ -43,10 +43,14 @@ public class RendererC extends Renderer
     public boolean      hasEvent; ///< Indicates that event has been retrieved within current scope.
     public boolean      useExponent;  ///< Some functions have extra parameters in fixed-point mode. Rather than duplicate rendering code, we tack on the extra parameters here.
 
-    public RendererC (JobC job, StringBuilder result, EquationSet part)
+    public RendererC (JobC job, StringBuilder result)
     {
         super (result);
-        this.job  = job;
+        this.job = job;
+    }
+
+    public void setPart (EquationSet part)
+    {
         this.part = part;
         bed       = (BackendDataC) part.backendData;
     }

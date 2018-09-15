@@ -486,81 +486,83 @@ public class JobC extends Thread
 
     public void generateCode (Path source) throws Exception
     {
-        StringBuilder s = new StringBuilder ();
+        StringBuilder result = new StringBuilder ();
+        RendererC context;
+        if (T.equals ("int")) context = new RendererCfp (this, result);
+        else                  context = new RendererC   (this, result);
 
-        s.append ("#include \"" + runtimeDir.resolve ("runtime.h") + "\"\n");
-        s.append ("\n");
-        s.append ("#include <iostream>\n");
-        s.append ("#include <vector>\n");
-        s.append ("#include <cmath>\n");
-        s.append ("\n");
-        s.append ("using namespace std;\n");
-        s.append ("using namespace fl;\n");
-        s.append ("\n");
-        generateStatic (model, s);
-        s.append ("\n");
-        generateClassList (model, s);
-        s.append ("class Wrapper;\n");
-        s.append ("\n");
-        generateDeclarations (model, s);
-        s.append ("class Wrapper : public WrapperBase<" + T + ">\n");
-        s.append ("{\n");
-        s.append ("public:\n");
-        s.append ("  " + prefix (model) + "_Population " + mangle (model.name) + ";\n");
-        s.append ("\n");
-        s.append ("  Wrapper ()\n");
-        s.append ("  {\n");
-        s.append ("    population = &" + mangle (model.name) + ";\n");
-        s.append ("    " + mangle (model.name) + ".container = this;\n");
-        s.append ("  }\n");
-        s.append ("};\n");
-        s.append ("\n");
-        generateDefinitions (model, s);
+        result.append ("#include \"" + runtimeDir.resolve ("runtime.h") + "\"\n");
+        result.append ("\n");
+        result.append ("#include <iostream>\n");
+        result.append ("#include <vector>\n");
+        result.append ("#include <cmath>\n");
+        result.append ("\n");
+        result.append ("using namespace std;\n");
+        result.append ("using namespace fl;\n");
+        result.append ("\n");
+        generateStatic (context, model);
+        result.append ("\n");
+        generateClassList (model, result);
+        result.append ("class Wrapper;\n");
+        result.append ("\n");
+        generateDeclarations (model, result);
+        result.append ("class Wrapper : public WrapperBase<" + T + ">\n");
+        result.append ("{\n");
+        result.append ("public:\n");
+        result.append ("  " + prefix (model) + "_Population " + mangle (model.name) + ";\n");
+        result.append ("\n");
+        result.append ("  Wrapper ()\n");
+        result.append ("  {\n");
+        result.append ("    population = &" + mangle (model.name) + ";\n");
+        result.append ("    " + mangle (model.name) + ".container = this;\n");
+        result.append ("  }\n");
+        result.append ("};\n");
+        result.append ("\n");
+        generateDefinitions (context, model);
 
         // Main
-        s.append ("int main (int argc, char * argv[])\n");
-        s.append ("{\n");
-        s.append ("  try\n");
-        s.append ("  {\n");
+        result.append ("int main (int argc, char * argv[])\n");
+        result.append ("{\n");
+        result.append ("  try\n");
+        result.append ("  {\n");
         if (T.equals ("int"))
         {
             Variable dt = model.find (new Variable ("$t", 1));
-            s.append ("    Event<int>::exponent = " + dt.exponent + ";\n");
+            result.append ("    Event<int>::exponent = " + dt.exponent + ";\n");
         }
         String integrator = model.getNamedValue ("c.integrator", "Euler");
         if (integrator.equalsIgnoreCase ("RungeKutta")) integrator = "RungeKutta";
         else                                            integrator = "Euler";
-        s.append ("    Simulator<" + T + ">::instance.integrator = new " + integrator + "<" + T + ">;\n");
-        s.append ("    Wrapper wrapper;\n");
-        s.append ("    Simulator<" + T + ">::instance.run (wrapper);\n");
-        s.append ("    outputClose ();\n");
-        s.append ("  }\n");
-        s.append ("  catch (const char * message)\n");
-        s.append ("  {\n");
-        s.append ("    cerr << \"Exception: \" << message << endl;\n");
-        s.append ("    return 1;\n");
-        s.append ("  }\n");
-        s.append ("  return 0;\n");
-        s.append ("}\n");
+        result.append ("    Simulator<" + T + ">::instance.integrator = new " + integrator + "<" + T + ">;\n");
+        result.append ("    Wrapper wrapper;\n");
+        result.append ("    Simulator<" + T + ">::instance.run (wrapper);\n");
+        result.append ("    outputClose ();\n");
+        result.append ("  }\n");
+        result.append ("  catch (const char * message)\n");
+        result.append ("  {\n");
+        result.append ("    cerr << \"Exception: \" << message << endl;\n");
+        result.append ("    return 1;\n");
+        result.append ("  }\n");
+        result.append ("  return 0;\n");
+        result.append ("}\n");
 
-        Files.copy (new ByteArrayInputStream (s.toString ().getBytes ("UTF-8")), source);
+        Files.copy (new ByteArrayInputStream (result.toString ().getBytes ("UTF-8")), source);
     }
 
     public void generateClassList (EquationSet s, StringBuilder result)
     {
         for (EquationSet p : s.parts) generateClassList (p, result);
-        result.append ("class " + prefix (s) + "_Population;\n");
         result.append ("class " + prefix (s) + ";\n");
+        result.append ("class " + prefix (s) + "_Population;\n");
     }
 
-    public void generateStatic (final EquationSet s, final StringBuilder result)
+    public void generateStatic (RendererC context, EquationSet s)
     {
-        for (EquationSet p : s.parts) generateStatic (p, result);
+        for (EquationSet p : s.parts) generateStatic (context, p);
 
-        final BackendDataC bed = (BackendDataC) s.backendData;
-        RendererC context;
-        if (T.equals ("int")) context = new RendererCfp (this, result, s);
-        else                  context = new RendererC   (this, result, s);
+        context.setPart (s);
+        BackendDataC  bed    = context.bed;
+        StringBuilder result = context.result;
 
         class CheckStatic extends Visitor
         {
@@ -692,7 +694,12 @@ public class JobC extends Thread
     public void generateDeclarations (EquationSet s, StringBuilder result)
     {
         for (EquationSet p : s.parts) generateDeclarations (p, result);
+        generateDeclarationsLocal (s, result);
+        generateDeclarationsGlobal (s, result);
+    }
 
+    public void generateDeclarationsGlobal (EquationSet s, StringBuilder result)
+    {
         BackendDataC bed = (BackendDataC) s.backendData;
 
         // Population class header
@@ -795,13 +802,16 @@ public class JobC extends Thread
         {
             result.append ("  virtual ~" + prefix (s) + "_Population ();\n");
         }
-        result.append ("  virtual Part<" + T + "> * create ();\n");
-        if (bed.index != null  ||  bed.trackInstances)
+        if (! bed.singleton)
         {
-            result.append ("  virtual void add (Part<" + T + "> * part);\n");
-            if (bed.trackInstances)
+            result.append ("  virtual Part<" + T + "> * create ();\n");
+            if (bed.index != null)
             {
-                result.append ("  virtual void remove (Part<" + T + "> * part);\n");
+                result.append ("  virtual void add (Part<" + T + "> * part);\n");
+                if (bed.trackInstances)
+                {
+                    result.append ("  virtual void remove (Part<" + T + "> * part);\n");
+                }
             }
         }
         result.append ("  virtual void init ();\n");
@@ -821,7 +831,7 @@ public class JobC extends Thread
         {
             result.append ("  virtual void resize (int n);\n");
         }
-        if (bed.n != null)
+        if (bed.n != null  &&  ! bed.singleton)
         {
             result.append ("  virtual int getN ();\n");
         }
@@ -862,8 +872,11 @@ public class JobC extends Thread
         // Population class trailer
         result.append ("};\n");
         result.append ("\n");
+    }
 
-        // -------------------------------------------------------------------
+    public void generateDeclarationsLocal (EquationSet s, StringBuilder result)
+    {
+        BackendDataC bed = (BackendDataC) s.backendData;
 
         // Unit class
         result.append ("class " + prefix (s) + " : public PartTime<" + T + ">\n");
@@ -1116,17 +1129,20 @@ public class JobC extends Thread
         result.append ("\n");
     }
 
-    public void generateDefinitions (EquationSet s, StringBuilder result) throws Exception
+    public void generateDefinitions (RendererC context, EquationSet s) throws Exception
     {
-        for (EquationSet p : s.parts) generateDefinitions (p, result);
+        for (EquationSet p : s.parts) generateDefinitions (context, p);
 
-        RendererC context;
-        if (T.equals ("int")) context = new RendererCfp (this, result, s);
-        else                  context = new RendererC   (this, result, s);
-        BackendDataC bed = (BackendDataC) s.backendData;
+        context.setPart (s);
+        generateDefinitionsLocal (context);
+        generateDefinitionsGlobal (context);
+    }
 
-        // -------------------------------------------------------------------
-
+    public void generateDefinitionsGlobal (RendererC context) throws Exception
+    {
+        EquationSet   s      = context.part;
+        BackendDataC  bed    = context.bed;
+        StringBuilder result = context.result;
         context.global = true;
         String ns = prefix (s) + "_Population::";  // namespace for all functions associated with part s
 
@@ -1867,11 +1883,15 @@ public class JobC extends Thread
             result.append ("}\n");
             result.append ("\n");
         }
+    }
 
-        // -------------------------------------------------------------------
-
+    public void generateDefinitionsLocal (RendererC context) throws Exception
+    {
+        EquationSet   s      = context.part;
+        BackendDataC  bed    = context.bed;
+        StringBuilder result = context.result;
         context.global = false;
-        ns = prefix (s) + "::";
+        String ns = prefix (s) + "::";
 
         // Unit ctor
         if (bed.needLocalCtor  ||  s.parts.size () > 0)
@@ -3135,7 +3155,7 @@ public class JobC extends Thread
                         result.append ("  result = \"" + s.name + "\";\n");
                     }
                 }
-                result.append ("  result += __24index;\n");
+                if (bed.index != null) result.append ("  result += __24index;\n");
             }
             else
             {

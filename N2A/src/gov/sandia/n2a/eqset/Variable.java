@@ -427,16 +427,14 @@ public class Variable implements Comparable<Variable>
 
             if (e.condition instanceof Constant)
             {
-                Constant c = (Constant) e.condition;
-                if (c.value instanceof Scalar)
+                if (e.condition.getDouble () == 0)  // Will never fire
                 {
-                    double value = ((Scalar) c.value).value;
-                    if (value == 0)
-                    {
-                        // Drop equation because it will never fire.
-                        changed = true;
-                        continue;
-                    }
+                    // Drop equation
+                    changed = true;
+                    continue;
+                }
+                else  // Will always fire
+                {
                     alwaysTrue.add (e);
                 }
             }

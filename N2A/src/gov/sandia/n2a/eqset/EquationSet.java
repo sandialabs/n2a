@@ -576,18 +576,14 @@ public class EquationSet implements Comparable<EquationSet>
         // Check variable names
         if (variables.contains (v)) return this;  // found it!
 
-        // Check if this is a direct reference to a child part.
+        // Guard against direct reference to a child part.
         // Similar to a "down" reference, except without a variable.
         EquationSet part = parts.floor (new EquationSet (v.name));
-        if (part != null  &&  part.name.equals (v.name))
-        {
-            return null; // formally, we don't allow a naked reference to a child population
-        }
+        if (part != null  &&  part.name.equals (v.name)) return null;
 
         if (create)
         {
             // Create a self-referencing variable with no equations
-            // TODO: make sure we can handle an empty set of equations in C Backend
             // TODO: what attributes or equations should this have?
             Variable cv = new Variable (v.name, v.order);
             add (cv);
