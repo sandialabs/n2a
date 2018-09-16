@@ -85,10 +85,10 @@ public class BackendDataC
     public boolean refcount;
     public boolean trackInstances;
     public boolean hasProject;
-    public boolean canGrowOrDie;  // via $p or $type
-    public boolean canResize;     // via $n
-    public boolean nInitOnly;  // $n is "initOnly"; Can only be true when $n exists.
-    public boolean singleton;  // $n=1
+    public boolean canGrowOrDie; // via $p or $type
+    public boolean canResize;    // via $n
+    public boolean nInitOnly;    // $n is "initOnly"; Can only be true when $n exists.
+    public boolean singleton;    // $n=1
 
     public List<String> globalColumns = new ArrayList<String> ();
     public List<String> localColumns  = new ArrayList<String> ();

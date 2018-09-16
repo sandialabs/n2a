@@ -4136,27 +4136,23 @@ public class JobC extends Thread
         if (bed.singleton)
         {
             result.append (prefix + "bool newborn = " + pointer + "instance.flags & (" + bed.localFlagType + ") 0x1 << " + bed.newborn + ";\n");
-            if (depth == 0)  // No enumerations occurred during the resolution, so no list was created.
+            if (depth == 0)
             {
-                result.append (prefix + "if (newborn) result->firstborn = 0;\n");
                 result.append (prefix + "result->instances = new vector<Part<" + T + "> *> (1);\n");
                 result.append (prefix + "result->deleteInstances = true;\n");
             }
-            else  // Enumerations occurred, so we are already accumulating a list.
-            {
-                result.append (prefix + "if (result->firstborn == INT_MAX  &&  newborn) result->firstborn = result->instances->size ();\n");
-            }
+            result.append (prefix + "if (result->firstborn == INT_MAX  &&  newborn) result->firstborn = result->instances->size ();\n");
             result.append (prefix + "result->instances->push_back (& " + pointer + "instance);\n");
         }
         else
         {
-            if (depth == 0)
+            if (depth == 0)  // No enumerations occurred during the resolution, so no list was created.
             {
                 // Simply reference the existing list of instances.
                 result.append (prefix + "result->firstborn = " + pointer + "firstborn;\n");
                 result.append (prefix + "result->instances = (vector<Part<" + T + "> *> *) & " + pointer + "instances;\n");
             }
-            else
+            else  // Enumerations occurred, so we are already accumulating a list.
             {
                 // Append instances to accumulating list.
                 result.append (prefix + "if (result->firstborn == INT_MAX  &&  " + pointer + "firstborn < " + pointer + "instances.size ()) result->firstborn = result->instances->size () + " + pointer + "firstborn;\n");
