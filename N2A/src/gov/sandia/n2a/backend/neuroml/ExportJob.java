@@ -2218,46 +2218,43 @@ public class ExportJob extends XMLutility
             // Rather than depend on backend.lems.part value, we directly determine the gate type.
             // This allows fewer distinct parts in the base repo.
             int flags = 0;
+            Map<String,Integer> typeMap = new HashMap<String,Integer> ();
+            flags |= check (part, "α",         alpha, typeMap);
+            flags |= check (part, "β",         beta,  typeMap);
+            flags |= check (part, "τUnscaled", tau,   typeMap);
+            flags |= check (part, "inf",       inf,   typeMap);
+            flags |= check (part, "q",         inf,   typeMap);
+
             List<Element> gateElements = new ArrayList<Element> ();
+            flags |= checkTau (part, "τUnscaled", gateElements);
             for (MNode c : part)
             {
                 MPart p = (MPart) c;
-                if (p.isPart ())
+                if (! p.isPart ()) continue;
+
+                String type = p.get ("$metadata", "backend.lems.part");
+                if (type.contains ("Q10"))
                 {
-                    String type = p.get ("$metadata", "backend.lems.part");
-                    if (type.contains ("Q10"))
-                    {
-                        q10 (p, "q10Settings", gateElements);
-                    }
-                    else if (type.contains ("State"))
-                    {
-                        kineticState (p, gateElements);
-                        flags = kinetic;
-                    }
-                    else if (type.contains ("Transition"))
-                    {
-                        kineticTransition (p, gateElements);
-                        flags = kinetic;
-                    }
-                    else if (type.contains ("gate"))
-                    {
-                        gate (p, gateElements);
-                        flags = fractional;
-                    }
-                    else
-                    {
-                        flags |= rate (p, gateElements);
-                    }
+                    q10 (p, "q10Settings", gateElements);
+                }
+                else if (type.contains ("State"))
+                {
+                    kineticState (p, gateElements);
+                    flags = kinetic;
+                }
+                else if (type.contains ("Transition"))
+                {
+                    kineticTransition (p, gateElements);
+                    flags = kinetic;
+                }
+                else if (type.contains ("gate"))
+                {
+                    gate (p, gateElements);
+                    flags = fractional;
                 }
                 else
                 {
-                    if (p.key ().equals ("tau")  &&  p.isFromTopDocument ())  // explicit tau
-                    {
-                        flags |= tau;
-                        Element t = addElement ("timeCourse", gateElements);
-                        t.setAttribute ("type", "fixeTimeCourse");  // TODO: verify this is the right type
-                        t.setAttribute ("tau", biophysicalUnits (p.get ()));
-                    }
+                    rate (p, typeMap, gateElements);
                 }
             }
 
@@ -2302,19 +2299,45 @@ public class ExportJob extends XMLutility
             sequencer.append (gate, gateElements);
         }
 
-        public int rate (MPart part, List<Element> gateElements)
+        public int check (MPart part, String variableName, int flag, Map<String,Integer> typeMap)
         {
-            int result = 0;
-            if      (part.child ("$up.α"        ) != null) result = alpha;
-            else if (part.child ("$up.forward"  ) != null) result = alpha;
-            else if (part.child ("$up.β"        ) != null) result = beta;
-            else if (part.child ("$up.reverse"  ) != null) result = beta;
-            else if (part.child ("$up.τUnscaled") != null) result = tau;
-            else if (part.child ("$up.inf"      ) != null) result = inf;
-            else if (part.child ("$up.q"        ) != null) result = inf;
+            String value = new Variable.ParsedValue (part.get (variableName)).expression;
+            if (! value.endsWith (".x")) return 0;
+            value = value.substring (0, value.length () - 2);
+            typeMap.put (value, flag);
+            return flag;
+        }
 
+        // Check for tau with constant value.
+        public int checkTau (MPart part, String variable, List<Element> gateElements)
+        {
+            MNode c = part.child (variable);
+            if (c == null) return 0;
+            String value = new Variable.ParsedValue (c.get ()).expression;
+            if (! value.endsWith (".x"))  // Does not reference an HHVariable
+            {
+                try
+                {
+                    Operator op = Operator.parse (value);
+                    if (op instanceof Constant)
+                    {
+                        Element t = addElement ("timeCourse", gateElements);
+                        t.setAttribute ("type", "HHTime");
+                        t.setAttribute ("tau", biophysicalUnits (value));
+                        return tau;
+                    }
+                }
+                catch (ParseException e) {}
+            }
+            return 0;
+        }
+
+        public void rate (MPart part, Map<String,Integer> typeMap, List<Element> gateElements)
+        {
             String name = part.key ();
-            switch (result)
+            Integer i = typeMap.get (name);
+            if (i == null) i = 0;
+            switch (i)
             {
                 case alpha: name = "forwardRate"; break;
                 case beta : name = "reverseRate"; break;
@@ -2334,8 +2357,6 @@ public class ExportJob extends XMLutility
             {
                 r.setAttribute (a, biophysicalUnits (part.get (a)));
             }
-
-            return result;
         }
 
         public void kineticState (MPart part, List<Element> parentElements)
@@ -2349,11 +2370,18 @@ public class ExportJob extends XMLutility
         public void kineticTransition (MPart part, List<Element> parentElements)
         {
             int flags = 0;
-            List<Element> kineticElements = new ArrayList<Element> ();
+            Map<String,Integer> typeMap = new HashMap<String,Integer> ();
+            flags |= check (part, "forward", alpha, typeMap);
+            flags |= check (part, "reverse", beta,  typeMap);
+            flags |= check (part, "τ",       tau,   typeMap);
+            flags |= check (part, "inf",     inf,   typeMap);
+
+            List<Element> transitionElements = new ArrayList<Element> ();
+            flags |= checkTau (part, "τ", transitionElements);
             for (MNode c : part)
             {
                 MPart p = (MPart) c;
-                if (p.isPart ()) flags |= rate (p, kineticElements);
+                if (p.isPart ()) rate (p, typeMap, transitionElements);
             }
 
             String type = part.get ("$metadata", "backend.lems.part");  // allows for vHalfTransition
@@ -2368,6 +2396,7 @@ public class ExportJob extends XMLutility
             transition.setAttribute ("id",   part.key ());
             transition.setAttribute ("from", part.get ("from"));
             transition.setAttribute ("to",   part.get ("to"));
+            sequencer.append (transition, transitionElements);
         }
 
         public boolean equals (Object that)

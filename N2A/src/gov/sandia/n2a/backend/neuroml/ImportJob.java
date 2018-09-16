@@ -720,6 +720,36 @@ public class ImportJob extends XMLutility
     public void rate (Node node, MNode container, boolean KS, boolean instantaneous)
     {
         String name = node.getNodeName ();
+        String var = "";
+        if (name.equals ("forwardRate"))
+        {
+            if (KS) var = "forward";
+            else    var = "α";
+        }
+        else if (name.equals ("reverseRate"))
+        {
+            if (KS) var = "reverse";
+            else    var = "β";
+        }
+        else if (name.equals ("steadyState"))
+        {
+            if (instantaneous) var = "q";  // Because the Gate model is written so that inf only initializes q once, while "instantaneous" requires continually changing q.
+            else               var = "inf";
+        }
+        else if (name.equals ("timeCourse"))
+        {
+            if (KS) var = "τ";
+            else    var = "τUnscaled";
+
+            // If the node defines tau, then that overrides any other HHVariable parameters.
+            String tau = getAttribute (node, "tau");
+            if (! tau.isEmpty ())
+            {
+                container.set (var, biophysicalUnits (tau));
+                return;
+            }
+        }
+
         String inherit = getAttribute (node, "type");
         MNode part = container.set (name, "");
         NameMap nameMap = partMap.importMap (inherit);
@@ -728,29 +758,7 @@ public class ImportJob extends XMLutility
         addDependency (part, inherit);
 
         addAttributes (node, part, nameMap, "type");
-
-        // add appropriate "$up.var=x" statement
-        String up = "";
-        if (name.equals ("forwardRate"))
-        {
-            if (KS) up = "$up.forward";
-            else    up = "$up.α";
-        }
-        else if (name.equals ("reverseRate"))
-        {
-            if (KS) up = "$up.reverse";
-            else    up = "$up.β";
-        }
-        else if (name.equals ("steadyState"))
-        {
-            if (instantaneous) up = "$up.q";  // Because the Gate model is written so that inf only initializes q once, while "instantaneous" requires continually changing q.
-            else               up = "$up.inf";
-        }
-        else if (name.equals ("timeCourse"))
-        {
-            up = "$up.τUnscaled";
-        }
-        if (! up.isEmpty ()) part.set (up, "x");
+        if (! var.isEmpty ()) container.set (var, ":" + name + ".x");
     }
 
     public void blockingPlasticSynapse (Node node)
