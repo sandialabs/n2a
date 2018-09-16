@@ -102,6 +102,7 @@ public class InternalBackendData
     public List<EventSource> eventSources    = new ArrayList<EventSource> ();
     public List<Variable>    eventReferences = new ArrayList<Variable> ();  // Variables in referenced parts that need to be finalized when this part executes due to a zero-delay event.
 
+    public boolean singleton;               // $n=1 always; No structural dynamics.
     public boolean populationCanGrowOrDie;  // by structural dynamics other than $n
     public boolean populationCanResize;     // by manipulating $n
     public int     populationIndex;         // in container.populations
@@ -869,8 +870,9 @@ public class InternalBackendData
             }
         }
 
+        singleton = s.isSingleton (true);
         populationCanGrowOrDie =  s.lethalP  ||  s.lethalType  ||  s.canGrow ();
-        if (n != null)
+        if (n != null  &&  ! singleton)
         {
             populationCanResize = globalMembers.contains (n);
 
@@ -888,7 +890,7 @@ public class InternalBackendData
             }
         }
 
-        if (index != null)
+        if (index != null  &&  ! singleton)
         {
             indexNext = countGlobalFloat++;
             namesGlobalFloat.add ("indexNext");
@@ -896,7 +898,7 @@ public class InternalBackendData
             namesGlobalObject.add ("indexAvailable");
         }
 
-        if (s.connected  ||  s.needInstanceTracking  ||  populationCanResize)  // track instances
+        if (singleton  ||  s.connected  ||  s.needInstanceTracking  ||  populationCanResize)  // track instances
         {
             // The reason populationCanResize forces use of the instances array is to enable pruning of parts when $n decreases.
 
@@ -905,8 +907,11 @@ public class InternalBackendData
 
             if (s.connected)  // in addition, track newly created instances
             {
-                firstborn = countGlobalFloat++;
-                namesGlobalFloat.add ("firstborn");
+                if (! singleton)
+                {
+                    firstborn = countGlobalFloat++;
+                    namesGlobalFloat.add ("firstborn");
+                }
                 newborn = countLocalFloat++;
                 namesLocalFloat.add ("newborn");
             }

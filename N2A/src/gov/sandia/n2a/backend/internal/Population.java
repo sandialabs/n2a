@@ -36,44 +36,67 @@ public class Population extends Instance
         this.container = container;
         InternalBackendData bed = (InternalBackendData) equations.backendData;
         allocate (bed.countGlobalFloat, bed.countGlobalObject);
+        if (bed.singleton)
+        {
+            Part p = new Part (equations, container);
+            valuesObject[bed.instances] = p;
+            n = 1;
+            if (equations.connected) p.valuesFloat[bed.newborn] = 1;
+        }
     }
 
     public void init (Simulator simulator)
     {
         InstanceTemporaries temp = new InstanceTemporaries (this, simulator, true);
-        resolve (temp.bed.globalReference);
-        for (Variable v : temp.bed.globalInit)
+        InternalBackendData bed = temp.bed;
+        resolve (bed.globalReference);
+
+        Part instance = null;
+        if (bed.singleton)
+        {
+            instance = (Part) valuesObject[bed.instances];
+            ((Part) container).event.enqueue (instance);
+            instance.resolve ();
+        }
+
+        for (Variable v : bed.globalInit)
         {
             Type result = v.eval (temp);
             if (result != null  &&  v.writeIndex >= 0) temp.set (v, result);
         }
-        for (Variable v : temp.bed.globalBuffered)
+        for (Variable v : bed.globalBuffered)
         {
             temp.setFinal (v, temp.getFinal (v));
         }
         // zero external buffered variables that may be written before first finish()
-        for (Variable v : temp.bed.globalBufferedExternalWrite) set (v, v.type);  // v.type should be pre-loaded with zero-equivalent values
+        for (Variable v : bed.globalBufferedExternalWrite) set (v, v.type);  // v.type should be pre-loaded with zero-equivalent values
 
-        if (temp.bed.index != null)
+        if (bed.index != null)
         {
-            valuesFloat[temp.bed.indexNext] = 0;  // Using floats directly as index counter limits us to 24 bits, or about 16 million. Internal is not intended for large simulations, so this limitation is acceptable.
+            valuesFloat[bed.indexNext] = 0;  // Using floats directly as index counter limits us to 24 bits, or about 16 million. Internal is not intended for large simulations, so this limitation is acceptable.
             // indexAvailable is initially null
         }
 
         // Note: A connection is forbidden from setting its own population size.
         // Even if a connection is the target of another connection, and thus functions as a compartment,
         // it still cannot set its own population size.
-        if (equations.connectionBindings == null)
+        if (bed.singleton)
         {
-            InternalBackendData bed = (InternalBackendData) equations.backendData;
-            int requestedN = 1;
-            if (bed.n.hasAttribute ("constant")) requestedN = (int) ((Scalar) bed.n.eval (this)).value;
-            else                                 requestedN = (int) ((Scalar) get (bed.n)).value;
-            resize (simulator, requestedN);
+            instance.init (simulator);
         }
         else
         {
-            simulator.connect (this);  // queue to evaluate our connections
+            if (equations.connectionBindings == null)
+            {
+                int requestedN = 1;
+                if (bed.n.hasAttribute ("constant")) requestedN = (int) ((Scalar) bed.n.eval (this)).value;
+                else                                 requestedN = (int) ((Scalar) get (bed.n)).value;
+                resize (simulator, requestedN);
+            }
+            else
+            {
+                simulator.connect (this);  // queue to evaluate our connections
+            }
         }
     }
 
@@ -273,17 +296,27 @@ public class Population extends Instance
             }
 
             // "current" is now a population of the endpoint type, so pbed is the correct backend data
-            int             leafFirstborn = (int)             current.valuesFloat [pbed.firstborn];
-            ArrayList<Part> leafInstances = (ArrayList<Part>) current.valuesObject[pbed.instances];
-            if (instances == null)  // No enumerations occurred during the resolution, so simply reference the existing list of instances.
+            if (pbed.singleton)
             {
-                instances = leafInstances;
-                firstborn = leafFirstborn;
+                Part instance = (Part) current.valuesObject[pbed.instances];
+                if (instances == null) instances = new ArrayList<Part> ();
+                if (firstborn == Integer.MAX_VALUE  &&  instance.valuesFloat[pbed.newborn] != 0) firstborn = instances.size ();
+                instances.add (instance);
             }
             else
             {
-                if (firstborn == Integer.MAX_VALUE  &&  leafFirstborn < leafInstances.size ()) firstborn = instances.size () + leafFirstborn;
-                instances.addAll (leafInstances);
+                int             leafFirstborn = (int)             current.valuesFloat [pbed.firstborn];
+                ArrayList<Part> leafInstances = (ArrayList<Part>) current.valuesObject[pbed.instances];
+                if (instances == null)  // No enumerations occurred during the resolution, so simply reference the existing list of instances.
+                {
+                    instances = leafInstances;
+                    firstborn = leafFirstborn;
+                }
+                else
+                {
+                    if (firstborn == Integer.MAX_VALUE  &&  leafFirstborn < leafInstances.size ()) firstborn = instances.size () + leafFirstborn;
+                    instances.addAll (leafInstances);
+                }
             }
             simulator.clearNew ((Population) current);  // Queue to clear after current cycle.
         }
@@ -662,24 +695,33 @@ public class Population extends Instance
     public void clearNew ()
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
-        ArrayList<Part> instances = (ArrayList<Part>) valuesObject[bed.instances];
-        int count     = instances.size ();
-        int firstborn = (int) valuesFloat[bed.firstborn];
-        for (int i = firstborn; i < count; i++)
+        if (bed.singleton)
         {
-            Part p = instances.get (i);
-            if (p == null) continue;
+            Part p = (Part) valuesObject[bed.instances];
             p.valuesFloat[bed.newborn] = 0;
         }
-        valuesFloat[bed.firstborn] = count;
+        else
+        {
+            ArrayList<Part> instances = (ArrayList<Part>) valuesObject[bed.instances];
+            int count     = instances.size ();
+            int firstborn = (int) valuesFloat[bed.firstborn];
+            for (int i = firstborn; i < count; i++)
+            {
+                Part p = instances.get (i);
+                if (p == null) continue;
+                p.valuesFloat[bed.newborn] = 0;
+            }
+            valuesFloat[bed.firstborn] = count;
+        }
     }
 
     @SuppressWarnings("unchecked")
     public void insert (Part p)
     {
-        n++;
-
         InternalBackendData bed = (InternalBackendData) equations.backendData;
+        if (bed.singleton) return;
+
+        n++;
         if (bed.index != null)
         {
             int index;
@@ -718,9 +760,10 @@ public class Population extends Instance
     @SuppressWarnings("unchecked")
     public void remove (Part p)
     {
-        n--;  // presuming that p is actually here
-
         InternalBackendData bed = (InternalBackendData) equations.backendData;
+        if (bed.singleton) return;
+
+        n--;  // presuming that p is actually here
         if (bed.index != null)
         {
             int index = (int) ((Scalar) p.get (bed.index)).value;
