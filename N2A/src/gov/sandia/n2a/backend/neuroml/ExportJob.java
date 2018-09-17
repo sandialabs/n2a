@@ -414,7 +414,7 @@ public class ExportJob extends XMLutility
                 else if (type.contains ("Input")  ||  type.contains ("Generator")  ||  type.contains ("Clamp")  ||  type.contains ("spikeArray")  ||  type.contains ("PointCurrent"))  // unary connection with embedded input
                 {
                     String inputID = input (p, elements, null);
-                    if (! p.get ("B").contains ("connect("))  // There are NeuroML files that create an input without incorporating it into a network, yet our importer wraps the whole result in a network. This guard prevents a malformed element in the output.
+                    if (! Operator.containsConnect (p.get ("B")))  // There are NeuroML files that create an input without incorporating it into a network, yet our importer wraps the whole result in a network. This guard prevents a malformed element in the output.
                     {
                         Element result = addElement ("inputList", networkElements);
                         result.setAttribute ("component", inputID);
@@ -2449,7 +2449,7 @@ public class ExportJob extends XMLutility
                 // A constant that is either overridden or required should be emitted here.
                 // An override that is an expression should trigger a LEMS extension part.
 
-                Variable v = partEquations.find (new Variable (key));
+                Variable v = partEquations.find (Variable.fromLHS (key));
                 boolean constant = v.hasAttribute ("constant");
 
                 boolean overridden = p.isFromTopDocument ()  ||  isOverride (part.get ("$inherit").replace ("\"", ""), key);

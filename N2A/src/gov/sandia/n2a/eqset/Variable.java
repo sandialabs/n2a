@@ -168,6 +168,18 @@ public class Variable implements Comparable<Variable>
         }
     }
 
+    public static Variable fromLHS (String lhs)
+    {
+        lhs = lhs.trim ();
+        int order = 0;
+        while (lhs.endsWith ("'"))
+        {
+            order++;
+            lhs = lhs.substring (0, lhs.length () - 1);
+        }
+        return new Variable (lhs, order);
+    }
+
     /**
         Checks for a combining operator at the beginning of the right-hand side, and removes it
         for further processing.

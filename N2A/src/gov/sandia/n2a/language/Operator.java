@@ -455,4 +455,9 @@ public class Operator implements Cloneable
         result.getOperandsFrom (node);
         return result;
     }
+
+    public static boolean containsConnect (String line)
+    {
+        return line.matches ("(^|.*[^\\p{Alnum}$_]+)connect\\s*\\(.*");
+    }
 }

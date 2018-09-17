@@ -356,8 +356,8 @@ public class EquationSet implements Comparable<EquationSet>
         <li>No variable in the current equation set matches the name.
         </ul>
         $up is permitted. The explicit name of a higher container may also be used.
-        $connect should not appear. It should have been overwritten during construction.
-        If $connect does appear, bindings are incomplete, which is an error.
+        connect() should not appear. It should have been overwritten during construction.
+        If connect() does appear, bindings are incomplete, which is an error.
     **/
     public void resolveConnectionBindings (LinkedList<String> unresolved) throws Exception
     {
@@ -709,7 +709,7 @@ public class EquationSet implements Comparable<EquationSet>
                                 query.reference.variable = new Variable ("(connection)");  // create a phantom variable.  TODO: should this be an attribute instead?
                                 query.reference.variable.container = dest;  // the container itself is really the target
                                 query.reference.variable.addAttribute ("initOnly"); // because instance variables are bound before the part is put into service, and remain constant for its entire life
-                                query.reference.variable.reference = query.reference;  // TODO: when $connect() is implemented, instances should become first class variables in the equation set, and this circular reference will be created by resolveLHS()
+                                query.reference.variable.reference = query.reference;  // TODO: when connect() is implemented, instances should become first class variables in the equation set, and this circular reference will be created by resolveLHS()
                             }
                             else if (query.name.equals ("$count"))  // accountable endpoint
                             {

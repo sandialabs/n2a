@@ -414,14 +414,14 @@ public class ImportJob extends XMLutility
     {
         dependents.remove (dependent);
         boolean isChildrenType = dependent.key ().startsWith ("backend.lems.children");
-        boolean isConnect      = dependent.get ().contains ("$connect");
+        boolean isConnect      = dependent.get ().contains ("connect(");
 
         String dependentInherit = dependent.get ("$inherit");
         if (dependentInherit.isEmpty ()) dependentInherit = dependent.get ();  // For connections, the part name might be a direct value.
-        if (dependentInherit.startsWith ("$connect"))
+        if (dependentInherit.startsWith ("connect("))
         {
-            dependentInherit = dependentInherit.replace ("$connect(", "");
-            dependentInherit = dependentInherit.replace (")",         "");
+            dependentInherit = dependentInherit.replace ("connect(", "");
+            dependentInherit = dependentInherit.replace (")",        "");
         }
 
         String[] sourceNames = dependentInherit.split (",");
@@ -573,8 +573,8 @@ public class ImportJob extends XMLutility
                 }
                 else if (isConnect)
                 {
-                    dependent.set ("$connect(\"" + inherit + "\")");
-                    //dependent.set ("0", id);  // TODO: Store ID with $connect() ?
+                    dependent.set ("connect(\"" + inherit + "\")");
+                    //dependent.set ("0", id);  // TODO: Store ID with connect() ?
                 }
                 else
                 {
@@ -3066,7 +3066,7 @@ public class ImportJob extends XMLutility
                         inherit     = getAttribute (child, "type");
                         description = getAttribute (child, "description");
                         if (models.child (modelName, inherit) == null) inherit = partMap.importName (inherit);
-                        part.set (name, "$connect(\"" + inherit + "\")");
+                        part.set (name, "connect(\"" + inherit + "\")");
                         if (! inherit    .isEmpty ()) addDependencyFromLEMS (part.child (name), inherit);
                         if (! description.isEmpty ()) part.set (name, "$metadata", "description", description);
                         break;
@@ -3612,15 +3612,15 @@ public class ImportJob extends XMLutility
                     if (sourceNode == null) sourceNode = part.set (component, "");
                 }
                 MNode targetNode = part.childOrCreate (component);
-                String inherit = sourceNode.get ();  // Will either be blank or a $connect line
-                if (inherit.startsWith ("$connect"))
+                String inherit = sourceNode.get ();  // Will either be blank or a connect() line
+                if (inherit.startsWith ("connect("))
                 {
-                    inherit = inherit.replace ("$connect(\"", "");
-                    inherit = inherit.replace ("\")",         "");
+                    inherit = inherit.replace ("connect(\"", "");
+                    inherit = inherit.replace ("\")",        "");
                     targetNode.set ("");
                     targetNode.set ("$inherit", "\"" + inherit + "\"");
                     if (sourceNode != targetNode) addDependencyFromLEMS (targetNode, inherit);
-                    // No need to call addDependency() if sourcePart is local, because it was already called when the $connect line was created.
+                    // No need to call addDependency() if sourcePart is local, because it was already called when the connect() line was created.
                 }
             }
         }
@@ -3928,10 +3928,10 @@ public class ImportJob extends XMLutility
                 if (next != null)
                 {
                     String connection = next.get ();
-                    if (connection.startsWith ("$connect"))
+                    if (connection.startsWith ("connect("))
                     {
-                        connection = connection.replace ("$connect(\"", "");
-                        connection = connection.replace ("\")",         "");
+                        connection = connection.replace ("connect(\"", "");
+                        connection = connection.replace ("\")",        "");
                         if (! connection.isEmpty ()) next = models.child (modelName, connection);
                     }
                 }
@@ -4011,7 +4011,7 @@ public class ImportJob extends XMLutility
             for (int i = 0; i < parts.size () - 1; i++)
             {
                 PathPart p = parts.get (i);
-                if (source.get (p.partName).startsWith ("$connect")) return;  // We only modify the variable if it does not go through a connection, that is, only if the variable is fully contained under us.
+                if (source.get (p.partName).startsWith ("connect(")) return;  // We only modify the variable if it does not go through a connection, that is, only if the variable is fully contained under us.
 
                 name = "$up." + name;
                 MNode child = source.child (p.partName);

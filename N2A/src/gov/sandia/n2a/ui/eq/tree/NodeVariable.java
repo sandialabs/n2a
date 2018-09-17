@@ -15,6 +15,7 @@ import java.util.List;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
@@ -138,7 +139,7 @@ public class NodeVariable extends NodeFilter
 
         NodePart parent = (NodePart) getParent ();
         String value = source.get ().trim ();
-        if (value.contains ("$connect"))
+        if (Operator.containsConnect (value))
         {
             isBinding = true;
         }
