@@ -2447,10 +2447,6 @@ public class JobC extends Thread
             if (s.lethalP)
             {
                 // lethalP implies that $p exists, so no need to check for null
-                if (bed.p.hasAttribute ("temporary"))
-                {
-                    multiconditional (bed.p, context, "  ");
-                }
                 if (bed.p.hasAttribute ("constant"))
                 {
                     double pvalue = ((Scalar) ((Constant) bed.p.equations.first ().expression).value).value;
@@ -2463,6 +2459,19 @@ public class JobC extends Thread
                 }
                 else
                 {
+                    if (bed.p.hasAttribute ("temporary"))
+                    {
+                        // Generate any temporaries needed by $p
+                        for (Variable t : s.variables)
+                        {
+                            if (t.hasAttribute ("temporary")  &&  bed.p.dependsOn (t) != null)
+                            {
+                                multiconditional (t, context, "  ");
+                            }
+                        }
+                        multiconditional (bed.p, context, "  ");
+                    }
+
                     result.append ("  if (" + mangle ("$p") + " == 0  ||  " + mangle ("$p") + " < " + context.print (1, bed.p.exponent) + "  &&  " + mangle ("$p") + " < uniform<" + T + "> ()");
                     if (context.useExponent) result.append (context.printShift (-1 - bed.p.exponent));
                     result.append (")\n");
@@ -2991,7 +3000,10 @@ public class JobC extends Thread
                 }
                 if (et.edge != EventTarget.NONZERO)
                 {
-                    result.append ("      " + T + " before = " + resolve (et.track.reference, context, false) + ";\n");
+                    result.append ("      " + T + " before = ");
+                    if (et.trackOne) result.append (resolve (et.track.reference, context, false));
+                    else             result.append (et.track.name);
+                    result.append (";\n");
                 }
                 if (et.trackOne)  // This is a single variable, so check its value directly.
                 {
@@ -3004,7 +3016,7 @@ public class JobC extends Thread
                     result.append (";\n");
                     if (et.edge != EventTarget.NONZERO)
                     {
-                        result.append ("      " + mangle (et.track) + " = after;\n");
+                        result.append ("      " + et.track.name + " = after;\n");
                     }
                 }
                 switch (et.edge)
