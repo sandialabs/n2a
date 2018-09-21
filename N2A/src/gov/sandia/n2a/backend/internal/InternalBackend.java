@@ -219,8 +219,12 @@ public class InternalBackend extends Backend
     {
         System.setProperty ("user.dir", new File (jobDir).getAbsolutePath ());  // Make paths relative to job directory
 
+        String backend = e.getNamedValue ("backend", "internal");
+        if (backend.isEmpty ()) backend = "none";  // Should not match any backend metadata entries, since they are all supposed to start with "backend".
+        else                    backend = "backend." + backend;
+
         e.resolveConnectionBindings ();
-        e.flatten ("backend." + e.getNamedValue ("backend", "internal"));
+        e.flatten (backend);
         e.addGlobalConstants ();
         e.addSpecials ();  // $index, $init, $live, $n, $t, $t', $type
         e.fillIntegratedVariables ();

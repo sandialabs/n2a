@@ -1256,11 +1256,6 @@ public class InternalBackendData
 
         public Instance resolve (Instance from)
         {
-            if (from instanceof Population)
-            {
-                Backend.err.get ().println ("ERROR: Ambiguous reference to " + from.equations.prefix () + "." + from.equations.name);
-                throw new Backend.AbortRun ();
-            }
             return (Instance) from.valuesObject[i];
         }
 

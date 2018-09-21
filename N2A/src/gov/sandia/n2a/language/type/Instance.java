@@ -19,6 +19,7 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 
 /**
     Instance type. Represents a entire concrete object at simulation time.
@@ -55,8 +56,20 @@ public class Instance extends Type
         for (VariableReference r : references)
         {
             Instance result = this;
-            Iterator<Object> it = r.resolution.iterator ();
-            while (it.hasNext ()) result = ((Resolver) it.next ()).resolve (result);
+            for (Object o : r.resolution)
+            {
+                result = ((Resolver) o).resolve (result);
+                if (result instanceof Population)
+                {
+                    InternalBackendData bed = (InternalBackendData) result.equations.backendData;
+                    if (! bed.singleton)
+                    {
+                        Backend.err.get ().println ("ERROR: Ambiguous reference to " + result.equations.prefix () + "." + result.equations.name);
+                        throw new Backend.AbortRun ();
+                    }
+                    result = (Instance) result.valuesObject[bed.instances];
+                }
+            }
             valuesObject[r.index] = result;
         }
     }

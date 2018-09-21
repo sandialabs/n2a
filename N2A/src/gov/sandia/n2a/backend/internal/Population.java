@@ -287,10 +287,17 @@ public class Population extends Instance
                 if (r.shouldEnumerate (current))
                 {
                     InternalBackendData bbed = (InternalBackendData) current.equations.backendData;  // "branch" bed
-                    ArrayList<Part> branchInstances = (ArrayList<Part>) current.valuesObject[bbed.instances];
-                    if (instances == null) instances = new ArrayList<Part> ();
-                    for (Part j : branchInstances) assemble (j, resolution, i);
-                    return;
+                    if (bbed.singleton)
+                    {
+                        current = (Instance) current.valuesObject[bbed.instances];
+                    }
+                    else
+                    {
+                        if (instances == null) instances = new ArrayList<Part> ();
+                        ArrayList<Part> branchInstances = (ArrayList<Part>) current.valuesObject[bbed.instances];
+                        for (Part j : branchInstances) assemble (j, resolution, i);
+                        return;
+                    }
                 }
                 current = r.resolve (current);
             }
