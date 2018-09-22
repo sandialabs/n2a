@@ -70,6 +70,7 @@ public class InternalBackendData
 
     // Ready-to-use handles for common $variables
     // Arrays are associated with connectionBindings, as above. Elements may be null if not applicable.
+    public Variable   connect;
     public Variable   index;
     public Variable   init;
     public Variable[] k;
@@ -85,7 +86,8 @@ public class InternalBackendData
     public Variable   type;
     public Variable   xyz;
 
-    public List<Variable> Pdependencies;  // Contains any temporary variables (in evaluation order) that $p depends on. Guaranteed non-null if $p is non-null.
+    public List<Variable> Pdependencies;   // Contains any temporary variables (in evaluation order) that $p depends on. Guaranteed non-null if $p is non-null.
+    public List<Variable> XYZdependencies; // Contains any temporary variables (in evaluation order) that $xyz depends on. Guaranteed non-null if $xyz is non-null.
 
     /**
         If the model uses events or otherwise has non-constant frequency, then we
@@ -220,7 +222,7 @@ public class InternalBackendData
         public double test (Instance targetPart, Simulator simulator)
         {
             // Evaluate any temporaries needed by operands in event()
-            InstanceTemporaries temp = new InstanceTemporaries (targetPart, simulator, false);
+            InstanceTemporaries temp = new InstanceTemporaries (targetPart, simulator);
             for (Variable v : dependencies)
             {
                 Type result = v.eval (temp);
@@ -279,7 +281,7 @@ public class InternalBackendData
         **/
         public double delay (Instance targetPart, Simulator simulator)
         {
-            InstanceTemporaries temp = new InstanceTemporaries (targetPart, simulator, false);
+            InstanceTemporaries temp = new InstanceTemporaries (targetPart, simulator);
             for (Variable v : dependencies)
             {
                 Type result = v.eval (temp);
@@ -703,18 +705,24 @@ public class InternalBackendData
             if (v.type != null) className = v.type.getClass ().getSimpleName ();
             System.out.println ("  " + v.nameString () + " " + v.attributeString () + " " + className);
 
-            if      (v.name.equals ("$index")                  ) index = v;
-            else if (v.name.equals ("$init" )                  ) init  = v;
-            else if (v.name.equals ("$live" )                  ) live  = v;
-            else if (v.name.equals ("$n"    )  &&  v.order == 0) n     = v;
-            else if (v.name.equals ("$p"    )  &&  v.order == 0) p     = v;
-            else if (v.name.equals ("$type" )                  ) type  = v;
-            else if (v.name.equals ("$xyz"  )  &&  v.order == 0) xyz   = v;
-            else if (v.name.equals ("$t"    ))
+            if      (v.name.equals ("$connect")                  ) connect = v;
+            else if (v.name.equals ("$index"  )                  ) index   = v;
+            else if (v.name.equals ("$init"   )                  ) init    = v;
+            else if (v.name.equals ("$live"   )                  ) live    = v;
+            else if (v.name.equals ("$n"      )  &&  v.order == 0) n       = v;
+            else if (v.name.equals ("$p"      )  &&  v.order == 0) p       = v;
+            else if (v.name.equals ("$type"   )                  ) type    = v;
+            else if (v.name.equals ("$xyz"    )  &&  v.order == 0) xyz     = v;
+            else if (v.name.equals ("$t"      ))
             {
                 if      (v.order == 0) t  = v;
                 else if (v.order == 1) dt = v;
             }
+
+            boolean initOnly        = v.hasAttribute ("initOnly");
+            boolean updates         = ! initOnly  &&  v.equations.size () > 0  &&  (v.derivative == null  ||  v.hasAttribute ("updates"));
+            boolean temporary       = v.hasAttribute ("temporary");
+            boolean unusedTemporary = temporary  &&  ! v.hasUsers ();
 
             if (v.hasAttribute ("global"))
             {
@@ -744,8 +752,6 @@ public class InternalBackendData
                 });
                 if (! v.hasAny (new String[] {"constant", "accessor", "readOnly"})  ||  v.hasAll (new String[] {"constant", "reference"}))  // eliminate non-computed values, unless they refer to a variable outside the immediate equation set
                 {
-                    boolean initOnly = v.hasAttribute ("initOnly");
-                    boolean updates  = ! initOnly  &&  v.equations.size () > 0  &&  (v.derivative == null  ||  v.hasAttribute ("updates"));
                     if (updates) globalUpdate.add (v);
                     if (v.hasAttribute ("reference"))
                     {
@@ -753,8 +759,7 @@ public class InternalBackendData
                     }
                     else
                     {
-                        boolean temporary = v.hasAttribute ("temporary");
-                        if (! temporary  ||  v.hasUsers ()) globalInit.add (v);
+                        if (! unusedTemporary) globalInit.add (v);
                         if (! temporary  &&  ! v.hasAttribute ("dummy"))
                         {
                             if (! v.hasAttribute ("preexistent")) globalMembers.add (v);
@@ -810,8 +815,6 @@ public class InternalBackendData
                 });
                 if (! v.hasAny (new String[] {"constant", "accessor", "readOnly"})  ||  v.hasAll (new String[] {"constant", "reference"}))
                 {
-                    boolean initOnly = v.hasAttribute ("initOnly");
-                    boolean updates  = ! initOnly  &&  v.equations.size () > 0  &&  (v.derivative == null  ||  v.hasAttribute ("updates"));
                     if (updates) localUpdate.add (v);
                     if (v.hasAttribute ("reference"))
                     {
@@ -819,8 +822,7 @@ public class InternalBackendData
                     }
                     else
                     {
-                        boolean temporary = v.hasAttribute ("temporary");
-                        if (! temporary  ||  v.hasUsers ())
+                        if (! unusedTemporary)
                         {
                             if (v.name.startsWith ("$")  ||  (temporary  &&  v.neededBySpecial ()))
                             {
@@ -925,6 +927,18 @@ public class InternalBackendData
                 if (t.hasAttribute ("temporary")  &&  p.dependsOn (t) != null)
                 {
                     Pdependencies.add (t);
+                }
+            }
+        }
+
+        if (xyz != null)
+        {
+            XYZdependencies = new ArrayList<Variable> ();
+            for (Variable t : s.ordered)
+            {
+                if (t.hasAttribute ("temporary")  &&  xyz.dependsOn (t) != null)
+                {
+                    XYZdependencies.add (t);
                 }
             }
         }

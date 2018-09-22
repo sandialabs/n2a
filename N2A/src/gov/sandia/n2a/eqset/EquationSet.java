@@ -1174,7 +1174,8 @@ public class EquationSet implements Comparable<EquationSet>
             s.addSpecials ();
         }
 
-        setInit (0);  // force $init to exist
+        setInit (0);     // force $init to exist
+        setConnect (0);  // and $connect
 
         Variable v = new Variable ("$t", 0);
         if (add (v))
@@ -1206,7 +1207,7 @@ public class EquationSet implements Comparable<EquationSet>
             }
         }
 
-        v = new Variable ("$live", 0);  // $live functions much the same as $init. See setInit().
+        v = new Variable ("$live", 0);  // $live functions much the same as $init or $connect
         if (add (v))
         {
             v.addAttribute ("constant");  // default. Actual values should be set by setAttributeLive()
@@ -1382,7 +1383,34 @@ public class EquationSet implements Comparable<EquationSet>
         Variable init = find (new Variable ("$init"));
         if (init == null) return false;
         EquationEntry e = init.equations.first ();
-        return ((Scalar) ((Constant) e.expression).value).value == 1.0;
+        return ((Scalar) ((Constant) e.expression).value).value != 0;
+    }
+
+    public void setConnect (float value)
+    {
+        Variable connect = find (new Variable ("$connect"));
+        if (connect == null)
+        {
+            connect = new Variable ("$connect", 0);
+            connect.addAttribute ("constant");
+            EquationEntry e = new EquationEntry (connect, "");
+            e.expression = new Constant (new Scalar (value));
+            connect.add (e);
+            add (connect);
+        }
+        else
+        {
+            EquationEntry e = connect.equations.first ();
+            ((Scalar) ((Constant) e.expression).value).value = value;
+        }
+    }
+
+    public boolean getConnect ()
+    {
+        Variable connect = find (new Variable ("$connect"));
+        if (connect == null) return false;
+        EquationEntry e = connect.equations.first ();
+        return ((Scalar) ((Constant) e.expression).value).value != 0;
     }
 
     /**
@@ -1523,41 +1551,22 @@ public class EquationSet implements Comparable<EquationSet>
         if (p != null)
         {
             // Determine if any equation is capable of setting $p to something besides 1
-            ReplaceInit replaceInit = new ReplaceInit ();
+            ReplacePhaseIndicators replacePhase = new ReplacePhaseIndicators ();
             for (EquationEntry e : p.equations)
             {
-                if (e.expression instanceof Constant)
-                {
-                    Type value = ((Constant) e.expression).value;
-                    if (value instanceof Scalar)
-                    {
-                        if (((Scalar) value).value == 1.0) continue;
-                    }
-                }
+                if (e.expression.isScalar ()  &&  e.expression.getDouble () >= 1) continue;
 
                 // Now we have an equation that evaluates to something other than 1.
-                // If this occurs anywhere but pre-init, then $p is lethal.
-
-                // Check if condition fires during init phase
+                // If this occurs anywhere but connect, then $p is lethal.
                 if (e.condition != null)
                 {
-                    replaceInit.init = 1;
-                    replaceInit.live = 1;
-                    Operator test = e.condition.deepCopy ().transform (replaceInit).simplify (p);
-                    if (test instanceof Constant)
+                    replacePhase.init = 1;
+                    Operator test = e.condition.deepCopy ().transform (replacePhase).simplify (p);
+                    if (test.isScalar ()  &&  test.getDouble () == 0)  // Does not fire during init phase
                     {
-                        Constant c = (Constant) test;
-                        if (c.value instanceof Scalar  &&  ((Scalar) c.value).value == 0)  // Does not fire during init phase
-                        {
-                            // Check if condition fires during update phase
-                            replaceInit.init = 0;
-                            test = e.condition.deepCopy ().transform (replaceInit).simplify (p);
-                            if (test instanceof Constant)
-                            {
-                                c = (Constant) test;
-                                if (c.value instanceof Scalar  &&  ((Scalar) c.value).value == 0) continue;  // Does not fire during update phase
-                            }
-                        }
+                        replacePhase.init = 0;
+                        test = e.condition.deepCopy ().transform (replacePhase).simplify (p);
+                        if (test.isScalar ()  &&  test.getDouble () == 0) continue;  // Does not fire during update phase
                     }
                 }
                 lethalP = true;
@@ -2392,17 +2401,16 @@ public class EquationSet implements Comparable<EquationSet>
         while (findInitOnlyRecursive ()) {}
     }
 
-    public static class ReplaceInit extends Transformer
+    public static class ReplacePhaseIndicators extends Transformer
     {
         public float init;
-        public float live;
         public Operator transform (Operator op)
         {
             if (op instanceof AccessVariable)
             {
                 AccessVariable av = (AccessVariable) op;
-                if (av.name.equals ("$init")) return new Constant (new Scalar (init));
-                if (av.name.equals ("$live")) return new Constant (new Scalar (live));
+                if (av.name.equals ("$init"   )) return new Constant (init);
+                if (av.name.equals ("$connect")) return new Constant (0);
             }
             return null;
         }
@@ -2417,7 +2425,7 @@ public class EquationSet implements Comparable<EquationSet>
             if (s.findInitOnlyRecursive ()) changed = true;
         }
 
-        ReplaceInit replaceInit = new ReplaceInit ();
+        ReplacePhaseIndicators replacePhase = new ReplacePhaseIndicators ();
 
         for (final Variable v : variables)
         {
@@ -2438,28 +2446,14 @@ public class EquationSet implements Comparable<EquationSet>
                 else
                 {
                     // init
-                    replaceInit.init = 1;
-                    replaceInit.live = 1;
-                    Operator test = e.condition.deepCopy ().transform (replaceInit).simplify (v);
-                    boolean fires = true;
-                    if (test instanceof Constant)
-                    {
-                        Constant c = (Constant) test;
-                        if (c.value instanceof Scalar  &&  ((Scalar) c.value).value == 0) fires = false;
-                    }
-                    if (fires) firesDuringInit++;
+                    replacePhase.init = 1;
+                    Operator test = e.condition.deepCopy ().transform (replacePhase).simplify (v);
+                    if (! test.isScalar ()  ||  test.getDouble () != 0)  firesDuringInit++;
 
                     // update
-                    replaceInit.init = 0;
-                    replaceInit.live = 1;
-                    test = e.condition.deepCopy ().transform (replaceInit).simplify (v);
-                    fires = true;
-                    if (test instanceof Constant)
-                    {
-                        Constant c = (Constant) test;
-                        if (c.value instanceof Scalar  &&  ((Scalar) c.value).value == 0) fires = false;
-                    }
-                    if (fires)
+                    replacePhase.init = 0;
+                    test = e.condition.deepCopy ().transform (replacePhase).simplify (v);
+                    if (! test.isScalar ()  ||  test.getDouble () != 0)
                     {
                         firesDuringUpdate++;
                         update = e;
@@ -2498,9 +2492,9 @@ public class EquationSet implements Comparable<EquationSet>
                                 // Also verify that the variables we depend on are available during the appropriate phase of init
                                 if (isInitOnly  &&  ! r.hasAttribute ("temporary"))  // Note that temporaries are always available.
                                 {
-                                    if (v.name.startsWith ("$"))  // we are a $variable, so we can only depend on $index and $init
+                                    if (v.name.startsWith ("$"))  // we are a $variable, so we can only depend on $index and phase indicators
                                     {
-                                        if (! "$index,$init,$live".contains (r.name)) isInitOnly = false;
+                                        if (! "$index,$connect,$init,$live".contains (r.name)) isInitOnly = false;
                                     }
                                     else  // we are a regular variable, so can only depend on $variables
                                     {
@@ -2550,7 +2544,79 @@ public class EquationSet implements Comparable<EquationSet>
 
         for (Variable v : variables)
         {
-            if (v.hasAttribute ("temporary")  &&  v.hasAttribute ("initOnly")) v.removeAttribute ("initOnly");
+            if (v.hasAttribute ("temporary")  &&  v.hasAttribute ("initOnly"))
+            {
+                v.removeAttribute ("initOnly");
+
+                // If there are no regular update equations, then convert init equations into
+                // regular update equations, because their values would continue to hold if the
+                // variable were stored.
+
+                // Test for presence of regular update equations.
+                // See findInitOnlyRecursive() for similar code.
+                boolean firesDuringUpdate = false;
+                ReplacePhaseIndicators replacePhase = new ReplacePhaseIndicators ();
+                replacePhase.init = 0;
+                for (EquationEntry e : v.equations)
+                {
+                    if (e.condition == null)
+                    {
+                        firesDuringUpdate = true;
+                        break;
+                    }
+                    else
+                    {
+                        Operator test = e.condition.deepCopy ().transform (replacePhase).simplify (v);
+                        if (! test.isScalar ()  ||  test.getDouble () != 0)
+                        {
+                            firesDuringUpdate = true;
+                            break;
+                        }
+                    }
+                }
+
+                // Adjust conditions, if necessary
+                // See Variable.simplify() for similar code.
+                if (! firesDuringUpdate)
+                {
+                    class ReplaceInit extends Transformer
+                    {
+                        public Operator transform (Operator op)
+                        {
+                            if (op instanceof AccessVariable)
+                            {
+                                AccessVariable av = (AccessVariable) op;
+                                if (av.name.equals ("$init"   )) return new Constant (1);
+                            }
+                            return null;
+                        }
+                    };
+                    ReplaceInit replaceInit = new ReplaceInit ();
+                    TreeSet<EquationEntry> nextEquations = new TreeSet<EquationEntry> ();
+                    for (EquationEntry e : v.equations)
+                    {
+                        e.condition = e.condition.transform (replaceInit).simplify (v);
+                        e.ifString = e.condition.render ();
+                        if (e.condition.isScalar ())
+                        {
+                            // Coming into this loop, there is no other default equation.
+                            // Nothing prevents more than one default equation from being created here,
+                            // but only one will remain after adding to nextEquations.
+                            if (e.condition.getDouble () != 0)  // Will always fire.
+                            {
+                                e.condition = null;
+                                e.ifString = "";
+                                nextEquations.add (e);
+                            }
+                        }
+                        else
+                        {
+                            nextEquations.add (e);
+                        }
+                    }
+                    v.equations = nextEquations;
+                }
+            }
         }
     }
 
@@ -2632,9 +2698,9 @@ public class EquationSet implements Comparable<EquationSet>
         {
             public Type get (Variable v)
             {
-                // TODO: implement phase indicator $connect. In that case, we would have $connect=1, $live=0, $init=0
-                if (v.name.equals ("$live")) return new Scalar (0);
-                if (v.name.equals ("$init")) return new Scalar (1);
+                if (v.name.equals ("$connect")) return new Scalar (1);
+                if (v.name.equals ("$init"   )) return new Scalar (0);
+                if (v.name.equals ("$live"   )) return new Scalar (0);
                 return v.type;
             }
         };
@@ -2653,6 +2719,7 @@ public class EquationSet implements Comparable<EquationSet>
                 break;
             }
         }
+        if (predicate == null) return;
 
         // Detect if equation or direct dependency contains a ReadMatrix function
         class ContainsTransformer extends Transformer

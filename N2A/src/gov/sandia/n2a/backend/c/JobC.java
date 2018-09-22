@@ -119,7 +119,6 @@ public class JobC extends Thread
             if (e.equals ("after"))  eventMode = Simulator.AFTER;
             if (e.equals ("before")) eventMode = Simulator.BEFORE;
 
-            model.setInit (0);
             System.out.println (model.dump (false));
 
             Path source = jobDir.resolve ("model.cc");
@@ -296,28 +295,28 @@ public class JobC extends Thread
         model.resolveConnectionBindings ();
         model.flatten ("backend.c");
         model.addGlobalConstants ();
-        model.addSpecials ();  // $dt, $index, $init, $live, $n, $t, $type
+        model.addSpecials ();  // $connect, $index, $init, $n, $t, $t', $type
+        model.addAttribute ("global",      0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
+        model.addAttribute ("preexistent", 0, true,  new String[] {"$index", "$t'", "$t"});  // Technically, $index is not pre-existent, but rather always receives special handling which has the same effect.
         model.fillIntegratedVariables ();
         model.findIntegrated ();
         model.resolveLHS ();
         model.resolveRHS ();
-        addImplicitDependencies (model);
         model.findConstants ();
         model.determineTraceVariableName ();
-        model.removeUnused ();  // especially get rid of unneeded $variables created by addSpecials()
         model.collectSplits ();
+        model.findDeath ();
+        addImplicitDependencies (model);
+        model.removeUnused ();  // especially get rid of unneeded $variables created by addSpecials()
         createBackendData (model);
         findPathToContainer (model);
         model.findAccountableConnections ();
         model.findTemporary ();  // for connections, makes $p and $project "temporary" under some circumstances. TODO: make sure this doesn't violate evaluation order rules
         model.determineOrder ();
         model.findDerivative ();
-        model.addAttribute ("global",      0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
-        model.addAttribute ("preexistent", 0, true,  new String[] {"$index", "$t'", "$t"});  // Technically, $index is not pre-existent, but rather always receives special handling which has the same effect.
         model.makeConstantDtInitOnly ();
         model.findInitOnly ();  // propagate initOnly through ASTs
         model.purgeInitOnlyTemporary ();
-        model.findDeath ();
         model.setAttributesLive ();
         model.forceTemporaryStorageForSpecials ();
         findLiveReferences (model);
@@ -335,6 +334,9 @@ public class JobC extends Thread
         analyze (model);
     }
 
+    /**
+        Depends on the results of: addAttributes(), findDeath()
+    **/
     public void addImplicitDependencies (EquationSet s)
     {
         if (T.equals ("int"))
@@ -354,6 +356,12 @@ public class JobC extends Thread
         }
     
         final Variable dt = s.find (new Variable ("$t", 1));
+
+        if (s.lethalP)
+        {
+            Variable p = s.find (new Variable ("$p", 0));  // Which should for sure exist, since lethalP implies it.
+            p.addDependencyOn (dt);
+        }
 
         class VisitorDt extends Visitor
         {
@@ -2303,7 +2311,7 @@ public class JobC extends Thread
             }
 
             // Preemptively fetch current event
-            boolean needT = bed.eventSources.size () > 0;
+            boolean needT = bed.eventSources.size () > 0  ||  s.lethalP;
             for (Variable v : bed.localBufferedExternal)
             {
                 if (v == bed.dt) needT = true;
@@ -2452,7 +2460,14 @@ public class JobC extends Thread
                     double pvalue = ((Scalar) ((Constant) bed.p.equations.first ().expression).value).value;
                     if (pvalue != 0)
                     {
-                        result.append ("  if (" + resolve (bed.p.reference, context, false) + " < uniform<" + T + "> ()");
+                        result.append ("  if (pow (" + resolve (bed.p.reference, context, false)+ ", " + resolve (bed.dt.reference, context, false));
+                        if (context.useExponent)
+                        {
+                            result.append (context.printShift (bed.dt.exponent - 15));  // second operand must have exponent=15
+                            result.append (", " + bed.p.exponent);  // exponentA
+                            result.append (", " + bed.p.exponent);  // exponentResult
+                        }
+                        result.append (") < uniform<" + T + "> ()");
                         if (context.useExponent) result.append (context.printShift (-1 - bed.p.exponent));  // -1 is hard-coded from the Uniform function.
                         result.append (")\n");
                     }
@@ -2472,7 +2487,14 @@ public class JobC extends Thread
                         multiconditional (bed.p, context, "  ");
                     }
 
-                    result.append ("  if (" + mangle ("$p") + " == 0  ||  " + mangle ("$p") + " < " + context.print (1, bed.p.exponent) + "  &&  " + mangle ("$p") + " < uniform<" + T + "> ()");
+                    result.append ("  if (" + mangle ("$p") + " <= 0  ||  " + mangle ("$p") + " < " + context.print (1, bed.p.exponent) + "  &&  pow (" + mangle ("$p") + ", " + resolve (bed.dt.reference, context, false));
+                    if (context.useExponent)
+                    {
+                        result.append (context.printShift (bed.dt.exponent - 15));
+                        result.append (", " + bed.p.exponent);
+                        result.append (", " + bed.p.exponent);
+                    }
+                    result.append (") < uniform<" + T + "> ()");
                     if (context.useExponent) result.append (context.printShift (-1 - bed.p.exponent));
                     result.append (")\n");
                 }
@@ -2763,18 +2785,8 @@ public class JobC extends Thread
             result.append ("void " + ns + "getProject (int i, MatrixFixed<" + T + ",3,1> & xyz)\n");
             result.append ("{\n");
 
-            // $project is evaluated similar to $p. The phase is $init&&!$live (eventually replace with $connect)
-            // and the result is not stored.
-
-            s.setInit (1);
-
-            // set $live to 0
-            Set<String> liveAttributes = bed.live.attributes;
-            bed.live.attributes = null;
-            bed.live.addAttribute ("constant");
-            EquationEntry e = bed.live.equations.first ();
-            Scalar liveValue = (Scalar) ((Constant) e.expression).value;
-            liveValue.value = 0;
+            // $project is evaluated similar to $p. The result is not stored.
+            s.setConnect (1);
 
             result.append ("  switch (i)\n");
             result.append ("  {\n");
@@ -2832,11 +2844,7 @@ public class JobC extends Thread
             result.append ("  }\n");
             result.append ("}\n");
 
-            // restore $live
-            bed.live.attributes = liveAttributes;
-            liveValue.value = 1;
-
-            s.setInit (0);
+            s.setConnect (0);
         }
 
         // Unit mapIndex
@@ -2917,17 +2925,7 @@ public class JobC extends Thread
             {
                 result.append (T + " " + ns + "getP ()\n");
                 result.append ("{\n");
-
-                s.setInit (1);
-
-                // set $live to 0
-                Set<String> liveAttributes = bed.live.attributes;
-                bed.live.attributes = null;
-                bed.live.addAttribute ("constant");
-                EquationEntry e = bed.live.equations.first ();  // this should always be an equation we create; the user cannot declare $live (or $init for that matter)
-                Scalar liveValue = (Scalar) ((Constant) e.expression).value;
-                liveValue.value = 0;
-
+                s.setConnect (1);
                 if (! bed.p.hasAttribute ("constant"))
                 {
                     // Generate any temporaries needed by $p
@@ -2941,13 +2939,7 @@ public class JobC extends Thread
                     multiconditional (bed.p, context, "  ");  // $p is always calculated, because we are in a pseudo-init phase
                 }
                 result.append ("  return " + resolve (bed.p.reference, context, false) + ";\n");
-
-                // restore $live
-                bed.live.attributes = liveAttributes;
-                liveValue.value = 1;
-
-                s.setInit (0);
-
+                s.setConnect (0);
                 result.append ("}\n");
                 result.append ("\n");
             }
@@ -2956,8 +2948,7 @@ public class JobC extends Thread
         // Unit getXYZ
         if (s.connectionBindings == null)  // Connections can also have $xyz, but only compartments need to provide an accessor.
         {
-            Variable xyz = s.find (new Variable ("$xyz", 0));
-            if (xyz != null)
+            if (bed.xyz != null)
             {
                 result.append ("void " + ns + "getXYZ (MatrixFixed<" + T + ",3,1> & xyz)\n");
                 result.append ("{\n");
@@ -2965,19 +2956,19 @@ public class JobC extends Thread
                 // If "temporary", then we compute it on the spot.
                 // If "constant", then we use the static matrix created during variable analysis
                 // If stored, then simply copy into the return value.
-                if (xyz.hasAttribute ("temporary"))
+                if (bed.xyz.hasAttribute ("temporary"))
                 {
                     // Generate any temporaries needed by $xyz
                     for (Variable t : s.variables)
                     {
-                        if (t.hasAttribute ("temporary")  &&  xyz.dependsOn (t) != null)
+                        if (t.hasAttribute ("temporary")  &&  bed.xyz.dependsOn (t) != null)
                         {
                             multiconditional (t, context, "    ");
                         }
                     }
-                    multiconditional (xyz, context, "    ");
+                    multiconditional (bed.xyz, context, "    ");
                 }
-                result.append ("  xyz = " + resolve (xyz.reference, context, false) + ";\n");
+                result.append ("  xyz = " + resolve (bed.xyz.reference, context, false) + ";\n");
                 result.append ("}\n");
                 result.append ("\n");
             }
@@ -3381,7 +3372,8 @@ public class JobC extends Thread
 
     public void multiconditional (Variable v, RendererC context, String pad) throws Exception
     {
-        boolean init = context.part.getInit ();
+        boolean connect = context.part.getConnect ();
+        boolean init    = context.part.getInit ();
         boolean isType = v.name.equals ("$type");
 
         if (v.hasAttribute ("temporary")) context.result.append (pad + type (v) + " " + mangle (v) + ";\n");
@@ -3390,12 +3382,21 @@ public class JobC extends Thread
         EquationEntry defaultEquation = null;
         for (EquationEntry e : v.equations)
         {
-            if (init  &&  e.ifString.equals ("$init"))  // TODO: also handle $init==1, or any other equivalent expression
+            // TODO: also handle $init==1, or any other equivalent expression
+            // Best approach is to deep-copy the equation set and optimize for each execution phase.
+            // In that case, the phase indicator will be optimized away completely, leaving only an
+            // unconditional equation.
+            if (init  &&  e.ifString.equals ("$init"))
             {
                 defaultEquation = e;
                 break;
             }
-            if (e.ifString.length () == 0) defaultEquation = e;
+            if (connect  &&  e.ifString.equals ("$connect"))
+            {
+                defaultEquation = e;
+                break;
+            }
+            if (e.ifString.isEmpty ()) defaultEquation = e;
         }
 
         // Initialize static objects, and dump dynamic objects needed by conditions
@@ -3414,15 +3415,25 @@ public class JobC extends Thread
         String padIf = pad;
         for (EquationEntry e : v.equations)
         {
-            if (e == defaultEquation) continue;
+            if (e == defaultEquation) continue;  // Must skip the default equation, as it will be emitted last.
+
+            // Skip cases where the condition will never fire.
             if (init)
             {
-                if (e.ifString.length () == 0) continue;
+                if (e.ifString.isEmpty ()) continue;
+                if (e.ifString.equals ("$connect")) continue;
             }
-            else  // not init
+            else if (connect)
             {
+                if (e.ifString.isEmpty ()) continue;
                 if (e.ifString.equals ("$init")) continue;
             }
+            else
+            {
+                if (e.ifString.equals ("$connect")) continue;
+                if (e.ifString.equals ("$init")) continue;
+            }
+
             if (e.condition != null)
             {
                 String ifString;
@@ -3467,15 +3478,14 @@ public class JobC extends Thread
         // Write the default equation
         if (defaultEquation == null)
         {
+            String defaultValue = null;
             if (isType)
             {
-                if (haveIf)
-                {
-                    context.result.append (pad + "else\n");
-                    context.result.append (pad + "{\n");
-                }
-                context.result.append (padIf + resolve (v.reference, context, true) + " = 0;\n");  // always reset $type to 0
-                if (haveIf) context.result.append (pad + "}\n");
+                defaultValue = "0";  // always reset $type to 0
+            }
+            else if (connect  &&  v.name.equals ("$p"))
+            {
+                defaultValue = "1";
             }
             else
             {
@@ -3488,14 +3498,19 @@ public class JobC extends Thread
                     && v.hasAny ("cycle", "externalRead")
                     && ! v.hasAttribute ("initOnly"))
                 {
-                    if (haveIf)
-                    {
-                        context.result.append (pad + "else\n");
-                        context.result.append (pad + "{\n");
-                    }
-                    context.result.append (padIf + resolve (v.reference, context, true) + " = " + resolve (v.reference, context, false) + ";\n");  // copy previous value
-                    if (haveIf) context.result.append (pad + "}\n");
+                    defaultValue = resolve (v.reference, context, false);  // copy previous value
                 }
+            }
+
+            if (defaultValue != null)
+            {
+                if (haveIf)
+                {
+                    context.result.append (pad + "else\n");
+                    context.result.append (pad + "{\n");
+                }
+                context.result.append (padIf + resolve (v.reference, context, true) + " = " + defaultValue + ";\n");
+                if (haveIf) context.result.append (pad + "}\n");
             }
         }
         else

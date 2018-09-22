@@ -22,25 +22,23 @@ public class InstanceTemporaries extends Instance
 {
     public Instance wrapped;
     public Simulator simulator;
-    public Scalar init;
     public InternalBackendData bed;
 
     /**
         For use by Internal simulator, where EquationSet.backendData is guaranteed to be InternalBackendData.
     **/
-    public InstanceTemporaries (Instance wrapped, Simulator simulator, boolean init)
+    public InstanceTemporaries (Instance wrapped, Simulator simulator)
     {
-        this (wrapped, simulator, init, (InternalBackendData) wrapped.equations.backendData);
+        this (wrapped, simulator, (InternalBackendData) wrapped.equations.backendData);
     }
 
     /**
         For use by other backends, which may have chained EquationSet.backendData.
     **/
-    public InstanceTemporaries (Instance wrapped, Simulator simulator, boolean init, InternalBackendData bed)
+    public InstanceTemporaries (Instance wrapped, Simulator simulator, InternalBackendData bed)
     {
         this.wrapped   = wrapped;
         this.simulator = simulator;
-        this.init      = new Scalar (init ? 1 : 0);
         this.bed       = bed;
         if (wrapped instanceof Population) allocate (bed.countGlobalTempFloat, bed.countGlobalTempObject);
         else                               allocate (bed.countLocalTempFloat,  bed.countLocalTempObject);
@@ -54,8 +52,8 @@ public class InstanceTemporaries extends Instance
 
     public Type get (Variable v)
     {
-        if (v == bed.init) return init;
-        if (v == bed.t   ) return new Scalar (simulator.currentEvent.t);
+        if (v == bed.init  ||  v == bed.connect) return new Scalar (0);
+        if (v == bed.t) return new Scalar (simulator.currentEvent.t);
         if (v == bed.dt)
         {
             if      (wrapped instanceof Part      ) return new Scalar (((Part) wrapped          ).event.dt);

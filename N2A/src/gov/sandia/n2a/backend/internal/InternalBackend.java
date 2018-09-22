@@ -226,26 +226,26 @@ public class InternalBackend extends Backend
         e.resolveConnectionBindings ();
         e.flatten (backend);
         e.addGlobalConstants ();
-        e.addSpecials ();  // $index, $init, $live, $n, $t, $t', $type
+        e.addSpecials ();  // $connect, $index, $init, $n, $t, $t', $type
+        e.addAttribute ("global",      0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
+        e.addAttribute ("preexistent", 0, true,  new String[] {"$t'", "$t"});  // variables that are not stored because Instance.get/set intercepts them
+        e.addAttribute ("readOnly",    0, true,  new String[] {"$t"});
         e.fillIntegratedVariables ();
         e.findIntegrated ();
         e.resolveLHS ();
         e.resolveRHS ();
         e.findConstants ();
         e.determineTraceVariableName ();
-        e.removeUnused ();  // especially get rid of unneeded $variables created by addSpecials()
         e.collectSplits ();
+        e.findDeath ();
+        e.removeUnused ();  // especially get rid of unneeded $variables created by addSpecials()
         e.findAccountableConnections ();
         e.findTemporary ();
         e.determineOrder ();
         e.findDerivative ();
-        e.addAttribute ("global",      0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
-        e.addAttribute ("preexistent", 0, true,  new String[] {"$t'", "$t"});  // variables that are not stored because Instance.get/set intercepts them
-        e.addAttribute ("readOnly",    0, true,  new String[] {"$t"});
         e.makeConstantDtInitOnly ();
         e.findInitOnly ();
         e.purgeInitOnlyTemporary ();
-        e.findDeath ();
         e.setAttributesLive ();
         e.forceTemporaryStorageForSpecials ();
         e.determineTypes ();

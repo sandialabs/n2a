@@ -170,7 +170,7 @@ public class BackendDataC
                 else if (v.order == 1) dt = v;
             }
 
-            if (v.hasAny (new String[] {"constant", "accessor"})) continue;
+            if (v.hasAny (new String[] {"constant", "accessor"})  &&  ! v.hasAll (new String[] {"constant", "reference"})) continue;
 
             boolean initOnly               = v.hasAttribute ("initOnly");
             boolean derivativeOrDependency = v.hasAttribute ("derivativeOrDependency");

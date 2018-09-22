@@ -124,7 +124,7 @@ public class Part extends Instance
     **/
     public void init (Simulator simulator)
     {
-        InstanceTemporaries temp = new InstanceTemporaries (this, simulator, true);
+        InstanceTemporaries temp = new InstanceInit (this, simulator);
         ((Population) container.valuesObject[temp.bed.populationIndex]).insert (this);  // update $n and assign $index
 
         // update accountable endpoints
@@ -214,7 +214,7 @@ public class Part extends Instance
 
     public void update (Simulator simulator)
     {
-        InstanceTemporaries temp = new InstanceTemporaries (this, simulator, false);
+        InstanceTemporaries temp = new InstanceTemporaries (this, simulator);
         for (Variable v : temp.bed.localUpdate)
         {
             Type result = v.eval (temp);
@@ -516,7 +516,7 @@ public class Part extends Instance
             double p;
             if (bed.p.hasAttribute ("temporary"))
             {
-                InstanceTemporaries temp = new InstanceTemporaries (this, simulator, false);
+                InstanceTemporaries temp = new InstanceTemporaries (this, simulator);
                 for (Variable v : bed.Pdependencies)
                 {
                     Type result = v.eval (temp);
@@ -530,7 +530,7 @@ public class Part extends Instance
             {
                 p = ((Scalar) get (bed.p)).value;
             }
-            if (p == 0  ||  p < 1  &&  p < simulator.random.nextDouble ())
+            if (p <= 0  ||  p < 1  &&  Math.pow (p, event.dt) < simulator.random.nextDouble ())
             {
                 die ();
                 return false;
@@ -599,7 +599,7 @@ public class Part extends Instance
 
     public double getP (Simulator simulator)
     {
-        InstancePreLive temp = new InstancePreLive (this, simulator);
+        InstanceConnect temp = new InstanceConnect (this, simulator);
         if (temp.bed.p == null) return 1;  // N2A language defines default to be 1 (always create)
         for (Variable v : temp.bed.Pdependencies)
         {
@@ -611,19 +611,24 @@ public class Part extends Instance
         return ((Scalar) result).value;
     }
 
-    public double[] getXYZ (Simulator simulator)
+    public double[] getXYZ (Simulator simulator, boolean connect)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
-        if (bed.xyz != null)
+        if (bed.xyz == null) return new double[3];  // default is ~[0,0,0]
+        if (! bed.xyz.hasAttribute ("temporary")) return ((MatrixDense) get (bed.xyz)).getRawColumn (0);  // Either "constant" or stored
+
+        InstanceTemporaries temp;
+        if (connect) temp = new InstanceConnect     (this, simulator);
+        else         temp = new InstanceTemporaries (this, simulator);
+
+        for (Variable v : bed.XYZdependencies)
         {
-            if (bed.xyz.hasAny (new String[] {"constant", "temporary"}))
-            {
-                InstanceTemporaries temp = new InstanceTemporaries (this, simulator, true);  // getXYZ() calls occur only during the init cycle, specifically when testing a connection
-                return ((MatrixDense) bed.xyz.eval (temp)).getRawColumn (0);
-            }
-            return ((MatrixDense) get (bed.xyz)).getRawColumn (0);
+            Type result = v.eval (temp);
+            if (result != null  &&  v.writeIndex >= 0) temp.set (v, result);
         }
-        return new double[3];  // default is ~[0,0,0]
+        Type result = bed.xyz.eval (temp);
+        if (result == null) return new double[3];
+        return ((MatrixDense) result).getRawColumn (0);
     }
 
     public String path ()

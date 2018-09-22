@@ -267,7 +267,7 @@ class XyceBackend extends Backend
                 writer.append (bed.deviceSymbol.getDefinition (renderer));
             }
 
-            InstanceTemporaries temp = new InstanceTemporaries (i, simulator, false, bed.internal);
+            InstanceTemporaries temp = new InstanceTemporaries (i, simulator, bed.internal);
             for (final Variable v : i.equations.variables)
             {
                 // Compute variable v

@@ -167,7 +167,7 @@ public class ExportJob extends XMLutility
             try
             {
                 equations.addGlobalConstants ();
-                equations.addSpecials ();  // $index, $init, $live, $n, $t, $t', $type
+                equations.addSpecials ();  // $connect, $index, $init, $n, $t, $t', $type
                 equations.fillIntegratedVariables ();
                 equations.findIntegrated ();
                 equations.resolveLHS ();

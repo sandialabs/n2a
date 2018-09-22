@@ -6,7 +6,6 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.type;
 
-import java.util.Iterator;
 import java.util.List;
 import java.util.TreeSet;
 

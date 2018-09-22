@@ -47,7 +47,7 @@ public class Population extends Instance
 
     public void init (Simulator simulator)
     {
-        InstanceTemporaries temp = new InstanceTemporaries (this, simulator, true);
+        InstanceTemporaries temp = new InstanceInit (this, simulator);
         InternalBackendData bed = temp.bed;
         resolve (bed.globalReference);
 
@@ -113,7 +113,7 @@ public class Population extends Instance
 
     public void update (Simulator simulator)
     {
-        InstanceTemporaries temp = new InstanceTemporaries (this, simulator, false);
+        InstanceTemporaries temp = new InstanceTemporaries (this, simulator);
         for (Variable v : temp.bed.globalUpdate)
         {
             Type result = v.eval (temp);
@@ -344,7 +344,7 @@ public class Population extends Instance
                 KDTree.Entry e = new KDTree.Entry ();
                 if (project == null)
                 {
-                    e.point = p.getXYZ (simulator);
+                    e.point = p.getXYZ (simulator, false);
                 }
                 else
                 {
@@ -365,7 +365,7 @@ public class Population extends Instance
                 c.resolve ((TreeSet<VariableReference>) cbed.projectReferences[index]);
             }
 
-            InstanceTemporaries temp = new InstanceTemporaries (c, simulator, true);  // $project is evaluated during the init cycle. TODO: change flag to $connect, and let $init be false.
+            InstanceConnect temp = new InstanceConnect (c, simulator);
             for (Object o : (ArrayList<Variable>) cbed.projectDependencies[index])
             {
                 Variable v = (Variable) o;
@@ -506,11 +506,11 @@ public class Population extends Instance
                         if (cbed.xyz != null)  // C explicitly defines $xyz
                         {
                             // This is a minimal evaluation. No reference resolution. No temporaries. TODO: deeper eval of C.$xyz ?
-                            t = c.getXYZ (simulator);
+                            t = c.getXYZ (simulator, true);
                         }
                         else if (project == null)
                         {
-                            t = p.getXYZ (simulator);
+                            t = p.getXYZ (simulator, false);
                         }
                         else
                         {

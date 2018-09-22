@@ -519,7 +519,7 @@ public class Variable implements Comparable<Variable>
             centerNew   = 0;
             exponentNew = Operator.MSB;
         }
-        else if (name.equals ("$init")  ||  name.equals ("$live"))
+        else if (name.equals ("$connect")  ||  name.equals ("$init")  ||  name.equals ("$live"))
         {
             // Booleans are stored as regular floats.
             centerNew   = Operator.MSB / 2;

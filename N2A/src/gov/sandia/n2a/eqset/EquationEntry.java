@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -139,6 +139,19 @@ public class EquationEntry implements Comparable<EquationEntry>
         if (     ifString.isEmpty ())        return  1;
         if (that.ifString.isEmpty ())        return -1;
 
+        boolean thisConnect =      ifString.contains ("$connect");
+        boolean thatConnect = that.ifString.contains ("$connect");
+        if (thisConnect)
+        {
+            if (! thatConnect)           return -1;
+            if (ifString.length () == 8) return  1;  // ifString is exactly "$connect". We don't do another string compare here because it is expensive and unnecessary.
+        }
+        if (thatConnect)
+        {
+            if (! thisConnect)                return  1;
+            if (that.ifString.length () == 8) return -1;
+        }
+
         boolean thisInit =      ifString.contains ("$init");
         boolean thatInit = that.ifString.contains ("$init");
         if (thisInit)
@@ -150,21 +163,6 @@ public class EquationEntry implements Comparable<EquationEntry>
         {
             if (! thisInit)                   return  1;
             if (that.ifString.length () == 5) return -1;
-        }
-
-        boolean thisPreLive =      ifString.contains ("!$live")  ||       ifString.contains ("$live==0");
-        boolean thatPreLive = that.ifString.contains ("!$live")  ||  that.ifString.contains ("$live==0");
-        if (thisPreLive)
-        {
-            if (! thatPreLive)           return -1;
-            if (ifString.length () == 6) return  1;  // ifString is exactly "!$live".  We don't do another string compare here because it is expensive and unnecessary.
-            if (ifString.length () == 8) return  1;  // The only way this might not be "$live==0" is if it is some mangled form of "!$live".
-        }
-        if (thatPreLive)
-        {
-            if (! thisPreLive)                return  1;
-            if (that.ifString.length () == 6) return -1;
-            if (that.ifString.length () == 8) return -1;
         }
 
         int diff = that.ifString.length () - ifString.length ();  // as a heuristic, sort longer ifStrings first
