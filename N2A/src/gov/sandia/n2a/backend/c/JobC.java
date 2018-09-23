@@ -1279,30 +1279,18 @@ public class JobC extends Thread
         {
             result.append ("  flags = 0;\n");
         }
-        //   declare buffer variables
-        for (Variable v : bed.globalBufferedInternal)
-        {
-            result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
-        }
-        if (bed.nInitOnly)  // $n is not stored, and therefore not buffered, so we need to declare a local variable to receive its value.
+        //   Compute variables
+        if (bed.nInitOnly)  // $n is not stored, so we need to declare a local variable to receive its value.
         {
             result.append ("  " + type (bed.n) + " " + mangle (bed.n) + ";\n");
         }
-        //   no separate $ and non-$ phases, because only $variables work at the population level
+        List<Variable> buffered = bed.globalBuffered;
+        bed.globalBuffered = new ArrayList<Variable> ();  // Trick multiconditional() and its subroutines into directly updating members.
         for (Variable v : bed.globalInit)
         {
             multiconditional (v, context, "  ");
         }
-        //   finalize
-        for (Variable v : bed.globalBuffered)
-        {
-            result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
-        }
-        //   clear variables that may be written externally before first finalize()
-        for (Variable v : bed.globalBufferedExternalWrite)
-        {
-            result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
-        }
+        bed.globalBuffered = buffered;
         //   create instances
         if (bed.singleton)
         {
@@ -2115,62 +2103,32 @@ public class JobC extends Thread
                 }
             }
 
-            // declare buffer variables
-            for (Variable v : bed.localBufferedInternal)
-            {
-                result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
-            }
-            // $variables
-            for (Variable v : bed.localInit)
-            {
-                if (! v.name.startsWith ("$")) continue;  // TODO: This doesn't allow in temporaries that a $variable may depend on. See InternalBackendData sorting section for example of how to handle this better.
-                if (v == bed.live) continue;
-                if (v == bed.type)
-                {
-                    Backend.err.get ().println ("$type must be conditional, and it must never be assigned during init.");  // TODO: Work out logic of $type better. This trap should not be here.
-                    throw new Backend.AbortRun ();
-                }
-                multiconditional (v, context, "  ");
-            }
-            // finalize $variables
+            // Compute variables
             if (bed.localBuffered.contains (bed.dt))
             {
                 result.append ("  EventStep<" + T + "> * event = getEvent ();\n");
                 context.hasEvent = true;
+                result.append ("  " + type (bed.dt) + " " + mangle (bed.dt) + ";\n");
             }
             if (bed.lastT)
             {
                 result.append ("  lastT = Simulator<" + T + ">::instance.currentEvent->t;\n");
             }
-            for (Variable v : bed.localBuffered)  // more than just localBufferedInternal, because we must finalize members as well
-            {
-                if (! v.name.startsWith ("$")) continue;
-                if (v == bed.dt)
-                {
-                    result.append ("  if (" + mangle ("next_", v) + " != event->dt) setPeriod (" + mangle ("next_", v) + ");\n");
-                }
-                else
-                {
-                    result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
-                }
-            }
-            // non-$variables
+            //   The following code tricks multiconditional() into treating all variables
+            //   as unbuffered and non-accumulating.
+            List<Variable> buffered = bed.localBuffered;
+            bed.localBuffered = new ArrayList<Variable> ();
             for (Variable v : bed.localInit)
             {
-                if (v.name.startsWith ("$")) continue;
+                int assignment = v.assignment;
+                v.assignment = Variable.REPLACE;
                 multiconditional (v, context, "  ");
+                v.assignment = assignment;
             }
-            // finalize non-$variables
-            for (Variable v : bed.localBuffered)
+            bed.localBuffered = buffered;
+            if (bed.localBuffered.contains (bed.dt))
             {
-                if (v.name.startsWith ("$")) continue;
-                result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
-            }
-
-            // clear variables that may be written externally before first finalize()
-            for (Variable v : bed.localBufferedExternalWrite)
-            {
-                result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
+                result.append ("  if (" + mangle (bed.dt) + " != event->dt) setPeriod (" + mangle (bed.dt) + ");\n");
             }
 
             // instance counting

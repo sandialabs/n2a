@@ -62,11 +62,7 @@ public class Population extends Instance
         for (Variable v : bed.globalInit)
         {
             Type result = v.eval (temp);
-            if (result != null  &&  v.writeIndex >= 0) temp.set (v, result);
-        }
-        for (Variable v : bed.globalBuffered)
-        {
-            temp.setFinal (v, temp.getFinal (v));
+            if (result != null  &&  v.writeIndex >= 0) temp.setFinal (v, result);
         }
         // zero external buffered variables that may be written before first finish()
         for (Variable v : bed.globalBufferedExternalWrite) set (v, v.type);  // v.type should be pre-loaded with zero-equivalent values

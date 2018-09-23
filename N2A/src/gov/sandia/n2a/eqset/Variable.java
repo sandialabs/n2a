@@ -937,7 +937,7 @@ public class Variable implements Comparable<Variable>
         before.add (after);  // I am before the given variable, and it is after me.
     }
 
-    public void setBefore ()
+    public void setBefore (boolean allTemp)
     {
         if (uses == null) return;
 
@@ -953,7 +953,7 @@ public class Variable implements Comparable<Variable>
                 // in a separate phase.
                 continue;
             }
-            if (v.hasAttribute ("temporary"))
+            if (allTemp  ||  v.hasAttribute ("temporary"))
             {
                 v.setBefore (this);
             }

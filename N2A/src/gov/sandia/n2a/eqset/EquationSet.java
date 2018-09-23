@@ -2243,7 +2243,7 @@ public class EquationSet implements Comparable<EquationSet>
         be solved exactly. If there are cycles, then this method uses a simple heuristic:
         prioritize variables with the largest number of dependencies.
         Depends on results of: resolveRHS(), findTemporary(),
-                               addSpecials() -- to $variables in the correct order along with everything else
+                               addSpecials() -- to put $variables in the correct order along with everything else
     **/
     public void determineOrder ()
     {
@@ -2258,7 +2258,7 @@ public class EquationSet implements Comparable<EquationSet>
         }
 
         // Determine order constraints for each variable separately
-        for (Variable v : variables) v.setBefore ();
+        for (Variable v : variables) v.setBefore (false);
 
         // Assign depth in dependency tree, processing variables with the most ordering constraints first
         PriorityQueue<Variable> queueDependency = new PriorityQueue<Variable> (variables.size (), new Comparator<Variable> ()
@@ -2306,6 +2306,50 @@ public class EquationSet implements Comparable<EquationSet>
                     u.addAttribute ("cycle");  // must be buffered; otherwise we will get the "after" value rather than "before"
                 }
             }
+        }
+    }
+
+    /**
+        Special version of determineOrder() that treats all variables like temporaries,
+        so that their order maximizes propagation of information.
+    **/
+    public static void determineOrderInit (List<Variable> list)
+    {
+        if (list.isEmpty ()) return;
+
+        for (Variable v : list)
+        {
+            v.before   = new ArrayList<Variable> ();
+            v.priority = 0;
+        }
+        for (Variable v : list) v.setBefore (true);
+
+        PriorityQueue<Variable> queueDependency = new PriorityQueue<Variable> (list.size (), new Comparator<Variable> ()
+        {
+            public int compare (Variable a, Variable b)
+            {
+                return b.before.size () - a.before.size ();
+            }
+        });
+        queueDependency.addAll (list);
+        for (Variable v = queueDependency.poll (); v != null; v = queueDependency.poll ())
+        {
+            v.visited = null;
+            v.setPriority (1);
+        }
+
+        PriorityQueue<Variable> queuePriority = new PriorityQueue<Variable> (list.size (), new Comparator<Variable> ()
+        {
+            public int compare (Variable a, Variable b)
+            {
+                return a.priority - b.priority;
+            }
+        });
+        queuePriority.addAll (list);
+        list.clear ();
+        for (Variable v = queuePriority.poll (); v != null; v = queuePriority.poll ())
+        {
+            list.add (v);
         }
     }
 

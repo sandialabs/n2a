@@ -24,8 +24,7 @@ public class BackendDataC
     public List<Variable>          localInit                             = new ArrayList<Variable> ();  // set by init()
     public List<Variable>          localMembers                          = new ArrayList<Variable> ();  // stored inside the object
     public List<Variable>          localBuffered                         = new ArrayList<Variable> ();  // needs buffering (temporaries)
-    public List<Variable>          localBufferedInternal                 = new ArrayList<Variable> ();  // subset of buffered that are due to dependencies strictly within the current equation-set
-    public List<Variable>          localBufferedInternalDerivative       = new ArrayList<Variable> ();  // subset of buffered internal that are derivatives or their dependencies
+    public List<Variable>          localBufferedInternalDerivative       = new ArrayList<Variable> ();  // subset of buffered internal (due to dependencies strictly within the current equation-set) that are derivatives or their dependencies
     public List<Variable>          localBufferedInternalUpdate           = new ArrayList<Variable> ();  // subset of buffered internal that can execute outside of init()
     public List<Variable>          localBufferedExternal                 = new ArrayList<Variable> ();  // subset of buffered that are due to some external access
     public List<Variable>          localBufferedExternalDerivative       = new ArrayList<Variable> ();  // subset of external that are derivatives
@@ -40,7 +39,6 @@ public class BackendDataC
     public List<Variable>          globalInit                            = new ArrayList<Variable> ();
     public List<Variable>          globalMembers                         = new ArrayList<Variable> ();
     public List<Variable>          globalBuffered                        = new ArrayList<Variable> ();
-    public List<Variable>          globalBufferedInternal                = new ArrayList<Variable> ();
     public List<Variable>          globalBufferedInternalDerivative      = new ArrayList<Variable> ();
     public List<Variable>          globalBufferedInternalUpdate          = new ArrayList<Variable> ();
     public List<Variable>          globalBufferedExternal                = new ArrayList<Variable> ();
@@ -236,14 +234,10 @@ public class BackendDataC
                         if (external  ||  v.hasAttribute ("cycle"))
                         {
                             globalBuffered.add (v);
-                            if (! external)
+                            if (! external  &&  ! initOnly)
                             {
-                                globalBufferedInternal.add (v);
-                                if (! initOnly)
-                                {
-                                    globalBufferedInternalUpdate.add (v);
-                                    if (derivativeOrDependency) globalBufferedInternalDerivative.add (v);
-                                }
+                                globalBufferedInternalUpdate.add (v);
+                                if (derivativeOrDependency) globalBufferedInternalDerivative.add (v);
                             }
                         }
                     }
@@ -259,7 +253,15 @@ public class BackendDataC
                 }
                 else
                 {
-                    if (! unusedTemporary) localInit.add (v);
+                    if (! unusedTemporary)
+                    {
+                        if (v == type)
+                        {
+                            Backend.err.get ().println ("$type must must never be assigned during init, so it needs an appropriate condition.");
+                            throw new Backend.AbortRun ();
+                        }
+                        localInit.add (v);
+                    }
                     if (! temporary  &&  ! v.hasAttribute ("dummy"))
                     {
                         if (! v.hasAttribute ("preexistent"))
@@ -307,14 +309,10 @@ public class BackendDataC
                         if (external  ||  v.hasAttribute ("cycle"))
                         {
                             localBuffered.add (v);
-                            if (! external)
+                            if (! external  &&  ! initOnly)
                             {
-                                localBufferedInternal.add (v);
-                                if (! initOnly)
-                                {
-                                    localBufferedInternalUpdate.add (v);
-                                    if (derivativeOrDependency) localBufferedInternalDerivative.add (v);
-                                }
+                                localBufferedInternalUpdate.add (v);
+                                if (derivativeOrDependency) localBufferedInternalDerivative.add (v);
                             }
                         }
                     }
@@ -337,6 +335,9 @@ public class BackendDataC
             for (Variable v : list) if (! v.hasAttribute ("temporary")) allTemporary = false;
             if (allTemporary) list.clear ();
         }
+
+        EquationSet.determineOrderInit (localInit);
+        EquationSet.determineOrderInit (globalInit);
 
         refcount            = s.referenced  &&  s.canDie ();
         singleton           = s.isSingleton (true);

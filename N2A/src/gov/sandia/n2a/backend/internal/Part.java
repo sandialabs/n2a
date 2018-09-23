@@ -118,9 +118,9 @@ public class Part extends Instance
     }
 
     /**
-        Note: specifically for Parts, call resolve() before calling init(). This is to
-        accommodate the connection process, which must probe values in a part (which
-        may include references) before calling init().
+        Note: specifically for Parts, call resolve() separately before calling init().
+        This is to accommodate the connection process, which must probe values in a part
+        (which may include references) before calling init().
     **/
     public void init (Simulator simulator)
     {
@@ -142,32 +142,16 @@ public class Part extends Instance
             }
         }
 
-        // $variables
+        // Initialize variables
         if (temp.bed.liveStorage == InternalBackendData.LIVE_STORED) set (temp.bed.live, new Scalar (1));  // force $live to be set before anything else
-        for (Variable v : temp.bed.localInitSpecial)
+        for (Variable v : temp.bed.localInit)
         {
             Type result = v.eval (temp);
-            if (result != null  &&  v.writeIndex >= 0) temp.set (v, result);
-
-            // Note that some valuesObject entries may be left null. This is OK, because Instance.get() will return
-            // a zero-equivalent value if it finds null. Ditto for non-$variables below.
-        }
-        for (Variable v : temp.bed.localBufferedSpecial)
-        {
-            temp.setFinal (v, temp.getFinal (v));
+            if (result != null  &&  v.writeIndex >= 0) temp.setFinal (v, result);
+            // Note that some valuesObject entries could be left null. This is OK, because Instance.get() will return
+            // a zero-equivalent value if it finds null.
         }
         if (temp.bed.lastT != null) temp.setFinal (temp.bed.lastT, new Scalar (simulator.currentEvent.t));
-
-        // non-$variables
-        for (Variable v : temp.bed.localInitRegular)
-        {
-            Type result = v.eval (temp);
-            if (result != null  &&  v.writeIndex >= 0) temp.set (v, result);
-        }
-        for (Variable v : temp.bed.localBufferedRegular)
-        {
-            temp.setFinal (v, temp.getFinal (v));
-        }
 
         // zero external buffered variables that may be written before first finish()
         for (Variable v : temp.bed.localBufferedExternalWrite) set (v, v.type);  // v.type should be pre-loaded with zero-equivalent values

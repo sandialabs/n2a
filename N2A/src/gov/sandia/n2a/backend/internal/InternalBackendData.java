@@ -38,11 +38,8 @@ public class InternalBackendData
     public Object backendData;  ///< Other backends may use Internal as a preprocessor, and may need to store additional data not covered here.
 
     public List<Variable> localUpdate                  = new ArrayList<Variable> ();  // updated during regular call to update()
-    public List<Variable> localInitRegular             = new ArrayList<Variable> ();  // non-$variables set by init()
-    public List<Variable> localInitSpecial             = new ArrayList<Variable> ();  // $variables set by init()
+    public List<Variable> localInit                    = new ArrayList<Variable> ();  // variables set by init()
     public List<Variable> localMembers                 = new ArrayList<Variable> ();  // stored inside the object
-    public List<Variable> localBufferedRegular         = new ArrayList<Variable> ();  // non-$variables that need buffering (temporaries)
-    public List<Variable> localBufferedSpecial         = new ArrayList<Variable> ();  // $variables that need buffering (temporaries)
     public List<Variable> localBufferedInternal        = new ArrayList<Variable> ();  // subset of buffered that are due to dependencies strictly within the current equation-set
     public List<Variable> localBufferedInternalUpdate  = new ArrayList<Variable> ();  // subset of buffered internal that can execute outside of init()
     public List<Variable> localBufferedExternal        = new ArrayList<Variable> ();  // subset of buffered that are due to some external access
@@ -51,7 +48,6 @@ public class InternalBackendData
     public List<Variable> globalUpdate                 = new ArrayList<Variable> ();
     public List<Variable> globalInit                   = new ArrayList<Variable> ();
     public List<Variable> globalMembers                = new ArrayList<Variable> ();
-    public List<Variable> globalBuffered               = new ArrayList<Variable> ();
     public List<Variable> globalBufferedInternal       = new ArrayList<Variable> ();
     public List<Variable> globalBufferedInternalUpdate = new ArrayList<Variable> ();
     public List<Variable> globalBufferedExternal       = new ArrayList<Variable> ();
@@ -775,14 +771,10 @@ public class InternalBackendData
                                 external = true;
                                 globalBufferedExternal.add (v);
                             }
-                            if (external  ||  v.hasAttribute ("cycle"))
+                            if (! external  &&  v.hasAttribute ("cycle"))
                             {
-                                globalBuffered.add (v);
-                                if (! external)
-                                {
-                                    globalBufferedInternal.add (v);
-                                    if (! initOnly) globalBufferedInternalUpdate.add (v);
-                                }
+                                globalBufferedInternal.add (v);
+                                if (! initOnly) globalBufferedInternalUpdate.add (v);
                             }
                         }
                     }
@@ -824,14 +816,7 @@ public class InternalBackendData
                     {
                         if (! unusedTemporary)
                         {
-                            if (v.name.startsWith ("$")  ||  (temporary  &&  v.neededBySpecial ()))
-                            {
-                                if (! v.name.equals ("$index")  &&  ! v.name.equals ("$live")) localInitSpecial.add (v);
-                            }
-                            else
-                            {
-                                localInitRegular.add (v);
-                            }
+                            if (! v.name.equals ("$index")  &&  ! v.name.equals ("$live")) localInit.add (v);
                         }
                         if (! temporary  &&  ! v.hasAttribute ("dummy"))
                         {
@@ -848,15 +833,10 @@ public class InternalBackendData
                                 external = true;
                                 localBufferedExternal.add (v);
                             }
-                            if (external  ||  v.hasAttribute ("cycle"))
+                            if (! external  &&  v.hasAttribute ("cycle"))
                             {
-                                if (v.name.startsWith ("$")) localBufferedSpecial.add (v);
-                                else                         localBufferedRegular.add (v);
-                                if (! external)  // v got here only by being a "cycle", not "externalRead" or "externalWrite"
-                                {
-                                    localBufferedInternal.add (v);
-                                    if (! initOnly) localBufferedInternalUpdate.add (v);
-                                }
+                                localBufferedInternal.add (v);
+                                if (! initOnly) localBufferedInternalUpdate.add (v);
                             }
                         }
                     }
@@ -871,6 +851,9 @@ public class InternalBackendData
                 else                            localIntegrated.add (v);
             }
         }
+
+        EquationSet.determineOrderInit (localInit);
+        EquationSet.determineOrderInit (globalInit);
 
         singleton = s.isSingleton (true);
         populationCanGrowOrDie =  s.lethalP  ||  s.lethalType  ||  s.canGrow ();
@@ -1326,11 +1309,8 @@ public class InternalBackendData
     public void dump ()
     {
         dumpVariableList ("localUpdate                 ", localUpdate);
-        dumpVariableList ("localInitRegular            ", localInitRegular);
-        dumpVariableList ("localInitSpecial            ", localInitSpecial);
+        dumpVariableList ("localInit                   ", localInit);
         dumpVariableList ("localMembers                ", localMembers);
-        dumpVariableList ("localBufferedRegular        ", localBufferedRegular);
-        dumpVariableList ("localBufferedSpecial        ", localBufferedSpecial);
         dumpVariableList ("localBufferedInternal       ", localBufferedInternal);
         dumpVariableList ("localBufferedInternalUpdate ", localBufferedInternalUpdate);
         dumpVariableList ("localBufferedExternal       ", localBufferedExternal);
@@ -1340,7 +1320,6 @@ public class InternalBackendData
         dumpVariableList ("globalUpdate                ", globalUpdate);
         dumpVariableList ("globalInit                  ", globalInit);
         dumpVariableList ("globalMembers               ", globalMembers);
-        dumpVariableList ("globalBuffered              ", globalBuffered);
         dumpVariableList ("globalBufferedInternal      ", globalBufferedInternal);
         dumpVariableList ("globalBufferedInternalUpdate", globalBufferedInternalUpdate);
         dumpVariableList ("globalBufferedExternal      ", globalBufferedExternal);
