@@ -285,6 +285,12 @@ public class EquationSet implements Comparable<EquationSet>
         return null;
     }
 
+    public static Variable find (Variable query, List<Variable> list)
+    {
+        for (Variable v : list) if (v.equals (query)) return v;
+        return null;
+    }
+
     public boolean add (Variable v)
     {
         v.container = this;
@@ -2310,6 +2316,38 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
+        Optimizes a given subset of variables with the assumption that $init=1.
+        Starts by replacing the variables with deep copies so that any changes do not
+        damage the original equation set.
+    **/
+    public static void simplifyInit (List<Variable> list)
+    {
+        Variable.deepCopy (list);
+        ReplacePhaseIndicators replace = new ReplacePhaseIndicators ();
+        replace.init = 1;
+        for (Variable v : list) v.transform (replace);
+
+        boolean changed = true;
+        while (changed)
+        {
+            changed = false;
+            Iterator<Variable> it = list.iterator ();
+            while (it.hasNext ())
+            {
+                Variable v = it.next ();
+                if (v.simplify ()) changed = true;
+                if (v.equations.isEmpty ())
+                {
+                    it.remove ();
+                    changed = true;
+                }
+            }
+        }
+
+        determineOrderInit (list);
+    }
+
+    /**
         Special version of determineOrder() that treats all variables like temporaries,
         so that their order maximizes propagation of information.
     **/
@@ -2347,10 +2385,7 @@ public class EquationSet implements Comparable<EquationSet>
         });
         queuePriority.addAll (list);
         list.clear ();
-        for (Variable v = queuePriority.poll (); v != null; v = queuePriority.poll ())
-        {
-            list.add (v);
-        }
+        for (Variable v = queuePriority.poll (); v != null; v = queuePriority.poll ()) list.add (v);
     }
 
     /**
@@ -2630,7 +2665,7 @@ public class EquationSet implements Comparable<EquationSet>
                             if (op instanceof AccessVariable)
                             {
                                 AccessVariable av = (AccessVariable) op;
-                                if (av.name.equals ("$init"   )) return new Constant (1);
+                                if (av.name.equals ("$init")) return new Constant (1);
                             }
                             return null;
                         }

@@ -17,6 +17,8 @@ import gov.sandia.n2a.language.type.Scalar;
 
 public class Add extends OperatorBinary
 {
+    public String name;  // For C backend, the name of the variable that holds an assembled result when Add is used to concatenate strings.
+
     public static Factory factory ()
     {
         return new Factory ()

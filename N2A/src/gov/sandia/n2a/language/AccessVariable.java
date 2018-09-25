@@ -73,24 +73,20 @@ public class AccessVariable extends Operator
             Type value = ((Constant) e.condition).value;
             if (! (value instanceof Scalar)  ||  ((Scalar) value).value == 0) return this;
         }
-        if (e.expression instanceof Constant)
+
+        if (! (e.expression instanceof Constant))
         {
-            from.removeDependencyOn (v);
-            from.changed = true;
-            Operator result = e.expression.deepCopy ();
-            result.parent = parent;
-            return result;
+            // Attempt to simplify expression, and maybe get a Constant
+            Variable p = from;
+            while (p != null)
+            {
+                if (p == v) return this;  // can't simplify, because we've already visited this variable
+                p = p.visited;
+            }
+            v.visited = from;
+            e.expression = e.expression.simplify (v);
         }
 
-        // Attempt to simplify expression, and maybe get a Constant
-        Variable p = from;
-        while (p != null)
-        {
-            if (p == v) return this;  // can't simplify, because we've already visited this variable
-            p = p.visited;
-        }
-        v.visited = from;
-        e.expression = e.expression.simplify (v);
         if (e.expression instanceof Constant)
         {
             from.removeDependencyOn (v);

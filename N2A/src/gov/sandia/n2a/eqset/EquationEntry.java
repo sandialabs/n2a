@@ -106,6 +106,14 @@ public class EquationEntry implements Comparable<EquationEntry>
         }
     }
 
+    public EquationEntry deepCopy (Variable newVariable)
+    {
+        EquationEntry result = new EquationEntry (newVariable, ifString);
+        if (expression != null) result.expression = expression.deepCopy ();
+        if (condition  != null) result.condition  = condition.deepCopy ();
+        return result;
+    }
+
     public void visit (Visitor visitor)
     {
         if (expression != null) expression.visit (visitor);

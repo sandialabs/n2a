@@ -20,6 +20,9 @@ import gov.sandia.n2a.language.type.Text;
 
 public class ReadMatrix extends Function
 {
+    public String name;     // For C backend, the name of the MatrixInput object.
+    public String fileName; // For C backend, the name of the string variable holding the file name, if any.
+
     public static Factory factory ()
     {
         return new Factory ()

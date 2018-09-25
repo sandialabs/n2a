@@ -41,11 +41,13 @@ public class Function extends Operator
         try
         {
             result = (Function) this.clone ();
+            Operator[] newOperands = new Operator[operands.length];
             for (int i = 0; i < operands.length; i++)
             {
-                result.operands[i] = operands[i].deepCopy ();
-                result.operands[i].parent = result;
+                newOperands[i] = operands[i].deepCopy ();
+                newOperands[i].parent = result;
             }
+            result.operands = newOperands;
         }
         catch (CloneNotSupportedException e)
         {

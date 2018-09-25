@@ -61,11 +61,11 @@ public class RendererC extends Renderer
 
         if (op instanceof Add)
         {
+            Add a = (Add) op;
             // Check if this is a string expression
-            String stringName = job.stringNames.get (op);
-            if (stringName != null)
+            if (a.name != null)
             {
-                result.append (stringName);
+                result.append (a.name);
                 return true;
             }
             return false;
@@ -101,7 +101,8 @@ public class RendererC extends Renderer
         }
         if (op instanceof BuildMatrix)
         {
-            result.append (job.matrixNames.get (op));
+            BuildMatrix b = (BuildMatrix) op;
+            result.append (b.name);
             return true;
         }
         if (op instanceof Constant)
@@ -120,7 +121,7 @@ public class RendererC extends Renderer
             }
             if (o instanceof Matrix)
             {
-                result.append (job.matrixNames.get (op));
+                result.append (c.name);
                 return true;
             }
             return false;
@@ -180,9 +181,6 @@ public class RendererC extends Renderer
         if (op instanceof Input)
         {
             Input i = (Input) op;
-            String inputName;
-            if (i.operands[0] instanceof Constant) inputName = job.inputNames.get (i.operands[0].toString ());
-            else                                   inputName = job.inputNames.get (i);
 
             String mode = "";
             if      (i.operands.length == 2) mode = i.operands[1].getString ();
@@ -192,19 +190,14 @@ public class RendererC extends Renderer
             if (useExponent  &&  shift != 0) result.append ("(");
             if (mode.contains ("columns"))
             {
-                result.append (inputName + "->getColumns ()");
+                result.append (i.name + "->getColumns ()");
             }
             else
             {
                 Operator op1 = i.operands[1];
                 Operator op2 = i.operands[2];
-                result.append (inputName + "->get");
-                if (   mode.contains ("raw")   // select raw mode, but only if column is not identified by a string
-                    && ! job.stringNames.containsKey (op2)
-                    && ! (op2 instanceof Constant  &&  ((Constant) op2).value instanceof Text))
-                {
-                    result.append ("Raw");
-                }
+                result.append (i.name + "->get");
+                if (mode.contains ("raw")) result.append ("Raw");
                 result.append (" (");
                 op1.render (this);
                 result.append (", ");
@@ -251,10 +244,7 @@ public class RendererC extends Renderer
         if (op instanceof Output)
         {
             Output o = (Output) op;
-            String outputName;
-            if (o.operands[0] instanceof Constant) outputName = job.outputNames.get (o.operands[0].toString ());
-            else                                   outputName = job.outputNames.get (o);
-            result.append (outputName + "->trace (Simulator<" + job.T + ">::instance.currentEvent->t, ");
+            result.append (o.name + "->trace (Simulator<" + job.T + ">::instance.currentEvent->t, ");
 
             if (o.operands.length > 2)  // column name is explicit
             {
@@ -262,8 +252,7 @@ public class RendererC extends Renderer
             }
             else  // column name is generated, so use prepared string value
             {
-                String stringName = job.stringNames.get (op);  // generated column name is associated with Output function itself, rather than one of its operands
-                result.append (stringName);
+                result.append (o.columnName);
             }
             result.append (", ");
 
@@ -304,23 +293,19 @@ public class RendererC extends Renderer
                 }
             }
 
-            String matrixName;
-            if (r.operands[0] instanceof Constant) matrixName = job.matrixNames.get (r.operands[0].toString ());
-            else                                   matrixName = job.matrixNames.get (r);
-
             int shift = r.exponent - r.exponentNext;
             if (useExponent  &&  shift != 0) result.append ("(");
             if (mode.equals ("rows"))
             {
-                result.append (matrixName + "->rows ()");
+                result.append (r.name + "->rows ()");
             }
             else if (mode.equals ("columns"))
             {
-                result.append (matrixName + "->columns ()");
+                result.append (r.name + "->columns ()");
             }
             else
             {
-                result.append (matrixName + "->get");
+                result.append (r.name + "->get");
                 if (mode.equals ("raw")) result.append ("Raw");
                 result.append (" (");
                 r.operands[1].render (this);

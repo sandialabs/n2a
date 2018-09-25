@@ -336,9 +336,6 @@ public class BackendDataC
             if (allTemporary) list.clear ();
         }
 
-        EquationSet.determineOrderInit (localInit);
-        EquationSet.determineOrderInit (globalInit);
-
         refcount            = s.referenced  &&  s.canDie ();
         singleton           = s.isSingleton (true);
         needGlobalPreserve  = globalIntegrated.size () > 0  ||  globalDerivativePreserve.size () > 0  ||  globalBufferedExternalWriteDerivative.size () > 0;

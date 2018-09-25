@@ -17,7 +17,8 @@ import gov.sandia.n2a.language.type.Text;
 public class Constant extends Operator
 {
     public Type      value;
-    public UnitValue unitValue;  // Used for pretty printing. If value is a scalar, then this is the original object returned by the parser. Note that value has already been scaled to SI, so this is merely a memo.
+    public UnitValue unitValue; // Used for pretty printing. If value is a scalar, then this is the original object returned by the parser. Note that value has already been scaled to SI, so this is merely a memo.
+    public String    name;      // For C backend, name of Matrix variable if this is a matrix constant.
 
     public Constant ()
     {

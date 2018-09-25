@@ -36,7 +36,10 @@ public class Output extends Function
     public String variableName;  // Trace needs to know its target variable in order to auto-generate a column name. This value is set by an analysis process.
     public String variableName0; // As found in operand[0]
     public String variableName1; // As found in operand[1]
-    public int    index;  // of generated column name in valuesObject array
+    public int    index;         // of generated column name in valuesObject array
+    public String name;          // For C backend, the name of the OutputHolder object.
+    public String fileName;      // For C backend, the name of the string variable holding the file name, if any.
+    public String columnName;    // For C backend, the name of the string varivle holding the generated column name, if any.
 
     public static Factory factory ()
     {

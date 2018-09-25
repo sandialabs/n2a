@@ -579,21 +579,22 @@ public class JobC extends Thread
             {
                 if (op instanceof Constant)
                 {
-                    Type m = ((Constant) op).value;
+                    Constant constant = (Constant) op;
+                    Type m = constant.value;
                     if (m instanceof Matrix)
                     {
                         Matrix A = (Matrix) m;
                         int rows = A.rows ();
                         int cols = A.columns ();
-                        String matrixName = "Matrix" + matrixNames.size ();
-                        matrixNames.put (op, matrixName);
-                        result.append ("MatrixFixed<" + T + "," + rows + "," + cols + ">" + matrixName + " = {");
+                        constant.name = "Matrix" + matrixNames.size ();
+                        matrixNames.put (constant, constant.name);
+                        result.append ("MatrixFixed<" + T + "," + rows + "," + cols + ">" + constant.name + " = {");
                         String initializer = "";
                         for (int c = 0; c < cols; c++)
                         {
                             for (int r = 0; r < rows; r++)
                             {
-                                initializer += context.print (A.get (r, c), op.exponent) + ", ";
+                                initializer += context.print (A.get (r, c), constant.exponent) + ", ";
                             }
                         }
                         if (initializer.length () > 2) initializer = initializer.substring (0, initializer.length () - 2);
@@ -606,17 +607,18 @@ public class JobC extends Thread
                     Function f = (Function) op;
                     if (f instanceof Output  &&  f.operands.length < 3)  // We need to auto-generate the column name.
                     {
-                        String stringName = "columnName" + stringNames.size ();
-                        stringNames.put (op, stringName);
+                        Output o = (Output) f;
+                        o.columnName = "columnName" + stringNames.size ();
+                        stringNames.put (op, o.columnName);
                         if (global)
                         {
                             bed.setGlobalNeedPath (s);
-                            bed.globalColumns.add (stringName);
+                            bed.globalColumns.add (o.columnName);
                         }
                         else
                         {
                             bed.setLocalNeedPath  (s);
-                            bed.localColumns.add (stringName);
+                            bed.localColumns.add (o.columnName);
                         }
                     }
                     // Detect functions that need static handles
@@ -626,55 +628,75 @@ public class JobC extends Thread
                         if (operand0 instanceof Constant)
                         {
                             Constant c = (Constant) operand0;
-                            Type o = c.value;
-                            if (o instanceof Text)
+                            if (c.value instanceof Text)
                             {
-                                String fileName = ((Text) o).value;
-                                if (op instanceof ReadMatrix)
+                                String fileName = ((Text) c.value).value;
+                                if (f instanceof ReadMatrix)
                                 {
-                                    if (! matrixNames.containsKey (fileName))
+                                    ReadMatrix r = (ReadMatrix) f;
+                                    r.name = matrixNames.get (fileName);
+                                    if (r.name == null)
                                     {
-                                        String matrixName = "Matrix" + matrixNames.size ();
-                                        matrixNames.put (fileName, matrixName);
-                                        result.append ("MatrixInput<" + T + "> * " + matrixName + " = matrixHelper<" + T + "> (\"" + fileName + "\");\n");
+                                        r.name = "Matrix" + matrixNames.size ();
+                                        matrixNames.put (fileName, r.name);
+                                        result.append ("MatrixInput<" + T + "> * " + r.name + " = matrixHelper<" + T + "> (\"" + fileName + "\");\n");
                                     }
                                 }
                                 else if (f instanceof Input)
                                 {
-                                    if (! inputNames.containsKey (fileName))
+                                    Input i = (Input) f;
+                                    i.name = inputNames.get (fileName);
+                                    if (i.name == null)
                                     {
-                                        String inputName = "Input" + inputNames.size ();
-                                        inputNames.put (fileName, inputName);
-                                        result.append ("InputHolder<" + T + "> * " + inputName + " = inputHelper<" + T + "> (\"" + fileName + "\");\n");
+                                        i.name = "Input" + inputNames.size ();
+                                        inputNames.put (fileName, i.name);
+                                        result.append ("InputHolder<" + T + "> * " + i.name + " = inputHelper<" + T + "> (\"" + fileName + "\");\n");
                                     }
                                 }
                                 else if (f instanceof Output)
                                 {
-                                    if (! outputNames.containsKey (fileName))
+                                    Output o = (Output) f;
+                                    o.name = outputNames.get (fileName);
+                                    if (o.name == null)
                                     {
-                                        String outputName = "Output" + outputNames.size ();
-                                        outputNames.put (fileName, outputName);
-                                        result.append ("OutputHolder<" + T + "> * " + outputName + " = outputHelper<" + T + "> (\"" + fileName + "\");\n");
+                                        o.name = "Output" + outputNames.size ();
+                                        outputNames.put (fileName, o.name);
+                                        result.append ("OutputHolder<" + T + "> * " + o.name + " = outputHelper<" + T + "> (\"" + fileName + "\");\n");
                                     }
                                 }
                             }
                         }
                         else  // Dynamic file name (no static handle)
                         {
+                            boolean error = false;
                             if (f instanceof ReadMatrix)
                             {
-                                matrixNames.put (op,       "Matrix"   + matrixNames.size ());
-                                stringNames.put (operand0, "fileName" + stringNames.size ());
+                                ReadMatrix r = (ReadMatrix) f;
+                                matrixNames.put (op,       r.name     = "Matrix"   + matrixNames.size ());
+                                stringNames.put (operand0, r.fileName = "fileName" + stringNames.size ());
+                                if (operand0 instanceof Add) ((Add) operand0).name = r.fileName;
+                                else error = true;
                             }
                             else if (f instanceof Input)
                             {
-                                inputNames .put (op,       "Input"    + inputNames .size ());
-                                stringNames.put (operand0, "fileName" + stringNames.size ());
+                                Input i = (Input) f;
+                                inputNames .put (op,       i.name     = "Input"    + inputNames .size ());
+                                stringNames.put (operand0, i.fileName = "fileName" + stringNames.size ());
+                                if (operand0 instanceof Add) ((Add) operand0).name = i.fileName;
+                                else error = true;
                             }
                             else if (f instanceof Output)
                             {
-                                outputNames.put (op,       "Output"   + outputNames.size ());
-                                stringNames.put (operand0, "fileName" + stringNames.size ());
+                                Output o = (Output) f;
+                                outputNames.put (op,       o.name     = "Output"   + outputNames.size ());
+                                stringNames.put (operand0, o.fileName = "fileName" + stringNames.size ());
+                                if (operand0 instanceof Add) ((Add) operand0).name = o.fileName;
+                                else error = true;
+                            }
+                            if (error)
+                            {
+                                Backend.err.get ().println ("ERROR: File name must be a string expression.");
+                                throw new AbortRun ();
                             }
                         }
                     }
@@ -1284,6 +1306,7 @@ public class JobC extends Thread
         {
             result.append ("  " + type (bed.n) + " " + mangle (bed.n) + ";\n");
         }
+        EquationSet.simplifyInit (bed.globalInit);
         List<Variable> buffered = bed.globalBuffered;
         bed.globalBuffered = new ArrayList<Variable> ();  // Trick multiconditional() and its subroutines into directly updating members.
         for (Variable v : bed.globalInit)
@@ -1839,10 +1862,7 @@ public class JobC extends Thread
                 ConnectionMatrix cm = s.connectionMatrix;
                 result.append ("  ConnectPopulation<" + T + "> * rows = getIterator (" + cm.rows.index + ");\n");
                 result.append ("  ConnectPopulation<" + T + "> * cols = getIterator (" + cm.cols.index + ");\n");
-
-                String matrixName = matrixNames.get (cm.A.operands[0].toString ());
-                result.append ("  IteratorNonzero<" + T + "> * it = " + matrixName + "->getIterator ();\n");
-
+                result.append ("  IteratorNonzero<" + T + "> * it = " + cm.A.name + "->getIterator ();\n");
                 result.append ("  Part<" + T + "> * dummy = create ();\n");
                 result.append ("  return new ConnectMatrix<" + T + "> (rows, cols, it, dummy);\n");
             }
@@ -2116,6 +2136,7 @@ public class JobC extends Thread
             }
             //   The following code tricks multiconditional() into treating all variables
             //   as unbuffered and non-accumulating.
+            EquationSet.simplifyInit (bed.localInit);
             List<Variable> buffered = bed.localBuffered;
             bed.localBuffered = new ArrayList<Variable> ();
             for (Variable v : bed.localInit)
@@ -3575,24 +3596,22 @@ public class JobC extends Thread
                     Output o = (Output) op;
                     if (o.operands.length < 3)  // column name is generated
                     {
-                        String stringName = stringNames.get (op);
                         BackendDataC bed = (BackendDataC) context.part.backendData;
                         if (context.global ? bed.needGlobalPath : bed.needLocalPath)
                         {
-                            context.result.append (pad + "path (" + stringName + ");\n");
-                            context.result.append (pad + stringName + " += \"." + o.variableName + "\";\n");
+                            context.result.append (pad + "path (" + o.columnName + ");\n");
+                            context.result.append (pad + o.columnName + " += \"." + o.variableName + "\";\n");
                         }
                         else
                         {
-                            context.result.append (pad + stringName + " = \"" + o.variableName + "\";\n");
+                            context.result.append (pad + o.columnName + " = \"" + o.variableName + "\";\n");
                         }
                     }
                     if (o.operands[0] instanceof Constant)
                     {
-                        String outputName = outputNames.get (o.operands[0].toString ());
                         if (o.operands.length >= 4  &&  o.operands[3].getString ().contains ("raw"))
                         {
-                            context.result.append (pad + outputName + "->raw = true;\n");
+                            context.result.append (pad + o.name + "->raw = true;\n");
                         }
                     }
                     return true;  // Continue to drill down, because I/O functions can be nested.
@@ -3602,10 +3621,9 @@ public class JobC extends Thread
                     Input i = (Input) op;
                     if (i.operands[0] instanceof Constant)
                     {
-                        String inputName = inputNames.get (i.operands[0].toString ());
                         if (T.equals ("int"))
                         {
-                            context.result.append (pad + inputName + "->exponent = " + i.exponent + ";\n");
+                            context.result.append (pad + i.name + "->exponent = " + i.exponent + ";\n");
                         }
 
                         // Detect time flag
@@ -3614,11 +3632,11 @@ public class JobC extends Thread
                         else if (i.operands.length >= 4) mode = i.operands[3].getString ();
                         if (mode.contains ("time"))
                         {
-                            context.result.append (pad + inputName + "->time = true;\n");
+                            context.result.append (pad + i.name + "->time = true;\n");
                             if (! context.global  &&  ! T.equals ("int"))  // Note: In the case of T==int, we don't need to set epsilon because it is already set to 1 by the constructor.
                             {
                                 // Read $t' as an lvalue, to ensure we get any newly-set frequency.
-                                context.result.append (pad + inputName + "->epsilon = " + resolve (bed.dt.reference, context, true) + " / 1000;\n");
+                                context.result.append (pad + i.name + "->epsilon = " + resolve (bed.dt.reference, context, true) + " / 1000;\n");
                             }
                         }
                     }
@@ -3648,14 +3666,14 @@ public class JobC extends Thread
                     int rows = m.getRows ();
                     int cols = m.getColumns ();
 
-                    String matrixName = "Matrix" + matrixNames.size ();
-                    matrixNames.put (m, matrixName);
-                    context.result.append (pad + "MatrixFixed<" + T + "," + rows + "," + cols + "> " + matrixName + ";\n");
+                    m.name = "Matrix" + matrixNames.size ();
+                    matrixNames.put (m, m.name);
+                    context.result.append (pad + "MatrixFixed<" + T + "," + rows + "," + cols + "> " + m.name + ";\n");
                     for (int r = 0; r < rows; r++)
                     {
                         if (cols == 1)
                         {
-                            context.result.append (pad + matrixName + "[" + r + "] = ");
+                            context.result.append (pad + m.name + "[" + r + "] = ");
                             m.operands[0][r].render (context);
                             context.result.append (";\n");
                         }
@@ -3663,7 +3681,7 @@ public class JobC extends Thread
                         {
                             for (int c = 0; c < cols; c++)
                             {
-                                context.result.append (pad + matrixName + "(" + r + "," + c + ") = ");
+                                context.result.append (pad + m.name + "(" + r + "," + c + ") = ");
                                 m.operands[c][r].render (context);
                                 context.result.append (";\n");
                             }
@@ -3674,13 +3692,12 @@ public class JobC extends Thread
                 if (op instanceof Add)
                 {
                     Add a = (Add) op;
-                    String stringName = stringNames.get (a);
-                    if (stringName != null)
+                    if (a.name != null)
                     {
-                        context.result.append (pad + "String " + stringName + ";\n");
+                        context.result.append (pad + "String " + a.name + ";\n");
                         for (Operator o : flattenAdd (a))
                         {
-                            context.result.append (pad + stringName + " += ");
+                            context.result.append (pad + a.name + " += ");
                             o.render (context);
                             context.result.append (";\n");
                         }
@@ -3702,9 +3719,7 @@ public class JobC extends Thread
                     ReadMatrix r = (ReadMatrix) op;
                     if (! (r.operands[0] instanceof Constant))
                     {
-                        String matrixName = matrixNames.get (r);
-                        String stringName = stringNames.get (r.operands[0]);
-                        context.result.append (pad + "MatrixInput<" + T + "> * " + matrixName + " = matrixHelper<" + T + "> (" + stringName + ", " + r.exponent + ");\n");
+                        context.result.append (pad + "MatrixInput<" + T + "> * " + r.name + " = matrixHelper<" + T + "> (" + r.fileName + ", " + r.exponent + ");\n");
                     }
                     return false;
                 }
@@ -3713,12 +3728,10 @@ public class JobC extends Thread
                     Input i = (Input) op;
                     if (! (i.operands[0] instanceof Constant))
                     {
-                        String inputName = inputNames.get (i);
-                        String stringName = stringNames.get (i.operands[0]);
-                        context.result.append (pad + "InputHolder<" + T + "> * " + inputName + " = inputHelper<" + T + "> (" + stringName + ");\n");
+                        context.result.append (pad + "InputHolder<" + T + "> * " + i.name + " = inputHelper<" + T + "> (" + i.fileName + ");\n");
                         if (T.equals ("int"))
                         {
-                            context.result.append (pad + inputName + "->exponent = " + i.exponent + ";\n");
+                            context.result.append (pad + i.name + "->exponent = " + i.exponent + ";\n");
                         }
 
                         // Detect time flag
@@ -3727,10 +3740,10 @@ public class JobC extends Thread
                         else if (i.operands.length >= 4) mode = i.operands[3].getString ();
                         if (mode.contains ("time"))
                         {
-                            context.result.append (pad + inputName + "->time = true;\n");
+                            context.result.append (pad + i.name + "->time = true;\n");
                             if (! context.global  &&  ! T.equals ("int"))
                             {
-                                context.result.append (pad + inputName + "->epsilon = " + resolve (bed.dt.reference, context, true) + " / 1000;\n");
+                                context.result.append (pad + i.name + "->epsilon = " + resolve (bed.dt.reference, context, true) + " / 1000;\n");
                             }
                         }
                     }
@@ -3741,13 +3754,10 @@ public class JobC extends Thread
                     Output o = (Output) op;
                     if (! (o.operands[0] instanceof Constant))
                     {
-                        String outputName = outputNames.get (o);
-                        String stringName = stringNames.get (o.operands[0]);
-                        context.result.append (pad + "OutputHolder<" + T + "> * " + outputName + " = outputHelper<" + T + "> (" + stringName + ");\n");
-
+                        context.result.append (pad + "OutputHolder<" + T + "> * " + o.name + " = outputHelper<" + T + "> (" + o.fileName + ");\n");
                         if (o.operands.length >= 4  &&  o.operands[3].getString ().contains ("raw"))
                         {
-                            context.result.append (pad + outputName + "->raw = true;\n");
+                            context.result.append (pad + o.name + "->raw = true;\n");
                         }
                     }
                     return true;

@@ -31,7 +31,9 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 public class Input extends Function
 {
     public boolean timeWarning;
-    public int     exponentTime = UNKNOWN;  // For C backend with integer math. The exponent used to convert time values to integer, both from the input file and from the caller.
+    public int     exponentTime = UNKNOWN; // For C backend with integer math. The exponent used to convert time values to integer, both from the input file and from the caller.
+    public String  name;                   // For C backend, the name of the InputHolder object.
+    public String  fileName;               // For C backend, the name of the string variable holding the file name, if any.
 
     public static Factory factory ()
     {

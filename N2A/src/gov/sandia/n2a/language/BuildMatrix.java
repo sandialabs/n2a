@@ -17,7 +17,8 @@ import gov.sandia.n2a.language.type.Text;
 
 public class BuildMatrix extends Operator
 {
-    public Operator[][] operands;  // stored in column-major order; that is, access as operands[column][row]
+    public Operator[][] operands; // stored in column-major order; that is, access as operands[column][row]
+    public String       name;     // For C backend, the name of the Matrix object that holds the assembled result.
 
     public void getOperandsFrom (SimpleNode node) throws ParseException
     {

@@ -38,7 +38,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-public class Variable implements Comparable<Variable>
+public class Variable implements Comparable<Variable>, Cloneable
 {
     public String                       name;
     public int                          order;      // of differential
@@ -203,6 +203,55 @@ public class Variable implements Comparable<Variable>
         }
 
         return rhs;
+    }
+
+    /**
+        Replaces each variable in a given subset, such that the result can be
+        modified by optimization procedures without damaging the original equation set.
+    **/
+    public static void deepCopy (List<Variable> list)
+    {
+        try
+        {
+            for (int i = 0; i < list.size (); i++) list.set (i, (Variable) list.get (i).clone ());
+        }
+        catch (CloneNotSupportedException e) {}
+
+        for (Variable v : list)
+        {
+            TreeSet<EquationEntry> newEquations = new TreeSet<EquationEntry> ();
+            for (EquationEntry e : v.equations) newEquations.add (e.deepCopy (v));
+            v.equations = newEquations;
+
+            v.usedBy = null;
+            v.uses = null;
+        }
+
+        // Rebuild dependency structure within the list.
+        // We only care about dependencies that determine ordering within the list.
+        // External dependencies won't be counted, but also won't be changed.
+        for (Variable v : list)
+        {
+            v.transform (new Transformer ()
+            {
+                public Operator transform (Operator op)
+                {
+                    if (op instanceof AccessVariable)
+                    {
+                        AccessVariable av = (AccessVariable) op;
+                        Variable listVariable = EquationSet.find (av.reference.variable, list);
+                        if (listVariable != null)
+                        {
+                            av.reference = new VariableReference ();
+                            av.reference.variable = listVariable;
+                            v.addDependencyOn (listVariable);
+                            return av;
+                        }
+                    }
+                    return null;
+                }
+            });
+        }
     }
 
     public static boolean isCombiner (String value)
@@ -425,6 +474,7 @@ public class Variable implements Comparable<Variable>
         changed = false;
         TreeSet<EquationEntry> nextEquations = new TreeSet<EquationEntry> ();
         TreeSet<EquationEntry> alwaysTrue    = new TreeSet<EquationEntry> ();
+        visited = null;
         for (EquationEntry e : equations)
         {
             if (e.expression != null)
@@ -782,7 +832,7 @@ public class Variable implements Comparable<Variable>
 
     /**
         Record variables or equation sets that depend on this variable.
-        Note that addDependency(Variable) handles both sides of the add. You only call this function
+        Note that addDependencyOn(Variable) handles both sides of the add. You only call this function
         directly to add equation sets.
     **/
     public void addUser (Object user)
@@ -1073,6 +1123,15 @@ public class Variable implements Comparable<Variable>
         {
             result = result + "'";
         }
+        return result;
+    }
+
+    public String fullName ()
+    {
+        String result = "";
+        if (container != null) result = container.prefix ();
+        if (! result.isEmpty ()) result += ".";
+        result += nameString ();
         return result;
     }
 

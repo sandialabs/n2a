@@ -11,10 +11,6 @@ import java.util.ArrayList;
 public class VariableReference
 {
     public Variable          variable;
-    /**
-        Trail of objects followed to resolve the variable.
-        The first one is always variable.container, so it is not included in the list.
-    **/
-    public ArrayList<Object> resolution = new ArrayList<Object> ();
+    public ArrayList<Object> resolution = new ArrayList<Object> ();  // Trail of objects followed to resolve the variable. The first one is always variable.container, so it is not included in the list.
     public int               index      = -1;   // Internal backend data, for looking up resolved Instance. -1 means unresolved
 }
