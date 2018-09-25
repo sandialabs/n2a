@@ -2323,9 +2323,34 @@ public class EquationSet implements Comparable<EquationSet>
     public static void simplifyInit (List<Variable> list)
     {
         Variable.deepCopy (list);
-        ReplacePhaseIndicators replace = new ReplacePhaseIndicators ();
-        replace.init = 1;
-        for (Variable v : list) v.transform (replace);
+
+        class ReplaceConstants extends Transformer
+        {
+            public Variable self;
+            public Operator transform (Operator op)
+            {
+                if (op instanceof AccessVariable)
+                {
+                    AccessVariable av = (AccessVariable) op;
+                    Operator result = null;
+                    if      (av.name.equals ("$init"   ))   result = new Constant (1);
+                    else if (av.name.equals ("$connect"))   result = new Constant (0);
+                    else if (av.reference.variable == self) result = new Constant (0);  // Self-reference is always 0 at init time, but reference to other variables is not, because they may be initialized before this one.
+                    if (result != null)
+                    {
+                        result.parent = av.parent;
+                        return result;
+                    }
+                }
+                return null;
+            }
+        };
+        ReplaceConstants replace = new ReplaceConstants ();
+        for (Variable v : list)
+        {
+            replace.self = v;
+            v.transform (replace);
+        }
 
         boolean changed = true;
         while (changed)
@@ -2336,7 +2361,7 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 Variable v = it.next ();
                 if (v.simplify ()) changed = true;
-                if (v.equations.isEmpty ())
+                if (v.equations.isEmpty ()  ||  v.hasAttribute ("temporary")  &&  ! v.hasUsers ())
                 {
                     it.remove ();
                     changed = true;
