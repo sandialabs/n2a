@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.backend.internal;
 
+import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.EquationSet.AccountableConnection;
 import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
@@ -15,6 +16,7 @@ import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Event;
@@ -852,8 +854,8 @@ public class InternalBackendData
             }
         }
 
-        EquationSet.determineOrderInit (localInit);
-        EquationSet.determineOrderInit (globalInit);
+        determineOrderInit (localInit);
+        determineOrderInit (globalInit);
 
         singleton = s.isSingleton (true);
         populationCanGrowOrDie =  s.lethalP  ||  s.lethalType  ||  s.canGrow ();
@@ -1227,6 +1229,92 @@ public class InternalBackendData
             namesLocalFloat.add (lastT.nameString ());
             lastT.type = new Scalar (0);
         }
+    }
+
+    /**
+        Rebuild dependencies based only on equations that can actually fire.
+    **/
+    public static void determineOrderInit (List<Variable> list)
+    {
+        for (Variable v : list)
+        {
+            v.usedBy = null;
+            v.uses = null;
+        }
+
+        class ReplaceConstants extends Transformer
+        {
+            public Variable self;
+            public Operator transform (Operator op)
+            {
+                if (op instanceof AccessVariable)
+                {
+                    AccessVariable av = (AccessVariable) op;
+                    Operator result = null;
+                    if      (av.name.equals ("$init"   ))   result = new Constant (1);
+                    else if (av.name.equals ("$connect"))   result = new Constant (0);
+                    else if (av.reference.variable == self) result = new Constant (0);  // Self-reference is always 0 at init time, but reference to other variables is not, because they may be initialized before this one.
+                    if (result != null)
+                    {
+                        result.parent = av.parent;
+                        return result;
+                    }
+                }
+                return null;
+            }
+        };
+        ReplaceConstants replace = new ReplaceConstants ();
+
+        class DependencyTransformer extends Transformer
+        {
+            public Variable v;
+            public Operator transform (Operator op)
+            {
+                if (op instanceof AccessVariable)
+                {
+                    AccessVariable av = (AccessVariable) op;
+                    Variable listVariable = EquationSet.find (av.reference.variable, list);
+                    if (listVariable != null)
+                    {
+                        av.reference = new VariableReference ();
+                        av.reference.variable = listVariable;
+                        v.addDependencyOn (listVariable);
+                        return av;
+                    }
+                }
+                return null;
+            }
+        }
+        DependencyTransformer depend = new DependencyTransformer ();
+
+        for (Variable v : list)
+        {
+            // Work through equations, adding dependencies for any that are ambiguous,
+            // and terminate at the first one that will always fire.
+            replace.self = v;
+            depend.v = v;
+            for (EquationEntry e : v.equations)
+            {
+                boolean couldFire   = true;
+                boolean alwaysFires = true;
+                if (e.condition != null)
+                {
+                    Operator test = e.condition.deepCopy ().transform (replace).simplify (v);
+                    if (test.isScalar ())
+                    {
+                        couldFire = alwaysFires = test.getDouble () != 0;
+                    }
+                    else
+                    {
+                        alwaysFires = false;
+                    }
+                }
+                if (couldFire) v.transform (depend);
+                if (alwaysFires) break;  // Don't check any more equations, because Internal will stop here.
+            }
+        }
+
+        EquationSet.determineOrderInit (list);
     }
 
     public static class ResolveContainer implements Instance.Resolver

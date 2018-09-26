@@ -205,55 +205,6 @@ public class Variable implements Comparable<Variable>, Cloneable
         return rhs;
     }
 
-    /**
-        Replaces each variable in a given subset, such that the result can be
-        modified by optimization procedures without damaging the original equation set.
-    **/
-    public static void deepCopy (List<Variable> list)
-    {
-        try
-        {
-            for (int i = 0; i < list.size (); i++) list.set (i, (Variable) list.get (i).clone ());
-        }
-        catch (CloneNotSupportedException e) {}
-
-        for (Variable v : list)
-        {
-            TreeSet<EquationEntry> newEquations = new TreeSet<EquationEntry> ();
-            for (EquationEntry e : v.equations) newEquations.add (e.deepCopy (v));
-            v.equations = newEquations;
-
-            v.usedBy = null;
-            v.uses = null;
-        }
-
-        // Rebuild dependency structure within the list.
-        // We only care about dependencies that determine ordering within the list.
-        // External dependencies won't be counted, but also won't be changed.
-        for (Variable v : list)
-        {
-            v.transform (new Transformer ()
-            {
-                public Operator transform (Operator op)
-                {
-                    if (op instanceof AccessVariable)
-                    {
-                        AccessVariable av = (AccessVariable) op;
-                        Variable listVariable = EquationSet.find (av.reference.variable, list);
-                        if (listVariable != null)
-                        {
-                            av.reference = new VariableReference ();
-                            av.reference.variable = listVariable;
-                            v.addDependencyOn (listVariable);
-                            return av;
-                        }
-                    }
-                    return null;
-                }
-            });
-        }
-    }
-
     public static boolean isCombiner (String value)
     {
         if (value.length () != 1) return false;
@@ -306,6 +257,59 @@ public class Variable implements Comparable<Variable>, Cloneable
         {
             if (condition.isEmpty ()) return combiner + expression;
             return combiner + expression + "@" + condition;
+        }
+    }
+
+    /**
+        Replaces each variable in a given subset, such that the result can be
+        modified by optimization procedures without damaging the original equation set.
+    **/
+    public static void deepCopy (List<Variable> list)
+    {
+        try
+        {
+            for (int i = 0; i < list.size (); i++) list.set (i, (Variable) list.get (i).clone ());
+        }
+        catch (CloneNotSupportedException e) {}
+
+        for (Variable v : list)
+        {
+            TreeSet<EquationEntry> newEquations = new TreeSet<EquationEntry> ();
+            for (EquationEntry e : v.equations) newEquations.add (e.deepCopy (v));
+            v.equations = newEquations;
+
+            v.usedBy = null;
+            v.uses = null;
+        }
+
+        // Rebuild dependency structure within the list.
+        // We only care about dependencies that determine ordering within the list.
+        // External dependencies won't be counted, but also won't be changed.
+        class DependencyTransformer extends Transformer
+        {
+            public Variable v;
+            public Operator transform (Operator op)
+            {
+                if (op instanceof AccessVariable)
+                {
+                    AccessVariable av = (AccessVariable) op;
+                    Variable listVariable = EquationSet.find (av.reference.variable, list);
+                    if (listVariable != null)
+                    {
+                        av.reference = new VariableReference ();
+                        av.reference.variable = listVariable;
+                        v.addDependencyOn (listVariable);
+                        return av;
+                    }
+                }
+                return null;
+            }
+        }
+        DependencyTransformer xform = new DependencyTransformer ();
+        for (Variable v : list)
+        {
+            xform.v = v;
+            v.transform (xform);
         }
     }
 

@@ -2316,63 +2316,6 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
-        Optimizes a given subset of variables with the assumption that $init=1.
-        Starts by replacing the variables with deep copies so that any changes do not
-        damage the original equation set.
-    **/
-    public static void simplifyInit (List<Variable> list)
-    {
-        Variable.deepCopy (list);
-
-        class ReplaceConstants extends Transformer
-        {
-            public Variable self;
-            public Operator transform (Operator op)
-            {
-                if (op instanceof AccessVariable)
-                {
-                    AccessVariable av = (AccessVariable) op;
-                    Operator result = null;
-                    if      (av.name.equals ("$init"   ))   result = new Constant (1);
-                    else if (av.name.equals ("$connect"))   result = new Constant (0);
-                    else if (av.reference.variable == self) result = new Constant (0);  // Self-reference is always 0 at init time, but reference to other variables is not, because they may be initialized before this one.
-                    if (result != null)
-                    {
-                        result.parent = av.parent;
-                        return result;
-                    }
-                }
-                return null;
-            }
-        };
-        ReplaceConstants replace = new ReplaceConstants ();
-        for (Variable v : list)
-        {
-            replace.self = v;
-            v.transform (replace);
-        }
-
-        boolean changed = true;
-        while (changed)
-        {
-            changed = false;
-            Iterator<Variable> it = list.iterator ();
-            while (it.hasNext ())
-            {
-                Variable v = it.next ();
-                if (v.simplify ()) changed = true;
-                if (v.equations.isEmpty ()  ||  v.hasAttribute ("temporary")  &&  ! v.hasUsers ())
-                {
-                    it.remove ();
-                    changed = true;
-                }
-            }
-        }
-
-        determineOrderInit (list);
-    }
-
-    /**
         Special version of determineOrder() that treats all variables like temporaries,
         so that their order maximizes propagation of information.
     **/
@@ -2541,6 +2484,8 @@ public class EquationSet implements Comparable<EquationSet>
             EquationEntry update = null;  // If we have a single update equation, then we may still be initOnly if it depends only on constants or other initOnly variables. Save the update equation for analysis.
             for (EquationEntry e : v.equations)
             {
+                // In the following tests, we make the conservative assumption that an equation fires
+                // unless we can be absolutely certain it will not.
                 if (e.condition == null)
                 {
                     firesDuringInit++;
