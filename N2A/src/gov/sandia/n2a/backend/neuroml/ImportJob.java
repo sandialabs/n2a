@@ -1803,7 +1803,7 @@ public class ImportJob extends XMLutility
     public void channel (Node node, MNode part, boolean doDependency)
     {
         String name       = node.getNodeName ();
-        String number     = part.get ("number");
+        String number     = getAttribute (node, "number");  // part contains renamed value. This is just to test for presence of attribute in original node, which indicate population object.
         String ionChannel = part.get ("ionChannel");
 
         part.clear ("ionChannel");

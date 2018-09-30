@@ -62,16 +62,16 @@ public class ExportJob extends XMLutility
     public String      modelName;
     public EquationSet equations;
 
-    public List<Element>       elements = new ArrayList<Element> ();
-    public List<IonChannel>    channels = new ArrayList<IonChannel> ();
-    public List<Synapse>       synapses = new ArrayList<Synapse> ();
-    public List<AbstractCell>  cells    = new ArrayList<AbstractCell> ();
-    public List<Network>       networks = new ArrayList<Network> ();
+    public List<Element>       elements   = new ArrayList<Element> ();
+    public List<IonChannel>    channels   = new ArrayList<IonChannel> ();
+    public List<Synapse>       synapses   = new ArrayList<Synapse> ();
+    public List<AbstractCell>  cells      = new ArrayList<AbstractCell> ();
+    public List<Network>       networks   = new ArrayList<Network> ();
+    public List<ComponentType> components = new ArrayList<ComponentType> ();
     public int                 countConcentration;
     public int                 countInput;
     public Map<Unit<?>,String> unitsUsed = new HashMap<Unit<?>,String> ();
-    public boolean             pureLEMS     = true;  // Indicates that no NeuroML parts were emitted.
-    public boolean             requiresLEMS = false; // Indicates that some elements were emitted that are not permitted in neuroml documents, so must upgrade to lems document.
+    public boolean             requiresNML = false;  // Indicates that no NeuroML parts were emitted.
 
     public static Map<Unit<?>,String>   unitsNML      = new HashMap<Unit<?>,String> ();
     public static Map<Dimension,String> dimensionsNML = new HashMap<Dimension,String> ();
@@ -206,31 +206,37 @@ public class ExportJob extends XMLutility
     {
         for (EquationSet p : s.parts) analyze (p);
 
-        for (final Variable v : s.variables)
+        class IndexVisitor extends Visitor
         {
-            Visitor visitor = new Visitor ()
+            Variable v;
+            public boolean visit (Operator op)
             {
-                public boolean visit (Operator op)
+                if (op instanceof AccessVariable)
                 {
-                    if (op instanceof AccessVariable)
+                    VariableReference r = ((AccessVariable) op).reference;
+                    if (r == null) return true;  // It is possible that some variables were not resolved.
+                    Variable rv = r.variable;
+                    if (rv.container != v.container  &&  ! r.resolution.isEmpty ())
                     {
-                        VariableReference r = ((AccessVariable) op).reference;
-                        Variable rv = r.variable;
-                        if (rv.container != v.container  &&  ! r.resolution.isEmpty ())
+                        Object o = r.resolution.get (r.resolution.size () - 1);
+                        if (o instanceof ConnectionBinding)
                         {
-                            Object o = r.resolution.get (r.resolution.size () - 1);
-                            if (o instanceof ConnectionBinding)
+                            // This is somewhat of a hack, but ConnectionContext assumes the mappings A->0 and B->1.
+                            switch (((ConnectionBinding) o).alias)
                             {
-                                ConnectionBinding c = (ConnectionBinding) o;
-                                // This is somewhat of a hack, but ConnectionContext assumes the mappings A->0 and B->1.
-                                if (c.alias.equals ("A")) r.index = 0;
-                                if (c.alias.equals ("B")) r.index = 1;
+                                case "A": r.index = 0; break;
+                                case "B": r.index = 1; break;
                             }
                         }
                     }
-                    return true;
                 }
-            };
+                return true;
+            }
+        };
+        IndexVisitor visitor = new IndexVisitor ();
+        for (final Variable v : s.variables)
+        {
+            visitor.v = v;
             v.visit (visitor);
         }
     }
@@ -278,23 +284,29 @@ public class ExportJob extends XMLutility
             topLevelPart (source);
         }
 
-        for (IonChannel ic : channels) ic.append ();
-        for (Synapse s: synapses) s.append ();
-        appendUnits (! pureLEMS);
+        for (IonChannel    ic : channels)   ic.append ();
+        for (Synapse       s  : synapses)   s .append ();
+        for (ComponentType t  : components) t .append ();
+        appendUnits (requiresNML);
 
         // Collate
-        Element root = doc.createElement (requiresLEMS ? "lems" : "neuroml");
-        root.setAttribute ("id", modelName);
-        if (requiresLEMS)
+        Element root;
+        if (components.isEmpty ())
         {
-            // TODO: Include NeuroML definition files for LEMS
-        }
-        else
-        {
+            root = doc.createElement ("neuroml");
             root.setAttribute ("xmlns",              "http://www.neuroml.org/schema/neuroml2");
             root.setAttribute ("xmlns:xsi",          "http://www.w3.org/2001/XMLSchema-instance");
             root.setAttribute ("xsi:schemaLocation", "http://www.neuroml.org/schema/neuroml2 ../Schemas/NeuroML2/NeuroML_v2beta4.xsd");
         }
+        else
+        {
+            root = doc.createElement ("lems");
+            if (requiresNML)
+            {
+                // TODO: Include NeuroML definition files for LEMS
+            }
+        }
+        root.setAttribute ("id", modelName);
         sequencer.append (root, elements);
         doc.appendChild (root);
     }
@@ -305,13 +317,13 @@ public class ExportJob extends XMLutility
         String inherit = source.get ("$inherit");
         if (type.equals ("network"))
         {
-            pureLEMS = false;
+            requiresNML = true;
             Network network = new Network (source);
             networks.add (network);
         }
         else if (type.equals ("cell")  ||  type.equals ("segment")  ||  type.contains ("Cell"))
         {
-            pureLEMS = false;
+            requiresNML = true;
             AbstractCell cell = addCell (source, true);
             if (cell.populationSize > 1)  // Wrap cell in a network
             {
@@ -321,28 +333,28 @@ public class ExportJob extends XMLutility
         }
         else if (type.contains ("Input")  ||  type.contains ("Generator")  ||  type.contains ("Clamp")  ||  type.contains ("spikeArray")  ||  type.contains ("PointCurrent"))
         {
-            pureLEMS = false;
+            requiresNML = true;
             input (source, elements, null);
         }
         else if (type.contains ("Synapse"))
         {
-            pureLEMS = false;
+            requiresNML = true;
             Synapse s = addSynapse (source, false);
             s.id = source.key ();
         }
         else if (inherit.contains ("Coupling"))
         {
-            pureLEMS = false;
+            requiresNML = true;
             Synapse s = addSynapse (source, true);
             s.id = source.key ();
         }
         else if (type.isEmpty ())
         {
-            new LEMS (source);
+            new ComponentType (source);
         }
         else
         {
-            // TODO: add a check if the part is defined by NeuroML. If so, pureLEMS=false.
+            // TODO: add a check if the part is defined by NeuroML. If so, requiresNML=true.
             genericPart (source, elements);
         }
     }
@@ -378,9 +390,9 @@ public class ExportJob extends XMLutility
             for (MNode c : source)
             {
                 MPart p = (MPart) c;
-
-                String type = c.get ("$metadata", "backend.lems.part");
-                if (type.equals ("cell")  ||  type.equals ("segment")  ||  type.endsWith ("Cell"))
+                if (! p.isPart ()) continue;
+                String type = p.get ("$metadata", "backend.lems.part");
+                if (type.equals ("cell")  ||  type.equals ("segment")  ||  type.endsWith ("Cell")  ||  type.contains ("baseCell"))
                 {
                     Population pop = new Population (p);
                     populations.put (pop.id, pop);
@@ -393,7 +405,7 @@ public class ExportJob extends XMLutility
                 MPart p = (MPart) c;
                 if (! p.isPart ()) continue;
                 String type = p.get ("$metadata", "backend.lems.part");
-                String inherit = p.get ("$inherit");
+                String inherit = p.get ("$inherit").replace ("\"", "");
                 if (type.contains ("Synapse"))
                 {
                     Element result = addElement ("projection", networkElements);
@@ -404,7 +416,7 @@ public class ExportJob extends XMLutility
                 {
                     projectionSplit (p);
                 }
-                else if (inherit.contains ("Coupling"))
+                else if (inherit.equals ("Coupling"))
                 {
                     // TODO: convert electricalProjection to Coupling during import
                     Element result = addElement ("electricalProjection", networkElements);
@@ -1105,7 +1117,7 @@ public class ExportJob extends XMLutility
         {
             cell = new Cell (source);
         }
-        else if (type.endsWith ("Cell"))  // standard point cell
+        else if (type.endsWith ("Cell")  ||  type.contains ("baseCell"))  // Standard point cell, or custom LEMS cell.
         {
             cell = new AbstractCell (source);
         }
@@ -1196,6 +1208,10 @@ public class ExportJob extends XMLutility
                 if (source.get ("TS").equals ("1s")) type = "fitzHughNagumoCell";
                 else                                 type = "fitzHughNagumo1969Cell";
                 skip.add ("TS");
+            }
+            else if (type.contains ("baseCell"))
+            {
+                type = type.split (",")[0];  // Simply pick the preferred export type.
             }
 
             Element cell = addElement (type, elements);
@@ -2092,19 +2108,6 @@ public class ExportJob extends XMLutility
         }
     }
 
-    public class LEMS
-    {
-        String  name;
-        Element componentType;
-
-        public LEMS (MPart source)
-        {
-            name = source.key ();
-            componentType = addElement ("ComponentType", elements);
-            componentType.setAttribute ("name", name);
-        }
-    }
-
     public class IonChannel
     {
         public String        id;
@@ -2407,9 +2410,55 @@ public class ExportJob extends XMLutility
         }
     }
 
+    public void addComponentType (MNode source)
+    {
+        ComponentType ct = new ComponentType (source);
+        if (! components.contains (ct))
+        {
+            components.add (ct);
+
+            // Add all component types that this one depends on.
+            String[] inherits = source.get ("$inherit").split (",");
+            for (String inherit : inherits)
+            {
+                inherit = inherit.replace ("\"", "");
+                MNode part = AppData.models.child (inherit);
+                if (part == null) continue;
+                if (! part.get ("$metadata", "backend.lems.part").isEmpty ()) continue;  // Don't add base parts.
+                addComponentType (part);
+            }
+            // TODO: add children and other dependencies
+        }
+    }
+
+    public class ComponentType
+    {
+        String name;
+        MNode  source;
+
+        public ComponentType (MNode source)
+        {
+            name        = source.key ();  // TOOD: use full path for names internal to model?
+            this.source = source;
+        }
+
+        public void append ()
+        {
+            System.out.println ("componentType = " + name);
+            //Element componentType = addElement ("ComponentType", elements);
+            //componentType.setAttribute ("name", name);
+        }
+
+        public boolean equals (Object that)
+        {
+            if (! (that instanceof ComponentType)) return false;
+            ComponentType ct = (ComponentType) that;
+            return ct.name.equals (name);
+        }
+    }
+
     public Element genericPart (MPart part, List<Element> elements, String... skip)
     {
-        // TODO: detect when it's necessary to emit a LEMS part
         String id   = part.key ();
         String type = part.get ("$metadata", "backend.lems.part").split (",")[0];  // first part should be preferred output type
         if (type.isEmpty ()  ||  ! sequencer.hasID (type))
@@ -2420,6 +2469,7 @@ public class ExportJob extends XMLutility
         Element e = addElement (type, elements);
         if (! id.isEmpty ()) e.setAttribute ("id", id);
         genericPart (part, e, skip);
+        if (! e.hasAttributes ()  &&  ! e.hasChildNodes ()) elements.remove (e);  // For aesthetic reasons, don't insert empty elements.
         return e;
     }
 
@@ -2428,6 +2478,7 @@ public class ExportJob extends XMLutility
         EquationSet partEquations = getEquations (part);
         List<Element> resultElements = new ArrayList<Element> ();
         List<String> skipList = Arrays.asList (skip);
+        boolean needsComponentType = false;
         for (MNode c : part)
         {
             MPart p = (MPart) c;
@@ -2477,13 +2528,17 @@ public class ExportJob extends XMLutility
                 }
                 else if (overridden)  // implies not constant (that is, an expression)
                 {
-                    // TODO: emit LEMS extension part
+                    needsComponentType = true;
                 }
             }
         }
         sequencer.append (result, resultElements);
+        if (needsComponentType) addComponentType (part);
     }
 
+    /**
+        Determine if a named field is overridden anywhere along the inheritance chain leading to a base part.
+    **/
     public boolean isOverride (String inherit, String key)
     {
         MNode part = AppData.models.child (inherit);
