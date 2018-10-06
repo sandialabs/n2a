@@ -62,16 +62,16 @@ public class ExportJob extends XMLutility
     public String      modelName;
     public EquationSet equations;
 
-    public List<Element>       elements   = new ArrayList<Element> ();
-    public List<IonChannel>    channels   = new ArrayList<IonChannel> ();
-    public List<Synapse>       synapses   = new ArrayList<Synapse> ();
-    public List<AbstractCell>  cells      = new ArrayList<AbstractCell> ();
-    public List<Network>       networks   = new ArrayList<Network> ();
-    public List<ComponentType> components = new ArrayList<ComponentType> ();
+    public List<Element>       elements       = new ArrayList<Element> ();
+    public List<IonChannel>    channels       = new ArrayList<IonChannel> ();
+    public List<Synapse>       synapses       = new ArrayList<Synapse> ();
+    public List<AbstractCell>  cells          = new ArrayList<AbstractCell> ();
+    public List<Network>       networks       = new ArrayList<Network> ();
+    public List<ComponentType> componentTypes = new ArrayList<ComponentType> ();
     public int                 countConcentration;
     public int                 countInput;
-    public Map<Unit<?>,String> unitsUsed = new HashMap<Unit<?>,String> ();
-    public boolean             requiresNML = false;  // Indicates that no NeuroML parts were emitted.
+    public Map<Unit<?>,String> unitsUsed      = new HashMap<Unit<?>,String> ();
+    public boolean             requiresNML    = false;  // Indicates that no NeuroML parts were emitted.
 
     public static Map<Unit<?>,String>   unitsNML      = new HashMap<Unit<?>,String> ();
     public static Map<Dimension,String> dimensionsNML = new HashMap<Dimension,String> ();
@@ -284,14 +284,11 @@ public class ExportJob extends XMLutility
             topLevelPart (source);
         }
 
-        for (IonChannel    ic : channels)   ic.append ();
-        for (Synapse       s  : synapses)   s .append ();
-        for (ComponentType t  : components) t .append ();
         appendUnits (requiresNML);
 
         // Collate
         Element root;
-        if (components.isEmpty ())
+        if (componentTypes.isEmpty ())
         {
             root = doc.createElement ("neuroml");
             root.setAttribute ("xmlns",              "http://www.neuroml.org/schema/neuroml2");
@@ -348,13 +345,9 @@ public class ExportJob extends XMLutility
             Synapse s = addSynapse (source, true);
             s.id = source.key ();
         }
-        else if (type.isEmpty ())
-        {
-            new ComponentType (source);
-        }
         else
         {
-            // TODO: add a check if the part is defined by NeuroML. If so, requiresNML=true.
+            if (! type.isEmpty ()) requiresNML = true;  // backend.lems.part only refers to an NML base part.
             genericPart (source, elements);
         }
     }
@@ -894,8 +887,15 @@ public class ExportJob extends XMLutility
     {
         Synapse s = new Synapse (source, electrical);
         int index = synapses.indexOf (s);
-        if (index >= 0) s = synapses.get (index);
-        else                synapses.add (s);
+        if (index >= 0)
+        {
+            s = synapses.get (index);
+        }
+        else
+        {
+            synapses.add (s);
+            s.append ();
+        }
 
         // Check for chained synapse (embedded input)
         MPart A = (MPart) source.child ("A");
@@ -903,8 +903,15 @@ public class ExportJob extends XMLutility
         Synapse s2 = new Synapse (s.id, A);
 
         index = synapses.indexOf (s2);
-        if (index >= 0) s2 = synapses.get (index);
-        else                 synapses.add (s2);
+        if (index >= 0)
+        {
+            s2 = synapses.get (index);
+        }
+        else
+        {
+            synapses.add (s2);
+            s2.append ();
+        }
         return s2;
     }
 
@@ -1010,7 +1017,7 @@ public class ExportJob extends XMLutility
             Element s = addElement (type, elements);
             s.setAttribute ("id", id);
             sequencer.append (s, synapseElements);
-            genericPart (source, s, skip.toArray (new String[] {}));
+            genericPart (source, s, skip);
         }
 
         public boolean equals (Object o)
@@ -1104,7 +1111,7 @@ public class ExportJob extends XMLutility
         }
         input.setAttribute ("id", id);
         standalone (source, input, inputElements);
-        genericPart (source, input, skip.toArray (new String[] {}));
+        genericPart (source, input, skip);
         sequencer.append (input, inputElements);
         return id;
     }
@@ -1217,7 +1224,7 @@ public class ExportJob extends XMLutility
             Element cell = addElement (type, elements);
             cell.setAttribute ("id", id);
             standalone (source, cell);
-            genericPart (source, cell, skip.toArray (new String[] {}));
+            genericPart (source, cell, skip);
 
             if (type.equals ("izhikevichCell"))  // strip units
             {
@@ -1971,49 +1978,9 @@ public class ExportJob extends XMLutility
                 }
                 boolean nonuniform = skipList.size () > 0;
 
-                // Select element type
-                String type = "channelPopulation";
-                if (! source.get ("Gall").contains ("population"))
-                {
-                    String potential = findPotential (source);
-                    if (potential.startsWith ("Potential "))
-                    {
-                        potential = potential.substring (10);
-                        switch (potential)
-                        {
-                            case "Nernst":
-                                if (nonuniform) type = "channelDensityNonUniformNernst";
-                                else            type = "channelDensityNernst";
-                                if (ca2) type += "Ca2";
-                                break;
-                            case "GHK":
-                                if (nonuniform) type = "channelDensityNonUniformGHK";
-                                else            type = "channelDensityGHK";
-                                break;
-                            case "GHK 2":
-                                type = "channelDensityGHK2";
-                                break;
-                        }
-                    }
-                    else  // potential is empty
-                    {
-                        if (nonuniform) type = "channelDensityNonUniform";
-                        else            type = "channelDensity";
-                    }
-                }
-
-                IonChannel ic = new IonChannel (source);
-                int index = channels.indexOf (ic);
-                if (index >= 0) ic = channels.get (index);
-                else            channels.add (ic);
+                IonChannel ic = addChannel (source, nonuniform, ca2);
                 skipList.addAll (ic.skipList);
-
-                Element channel = addElement (type, membrane);
-                genericPart (source, channel, skipList.toArray (new String[] {}));
-                channel.setAttribute ("id", source.key ());
-                channel.setAttribute ("ionChannel", ic.id);
-                String ion = source.get ("$metadata", "species");
-                if (! ion.isEmpty ()) channel.setAttribute ("ion", ion);
+                Element channel = ic.appendWrapper (membrane, skipList);
 
                 generateSegmentGroup (false);
                 if (nonuniform)
@@ -2041,23 +2008,6 @@ public class ExportJob extends XMLutility
                 {
                     setSegment (channel);
                 }
-            }
-
-            public String findPotential (MNode source)
-            {
-                String[] parents = source.get ("$inherit").split (",");
-                for (String p : parents)
-                {
-                    p = p.replace ("\"", "");
-                    if (p.startsWith ("Potential ")) return p;
-                    MNode c = AppData.models.child (p);
-                    if (c != null)
-                    {
-                        String result = findPotential (c);
-                        if (! result.isEmpty ()) return result;
-                    }
-                }
-                return "";
             }
 
             public boolean equals (Object that)
@@ -2108,6 +2058,17 @@ public class ExportJob extends XMLutility
         }
     }
 
+    public IonChannel addChannel (MPart source, boolean nonuniform, boolean ca2)
+    {
+        IonChannel result = new IonChannel (source);
+        int index = channels.indexOf (result);
+        if (index >= 0) return channels.get (index);
+        channels.add (result);
+        result.determineType (nonuniform, ca2);
+        result.append ();
+        return result;
+    }
+
     public class IonChannel
     {
         public String        id;
@@ -2115,8 +2076,9 @@ public class ExportJob extends XMLutility
         public MNode         base;      // pseudo-document with modifications to factor out changes made by Segment
         public String        inherit;   // model name of parent channel, without the Potential
         public String        potential; // model name for the Potential, if specified. null if no Potential is given.
+        public String        type;
         public List<Element> channelElements = new ArrayList<Element> ();
-        public List<String>  skipList        = new ArrayList<String> ();  // A hint to containing channel about which elements it should skip.
+        public List<String>  skipList        = new ArrayList<String> ();  // A hint to wrapper element about which attributes it should skip.
 
         public IonChannel (MPart source)
         {
@@ -2138,6 +2100,7 @@ public class ExportJob extends XMLutility
             base = new MVolatile ();
             base.set ("$inherit", inherit);  // skip potential, if it existed
             List<String> forbidden = Arrays.asList ("$inherit", "c", "E", "Gall", "Gdensity", "population", "permeability");
+            skipList.add ("Gall");  // "Gall" should not appear in either wrapper or ion channel.
             for (MNode c : source)
             {
                 String key = c.key ();
@@ -2156,6 +2119,67 @@ public class ExportJob extends XMLutility
                 id = source.get ("$metadata", "backend.lems.id");
                 if (id.isEmpty ()) id = "N2A_Channel" + channels.size ();
             }
+        }
+
+        public void determineType (boolean nonuniform, boolean ca2)
+        {
+            type = "channelPopulation";
+            if (! source.get ("Gall").contains ("population"))
+            {
+                String potential = findPotential (source);
+                if (potential.startsWith ("Potential "))
+                {
+                    potential = potential.substring (10);
+                    switch (potential)
+                    {
+                        case "Nernst":
+                            if (nonuniform) type = "channelDensityNonUniformNernst";
+                            else            type = "channelDensityNernst";
+                            if (ca2) type += "Ca2";
+                            break;
+                        case "GHK":
+                            if (nonuniform) type = "channelDensityNonUniformGHK";
+                            else            type = "channelDensityGHK";
+                            break;
+                        case "GHK 2":
+                            type = "channelDensityGHK2";
+                            break;
+                    }
+                }
+                else  // potential is empty
+                {
+                    if (nonuniform) type = "channelDensityNonUniform";
+                    else            type = "channelDensity";
+                }
+            }
+        }
+
+        public String findPotential (MNode source)
+        {
+            String[] parents = source.get ("$inherit").split (",");
+            for (String p : parents)
+            {
+                p = p.replace ("\"", "");
+                if (p.startsWith ("Potential ")) return p;
+                MNode c = AppData.models.child (p);
+                if (c != null)
+                {
+                    String result = findPotential (c);
+                    if (! result.isEmpty ()) return result;
+                }
+            }
+            return "";
+        }
+
+        public Element appendWrapper (List<Element> containerElements, List<String> skipList)
+        {
+            Element result = addElement (type, containerElements);
+            genericPart (source, result, skipList);
+            result.setAttribute ("id", source.key ());
+            result.setAttribute ("ionChannel", id);
+            String ion = source.get ("$metadata", "species");
+            if (! ion.isEmpty ()) result.setAttribute ("ion", ion);
+            return result;
         }
 
         public void append ()
@@ -2413,9 +2437,10 @@ public class ExportJob extends XMLutility
     public void addComponentType (MNode source)
     {
         ComponentType ct = new ComponentType (source);
-        if (! components.contains (ct))
+        if (! componentTypes.contains (ct))
         {
-            components.add (ct);
+            componentTypes.add (ct);
+            ct.append ();
 
             // Add all component types that this one depends on.
             String[] inherits = source.get ("$inherit").split (",");
@@ -2444,9 +2469,8 @@ public class ExportJob extends XMLutility
 
         public void append ()
         {
-            System.out.println ("componentType = " + name);
-            //Element componentType = addElement ("ComponentType", elements);
-            //componentType.setAttribute ("name", name);
+            Element componentType = addElement ("ComponentType", elements);
+            componentType.setAttribute ("name", name);
         }
 
         public boolean equals (Object that)
@@ -2457,7 +2481,10 @@ public class ExportJob extends XMLutility
         }
     }
 
-    public Element genericPart (MPart part, List<Element> elements, String... skip)
+    /**
+        Handles all Components, whether or not they are NML-defined types.
+    **/
+    public Element genericPart (MPart part, List<Element> elements)
     {
         String id   = part.key ();
         String type = part.get ("$metadata", "backend.lems.part").split (",")[0];  // first part should be preferred output type
@@ -2468,16 +2495,20 @@ public class ExportJob extends XMLutility
         }
         Element e = addElement (type, elements);
         if (! id.isEmpty ()) e.setAttribute ("id", id);
-        genericPart (part, e, skip);
+        genericPart (part, e);
         if (! e.hasAttributes ()  &&  ! e.hasChildNodes ()) elements.remove (e);  // For aesthetic reasons, don't insert empty elements.
         return e;
     }
 
     public void genericPart (MPart part, Element result, String... skip)
     {
+        genericPart (part, result, Arrays.asList (skip));
+    }
+
+    public void genericPart (MPart part, Element result, List<String> skipList)
+    {
         EquationSet partEquations = getEquations (part);
         List<Element> resultElements = new ArrayList<Element> ();
-        List<String> skipList = Arrays.asList (skip);
         boolean needsComponentType = false;
         for (MNode c : part)
         {
@@ -2488,9 +2519,19 @@ public class ExportJob extends XMLutility
             if (key.startsWith ("$")) continue;
             if (skipList.contains (key)) continue;
 
+            boolean overridden = p.isFromTopDocument ()  ||  isOverride (part.get ("$inherit").replace ("\"", ""), key);
             if (p.isPart ())
             {
-                genericPart (p, resultElements);
+                if (! overridden) continue;
+                if (p.get ("$metadata", "backend.lems.part").contains ("ionChannel"))
+                {
+                    IonChannel ic = addChannel (p, false, false);
+                    ic.appendWrapper (resultElements, ic.skipList);
+                }
+                else
+                {
+                    genericPart (p, resultElements);
+                }
             }
             else
             {
@@ -2502,8 +2543,6 @@ public class ExportJob extends XMLutility
 
                 Variable v = partEquations.find (Variable.fromLHS (key));
                 boolean constant = v.hasAttribute ("constant");
-
-                boolean overridden = p.isFromTopDocument ()  ||  isOverride (part.get ("$inherit").replace ("\"", ""), key);
 
                 String name = sequencer.bestFieldName (result, p.get ("$metadata", "backend.lems.param"));
                 if (name.isEmpty ()) name = key;

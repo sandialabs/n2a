@@ -79,7 +79,7 @@ public class Sequencer extends XMLutility
     public boolean hasID (String tag)
     {
         SequencerElement se = getSequencerElement (tag);
-        if (se == null) return false;
+        if (se == null) return true;  // Most likely this is a user-defined LEMS Component, which does use ID.
         return se.attributes.contains ("id");
     }
 
