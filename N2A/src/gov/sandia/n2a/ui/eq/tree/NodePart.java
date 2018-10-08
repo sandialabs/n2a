@@ -1,5 +1,5 @@
 /*
-Copyright 2016,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -143,9 +143,9 @@ public class NodePart extends NodeFilter
         if (filterLevel <= FilteredTreeModel.ALL) return true;
         if (source.isFromTopDocument ()) return true;
         if (filterLevel >= FilteredTreeModel.LOCAL) return false;  // Since we already fail the "local" requirement
-        // FilteredTreeModel.PUBLIC ...
+        // FilteredTreeModel.PARAM ...
         if (children != null  &&  children.size () > 0  &&  (filtered == null  ||  filtered.size () > 0)) return true;  // We have subnodes, and at least some of them are visible (which can only happen at this point if they are public).
-        return source.child ("$metadata", "public") != null;
+        return source.child ("$metadata", "param") != null;
     }
 
     @Override

@@ -1,5 +1,5 @@
 /*
-Copyright 2016,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -171,8 +171,8 @@ public class NodeVariable extends NodeFilter
         if (filterLevel == FilteredTreeModel.ALL    ) return true;
         if (source.isFromTopDocument ())              return true;
         if (filterLevel >= FilteredTreeModel.LOCAL)   return false;  // Since we already fail the "local" requirement
-        // FilteredTreeModel.PUBLIC ...
-        return source.child ("$metadata", "public") != null;
+        // FilteredTreeModel.PARAM ...
+        return source.child ("$metadata", "param") != null;
     }
 
     @Override

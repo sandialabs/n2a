@@ -41,8 +41,8 @@ public class NodeReferences extends NodeContainer
     @Override
     public boolean visible (int filterLevel)
     {
-        if (filterLevel <= FilteredTreeModel.ALL)    return true;
-        if (filterLevel == FilteredTreeModel.PUBLIC) return true;
+        if (filterLevel <= FilteredTreeModel.ALL)   return true;
+        if (filterLevel == FilteredTreeModel.PARAM) return true;
         // FilteredTreeModel.LOCAL ...
         return source.isFromTopDocument ();
     }

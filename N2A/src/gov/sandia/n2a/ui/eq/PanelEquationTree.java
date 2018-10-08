@@ -132,7 +132,7 @@ public class PanelEquationTree extends JPanel
 
     protected static ImageIcon iconFilterRevoked = ImageUtil.getImage ("filterRevoked.png");
     protected static ImageIcon iconFilterAll     = ImageUtil.getImage ("filter.png");
-    protected static ImageIcon iconFilterPublic  = ImageUtil.getImage ("filterPublic.png");
+    protected static ImageIcon iconFilterParam   = ImageUtil.getImage ("filterParam.png");
     protected static ImageIcon iconFilterLocal   = ImageUtil.getImage ("filterLocal.png");
     protected static ImageIcon iconLocked        = ImageUtil.getImage ("locked.png");
     protected static ImageIcon iconUnlocked      = ImageUtil.getImage ("unlocked.png");
@@ -766,26 +766,26 @@ public class PanelEquationTree extends JPanel
         menuPopup.add (itemDelete);
 
         // Filter menu
-        int filterLevel = AppData.state.getOrDefaultInt ("PanelModel", "filter", String.valueOf (FilteredTreeModel.PUBLIC));
+        int filterLevel = AppData.state.getOrDefaultInt ("PanelModel", "filter", String.valueOf (FilteredTreeModel.PARAM));
         model.setFilterLevel (filterLevel, tree);  // root is still null, so this has no immediate effect
         switch (filterLevel)
         {
             case FilteredTreeModel.REVOKED: buttonFilter.setIcon (iconFilterRevoked); break;
             case FilteredTreeModel.ALL:     buttonFilter.setIcon (iconFilterAll);     break;
-            case FilteredTreeModel.PUBLIC:  buttonFilter.setIcon (iconFilterPublic);  break;
+            case FilteredTreeModel.PARAM:   buttonFilter.setIcon (iconFilterParam);   break;
             case FilteredTreeModel.LOCAL:   buttonFilter.setIcon (iconFilterLocal);   break;
         }
 
-        JRadioButtonMenuItem itemFilterRevoked = new JRadioButtonMenuItem ("Revoked", model.filterLevel == FilteredTreeModel.REVOKED);
+        JRadioButtonMenuItem itemFilterRevoked = new JRadioButtonMenuItem ("Revoked",    model.filterLevel == FilteredTreeModel.REVOKED);
         itemFilterRevoked.addActionListener (listenerFilter);
 
-        JRadioButtonMenuItem itemFilterAll     = new JRadioButtonMenuItem ("All",     model.filterLevel == FilteredTreeModel.ALL);
+        JRadioButtonMenuItem itemFilterAll     = new JRadioButtonMenuItem ("All",        model.filterLevel == FilteredTreeModel.ALL);
         itemFilterAll    .addActionListener (listenerFilter);
 
-        JRadioButtonMenuItem itemFilterPublic  = new JRadioButtonMenuItem ("Public",  model.filterLevel == FilteredTreeModel.PUBLIC);
+        JRadioButtonMenuItem itemFilterPublic  = new JRadioButtonMenuItem ("Parameters", model.filterLevel == FilteredTreeModel.PARAM);
         itemFilterPublic .addActionListener (listenerFilter);
 
-        JRadioButtonMenuItem itemFilterLocal   = new JRadioButtonMenuItem ("Local",   model.filterLevel == FilteredTreeModel.LOCAL);
+        JRadioButtonMenuItem itemFilterLocal   = new JRadioButtonMenuItem ("Local",      model.filterLevel == FilteredTreeModel.LOCAL);
         itemFilterLocal  .addActionListener (listenerFilter);
 
         menuFilter = new JPopupMenu ();
@@ -1111,10 +1111,10 @@ public class PanelEquationTree extends JPanel
                 model.setFilterLevel (FilteredTreeModel.ALL, tree);
                 buttonFilter.setIcon (iconFilterAll);
             }
-            else if (action.equals ("Public"))
+            else if (action.equals ("Parameters"))
             {
-                model.setFilterLevel (FilteredTreeModel.PUBLIC, tree);
-                buttonFilter.setIcon (iconFilterPublic);
+                model.setFilterLevel (FilteredTreeModel.PARAM, tree);
+                buttonFilter.setIcon (iconFilterParam);
             }
             else if (action.equals ("Local"))
             {

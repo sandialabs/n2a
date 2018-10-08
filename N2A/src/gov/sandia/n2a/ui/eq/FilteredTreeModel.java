@@ -21,7 +21,7 @@ public class FilteredTreeModel extends DefaultTreeModel
 {
     public static final int REVOKED = -1;
     public static final int ALL     = 0;
-    public static final int PUBLIC  = 1;
+    public static final int PARAM   = 1;
     public static final int LOCAL   = 2;
     public int filterLevel = ALL;
 
