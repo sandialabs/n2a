@@ -83,6 +83,12 @@ public class ImportJob extends XMLutility
     public ImportJob (PartMap partMap)
     {
         this.partMap = partMap;
+
+        // Pre-load standard NML dimensions and units. Any dimensions or units defined by the input files will overlay these.
+        // This provides a fallback for the likely case that NeuroMLCoreDimensions is included by not available in the local directory.
+        dimensions.putAll (nmlDimensions);
+        ExpressionParser.namedUnits = new HashMap<String,Unit<?>> ();
+        for (Entry<Unit<?>,String> e : unitsNML.entrySet ()) ExpressionParser.namedUnits.put (e.getValue (), e.getKey ());
     }
 
     public void process (File source)
@@ -415,13 +421,23 @@ public class ImportJob extends XMLutility
         dependents.remove (dependent);
         boolean isChildrenType = dependent.key ().startsWith ("backend.lems.children");
         boolean isConnect      = dependent.get ().contains ("connect(");
+        String childrenExternalName = "";
 
         String dependentInherit = dependent.get ("$inherit");
-        if (dependentInherit.isEmpty ()) dependentInherit = dependent.get ();  // For connections, the part name might be a direct value.
-        if (dependentInherit.startsWith ("connect("))
+        if (dependentInherit.isEmpty ())
         {
-            dependentInherit = dependentInherit.replace ("connect(", "");
-            dependentInherit = dependentInherit.replace (")",        "");
+            dependentInherit = dependent.get ();
+            if (isChildrenType)
+            {
+                String[] children = dependentInherit.split (",");
+                dependentInherit = children[0];
+                if (children.length > 1) childrenExternalName = children[1];
+            }
+            else if (isConnect)  // An explicit connection will have a direct value, while an abstract connection will have "connect(part name)".
+            {
+                dependentInherit = dependentInherit.replace ("connect(", "");
+                dependentInherit = dependentInherit.replace (")",        "");
+            }
         }
 
         String[] sourceNames = dependentInherit.split (",");
@@ -484,6 +500,7 @@ public class ImportJob extends XMLutility
             // the dependent will end up referring directly to the external model.
             int count = source.getInt ("$count");
             boolean connected = source.child ("$connected") != null;
+            boolean lems      = source.child ("$lems"     ) != null;
             boolean lemsUses  = source.child ("$lemsUses" ) != null;
             if (count > 0)  // triage is necessary
             {
@@ -504,20 +521,27 @@ public class ImportJob extends XMLutility
                 else  // count > 1 and not connected, so could be moved out to independent model
                 {
                     // Criterion: If a part has subparts, then it is heavy-weight and should be moved out.
-                    // A part that merely sets some parameters on an inherited model is lightweight, and should simply be merged everywhere it is used.
-                    boolean heavy = false;
-                    for (MNode s : source)
+                    // A part that merely sets some parameters on an inherited model is lightweight, and
+                    // should simply be merged everywhere it is used.
+                    // A LEMS part presumably does more than just set parameters. When it has multiple users,
+                    // it should always be treated as heavy-weight.
+                    boolean heavy = lems;
+                    if (! lems)
                     {
-                        if (MPart.isPart (s))
+                        for (MNode s : source)
                         {
-                            heavy = true;
-                            break;
+                            if (MPart.isPart (s))
+                            {
+                                heavy = true;
+                                break;
+                            }
                         }
                     }
                     if (heavy) count = -3;
                     else       count = -2;
                 }
                 source.set ("$count", count);
+                if (count >= -3  &&  lems) source.set ("$metadata", "backend.lems.name", source.key ());  // Save original ComponentType name.
                 if (count == -3)
                 {
                     MNode id = source.childOrCreate ("$metadata", "id");
@@ -559,7 +583,7 @@ public class ImportJob extends XMLutility
                         else           c.mergeUnder (n);
                     }
 
-                    if (! proxy) dependent.set ("$metadata", "backend.lems.id", sourceName);
+                    if (! proxy  &&  ! lems) dependent.set ("$metadata", "backend.lems.id", sourceName);
                 }
                 if (count == -1) models.clear (modelName, sourceName);
             }
@@ -569,12 +593,13 @@ public class ImportJob extends XMLutility
                 String id      = source.get ("$metadata", "id");
                 if (isChildrenType)
                 {
-                    dependent.set (inherit);  // TODO: Can't store ID under metadata node, but could tack it on the end as a comma-separated value.
+                    if (! childrenExternalName.isEmpty ()) inherit += "," + childrenExternalName;
+                    dependent.set (inherit);  // TODO: When hierarchical metadata is implemented, store ID under this node.
                 }
                 else if (isConnect)
                 {
                     dependent.set ("connect(\"" + inherit + "\")");
-                    //dependent.set ("0", id);  // TODO: Store ID with connect() ?
+                    //dependent.set ("0", id);  // TODO: Store ID with abstract connections
                 }
                 else
                 {
@@ -2792,7 +2817,7 @@ public class ImportJob extends XMLutility
             String type = parent.get (nodeName, "$inherit").replace ("\"", "");  // Assumes single inheritance
             if (! type.isEmpty ()) return type;
             MNode c = parent.child ("$metadata", query);
-            if (c != null) return c.getOrDefault (nodeName);
+            if (c != null) return c.getOrDefault (nodeName).split (",")[0];
         }
         return "";
     }
@@ -2877,6 +2902,7 @@ public class ImportJob extends XMLutility
         double offset    = getAttribute (node, "offset", 0.0);
 
         Unit unit = dimensions.get (dimension);
+        if (unit == null) unit = nmlDimensions.get (dimension); // If the file is defi
         if (unit == null) unit = AbstractUnit.ONE;  // fall back, but in general something is broken about the file
         if      (power > 0) unit = unit.transform (new RationalConverter (BigInteger.TEN.pow (power), BigInteger.ONE));
         else if (power < 0) unit = unit.transform (new RationalConverter (BigInteger.ONE,             BigInteger.TEN.pow (-power)));
@@ -2949,7 +2975,6 @@ public class ImportJob extends XMLutility
             }
         }
 
-        if (ExpressionParser.namedUnits == null) ExpressionParser.namedUnits = new HashMap<String,Unit<?>> ();
         ExpressionParser.namedUnits.put (symbol, unit);
     }
 
@@ -2981,7 +3006,11 @@ public class ImportJob extends XMLutility
                 // Here we make one feeble attempt to check new part definitions first, but this may
                 // fail because parts may not appear in the file in dependency order.
                 // Similar comments apply to other name mapping below.
-                if (models.child (modelName, inherit) == null) inherit = partMap.importName (inherit);
+                if (models.child (modelName, inherit) == null)
+                {
+                    part.set ("$metadata", "backend.lems.extends", inherit);  // Remember the original "extends" value, because inherited backend.lems.part usually conflates several base types.
+                    inherit = partMap.importName (inherit);
+                }
                 part.set ("$inherit", "\"" + inherit + "\"");
                 addDependencyFromLEMS (part, inherit);
             }
@@ -3051,9 +3080,11 @@ public class ImportJob extends XMLutility
                         String min = getAttribute (child, "min");
                         String max = getAttribute (child, "max");
                         if (inherit.isEmpty ()) inherit = name;
-                        if (models.child (modelName, inherit) == null) inherit = partMap.importName (inherit);
                         name = "backend.lems.children." + name;  // This tag is used to determine type ($inherit) when adding the subpart.
-                        part.set ("$metadata", name, inherit);
+                        String rawInherit = inherit;
+                        if (models.child (modelName, inherit) == null) inherit = partMap.importName (inherit);
+                        if (rawInherit.equals (inherit)) part.set ("$metadata", name, inherit);
+                        else                             part.set ("$metadata", name, inherit + "," + rawInherit);
                         addDependencyFromLEMS (part.child ("$metadata", name), inherit);
                         if (! min.isEmpty ()) part.set ("$metadata", name + ".min", min);
                         if (! max.isEmpty ()) part.set ("$metadata", name + ".max", max);
@@ -3170,7 +3201,7 @@ public class ImportJob extends XMLutility
                 || nodeName.equals ("Path")
                 || nodeName.equals ("Text"))
             {
-                result.set ("$metadata", "public", "");  // Intended as public interface to this component
+                result.set ("$metadata", "param", "");  // Intended as public interface to this component
             }
 
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
@@ -3362,7 +3393,7 @@ public class ImportJob extends XMLutility
             // across the states. However, nothing in the LEMS models gives an initial state,
             // so they must all start at 0. That being the case, don't worry about normalization.
 
-            String inherit = part.get ("$metadata", "backend.lems.children." + nodes);
+            String inherit = part.get ("$metadata", "backend.lems.children." + nodes).split (",")[0];
             if (! inherit.isEmpty ())
             {
                 MNode parent = AppData.models.child (inherit);
@@ -3379,7 +3410,7 @@ public class ImportJob extends XMLutility
                 }
             }
 
-            inherit = part.get ("$metadata", "backend.lems.children." + edges);
+            inherit = part.get ("$metadata", "backend.lems.children." + edges).split (",")[0];
             if (! inherit.isEmpty ())
             {
                 MNode parent = AppData.models.child (inherit);
@@ -3589,7 +3620,7 @@ public class ImportJob extends XMLutility
                     {
                         // If the child type happens to be any member of the family,
                         // then the candidate container is indeed the kind we are seeking.
-                        if (family.contains (m.get ())) return true;
+                        if (family.contains (m.get ().split (",")[0])) return true;
                     }
                 }
 

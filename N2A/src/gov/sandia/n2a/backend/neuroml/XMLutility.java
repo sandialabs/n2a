@@ -6,9 +6,12 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.backend.neuroml;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.measure.Dimension;
 import javax.measure.Unit;
 import javax.measure.format.UnitFormat;
 import javax.measure.spi.ServiceProvider;
@@ -21,12 +24,84 @@ import gov.sandia.n2a.language.type.Scalar;
 
 public class XMLutility
 {
-    public static Pattern       floatParser   = Pattern.compile ("[-+]?(NaN|Infinity|([0-9]*\\.?[0-9]*([eE][-+]?[0-9]+)?))");
-    public static Pattern       forbiddenUCUM = Pattern.compile ("[.,;><=!&|+\\-*/%\\^~]");
-    public static SystemOfUnits systemOfUnits = ServiceProvider.current ().getSystemOfUnitsService ().getSystemOfUnits ("UCUM");
-    public static UnitFormat    UCUM          = ServiceProvider.current ().getUnitFormatService ().getUnitFormat ("UCUM");
+    public static Pattern               floatParser   = Pattern.compile ("[-+]?(NaN|Infinity|([0-9]*\\.?[0-9]*([eE][-+]?[0-9]+)?))");
+    public static Pattern               forbiddenUCUM = Pattern.compile ("[.,;><=!&|+\\-*/%\\^~]");
+    public static SystemOfUnits         systemOfUnits = ServiceProvider.current ().getSystemOfUnitsService ().getSystemOfUnits ("UCUM");
+    public static UnitFormat            UCUM          = ServiceProvider.current ().getUnitFormatService ().getUnitFormat ("UCUM");
+    public static Map<Dimension,String> dimensionsNML = new HashMap<Dimension,String> ();  // Map from Dimension to NML name
+    public static Map<String,Unit<?>>   nmlDimensions = new HashMap<String,Unit<?>> ();    // Map from NML dimension name to base unit
+    public static Map<Unit<?>,String>   unitsNML      = new HashMap<Unit<?>,String> ();    // Map from Unit to NML name
 
     public static final double epsilon = Math.ulp (1);  // Even though this is stored as double, it is really a single-precision epsilon
+
+    static
+    {
+        // Dimensions specified in NeuroMLCoreDimensions.
+        addDimension ("s",         "time");
+        addDimension ("/s",        "per_time");
+        addDimension ("V",         "voltage");
+        addDimension ("/V",        "per_voltage");
+        addDimension ("S",         "conductance");
+        addDimension ("S/m2",      "conductanceDensity");
+        addDimension ("F",         "capacitance");
+        addDimension ("F/m2",      "specificCapacitance");
+        addDimension ("Ohm",       "resistance");
+        addDimension ("Ohm.m",     "resistivity");
+        addDimension ("C",         "charge");
+        addDimension ("C/mol",     "charge_per_mole");
+        addDimension ("A",         "current");
+        addDimension ("A/m2",      "currentDensity");
+        addDimension ("m",         "length");
+        addDimension ("m2",        "area");
+        addDimension ("m3",        "volume");
+        addDimension ("mol/m3",    "concentration");
+        addDimension ("mol",       "substance");
+        addDimension ("m/s",       "permeability");
+        addDimension ("Cel",       "temperature");
+        addDimension ("J/K/mol",   "idealGasConstant");
+        addDimension ("S/V",       "conductance_per_voltage");
+        addDimension ("mol/m/A/s", "rho_factor");
+
+        // Units specified in NeuroMLCoreDimensions. With a little massaging, these can be converted to UCUM.
+        String[] nmlDefined =
+        {
+            "s", "ms",
+            "per_s", "per_ms", "Hz",
+            "min", "per_min", "hour", "per_hour",
+            "m", "cm", "um",
+            "m2", "cm2", "um2",
+            "m3", "cm3", "litre", "um3",
+            "V", "mV",
+            "per_V", "per_mV",
+            "ohm", "kohm", "Mohm",
+            "S", "mS", "uS", "nS", "pS",
+            "S_per_m2", "mS_per_m2", "S_per_cm2",
+            "F", "uF", "nF", "pF",
+            "F_per_m2", "uF_per_cm2",
+            "ohm_m", "kohm_cm", "ohm_cm",
+            "C",
+            "C_per_mol", "nA_ms_per_mol",
+            "m_per_s",
+            "A", "uA", "nA", "pA",
+            "A_per_m2", "uA_per_cm2", "mA_per_cm2",
+            "mol_per_m3", "mol_per_cm3", "M", "mM",
+            "mol",
+            "m_per_s", "cm_per_s", "um_per_s", "cm_per_ms",
+            "degC",
+            "K",
+            "J_per_K_per_mol",
+            "S_per_V", "nS_per_mV",
+            "mol_per_m_per_A_per_s", "mol_per_cm_per_uA_per_ms"
+        };
+        for (String u : nmlDefined) unitsNML.put (UCUM.parse (cleanupUnits (u)), u);
+    }
+
+    public static void addDimension (String unitName, String dimensionName)
+    {
+        Unit<?> unit = UCUM.parse (unitName);
+        dimensionsNML.put (unit.getDimension (), dimensionName);
+        nmlDimensions.put (dimensionName, unit);
+    }
 
     public static int findUnits (String value)
     {

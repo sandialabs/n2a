@@ -175,10 +175,22 @@ public class Sequencer extends XMLutility
             }
             else if (name.contains ("element"))  // a top-level element
             {
-                // Treat as an alias for its type, so inherit from type.
+                // A "type" attribute refers to a complexType node defined elsewhere.
                 String tag  = getAttribute (child, "name");
                 String type = getAttribute (child, "type");
-                alias.put (tag, type);
+                if (type.isEmpty ()) 
+                {
+                    // This element does not have a type attribute, so expect a complexType child.
+                    SequencerElement se = new SequencerElement ();
+                    se.name = tag;
+                    elements.put (se.name, se);
+                    se.complexType (child);
+                }
+                else
+                {
+                    // Treat as an alias for its type, so inherit from type.
+                    alias.put (tag, type);
+                }
             }
         }
     }
@@ -222,9 +234,9 @@ public class Sequencer extends XMLutility
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
                 String name = child.getNodeName ();
-                if      (name.contains ("sequence"      )) sequence    (child);
-                else if (name.contains ("complexContent")) complexType (child);
-                else if (name.contains ("extension"     ))
+                if      (name.contains ("sequence")) sequence (child);
+                else if (name.contains ("complexContent")  ||  name.contains ("complexType")) complexType (child);  // Should only recur one time
+                else if (name.contains ("extension"))
                 {
                     base = getAttribute (child, "base");
                     complexType (child);

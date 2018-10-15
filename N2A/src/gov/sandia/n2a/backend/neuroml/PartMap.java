@@ -76,7 +76,7 @@ public class PartMap
                 {
                     if (m.key ().startsWith ("backend.lems.children"))
                     {
-                        children.add (m.get ());
+                        children.add (m.get ().split (",")[0]);
                     }
                 }
             }
@@ -307,6 +307,11 @@ public class PartMap
             if (parent != null) return exportMap (parent);
         }
         return new NameMap (key);
+    }
+
+    public String exportName (String internalPartName)
+    {
+        return exportMap (internalPartName).neuroml.get (0);
     }
 
     public NameMap importMap (String neuromlPartName)

@@ -29,7 +29,7 @@ import gov.sandia.n2a.db.MVolatile;
     All MNode functions are fully supported. In particular, merge() is safe to use, even
     if it involves $inherit lines.
 **/
-public class MPart extends MNode  // Could derive this from MVolatile, but the extra work of implementing from scratch is worth saving an unused member variable.
+public class MPart extends MNode
 {
     protected MPersistent source;
     protected MPersistent original;        // The original source of this node, before it was overwritten by another document. Refers to same object as source if this node has not been overridden.

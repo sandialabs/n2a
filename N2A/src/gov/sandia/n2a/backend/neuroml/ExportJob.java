@@ -35,24 +35,36 @@ import org.w3c.dom.Element;
 
 import gov.sandia.n2a.backend.neuroml.PartMap.NameMap;
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.db.MVolatile;
+import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
 import gov.sandia.n2a.language.AccessVariable;
+import gov.sandia.n2a.language.Comparison;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.ParseException;
+import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
+import gov.sandia.n2a.language.function.Uniform;
+import gov.sandia.n2a.language.operator.EQ;
+import gov.sandia.n2a.language.operator.GE;
+import gov.sandia.n2a.language.operator.GT;
+import gov.sandia.n2a.language.operator.LE;
+import gov.sandia.n2a.language.operator.LT;
+import gov.sandia.n2a.language.operator.NE;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
+import gov.sandia.n2a.language.type.Text;
 
 public class ExportJob extends XMLutility
 {
@@ -73,76 +85,8 @@ public class ExportJob extends XMLutility
     public Map<Unit<?>,String> unitsUsed      = new HashMap<Unit<?>,String> ();
     public boolean             requiresNML    = false;  // Indicates that no NeuroML parts were emitted.
 
-    public static Map<Unit<?>,String>   unitsNML      = new HashMap<Unit<?>,String> ();
-    public static Map<Dimension,String> dimensionsNML = new HashMap<Dimension,String> ();
-    public static Unit<?>               um            = UCUM.parse ("um");
-    public static double                baseRatio     = Math.log (10) / Math.log (2);  // log_2 (10), how many binary digits it takes to represent one decimal digit
-
-    static
-    {
-        // Units specified in NeuroMLCoreDimensions. With a little massaging, these can be converted to UCUM.
-        String[] nmlDefined =
-        {
-            "s", "ms",
-            "per_s", "per_ms", "Hz",
-            "min", "per_min", "hour", "per_hour",
-            "m", "cm", "um",
-            "m2", "cm2", "um2",
-            "m3", "cm3", "litre", "um3",
-            "V", "mV",
-            "per_V", "per_mV",
-            "ohm", "kohm", "Mohm",
-            "S", "mS", "uS", "nS", "pS",
-            "S_per_m2", "mS_per_m2", "S_per_cm2",
-            "F", "uF", "nF", "pF",
-            "F_per_m2", "uF_per_cm2",
-            "ohm_m", "kohm_cm", "ohm_cm",
-            "C",
-            "C_per_mol", "nA_ms_per_mol",
-            "m_per_s",
-            "A", "uA", "nA", "pA",
-            "A_per_m2", "uA_per_cm2", "mA_per_cm2",
-            "mol_per_m3", "mol_per_cm3", "M", "mM",
-            "mol",
-            "m_per_s", "cm_per_s", "um_per_s", "cm_per_ms",
-            "degC",
-            "K",
-            "J_per_K_per_mol",
-            "S_per_V", "nS_per_mV",
-            "mol_per_m_per_A_per_s", "mol_per_cm_per_uA_per_ms"
-        };
-        for (String u : nmlDefined) unitsNML.put (UCUM.parse (cleanupUnits (u)), u);
-
-        addDimension ("s",         "time");
-        addDimension ("/s",        "per_time");
-        addDimension ("V",         "voltage");
-        addDimension ("/V",        "per_voltage");
-        addDimension ("S",         "conductance");
-        addDimension ("S/m2",      "conductanceDensity");
-        addDimension ("F",         "capacitance");
-        addDimension ("F/m2",      "specificCapacitance");
-        addDimension ("Ohm",       "resistance");
-        addDimension ("Ohm.m",     "resistivity");
-        addDimension ("C",         "charge");
-        addDimension ("C/mol",     "charge_per_mole");
-        addDimension ("A",         "current");
-        addDimension ("A/m2",      "currentDensity");
-        addDimension ("m",         "length");
-        addDimension ("m2",        "area");
-        addDimension ("m3",        "volume");
-        addDimension ("mol/m3",    "concentration");
-        addDimension ("mol",       "substance");
-        addDimension ("m/s",       "permeability");
-        addDimension ("Cel",       "temperature");
-        addDimension ("J/K/mol",   "idealGasConstant");
-        addDimension ("S/V",       "conductance_per_voltage");
-        addDimension ("mol/m/A/s", "rho_factor");
-    }
-
-    public static void addDimension (String unitName, String dimensionName)
-    {
-        dimensionsNML.put (UCUM.parse (unitName).getDimension (), dimensionName);
-    }
+    public static Unit<?> um        = UCUM.parse ("um");            // micrometers, used for morphology
+    public static double  baseRatio = Math.log (10) / Math.log (2); // log_2 (10), how many binary digits it takes to represent one decimal digit
 
     public ExportJob (PartMap partMap, Sequencer sequencer)
     {
@@ -157,26 +101,7 @@ public class ExportJob extends XMLutility
             MPart mpart = new MPart ((MPersistent) source);
             modelName = source.key ();
             equations = new EquationSet (mpart);
-
-            // Make eqset minimally executable ...
-            try
-            {
-                equations.resolveConnectionBindings ();
-            }
-            catch (Exception e) {}  // Still try to finish rest of compilation. Maybe only one or two minor parts were affected.
-            try
-            {
-                equations.addGlobalConstants ();
-                equations.addSpecials ();  // $connect, $index, $init, $n, $t, $t', $type
-                equations.fillIntegratedVariables ();
-                equations.findIntegrated ();
-                equations.resolveLHS ();
-                equations.resolveRHS ();
-                equations.findConstants ();  // This could hurt the analysis. It simplifies expressions and substitutes constants, breaking some dependency chains.
-                equations.determineTypes ();
-                equations.clearVariables ();
-            }
-            catch (Exception e) {}  // It may still be possible to complete the export.
+            makeExecutable (equations);
             analyze (equations);
 
             DocumentBuilderFactory factoryBuilder = DocumentBuilderFactory.newInstance ();
@@ -238,6 +163,20 @@ public class ExportJob extends XMLutility
         {
             visitor.v = v;
             v.visit (visitor);
+
+            // Check for dummy variables.
+            // Normally, this is done in EquationSet.removeUnused(). However, our simplified analysis
+            // does not call that function.
+            if (v.hasUsers ()  ||  v.hasAttribute ("externalWrite")) continue;
+            if (v.name.startsWith ("$")  ||  v.name.contains (".$")) continue;
+            for (EquationEntry e : v.equations)
+            {
+                if (e.expression.isOutput ())
+                {
+                    v.addAttribute ("dummy");
+                    break;
+                }
+            }
         }
     }
 
@@ -294,16 +233,16 @@ public class ExportJob extends XMLutility
             root.setAttribute ("xmlns",              "http://www.neuroml.org/schema/neuroml2");
             root.setAttribute ("xmlns:xsi",          "http://www.w3.org/2001/XMLSchema-instance");
             root.setAttribute ("xsi:schemaLocation", "http://www.neuroml.org/schema/neuroml2 ../Schemas/NeuroML2/NeuroML_v2beta4.xsd");
+            root.setAttribute ("id", modelName);
         }
         else
         {
-            root = doc.createElement ("lems");
+            root = doc.createElement ("Lems");
             if (requiresNML)
             {
                 // TODO: Include NeuroML definition files for LEMS
             }
         }
-        root.setAttribute ("id", modelName);
         sequencer.append (root, elements);
         doc.appendChild (root);
     }
@@ -370,7 +309,7 @@ public class ExportJob extends XMLutility
             network.appendChild (population);
             population.setAttribute ("id",        populationID);
             population.setAttribute ("component", cell.id);
-            population.setAttribute ("size",      String.valueOf (cell.populationSize));
+            population.setAttribute ("size",      String.valueOf (cell.populationSize));  // size is always greater than 1 here, because of the way this ctor is called.
         }
 
         public Network (MPart source)
@@ -941,7 +880,7 @@ public class ExportJob extends XMLutility
             String inherit = source.get ("$inherit").replace ("\"", "");
             if (inherit.startsWith (modelName))
             {
-                id = inherit.substring (modelName.length () + 1);
+                id = inherit.substring (modelName.length ()).trim ();
             }
             else
             {
@@ -1152,16 +1091,13 @@ public class ExportJob extends XMLutility
         {
             this.source = source;
 
-            String inherit = source.get ("$inherit").replace ("\"", "");
-            if (inherit.startsWith (modelName))
+            id = source.get ("$metadata", "backend.lems.id");
+            if (id.isEmpty ())
             {
-                id = inherit.substring (modelName.length ()).trim ();
+                String inherit = source.get ("$inherit").replace ("\"", "");
+                if (inherit.startsWith (modelName)) id = inherit.substring (modelName.length ()).trim ();
             }
-            else
-            {
-                id = source.get ("$metadata", "backend.lems.id");
-                if (id.isEmpty ()) id = "N2A_Cell" + cells.size ();  // Can't be source.key(), because that is most likely reserved for population id. If this is at top level, then id will be replaced with key elsewhere.
-            }
+            if (id.isEmpty ()) id = "N2A_Cell" + cells.size ();  // Can't be source.key(), because that is most likely reserved for population id. If this is at top level, then id will be replaced with key elsewhere.
 
             base = new MVolatile ();
             base.merge (source);
@@ -1177,18 +1113,18 @@ public class ExportJob extends XMLutility
 
         public void append ()
         {
-            String type = source.get ("$metadata", "backend.lems.part");
+            String               type = source.get ("$metadata", "backend.lems.name");
+            if (type.isEmpty ()) type = source.get ("$metadata", "backend.lems.part").split (",")[0];
             List<String> skip = new ArrayList<String> ();
-            if (type.contains ("izhikevich"))
+            if (type.equals ("izhikevichCell"))
             {
                 // Check if crucial variables have been touched
-                type = "izhikevichCell";
                 if (anyOverride (source, "C", "k", "vr", "vt")) type = "izhikevich2007Cell";
             }
-            else if (type.contains ("iaf"))  // Case is important. We don't want "adExIaFCell" with a capital "I".
+            else if (type.startsWith ("iaf"))
             {
                 // There are four types of IAF, depending on whether it is refractory, and whether it uses tau.
-                NameMap nameMap = partMap.importMap ("iafTauCell");
+                NameMap nameMap = partMap.importMap (type);
                 String tau = nameMap.importName ("tau");
                 MPart p = (MPart) source.child (tau);
                 boolean hasTau =  p != null  &&  p.isFromTopDocument ();
@@ -1208,17 +1144,13 @@ public class ExportJob extends XMLutility
                     else            type = "iafCell";
                 }
             }
-            else if (type.contains ("fitzHughNagumo"))
+            else if (type.startsWith ("fitzHughNagumo"))
             {
                 // Since TS is a hard-coded constant, there's really nothing we can do.
                 // In general, prefer FN1969 over the more limited FN.
                 if (source.get ("TS").equals ("1s")) type = "fitzHughNagumoCell";
                 else                                 type = "fitzHughNagumo1969Cell";
                 skip.add ("TS");
-            }
-            else if (type.contains ("baseCell"))
-            {
-                type = type.split (",")[0];  // Simply pick the preferred export type.
             }
 
             Element cell = addElement (type, elements);
@@ -1291,7 +1223,7 @@ public class ExportJob extends XMLutility
         {
             cell = addElement ("cell", elements);
             standalone (source, cell, cellElements);
-            cell.setAttribute ("id", id);  // May get changed to "name" if this is a non-networked cell
+            cell.setAttribute ("id", id);
 
             // Collect Segments and transform them into distinct property sets.
             // This reverses the import process, which converts property sets into distinct segment populations.
@@ -2228,9 +2160,16 @@ public class ExportJob extends XMLutility
 
         public void q10 (MPart part, String type, List<Element> parentElements)
         {
+            // Trap fixedQ10
+            String subtype = "q10ExpTemp";
+            NameMap nameMap = partMap.exportMap (part);
+            String name = nameMap.importName ("fixedQ10");
+            String fixedQ10 = part.get (name);
+            if (! fixedQ10.equals ("*scaling")) subtype = "q10Fixed";  // Hack to check for override, which almost certainly is a constant.
+
             Element q10 = addElement (type, parentElements);
+            if (! type.equals ("q10ConductanceScaling")) q10.setAttribute ("type", subtype);
             genericPart (part, q10);
-            // TODO: trap fixedQ10. May need to fully implement this method, rather than using genericPart().
         }
 
         public static final int alpha      = 0x1;  // forward
@@ -2372,18 +2311,26 @@ public class ExportJob extends XMLutility
                 case inf  : name = "steadyState"; break;
             }
 
-            String[] types = part.get ("$metadata", "backend.lems.part").split (",");
-            String search = "Variable";
-            if (name.contains ("Rate")) search = "Rate";
-            String type = "unknown";
-            for (String t : types) if (t.contains (search)) type = t;
+            String type = part.get ("$metadata", "backend.lems.name");
+            if (type.isEmpty ())
+            {
+                type = "unknown";
+                String[] types = part.get ("$metadata", "backend.lems.part").split (",");
+                String search = "Variable";
+                if (name.contains ("Rate")) search = "Rate";
+                for (String t : types)
+                {
+                    if (t.contains (search))
+                    {
+                        type = t;
+                        break;
+                    }
+                }
+            }
 
             Element r = addElement (name, gateElements);
             r.setAttribute ("type", type);
-            for (String a : new String[] {"rate", "midpoint", "scale"})
-            {
-                r.setAttribute (a, biophysicalUnits (part.get (a)));
-            }
+            genericPart (part, r);
         }
 
         public void kineticState (MPart part, List<Element> parentElements)
@@ -2434,50 +2381,241 @@ public class ExportJob extends XMLutility
         }
     }
 
-    public void addComponentType (MNode source)
+    public void addComponentType (MNode source, MNode base)
     {
-        ComponentType ct = new ComponentType (source);
+        ComponentType ct = new ComponentType (source, base);
         if (! componentTypes.contains (ct))
         {
             componentTypes.add (ct);
             ct.append ();
-
-            // Add all component types that this one depends on.
-            String[] inherits = source.get ("$inherit").split (",");
-            for (String inherit : inherits)
-            {
-                inherit = inherit.replace ("\"", "");
-                MNode part = AppData.models.child (inherit);
-                if (part == null) continue;
-                if (! part.get ("$metadata", "backend.lems.part").isEmpty ()) continue;  // Don't add base parts.
-                addComponentType (part);
-            }
-            // TODO: add children and other dependencies
+            addComponentTypeDependencies (source);
         }
+    }
+
+    /**
+        Add all component types that source depends on.
+    **/
+    public void addComponentTypeDependencies (MNode source)
+    {
+        String[] inherits = source.get ("$inherit").split (",");
+        for (String inherit : inherits)
+        {
+            inherit = inherit.replace ("\"", "");
+            MNode part = AppData.models.child (inherit);
+            if (part == null) continue;
+            if (! part.get ("$metadata", "backend.lems.part").isEmpty ()) continue;  // Don't add base parts.
+            addComponentType (part, part);
+        }
+        // TODO: add children and other dependencies
     }
 
     public class ComponentType
     {
-        String name;
-        MNode  source;
+        public String name;
+        public MNode  source;
+        public MNode  base;  // for comparisons
 
-        public ComponentType (MNode source)
+        public Map<String,String> rename;
+
+        public ComponentType (MNode source, MNode base)
         {
-            name        = source.key ();  // TOOD: use full path for names internal to model?
+            this (source.key (), source, base);
+        }
+
+        public ComponentType (String name, MNode source, MNode base)
+        {
+            if (name.startsWith (modelName)) name = name.substring (modelName.length ()).trim ();
+            if (name.isEmpty ())             name = source.get ("$metadata", "backend.lems.name");
+            if (name.isEmpty ())             name = "N2A_ComponentType" + componentTypes.size ();
+            this.name = name;
+
             this.source = source;
+            this.base   = base;
         }
 
         public void append ()
         {
+            List<Element> componentTypeElements = new ArrayList<Element> ();
+            List<Element> dynamicsElements      = new ArrayList<Element> ();
+
+            // Assemble a working EquationSet
+            EquationSet equations;
+            if (source instanceof MPart)
+            {
+                equations = getEquations ((MPart) source);
+            }
+            else  // source is from db, so MPersistent
+            {
+                try
+                {
+                    equations = new EquationSet ((MPersistent) source);
+                    makeExecutable (equations);
+                }
+                catch (Exception e)
+                {
+                    equations = new EquationSet ("");
+                }
+            }
+
+            // Declarations from $metadata
+            String extension = base.get ("$metadata", "backend.lems.extends");
+            if (extension.isEmpty ()) extension = base.get ("$metadata", "backend.lems.part").split (",")[0];
+
+            String description = base.get ("$metadata", "description");
+            if (description.isEmpty ()) description = base.get ("$metadata", "notes");
+
+            MNode metadata = base.child ("$metadata");
+            if (metadata != null)
+            {
+                String prefix = "backend.lems.";
+                int prefixLength = prefix.length ();
+                for (MNode m : metadata)
+                {
+                    String key = m.key ();
+                    if (! key.startsWith (prefix)) continue;
+                    key = key.substring (prefixLength);
+                    String value = m.get ();
+
+                    if (key.startsWith ("children."))
+                    {
+                        key = key.substring (9);
+                        String[] types = value.split (",");
+                        String type;
+                        if (types.length > 1) type = types[1];
+                        else                  type = partMap.exportName (types[0]);
+                        Element children = addElement ("Children", componentTypeElements);
+                        children.setAttribute ("name", key);
+                        children.setAttribute ("type", type);
+                    }
+                }
+            }
+
+            // Build name mapping
+            rename = new HashMap<String,String> ();
+            if (! extension.isEmpty ())
+            {
+                NameMap nameMap = partMap.importMap (extension);
+                for (Entry<String,ArrayList<String>> e : nameMap.outward.entrySet ())
+                {
+                    String key = e.getKey ();
+                    ArrayList<String> outNames = e.getValue ();
+                    if (outNames.size () == 1) rename.put (key, outNames.get (0));
+                    else
+                    {
+                        // TODO: Handle special cases where we care about choice of output variable based on context.
+                        rename.put (key, outNames.get (0));
+                    }
+                }
+            }
+
+            // Variables
+            for (MNode m : source)  // source, not base, because we want to include parameters which were excluded from comparison.
+            {
+                String key = m.key ();
+                if (key.startsWith ("$")) continue;  // Should only be $inherit and $metadata
+                if (MPart.isPart (m)) continue;  // There shouldn't be any of these.
+
+                // Eliminate non-local items
+                if (m instanceof MPart)  // Only applies to embedded LEMS
+                {
+                    MPart p = (MPart) m;
+                    if (! p.isFromTopDocument ()  &&  p.getSource ().getParent () instanceof MDoc) continue;
+                }
+
+                String value = m.get ().trim ();
+
+                Element element = null;
+                Variable v = equations.find (Variable.fromLHS (key));
+                boolean constant = v != null  &&  v.hasAttribute ("constant");
+                boolean parameter = m.child ("$metadata", "param") != null;
+                if (constant  ||  parameter)
+                {
+                    UnitValue uv = new UnitValue (value);
+
+                    // TODO: Evaluate constant expressions, such as simple references to other variables.
+                    String type;
+                    if (parameter) type = uv.value == 0 ? "Parameter" : "Property";
+                    else           type = "Constant";
+
+                    element = addElement (type, componentTypeElements);
+                    if (uv.unit != null) element.setAttribute ("dimension", uv.printDimension ());
+                    if (uv.value != 0)
+                    {
+                        if (constant) element.setAttribute ("value",        uv.print ());
+                        else          element.setAttribute ("defaultValue", uv.print ());
+                    }
+                }
+                else if (value.startsWith (":"))
+                {
+                    element = addElement ("DerivedVariable", dynamicsElements);
+                }
+
+                if (element != null)
+                {
+                    element.setAttribute ("name", key);
+
+                    // TODO: determine dimension from dimensional analysis
+
+                    String vdescription = m.get ("$metadata", "desription");
+                    if (vdescription.isEmpty ()) vdescription = m.get ("$metadata", "notes");
+                    if (! vdescription.isEmpty ()) element.setAttribute ("description", vdescription);
+                }
+            }
+
+            if (! dynamicsElements.isEmpty ())
+            {
+                Element dynamics = addElement ("Dynamics", componentTypeElements);
+                sequencer.append (dynamics, dynamicsElements);
+            }
+
             Element componentType = addElement ("ComponentType", elements);
             componentType.setAttribute ("name", name);
+            if (! extension.isEmpty ()) componentType.setAttribute ("extends", extension);
+            if (! description.isEmpty ()) componentType.setAttribute ("description", description);
+            sequencer.append (componentType, componentTypeElements);
+        }
+
+        public class RendererLEMS extends Renderer
+        {
+            public boolean render (Operator op)
+            {
+                if (op instanceof Comparison)
+                {
+                    Comparison c = (Comparison) op;
+                    String                     middle = " .eq. ";
+                    if      (op instanceof NE) middle = " .ne. ";
+                    else if (op instanceof GT) middle = " .gt. ";
+                    else if (op instanceof LT) middle = " .lt. ";
+                    else if (op instanceof GE) middle = " .ge. ";
+                    else if (op instanceof LE) middle = " .le. ";
+                    c.render (this, middle);
+                    return true;
+                }
+                if (op instanceof AccessVariable)
+                {
+                    AccessVariable av = (AccessVariable) op;
+                    String name = rename.get (av.name);
+                    if (name == null) name = av.name;
+                    result.append (name);
+                    return true;
+                }
+                if (op instanceof Uniform)
+                {
+                    Uniform u = (Uniform) op;
+                    result.append ("random(");
+                    u.operands[0].render (this);
+                    result.append (")");
+                    return true;
+                }
+                return false;
+            }
         }
 
         public boolean equals (Object that)
         {
             if (! (that instanceof ComponentType)) return false;
             ComponentType ct = (ComponentType) that;
-            return ct.name.equals (name);
+            return ct.base.equals (base);
         }
     }
 
@@ -2509,17 +2647,59 @@ public class ExportJob extends XMLutility
     {
         EquationSet partEquations = getEquations (part);
         List<Element> resultElements = new ArrayList<Element> ();
+
+        MNode componentType = new MVolatile ();
         boolean needsComponentType = false;
+        boolean inheritedOnly = true;
+
         for (MNode c : part)
         {
             MPart p = (MPart) c;
 
             String key = p.key ();
             if (partEquations.findConnection (key) != null) continue;  // Skip connection bindings. They are unpacked elsewhere.
-            if (key.startsWith ("$")) continue;
             if (skipList.contains (key)) continue;
+            if (key.startsWith ("$"))
+            {
+                // Store special values in componentType, in case we need to emit it.
+                if (key.equals ("$inherit"))
+                {
+                    componentType.set (key, p);
+                }
+                else if (key.equals ("$metadata"))
+                {
+                    String prefix = "backend.lems.";
+                    int prefixLength = prefix.length ();
+                    for (MNode m : p)
+                    {
+                        String mkey = m.key ();
+                        if (! mkey.startsWith (prefix)) continue;
+                        String suffix = mkey.substring (prefixLength);
+                        String value = m.get ();
 
-            boolean overridden = p.isFromTopDocument ()  ||  isOverride (part.get ("$inherit").replace ("\"", ""), key);
+                        if (suffix.equals ("id")) continue;
+                        if (suffix.startsWith ("children"))
+                        {
+                            MPart mp = (MPart) m;
+                            if (! mp.isFromTopDocument ())
+                            {
+                                // As explained below, we always emit an embedded LEMS type.
+                                // We also emit types from the database if they are on an inheritance path
+                                // between the base part and the embedded part. However, those are selected elsewhere.
+                                MNode parent = mp.getSource ().getParent ();  // get source $metadata node
+                                if (! parent.get ("backend.lems.part").isEmpty ()) continue;  // base part, which we never emit
+                                if (((MPersistent) parent).getParent () instanceof MDoc) continue;  // not embedded
+                            }
+                        }
+                        componentType.set ("$metadata", mkey, value);
+                    }
+                }
+
+                continue;
+            }
+
+            MNode parent = p.getSource ().getParent ();
+            boolean overridden = p.isFromTopDocument ()  ||  parent.get ("$metadata", "backend.lems.part").isEmpty ();
             if (p.isPart ())
             {
                 if (! overridden) continue;
@@ -2542,13 +2722,15 @@ public class ExportJob extends XMLutility
                 // An override that is an expression should trigger a LEMS extension part.
 
                 Variable v = partEquations.find (Variable.fromLHS (key));
-                boolean constant = v.hasAttribute ("constant");
+                boolean constant = v != null  &&  v.hasAttribute ("constant");  // v could be null if it is revoked (MPart still contains the variable, but EquationSet eliminates it).
 
                 String name = sequencer.bestFieldName (result, p.get ("$metadata", "backend.lems.param"));
                 if (name.isEmpty ()) name = key;
                 boolean required = sequencer.isRequired (result, name);
 
-                if (required  ||  (overridden  &&  constant))
+                boolean param = p.child ("$metadata", "param") != null;
+
+                if (required  ||  (overridden  &&  constant  &&  param))
                 {
                     String value = p.get ();
                     if (constant)
@@ -2565,26 +2747,28 @@ public class ExportJob extends XMLutility
                     }
                     result.setAttribute (name, biophysicalUnits (value));  // biophysicalUnits() should return strings (non-numbers) unmodified
                 }
-                else if (overridden)  // implies not constant (that is, an expression)
+                if (overridden  &&  (! constant  ||  ! param)  &&  ! v.hasAttribute ("dummy"))
                 {
-                    needsComponentType = true;
+                    needsComponentType = true;  // Only an actual equation creates the need to emit a ComponentType.
+                    // Emit an embedded LEMS type separately from its parent, regardless of whether
+                    // it is defined locally or in some other part we inherit from.
+                    if (p.isFromTopDocument ()  ||  ! (parent instanceof MDoc))
+                    {
+                        inheritedOnly = false;
+                        componentType.set (key, p);
+                    }
                 }
+
+                // TODO: Scan for output() calls
             }
         }
         sequencer.append (result, resultElements);
-        if (needsComponentType) addComponentType (part);
-    }
 
-    /**
-        Determine if a named field is overridden anywhere along the inheritance chain leading to a base part.
-    **/
-    public boolean isOverride (String inherit, String key)
-    {
-        MNode part = AppData.models.child (inherit);
-        if (part == null) return false;
-        if (! part.get ("$metadata", "backend.lems.part").isEmpty ()) return false;  // Once we get to the base part, fields no longer count as override. IE: it's either a ComponentType or a Component instance, not both.
-        if (part.child (key) != null) return true;
-        return isOverride (part.get ("$inherit").replace ("\"", ""), key);
+        if (needsComponentType)
+        {
+            if (inheritedOnly) addComponentTypeDependencies (part);
+            else               addComponentType             (part, componentType);
+        }
     }
 
     public void standalone (MPart source, Element node)
@@ -2632,6 +2816,31 @@ public class ExportJob extends XMLutility
         {
             // TODO: emit annotation elements
         }
+    }
+
+    /**
+        Make eqset minimally executable.
+    **/
+    public static void makeExecutable (EquationSet equations)
+    {
+        try
+        {
+            equations.resolveConnectionBindings ();
+        }
+        catch (Exception e) {}  // Still try to finish rest of compilation. Maybe only one or two minor parts were affected.
+        try
+        {
+            equations.addGlobalConstants ();
+            equations.addSpecials ();  // $connect, $index, $init, $n, $t, $t', $type
+            equations.fillIntegratedVariables ();
+            equations.findIntegrated ();
+            equations.resolveLHS ();
+            equations.resolveRHS ();
+            equations.findConstants ();  // This could hurt the analysis. It simplifies expressions and substitutes constants, breaking some dependency chains.
+            equations.determineTypes ();
+            equations.clearVariables ();
+        }
+        catch (Exception e) {}  // It may still be possible to complete the export.
     }
 
     public EquationSet getEquations (MPart p)
@@ -2705,99 +2914,124 @@ public class ExportJob extends XMLutility
 
     public String biophysicalUnits (String value)
     {
-        value = value.trim ();
-        int unitIndex = findUnits (value);
-        if (unitIndex == 0  ||  unitIndex >= value.length ()) return value;  // no number or no units, so probably something else
+        UnitValue uv = new UnitValue (value);
+        if (uv.unit == null) return value;
+        return uv.print ();
+    }
 
-        String unitString   = value.substring (unitIndex).trim ();
-        String numberString = value.substring (0, unitIndex);
+    public class UnitValue
+    {
+        public double value;
+        public Unit<?> unit;
+        public String nml;  // NeuroML declared name for this unit.
 
-        Unit<?> unit;
-        try
+        public UnitValue (String source)
         {
-            unit = UCUM.parse (unitString);
-        }
-        catch (Exception e)
-        {
-            return value;
-        }
+            source = source.trim ();
+            int unitIndex = findUnits (source);
+            if (unitIndex == 0  ||  unitIndex >= source.length ()) return;  // no number or no units, so probably something else
 
-        double v = 0;
-        try
-        {
-            v = Double.valueOf (numberString);
-        }
-        catch (NumberFormatException error)
-        {
-            return value;
-        }
+            String unitString   = source.substring (unitIndex).trim ();
+            String numberString = source.substring (0, unitIndex);
 
-        // Determine power in numberString itself
-        double power = 1;
-        if (v != 0) power = Math.pow (10, Math.floor ((Math.getExponent (v) + 1) / baseRatio));
-
-        // Find closest matching unit
-        Unit<?> closest      = null;
-        Unit<?> closestAbove = null;  // like closest, but only ratios >= 1
-        double  closestRatio      = Double.POSITIVE_INFINITY;
-        double  closestAboveRatio = Double.POSITIVE_INFINITY;
-        String  closestString      = "";
-        String  closestAboveString = "";
-        for (Entry<Unit<?>,String> e : unitsNML.entrySet ())
-        {
-            Unit<?> u = e.getKey ();
-            if (u.isCompatible (unit))
+            try
             {
-                try
+                unit = UCUM.parse (unitString);
+            }
+            catch (Exception e)
+            {
+                return;
+            }
+
+            try
+            {
+                value = Double.valueOf (numberString);
+            }
+            catch (NumberFormatException error)
+            {
+                return;
+            }
+
+            // Determine power in numberString itself
+            double power = 1;
+            if (value != 0) power = Math.pow (10, Math.floor ((Math.getExponent (value) + 1) / baseRatio));
+
+            // Find closest matching unit
+            Unit<?> closest      = null;
+            Unit<?> closestAbove = null;  // like closest, but only ratios >= 1
+            double  closestRatio      = Double.POSITIVE_INFINITY;
+            double  closestAboveRatio = Double.POSITIVE_INFINITY;
+            String  closestString      = "";
+            String  closestAboveString = "";
+            for (Entry<Unit<?>,String> e : unitsNML.entrySet ())
+            {
+                Unit<?> u = e.getKey ();
+                if (u.isCompatible (unit))
                 {
-                    UnitConverter converter = unit.getConverterToAny (u);
-                    double ratio = converter.convert (power);
-                    if (ratio < 1)
+                    try
                     {
-                        ratio = 1 / ratio;
-                    }
-                    else
-                    {
-                        if (ratio < closestAboveRatio)
+                        UnitConverter converter = unit.getConverterToAny (u);
+                        double ratio = converter.convert (power);
+                        if (ratio < 1)
                         {
-                            closestAboveRatio  = ratio;
-                            closestAbove       = e.getKey ();
-                            closestAboveString = e.getValue ();
+                            ratio = 1 / ratio;
+                        }
+                        else
+                        {
+                            if (ratio < closestAboveRatio)
+                            {
+                                closestAboveRatio  = ratio;
+                                closestAbove       = e.getKey ();
+                                closestAboveString = e.getValue ();
+                            }
+                        }
+                        if (ratio < closestRatio)
+                        {
+                            closestRatio  = ratio;
+                            closest       = e.getKey ();
+                            closestString = e.getValue ();
                         }
                     }
-                    if (ratio < closestRatio)
+                    catch (UnconvertibleException | IncommensurableException e1)
                     {
-                        closestRatio  = ratio;
-                        closest       = e.getKey ();
-                        closestString = e.getValue ();
                     }
                 }
-                catch (UnconvertibleException | IncommensurableException e1)
-                {
-                }
             }
-        }
-        if (closest == null)
-        {
-            closest       = unit;
-            closestString = unitString;
-        }
-        else if (closestAboveRatio <= 1000 + epsilon)
-        {
-            closest       = closestAbove;
-            closestString = closestAboveString;
-        }
-        unitsUsed.put (closest, closestString);
+            if (closest == null)
+            {
+                closest       = unit;
+                closestString = unitString;
+            }
+            else if (closestAboveRatio <= 1000 + epsilon)
+            {
+                closest       = closestAbove;
+                closestString = closestAboveString;
+            }
+            unitsUsed.put (closest, closestString);
 
-        try
-        {
-            UnitConverter converter = unit.getConverterToAny (closest);
-            v = converter.convert (v);
+            try
+            {
+                UnitConverter converter = unit.getConverterToAny (closest);
+                value = converter.convert (value);
+            }
+            catch (Exception error) {}
+
+            unit = closest;
+            nml  = closestString;
         }
-        catch (Exception error)
+
+        public String print ()
         {
+            return ExportJob.print (value) + nml;
         }
-        return print (v) + closestString;
+
+        public String printDimension ()
+        {
+            Dimension dimension = unit.getDimension ();
+            String result = dimensionsNML.get (dimension);
+            if (result == null) result = dimension.toString ();  // Not a standard NML dimension
+            return result;
+        }
     }
 
     public void appendUnits (boolean assumeNML)
