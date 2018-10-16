@@ -32,6 +32,7 @@ import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 import gov.sandia.n2a.plugins.extpoints.Backend;
+import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.parms.Parameter;
 import gov.sandia.n2a.parms.ParameterDomain;
@@ -2018,6 +2019,63 @@ public class EquationSet implements Comparable<EquationSet>
             ps.println ("  " + base10 + "\t" + fullName);
         }
         for (EquationSet s : parts) s.dumpMedians (ps);
+    }
+
+    public void determineUnits ()
+    {
+        while (determineUnitsEval ());
+    }
+
+    public boolean determineUnitsEval ()
+    {
+        boolean changed = false;
+        for (EquationSet s : parts)
+        {
+            if (s.determineUnitsEval ()) changed = true;
+        }
+        for (Variable v : variables)
+        {
+            if (v.determineUnit ()) changed = true;
+        }
+        return changed;
+    }
+
+    /**
+        Convenience function to implement user preferences about dimension checking during compilation.
+        @throws AbortRun if an inconsistency is found and user wants this to be fatal.
+    **/
+    public void checkUnits () throws AbortRun
+    {
+        String dimension = AppData.state.get ("General", "dimension");
+        if (dimension.isEmpty ()) return;
+
+        determineUnits ();
+        LinkedList<String> mismatches = new LinkedList<String> ();
+        checkUnitsEval (mismatches);
+        if (mismatches.size () > 0)
+        {
+            boolean error = dimension.equals ("error");
+            PrintStream err = Backend.err.get ();
+            err.println ((error ? "ERROR" : "WARNING") + ": The following variables contain inconsistent dimensions:");
+            for (String m : mismatches) err.println (m);
+            if (error) throw new AbortRun ();
+        }
+    }
+
+    public void checkUnitsEval (LinkedList<String> mismatches)
+    {
+        for (EquationSet s : parts) s.checkUnitsEval (mismatches);
+        for (Variable v : variables)
+        {
+            String mismatch = v.checkUnit ();
+            if (mismatch != null)
+            {
+                String name = prefix ();
+                if (! name.isEmpty ()) name += ".";
+                name += v.nameString ();
+                mismatches.add ("  " + name + " : " + mismatch);
+            }
+        }
     }
 
     /**

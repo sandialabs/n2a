@@ -9,6 +9,7 @@ package gov.sandia.n2a.language;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.type.Scalar;
+import tec.uom.se.AbstractUnit;
 
 public class Comparison extends OperatorBinary implements OperatorLogical
 {
@@ -76,6 +77,12 @@ public class Comparison extends OperatorBinary implements OperatorLogical
         operand1.exponentNext = next;
         operand0.determineExponentNext (from);
         operand1.determineExponentNext (from);
+    }
+
+    public void determineUnit (boolean fatal) throws Exception
+    {
+        super.determineUnit (fatal);
+        unit = AbstractUnit.ONE;
     }
 
     public Type getType ()

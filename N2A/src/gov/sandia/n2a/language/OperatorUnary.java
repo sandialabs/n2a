@@ -86,6 +86,12 @@ public class OperatorUnary extends Operator implements OperatorArithmetic
         operand.dumpExponents (pad + "  ");
     }
 
+    public void determineUnit (boolean fatal) throws Exception
+    {
+        operand.determineUnit (fatal);
+        unit = operand.unit;
+    }
+
     public void render (Renderer renderer)
     {
         if (renderer.render (this)) return;

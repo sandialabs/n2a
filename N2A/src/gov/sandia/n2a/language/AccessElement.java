@@ -131,6 +131,12 @@ public class AccessElement extends Function
         }
     }
 
+    public void determineUnit (boolean fatal) throws Exception
+    {
+        operands[0].determineUnit (fatal);
+        unit = operands[0].unit;
+    }
+
     public void render (Renderer renderer)
     {
         if (renderer.render (this)) return;

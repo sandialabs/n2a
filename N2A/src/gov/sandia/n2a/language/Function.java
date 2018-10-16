@@ -10,6 +10,7 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.parse.ASTList;
 import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.type.Scalar;
+import tec.uom.se.AbstractUnit;
 
 public class Function extends Operator
 {
@@ -159,6 +160,28 @@ public class Function extends Operator
     {
         super.dumpExponents (pad);
         for (int i = 0; i < operands.length; i++) operands[i].dumpExponents (pad + "  ");
+    }
+
+    public void determineUnit (boolean fatal) throws Exception
+    {
+        for (int i = 0; i < operands.length; i++) operands[i].determineUnit (fatal);
+
+        unit = AbstractUnit.ONE;
+        for (int i = 0; i < operands.length; i++)
+        {
+            Operator op = operands[i];
+            if (! op.unit.isCompatible (AbstractUnit.ONE))
+            {
+                // Only one distinct unit is allowed. All others must match or be unitless.
+                if (! unit.isCompatible (AbstractUnit.ONE)  &&  ! op.unit.isCompatible (unit))
+                {
+                    if (fatal) throw new Exception (toString () + "(" + unit.getDimension () + " versus " + op.unit.getDimension () + ")");
+                    unit = AbstractUnit.ONE;
+                    return;
+                }
+                unit = op.unit;
+            }
+        }
     }
 
     public void render (Renderer renderer)

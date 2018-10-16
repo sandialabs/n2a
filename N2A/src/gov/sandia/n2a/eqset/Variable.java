@@ -27,6 +27,7 @@ import gov.sandia.n2a.language.operator.Multiply;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.plugins.extpoints.Backend;
+import tec.uom.se.AbstractUnit;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -38,11 +39,14 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import javax.measure.Unit;
+
 public class Variable implements Comparable<Variable>, Cloneable
 {
     public String                       name;
     public int                          order;      // of differential
     public Type                         type;       // Stores an actual instance of the type. Necessary to get the size of Matrix. Otherwise, only class matters.
+    public Unit<?>                      unit;       // Stands in for the physical dimensions associated with this variable.
     public Set<String>                  attributes;
     public NavigableSet<EquationEntry>  equations;
     public int                          assignment;
@@ -783,6 +787,54 @@ public class Variable implements Comparable<Variable>, Cloneable
                 e.condition.dumpExponents ("    ");
             }
         }
+    }
+
+    public boolean determineUnit ()
+    {
+        if (unit == null) unit = AbstractUnit.ONE;  // Initializing to ONE does not count as a change. Ditto in AccessVariable.
+        Unit<?> nextUnit = unit;
+        try
+        {
+            for (EquationEntry e : equations)
+            {
+                if (e.condition != null) e.condition.determineUnit (false);
+                if (e.expression != null)
+                {
+                    e.expression.determineUnit (false);
+                    if (! e.expression.unit.isCompatible (AbstractUnit.ONE)) nextUnit = e.expression.unit;
+                }
+            }
+        }
+        catch (Exception error) {}  // Should not occur on this pass, so we don't care.
+
+        boolean changed = ! nextUnit.isCompatible (unit);
+        unit = nextUnit;
+        return changed;
+    }
+
+    public String checkUnit ()
+    {
+        try
+        {
+            for (EquationEntry e : equations)
+            {
+                if (e.condition != null) e.condition.determineUnit (true);
+                if (e.expression != null)
+                {
+                    e.expression.determineUnit (true);
+                    if (   ! e.expression.unit.isCompatible (unit)
+                        && ! e.expression.unit.isCompatible (AbstractUnit.ONE))
+                    {
+                        return "conditional expressions: " + unit.getDimension () + " versus " + e.expression.unit.getDimension ();
+                    }
+                }
+            }
+        }
+        catch (Exception error)
+        {
+            return error.getMessage ();
+        }
+        return null;
     }
 
     /**

@@ -57,9 +57,12 @@ import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
+import tec.uom.se.AbstractUnit;
 
 import java.util.List;
 import java.util.TreeMap;
+
+import javax.measure.Unit;
 
 /**
     Base class of the abstract syntax tree (AST) hierarchy for our expression language.
@@ -68,7 +71,8 @@ import java.util.TreeMap;
 **/
 public class Operator implements Cloneable
 {
-    public Object parent;  // The AST node that contains this one. If null or Variable, then this is the root node.
+    public Object  parent; // The AST node that contains this one. If null or Variable, then this is the root node.
+    public Unit<?> unit;   // Stands in for the physical dimensions associated with the output of this operator.
 
     // Fixed-point
     public static int UNKNOWN = Integer.MIN_VALUE;
@@ -242,6 +246,17 @@ public class Operator implements Cloneable
     public int centerPower ()
     {
         return exponent - MSB + center;
+    }
+
+    /**
+        Sets the unit field, guided by operands and other member data.
+        Before this function is called for the first time, unit may be null.
+        @param fatal true if mismatched dimensions should produce an exception.
+        false if a mismatch should merely result in continued processing with a best guess.
+    **/
+    public void determineUnit (boolean fatal) throws Exception
+    {
+        if (unit == null) unit = AbstractUnit.ONE;
     }
 
     /**

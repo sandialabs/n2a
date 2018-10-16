@@ -14,6 +14,7 @@ import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
+import tec.uom.se.AbstractUnit;
 
 public class BuildMatrix extends Operator
 {
@@ -273,6 +274,35 @@ public class BuildMatrix extends Operator
                 if (operands[c][r] == null) continue;
                 System.out.println (pad + r + "," + c + ": ");
                 operands[c][r].dumpExponents (pad + "  ");
+            }
+        }
+    }
+
+    public void determineUnit (boolean fatal) throws Exception
+    {
+        for (Operator[] c : operands)
+        {
+            for (Operator e : c)
+            {
+                e.determineUnit (fatal);
+            }
+        }
+
+        unit = AbstractUnit.ONE;
+        for (Operator[] c : operands)
+        {
+            for (Operator e : c)
+            {
+                if (! e.unit.isCompatible (AbstractUnit.ONE))
+                {
+                    if (! unit.isCompatible (AbstractUnit.ONE)  &&  ! e.unit.isCompatible (unit))
+                    {
+                        if (fatal) throw new Exception ("matrix elements: " + unit.getDimension () + " versus " + e.unit.getDimension ());
+                        unit = AbstractUnit.ONE;
+                        return;
+                    }
+                    unit = e.unit;
+                }
             }
         }
     }

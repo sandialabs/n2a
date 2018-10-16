@@ -13,6 +13,7 @@ import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
+import tec.uom.se.AbstractUnit;
 
 public class Constant extends Operator
 {
@@ -34,23 +35,22 @@ public class Constant extends Operator
         this.value = new Scalar (value);
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public void getOperandsFrom (SimpleNode node)
     {
         Object o = node.jjtGetValue ();
         if (o instanceof UnitValue)
         {
             unitValue = (UnitValue) node.jjtGetValue ();
-            Unit<?> unit = unitValue.unit;
-            if (unit == null)  // naked number, so assume already in SI
+            if (unitValue.unit == null)  // naked number, so assume already in SI
             {
+                unit = AbstractUnit.ONE;
                 value = new Scalar (unitValue.value);
             }
             else  // there was a unit given, so convert
             {
-                @SuppressWarnings("rawtypes")
-                Unit si = unit.getSystemUnit ();
-                value = new Scalar (unit.getConverterTo (si).convert (unitValue.value));
+                unit = unitValue.unit.getSystemUnit ();
+                value = new Scalar (unitValue.unit.getConverterTo ((Unit) unit).convert (unitValue.value));
             }
         }
         else

@@ -9,6 +9,7 @@ package gov.sandia.n2a.language;
 import gov.sandia.n2a.eqset.Equality;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.parse.SimpleNode;
+import tec.uom.se.AbstractUnit;
 
 public class OperatorBinary extends Operator implements OperatorArithmetic
 {
@@ -100,6 +101,26 @@ public class OperatorBinary extends Operator implements OperatorArithmetic
         super.dumpExponents (pad);
         operand0.dumpExponents (pad + "  ");
         operand1.dumpExponents (pad + "  ");
+    }
+
+    public void determineUnit (boolean fatal) throws Exception
+    {
+        operand0.determineUnit (fatal);
+        operand1.determineUnit (fatal);
+        if (operand0.unit.isCompatible (operand1.unit))
+        {
+            unit = operand0.unit;
+        }
+        else
+        {
+            if      (operand0.unit.isCompatible (AbstractUnit.ONE)) unit = operand1.unit;
+            else if (operand1.unit.isCompatible (AbstractUnit.ONE)) unit = operand0.unit;
+            else
+            {
+                if (fatal) throw new Exception (operand0.unit.getDimension () + toString () + operand1.unit.getDimension ());
+                unit = AbstractUnit.ONE;
+            }
+        }
     }
 
     public void render (Renderer renderer)
