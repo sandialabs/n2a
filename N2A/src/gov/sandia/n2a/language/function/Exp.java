@@ -14,6 +14,7 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
+import tec.uom.se.AbstractUnit;
 import gov.sandia.n2a.language.type.Matrix;
 
 public class Exp extends Function
@@ -68,6 +69,12 @@ public class Exp extends Function
         Operator op = operands[0];
         op.exponentNext = 7;  // exp(n) rapidly explodes, so no benefit in allowing arbitrary magnitude. Instead, use those bits for precision.
         op.determineExponentNext (from);
+    }
+
+    public void determineUnit (boolean fatal) throws Exception
+    {
+        for (int i = 0; i < operands.length; i++) operands[i].determineUnit (fatal);
+        unit = AbstractUnit.ONE;
     }
 
     public Type eval (Instance context)

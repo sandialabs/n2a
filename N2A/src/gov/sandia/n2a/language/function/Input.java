@@ -27,6 +27,7 @@ import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 import gov.sandia.n2a.plugins.extpoints.Backend;
+import tec.uom.se.AbstractUnit;
 
 public class Input extends Function
 {
@@ -104,6 +105,12 @@ public class Input extends Function
             else     op.exponentNext = 0;    // We expect a number in [0,1], with some provision for going slightly out of bounds.
             op.determineExponentNext (from);
         }
+    }
+
+    public void determineUnit (boolean fatal) throws Exception
+    {
+        for (int i = 0; i < operands.length; i++) operands[i].determineUnit (fatal);
+        unit = AbstractUnit.ONE;
     }
 
     public static class Holder

@@ -13,6 +13,7 @@ import gov.sandia.n2a.language.OperatorUnary;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
+import tec.uom.se.AbstractUnit;
 
 public class NOT extends OperatorUnary implements OperatorLogical
 {
@@ -69,6 +70,12 @@ public class NOT extends OperatorUnary implements OperatorLogical
     {
         operand.exponentNext = operand.exponent;
         operand.determineExponentNext (from);
+    }
+
+    public void determineUnit (boolean fatal) throws Exception
+    {
+        operand.determineUnit (fatal);
+        unit = AbstractUnit.ONE;
     }
 
     public Type eval (Instance context)

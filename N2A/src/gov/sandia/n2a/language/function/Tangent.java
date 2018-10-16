@@ -13,6 +13,7 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
+import tec.uom.se.AbstractUnit;
 import gov.sandia.n2a.language.type.Matrix;
 
 public class Tangent extends Function
@@ -50,6 +51,13 @@ public class Tangent extends Function
         Operator op = operands[0];
         op.exponentNext = op.exponent;
         op.determineExponentNext (from);
+    }
+
+    public void determineUnit (boolean fatal) throws Exception
+    {
+        Operator op = operands[0];
+        op.determineUnit (fatal);
+        unit = AbstractUnit.ONE;
     }
 
     public Type eval (Instance context)

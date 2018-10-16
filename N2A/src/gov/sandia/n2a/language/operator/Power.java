@@ -17,6 +17,7 @@ import gov.sandia.n2a.language.function.Log;
 import gov.sandia.n2a.language.parse.ASTList;
 import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.type.Instance;
+import tec.uom.se.AbstractUnit;
 
 public class Power extends OperatorBinary
 {
@@ -151,6 +152,26 @@ public class Power extends OperatorBinary
         operand1.exponentNext = MSB / 2;  // Exponentiation is very sensitive, so no benefit in allowing arbitrary size of input.
         operand0.determineExponentNext (from);
         operand1.determineExponentNext (from);
+    }
+
+    public void determineUnit (boolean fatal) throws Exception
+    {
+        operand0.determineUnit (fatal);
+        operand1.determineUnit (fatal);
+        if (operand1.isScalar ())
+        {
+            double value = operand1.getDouble ();
+            int b = (int) value;
+            if (b == value)
+            {
+                unit = operand0.unit.pow (b);
+                return;
+            }
+        }
+        // Impossible to determine unit of result.
+        // Could return unit of operand0, or declare unitless.
+        // It seems that unitless is the least wrong answer.
+        unit = AbstractUnit.ONE;
     }
 
     public void render (Renderer renderer)

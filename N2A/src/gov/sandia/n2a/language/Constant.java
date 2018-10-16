@@ -154,6 +154,11 @@ public class Constant extends Operator
         */
     }
 
+    public void determineUnit (boolean fatal) throws Exception
+    {
+        // Do nothing (and prevent superclass from doing anything), because we already did it in getOperandsFrom().
+    }
+
     public void render (Renderer renderer)
     {
         if (renderer.render (this)) return;

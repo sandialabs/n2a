@@ -39,7 +39,7 @@ public class Output extends Function
     public int    index;         // of generated column name in valuesObject array
     public String name;          // For C backend, the name of the OutputHolder object.
     public String fileName;      // For C backend, the name of the string variable holding the file name, if any.
-    public String columnName;    // For C backend, the name of the string varivle holding the generated column name, if any.
+    public String columnName;    // For C backend, the name of the string variable holding the generated column name, if any.
 
     public static Factory factory ()
     {

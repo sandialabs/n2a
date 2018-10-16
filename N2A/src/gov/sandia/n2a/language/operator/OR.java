@@ -14,6 +14,7 @@ import gov.sandia.n2a.language.OperatorLogical;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
+import tec.uom.se.AbstractUnit;
 
 public class OR extends OperatorBinary implements OperatorLogical
 {
@@ -79,6 +80,13 @@ public class OR extends OperatorBinary implements OperatorLogical
         int centerNew   = MSB / 2;
         int exponentNew = MSB - centerNew;
         updateExponent (from, exponentNew, centerNew);
+    }
+
+    public void determineUnit (boolean fatal) throws Exception
+    {
+        operand0.determineUnit (fatal);
+        operand1.determineUnit (fatal);
+        unit = AbstractUnit.ONE;
     }
 
     public Type eval (Instance context)

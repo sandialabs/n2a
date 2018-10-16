@@ -15,6 +15,7 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
+import tec.uom.se.AbstractUnit;
 import gov.sandia.n2a.language.type.Matrix;
 
 public class Norm extends Function
@@ -90,6 +91,15 @@ public class Norm extends Function
         op1.exponentNext = Operator.MSB / 2;
         op0.determineExponentNext (from);
         op1.determineExponentNext (from);
+    }
+
+    public void determineUnit (boolean fatal) throws Exception
+    {
+        Operator op0 = operands[0];  // A
+        Operator op1 = operands[1];  // n
+        op0.determineUnit (fatal);
+        op1.determineUnit (fatal);
+        unit = op0.unit;
     }
 
     public Type getType ()

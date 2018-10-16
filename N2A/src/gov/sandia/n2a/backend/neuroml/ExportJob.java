@@ -54,7 +54,6 @@ import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Uniform;
-import gov.sandia.n2a.language.operator.EQ;
 import gov.sandia.n2a.language.operator.GE;
 import gov.sandia.n2a.language.operator.GT;
 import gov.sandia.n2a.language.operator.LE;
@@ -64,7 +63,7 @@ import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
-import gov.sandia.n2a.language.type.Text;
+import tec.uom.se.AbstractUnit;
 
 public class ExportJob extends XMLutility
 {
@@ -2528,9 +2527,12 @@ public class ExportJob extends XMLutility
                 Variable v = equations.find (Variable.fromLHS (key));
                 boolean constant = v != null  &&  v.hasAttribute ("constant");
                 boolean parameter = m.child ("$metadata", "param") != null;
+                Unit<?> unit = null;
+                if (v != null) unit = v.unit;
                 if (constant  ||  parameter)
                 {
                     UnitValue uv = new UnitValue (value);
+                    if (unit == null) unit = uv.unit;
 
                     // TODO: Evaluate constant expressions, such as simple references to other variables.
                     String type;
@@ -2538,7 +2540,6 @@ public class ExportJob extends XMLutility
                     else           type = "Constant";
 
                     element = addElement (type, componentTypeElements);
-                    if (uv.unit != null) element.setAttribute ("dimension", uv.printDimension ());
                     if (uv.value != 0)
                     {
                         if (constant) element.setAttribute ("value",        uv.print ());
@@ -2554,7 +2555,7 @@ public class ExportJob extends XMLutility
                 {
                     element.setAttribute ("name", key);
 
-                    // TODO: determine dimension from dimensional analysis
+                    if (unit != null) element.setAttribute ("dimension", printDimension (unit));
 
                     String vdescription = m.get ("$metadata", "desription");
                     if (vdescription.isEmpty ()) vdescription = m.get ("$metadata", "notes");
@@ -2837,7 +2838,9 @@ public class ExportJob extends XMLutility
             equations.resolveLHS ();
             equations.resolveRHS ();
             equations.findConstants ();  // This could hurt the analysis. It simplifies expressions and substitutes constants, breaking some dependency chains.
+            equations.determineTraceVariableName ();
             equations.determineTypes ();
+            equations.determineUnits ();
             equations.clearVariables ();
         }
         catch (Exception e) {}  // It may still be possible to complete the export.
@@ -3024,14 +3027,14 @@ public class ExportJob extends XMLutility
         {
             return ExportJob.print (value) + nml;
         }
+    }
 
-        public String printDimension ()
-        {
-            Dimension dimension = unit.getDimension ();
-            String result = dimensionsNML.get (dimension);
-            if (result == null) result = dimension.toString ();  // Not a standard NML dimension
-            return result;
-        }
+    public String printDimension (Unit<?> unit)
+    {
+        Dimension dimension = unit.getDimension ();
+        String result = dimensionsNML.get (dimension);
+        if (result == null) result = dimension.toString ();  // Not a standard NML dimension
+        return result;
     }
 
     public void appendUnits (boolean assumeNML)

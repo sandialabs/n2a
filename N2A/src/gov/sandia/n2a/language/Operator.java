@@ -256,7 +256,7 @@ public class Operator implements Cloneable
     **/
     public void determineUnit (boolean fatal) throws Exception
     {
-        if (unit == null) unit = AbstractUnit.ONE;
+        unit = AbstractUnit.ONE;
     }
 
     /**

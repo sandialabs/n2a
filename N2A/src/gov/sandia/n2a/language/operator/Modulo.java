@@ -59,6 +59,13 @@ public class Modulo extends OperatorBinary
         }
     }
 
+    public void determineUnit (boolean fatal) throws Exception
+    {
+        operand0.determineUnit (fatal);
+        operand1.determineUnit (fatal);
+        unit = operand0.unit.divide (operand1.unit);
+    }
+
     public Type eval (Instance context)
     {
         return operand0.eval (context).modulo (operand1.eval (context));

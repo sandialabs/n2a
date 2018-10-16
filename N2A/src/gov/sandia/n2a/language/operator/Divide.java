@@ -70,6 +70,13 @@ public class Divide extends OperatorBinary
         // else don't to propagate a bad guess. Instead, hope that better information arrives in next cycle.
     }
 
+    public void determineUnit (boolean fatal) throws Exception
+    {
+        operand0.determineUnit (fatal);
+        operand1.determineUnit (fatal);
+        unit = operand0.unit.divide (operand1.unit);
+    }
+
     public Type eval (Instance context)
     {
         return operand0.eval (context).divide (operand1.eval (context));

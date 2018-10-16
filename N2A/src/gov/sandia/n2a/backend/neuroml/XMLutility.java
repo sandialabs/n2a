@@ -21,6 +21,7 @@ import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 
 import gov.sandia.n2a.language.type.Scalar;
+import tec.uom.se.AbstractUnit;
 
 public class XMLutility
 {
@@ -61,6 +62,8 @@ public class XMLutility
         addDimension ("J/K/mol",   "idealGasConstant");
         addDimension ("S/V",       "conductance_per_voltage");
         addDimension ("mol/m/A/s", "rho_factor");
+        dimensionsNML.put (AbstractUnit.ONE.getDimension (), "none");
+        nmlDimensions.put ("none", AbstractUnit.ONE);
 
         // Units specified in NeuroMLCoreDimensions. With a little massaging, these can be converted to UCUM.
         String[] nmlDefined =
