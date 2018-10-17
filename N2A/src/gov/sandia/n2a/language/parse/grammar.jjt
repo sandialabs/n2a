@@ -29,14 +29,13 @@ import javax.measure.spi.ServiceProvider;
 
 public class ExpressionParser
 {
-    public static UnitFormat          UCUM;
+    public static UnitFormat          UCUM = ServiceProvider.current ().getUnitFormatService ().getUnitFormat ("UCUM");
     public static Map<String,Unit<?>> namedUnits;  // Alternate unit names which should not go through the UCUM parser. null if none are active.
 
     public static SimpleNode parse (String line) throws gov.sandia.n2a.language.ParseException
     {
         try
         {
-            if (UCUM == null) UCUM = ServiceProvider.current ().getUnitFormatService ().getUnitFormat ("UCUM");
             ExpressionParser parser = new ExpressionParser (new StringReader (line));
             Node startNode = parser.Start ();
             SimpleNode result = (SimpleNode) startNode.jjtGetChild (0);

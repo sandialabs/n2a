@@ -234,6 +234,7 @@ public class InternalBackend extends Backend
         e.findIntegrated ();
         e.resolveLHS ();
         e.resolveRHS ();
+        e.checkUnits ();
         e.findConstants ();
         e.determineTraceVariableName ();
         e.collectSplits ();

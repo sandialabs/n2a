@@ -825,7 +825,7 @@ public class Variable implements Comparable<Variable>, Cloneable
                     if (   ! e.expression.unit.isCompatible (unit)
                         && ! e.expression.unit.isCompatible (AbstractUnit.ONE))
                     {
-                        return "conditional expressions: " + unit.getDimension () + " versus " + e.expression.unit.getDimension ();
+                        return "conditional expressions: " + unit + " versus " + e.expression.unit;
                     }
                 }
             }

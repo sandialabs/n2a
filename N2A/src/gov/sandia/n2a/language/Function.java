@@ -175,7 +175,7 @@ public class Function extends Operator
                 // Only one distinct unit is allowed. All others must match or be unitless.
                 if (! unit.isCompatible (AbstractUnit.ONE)  &&  ! op.unit.isCompatible (unit))
                 {
-                    if (fatal) throw new Exception (toString () + "(" + unit.getDimension () + " versus " + op.unit.getDimension () + ")");
+                    if (fatal) throw new Exception (toString () + "(" + unit + " versus " + op.unit + ")");
                     unit = AbstractUnit.ONE;
                     return;
                 }

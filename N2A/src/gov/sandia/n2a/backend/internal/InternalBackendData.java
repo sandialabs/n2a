@@ -701,7 +701,9 @@ public class InternalBackendData
         {
             String className = "null";
             if (v.type != null) className = v.type.getClass ().getSimpleName ();
-            System.out.println ("  " + v.nameString () + " " + v.attributeString () + " " + className);
+            String dimensionName = "";
+            if (v.unit != null) dimensionName = v.unit.toString ();
+            System.out.println ("  " + v.nameString () + " " + v.attributeString () + " " + className + " " + dimensionName);
 
             if      (v.name.equals ("$connect")                  ) connect = v;
             else if (v.name.equals ("$index"  )                  ) index   = v;

@@ -297,7 +297,7 @@ public class BuildMatrix extends Operator
                 {
                     if (! unit.isCompatible (AbstractUnit.ONE)  &&  ! e.unit.isCompatible (unit))
                     {
-                        if (fatal) throw new Exception ("matrix elements: " + unit.getDimension () + " versus " + e.unit.getDimension ());
+                        if (fatal) throw new Exception ("matrix elements: " + unit + " versus " + e.unit);
                         unit = AbstractUnit.ONE;
                         return;
                     }

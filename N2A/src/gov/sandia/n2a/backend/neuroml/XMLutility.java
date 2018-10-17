@@ -20,6 +20,7 @@ import javax.measure.spi.SystemOfUnits;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 
+import gov.sandia.n2a.language.parse.ExpressionParser;
 import gov.sandia.n2a.language.type.Scalar;
 import tec.uom.se.AbstractUnit;
 
@@ -28,7 +29,7 @@ public class XMLutility
     public static Pattern               floatParser   = Pattern.compile ("[-+]?(NaN|Infinity|([0-9]*\\.?[0-9]*([eE][-+]?[0-9]+)?))");
     public static Pattern               forbiddenUCUM = Pattern.compile ("[.,;><=!&|+\\-*/%\\^~]");
     public static SystemOfUnits         systemOfUnits = ServiceProvider.current ().getSystemOfUnitsService ().getSystemOfUnits ("UCUM");
-    public static UnitFormat            UCUM          = ServiceProvider.current ().getUnitFormatService ().getUnitFormat ("UCUM");
+    public static UnitFormat            UCUM          = ExpressionParser.UCUM;             // To save a little typing, since it's used so much.
     public static Map<Dimension,String> dimensionsNML = new HashMap<Dimension,String> ();  // Map from Dimension to NML name
     public static Map<String,Unit<?>>   nmlDimensions = new HashMap<String,Unit<?>> ();    // Map from NML dimension name to base unit
     public static Map<Unit<?>,String>   unitsNML      = new HashMap<Unit<?>,String> ();    // Map from Unit to NML name

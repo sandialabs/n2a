@@ -108,7 +108,7 @@ public class Multiply extends OperatorBinary
     {
         operand0.determineUnit (fatal);
         operand1.determineUnit (fatal);
-        unit = operand0.unit.multiply (operand1.unit);
+        unit = operand0.unit.multiply (operand1.unit).getSystemUnit ();
     }
 
     public Type eval (Instance context)

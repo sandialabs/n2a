@@ -27,6 +27,7 @@ import gov.sandia.n2a.language.operator.GE;
 import gov.sandia.n2a.language.operator.GT;
 import gov.sandia.n2a.language.operator.LE;
 import gov.sandia.n2a.language.operator.LT;
+import gov.sandia.n2a.language.parse.ExpressionParser;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
@@ -34,6 +35,7 @@ import gov.sandia.n2a.language.type.Text;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
 import gov.sandia.n2a.ui.images.ImageUtil;
+import tec.uom.se.AbstractUnit;
 import gov.sandia.n2a.parms.Parameter;
 import gov.sandia.n2a.parms.ParameterDomain;
 
@@ -1187,12 +1189,14 @@ public class EquationSet implements Comparable<EquationSet>
         Variable v = new Variable ("$t", 0);
         if (add (v))
         {
+            v.unit = ExpressionParser.UCUM.parse ("s");
             v.equations = new TreeSet<EquationEntry> ();
         }
 
         v = new Variable ("$t", 1);  // $t'
         if (add (v))
         {
+            v.unit = ExpressionParser.UCUM.parse ("s");
             v.equations = new TreeSet<EquationEntry> ();
         }
 
@@ -1201,6 +1205,7 @@ public class EquationSet implements Comparable<EquationSet>
             v = new Variable ("$p", 0);  // must have a termination condition
             if (add (v))                 // but it doesn't
             {
+                v.unit = AbstractUnit.ONE;
                 try
                 {
                     String duration = getNamedValue ("duration", "1");  // limit sim time to 1 second, if not otherwise specified
@@ -1217,6 +1222,7 @@ public class EquationSet implements Comparable<EquationSet>
         v = new Variable ("$live", 0);  // $live functions much the same as $init or $connect
         if (add (v))
         {
+            v.unit = AbstractUnit.ONE;
             v.addAttribute ("constant");  // default. Actual values should be set by setAttributeLive()
             EquationEntry e = new EquationEntry (v, "");
             e.expression = new Constant (new Scalar (1));
@@ -1230,6 +1236,7 @@ public class EquationSet implements Comparable<EquationSet>
             v = new Variable ("$index", 0);
             if (add (v))
             {
+                v.unit = AbstractUnit.ONE;
                 v.equations = new TreeSet<EquationEntry> ();
                 if (singleton)
                 {
@@ -1255,6 +1262,7 @@ public class EquationSet implements Comparable<EquationSet>
             v = new Variable ("$n", 0);
             if (add (v))
             {
+                v.unit = AbstractUnit.ONE;
                 v.addAttribute ("constant");  // default. Actual values set by client code.
                 EquationEntry e = new EquationEntry (v, "");
                 e.expression = new Constant (new Scalar (1));
@@ -1372,6 +1380,7 @@ public class EquationSet implements Comparable<EquationSet>
         if (init == null)
         {
             init = new Variable ("$init", 0);
+            init.unit = AbstractUnit.ONE;
             init.addAttribute ("constant");  // TODO: should really be "initOnly", since it changes value during (at the end of) the init cycle.
             EquationEntry e = new EquationEntry (init, "");
             e.expression = new Constant (new Scalar (value));
@@ -1399,6 +1408,7 @@ public class EquationSet implements Comparable<EquationSet>
         if (connect == null)
         {
             connect = new Variable ("$connect", 0);
+            connect.unit = AbstractUnit.ONE;
             connect.addAttribute ("constant");
             EquationEntry e = new EquationEntry (connect, "");
             e.expression = new Constant (new Scalar (value));
@@ -2042,19 +2052,20 @@ public class EquationSet implements Comparable<EquationSet>
 
     /**
         Convenience function to implement user preferences about dimension checking during compilation.
+        Depends on results of: resolveLHS, resolveRHS -- All variable references must be resolved.
         @throws AbortRun if an inconsistency is found and user wants this to be fatal.
     **/
     public void checkUnits () throws AbortRun
     {
         String dimension = AppData.state.get ("General", "dimension");
-        if (dimension.isEmpty ()) return;
+        if (! dimension.equals ("Warning")  &&  ! dimension.equals ("Error")) return;  // blank or "Don't check"
 
         determineUnits ();
         LinkedList<String> mismatches = new LinkedList<String> ();
         checkUnitsEval (mismatches);
         if (mismatches.size () > 0)
         {
-            boolean error = dimension.equals ("error");
+            boolean error = dimension.equals ("Error");
             PrintStream err = Backend.err.get ();
             err.println ((error ? "ERROR" : "WARNING") + ": The following variables contain inconsistent dimensions:");
             for (String m : mismatches) err.println (m);

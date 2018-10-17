@@ -117,7 +117,7 @@ public class OperatorBinary extends Operator implements OperatorArithmetic
             else if (operand1.unit.isCompatible (AbstractUnit.ONE)) unit = operand0.unit;
             else
             {
-                if (fatal) throw new Exception (operand0.unit.getDimension () + toString () + operand1.unit.getDimension ());
+                if (fatal) throw new Exception (operand0.unit + " " + toString () + " " + operand1.unit);
                 unit = AbstractUnit.ONE;
             }
         }

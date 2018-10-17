@@ -62,7 +62,7 @@ public class SquareRoot extends Function
         op.determineUnit (fatal);
         try
         {
-            unit = op.unit.root (2);
+            unit = op.unit.root (2).getSystemUnit ();
         }
         catch (ArithmeticException error)
         {

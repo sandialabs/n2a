@@ -164,7 +164,7 @@ public class Power extends OperatorBinary
             int b = (int) value;
             if (b == value)
             {
-                unit = operand0.unit.pow (b);
+                unit = operand0.unit.pow (b).getSystemUnit ();
                 return;
             }
         }

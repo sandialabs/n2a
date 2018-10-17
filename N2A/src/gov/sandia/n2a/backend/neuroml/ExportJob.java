@@ -63,7 +63,6 @@ import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
-import tec.uom.se.AbstractUnit;
 
 public class ExportJob extends XMLutility
 {

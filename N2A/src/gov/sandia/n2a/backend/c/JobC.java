@@ -304,6 +304,7 @@ public class JobC extends Thread
         model.findIntegrated ();
         model.resolveLHS ();
         model.resolveRHS ();
+        model.checkUnits ();
         model.findConstants ();
         model.determineTraceVariableName ();
         model.collectSplits ();
