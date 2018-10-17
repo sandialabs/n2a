@@ -19,6 +19,7 @@ import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Split;
 import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Output;
@@ -27,7 +28,6 @@ import gov.sandia.n2a.language.operator.GE;
 import gov.sandia.n2a.language.operator.GT;
 import gov.sandia.n2a.language.operator.LE;
 import gov.sandia.n2a.language.operator.LT;
-import gov.sandia.n2a.language.parse.ExpressionParser;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
@@ -1189,14 +1189,14 @@ public class EquationSet implements Comparable<EquationSet>
         Variable v = new Variable ("$t", 0);
         if (add (v))
         {
-            v.unit = ExpressionParser.UCUM.parse ("s");
+            v.unit = UnitValue.seconds;
             v.equations = new TreeSet<EquationEntry> ();
         }
 
         v = new Variable ("$t", 1);  // $t'
         if (add (v))
         {
-            v.unit = ExpressionParser.UCUM.parse ("s");
+            v.unit = UnitValue.seconds;
             v.equations = new TreeSet<EquationEntry> ();
         }
 
@@ -2045,7 +2045,8 @@ public class EquationSet implements Comparable<EquationSet>
         }
         for (Variable v : variables)
         {
-            if (v.determineUnit ()) changed = true;
+            try {if (v.determineUnit (false)) changed = true;}
+            catch (Exception e) {}  // No exceptions should occur during this pass.
         }
         return changed;
     }
@@ -2057,8 +2058,8 @@ public class EquationSet implements Comparable<EquationSet>
     **/
     public void checkUnits () throws AbortRun
     {
-        String dimension = AppData.state.get ("General", "dimension");
-        if (! dimension.equals ("Warning")  &&  ! dimension.equals ("Error")) return;  // blank or "Don't check"
+        String dimension = AppData.state.getOrDefault ("General", "dimension", "Warning");
+        if (! dimension.equals ("Warning")  &&  ! dimension.equals ("Error")) return;  // "Don't check"
 
         determineUnits ();
         LinkedList<String> mismatches = new LinkedList<String> ();
@@ -2067,7 +2068,7 @@ public class EquationSet implements Comparable<EquationSet>
         {
             boolean error = dimension.equals ("Error");
             PrintStream err = Backend.err.get ();
-            err.println ((error ? "ERROR" : "WARNING") + ": The following variables contain inconsistent dimensions:");
+            err.println ((error ? "ERROR" : "WARNING") + ": Inconsistent dimensions. Report shows operator and mismatched units from operands.");
             for (String m : mismatches) err.println (m);
             if (error) throw new AbortRun ();
         }
@@ -2078,13 +2079,16 @@ public class EquationSet implements Comparable<EquationSet>
         for (EquationSet s : parts) s.checkUnitsEval (mismatches);
         for (Variable v : variables)
         {
-            String mismatch = v.checkUnit ();
-            if (mismatch != null)
+            try
+            {
+                v.determineUnit (true);
+            }
+            catch (Exception error)
             {
                 String name = prefix ();
                 if (! name.isEmpty ()) name += ".";
                 name += v.nameString ();
-                mismatches.add ("  " + name + " : " + mismatch);
+                mismatches.add ("  " + name + " : " + error.getMessage ());
             }
         }
     }

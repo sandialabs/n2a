@@ -280,28 +280,22 @@ public class BuildMatrix extends Operator
 
     public void determineUnit (boolean fatal) throws Exception
     {
+        unit = null;
         for (Operator[] c : operands)
         {
             for (Operator e : c)
             {
                 e.determineUnit (fatal);
-            }
-        }
-
-        unit = AbstractUnit.ONE;
-        for (Operator[] c : operands)
-        {
-            for (Operator e : c)
-            {
-                if (! e.unit.isCompatible (AbstractUnit.ONE))
+                if (e.unit != null)
                 {
-                    if (! unit.isCompatible (AbstractUnit.ONE)  &&  ! e.unit.isCompatible (unit))
+                    if (unit == null  ||  unit.isCompatible (AbstractUnit.ONE))
                     {
-                        if (fatal) throw new Exception ("matrix elements: " + unit + " versus " + e.unit);
-                        unit = AbstractUnit.ONE;
-                        return;
+                        unit = e.unit;
                     }
-                    unit = e.unit;
+                    else if (fatal  &&  ! e.unit.isCompatible (AbstractUnit.ONE)  &&  ! e.unit.isCompatible (unit))
+                    {
+                        throw new Exception ("matrix elements: " + unit + " versus " + e.unit);
+                    }
                 }
             }
         }

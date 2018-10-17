@@ -2530,7 +2530,7 @@ public class ExportJob extends XMLutility
                 if (v != null) unit = v.unit;
                 if (constant  ||  parameter)
                 {
-                    UnitValue uv = new UnitValue (value);
+                    UnitParser uv = new UnitParser (value);
                     if (unit == null) unit = uv.unit;
 
                     // TODO: Evaluate constant expressions, such as simple references to other variables.
@@ -2836,10 +2836,10 @@ public class ExportJob extends XMLutility
             equations.findIntegrated ();
             equations.resolveLHS ();
             equations.resolveRHS ();
+            equations.determineUnits ();
             equations.findConstants ();  // This could hurt the analysis. It simplifies expressions and substitutes constants, breaking some dependency chains.
             equations.determineTraceVariableName ();
             equations.determineTypes ();
-            equations.determineUnits ();
             equations.clearVariables ();
         }
         catch (Exception e) {}  // It may still be possible to complete the export.
@@ -2916,18 +2916,18 @@ public class ExportJob extends XMLutility
 
     public String biophysicalUnits (String value)
     {
-        UnitValue uv = new UnitValue (value);
+        UnitParser uv = new UnitParser (value);
         if (uv.unit == null) return value;
         return uv.print ();
     }
 
-    public class UnitValue
+    public class UnitParser
     {
         public double value;
         public Unit<?> unit;
         public String nml;  // NeuroML declared name for this unit.
 
-        public UnitValue (String source)
+        public UnitParser (String source)
         {
             source = source.trim ();
             int unitIndex = findUnits (source);

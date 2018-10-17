@@ -11,6 +11,7 @@ import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 
@@ -92,7 +93,14 @@ public class MultiplyElementwise extends OperatorBinary
     {
         operand0.determineUnit (fatal);
         operand1.determineUnit (fatal);
-        unit = operand0.unit.multiply (operand1.unit).getSystemUnit ();
+        if (operand0.unit == null  ||  operand1.unit == null)
+        {
+            unit = null;
+        }
+        else
+        {
+            unit = UnitValue.simplify (operand0.unit.multiply (operand1.unit));
+        }
     }
 
     public Type eval (Instance context)

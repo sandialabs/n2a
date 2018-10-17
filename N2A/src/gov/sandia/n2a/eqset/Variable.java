@@ -16,6 +16,7 @@ import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Max;
@@ -789,52 +790,61 @@ public class Variable implements Comparable<Variable>, Cloneable
         }
     }
 
-    public boolean determineUnit ()
+    public boolean determineUnit (boolean fatal) throws Exception
     {
-        if (unit == null) unit = AbstractUnit.ONE;  // Initializing to ONE does not count as a change. Ditto in AccessVariable.
-        Unit<?> nextUnit = unit;
-        try
+        Unit<?> nextUnit = null;
+        for (EquationEntry e : equations)
         {
-            for (EquationEntry e : equations)
+            if (e.condition != null) e.condition.determineUnit (fatal);
+            if (e.expression != null)
             {
-                if (e.condition != null) e.condition.determineUnit (false);
-                if (e.expression != null)
+                e.expression.determineUnit (fatal);
+                if (e.expression.unit != null)
                 {
-                    e.expression.determineUnit (false);
-                    if (! e.expression.unit.isCompatible (AbstractUnit.ONE)) nextUnit = e.expression.unit;
-                }
-            }
-        }
-        catch (Exception error) {}  // Should not occur on this pass, so we don't care.
-
-        boolean changed = ! nextUnit.isCompatible (unit);
-        unit = nextUnit;
-        return changed;
-    }
-
-    public String checkUnit ()
-    {
-        try
-        {
-            for (EquationEntry e : equations)
-            {
-                if (e.condition != null) e.condition.determineUnit (true);
-                if (e.expression != null)
-                {
-                    e.expression.determineUnit (true);
-                    if (   ! e.expression.unit.isCompatible (unit)
-                        && ! e.expression.unit.isCompatible (AbstractUnit.ONE))
+                    if (nextUnit == null  ||  nextUnit.isCompatible (AbstractUnit.ONE))
                     {
-                        return "conditional expressions: " + unit + " versus " + e.expression.unit;
+                        nextUnit = e.expression.unit;
+                    }
+                    else if (fatal  &&  ! e.expression.unit.isCompatible (AbstractUnit.ONE)  &&  ! e.expression.unit.isCompatible (nextUnit))
+                    {
+                        throw new Exception (nextUnit + " versus " + e.expression.unit);
                     }
                 }
             }
         }
-        catch (Exception error)
+        if (derivative != null  &&  derivative.unit != null)
         {
-            return error.getMessage ();
+            Unit<?> integrated = UnitValue.simplify (derivative.unit.multiply (UnitValue.seconds));
+            if (nextUnit == null  ||  nextUnit.isCompatible (AbstractUnit.ONE))
+            {
+                nextUnit = integrated;
+            }
+            else if (fatal  &&  ! integrated.isCompatible (AbstractUnit.ONE)  &&  ! integrated.isCompatible (nextUnit))
+            {
+                throw new Exception ("derivative " + derivative.unit + " versus " + nextUnit);
+            }
         }
-        return null;
+
+        boolean changed = nextUnit != unit  &&  (unit == null  ||  nextUnit == null  ||  ! nextUnit.isCompatible (unit));
+        unit = nextUnit;
+
+        if (unit != null  &&  reference != null  &&  reference.variable != this)
+        {
+            if (reference.variable.unit == null  ||  reference.variable.unit.isCompatible (AbstractUnit.ONE))
+            {
+                if (reference.variable.unit == null  ||  ! unit.isCompatible (AbstractUnit.ONE))
+                {
+                    reference.variable.unit = unit;
+                    changed = true;  // It's really the other variable that changed, but this is sufficient to force another eval cycle.
+                }
+            }
+            else if (fatal  &&  ! reference.variable.unit.isCompatible (AbstractUnit.ONE)  &&  ! reference.variable.unit.isCompatible (unit))
+            {
+                throw new Exception ("reference " + reference.variable.unit + " versus " + unit);
+            }
+        }
+
+        return changed;
     }
 
     /**

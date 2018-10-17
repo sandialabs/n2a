@@ -13,7 +13,6 @@ import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
-import tec.uom.se.AbstractUnit;
 
 public class AccessVariable extends Operator
 {
@@ -146,7 +145,6 @@ public class AccessVariable extends Operator
     public void determineUnit (boolean fatal) throws Exception
     {
         if (reference != null) unit = reference.variable.unit;
-        if (unit == null) unit = AbstractUnit.ONE;
     }
 
     public Type getType ()

@@ -55,6 +55,7 @@ public class Constant extends Operator
         }
         else
         {
+            unit = AbstractUnit.ONE;
             value = (Type) o;
         }
     }
@@ -156,7 +157,7 @@ public class Constant extends Operator
 
     public void determineUnit (boolean fatal) throws Exception
     {
-        // Do nothing (and prevent superclass from doing anything), because we already did it in getOperandsFrom().
+        if (unit == null) unit = AbstractUnit.ONE;  // Just in case getOperandsFrom() was not called.
     }
 
     public void render (Renderer renderer)

@@ -57,8 +57,6 @@ import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
-import tec.uom.se.AbstractUnit;
-
 import java.util.List;
 import java.util.TreeMap;
 
@@ -256,7 +254,6 @@ public class Operator implements Cloneable
     **/
     public void determineUnit (boolean fatal) throws Exception
     {
-        unit = AbstractUnit.ONE;
     }
 
     /**

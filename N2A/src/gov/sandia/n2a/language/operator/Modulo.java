@@ -10,6 +10,7 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.type.Instance;
 
 public class Modulo extends OperatorBinary
@@ -63,7 +64,14 @@ public class Modulo extends OperatorBinary
     {
         operand0.determineUnit (fatal);
         operand1.determineUnit (fatal);
-        unit = operand0.unit.divide (operand1.unit).getSystemUnit ();
+        if (operand0.unit == null  ||  operand1.unit == null)
+        {
+            unit = null;
+        }
+        else
+        {
+            unit = UnitValue.simplify (operand0.unit.divide (operand1.unit));
+        }
     }
 
     public Type eval (Instance context)

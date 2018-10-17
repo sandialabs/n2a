@@ -49,8 +49,7 @@ public class Cosine extends Function
 
     public void determineUnit (boolean fatal) throws Exception
     {
-        Operator op = operands[0];
-        op.determineUnit (fatal);
+        operands[0].determineUnit (fatal);
         unit = AbstractUnit.ONE;
     }
 

@@ -13,6 +13,7 @@ import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.function.Log;
 import gov.sandia.n2a.language.parse.ASTList;
 import gov.sandia.n2a.language.parse.SimpleNode;
@@ -158,20 +159,15 @@ public class Power extends OperatorBinary
     {
         operand0.determineUnit (fatal);
         operand1.determineUnit (fatal);
-        if (operand1.isScalar ())
+        unit = operand0.unit;
+        if (unit != null  &&  ! unit.isCompatible (AbstractUnit.ONE)  &&  operand1.isScalar ())
         {
             double value = operand1.getDouble ();
             int b = (int) value;
-            if (b == value)
-            {
-                unit = operand0.unit.pow (b).getSystemUnit ();
-                return;
-            }
+            if (b == value) unit = UnitValue.simplify (operand0.unit.pow (b));
+            else            unit = null;  // TODO: would it make more sense to set unit=ONE ?
+            // TODO: handle b=1/i, where i is an integer. User Unit.root()
         }
-        // Impossible to determine unit of result.
-        // Could return unit of operand0, or declare unitless.
-        // It seems that unitless is the least wrong answer.
-        unit = AbstractUnit.ONE;
     }
 
     public void render (Renderer renderer)

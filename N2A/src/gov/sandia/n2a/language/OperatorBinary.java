@@ -107,18 +107,16 @@ public class OperatorBinary extends Operator implements OperatorArithmetic
     {
         operand0.determineUnit (fatal);
         operand1.determineUnit (fatal);
-        if (operand0.unit.isCompatible (operand1.unit))
+        unit = operand0.unit;
+        if (operand1.unit != null)
         {
-            unit = operand0.unit;
-        }
-        else
-        {
-            if      (operand0.unit.isCompatible (AbstractUnit.ONE)) unit = operand1.unit;
-            else if (operand1.unit.isCompatible (AbstractUnit.ONE)) unit = operand0.unit;
-            else
+            if (unit == null  ||  unit.isCompatible (AbstractUnit.ONE))
             {
-                if (fatal) throw new Exception (operand0.unit + " " + toString () + " " + operand1.unit);
-                unit = AbstractUnit.ONE;
+                unit = operand1.unit;
+            }
+            else if (fatal  &&  ! operand1.unit.isCompatible (AbstractUnit.ONE)  &&  ! operand1.unit.isCompatible (unit))
+            {
+                throw new Exception (unit + " " + toString () + " " + operand1.unit);
             }
         }
     }

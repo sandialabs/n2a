@@ -164,22 +164,21 @@ public class Function extends Operator
 
     public void determineUnit (boolean fatal) throws Exception
     {
-        for (int i = 0; i < operands.length; i++) operands[i].determineUnit (fatal);
-
-        unit = AbstractUnit.ONE;
+        unit = null;
         for (int i = 0; i < operands.length; i++)
         {
             Operator op = operands[i];
-            if (! op.unit.isCompatible (AbstractUnit.ONE))
+            op.determineUnit (fatal);
+            if (op.unit != null)
             {
-                // Only one distinct unit is allowed. All others must match or be unitless.
-                if (! unit.isCompatible (AbstractUnit.ONE)  &&  ! op.unit.isCompatible (unit))
+                if (unit == null  ||  unit.isCompatible (AbstractUnit.ONE))
                 {
-                    if (fatal) throw new Exception (toString () + "(" + unit + " versus " + op.unit + ")");
-                    unit = AbstractUnit.ONE;
-                    return;
+                    unit = op.unit;
                 }
-                unit = op.unit;
+                else if (fatal  &&  ! op.unit.isCompatible (AbstractUnit.ONE)  &&  ! op.unit.isCompatible (unit))
+                {
+                    throw new Exception (toString () + "(" + unit + " versus " + op.unit + ")");
+                }
             }
         }
     }
