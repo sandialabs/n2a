@@ -52,13 +52,16 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Uniform;
+import gov.sandia.n2a.language.operator.AND;
 import gov.sandia.n2a.language.operator.GE;
 import gov.sandia.n2a.language.operator.GT;
 import gov.sandia.n2a.language.operator.LE;
 import gov.sandia.n2a.language.operator.LT;
 import gov.sandia.n2a.language.operator.NE;
+import gov.sandia.n2a.language.operator.OR;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.MatrixDense;
@@ -72,16 +75,17 @@ public class ExportJob extends XMLutility
     public String      modelName;
     public EquationSet equations;
 
-    public List<Element>       elements       = new ArrayList<Element> ();
-    public List<IonChannel>    channels       = new ArrayList<IonChannel> ();
-    public List<Synapse>       synapses       = new ArrayList<Synapse> ();
-    public List<AbstractCell>  cells          = new ArrayList<AbstractCell> ();
-    public List<Network>       networks       = new ArrayList<Network> ();
-    public List<ComponentType> componentTypes = new ArrayList<ComponentType> ();
-    public int                 countConcentration;
-    public int                 countInput;
-    public Map<Unit<?>,String> unitsUsed      = new HashMap<Unit<?>,String> ();
-    public boolean             requiresNML    = false;  // Indicates that no NeuroML parts were emitted.
+    public List<Element>         elements       = new ArrayList<Element> ();
+    public List<IonChannel>      channels       = new ArrayList<IonChannel> ();
+    public List<Synapse>         synapses       = new ArrayList<Synapse> ();
+    public List<AbstractCell>    cells          = new ArrayList<AbstractCell> ();
+    public List<Network>         networks       = new ArrayList<Network> ();
+    public List<ComponentType>   componentTypes = new ArrayList<ComponentType> ();
+    public int                   countConcentration;
+    public int                   countInput;
+    public Map<Unit<?>,String>   unitsUsed      = new HashMap<Unit<?>,String> ();
+    public Map<String,Dimension> dimensionsUsed = new HashMap<String,Dimension> ();
+    public boolean               requiresNML    = false;  // Indicates that no NeuroML parts were emitted.
 
     public static Unit<?> um        = UCUM.parse ("um");            // micrometers, used for morphology
     public static double  baseRatio = Math.log (10) / Math.log (2); // log_2 (10), how many binary digits it takes to represent one decimal digit
@@ -99,7 +103,7 @@ public class ExportJob extends XMLutility
             MPart mpart = new MPart ((MPersistent) source);
             modelName = source.key ();
             equations = new EquationSet (mpart);
-            makeExecutable (equations);
+            makeExecutable (equations, true);
             analyze (equations);
 
             DocumentBuilderFactory factoryBuilder = DocumentBuilderFactory.newInstance ();
@@ -125,7 +129,7 @@ public class ExportJob extends XMLutility
     /**
         Find references to $index in connection endpoints, and set up info for ConnectionContext.
     **/
-    public void analyze (EquationSet s)
+    public static void analyze (EquationSet s)
     {
         for (EquationSet p : s.parts) analyze (p);
 
@@ -220,6 +224,18 @@ public class ExportJob extends XMLutility
         {
             topLevelPart (source);
         }
+
+        // ComponentTypes
+        try
+        {
+            // Rebuild equations, this time without the aggressive constant folding.
+            MPart mpart = (MPart) equations.source;
+            equations = new EquationSet (mpart);
+            makeExecutable (equations, false);
+
+            for (ComponentType ct : componentTypes) ct.append ();
+        }
+        catch (Exception e) {}  // Shouldn't be any exceptions, since we already built this equation set once.
 
         appendUnits (requiresNML);
 
@@ -2126,6 +2142,7 @@ public class ExportJob extends XMLutility
             }
 
             Element channel = addElement (type, elements);
+            standalone (source, channel, channelElements);
             channel.setAttribute ("id", id);
 
             // Attributes
@@ -2385,7 +2402,6 @@ public class ExportJob extends XMLutility
         if (! componentTypes.contains (ct))
         {
             componentTypes.add (ct);
-            ct.append ();
             addComponentTypeDependencies (source);
         }
     }
@@ -2414,6 +2430,9 @@ public class ExportJob extends XMLutility
         public MNode  base;  // for comparisons
 
         public Map<String,String> rename;
+        public List<OnCondition>  onConditions;
+        public List<OnEvent>      onEvents;
+        public RendererLEMS       renderer;
 
         public ComponentType (MNode source, MNode base)
         {
@@ -2435,6 +2454,11 @@ public class ExportJob extends XMLutility
         {
             List<Element> componentTypeElements = new ArrayList<Element> ();
             List<Element> dynamicsElements      = new ArrayList<Element> ();
+            List<Element> onStartElements       = new ArrayList<Element> ();
+            rename       = new HashMap<String,String> ();
+            renderer     = new RendererLEMS ();
+            onConditions = new ArrayList<OnCondition> ();
+            onEvents     = new ArrayList<OnEvent> ();
 
             // Assemble a working EquationSet
             EquationSet equations;
@@ -2447,7 +2471,7 @@ public class ExportJob extends XMLutility
                 try
                 {
                     equations = new EquationSet ((MPersistent) source);
-                    makeExecutable (equations);
+                    makeExecutable (equations, false);
                 }
                 catch (Exception e)
                 {
@@ -2462,34 +2486,64 @@ public class ExportJob extends XMLutility
             String description = base.get ("$metadata", "description");
             if (description.isEmpty ()) description = base.get ("$metadata", "notes");
 
-            MNode metadata = base.child ("$metadata");
+            List<NamedDimensionalType> requirements          = new ArrayList<NamedDimensionalType> ();
+            List<NamedDimensionalType> requirementsInherited = new ArrayList<NamedDimensionalType> ();
+            // For direct db parts, need to know which requirements are already provided by parents.
+            if (! (source instanceof MPart)) inheritRequirements (source.get ("$inherit"), requirementsInherited);
+
+            MNode metadata = source.child ("$metadata");
             if (metadata != null)
             {
-                String prefix = "backend.lems.";
-                int prefixLength = prefix.length ();
                 for (MNode m : metadata)
                 {
                     String key = m.key ();
-                    if (! key.startsWith (prefix)) continue;
-                    key = key.substring (prefixLength);
+                    if (! key.startsWith ("backend.lems.")) continue;
+
+                    boolean local = true;
+                    if (m instanceof MPart)  // Only applies to embedded LEMS
+                    {
+                        MPart p = (MPart) m;
+                        // The immediate parent of p is $metadata, so we need to check p's grandparent to see if this is an embedded LEMS part.
+                        local = p.isFromTopDocument ()  ||  ! (((MPersistent) p.getSource ().getParent ()).getParent () instanceof MDoc);
+                    }
+
+                    key = key.substring (13);
                     String value = m.get ();
 
                     if (key.startsWith ("children."))
                     {
-                        key = key.substring (9);
-                        String[] types = value.split (",");
-                        String type;
-                        if (types.length > 1) type = types[1];
-                        else                  type = partMap.exportName (types[0]);
-                        Element children = addElement ("Children", componentTypeElements);
-                        children.setAttribute ("name", key);
-                        children.setAttribute ("type", type);
+                        if (local)
+                        {
+                            key = key.substring (9);
+                            String[] types = value.split (",");
+                            String type;
+                            if (types.length > 1) type = types[1];
+                            else                  type = partMap.exportName (types[0]);
+                            Element children = addElement ("Children", componentTypeElements);
+                            children.setAttribute ("name", key);
+                            children.setAttribute ("type", type);
+                        }
+                    }
+                    else if (key.startsWith ("requirement."))
+                    {
+                        NamedDimensionalType r = new NamedDimensionalType ();
+                        r.internal = key.substring (12);
+                        r.parse (value);
+                        if (local)
+                        {
+                            r.dimension = useDimension (r.dimension);
+                            if (! requirements.contains (r)) requirements.add (r);
+                        }
+                        else
+                        {
+                            if (! requirementsInherited.contains (r)) requirementsInherited.add (r);
+                        }
                     }
                 }
             }
 
             // Build name mapping
-            rename = new HashMap<String,String> ();
+            rename.put ("$t", "t");
             if (! extension.isEmpty ())
             {
                 NameMap nameMap = partMap.importMap (extension);
@@ -2497,16 +2551,114 @@ public class ExportJob extends XMLutility
                 {
                     String key = e.getKey ();
                     ArrayList<String> outNames = e.getValue ();
-                    if (outNames.size () == 1) rename.put (key, outNames.get (0));
-                    else
+                    if (outNames.size () > 1)
                     {
-                        // TODO: Handle special cases where we care about choice of output variable based on context.
-                        rename.put (key, outNames.get (0));
+                        // Handle special cases where we care about choice of output variable based on context.
+                        if (nameMap.internal.startsWith ("HHVariable"))  // rather inflexible hard coding
+                        {
+                            String value = "";
+                            if      (extension.contains ("Rate"))     value = "r";
+                            else if (extension.contains ("Time"))     value = "t";
+                            else if (extension.contains ("Variable")) value = "x";
+                            if (! value.isEmpty ())
+                            {
+                                rename.put (key, value);
+                                continue;
+                            }
+                        }
+                        else if (extension.equals ("channelPopulation"))
+                        {
+                            rename.put (key, "geff");
+                            continue;
+                        }
+                        else if (extension.equals ("izhikevich2007Cell"))
+                        {
+                            rename.put (key, "vpeak");
+                            continue;
+                        }
+                        else if (extension.equals ("pulseGenerator"))
+                        {
+                            rename.put (key, "amplitude");
+                            continue;
+                        }
+                        // The remaining case is Compartment.I maping to {iMemb,iSyn,iChannels}
+                        // Since iMemb is the only meaningful variable, and the default, no need for further action.
                     }
+                    rename.put (key, outNames.get (0));
                 }
             }
 
-            // Variables
+            // Requirements
+            class RequirementVisitor extends Visitor
+            {
+                public Variable v;
+                public EquationSet equations;
+                public boolean visit (Operator op)
+                {
+                    if (op instanceof AccessVariable)
+                    {
+                        AccessVariable av = (AccessVariable) op;
+                        if (av.reference == null)
+                        {
+                            NamedDimensionalType r = new NamedDimensionalType ();
+                            r.internal = r.external = av.name;
+                            if (! requirements.contains (r)) requirements.add (r);
+                        }
+                        else if (av.reference.variable.container != v.container)
+                        {
+                            Variable v2 = null;
+                            // It is possible for the referent not to be in a direct ancestor of v.
+                            // This happens due to folding of variables in AccessVariable.simplify().
+                            // Just to be sure, we re-resolve the variable.
+                            Variable query = new Variable (av.getName (), av.getOrder ());
+                            query.reference = new VariableReference ();
+                            EquationSet dest = equations.resolveEquationSet (query, false);
+                            if (dest != null) v2 = dest.find (query);
+                            if (v2 == null) v2 = av.reference.variable;
+
+                            NamedDimensionalType r = new NamedDimensionalType ();
+                            r.internal = v2.name;  // Not nameString(), because LEMS doesn't handle direct references to derivatives.
+                            r.external = v2.getNamedValue ("backend.lems.param").split (",")[0];
+                            if (r.external.isEmpty ()) r.external = r.internal;
+                            if (! requirementsInherited.contains (r)  &&  ! requirements.contains (r))
+                            {
+                                r.dimension = useDimension (v2.unit);
+                                requirements.add (r);
+                            }
+                        }
+                        return false;
+                    }
+                    return true;
+                }
+            }
+            RequirementVisitor requirementVisitor = new RequirementVisitor ();
+            requirementVisitor.equations = equations;
+            for (MNode m : source)
+            {
+                // See comments below on filtering variables.
+                String key = m.key ();
+                if (key.startsWith ("$")) continue;
+                if (m instanceof MPart)
+                {
+                    MPart p = (MPart) m;
+                    if (! p.isFromTopDocument ()  &&  p.getSource ().getParent () instanceof MDoc) continue;
+                }
+                Variable v = equations.find (Variable.fromLHS (key));
+                if (v == null) continue;
+                requirementVisitor.v = v;
+                v.visit (requirementVisitor);
+            }
+            for (NamedDimensionalType r : requirements)
+            {
+                if (! r.internal.equals (r.external)) rename.put (r.internal, r.external);
+                Element requirement = addElement ("Requirement", componentTypeElements);
+                requirement.setAttribute ("name", r.external);
+                if (r.dimension   != null  &&  ! r.dimension  .isEmpty ()) requirement.setAttribute ("dimension",   r.dimension);
+                if (r.description != null  &&  ! r.description.isEmpty ()) requirement.setAttribute ("description", r.description);
+            }
+
+            // Collect Variables
+            Map<Variable,MNode> variables = new HashMap<Variable,MNode> ();
             for (MNode m : source)  // source, not base, because we want to include parameters which were excluded from comparison.
             {
                 String key = m.key ();
@@ -2520,46 +2672,208 @@ public class ExportJob extends XMLutility
                     if (! p.isFromTopDocument ()  &&  p.getSource ().getParent () instanceof MDoc) continue;
                 }
 
-                String value = m.get ().trim ();
-
-                Element element = null;
                 Variable v = equations.find (Variable.fromLHS (key));
-                boolean constant = v != null  &&  v.hasAttribute ("constant");
+                if (v != null) variables.put (v, m);  // If v is null, then it was revoked.
+            }
+
+            // Constants and Parameters
+            // Note: Property has a similar form to Parameter and Constant, but it is
+            // only used (along with Assign) in a Structure element. The only example
+            // is setting the weight on a synapse.
+            List<Constant> constants = new ArrayList<Constant> ();
+            for (Variable v : new ArrayList<Variable> (variables.keySet ()))
+            {
+                MNode m = variables.get (v);
+
                 boolean parameter = m.child ("$metadata", "param") != null;
-                Unit<?> unit = null;
-                if (v != null) unit = v.unit;
-                if (constant  ||  parameter)
+
+                // For now, we only want explicit constants. We will detect calculated constants below, while processing variables.
+                boolean constant = false;
+                if (v.equations.size () == 1)
                 {
-                    UnitParser uv = new UnitParser (value);
-                    if (unit == null) unit = uv.unit;
+                    EquationEntry e = v.equations.first ();
+                    constant = e.condition == null  &&  e.expression instanceof gov.sandia.n2a.language.Constant;
+                }
 
-                    // TODO: Evaluate constant expressions, such as simple references to other variables.
-                    String type;
-                    if (parameter) type = uv.value == 0 ? "Parameter" : "Property";
-                    else           type = "Constant";
+                if (! constant  &&  ! parameter) continue;
+                variables.remove (v);
 
-                    element = addElement (type, componentTypeElements);
-                    if (uv.value != 0)
+                Constant c = new Constant ();
+                c.internal = m.key ();
+                c.external = rename.get (c.internal);
+                if (c.external == null) c.external = c.internal;
+                c.description = m.get ("$metadata", "desription");
+                c.value = new UnitParser (m.get ().trim ());
+                if (c.value.unit != null) c.dimension = printDimension (c.value.unit);
+
+                String type = parameter ? "Parameter" : "Constant";
+                Element element = addElement (type, componentTypeElements);
+                element.setAttribute ("name", c.external);
+                if (c.value.value != 0)                                    element.setAttribute ("value",       c.value.print ());
+                if (c.dimension   != null  &&  ! c.dimension  .isEmpty ()) element.setAttribute ("dimension",   c.dimension);
+                if (c.description != null  &&  ! c.description.isEmpty ()) element.setAttribute ("description", c.description);
+
+                if (! parameter) constants.add (c);
+            }
+
+            // Variables
+            for (Entry<Variable,MNode> vm : variables.entrySet ())
+            {
+                Variable v = vm.getKey ();
+                MNode    m = vm.getValue ();
+                String name = rename.get (v.name);
+                if (name == null) name = v.name;
+
+                boolean conditional = false;
+                boolean hasInit     = false;
+                for (EquationEntry e : v.equations)
+                {
+                    if (e.condition != null)
                     {
-                        if (constant) element.setAttribute ("value",        uv.print ());
-                        else          element.setAttribute ("defaultValue", uv.print ());
+                        conditional = true;
+                        if (e.ifString.equals ("$init")) hasInit = true;
                     }
                 }
-                else if (value.startsWith (":"))
+
+                Element element = null;
+                if (v.order > 0)  // TimeDerivative
                 {
-                    element = addElement ("DerivedVariable", dynamicsElements);
+                    // TODO: Trap higher order derivatives.
+                    if (conditional)
+                    {
+                        // The only way to express conditional values for a derivative is to create separate regimes.
+                        // For now, we will not attempt to translate arbitrary internal models, but rather assume
+                        // they are the result of an import. In that case, they already have regimes set up.
+                    }
+                    else
+                    {
+                        Element timeDerivative = addElement ("TimeDerivative", dynamicsElements);
+                        timeDerivative.setAttribute ("variable", name);
+                        renderer.setAttribute (timeDerivative, "value", v.equations.first ().expression);
+                    }
+                }
+                else if (v.derivative != null  ||  hasInit) // StateVariable
+                {
+                    element = addElement ("StateVariable", dynamicsElements);
+                    for (EquationEntry e : v.equations)
+                    {
+                        Element stateAssignment;
+                        if (e.ifString.isEmpty ()  ||  e.ifString.equals ("$init"))  // OnStart
+                        {
+                            stateAssignment = addElement ("StateAssignment", onStartElements);
+                        }
+                        else  // OnCondition
+                        {
+                            OnCondition onCondition = addOnCondition (e.condition);
+                            stateAssignment = addElement ("StateAssignment", onCondition.elements);
+                        }
+                        stateAssignment.setAttribute ("variable", name);
+                        renderer.setAttribute (stateAssignment, "value", e.expression);
+                    }
+                }
+                else  // DerivedVariable
+                {
+                    if (conditional)
+                    {
+                        element = addElement ("ConditionalDerivedVariable", dynamicsElements);
+                        List<Element> cases = new ArrayList<Element> ();
+                        for (EquationEntry e : v.equations)
+                        {
+                            Element Case = addElement ("Case", cases);
+                            if (e.condition  != null) renderer.setAttribute (Case, "condition", e.condition);
+                            if (e.expression != null) renderer.setAttribute (Case, "value",     e.expression);
+                        }
+                        sequencer.append (element, cases);
+                    }
+                    else
+                    {
+                        // Only DerivedVariabls are capable of acting as targets for reductions.
+                        element = addElement ("DerivedVariable", dynamicsElements);
+                        if (v.assignment == Variable.REPLACE)
+                        {
+                            renderer.setAttribute (element, "value", v.equations.first ().expression);
+                        }
+                        else
+                        {
+                            String select = "Unable to determine for standalone part";
+                            if (v.hasUsers ())  // In a fully-built and compiled model, we can find the variables that are being reduced to this variable.
+                            {
+                                for (Object o : v.usedBy)
+                                {
+                                    if (! (o instanceof Variable)) continue;
+                                    Variable u = (Variable) o;
+                                    if (u.reference == null  ||  u.reference.variable != v) continue;
+                                    // u is a variable that references v, most likely via a reduction
+                                    // Must compute an XPath between v and u. (Ugh!)
+                                    select = u.name;
+                                    EquationSet container = u.container;
+                                    while (container != null  &&  container != v.container)
+                                    {
+                                        if (container.isSingleton (true)) select = container.name + "/"    + select;
+                                        else                              select = container.name + "[*]/" + select;
+                                        container = container.container;
+                                    }
+                                    break;
+                                }
+                            }
+                            element.setAttribute ("select", select);
+                            
+                            // TODO: trap assignment types that LEMS does not handle
+                            if (v.assignment == Variable.ADD) element.setAttribute ("reduce", "add");
+                            else                              element.setAttribute ("reduce", "multiply");
+
+                            if (m.child ("$metadata", "backend.lems.required") != null) element.setAttribute ("required", "true");
+                        }
+                    }
                 }
 
                 if (element != null)
                 {
-                    element.setAttribute ("name", key);
+                    element.setAttribute ("name", name);
 
-                    if (unit != null) element.setAttribute ("dimension", printDimension (unit));
+                    String dimension = "";
+                    if (v.unit != null) dimension = printDimension (v.unit);
+                    if (! dimension.isEmpty ()) element.setAttribute ("dimension", dimension);
 
                     String vdescription = m.get ("$metadata", "desription");
-                    if (vdescription.isEmpty ()) vdescription = m.get ("$metadata", "notes");
                     if (! vdescription.isEmpty ()) element.setAttribute ("description", vdescription);
+
+                    MNode expose = m.child ("$metadata", "backend.lems.expose");
+                    if (expose != null)
+                    {
+                        String exposureName = expose.getOrDefault (name);
+                        element.setAttribute ("exposure", exposureName);
+
+                        if (expose instanceof MPart)
+                        {
+                            MPart mpart = (MPart) expose;
+                            MPersistent meta = (MPersistent) mpart.getSource ().getParent (); // $metadata that contains expose
+                            MPersistent mvar = (MPersistent) meta.getParent ();               // containing variable
+                            MNode       mdp  = mvar.getParent ();                             // containing doc or embedded part
+                            if (mpart.isFromTopDocument ()  ||  ! (mdp instanceof MDoc))
+                            {
+                                Element Exposure = addElement ("Exposure", componentTypeElements);
+                                Exposure.setAttribute ("name", exposureName);
+                                if (! dimension.isEmpty ()) Exposure.setAttribute ("dimension", dimension);
+                            }
+                        }
+                    }
                 }
+            }
+
+            if (! onStartElements.isEmpty ())
+            {
+                Element OnStart = addElement ("OnStart", dynamicsElements);
+                sequencer.append (OnStart, onStartElements);
+            }
+
+            for (OnCondition oc : onConditions) oc.append (renderer, dynamicsElements);
+
+            for (OnEvent oe : onEvents)
+            {
+                Element onEvent = addElement ("OnEvent", dynamicsElements);
+                onEvent.setAttribute ("port", oe.port);
+                sequencer.append (onEvent, oe.elements);
             }
 
             if (! dynamicsElements.isEmpty ())
@@ -2575,6 +2889,131 @@ public class ExportJob extends XMLutility
             sequencer.append (componentType, componentTypeElements);
         }
 
+        public class NamedDimensionalType
+        {
+            public String internal;
+            public String external;
+            public String dimension;
+            public String description;
+
+            public void parse (String value)
+            {
+                String[] splits = value.split ("\\(", 2);
+                external = splits[0];
+                splits = splits[1].split ("\\)", 2);
+                description = splits[1].trim ();
+                dimension   = splits[0];  // This is merely the raw name of the unit. Still needs to be converted to dimension.
+            }
+
+            public boolean equals (Object o)
+            {
+                NamedDimensionalType that = (NamedDimensionalType) o;
+                return external.equals (that.external); //  ||  internal.equals (that.internal);
+            }
+        }
+
+        public class Constant extends NamedDimensionalType
+        {
+            // Unit must be non-null. Otherwise, there's no point in creating a named constant.
+            public UnitParser value;
+
+            public boolean equals (Object o)
+            {
+                Constant that = (Constant) o;
+                return value.value == that.value.value  &&  value.unit.isCompatible (that.value.unit);
+            }
+        }
+
+        public void inheritRequirements (String inherit, List<NamedDimensionalType> list)
+        {
+            if (inherit.isEmpty ()) return;  // Just to save a little work. The code below will tolerate an empty string.
+            String[] inherits = inherit.split (",");
+            for (String i : inherits)
+            {
+                i = i.replace ("\"", "").trim ();
+                MNode parent = AppData.models.child (i);
+                if (parent != null)
+                {
+                    // Load requirements
+                    MNode metadata = parent.child ("$metadata");
+                    if (metadata != null)
+                    {
+                        for (MNode m : metadata)
+                        {
+                            String key = m.key ();
+                            if (key.startsWith ("backend.lems.requirement."))
+                            {
+                                NamedDimensionalType r = new NamedDimensionalType ();
+                                r.internal = key.substring (25);
+                                r.parse (m.get ());
+                                list.add (r);
+                            }
+                        }
+                    }
+                    // Expand grandparents
+                    inheritRequirements (parent.get ("$inherit"), list);
+                }
+            }
+        }
+
+        public OnCondition addOnCondition (Operator condition)
+        {
+            OnCondition result = new OnCondition ();
+            result.test = renderer.string (condition);
+            int index = onConditions.indexOf (result);
+            if (index >= 0) return onConditions.get (index);
+            onConditions.add (result);
+            result.elements = new ArrayList<Element> ();
+            return result;
+        }
+
+        public class OnCondition
+        {
+            public String        test;
+            public List<Element> elements;
+
+            public void append (Renderer renderer, List<Element> containerElements)
+            {
+                Element onCondition = addElement ("OnCondition", containerElements);
+                onCondition.setAttribute ("test", test);
+                sequencer.append (onCondition, elements);
+            }
+
+            public boolean equals (Object o)
+            {
+                OnCondition that = (OnCondition) o;
+                // TODO: This is a very crude test. Better is to implement proper Operator.equals().
+                return test.equals (that.test);
+            }
+        }
+
+        public class OnEvent
+        {
+            public String        port;
+            public List<Element> elements;
+
+            public boolean equals (Object o)
+            {
+                OnEvent that = (OnEvent) o;
+                return port.equals (that.port);
+            }
+        }
+
+        public class Regime
+        {
+            public String            name;
+            public boolean           initial;
+            public List<Element>     timeDerivatives;
+            public List<Element>     onEntry;
+            public List<OnCondition> onConditions;
+
+            public boolean equals (Object o)
+            {
+                Regime that = (Regime) o;
+                return name.equals (that.name);
+            }
+        }
+
         public class RendererLEMS extends Renderer
         {
             public boolean render (Operator op)
@@ -2583,12 +3022,22 @@ public class ExportJob extends XMLutility
                 {
                     Comparison c = (Comparison) op;
                     String                     middle = " .eq. ";
-                    if      (op instanceof NE) middle = " .ne. ";
+                    if      (op instanceof NE) middle = " .neq. ";
                     else if (op instanceof GT) middle = " .gt. ";
                     else if (op instanceof LT) middle = " .lt. ";
-                    else if (op instanceof GE) middle = " .ge. ";
-                    else if (op instanceof LE) middle = " .le. ";
+                    else if (op instanceof GE) middle = " .geq. ";
+                    else if (op instanceof LE) middle = " .leq. ";
                     c.render (this, middle);
+                    return true;
+                }
+                if (op instanceof AND)
+                {
+                    ((AND) op).render (this, " .and. ");
+                    return true;
+                }
+                if (op instanceof OR)
+                {
+                    ((OR) op).render (this, " .or. ");
                     return true;
                 }
                 if (op instanceof AccessVariable)
@@ -2608,6 +3057,18 @@ public class ExportJob extends XMLutility
                     return true;
                 }
                 return false;
+            }
+
+            public String string (Operator expression)
+            {
+                result = new StringBuilder ();
+                expression.render (this);
+                return result.toString ();
+            }
+
+            public void setAttribute (Element element, String attributeName, Operator expression)
+            {
+                element.setAttribute (attributeName, string (expression));
             }
         }
 
@@ -2668,33 +3129,14 @@ public class ExportJob extends XMLutility
                 }
                 else if (key.equals ("$metadata"))
                 {
-                    String prefix = "backend.lems.";
-                    int prefixLength = prefix.length ();
                     for (MNode m : p)
                     {
                         String mkey = m.key ();
-                        if (! mkey.startsWith (prefix)) continue;
-                        String suffix = mkey.substring (prefixLength);
-                        String value = m.get ();
-
-                        if (suffix.equals ("id")) continue;
-                        if (suffix.startsWith ("children"))
-                        {
-                            MPart mp = (MPart) m;
-                            if (! mp.isFromTopDocument ())
-                            {
-                                // As explained below, we always emit an embedded LEMS type.
-                                // We also emit types from the database if they are on an inheritance path
-                                // between the base part and the embedded part. However, those are selected elsewhere.
-                                MNode parent = mp.getSource ().getParent ();  // get source $metadata node
-                                if (! parent.get ("backend.lems.part").isEmpty ()) continue;  // base part, which we never emit
-                                if (((MPersistent) parent).getParent () instanceof MDoc) continue;  // not embedded
-                            }
-                        }
-                        componentType.set ("$metadata", mkey, value);
+                        if (! mkey.startsWith ("backend.lems.")) continue;
+                        if (mkey.endsWith ("id")) continue;
+                        componentType.set ("$metadata", mkey, m.get ());
                     }
                 }
-
                 continue;
             }
 
@@ -2803,6 +3245,10 @@ public class ExportJob extends XMLutility
                         Element notes = addElement ("notes", elements);
                         notes.setTextContent (m.get ());
                         break;
+                    case "annotation":
+                        Element annotation = addElement ("annotation", elements);
+                        annotation.setTextContent (m.get ());
+                        break;
                     default:
                         Element property = addElement ("property", elements);
                         property.setAttribute ("tag",   key);
@@ -2821,7 +3267,7 @@ public class ExportJob extends XMLutility
     /**
         Make eqset minimally executable.
     **/
-    public static void makeExecutable (EquationSet equations)
+    public static void makeExecutable (EquationSet equations, boolean findConstants)
     {
         try
         {
@@ -2837,7 +3283,7 @@ public class ExportJob extends XMLutility
             equations.resolveLHS ();
             equations.resolveRHS ();
             equations.determineUnits ();
-            equations.findConstants ();  // This could hurt the analysis. It simplifies expressions and substitutes constants, breaking some dependency chains.
+            if (findConstants) equations.findConstants ();  // This could hurt the analysis. It simplifies expressions and substitutes constants, breaking some dependency chains.
             equations.determineTraceVariableName ();
             equations.determineTypes ();
             equations.clearVariables ();
@@ -3036,9 +3482,46 @@ public class ExportJob extends XMLutility
         return result;
     }
 
+    public String useDimension (String unitName)
+    {
+        try
+        {
+            Unit<?> unit = UnitValue.UCUM.parse (unitName);
+            return useDimension (unit);
+        }
+        catch (Exception e)
+        {
+            return null;
+        }
+    }
+
+    /**
+        Translates given unit to its associated dimension, notes that it was used, and returns the
+        dimension name suitable for LEMS output.
+    **/
+    public String useDimension (Unit<?> unit)
+    {
+        if (unit == null) return null;
+        Dimension d = unit.getDimension ();
+        String result = dimensionsNML.get (d);
+        if (result == null) result = d.toString ();
+        dimensionsUsed.put (result, d);
+        return result;
+    }
+
     public void appendUnits (boolean assumeNML)
     {
-        Map<String,Dimension> dimensionsUsed = new HashMap<String,Dimension> ();
+        // Purge pure dimensions (added independent of specific unit) if they are standard and NML dimensions are available.
+        if (assumeNML)
+        {
+            List<String> keys = new ArrayList<String> (dimensionsUsed.keySet ());
+            for (String key : keys)
+            {
+                Dimension d = dimensionsUsed.get (key);
+                if (dimensionsNML.containsKey (d)) dimensionsUsed.remove (key);
+            }
+        }
+
         for (Entry<Unit<?>,String> e : unitsUsed.entrySet ())
         {
             Unit<?> key = e.getKey ();

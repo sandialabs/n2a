@@ -32,6 +32,7 @@ import systems.uom.ucum.internal.format.TokenException;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.StringWriter;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -52,6 +53,11 @@ import javax.measure.format.ParserException;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+
 import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
@@ -2629,7 +2635,10 @@ public class ImportJob extends XMLutility
             container.set ("$metadata", tag, value);
             return container.child ("$metadata", tag);
         }
-        if (nodeName.equals ("annotation")) return null;  // TODO: process annotations
+        if (nodeName.equals ("annotation"))
+        {
+            return Annotation (node, container);
+        }
 
         String id = getAttribute (node, "id", nodeName);
         String stem = id;
@@ -2702,6 +2711,29 @@ public class ImportJob extends XMLutility
         }
 
         return part;
+    }
+
+    public MNode Annotation (Node node, MNode container)
+    {
+        StringWriter resultStream = new StringWriter ();
+        DOMSource dom = new DOMSource (node);
+        StreamResult stream = new StreamResult (resultStream);
+        TransformerFactory factoryXform = TransformerFactory.newInstance ();
+        factoryXform.setAttribute ("indent-number", 4);
+        try
+        {
+            javax.xml.transform.Transformer xform = factoryXform.newTransformer ();
+            xform.setOutputProperty (OutputKeys.INDENT, "yes");
+            xform.transform (dom, stream);
+        }
+        catch (Exception e) {}
+
+        String result = resultStream.toString ();
+        result = result.split ("<annotation>", 2)[1];
+        result = result.split ("</annotation>", 2)[0];
+
+        container.set ("$metadata", "annotation", result);
+        return container.child ("$metadata", "annotation");
     }
 
     public void remap (MNode part, NameMap nameMap)
@@ -2902,7 +2934,7 @@ public class ImportJob extends XMLutility
         double offset    = getAttribute (node, "offset", 0.0);
 
         Unit unit = dimensions.get (dimension);
-        if (unit == null) unit = nmlDimensions.get (dimension); // If the file is defi
+        if (unit == null) unit = nmlDimensions.get (dimension);
         if (unit == null) unit = AbstractUnit.ONE;  // fall back, but in general something is broken about the file
         if      (power > 0) unit = unit.transform (new RationalConverter (BigInteger.TEN.pow (power), BigInteger.ONE));
         else if (power < 0) unit = unit.transform (new RationalConverter (BigInteger.ONE,             BigInteger.TEN.pow (-power)));
@@ -2999,8 +3031,10 @@ public class ImportJob extends XMLutility
             String description = getAttribute (node, "description");
             part = models.childOrCreate (modelName, name);
             part.set ("$lems", "1");
+            NameMap nameMap = null;
             if (! inherit.isEmpty ())
             {
+                nameMap = partMap.importMap (inherit);
                 // In general, we want to give priority to newly defined parts over db parts.
                 // Also, in general, they should never overlap.
                 // Here we make one feeble attempt to check new part definitions first, but this may
@@ -3009,7 +3043,7 @@ public class ImportJob extends XMLutility
                 if (models.child (modelName, inherit) == null)
                 {
                     part.set ("$metadata", "backend.lems.extends", inherit);  // Remember the original "extends" value, because inherited backend.lems.part usually conflates several base types.
-                    inherit = partMap.importName (inherit);
+                    inherit = nameMap.internal;
                 }
                 part.set ("$inherit", "\"" + inherit + "\"");
                 addDependencyFromLEMS (part, inherit);
@@ -3043,16 +3077,28 @@ public class ImportJob extends XMLutility
                         description      = getAttribute (child, "description");
                         String dimension = getAttribute (child, "dimension");
                         String value = "";
-                        if (! dimension.isEmpty ())
+                        if (nameMap != null)
+                        {
+                            String internalName = nameMap.importName (name);
+                            if (! internalName.equals (name))
+                            {
+                                value = name;
+                                name = internalName;
+                            }
+                        }
+                        if (dimension.isEmpty ())
+                        {
+                            value += "()";
+                        }
+                        else
                         {
                             Unit<?> unit = dimensions.get (dimension);
-                            if (unit == null) value = "(" + dimension + ")";
-                            else              value = "(" + UCUM.format (unit) + ")";
+                            if (unit == null) value += "(" + dimension + ")";
+                            else              value += "(" + UCUM.format (unit) + ")";
                         }
                         if (! description.isEmpty ())
                         {
-                            if (! value.isEmpty ()) value += " ";
-                            value += description;
+                            value += " " + description;
                         }
                         part.set ("$metadata", "backend.lems.requirement." + name, value);
                         break;
@@ -3194,7 +3240,18 @@ public class ImportJob extends XMLutility
                 equationCount++;
             }
             if (! description.isEmpty ()) result.set ("$metadata", "description", description);
-            if (! exposure.isEmpty ()  &&  ! exposure.equals (name)) result.set (exposure, name);
+            if (! exposure.isEmpty ())
+            {
+                if (exposure.equals (name))
+                {
+                    result.set ("$metadata", "backend.lems.expose", "");
+                }
+                else
+                {
+                    result.set ("$metadata", "backend.lems.expose", exposure);
+                    part.set (exposure, name);  // Create an alias so that other parts can find the value.
+                }
+            }
 
             if (   nodeName.equals ("Parameter")
                 || nodeName.equals ("IndexParameter")
@@ -3257,7 +3314,7 @@ public class ImportJob extends XMLutility
             expression = expression.replace (".neq.", "!=");
             expression = expression.replace (".and.", "&&");
             expression = expression.replace (".or.",  "||");
-            expression = expression.replace (" ",     "");  // There's really only one place the parser cares about space: between a numeric constant and its units. Everything else could stay as-is.
+            expression = expression.replace (" ",     "");
             return expression;
         }
 

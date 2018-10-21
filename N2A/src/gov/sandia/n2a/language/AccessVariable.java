@@ -16,8 +16,8 @@ import gov.sandia.n2a.language.type.Scalar;
 
 public class AccessVariable extends Operator
 {
-    public String name; // only needed to resolve the variable (since we will abandon the AST node)
-    public VariableReference reference;  // non-null when this node has been resolved in the context of an EquationSet
+    public String            name;      // of target variable as it appears in the AST node (which we throw away). Maybe modified by EquationSet.flatten(), but not by our own simplify().
+    public VariableReference reference; // non-null when this node has been resolved in the context of an EquationSet
 
     public AccessVariable ()
     {
@@ -106,7 +106,6 @@ public class AccessVariable extends Operator
             from.removeDependencyOn (v);
             from.addDependencyOn (v2);
             from.changed = true;
-            name = av.reference.variable.nameString ();
             reference.variable = v2;
             //   Merge resolution paths
             //   Our current resolution path should end with the equation set that contains v.

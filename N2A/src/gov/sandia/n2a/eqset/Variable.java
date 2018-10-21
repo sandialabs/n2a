@@ -825,10 +825,22 @@ public class Variable implements Comparable<Variable>, Cloneable
             }
         }
 
+        // Special cases where we should retain the current value of unit.
+        // reduction -- Because it will be set by incoming references.
+        // $variable -- EquationSet.addSpecials() sets it directly. 
+        boolean referenceOut = reference != null  &&  reference.variable != this;
+        boolean reduction = assignment != REPLACE  &&  ! referenceOut;
+        if (   unit != null
+            && (reduction  ||  equations.isEmpty ())  &&  derivative == null
+            && (nextUnit == null  ||  nextUnit.isCompatible (AbstractUnit.ONE)))
+        {
+            nextUnit = unit;
+        }
+
         boolean changed = nextUnit != unit  &&  (unit == null  ||  nextUnit == null  ||  ! nextUnit.isCompatible (unit));
         unit = nextUnit;
 
-        if (unit != null  &&  reference != null  &&  reference.variable != this)
+        if (unit != null  &&  referenceOut)
         {
             if (reference.variable.unit == null  ||  reference.variable.unit.isCompatible (AbstractUnit.ONE))
             {
