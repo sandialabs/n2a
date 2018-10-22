@@ -2470,7 +2470,10 @@ public class ExportJob extends XMLutility
             {
                 try
                 {
-                    equations = new EquationSet ((MPersistent) source);
+                    // Do a complete build of the model, including inheritance resolution.
+                    // This makes it indistinguishable from an embedded LEMS model.
+                    source = new MPart ((MPersistent) source);
+                    equations = new EquationSet (source);
                     makeExecutable (equations, false);
                 }
                 catch (Exception e)
@@ -2488,8 +2491,6 @@ public class ExportJob extends XMLutility
 
             List<NamedDimensionalType> requirements          = new ArrayList<NamedDimensionalType> ();
             List<NamedDimensionalType> requirementsInherited = new ArrayList<NamedDimensionalType> ();
-            // For direct db parts, need to know which requirements are already provided by parents.
-            if (! (source instanceof MPart)) inheritRequirements (source.get ("$inherit"), requirementsInherited);
 
             MNode metadata = source.child ("$metadata");
             if (metadata != null)
@@ -2498,17 +2499,12 @@ public class ExportJob extends XMLutility
                 {
                     String key = m.key ();
                     if (! key.startsWith ("backend.lems.")) continue;
-
-                    boolean local = true;
-                    if (m instanceof MPart)  // Only applies to embedded LEMS
-                    {
-                        MPart p = (MPart) m;
-                        // The immediate parent of p is $metadata, so we need to check p's grandparent to see if this is an embedded LEMS part.
-                        local = p.isFromTopDocument ()  ||  ! (((MPersistent) p.getSource ().getParent ()).getParent () instanceof MDoc);
-                    }
-
                     key = key.substring (13);
                     String value = m.get ();
+
+                    MPart p = (MPart) m;
+                    // The immediate parent of p is $metadata, so we need to check p's grandparent to see if this is an embedded LEMS part.
+                    boolean local = p.isFromTopDocument ()  ||  ! (((MPersistent) p.getSource ().getParent ()).getParent () instanceof MDoc);
 
                     if (key.startsWith ("children."))
                     {
@@ -2638,11 +2634,8 @@ public class ExportJob extends XMLutility
                 // See comments below on filtering variables.
                 String key = m.key ();
                 if (key.startsWith ("$")) continue;
-                if (m instanceof MPart)
-                {
-                    MPart p = (MPart) m;
-                    if (! p.isFromTopDocument ()  &&  p.getSource ().getParent () instanceof MDoc) continue;
-                }
+                MPart p = (MPart) m;
+                if (! p.isFromTopDocument ()  &&  p.getSource ().getParent () instanceof MDoc) continue;
                 Variable v = equations.find (Variable.fromLHS (key));
                 if (v == null) continue;
                 requirementVisitor.v = v;
@@ -2663,14 +2656,9 @@ public class ExportJob extends XMLutility
             {
                 String key = m.key ();
                 if (key.startsWith ("$")) continue;  // Should only be $inherit and $metadata
-                if (MPart.isPart (m)) continue;  // There shouldn't be any of these.
-
-                // Eliminate non-local items
-                if (m instanceof MPart)  // Only applies to embedded LEMS
-                {
-                    MPart p = (MPart) m;
-                    if (! p.isFromTopDocument ()  &&  p.getSource ().getParent () instanceof MDoc) continue;
-                }
+                MPart p = (MPart) m;
+                if (p.isPart ()) continue;  // There shouldn't be any of these.
+                if (! p.isFromTopDocument ()  &&  p.getSource ().getParent () instanceof MDoc) continue;  // Eliminate non-local items
 
                 Variable v = equations.find (Variable.fromLHS (key));
                 if (v != null) variables.put (v, m);  // If v is null, then it was revoked.
@@ -2844,18 +2832,15 @@ public class ExportJob extends XMLutility
                         String exposureName = expose.getOrDefault (name);
                         element.setAttribute ("exposure", exposureName);
 
-                        if (expose instanceof MPart)
+                        MPart mpart = (MPart) expose;
+                        MPersistent meta = (MPersistent) mpart.getSource ().getParent (); // $metadata that contains expose
+                        MPersistent mvar = (MPersistent) meta.getParent ();               // containing variable
+                        MNode       mdp  = mvar.getParent ();                             // containing doc or embedded part
+                        if (mpart.isFromTopDocument ()  ||  ! (mdp instanceof MDoc))
                         {
-                            MPart mpart = (MPart) expose;
-                            MPersistent meta = (MPersistent) mpart.getSource ().getParent (); // $metadata that contains expose
-                            MPersistent mvar = (MPersistent) meta.getParent ();               // containing variable
-                            MNode       mdp  = mvar.getParent ();                             // containing doc or embedded part
-                            if (mpart.isFromTopDocument ()  ||  ! (mdp instanceof MDoc))
-                            {
-                                Element Exposure = addElement ("Exposure", componentTypeElements);
-                                Exposure.setAttribute ("name", exposureName);
-                                if (! dimension.isEmpty ()) Exposure.setAttribute ("dimension", dimension);
-                            }
+                            Element Exposure = addElement ("Exposure", componentTypeElements);
+                            Exposure.setAttribute ("name", exposureName);
+                            if (! dimension.isEmpty ()) Exposure.setAttribute ("dimension", dimension);
                         }
                     }
                 }
