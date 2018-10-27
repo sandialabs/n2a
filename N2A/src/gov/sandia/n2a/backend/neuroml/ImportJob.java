@@ -233,6 +233,9 @@ public class ImportJob extends XMLutility
                     Network network = new Network (child);
                     networks.put (network.id, network);
                     break;
+                case "Simulation":
+                    simulation (child);
+                    break;
 
                 // LEMS ------------------------------------------------------
                 case "Target":
@@ -250,9 +253,6 @@ public class ImportJob extends XMLutility
                 case "ComponentType":
                     ComponentType component = new ComponentType (child);
                     components.put (component.part.key (), component);
-                    break;
-                case "Simulation":
-                    simulation (child);
                     break;
                 case "Component":
                 default:
@@ -2615,6 +2615,106 @@ public class ImportJob extends XMLutility
         }
     }
 
+    public void simulation (Node node)
+    {
+        String id     = getAttribute (node, "id");
+        String length = getAttribute (node, "length");
+        String step   = getAttribute (node, "step");
+        String target = getAttribute (node, "target");
+
+        if (primaryModel.equals (id)) primaryModel = target;  // redirect, since "Simulation" itself is not a proper object.
+
+        MNode part = models.childOrCreate (modelName, target);
+        part.set ("$t'", step);
+        part.set ("$p", "$t<" + length);
+
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () == Node.ELEMENT_NODE) output (child, part);
+        }
+    }
+
+    /**
+        Handles outputs under the NeuroML Simulation element (Display, OutputFile, EventOutputFile).
+        The LEMS output elements (under the LEMS Simulation element) work in close cooperation
+        with the NeuroML elements, so they are not directly supported here.
+    **/
+    public void output (Node node, MNode part)
+    {
+        String path      = getAttribute (node, "path");     // Is this a path that precedes fileName, or an XPath to some runtime instance?
+        String fileName  = getAttribute (node, "fileName");
+        //String format    = getAttribute (node, "format");   // Spike raster format.
+        String title     = getAttribute (node, "title");
+        String timeScale = getAttribute (node, "timeScale");
+        String xmin      = getAttribute (node, "xmin");
+        String xmax      = getAttribute (node, "xmax");
+        String ymin      = getAttribute (node, "ymin");
+        String ymax      = getAttribute (node, "ymax");
+
+        if (fileName.isEmpty ()) fileName = title;
+        if (! path.isEmpty ()) fileName = path + "/" + fileName;
+
+        String chartParameters = "";
+        if (! timeScale.isEmpty ()) chartParameters  = "timeScale=" + timeScale;
+        if (! xmin     .isEmpty ()) chartParameters += ",xmin="     + xmin;
+        if (! xmax     .isEmpty ()) chartParameters += ",xmax="     + xmax;
+        if (! ymin     .isEmpty ()) chartParameters += ",ymin="     + ymin;
+        if (! ymax     .isEmpty ()) chartParameters += ",ymax="     + ymax;
+        if (chartParameters.startsWith (",")) chartParameters = chartParameters.substring (1);
+
+        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+
+            String id            = getAttribute (child, "id");  // Presumably determines data series name, or equivalently, column heading.
+            String quantity      = getAttribute (child, "quantity");
+            String select        = getAttribute (child, "select");
+            String event         = getAttribute (child, "eventPort");
+            String scale         = getAttribute (child, "scale");
+            String lineTimeScale = getAttribute (child, "timeScale");
+            String color         = getAttribute (child, "color");
+
+            if (quantity.isEmpty ()  &&  ! select.isEmpty ()) quantity = select + "/ignored";
+            Path variablePath = new Path (quantity);
+            variablePath.resolve (part);
+            MNode container = variablePath.container ();
+            if (container == null) continue;
+            String variable = variablePath.target ();
+
+            String dummy = "x0";
+            int index = 1;
+            while (container.child (dummy) != null) dummy = "x" + index++;
+
+            String condition = variablePath.condition ();
+            if (! event.isEmpty ())
+            {
+                if (! condition.isEmpty ()) condition += "&&";
+                condition += "event(" + event + ")";
+                variable = "1";
+            }
+
+            String mode = "";
+            if (! scale        .isEmpty ()) mode = "scale="          + scale;
+            if (! color        .isEmpty ()) mode = ",color="         + color;
+            if (! lineTimeScale.isEmpty ()) mode = ",lineTimeScale=" + lineTimeScale;
+            if (! chartParameters.isEmpty ())
+            {
+                if (! mode.isEmpty ()) mode += ",";
+                mode += chartParameters;
+                chartParameters = "";  // Only output once
+            }
+
+            String output = "output(";
+            if (! fileName.isEmpty ()) output += "\"" + fileName + "\",";
+            output += variable;
+            if (! id.isEmpty ()) output += ",\"" + id + "\"";
+            if (! mode.isEmpty ()) output += ",\"" + mode + "\"";
+            output += ")";
+            if (! condition.isEmpty ()) output += "@" + condition;
+            container.set (dummy, output);
+        }
+    }
+
     /**
         Handles elements in a generic manner, including metadata elements.
         Generic elements get processed into parts under the given container.
@@ -3857,64 +3957,6 @@ public class ImportJob extends XMLutility
             if (part.child ("t") == null) pp.rename.put ("t", "$t");  // If t is not locally defined, then it is the same as $t.
 
             pp.process (part);
-        }
-    }
-
-    public void simulation (Node node)
-    {
-        String id     = getAttribute (node, "id");
-        String length = getAttribute (node, "length");
-        String step   = getAttribute (node, "step");
-        String target = getAttribute (node, "target");
-
-        if (primaryModel.equals (id)) primaryModel = target;  // redirect, since "Simulation" itself is not a proper object.
-
-        MNode part = models.childOrCreate (modelName, target);
-        part.set ("$t'", step);
-        part.set ("$p", "$t<" + length);
-
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            if (child.getNodeType () == Node.ELEMENT_NODE) output (child, part);
-        }
-    }
-
-    public void output (Node node, MNode part)
-    {
-        //String path     = getAttribute (node, "path");  // TODO: what is the relationship between path and fileName here?
-        String fileName = getAttribute (node, "fileName");
-        //String format   = getAttribute (node, "format");
-
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
-        {
-            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
-
-            String quantity = getAttribute (child, "quantity");
-            String select   = getAttribute (child, "select");
-            String event    = getAttribute (child, "eventPort");
-
-            if (quantity.isEmpty ()  &&  ! select.isEmpty ()) quantity = select + "/ignored";
-            Path variablePath = new Path (quantity);
-            variablePath.resolve (part);
-            MNode container = variablePath.container ();
-            if (container == null) continue;
-            String variable = variablePath.target ();
-
-            String dummy = "x0";
-            int index = 1;
-            while (container.child (dummy) != null) dummy = "x" + index++;
-
-            String condition = variablePath.condition ();
-            if (! event.isEmpty ())
-            {
-                if (! condition.isEmpty ()) condition += "&&";
-                condition += "event(" + event + ")";
-                variable = "1";
-            }
-
-            if (! condition.isEmpty ()) condition = "@" + condition;
-            if (fileName.isEmpty ()) container.set (dummy, "output("                      + variable + ")" + condition);
-            else                     container.set (dummy, "output(\"" + fileName + "\"," + variable + ")" + condition);
         }
     }
 

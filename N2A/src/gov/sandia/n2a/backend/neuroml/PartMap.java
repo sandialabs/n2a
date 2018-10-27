@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
+import gov.sandia.n2a.backend.neuroml.Sequencer.SequencerElement;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MPersistent;
@@ -224,6 +225,46 @@ public class PartMap
         {
             String result = inward.get (neuromlVariableName);
             if (result == null) return neuromlVariableName;
+            return result;
+        }
+
+        /**
+            Given a more specific hint about part identity, pick the most appropriate external name.
+            @param neuromlPartName If empty, then return the default name, which is the first one
+            given on the backend.lems.param line.
+        **/
+        public String exportName (String internalVariableName, String neuromlPartName)
+        {
+            ArrayList<String> names = outward.get (internalVariableName);
+            if (names == null) return internalVariableName;
+            String result = names.get (0);
+
+            if (names.size () > 1  &&  ! neuromlPartName.isEmpty ())  // The export name is ambiguous, so try to pick one most relevant to the given part.
+            {
+                if (internal.startsWith ("HHVariable"))  // rather inflexible hard coding
+                {
+                    if (neuromlPartName.contains ("Rate"))     return "r";
+                    if (neuromlPartName.contains ("Time"))     return "t";
+                    if (neuromlPartName.contains ("Variable")) return "x";
+                }
+
+                // Try sequencer
+                SequencerElement se = PluginNeuroML.sequencer.getSequencerElement (neuromlPartName);
+                if (se != null)
+                {
+                    int bestRank = Integer.MAX_VALUE;
+                    for (String f : names)
+                    {
+                        int rank = se.attributes.indexOf (f);
+                        if (rank >= 0  &&  rank < bestRank)
+                        {
+                            bestRank = rank;
+                            result = f;
+                        }
+                    }
+                }
+            }
+
             return result;
         }
 

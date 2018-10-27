@@ -9,8 +9,10 @@ package gov.sandia.n2a.backend.neuroml;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStreamWriter;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,6 +56,7 @@ import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.Visitor;
+import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.AND;
 import gov.sandia.n2a.language.operator.GE;
@@ -80,6 +83,7 @@ public class ExportJob extends XMLutility
     public List<Synapse>         synapses       = new ArrayList<Synapse> ();
     public List<AbstractCell>    cells          = new ArrayList<AbstractCell> ();
     public List<Network>         networks       = new ArrayList<Network> ();
+    public List<Component>       components     = new ArrayList<Component> ();
     public List<ComponentType>   componentTypes = new ArrayList<ComponentType> ();
     public int                   countConcentration;
     public int                   countInput;
@@ -225,6 +229,29 @@ public class ExportJob extends XMLutility
             topLevelPart (source);
         }
 
+        // Simulation
+        // There can be at most one Simulation element, so pick the one with most stuff in it.
+        // Order matters. We want networks to take priority over cells, and so on.
+        List<Simulation> simulations = new ArrayList<Simulation> ();
+        for (Network      n : networks  ) if (n.sim != null) simulations.add (n.sim);
+        for (Component    c : components) if (c.sim != null) simulations.add (c.sim);
+        for (AbstractCell c : cells     ) if (c.sim != null) simulations.add (c.sim);
+        for (Synapse      s : synapses  ) if (s.sim != null) simulations.add (s.sim);
+        for (IonChannel   i : channels  ) if (i.sim != null) simulations.add (i.sim);
+        Simulation best      = null;
+        int        bestScore = 0;
+        for (Simulation s : simulations)
+        {
+            int score = s.score ();
+            if (score > bestScore)
+            {
+                best      = s;
+                bestScore = score;
+            }
+        }
+        if (best != null) best.append ();
+        // TODO: Import is missing nax/g because it gets folded into channel population
+
         // ComponentTypes
         try
         {
@@ -298,10 +325,11 @@ public class ExportJob extends XMLutility
             Synapse s = addSynapse (source, true);
             s.id = source.key ();
         }
-        else
+        else  // generic Component instantiation, but could still be a NueroML part
         {
-            if (! type.isEmpty ()) requiresNML = true;  // backend.lems.part only refers to an NML base part.
-            genericPart (source, elements);
+            if (! type.isEmpty ()) requiresNML = true;  // backend.lems.part only refers to NML base parts.
+            Component c = new Component (source);
+            components.add (c);
         }
     }
 
@@ -311,10 +339,15 @@ public class ExportJob extends XMLutility
         List<Element>          networkElements = new ArrayList<Element> ();
         Map<String,Population> populations     = new TreeMap<String,Population> ();
         List<Space>            spaces          = new ArrayList<Space> ();
+        Simulation             sim;
 
         public Network (String populationID, AbstractCell cell)
         {
             id = "N2A_Network" + networks.size ();
+
+            // Capture the simulation object
+            sim = new Simulation (id);
+            sim.capture (populationID + "[0]", cell.sim);
 
             Element network = addElement ("network", elements);
             network.setAttribute ("id", id);
@@ -332,6 +365,9 @@ public class ExportJob extends XMLutility
             String lemsID = source.get ("$metadata", "backend.lems.id");
             if (! lemsID.isEmpty ()) id = lemsID;
 
+            sim = new Simulation (id, source);
+            // TODO: Some input types are not captured below.
+
             // Collect populations first, because they contain info needed by projections and inputs.
             for (MNode c : source)
             {
@@ -342,6 +378,7 @@ public class ExportJob extends XMLutility
                 {
                     Population pop = new Population (p);
                     populations.put (pop.id, pop);
+                    sim.capture (pop.id + "[0]", pop.cell.sim);
                 }
             }
 
@@ -355,8 +392,10 @@ public class ExportJob extends XMLutility
                 if (type.contains ("Synapse"))
                 {
                     Element result = addElement ("projection", networkElements);
-                    result.setAttribute ("synapse", addSynapse (p, false).id);
+                    Synapse s = addSynapse (p, false);
+                    result.setAttribute ("synapse", s.id);
                     connections (p, result, "connection", "", "");
+                    sim.capture (s.id, s.sim);
                 }
                 else if (type.contains ("Projection"))  // gap junctions and split synapses. These use the special projection types.
                 {
@@ -366,8 +405,9 @@ public class ExportJob extends XMLutility
                 {
                     // TODO: convert electricalProjection to Coupling during import
                     Element result = addElement ("electricalProjection", networkElements);
-                    String synapseID = addSynapse (p, true).id;
-                    connections (source, result, "electricalConnection", synapseID, synapseID);
+                    Synapse s = addSynapse (p, true);
+                    connections (source, result, "electricalConnection", s.id, s.id);
+                    sim.capture (s.id, s.sim);
                 }
                 else if (type.contains ("Input")  ||  type.contains ("Generator")  ||  type.contains ("Clamp")  ||  type.contains ("spikeArray")  ||  type.contains ("PointCurrent"))  // unary connection with embedded input
                 {
@@ -870,12 +910,13 @@ public class ExportJob extends XMLutility
 
     public class Synapse
     {
-        String  id;
-        String  chainID = "";
-        MPart   source;
-        MNode   base    = new MVolatile ();
-        boolean electrical;  // A hint about context. Shouldn't change identity.
-        boolean usedInCell;  // This is a Coupling between segments in a single cell model, and thus should not be emitted. (Parameter overrides, such as to G, are not supported in this case.)
+        String     id;
+        String     chainID = "";
+        MPart      source;
+        MNode      base    = new MVolatile ();
+        boolean    electrical;  // A hint about context. Shouldn't change identity.
+        boolean    usedInCell;  // This is a Coupling between segments in a single cell model, and thus should not be emitted. (Parameter overrides, such as to G, are not supported in this case.)
+        Simulation sim;
 
         public Synapse (MPart source, boolean electrical)
         {
@@ -914,6 +955,8 @@ public class ExportJob extends XMLutility
 
         public void append ()
         {
+            sim = new Simulation (id, source);
+
             if (usedInCell) return;
 
             if (! chainID.isEmpty ())  // We have embedded input, so the main synapse will be emitted elsewhere.
@@ -948,7 +991,9 @@ public class ExportJob extends XMLutility
                 {
                     skip.add (key);
                     Element plasticity = addElement ("plasticityMechanism", synapseElements);
-                    genericPart (p, plasticity);
+                    sim.push ("plasticityMechanism");
+                    genericPart (p, plasticity, sim);
+                    sim.pop ();
 
                     NameMap nameMap = partMap.importMap (partType);
                     String tauFac = nameMap.importName ("tauFac");
@@ -961,7 +1006,9 @@ public class ExportJob extends XMLutility
                     Element block = addElement ("blockMechanism", synapseElements);
                     block.setAttribute ("type", "voltageConcDepBlockMechanism");
                     block.setAttribute ("species", p.get ("$metadata", "species"));
-                    genericPart (p, block);
+                    sim.push ("blockMechanism");
+                    genericPart (p, block, sim);
+                    sim.pop ();
                 }
             }
             if (skip.size () > 0) type = "blockingPlasticSynapse";
@@ -970,7 +1017,7 @@ public class ExportJob extends XMLutility
             Element s = addElement (type, elements);
             s.setAttribute ("id", id);
             sequencer.append (s, synapseElements);
-            genericPart (source, s, skip);
+            genericPart (source, s, sim, skip);
         }
 
         public boolean equals (Object o)
@@ -1064,7 +1111,8 @@ public class ExportJob extends XMLutility
         }
         input.setAttribute ("id", id);
         standalone (source, input, inputElements);
-        genericPart (source, input, skip);
+        Simulation sim = new Simulation (null);  // Dummy. For now we don't handle output() in inputs.
+        genericPart (source, input, sim, skip);
         sequencer.append (input, inputElements);
         return id;
     }
@@ -1096,10 +1144,11 @@ public class ExportJob extends XMLutility
 
     public class AbstractCell
     {
-        public String id;
-        public MPart  source;
-        public MNode  base;
-        public int    populationSize;  // Ideally this would be a member of Population, but cells can be created outside a network, and N2A (but not NeuroML) allows them to have $n > 1.
+        public String     id;
+        public MPart      source;
+        public MNode      base;
+        public int        populationSize;  // Ideally this would be a member of Population, but cells can be created outside a network, and N2A (but not NeuroML) allows them to have $n > 1.
+        public Simulation sim;
 
         public AbstractCell (MPart source)
         {
@@ -1127,6 +1176,8 @@ public class ExportJob extends XMLutility
 
         public void append ()
         {
+            sim = new Simulation (id, source);
+
             String               type = source.get ("$metadata", "backend.lems.name");
             if (type.isEmpty ()) type = source.get ("$metadata", "backend.lems.part").split (",")[0];
             List<String> skip = new ArrayList<String> ();
@@ -1170,7 +1221,7 @@ public class ExportJob extends XMLutility
             Element cell = addElement (type, elements);
             cell.setAttribute ("id", id);
             standalone (source, cell);
-            genericPart (source, cell, skip);
+            genericPart (source, cell, sim, skip);
 
             if (type.equals ("izhikevichCell"))  // strip units
             {
@@ -1235,6 +1286,8 @@ public class ExportJob extends XMLutility
 
         public void append ()
         {
+            sim = new Simulation (id, source);
+
             cell = addElement ("cell", elements);
             standalone (source, cell, cellElements);
             cell.setAttribute ("id", id);
@@ -1931,13 +1984,13 @@ public class ExportJob extends XMLutility
                 generateSegmentGroup (false);
                 if (nonuniform)
                 {
+                    String type = channel.getTagName ();
+                    NameMap nameMap = partMap.importMap (type);
                     for (Entry<String,String> e : variableParameters.entrySet ())
                     {
                         String key = e.getKey ();
                         MNode v = source.child (key);
-                        String parameter = key;
-                        String fieldNames = v.get ("$metadata", "backend.lems.param");
-                        if (! fieldNames.isEmpty ()) parameter = sequencer.bestFieldName (channel, fieldNames);
+                        String parameter = nameMap.exportName (key, type);
 
                         Element vp = doc.createElement ("variableParameter");
                         channel.appendChild (vp);
@@ -1986,7 +2039,9 @@ public class ExportJob extends XMLutility
                 if (concentrationID.isEmpty ()) concentrationID = "N2A_Concentration" + countConcentration++;
                 concentration.setAttribute ("id",  concentrationID);
                 concentration.setAttribute ("ion", ion);
-                genericPart (source, concentration, inside0, outside0);
+                sim.push (id);
+                genericPart (source, concentration, sim, inside0, outside0);
+                sim.pop ();
 
                 Element species = addElement ("species", intra);
                 species.setAttribute ("id",                      ion);
@@ -2025,6 +2080,7 @@ public class ExportJob extends XMLutility
         public String        type;
         public List<Element> channelElements = new ArrayList<Element> ();
         public List<String>  skipList        = new ArrayList<String> ();  // A hint to wrapper element about which attributes it should skip.
+        public Simulation    sim;
 
         public IonChannel (MPart source)
         {
@@ -2047,10 +2103,14 @@ public class ExportJob extends XMLutility
             base.set ("$inherit", inherit);  // skip potential, if it existed
             List<String> forbidden = Arrays.asList ("$inherit", "c", "E", "Gall", "Gdensity", "population", "permeability");
             skipList.add ("Gall");  // "Gall" should not appear in either wrapper or ion channel.
+            EquationSet channelEquations = getEquations (source);
             for (MNode c : source)
             {
                 String key = c.key ();
                 if (forbidden.contains (key)) continue;
+                Variable v = channelEquations.find (Variable.fromLHS (key));
+                if (v != null  &&  v.hasAttribute ("dummy")) continue;
+
                 base.set (key, c);
                 skipList.add (key);
             }
@@ -2120,7 +2180,9 @@ public class ExportJob extends XMLutility
         public Element appendWrapper (List<Element> containerElements, List<String> skipList)
         {
             Element result = addElement (type, containerElements);
-            genericPart (source, result, skipList);
+            sim.push (id);
+            genericPart (source, result, sim, skipList);
+            sim.pop ();
             result.setAttribute ("id", source.key ());
             result.setAttribute ("ionChannel", id);
             String ion = source.get ("$metadata", "species");
@@ -2160,6 +2222,14 @@ public class ExportJob extends XMLutility
                 if (species.isFromTopDocument ()) channel.setAttribute ("species", species.get ());
             }
 
+            // Outputs
+            sim = new Simulation (id, source);
+            NameMap nameMap = partMap.importMap (type);
+            for (Variable v : getEquations (source).variables)
+            {
+                sim.check (v, nameMap);
+            }
+
             // Subparts
             for (MNode c : source)
             {
@@ -2168,7 +2238,12 @@ public class ExportJob extends XMLutility
                 type = p.get ("$metadata", "backend.lems.part");
                 if      (type.contains ("Q10"))  q10 (p, "q10ConductanceScaling", channelElements);
                 else if (type.contains ("gate")) gate (p, channelElements);
-                else                             genericPart (p, channelElements);
+                else
+                {
+                    sim.push (p.key ());
+                    genericPart (p, channelElements, sim);
+                    sim.pop ();
+                }
             }
             sequencer.append (channel, channelElements);
         }
@@ -2184,7 +2259,9 @@ public class ExportJob extends XMLutility
 
             Element q10 = addElement (type, parentElements);
             if (! type.equals ("q10ConductanceScaling")) q10.setAttribute ("type", subtype);
-            genericPart (part, q10);
+            sim.push (part.key ());
+            genericPart (part, q10, sim);
+            sim.pop ();
         }
 
         public static final int alpha      = 0x1;  // forward
@@ -2345,7 +2422,9 @@ public class ExportJob extends XMLutility
 
             Element r = addElement (name, gateElements);
             r.setAttribute ("type", type);
-            genericPart (part, r);
+            sim.push (name);
+            genericPart (part, r, sim);
+            sim.pop ();
         }
 
         public void kineticState (MPart part, List<Element> parentElements)
@@ -2393,6 +2472,323 @@ public class ExportJob extends XMLutility
             if (! (that instanceof IonChannel)) return false;
             IonChannel ic = (IonChannel) that;
             return ic.base.equals (base);  // deep compare
+        }
+    }
+
+    public class Component
+    {
+        public Simulation sim;
+
+        public Component (MPart source)
+        {
+            sim = new Simulation (source.key ());
+            genericPart (source, elements, sim);
+        }
+    }
+
+    public class Simulation
+    {
+        public String        target;  // Generally, a Network
+        public List<Display> displays = new ArrayList<Display> ();
+        public UnitParser    step;
+        public UnitParser    duration;
+        public Deque<String> xpath;  // Path from target to current object which might add a line item to a display.
+
+        public Simulation (String target)
+        {
+            this.target = target;
+        }
+
+        public Simulation (String target, MPart source)
+        {
+            this.target = target;
+            EquationSet equations = getEquations (source);
+            if (equations != null) extractTiming (equations);
+        }
+
+        public void append ()
+        {
+            List<Element> simulationElements = new ArrayList<Element> ();
+            for (Display d : displays) d.append (simulationElements);
+
+            Element simulation = addElement ("Simulation", elements);
+            simulation.setAttribute ("id",     "N2A_Simulation");  // There can only ever be one, so no need for number.
+            simulation.setAttribute ("target", target);
+            if (step     != null) simulation.setAttribute ("step",   step    .print ());
+            if (duration != null) simulation.setAttribute ("length", duration.print ());
+            sequencer.append (simulation, simulationElements);
+        }
+
+        public void extractTiming (EquationSet equations)
+        {
+            Variable dt = equations.find (new Variable ("$t", 1));
+            if (dt != null  &&  dt.hasAttribute ("constant"))
+            {
+                Constant value = (Constant) dt.equations.first ().expression;
+                step = new UnitParser (value.unit, value.getDouble ());
+            }
+            equations.determineDuration ();  // Result is stored in metadata, always in seconds.
+            String durationString = equations.getNamedValue ("duration");
+            if (! durationString.isEmpty ())
+            {
+                double value = Double.valueOf (durationString);
+                duration = new UnitParser (UnitValue.seconds, value);
+            }
+        }
+
+        public void push (String name)
+        {
+            if (xpath == null) xpath = new ArrayDeque<String> ();
+            xpath.push (name);
+        }
+
+        public void pop ()
+        {
+            // pop() must always match push(), so no need to check for null xpath. An NPE here indicates a real bug.
+            xpath.pop ();
+        }
+
+        /**
+            Add a top-level string to the xpath of each line item after they have already been generated.
+            Used primarily by Network to wrap an AbstractCell after the fact.
+        **/
+        public void capture (String name, Simulation that)
+        {
+            if (step     == null) step     = that.step;
+            if (duration == null) duration = that.duration;
+
+            name += "/";
+            for (Display d : that.displays)
+            {
+                for (Display.Line l : d.lines)
+                {
+                    l.quantity = name + l.quantity;
+                }
+
+                int index = displays.indexOf (d);
+                if (index < 0)
+                {
+                    displays.add (d);
+                }
+                else
+                {
+                    Display dest = displays.get (index);
+                    for (Display.Line l : d.lines)
+                    {
+                        dest.lines.add (l);
+                    }
+                }
+            }
+        }
+
+        public void check (Variable v, NameMap nameMap)
+        {
+            v.visit (new Visitor ()
+            {
+                public boolean visit (Operator op)
+                {
+                    if (op instanceof Output)
+                    {
+                        add (v.container, (Output) op, nameMap);
+                        return false;
+                    }
+                    return true;
+                }
+            });
+        }
+
+        public void add (EquationSet container, Output output, NameMap nameMap)
+        {
+            // Assuming output() has been pre-processed properly, the first argument is file.
+            String file = output.operands[0].getString ();
+            Display display = addDisplay (file);
+            if (file.isEmpty ()) display.type = "Display";
+            else                 display.type = "OutputFile";
+            String scale     = "";
+            String timeScale = "";
+            String color     = "";
+            if (output.operands.length > 3)
+            {
+                String mode = output.operands[3].getString ();
+                String[] pieces = mode.split (",");
+                for (String s : pieces)
+                {
+                    String[] nv = s.split ("=", 2);
+                    if (nv.length < 2) continue;
+                    String key = nv[0].trim ();
+                    if (key.equals ("raw")) continue;
+                    String value = nv[1].trim ();
+                    if (value.isEmpty ()) continue;
+                    switch (key)
+                    {
+                        // Display
+                        case "xmin":
+                            display.xmin = value;
+                            display.type = "Display";
+                            break;
+                        case "xmax":
+                            display.xmax = value;
+                            display.type = "Display";
+                            break;
+                        case "ymin":
+                            display.ymin = value;
+                            display.type = "Display";
+                            break;
+                        case "ymax":
+                            display.ymax = value;
+                            display.type = "Display";
+                            break;
+                        case "timeScale":
+                            display.timeScale = value;
+                            display.type = "Display";
+                            break;
+
+                        // Line
+                        case "scale":
+                            scale = value;
+                            break;
+                        case "lineTimeScale":
+                            timeScale = value;
+                            break;
+                        case "color":
+                            color = value;
+                            break;
+                    }
+                }
+            }
+
+            Display.Line line = display.addLine ();
+
+            MNode source = container.source;
+            String targetType = source.get ("$metadata", "backend.lems.extends");
+            if (targetType.isEmpty ()) targetType = source.get ("$metadata", "backend.lems.part").split (",")[0];
+            AccessVariable av = (AccessVariable) output.operands[1];
+            String name = nameMap.exportName (av.name, targetType);
+            line.quantity = "";
+            if (xpath != null) for (String x : xpath) line.quantity += x + "/";
+            line.quantity += name;
+
+            // Determine column name
+            // See Ouptut.eval() for similar code. This version must work with static model information
+            // rather than an instantiated network.
+            line.id = "";
+            if (output.operands.length > 2)  // column name is specified
+            {
+                line.id = output.operands[2].getString ();
+            }
+            else if (display.type.equals ("Display"))  // Auto-generate column name, but only for Display.
+            {
+                String prefix = container.prefix ();
+                if (prefix.isEmpty ()) line.id =                output.variableName;
+                else                   line.id = prefix + "." + output.variableName;
+            }
+
+            line.scale     = scale;
+            line.timeScale = timeScale;
+            line.color     = color;
+        }
+
+        public Display addDisplay (String name)
+        {
+            Display result = new Display (name);
+            int index = displays.indexOf (result);
+            if (index >= 0) return displays.get (index);
+            result.id = "N2A_Output" + displays.size ();
+            displays.add (result);
+            result.lines = new ArrayList<Display.Line> ();
+            result.xmin = "";
+            result.xmax = "";
+            result.ymin = "";
+            result.ymax = "";
+            result.timeScale = "";
+            return result;
+        }
+
+        public class Display
+        {
+            String     type;  // Display or OutputFile
+            String     name;  // title or fileName
+            String     id;
+            String     xmin;
+            String     xmax;
+            String     ymin;
+            String     ymax;
+            String     timeScale;
+            List<Line> lines;
+
+            public Display (String name)
+            {
+                this.name = name;
+            }
+
+            public void append (List<Element> simulationElements)
+            {
+                String nameType;
+                String lineType;
+                if (type.equals ("Display"))
+                {
+                    nameType = "title";
+                    lineType = "Line";
+                }
+                else
+                {
+                    nameType = "fileName";
+                    lineType = "OutputColumn";
+                }
+
+                List<Element> displayElements = new ArrayList<Element> ();
+                for (Line l : lines) l.append (lineType, displayElements);
+
+                Element display = addElement (type, simulationElements);
+                display.setAttribute ("id",     id);
+                display.setAttribute (nameType, name);
+                if (! xmin     .isEmpty ()) display.setAttribute ("xmin",      xmin);
+                if (! xmax     .isEmpty ()) display.setAttribute ("xmax",      xmax);
+                if (! ymin     .isEmpty ()) display.setAttribute ("ymin",      ymin);
+                if (! ymax     .isEmpty ()) display.setAttribute ("ymax",      ymax);
+                if (! timeScale.isEmpty ()) display.setAttribute ("timeScale", timeScale);
+                sequencer.append (display, displayElements);
+            }
+
+            public Line addLine ()
+            {
+                Line result = new Line ();
+                lines.add (result);
+                return result;
+            }
+
+            public class Line
+            {
+                String id;
+                String quantity;  // a path to the value
+                String scale;
+                String timeScale;
+                String color;
+
+                public void append (String lineType, List<Element> displayElements)
+                {
+                    Element e = addElement (lineType, displayElements);
+                    e.setAttribute ("quantity", quantity);
+                    if (! id       .isEmpty ()) e.setAttribute ("id",        id);
+                    if (! scale    .isEmpty ()) e.setAttribute ("scale",     scale);
+                    if (! timeScale.isEmpty ()) e.setAttribute ("timeScale", timeScale);
+                    if (! color    .isEmpty ()) e.setAttribute ("color",     color);
+                }
+            }
+
+            public boolean equals (Object o)
+            {
+                Display that = (Display) o;
+                return name.equals (that.name);
+            }
+        }
+
+        public int score ()
+        {
+            int result = displays.size ();
+            if (step     != null) result++;
+            if (duration != null) result++;
+            return result;
         }
     }
 
@@ -2546,41 +2942,7 @@ public class ExportJob extends XMLutility
                 for (Entry<String,ArrayList<String>> e : nameMap.outward.entrySet ())
                 {
                     String key = e.getKey ();
-                    ArrayList<String> outNames = e.getValue ();
-                    if (outNames.size () > 1)
-                    {
-                        // Handle special cases where we care about choice of output variable based on context.
-                        if (nameMap.internal.startsWith ("HHVariable"))  // rather inflexible hard coding
-                        {
-                            String value = "";
-                            if      (extension.contains ("Rate"))     value = "r";
-                            else if (extension.contains ("Time"))     value = "t";
-                            else if (extension.contains ("Variable")) value = "x";
-                            if (! value.isEmpty ())
-                            {
-                                rename.put (key, value);
-                                continue;
-                            }
-                        }
-                        else if (extension.equals ("channelPopulation"))
-                        {
-                            rename.put (key, "geff");
-                            continue;
-                        }
-                        else if (extension.equals ("izhikevich2007Cell"))
-                        {
-                            rename.put (key, "vpeak");
-                            continue;
-                        }
-                        else if (extension.equals ("pulseGenerator"))
-                        {
-                            rename.put (key, "amplitude");
-                            continue;
-                        }
-                        // The remaining case is Compartment.I maping to {iMemb,iSyn,iChannels}
-                        // Since iMemb is the only meaningful variable, and the default, no need for further action.
-                    }
-                    rename.put (key, outNames.get (0));
+                    rename.put (key, nameMap.exportName (key, extension));
                 }
             }
 
@@ -3068,7 +3430,7 @@ public class ExportJob extends XMLutility
     /**
         Handles all Components, whether or not they are NML-defined types.
     **/
-    public Element genericPart (MPart part, List<Element> elements)
+    public Element genericPart (MPart part, List<Element> elements, Simulation sim)
     {
         String id   = part.key ();
         String type = part.get ("$metadata", "backend.lems.part").split (",")[0];  // first part should be preferred output type
@@ -3079,17 +3441,17 @@ public class ExportJob extends XMLutility
         }
         Element e = addElement (type, elements);
         if (! id.isEmpty ()) e.setAttribute ("id", id);
-        genericPart (part, e);
+        genericPart (part, e, sim);
         if (! e.hasAttributes ()  &&  ! e.hasChildNodes ()) elements.remove (e);  // For aesthetic reasons, don't insert empty elements.
         return e;
     }
 
-    public void genericPart (MPart part, Element result, String... skip)
+    public void genericPart (MPart part, Element result, Simulation sim, String... skip)
     {
-        genericPart (part, result, Arrays.asList (skip));
+        genericPart (part, result, sim, Arrays.asList (skip));
     }
 
-    public void genericPart (MPart part, Element result, List<String> skipList)
+    public void genericPart (MPart part, Element result, Simulation sim, List<String> skipList)
     {
         EquationSet partEquations = getEquations (part);
         List<Element> resultElements = new ArrayList<Element> ();
@@ -3097,6 +3459,9 @@ public class ExportJob extends XMLutility
         MNode componentType = new MVolatile ();
         boolean needsComponentType = false;
         boolean inheritedOnly = true;
+
+        String type = result.getTagName ();
+        NameMap nameMap = partMap.exportMap (part);
 
         for (MNode c : part)
         {
@@ -3137,7 +3502,9 @@ public class ExportJob extends XMLutility
                 }
                 else
                 {
-                    genericPart (p, resultElements);
+                    sim.push (key);
+                    genericPart (p, resultElements, sim);
+                    sim.pop ();
                 }
             }
             else
@@ -3151,8 +3518,7 @@ public class ExportJob extends XMLutility
                 Variable v = partEquations.find (Variable.fromLHS (key));
                 boolean constant = v != null  &&  v.hasAttribute ("constant");  // v could be null if it is revoked (MPart still contains the variable, but EquationSet eliminates it).
 
-                String name = sequencer.bestFieldName (result, p.get ("$metadata", "backend.lems.param"));
-                if (name.isEmpty ()) name = key;
+                String name = nameMap.exportName (key, type);
                 boolean required = sequencer.isRequired (result, name);
 
                 boolean param = p.child ("$metadata", "param") != null;
@@ -3186,7 +3552,7 @@ public class ExportJob extends XMLutility
                     }
                 }
 
-                // TODO: Scan for output() calls
+                sim.check (v, nameMap);
             }
         }
         sequencer.append (result, resultElements);
@@ -3385,6 +3751,20 @@ public class ExportJob extends XMLutility
                 return;
             }
 
+            init (unitString);
+        }
+
+        public UnitParser (Unit<?> unit, double value)
+        {
+            this.unit  = unit;
+            this.value = value;
+
+            String unitString = UCUM.format (unit);
+            init (unitString);
+        }
+
+        public void init (String unitString)
+        {
             // Determine power in numberString itself
             double power = 1;
             if (value != 0) power = Math.pow (10, Math.floor ((Math.getExponent (value) + 1) / baseRatio));

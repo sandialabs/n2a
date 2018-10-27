@@ -90,26 +90,6 @@ public class Sequencer extends XMLutility
         return se.required.contains (param);
     }
 
-    public String bestFieldName (Element parent, String fieldNames)
-    {
-        String[] pieces = fieldNames.split (",");
-        SequencerElement se = getSequencerElement (parent);
-        if (se == null) return pieces[0];
-
-        String result = pieces[0];
-        int bestRank = Integer.MAX_VALUE;
-        for (String f : pieces)
-        {
-            int rank = se.attributes.indexOf (f);
-            if (rank >= 0  &&  rank < bestRank)
-            {
-                bestRank = rank;
-                result = f;
-            }
-        }
-        return result;
-    }
-
     public void loadXSD (String source)
     {
         try
