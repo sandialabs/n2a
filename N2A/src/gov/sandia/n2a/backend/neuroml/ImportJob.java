@@ -2697,6 +2697,7 @@ public class ImportJob extends XMLutility
             if (! scale        .isEmpty ()) mode = "scale="          + scale;
             if (! color        .isEmpty ()) mode = ",color="         + color;
             if (! lineTimeScale.isEmpty ()) mode = ",lineTimeScale=" + lineTimeScale;
+            if (mode.startsWith (",")) mode = mode.substring (1);
             if (! chartParameters.isEmpty ())
             {
                 if (! mode.isEmpty ()) mode += ",";
@@ -4028,7 +4029,7 @@ public class ImportJob extends XMLutility
                     }
                 }
 
-                // Try direct lookup
+                // Try members of root or its parents
                 MNode next = definitionFor (p.partName, lineage);
                 // If that fails, try aliases
                 if (next == null)
@@ -4052,6 +4053,12 @@ public class ImportJob extends XMLutility
                         next = models.child (modelName, typeName);
                         isDirect = false;
                     }
+                }
+                // If that fails, check for a folded part
+                if (next == null)
+                {
+                    String inherit = root.get ("$inherit").replaceAll ("\"", "");
+                    if (p.partName.equals (inherit)) next = root;  // This can happen if the path name refers to an ionChannel folded into a channelPopulation.
                 }
 
                 // Check if connection

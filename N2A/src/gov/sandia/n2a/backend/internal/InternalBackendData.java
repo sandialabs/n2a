@@ -890,6 +890,7 @@ public class InternalBackendData
         if (singleton  ||  s.connected  ||  s.needInstanceTracking  ||  populationCanResize)  // track instances
         {
             // The reason populationCanResize forces use of the instances array is to enable pruning of parts when $n decreases.
+            // The reason to "track instances" for a singleton is to allocate a slot for direct storage of the single instance in valuesObject.
 
             instances = countGlobalObject++;
             namesGlobalObject.add ("instances");

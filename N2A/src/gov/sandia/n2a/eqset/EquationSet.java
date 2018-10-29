@@ -1434,7 +1434,7 @@ public class EquationSet implements Comparable<EquationSet>
         Scans all conditional forms of $type, and stores the patterns in the splits field.
         Depends on results of: resolveLHS(), resolveRHS()
     **/
-    public void collectSplits () throws Exception
+    public void collectSplits ()
     {
         for (EquationSet s : parts)
         {

@@ -67,7 +67,7 @@ public class Population extends Instance
         // zero external buffered variables that may be written before first finish()
         for (Variable v : bed.globalBufferedExternalWrite) set (v, v.type);  // v.type should be pre-loaded with zero-equivalent values
 
-        if (bed.index != null)
+        if (bed.index != null  &&  ! bed.singleton)
         {
             valuesFloat[bed.indexNext] = 0;  // Using floats directly as index counter limits us to 24 bits, or about 16 million. Internal is not intended for large simulations, so this limitation is acceptable.
             // indexAvailable is initially null
