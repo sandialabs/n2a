@@ -1154,7 +1154,7 @@ public class EquationSet implements Comparable<EquationSet>
 
     public void addGlobalConstants () throws ParseException
     {
-        String key = AppData.state.get ("General", "constants");
+        String key = AppData.state.getOrDefault ("General", "constants", "Constants");
         MNode constants = AppData.models.child (key);
         if (constants == null) return;
         for (MNode c : constants)

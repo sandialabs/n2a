@@ -88,7 +88,7 @@ public class AppData
             while ((entry = zip.getNextEntry ()) != null)
             {
                 MDoc doc = (MDoc) models.set (entry.getName (), "");
-                BufferedReader reader = new BufferedReader (new InputStreamReader (zip));
+                BufferedReader reader = new BufferedReader (new InputStreamReader (zip, "UTF-8"));
                 reader.readLine ();  // dispose of schema line
                 doc.read (reader);
             }

@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -14,7 +14,6 @@ import gov.sandia.n2a.parms.ParameterDomain;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.io.RandomAccessFile;
@@ -78,8 +77,8 @@ public class InternalBackend extends Backend
         public void run ()
         {
             String jobDir = new File (job.get ()).getParent ();  // assumes the MNode "job" is really an MDoc. In any case, the value of the node should point to a file on disk where it is stored in a directory just for it.
-            try {err.set (new PrintStream (new FileOutputStream (new File (jobDir, "err"), true)));}
-            catch (FileNotFoundException e) {}
+            try {err.set (new PrintStream (new FileOutputStream (new File (jobDir, "err"), true), false, "UTF-8"));}
+            catch (Exception e) {}
 
             long elapsedTime = 0;
             try

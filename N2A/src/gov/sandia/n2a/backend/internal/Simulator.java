@@ -12,7 +12,6 @@ import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.HashMap;
@@ -79,8 +78,8 @@ public class Simulator implements Iterable<Part>
 
     public Simulator (Wrapper wrapper, long seed, EventFactory factory)
     {
-        try {out = new PrintStream (new File ("out").getAbsoluteFile ());}      // put in current working dir, which should be the job directory
-        catch (FileNotFoundException e) {out = System.out;}  // if that fails, just use the default stdout
+        try {out = new PrintStream (new File ("out").getAbsoluteFile (), "UTF-8");}      // put in current working dir, which should be the job directory
+        catch (Exception e) {out = System.out;}  // if that fails, just use the default stdout
 
         random = new Random (seed);
 

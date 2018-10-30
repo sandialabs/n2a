@@ -15,7 +15,6 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
-import tec.uom.se.AbstractUnit;
 import gov.sandia.n2a.language.type.Matrix;
 
 public class Norm extends Function

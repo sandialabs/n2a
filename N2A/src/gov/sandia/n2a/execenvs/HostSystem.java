@@ -199,7 +199,7 @@ public abstract class HostSystem
 
     public static String streamToString (InputStream input)
     {
-        try (BufferedReader reader = new BufferedReader (new InputStreamReader (input)))
+        try (BufferedReader reader = new BufferedReader (new InputStreamReader (input, "UTF-8")))
         {
             return reader.lines ().collect (Collectors.joining ("\n"));
         }

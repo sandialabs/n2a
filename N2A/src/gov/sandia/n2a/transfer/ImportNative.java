@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -13,8 +13,8 @@ import gov.sandia.n2a.ui.eq.undo.AddDoc;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
+import java.nio.file.Files;
 
 public class ImportNative implements Importer
 {
@@ -27,7 +27,7 @@ public class ImportNative implements Importer
     @Override
     public void process (File source)
     {
-        try (BufferedReader reader = new BufferedReader (new FileReader (source)))
+        try (BufferedReader reader = Files.newBufferedReader (source.toPath ()))
         {
             reader.readLine ();  // dispose of schema line
             MVolatile doc = new MVolatile ();
@@ -42,7 +42,7 @@ public class ImportNative implements Importer
     @Override
     public float isIn (File source)
     {
-        try (BufferedReader reader = new BufferedReader (new FileReader (source)))
+        try (BufferedReader reader = Files.newBufferedReader (source.toPath ()))
         {
             String line = reader.readLine ();
             if (line.startsWith ("N2A.schema")) return 1;

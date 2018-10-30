@@ -1,5 +1,5 @@
 /*
-Copyright 2016,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -7,9 +7,9 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.db;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
@@ -182,7 +182,7 @@ public class MDoc extends MPersistent
         try
         {
             needsWrite = true;  // lie to ourselves, to prevent being put onto the MDir write queue
-            schema.readAll (new FileReader (file), this);
+            schema.readAll (Files.newBufferedReader (file.toPath ()), this);
         }
         catch (IOException e)
         {
@@ -198,7 +198,7 @@ public class MDoc extends MPersistent
 	    try
 	    {
 	        file.getParentFile ().mkdirs ();
-	        FileWriter writer = new FileWriter (file);
+	        OutputStreamWriter writer = new OutputStreamWriter (new FileOutputStream (file), "UTF-8");
 	        schema.writeAll (writer, this);
 	        writer.close ();
 	        clearChanged ();

@@ -105,7 +105,7 @@ public class Operator implements Cloneable
     public interface Factory extends ExtensionPoint
     {
         public String   name ();  ///< Unique string for searching in the table of registered operators. Used explicitly by parser.
-        public Operator createInstance ();  ///< Operators may be instantiated with specific operands. The operands must be set separately based on category (Unary, Binary, Function)
+        public Operator createInstance ();
     }
 
     /// Example implementation of function to register Operator
