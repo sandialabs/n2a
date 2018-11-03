@@ -103,7 +103,7 @@ public class BackendNeuroML extends Backend
                 if (jnmlHome == null) jnmlHome = "/usr/local/jNeuroML";  // just a guess
                 jnmlCommand = Paths.get (jnmlHome, "jnml");
 
-                if (! simulator.isEmpty ())
+                if (! simulator.isEmpty ()  &&  ! simulator.equals ("neuron"))  // NUERON gets special treatment because jnml will run it for us.
                 {
                     ProcessBuilder b = new ProcessBuilder (jnmlCommand.toString (), modelPath.toString (), "-" + simulator);
                     Map<String,String> env = b.environment ();

@@ -220,9 +220,9 @@ public class NodeJob extends NodeBase
         File path = new File (source.get ()).getParentFile ();
         for (File file : path.listFiles ())
         {
-            NodeFile newNode;
-            String fileName = file.getName ();
+            if (file.isDirectory ()) continue;
 
+            String fileName = file.getName ();
             if (fileName.startsWith ("n2a_job" )) continue;
             if (fileName.equals     ("model"   )) continue;  // This is the file associated with our own "source"
             if (fileName.equals     ("started" )) continue;
@@ -231,7 +231,9 @@ public class NodeJob extends NodeBase
             if (fileName.endsWith   (".bin"    )) continue;  // Don't show generated binaries
             if (fileName.endsWith   (".aplx"   )) continue;
             if (fileName.endsWith   (".columns")) continue;  // Hint for column names when simulator doesn't output them.
+            if (fileName.endsWith   (".mod"    )) continue;  // NEURON files
 
+            NodeFile newNode;
             if      (fileName.endsWith ("out"    )) newNode = new NodeFile (NodeFile.Type.Output,  file);
             else if (fileName.endsWith ("err"    )) newNode = new NodeFile (NodeFile.Type.Error,   file);
             else if (fileName.endsWith ("result" )) newNode = new NodeFile (NodeFile.Type.Result,  file);

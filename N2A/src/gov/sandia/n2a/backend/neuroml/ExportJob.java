@@ -2684,7 +2684,7 @@ public class ExportJob extends XMLutility
             {
                 line.id = output.operands[2].getString ();
             }
-            else if (display.type.equals ("Display"))  // Auto-generate column name, but only for Display.
+            else   // Auto-generate column name
             {
                 String prefix = container.prefix ();
                 if (prefix.isEmpty ()) line.id =                output.variableName;
@@ -2753,11 +2753,14 @@ public class ExportJob extends XMLutility
                 Element display = addElement (type, simulationElements);
                 display.setAttribute ("id",     id);
                 display.setAttribute (nameType, name);
-                if (! xmin     .isEmpty ()) display.setAttribute ("xmin",      xmin);
-                if (! xmax     .isEmpty ()) display.setAttribute ("xmax",      xmax);
-                if (! ymin     .isEmpty ()) display.setAttribute ("ymin",      ymin);
-                if (! ymax     .isEmpty ()) display.setAttribute ("ymax",      ymax);
-                if (! timeScale.isEmpty ()) display.setAttribute ("timeScale", timeScale);
+                if (type.equals ("Display"))
+                {
+                    if (! xmin     .isEmpty ()) display.setAttribute ("xmin",      xmin);
+                    if (! xmax     .isEmpty ()) display.setAttribute ("xmax",      xmax);
+                    if (! ymin     .isEmpty ()) display.setAttribute ("ymin",      ymin);
+                    if (! ymax     .isEmpty ()) display.setAttribute ("ymax",      ymax);
+                    if (! timeScale.isEmpty ()) display.setAttribute ("timeScale", timeScale);
+                }
                 sequencer.append (display, displayElements);
             }
 
@@ -2767,7 +2770,7 @@ public class ExportJob extends XMLutility
                 try (PrintStream ps = new PrintStream (new FileOutputStream (jobDir.resolve (name + ".columns").toFile (), true), false, "UTF-8"))
                 {
                     ps.println ("$t");  // Because this function is used mainly by the LEMS backend, and LEMS always puts time in first column.
-                    for (Line l : lines) ps.println (l.quantity);
+                    for (Line l : lines) ps.println (l.id);
                 }
                 catch (Exception e) {}
                 return name;
@@ -2792,9 +2795,9 @@ public class ExportJob extends XMLutility
                 {
                     Element e = addElement (lineType, displayElements);
                     e.setAttribute ("quantity", quantity);
+                    if (! id.isEmpty ()) e.setAttribute ("id", id);
                     if (lineType.equals ("Line"))
                     {
-                        if (! id       .isEmpty ()) e.setAttribute ("id",        id);
                         if (! scale    .isEmpty ()) e.setAttribute ("scale",     scale);
                         if (! timeScale.isEmpty ()) e.setAttribute ("timeScale", timeScale);
                         if (! color    .isEmpty ()) e.setAttribute ("color",     color);
