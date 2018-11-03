@@ -643,7 +643,7 @@ public class EquationSet implements Comparable<EquationSet>
                 target.addAttribute ("externalWrite");
                 if (target.hasAttribute ("temporary"))
                 {
-                    Backend.err.get ().println ("WARNING: Variable " + target.container.prefix () + "." + target.nameString () + " receives an external write, so cannot be temporary.");
+                    //Backend.err.get ().println ("WARNING: Variable " + target.container.prefix () + "." + target.nameString () + " receives an external write, so cannot be temporary.");
                     target.removeAttribute ("temporary");
                 }
                 target.addDependencyOn (v);  // v.reference.variable receives an external write from v, and therefore its value depends on v
@@ -757,7 +757,7 @@ public class EquationSet implements Comparable<EquationSet>
                                 target.addAttribute ("externalRead");
                                 if (target.hasAttribute ("temporary"))
                                 {
-                                    Backend.err.get ().println ("WARNING: Variable " + target.container.prefix () + "." + target.nameString () + " has an external read, so cannot be temporary.");
+                                    //Backend.err.get ().println ("WARNING: Variable " + target.container.prefix () + "." + target.nameString () + " has an external read, so cannot be temporary.");
                                     target.removeAttribute ("temporary");
                                 }
                             }

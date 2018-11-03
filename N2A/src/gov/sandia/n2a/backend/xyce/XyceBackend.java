@@ -185,8 +185,7 @@ class XyceBackend extends Backend
                         ps.close ();
                         Backend.err.remove ();
                     }
-                    long pid = env.submitJob (job, xyce + " " + env.quotePath (cirFile) + " -o " + env.quotePath (prnFile));
-                    job.set ("$metadata", "pid", pid);
+                    env.submitJob (job, xyce + " " + env.quotePath (cirFile) + " -o " + env.quotePath (prnFile));
                 }
                 catch (AbortRun a)
                 {

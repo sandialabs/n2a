@@ -13,6 +13,8 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -24,8 +26,7 @@ public class Linux extends LocalHost
     public Set<Long> getActiveProcs () throws Exception
     {
         Set<Long> result = new TreeSet<Long> ();
-        String[] cmdArray = new String[] {"ps", "-eo", "pid,command"};
-        Process proc = Runtime.getRuntime ().exec (cmdArray);
+        Process proc = new ProcessBuilder ("ps", "-eo", "pid,command").start ();
         try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
@@ -63,7 +64,7 @@ public class Linux extends LocalHost
     }
 
     @Override
-    public long submitJob (MNode job, String command) throws Exception
+    public void submitJob (MNode job, String command) throws Exception
     {
         File binDir     = new File (AppData.properties.get ("resourceDir"), "bin");
         File background = new File (binDir, "background");
@@ -132,17 +133,43 @@ public class Linux extends LocalHost
                 {
                     line = line.trim ();
                     String[] parts = line.split ("\\s+");  // any amount/type of whitespace forms the delimiter
-                    return Long.parseLong (parts[0]);
+                    job.set ("$metadata", "pid", Long.parseLong (parts[0]));
+                    return;
                 }
             }
         }
-        return 0;
     }
 
     @Override
     public void killJob (long pid) throws Exception
     {
-        Runtime.getRuntime ().exec (new String[] {"kill", "-9", String.valueOf (pid)});
+        // Scan for PIDs chained from the given one. We need to kill them all.
+        Set<Long> pids = new TreeSet<Long> ();
+        pids.add (pid);
+        Process proc = new ProcessBuilder ("ps", "-eo", "pid,ppid").start ();
+        try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+        {
+            System.out.println ("  in try");
+            String line;
+            while ((line = reader.readLine ()) != null)
+            {
+                line = line.trim ();
+                String[] parts = line.split ("\\s+");  // any amount/type of whitespace forms the delimiter
+                try
+                {
+                    long PID  = Long.parseLong (parts[0]);
+                    long PPID = Long.parseLong (parts[1]);
+                    if (pids.contains (PPID)) pids.add (PID);
+                }
+                catch (Exception e) {}
+            }
+        }
+
+        List<String> command = new ArrayList<String> ();
+        command.add ("kill");
+        command.add ("-9");
+        for (long l : pids) command.add (String.valueOf (l));
+        new ProcessBuilder (command).start ();
     }
 
     @Override

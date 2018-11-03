@@ -75,7 +75,7 @@ public abstract class HostSystem
         Sets up piping of the program's stdout and stderr to files "out" and "err" respectively.
         If a file called "in" exists in the jobDir, then pipes it into the program.
     **/
-    public abstract long         submitJob         (MNode job, String command)   throws Exception;
+    public abstract void         submitJob         (MNode job, String command)   throws Exception;
     public abstract void         killJob           (long pid)                    throws Exception;
     public abstract void         setFileContents   (String path, String content) throws Exception;
     public abstract String       getFileContents   (String path)                 throws Exception;

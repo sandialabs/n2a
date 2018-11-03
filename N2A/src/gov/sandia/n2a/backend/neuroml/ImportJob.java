@@ -2694,9 +2694,9 @@ public class ImportJob extends XMLutility
             }
 
             String mode = "";
-            if (! scale        .isEmpty ()) mode = "scale="          + scale;
-            if (! color        .isEmpty ()) mode = ",color="         + color;
-            if (! lineTimeScale.isEmpty ()) mode = ",lineTimeScale=" + lineTimeScale;
+            if (! scale        .isEmpty ()) mode  = "scale="          + scale;
+            if (! color        .isEmpty ()) mode += ",color="         + color;
+            if (! lineTimeScale.isEmpty ()) mode += ",lineTimeScale=" + lineTimeScale;
             if (mode.startsWith (",")) mode = mode.substring (1);
             if (! chartParameters.isEmpty ())
             {

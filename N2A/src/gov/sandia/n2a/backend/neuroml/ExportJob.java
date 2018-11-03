@@ -9,6 +9,8 @@ package gov.sandia.n2a.backend.neuroml;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStreamWriter;
+import java.io.PrintStream;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -92,6 +94,8 @@ public class ExportJob extends XMLutility
     public Map<Unit<?>,String>   unitsUsed      = new HashMap<Unit<?>,String> ();
     public Map<String,Dimension> dimensionsUsed = new HashMap<String,Dimension> ();
     public boolean               requiresNML    = false;  // Indicates that no NeuroML parts were emitted.
+    public String                duration;
+    public boolean               forBackend;  // The output is for backend use, rather than general export to another tool. Enables a few hacks to make backend interaction smoother.
 
     public static Unit<?> um        = UCUM.parse ("um");            // micrometers, used for morphology
     public static double  baseRatio = Math.log (10) / Math.log (2); // log_2 (10), how many binary digits it takes to represent one decimal digit
@@ -275,7 +279,24 @@ public class ExportJob extends XMLutility
             root = doc.createElement ("Lems");
             if (requiresNML)
             {
-                // TODO: Include NeuroML definition files for LEMS
+                Element include = addElement ("Include", elements);
+                include.setAttribute ("file", "Cells.xml");
+
+                include = addElement ("Include", elements);
+                include.setAttribute ("file", "Networks.xml");
+
+                if (simulation != null)
+                {
+                    include = addElement ("Include", elements);
+                    include.setAttribute ("file", "Simulation.xml");
+
+                    Element target = addElement ("Target", elements);
+                    target.setAttribute ("component", simulation.id);
+                }
+            }
+            else
+            {
+                // TODO: set Target for pure LEMS file (one with no NeuroML elements at all).
             }
         }
         sequencer.append (root, elements);
@@ -340,7 +361,11 @@ public class ExportJob extends XMLutility
             {
                 simulation        = sim;
                 simulation.target = target;
-                e.setNamedValue ("backend.lems.target", "1");  // Indicates that this eqset is the sim target, so don't build XPath names above it.
+                // Indicate that this eqset is the sim target, so don't build XPath names above it.
+                // It does no harm for multiple objects get this tag, since XPaths on multiple sim
+                // targets will fail for other reasons.
+                e.setNamedValue ("backend.lems.target", "1");
+                duration = e.getNamedValue ("duration");
             }
         }
     }
@@ -478,7 +503,7 @@ public class ExportJob extends XMLutility
                 population.setAttribute ("id", id);
                 population.setAttribute ("component", cell.id);
                 if (list) population.setAttribute ("type", "populationList");
-                if (size > 1) population.setAttribute ("size", String.valueOf (size));
+                population.setAttribute ("size", String.valueOf (size));  // Even though the XSD says size is optional (which implies size=1), jLEMS will balk if it isn't supplied.
 
                 // Output 3D structure
                 if (list)
@@ -2472,22 +2497,47 @@ public class ExportJob extends XMLutility
 
     public class Simulation
     {
+        public String           id;
         public SimulationTarget target;  // Generally, a Network
         public List<Display>    displays = new ArrayList<Display> ();
         public UnitParser       step;
         public UnitParser       duration;
+        public String           outputFiles;  // For recording in job metadata
 
         public void append ()
         {
+            // Ensure that default output gets a proper file name.
+            for (Display d : displays)
+            {
+                if (! d.name.isEmpty ()) continue;  // default output has "" for file name
+                Display probe = new Display ("defaultOutput");
+                int suffix = 2;
+                while (displays.contains (probe)) probe.name = "defaultOutput" + suffix++;
+                d.name = probe.name;
+                break;
+            }
+
             List<Element> simulationElements = new ArrayList<Element> ();
             for (Display d : displays) d.append (simulationElements);
 
             Element simulation = addElement ("Simulation", elements);
-            simulation.setAttribute ("id",     "N2A_Simulation");  // There can only ever be one, so no need for number.
+            id = "N2A_Simulation";  // There can only ever be one, so no need for number.
+            simulation.setAttribute ("id",     id);
             simulation.setAttribute ("target", target.id);
             if (step     != null) simulation.setAttribute ("step",   step    .print ());
             if (duration != null) simulation.setAttribute ("length", duration.print ());
             sequencer.append (simulation, simulationElements);
+        }
+
+        public List<String> dumpColumns (Path jobDir)
+        {
+            List<String> result = new ArrayList<String> ();
+            for (Display d : displays)
+            {
+                String fileName = d.dumpColumns (jobDir);
+                if (! fileName.isEmpty ()) result.add (fileName);
+            }
+            return result;
         }
 
         public void extractTiming (EquationSet equations)
@@ -2585,6 +2635,7 @@ public class ExportJob extends XMLutility
                     }
                 }
             }
+            if (forBackend) display.type = "OutputFile";  // Force the choice in this case;
 
             Display.Line line = display.addLine ();
 
@@ -2710,6 +2761,18 @@ public class ExportJob extends XMLutility
                 sequencer.append (display, displayElements);
             }
 
+            public String dumpColumns (Path jobDir)
+            {
+                if (type.equals ("Display")) return "";
+                try (PrintStream ps = new PrintStream (new FileOutputStream (jobDir.resolve (name + ".columns").toFile (), true), false, "UTF-8"))
+                {
+                    ps.println ("$t");  // Because this function is used mainly by the LEMS backend, and LEMS always puts time in first column.
+                    for (Line l : lines) ps.println (l.quantity);
+                }
+                catch (Exception e) {}
+                return name;
+            }
+
             public Line addLine ()
             {
                 Line result = new Line ();
@@ -2729,10 +2792,13 @@ public class ExportJob extends XMLutility
                 {
                     Element e = addElement (lineType, displayElements);
                     e.setAttribute ("quantity", quantity);
-                    if (! id       .isEmpty ()) e.setAttribute ("id",        id);
-                    if (! scale    .isEmpty ()) e.setAttribute ("scale",     scale);
-                    if (! timeScale.isEmpty ()) e.setAttribute ("timeScale", timeScale);
-                    if (! color    .isEmpty ()) e.setAttribute ("color",     color);
+                    if (lineType.equals ("Line"))
+                    {
+                        if (! id       .isEmpty ()) e.setAttribute ("id",        id);
+                        if (! scale    .isEmpty ()) e.setAttribute ("scale",     scale);
+                        if (! timeScale.isEmpty ()) e.setAttribute ("timeScale", timeScale);
+                        if (! color    .isEmpty ()) e.setAttribute ("color",     color);
+                    }
                 }
             }
 
@@ -2792,15 +2858,12 @@ public class ExportJob extends XMLutility
 
         public ComponentType (MNode source, MNode base)
         {
-            this (source.key (), source, base);
-        }
-
-        public ComponentType (String name, MNode source, MNode base)
-        {
-            if (name.startsWith (modelName)) name = name.substring (modelName.length ()).trim ();
-            if (name.isEmpty ())             name = source.get ("$metadata", "backend.lems.name");
-            if (name.isEmpty ())             name = "N2A_ComponentType" + componentTypes.size ();
-            this.name = name;
+            name = source.get ("$metadata", "backend.lems.name");
+            if (name.isEmpty ())
+            {
+                name = source.key ();
+                if (name.startsWith (modelName)) name = name.substring (modelName.length ()).trim ();
+            }
 
             this.source = source;
             this.base   = base;

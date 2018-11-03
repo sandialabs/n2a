@@ -43,23 +43,23 @@ public class RemoteGateway extends RemoteHost
     }
 
     @Override
-    public long submitJob (MNode job, String command) throws Exception
+    public void submitJob (MNode job, String command) throws Exception
     {
         String jobDir = job.get ("$metadata", "remote.dir");  // Of course, this is a dir this class generated for the job.
         Connection.exec (command + " > '" + jobDir + "/out' 2> '" + jobDir + "/err' &", true);
 
         // Get PID of newly-created job
         Result r = Connection.exec ("ps -ewwo pid,command");
-        if (r.error) return 0;
+        if (r.error) return;
         BufferedReader reader = new BufferedReader (new StringReader (r.stdOut));
         String line;
         while ((line = reader.readLine ()) != null)
         {
             line = line.trim ();
             String[] parts = line.split ("\\s+");  // any amount/type of whitespace forms the delimiter
-            return Long.parseLong (parts[0]);
+            job.set ("$metadata", "pid", Long.parseLong (parts[0]));
+            return;
         }
-        return 0;
     }
 
     @Override

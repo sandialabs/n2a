@@ -7,9 +7,9 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.jobs;
 
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -26,21 +26,20 @@ public class OutputParser
     public boolean      isXycePRN;
     public Column       time;
 
-    public void parse (File f)
+    public void parse (Path f)
     {
         parse (f, 0.0);
     }
 
-    public void parse (File f, double defaultValue)
+    public void parse (Path f, double defaultValue)
     {
         columns = new ArrayList<Column> ();
         isXycePRN = false;
         time = null;
 
-        try
+        try (BufferedReader br = Files.newBufferedReader (f))
         {
             int row = 0;
-            BufferedReader br = new BufferedReader (new FileReader (f));
             while (true)
             {
                 String line = br.readLine ();
@@ -86,13 +85,30 @@ public class OutputParser
                     row++;
                 }
             }
-            br.close ();
         }
         catch (IOException e)
         {
 		}
-
         if (columns.size () == 0) return;
+
+        // If there is a separate columns file, open and parse it.
+        Path jobDir = f.getParent ();
+        Path columnFile = jobDir.resolve (f.getFileName ().toString () + ".columns");
+        try (BufferedReader br = Files.newBufferedReader (columnFile))
+        {
+            int columnIndex = 0;
+            String line;
+            while (columnIndex < columns.size ()  &&  (line = br.readLine ()) != null)
+            {
+                Column c = columns.get (columnIndex++);
+                if (c.header.isEmpty ()) c.header = line;
+            }
+        }
+        catch (IOException e)
+        {
+        }
+
+        // Determine time column
         time = columns.get (0);  // fallback, in case we don't find it by name
         int timeMatch = 0;
         for (Column c : columns)

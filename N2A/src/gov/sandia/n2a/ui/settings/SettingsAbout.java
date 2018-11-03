@@ -9,11 +9,9 @@ package gov.sandia.n2a.ui.settings;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.extpoints.Settings;
-import gov.sandia.n2a.ui.GradientPanel;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
-import java.awt.Color;
 import java.awt.Component;
 import java.awt.Desktop;
 import java.awt.event.InputEvent;
@@ -90,16 +88,9 @@ public class SettingsAbout extends JPanel implements Settings
             }
         });
 
-        Color background = new JPanel ().getBackground ();
-        Color darker = background.darker ();
-        GradientPanel gp = new GradientPanel (background, darker);
-
-        Lay.BLtg (gp, "C", html, "eb=10");
-
         Lay.BLtg (this,
             "N", Lay.lb (ImageUtil.getImage ("n2a-splash.png")),
-            "C", gp,
-            "resizable=false,size=[520,380],center"
+            "C", html, "eb=10"
         );
     }
 

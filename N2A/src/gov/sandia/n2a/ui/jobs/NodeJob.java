@@ -12,15 +12,20 @@ import java.awt.EventQueue;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
+import java.util.Set;
 import java.util.TreeMap;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
@@ -37,16 +42,20 @@ public class NodeJob extends NodeBase
     protected static ImageIcon iconFailed   = ImageUtil.getImage ("remove.gif");
     protected static ImageIcon iconStopped  = ImageUtil.getImage ("stop.gif");
 
-    protected MNode source;
-    protected float complete = -1;  // A number between 0 and 1, where 0 means just started, and 1 means done. -1 means unknown. 2 means failed. 3 means terminated.
-    protected Date dateStarted = null;
-    protected Date dateFinished = null;
-    protected double expectedSimTime = 0;  // If greater than 0, then we can use this to estimate percent complete.
+    protected MNode   source;
+    protected String  inherit         = "";
+    protected float   complete        = -1; // A number between 0 and 1, where 0 means just started, and 1 means done. -1 means unknown. 2 means failed. 3 means terminated.
+    protected Date    dateStarted     = null;
+    protected Date    dateFinished    = null;
+    protected double  expectedSimTime = 0;  // If greater than 0, then we can use this to estimate percent complete.
+    protected long    lastLiveCheck   = 0;
+    protected boolean deleted;
 
-    public NodeJob (MNode source)
+    public NodeJob (MNode source, boolean newlyStarted)
     {
         this.source = source;
-        setUserObject (source.getOrDefault ("$inherit", source.key ()).split (",", 2)[0].replace ("\"", ""));
+        setUserObject (source.key ());  // This is fast, but the task of loading the $inherit line is slow, so we do it on the first call to monitorProgress().
+        if (newlyStarted) lastLiveCheck = System.currentTimeMillis () + 500000;  // About 10 minutes in the future
     }
 
     @Override
@@ -75,31 +84,51 @@ public class NodeJob extends NodeBase
         return new ImageIcon (inProgress);
     }
 
-    public void monitorProgress (final PanelRun panel)
+    public synchronized void monitorProgress (final PanelRun panel)
     {
+        if (deleted) return;
+
+        if (inherit.isEmpty ())
+        {
+            inherit = source.getOrDefault ("$inherit", source.key ()).split (",", 2)[0].replace ("\"", "");
+            setUserObject (inherit);
+            if (complete >= 1)
+            {
+                // Since we won't reach the display update below, do a simple one here.
+                EventQueue.invokeLater (new Runnable ()
+                {
+                    public void run ()
+                    {
+                        panel.model.nodeChanged (NodeJob.this);
+                        panel.tree.paintImmediately (panel.tree.getPathBounds (new TreePath (NodeJob.this.getPath ())));
+                    }
+                });
+            }
+        }
+
         if (complete >= 1) return;
 
         float oldComplete = complete;
-        File path = new File (source.get ()).getParentFile ();
+        Path jobDir = Paths.get (source.get ()).getParent ();
         if (complete == -1)
         {
-            File started = new File (path, "started"); 
-            if (started.exists ())
+            Path started = jobDir.resolve ("started");
+            if (Files.exists (started))
             {
                 complete = 0;
-                dateStarted = new Date (started.lastModified ());
+                dateStarted = new Date (started.toFile ().lastModified ());
             }
         }
         if (complete < 1)
         {
-            File finished = new File (path, "finished");
-            if (finished.exists ())
+            Path finished = jobDir.resolve ("finished");
+            if (Files.exists (finished))
             {
-                dateFinished = new Date (finished.lastModified ());
+                dateFinished = new Date (finished.toFile ().lastModified ());
                 String line = null;
                 try
                 {
-                    BufferedReader reader = new BufferedReader (new FileReader (finished));
+                    BufferedReader reader = Files.newBufferedReader (finished);
                     line = reader.readLine ();
                     reader.close ();
                 }
@@ -111,6 +140,29 @@ public class NodeJob extends NodeBase
                     if      (line.equals ("success")) complete = 1;
                     else if (line.equals ("killed" )) complete = 3;
                     else                              complete = 2;  // includes "failure", "", and any other unknown string
+                }
+            }
+            else
+            {
+                long currentTime = System.currentTimeMillis ();
+                if (currentTime - lastLiveCheck > 1000000)  // a million milliseconds is about 20 minutes
+                {
+                    HostSystem env = HostSystem.get (source.get ("$metadata", "host"));
+                    long pid = source.getOrDefaultLong ("$metadata", "pid", "0");
+                    try
+                    {
+                        Set<Long> pids = env.getActiveProcs ();
+                        boolean dead;
+                        if (pid == 0) dead = pids.isEmpty ();
+                        else          dead = ! pids.contains (pid);
+                        if (dead)
+                        {
+                            Files.copy (new ByteArrayInputStream ("killed".getBytes ("UTF-8")), finished);
+                            complete = 3;
+                        }
+                    }
+                    catch (Exception e) {}
+                    lastLiveCheck = currentTime;
                 }
             }
         }
@@ -178,6 +230,7 @@ public class NodeJob extends NodeBase
             if (fileName.startsWith ("compile" )) continue;  // Piped files for compilation process. These will get copied to appropriate places if necessary.
             if (fileName.endsWith   (".bin"    )) continue;  // Don't show generated binaries
             if (fileName.endsWith   (".aplx"   )) continue;
+            if (fileName.endsWith   (".columns")) continue;  // Hint for column names when simulator doesn't output them.
 
             if      (fileName.endsWith ("out"    )) newNode = new NodeFile (NodeFile.Type.Output,  file);
             else if (fileName.endsWith ("err"    )) newNode = new NodeFile (NodeFile.Type.Error,   file);

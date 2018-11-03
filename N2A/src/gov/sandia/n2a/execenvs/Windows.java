@@ -42,7 +42,7 @@ public class Windows extends LocalHost
     }
 
     @Override
-    public long submitJob (MNode job, String command) throws Exception
+    public void submitJob (MNode job, String command) throws Exception
     {
         String jobDir = new File (job.get ()).getParent ();
 
@@ -78,11 +78,11 @@ public class Windows extends LocalHost
                 if (line.contains (jobDir))
                 {
                     String[] parts = line.split ("\\s+");
-                    return Long.parseLong (parts[1]);
+                    job.set ("$metadata", "pid", Long.parseLong (parts[1]));
+                    return;
                 }
             }
         }
-        return 0;
     }
 
     @Override

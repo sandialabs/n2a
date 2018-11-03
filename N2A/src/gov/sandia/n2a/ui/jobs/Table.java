@@ -8,7 +8,7 @@ package gov.sandia.n2a.ui.jobs;
 
 import java.awt.Component;
 import java.awt.FontMetrics;
-import java.io.File;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 
 import javax.swing.JLabel;
@@ -27,7 +27,7 @@ public class Table extends OutputParser
 
     public Table (String path, boolean sorted)
     {
-    	parse (new File (path), Double.NaN);
+    	parse (Paths.get (path), Double.NaN);
     	for (Column c : columns) rows = Math.max (rows, c.startRow + c.values.size ());
 
     	if (isXycePRN) columns.remove (0);  // get rid of Index column
@@ -59,11 +59,18 @@ public class Table extends OutputParser
 
         FontMetrics fm = result.getFontMetrics (result.getFont ());
         int digitWidth = fm.charWidth ('0');
+
+        int maxTextWidth = 10;
+        for (int i = 0; i < columns.size (); i++) maxTextWidth = Math.max (maxTextWidth, columns.get (i).textWidth);
+        maxTextWidth *= digitWidth * 2;
+
         TableColumnModel cols = result.getColumnModel ();
         for (int i = 0; i < columns.size (); i++)
         {
             Column c = columns.get (i);
-            cols.getColumn (i).setPreferredWidth (Math.max (digitWidth * c.textWidth, fm.stringWidth (c.header) + digitWidth));
+            int width = Math.max (digitWidth * c.textWidth, fm.stringWidth (c.header) + digitWidth);
+            width = Math.min (width, maxTextWidth);  // Avoid absurdly wide columns, because it's hard to read table.
+            cols.getColumn (i).setPreferredWidth (width);
         }
 
         return result;

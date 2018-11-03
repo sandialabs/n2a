@@ -18,6 +18,7 @@ import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.io.RandomAccessFile;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 
 public class InternalBackend extends Backend
@@ -146,18 +147,22 @@ public class InternalBackend extends Backend
         return 0;
     }
 
+    public static double getSimTimeFromOutput (MNode job)
+    {
+        Path jobDir = Paths.get (job.get ()).getParent ();
+        Path out = jobDir.resolve ("out");
+        return getSimTimeFromOutput (out);
+    }
+
     /**
         Assumes that $t is output in first column.
         Note that this does not hold true for Xyce.
     **/
-    public static double getSimTimeFromOutput (MNode job)
+    public static double getSimTimeFromOutput (Path out)
     {
         double result = 0;
-        File out = new File (new File (job.get ()).getParentFile (), "out");
-        RandomAccessFile raf;
-        try
+        try (RandomAccessFile raf = new RandomAccessFile (out.toFile (), "r"))
         {
-            raf = new RandomAccessFile (out, "r");
             long lineLength = 16;  // Initial guess. About long enough to catch two columns. Smaller initial value gives more accurate result, but costs more in terms of repeated scans.
             while (true)
             {
@@ -192,12 +197,8 @@ public class InternalBackend extends Backend
                 }
                 lineLength *= 2;
             }
-
-            raf.close ();
         }
-        catch (Exception e)
-        {
-        }
+        catch (Exception e) {}
         return result;
     }
 

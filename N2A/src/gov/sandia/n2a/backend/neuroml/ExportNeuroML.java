@@ -22,6 +22,11 @@ public class ExportNeuroML implements Exporter
     @Override
     public void export (MNode source, File destination)
     {
+        export (source, destination, false);
+    }
+
+    public ExportJob export (MNode source, File destination, boolean forBackend)
+    {
         if (PluginNeuroML.partMap == null) PluginNeuroML.partMap = new PartMap ();
         if (PluginNeuroML.sequencer == null)
         {
@@ -31,6 +36,8 @@ public class ExportNeuroML implements Exporter
         }
 
         ExportJob job = new ExportJob (PluginNeuroML.partMap, PluginNeuroML.sequencer);
+        job.forBackend = forBackend;
         job.process (source, destination);
+        return job;
     }
 }

@@ -163,7 +163,7 @@ public class PanelRun extends JPanel
             }
         });
 
-        Thread refreshThread = new Thread ()
+        Thread refreshThreadSlow = new Thread ("Job Refresh Slow")
         {
             public void run ()
             {
@@ -172,20 +172,52 @@ public class PanelRun extends JPanel
                     // Initial load
                     synchronized (running)
                     {
-                        for (MNode n : AppData.runs) running.add (0, new NodeJob (n));  // This should be efficient on a doubly-linked list.
+                        for (MNode n : AppData.runs) running.add (0, new NodeJob (n, false));  // Insert at front to create reverse time order. This should be efficient on a doubly-linked list.
                         for (NodeJob job : running) root.add (job);
                     }
                     EventQueue.invokeLater (new Runnable ()
                     {
                         public void run ()
                         {
+                            // Update display with newly loaded jobs.
+                            // If a job was added before we finish load, and if the user focused a row under it,
+                            // then we want to retain that selection.
+                            int row = tree.getLeadSelectionRow ();
                             model.nodeStructureChanged (root);
-                            if (model.getChildCount (root) > 0) tree.setSelectionRow (0);
+                            if (model.getChildCount (root) > 0) tree.setSelectionRow (Math.max (0, row));
                         }
                     });
 
                     // Periodic refresh to show status of running jobs
-                    int shortCycles = 100;  // Use a number larger than our actual cycle limit, to force full scan on first cycle.
+                    while (true)
+                    {
+                        synchronized (running)
+                        {
+                            Iterator<NodeJob> i = running.iterator ();
+                            while (i.hasNext ())
+                            {
+                                NodeJob job = i.next ();
+                                job.monitorProgress (PanelRun.this);
+                                if (job.complete >= 1  ||  job.deleted) i.remove ();
+                            }
+                        }
+                        sleep (20000);
+                    }
+                }
+                catch (InterruptedException e)
+                {
+                }
+            }
+        };
+        refreshThreadSlow.setDaemon (true);
+        refreshThreadSlow.start ();
+
+        Thread refreshThreadFast = new Thread ("Job Refresh Fast")
+        {
+            public void run ()
+            {
+                try
+                {
                     while (true)
                     {
                         NodeBase d = displayNode;  // Make local copy (atomic action) to prevent it changing from under us
@@ -194,23 +226,7 @@ public class PanelRun extends JPanel
                             if (d instanceof NodeFile) d = (NodeBase) d.getParent ();  // parent could be null, if a sub-node was just deleted
                             if (d != null) ((NodeJob) d).monitorProgress (PanelRun.this);
                         }
-                        if (shortCycles++ < 20)
-                        {
-                            Thread.sleep (1000);
-                            continue;
-                        }
-                        shortCycles = 0;
-
-                        synchronized (running)
-                        {
-                            Iterator<NodeJob> i = running.iterator ();
-                            while (i.hasNext ())
-                            {
-                                NodeJob job = i.next ();
-                                if (job != d) job.monitorProgress (PanelRun.this);
-                                if (job.complete >= 1) i.remove ();
-                            }
-                        }
+                        sleep (1000);
                     }
                 }
                 catch (InterruptedException e)
@@ -218,8 +234,8 @@ public class PanelRun extends JPanel
                 }
             }
         };
-        refreshThread.setDaemon (true);
-        refreshThread.start ();
+        refreshThreadFast.setDaemon (true);
+        refreshThreadFast.start ();
 
         displayText = new JTextArea ();
         displayText.setEditable(false);
@@ -462,6 +478,31 @@ public class PanelRun extends JPanel
                         BufferedReader reader = new BufferedReader (new FileReader (new File (path)));
                         String line = reader.readLine ();
                         graphable = line.startsWith ("$t")  ||  line.startsWith ("Index");
+                        if (! graphable)
+                        {
+                            // Try an alternate heuristic: Does the line appear to be a set of tab-delimited fields?
+                            // Don't allow spaces, because it could look too much like ordinary text.
+                            line = reader.readLine ();  // Get a second line, just to ensure we get past textual headers.
+                            if (line != null)
+                            {
+                                String[] pieces = line.split ("\\t");
+                                int columns = 0;
+                                for (String p : pieces)
+                                {
+                                    if (p.length () < 20)
+                                    {
+                                        try
+                                        {
+                                            double v = Double.parseDouble (p);
+                                            if (v != 0) columns++;
+                                        }
+                                        catch (Exception e) {}
+                                    }
+                                }
+                                // At least 3 viable columns, and more than half are interpretable as numbers.
+                                graphable = columns > 3  &&  (double) columns / pieces.length > 0.7;
+                            }
+                        }
                         reader.close ();
                     }
 
@@ -626,7 +667,7 @@ public class PanelRun extends JPanel
                     if (node instanceof NodeJob)
                     {
                         NodeJob job = (NodeJob) node;
-                        synchronized (running) {running.remove (job);}
+                        synchronized (job) {job.deleted = true;}
 
                         MDoc doc = (MDoc) job.source;
                         HostSystem env = HostSystem.get (doc.getOrDefault ("$metadata", "host", "localhost"));
@@ -663,7 +704,7 @@ public class PanelRun extends JPanel
 
     public void addNewRun (MNode run)
     {
-        final NodeJob node = new NodeJob (run);
+        final NodeJob node = new NodeJob (run, true);
         model.insertNodeInto (node, root, 0);  // Since this always executes on event dispatch thread, it will not conflict with other code that accesses model.
         if (root.getChildCount () == 1) model.nodeStructureChanged (root);  // If the list was empty, we need to give the JTree a little extra kick to get started.
         tree.setSelectionRow (0);
@@ -685,7 +726,7 @@ public class PanelRun extends JPanel
                 }
 
                 node.monitorProgress (PanelRun.this);
-                if (node.complete < 1) synchronized (running) {running.add (0, node);}
+                if (node.complete < 1) synchronized (running) {running.add (0, node);}  // It could take a very long time for this job to get added, but no longer than one complete update pass over running jobs.
             };
         }.start ();
     }

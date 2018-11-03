@@ -37,7 +37,7 @@ public class RemoteParallel extends RemoteHost
     }
 
     @Override
-    public long submitJob (MNode job, String command) throws Exception
+    public void submitJob (MNode job, String command) throws Exception
     {
         String jobDir = job.get          ("$metadata", "remote.dir");
         String cores  = job.getOrDefault ("$metadata", "cores",        "1");
@@ -78,11 +78,10 @@ public class RemoteParallel extends RemoteHost
             String[] parts = line.split ("job", 2);
             if (parts.length == 2)
             {
-                return Long.parseLong (parts[1].trim ());
+                job.set ("$metadata", "pid", Long.parseLong (parts[1].trim ()));
+                return;
             }
         }
-
-        return 0;
     }
 
     @Override

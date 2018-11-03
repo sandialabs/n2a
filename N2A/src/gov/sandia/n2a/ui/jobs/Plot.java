@@ -7,7 +7,8 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.jobs;
 
 import java.awt.Color;
-import java.io.File;
+import java.nio.file.Paths;
+
 import javax.swing.JPanel;
 
 import org.jfree.chart.ChartFactory;
@@ -26,7 +27,7 @@ public class Plot extends OutputParser
 {
     public Plot (String path)
     {
-    	parse (new File (path));
+    	parse (Paths.get (path));
     }
 
     public JPanel createGraphPanel ()

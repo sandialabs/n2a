@@ -39,7 +39,7 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
 
 import java.io.ByteArrayInputStream;
-import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.net.URL;
@@ -86,8 +86,8 @@ public class JobC extends Thread
     public void run ()
     {
         jobDir = Paths.get (job.get ()).getParent ();  // assumes the MNode "job" is really an MDoc. In any case, the value of the node should point to a file on disk where it is stored in a directory just for it.
-        try {Backend.err.set (new PrintStream (jobDir.resolve ("err").toFile ()));}
-        catch (FileNotFoundException e) {}
+        try {Backend.err.set (new PrintStream (new FileOutputStream (jobDir.resolve ("err").toFile (), true), false, "UTF-8"));}
+        catch (Exception e) {}
 
         try
         {
@@ -135,8 +135,7 @@ public class JobC extends Thread
                 Backend.err.remove ();
             }
 
-            long pid = env.submitJob (job, command);
-            job.set ("$metadata", "pid", pid);
+            env.submitJob (job, command);
         }
         catch (AbortRun a)
         {

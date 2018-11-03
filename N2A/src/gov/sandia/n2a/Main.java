@@ -40,6 +40,7 @@ public class Main
         pluginClassNames.add ("gov.sandia.n2a.backend.xyce.XycePlugin");
         pluginClassNames.add ("gov.sandia.n2a.backend.c.PluginC");
         pluginClassNames.add ("gov.sandia.n2a.backend.neuroml.PluginNeuroML");
+        pluginClassNames.add ("gov.sandia.n2a.backend.neuron.PluginNeuron");
 
         ArrayList<File> pluginDirs = new ArrayList<File> ();
         pluginDirs.add (new File (AppData.properties.get ("resourceDir"), "plugins"));
