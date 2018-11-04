@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.backend.neuroml;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStreamWriter;
@@ -24,6 +25,9 @@ import javax.measure.IncommensurableException;
 import javax.measure.UnconvertibleException;
 import javax.measure.Unit;
 import javax.measure.UnitConverter;
+import javax.swing.JOptionPane;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.OutputKeys;
@@ -72,6 +76,8 @@ import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
+import gov.sandia.n2a.plugins.extpoints.Backend;
+import gov.sandia.n2a.ui.MainFrame;
 
 public class ExportJob extends XMLutility
 {
@@ -108,6 +114,11 @@ public class ExportJob extends XMLutility
 
     public void process (MNode source, File destination)
     {
+        ByteArrayOutputStream boas = new ByteArrayOutputStream ();
+        try {Backend.err.set (new PrintStream (boas, false, "UTF-8"));}
+        catch (Exception e) {}
+        boolean failed = false;
+
         try
         {
             MPart mpart = new MPart ((MPersistent) source);
@@ -132,7 +143,30 @@ public class ExportJob extends XMLutility
         }
         catch (Exception e)
         {
-            e.printStackTrace ();
+            failed = true;
+            PrintStream ps = Backend.err.get ();
+            e.printStackTrace (ps);
+        }
+
+        PrintStream ps = Backend.err.get ();
+        if (ps != System.err) ps.close ();
+
+        String errors = "";
+        try {errors = boas.toString ("UTF-8");}
+        catch (Exception e2) {}
+
+        if (! errors.isEmpty ())
+        {
+            JTextArea textArea = new JTextArea (errors);
+            JScrollPane scrollPane = new JScrollPane (textArea);
+            scrollPane.setPreferredSize (new java.awt.Dimension (640, 480));
+            JOptionPane.showMessageDialog
+            (
+                MainFrame.instance,
+                scrollPane,
+                failed ? "Export failed" : "Export completed with warnings",
+                failed ? JOptionPane.ERROR_MESSAGE :  JOptionPane.WARNING_MESSAGE
+            );
         }
     }
 
@@ -2559,23 +2593,32 @@ public class ExportJob extends XMLutility
 
         public void findOutputs ()
         {
-            // Finish preparing equations for init cycle
-            equations.addAttribute ("global",      0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
-            equations.addAttribute ("preexistent", 0, true,  new String[] {"$t'", "$t"});  // variables that are not stored because Instance.get/set intercepts them
-            equations.addAttribute ("readOnly",    0, true,  new String[] {"$t"});
-            equations.collectSplits ();
-            equations.determineOrder ();
-            equations.findDerivative ();
-            equations.makeConstantDtInitOnly ();
-            equations.forceTemporaryStorageForSpecials ();
-            equations.determineTypes ();
-            InternalBackend.prepareToRun (equations);
+            try
+            {
+                // Finish preparing equations for init cycle
+                equations.addAttribute ("global",      0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
+                equations.addAttribute ("preexistent", 0, true,  new String[] {"$t'", "$t"});  // variables that are not stored because Instance.get/set intercepts them
+                equations.addAttribute ("readOnly",    0, true,  new String[] {"$t"});
+                equations.collectSplits ();
+                equations.determineOrder ();
+                equations.findDerivative ();
+                equations.makeConstantDtInitOnly ();
+                equations.forceTemporaryStorageForSpecials ();
+                equations.determineTypes ();
+                InternalBackend.prepareToRun (equations);
 
-            // Run init cycle.
-            // This will call OutputLEMS.eval(), which does the work of setting up outputs.
-            // This will also filter the calls based on any conditional expressions.
-            Simulator result = new Simulator (new Wrapper (equations), 0);
-            result.init ();
+                // Run init cycle.
+                // This will call OutputLEMS.eval(), which does the work of setting up outputs.
+                // This will also filter the calls based on any conditional expressions.
+                Simulator result = new Simulator (new Wrapper (equations), 0);
+                result.init ();
+            }
+            catch (Exception e)
+            {
+                PrintStream ps = Backend.err.get ();
+                ps.println ("WARNING: Failed to export output() statements due to exception, probably caused by errors in model such as unresolved variables:");
+                e.printStackTrace (ps);
+            }
         }
 
         public void add (Output output)
@@ -3050,6 +3093,47 @@ public class ExportJob extends XMLutility
 
                 Variable v = equations.find (Variable.fromLHS (key));
                 if (v != null) variables.put (v, m);  // If v is null, then it was revoked.
+            }
+
+            // Detect regimes
+            Variable regimeVariable = null;
+            List<Variable> regimeNames = new ArrayList<Variable> ();
+            for (Variable v : new ArrayList<Variable> (variables.keySet ()))
+            {
+                MNode m = variables.get (v);
+                if (m.child ("$metadata", "backend.lems.regime") != null)
+                {
+                    regimeVariable = v;
+                    break;
+                }
+                if (v.name.equals ("regime"))
+                {
+                    // The name "regime" without the metadata tag might not actually be a regime variable.
+                    // However, if the equation has the right form, it is very likely.
+                    // Specifically, if it is a conditional assignment of only constants.
+                    boolean onlyConstants = true;
+                    for (EquationEntry e : v.equations)
+                    {
+                        if (e.expression == null) continue;
+                        if (e.expression instanceof gov.sandia.n2a.language.Constant) continue;
+                        if (! (e.expression instanceof AccessVariable))
+                        {
+                            onlyConstants = false;
+                            break;
+                        }
+                        AccessVariable av = (AccessVariable) e.expression;
+                        if (! av.reference.variable.hasAttribute ("constant"))
+                        {
+                            onlyConstants = false;
+                            break;
+                        }
+                    }
+                    if (onlyConstants)
+                    {
+                        regimeVariable = v;
+                        // But don't break here, because we might still find a variable specifically tagged as regime.
+                    }
+                }
             }
 
             // Constants and Parameters
