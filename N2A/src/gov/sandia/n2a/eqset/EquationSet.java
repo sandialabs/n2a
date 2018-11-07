@@ -2350,8 +2350,7 @@ public class EquationSet implements Comparable<EquationSet>
         queueDependency.addAll (variables);
         for (Variable v = queueDependency.poll (); v != null; v = queueDependency.poll ())
         {
-            v.visited = null;
-            v.setPriority (1);
+            v.setPriority (1, null);
         }
 
         // Assemble dependency tree into flat list
@@ -2413,8 +2412,7 @@ public class EquationSet implements Comparable<EquationSet>
         queueDependency.addAll (list);
         for (Variable v = queueDependency.poll (); v != null; v = queueDependency.poll ())
         {
-            v.visited = null;
-            v.setPriority (1);
+            v.setPriority (1, null);
         }
 
         PriorityQueue<Variable> queuePriority = new PriorityQueue<Variable> (list.size (), new Comparator<Variable> ()

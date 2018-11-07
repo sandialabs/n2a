@@ -20,11 +20,9 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.operator.Negate;
-import gov.sandia.n2a.language.type.Scalar;
 
 public class PartMap
 {
@@ -37,7 +35,7 @@ public class PartMap
         public List<String>                  neuroml    = new ArrayList<String> ();                 // All the NeuroML names mapped to the internal part. The first entry is the preferred name for export.
         public Map<String,ArrayList<String>> outward    = new HashMap<String,ArrayList<String>> (); // from internal variable to NeuroML; First entry is the preferred name for export.
         public Map<String,String>            inward     = new HashMap<String,String> ();            // from NeuroML variable to internal; several keys can map to the same value
-        public Map<String,String>            dimensions;                                            // Only non-null if this part is tagged as having dimensionless (DL) fields. In that case, this maps from internal variable name to presumptive unit.
+        public Map<String,String>            dimensions;                                            // Only non-null if this part has dimensionless (DL) fields. In that case, this maps from internal variable name to specified unit.
         public Set<String>                   children   = new HashSet<String> ();                   // Subparts or parts named by a metadata "children" entry. Used to determine probable containment hierarchy.
         public Set<NameMap>                  containers = new HashSet<NameMap> ();                  // Parts that may contain us.
         public boolean                       inheritContainersDone;                                 // Indicates this map has already collated all the containers from its parents (via $inherit).
@@ -63,12 +61,9 @@ public class PartMap
             String pieces[] = part.get ("$metadata", "backend.lems.part").split (",");
             for (String n : pieces)
             {
-                n = n.replace ("\"", "");
                 neuroml.add (n);
             }
             if (neuroml.size () == 0) neuroml.add (internal);  // Simply a tagged part, with no name change.
-
-            if (part.child ("$metadata", "backend.lems.DL") != null) dimensions = new HashMap<String,String> ();
 
             MNode metadata = part.child ("$metadata");
             if (metadata != null)
@@ -95,10 +90,10 @@ public class PartMap
                 }
 
                 // Add name mapping
+                String key = c.key ();
                 String param = c.get ("$metadata", "backend.lems.param");
                 if (! param.isEmpty ())
                 {
-                    String key = c.key ();
                     pieces = param.split (",");
                     ArrayList<String> variables = new ArrayList<String> ();
                     for (String s : pieces)
@@ -110,26 +105,29 @@ public class PartMap
                 }
 
                 // Add default unit
-                if (dimensions == null) continue;
-                pieces = c.get ().split ("@");
-                try
+                MNode metaDL = c.child ("$metadata", "backend.lems.DL");
+                if (metaDL != null)
                 {
-                    // Only do this for simple constants
-                    Operator op = Operator.parse (pieces[0]);
-                    if (op instanceof Negate) op = ((Negate) op).operand;
-                    if (op instanceof Constant  &&  ((Constant) op).value instanceof Scalar)
+                    if (dimensions == null) dimensions = new HashMap<String,String> ();
+                    String unit = metaDL.get ();
+                    if (unit.isEmpty ())
                     {
-                        String value = pieces[0].trim ();
-                        int unitIndex = XMLutility.findUnits (value);
-                        if (unitIndex < value.length ())
+                        pieces = c.get ().split ("@");
+                        try
                         {
-                            String unit = value.substring (unitIndex);
-                            dimensions.put (c.key (), unit);
+                            // Only do this for simple constants
+                            Operator op = Operator.parse (pieces[0]);
+                            if (op instanceof Negate) op = ((Negate) op).operand;
+                            if (op.isScalar ())
+                            {
+                                String value = pieces[0].trim ();
+                                int unitIndex = XMLutility.findUnits (value);
+                                if (unitIndex < value.length ()) unit = value.substring (unitIndex);
+                            }
                         }
+                        catch (ParseException e) {}
                     }
-                }
-                catch (ParseException e)
-                {
+                    if (! unit.isEmpty ()) dimensions.put (key, unit);
                 }
             }
         }
@@ -247,6 +245,11 @@ public class PartMap
                     if (neuromlPartName.contains ("Time"))     return "t";
                     if (neuromlPartName.contains ("Variable")) return "x";
                 }
+                else if (neuromlPartName.equals ("izhikevichCell"))  // not izhikevich2007Cell, which works correctly with default mapping
+                {
+                    if (internalVariableName.equals ("u" )) return "U";
+                    if (internalVariableName.equals ("u'")) return "U'";
+                }
 
                 // Try sequencer
                 SequencerElement se = PluginNeuroML.sequencer.getSequencerElement (neuromlPartName);
@@ -272,8 +275,8 @@ public class PartMap
         {
             if (dimensions == null) return "";
             String unit = dimensions.get (internalVariableName);
-            if (unit != null) return unit;
-            return "";
+            if (unit == null) return "";
+            return unit;
         }
 
         public void dump ()

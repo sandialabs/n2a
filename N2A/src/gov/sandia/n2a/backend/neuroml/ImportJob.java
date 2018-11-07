@@ -82,6 +82,7 @@ public class ImportJob extends XMLutility
     Map<String,Node>            properties      = new HashMap<String,Node> ();  // Map from IDs to top-level intra- or extra-cellular property blocks.
     Map<String,Cell>            cells           = new HashMap<String,Cell> ();
     Map<String,Network>         networks        = new HashMap<String,Network> ();
+    List<Output>                outputs         = new ArrayList<Output> ();
     Map<String,ComponentType>   components      = new HashMap<String,ComponentType> ();
     Map<String,TreeSet<String>> aliases         = new HashMap<String,TreeSet<String>> ();
     Map<String,Unit<?>>         dimensions      = new TreeMap<String,Unit<?>> ();  // Declared dimension names
@@ -333,6 +334,7 @@ public class ImportJob extends XMLutility
         for (Entry<String,Cell>          e : cells     .entrySet ()) e.getValue ().finish ();
         for (Entry<String,Network>       e : networks  .entrySet ()) e.getValue ().finish1 ();
         for (Entry<String,Network>       e : networks  .entrySet ()) e.getValue ().finish2 ();
+        for (Output                      o : outputs               ) o            .finish ();
 
         // (Obscure case) Find spike sources that reference a target synapse but did not get used.
         // Need to construct fused parts so they are functional on their own.
@@ -425,7 +427,8 @@ public class ImportJob extends XMLutility
     public void resolve (MNode dependent)
     {
         dependents.remove (dependent);
-        boolean isChildrenType = dependent.key ().startsWith ("backend.lems.children");
+        String dkey = dependent.key ();
+        boolean isChildrenType = dkey.startsWith ("backend.lems.children")  ||  dkey.startsWith ("backend.lems.attachments");
         boolean isConnect      = dependent.get ().contains ("connect(");
         String childrenExternalName = "";
 
@@ -2456,7 +2459,7 @@ public class ImportJob extends XMLutility
                 // The unresolved question here is whether sourcePart is shared with any other input.
                 // The only way to be certain is to check after all inputs have been created.
                 // If this is the case, then sourcePart should be changed into a connection endpoint,
-                // and this connection object get some added equations to move the values.
+                // and this connection object should get some added equations to move the values.
                 explicitInputRecheck.add (name);
             }
             else
@@ -2630,89 +2633,117 @@ public class ImportJob extends XMLutility
 
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
-            if (child.getNodeType () == Node.ELEMENT_NODE) output (child, part);
+            if (child.getNodeType () == Node.ELEMENT_NODE) outputs.add (new Output (child, part));
         }
     }
 
-    /**
-        Handles outputs under the NeuroML Simulation element (Display, OutputFile, EventOutputFile).
-        The LEMS output elements (under the LEMS Simulation element) work in close cooperation
-        with the NeuroML elements, so they are not directly supported here.
-    **/
-    public void output (Node node, MNode part)
+    public class Output
     {
-        String path      = getAttribute (node, "path");     // Is this a path that precedes fileName, or an XPath to some runtime instance?
-        String fileName  = getAttribute (node, "fileName");
-        //String format    = getAttribute (node, "format");   // Spike raster format.
-        String title     = getAttribute (node, "title");
-        String timeScale = getAttribute (node, "timeScale");
-        String xmin      = getAttribute (node, "xmin");
-        String xmax      = getAttribute (node, "xmax");
-        String ymin      = getAttribute (node, "ymin");
-        String ymax      = getAttribute (node, "ymax");
+        MNode      part;
+        String     fileName;
+        String     chartParameters;
+        List<Line> lines = new ArrayList<Line> ();
 
-        if (fileName.isEmpty ()) fileName = title;
-        if (! path.isEmpty ()) fileName = path + "/" + fileName;
-
-        String chartParameters = "";
-        if (! timeScale.isEmpty ()) chartParameters  = "timeScale=" + timeScale;
-        if (! xmin     .isEmpty ()) chartParameters += ",xmin="     + xmin;
-        if (! xmax     .isEmpty ()) chartParameters += ",xmax="     + xmax;
-        if (! ymin     .isEmpty ()) chartParameters += ",ymin="     + ymin;
-        if (! ymax     .isEmpty ()) chartParameters += ",ymax="     + ymax;
-        if (chartParameters.startsWith (",")) chartParameters = chartParameters.substring (1);
-
-        for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
+        public Output (Node node, MNode part)
         {
-            if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+            this.part = part;
 
-            String id            = getAttribute (child, "id");  // Presumably determines data series name, or equivalently, column heading.
-            String quantity      = getAttribute (child, "quantity");
-            String select        = getAttribute (child, "select");
-            String event         = getAttribute (child, "eventPort");
-            String scale         = getAttribute (child, "scale");
-            String lineTimeScale = getAttribute (child, "timeScale");
-            String color         = getAttribute (child, "color");
+            String path      = getAttribute (node, "path");     // Is this a path that precedes fileName, or an XPath to some runtime instance?
+            fileName         = getAttribute (node, "fileName");
+            //String format    = getAttribute (node, "format");   // Spike raster format.
+            String title     = getAttribute (node, "title");
+            String timeScale = getAttribute (node, "timeScale");
+            String xmin      = getAttribute (node, "xmin");
+            String xmax      = getAttribute (node, "xmax");
+            String ymin      = getAttribute (node, "ymin");
+            String ymax      = getAttribute (node, "ymax");
 
-            if (quantity.isEmpty ()  &&  ! select.isEmpty ()) quantity = select + "/ignored";
-            Path variablePath = new Path (quantity);
-            variablePath.resolve (part);
-            MNode container = variablePath.container ();
-            if (container == null) continue;
-            String variable = variablePath.target ();
+            if (fileName.isEmpty ()) fileName = title;
+            if (! path.isEmpty ()) fileName = path + "/" + fileName;
 
-            String dummy = "x0";
-            int index = 1;
-            while (container.child (dummy) != null) dummy = "x" + index++;
+            chartParameters = "";
+            if (! timeScale.isEmpty ()) chartParameters  = "timeScale=" + timeScale;
+            if (! xmin     .isEmpty ()) chartParameters += ",xmin="     + xmin;
+            if (! xmax     .isEmpty ()) chartParameters += ",xmax="     + xmax;
+            if (! ymin     .isEmpty ()) chartParameters += ",ymin="     + ymin;
+            if (! ymax     .isEmpty ()) chartParameters += ",ymax="     + ymax;
+            if (chartParameters.startsWith (",")) chartParameters = chartParameters.substring (1);
 
-            String condition = variablePath.condition ();
-            if (! event.isEmpty ())
+            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
-                if (! condition.isEmpty ()) condition += "&&";
-                condition += "event(" + event + ")";
-                variable = "1";
+                if (child.getNodeType () != Node.ELEMENT_NODE) continue;
+                lines.add (new Line (child));
+            }
+        }
+
+        public void finish ()
+        {
+            for (Line l : lines) l.finish ();
+        }
+
+        public class Line
+        {
+            String id;
+            String quantity;
+            String mode;
+            String event;
+
+            public Line (Node node)
+            {
+                id                   = getAttribute (node, "id");  // Presumably determines data series name, or equivalently, column heading.
+                quantity             = getAttribute (node, "quantity");
+                String select        = getAttribute (node, "select");
+                event                = getAttribute (node, "eventPort");
+                String scale         = getAttribute (node, "scale");
+                String lineTimeScale = getAttribute (node, "timeScale");
+                String color         = getAttribute (node, "color");
+
+                if (quantity.isEmpty ()  &&  ! select.isEmpty ()) quantity = select + "/ignored";
+
+                mode = "";
+                if (! scale        .isEmpty ()) mode  = "scale="          + scale;
+                if (! color        .isEmpty ()) mode += ",color="         + color;
+                if (! lineTimeScale.isEmpty ()) mode += ",lineTimeScale=" + lineTimeScale;
+                if (mode.startsWith (",")) mode = mode.substring (1);
+                if (! chartParameters.isEmpty ())
+                {
+                    if (! mode.isEmpty ()) mode += ",";
+                    mode += chartParameters;
+                    chartParameters = "";  // Only output once
+                }
             }
 
-            String mode = "";
-            if (! scale        .isEmpty ()) mode  = "scale="          + scale;
-            if (! color        .isEmpty ()) mode += ",color="         + color;
-            if (! lineTimeScale.isEmpty ()) mode += ",lineTimeScale=" + lineTimeScale;
-            if (mode.startsWith (",")) mode = mode.substring (1);
-            if (! chartParameters.isEmpty ())
+            public void finish ()
             {
-                if (! mode.isEmpty ()) mode += ",";
-                mode += chartParameters;
-                chartParameters = "";  // Only output once
-            }
+                System.out.println ("Line.finish");
+                // Resolve XPath to determine final location of output() statement, and identity of target variable.
+                Path variablePath = new Path (quantity);
+                variablePath.resolve (part);
+                MNode container = variablePath.container ();
+                if (container == null) return;
+                String variable = variablePath.target ();
 
-            String output = "output(";
-            if (! fileName.isEmpty ()) output += "\"" + fileName + "\",";
-            output += variable;
-            if (! id.isEmpty ()) output += ",\"" + id + "\"";
-            if (! mode.isEmpty ()) output += ",\"" + mode + "\"";
-            output += ")";
-            if (! condition.isEmpty ()) output += "@" + condition;
-            container.set (dummy, output);
+                String dummy = "x0";
+                int index = 1;
+                while (container.child (dummy) != null) dummy = "x" + index++;
+
+                String condition = variablePath.condition ();
+                if (! event.isEmpty ())
+                {
+                    if (! condition.isEmpty ()) condition += "&&";
+                    condition += "event(" + event + ")";
+                    variable = "1";
+                }
+
+                String output = "output(";
+                if (! fileName.isEmpty ()) output += "\"" + fileName + "\",";
+                output += variable;
+                if (! id.isEmpty ()) output += ",\"" + id + "\"";
+                if (! mode.isEmpty ()) output += ",\"" + mode + "\"";
+                output += ")";
+                if (! condition.isEmpty ()) output += "@" + condition;
+                container.set (dummy, output);
+            }
         }
     }
 
@@ -2942,14 +2973,15 @@ public class ImportJob extends XMLutility
     **/
     public String typeFor (String nodeName, List<MNode> parents)
     {
-        String query = "backend.lems.children." + nodeName;
         for (MNode parent : parents)
         {
             // TODO: for lookup of direct child, may need to map node name in context of parent.
             // This is only necessary if the subpart has a different internal name.
             String type = parent.get (nodeName, "$inherit").replace ("\"", "");  // Assumes single inheritance
             if (! type.isEmpty ()) return type;
-            MNode c = parent.child ("$metadata", query);
+            MNode c = parent.child ("$metadata", "backend.lems.children." + nodeName);
+            if (c != null) return c.getOrDefault (nodeName).split (",")[0];
+            c = parent.child ("$metadata", "backend.lems.attachments." + nodeName);
             if (c != null) return c.getOrDefault (nodeName).split (",")[0];
         }
         return "";
@@ -3115,7 +3147,7 @@ public class ImportJob extends XMLutility
     {
         MNode            part;
         MNode            regime;
-        int              nextRegimeIndex = 1;  // Never allocate regime 0, because that is the default initila value for all variables. We only want to enter an inital regime explicitly.
+        int              nextRegimeIndex = 1;  // Never allocate regime 0, because that is the default initial value for all variables. We only want to enter an initial regime explicitly.
         Set<EventChild>  eventChildren  = new HashSet<EventChild> ();   // Events that try to reference a parent port. Attempt to resolve these in postprocessing.
         Map<String,Path> directPaths    = new HashMap<String,Path> ();
         Set<String>      childInstances = new HashSet<String> ();
@@ -3221,17 +3253,29 @@ public class ImportJob extends XMLutility
                         addDependencyFromLEMS (childPart, inherit);
                         break;
                     case "Children":
-                    case "Attachments":  // Similar to "Children" but added at runtime. N2A does not add subparts dynamically. Instead, they access their "parent" via a pointer. Like children, attached components must be modified to push any value that is mentioned by the parent as a reduction.
+                    case "Attachments":
+                        // (My best guess is ...)
+                        // A named collection of instances that is built at runtime and used mainly for XPath select statements.
+                        // The collection has a given type.
+                        // A "children" collection receives any subpart that matches the given type. The subparts are
+                        // declared ahead of time.
+                        // An "attachments" collection is a list of remote parts which connect to this one.
                         name       = getAttribute (child, "name");
                         inherit    = getAttribute (child, "type");
                         String min = getAttribute (child, "min");
                         String max = getAttribute (child, "max");
                         if (inherit.isEmpty ()) inherit = name;
-                        name = "backend.lems.children." + name;  // This tag is used to determine type ($inherit) when adding the subpart.
+                        name = "backend.lems." + nodeName.toLowerCase () + "." + name;  // This tag is used to look up the associated type ($inherit) when adding a subpart.
                         String rawInherit = inherit;
                         if (models.child (modelName, inherit) == null) inherit = partMap.importName (inherit);
-                        if (rawInherit.equals (inherit)) part.set ("$metadata", name, inherit);
-                        else                             part.set ("$metadata", name, inherit + "," + rawInherit);
+                        if (rawInherit.equals (partMap.exportName (inherit)))  // If our default external name matches the original (raw) external name, then only store the internal part name.
+                        {
+                            part.set ("$metadata", name, inherit);
+                        }
+                        else  // Store both the internal name and the original external name, to facilitate more precise re-export.
+                        {
+                            part.set ("$metadata", name, inherit + "," + rawInherit);
+                        }
                         addDependencyFromLEMS (part.child ("$metadata", name), inherit);
                         if (! min.isEmpty ()) part.set ("$metadata", name + ".min", min);
                         if (! max.isEmpty ()) part.set ("$metadata", name + ".max", max);
@@ -3551,7 +3595,7 @@ public class ImportJob extends XMLutility
             // across the states. However, nothing in the LEMS models gives an initial state,
             // so they must all start at 0. That being the case, don't worry about normalization.
 
-            String inherit = part.get ("$metadata", "backend.lems.children." + nodes).split (",")[0];
+            String inherit = part.get ("$metadata", "backend.lems.children." + nodes).split (",")[0];  // No need to also check attachments, because kinetic scheme only works with children parts
             if (! inherit.isEmpty ())
             {
                 MNode parent = AppData.models.child (inherit);
@@ -3774,7 +3818,8 @@ public class ImportJob extends XMLutility
 
                 for (MNode m : metadata)
                 {
-                    if (m.key ().startsWith ("backend.lems.children."))
+                    String key = m.key ();
+                    if (key.startsWith ("backend.lems.children.")  ||  key.startsWith ("backend.lems.attachments."))
                     {
                         // If the child type happens to be any member of the family,
                         // then the candidate container is indeed the kind we are seeking.
@@ -4010,18 +4055,19 @@ public class ImportJob extends XMLutility
         **/
         public void resolve (MNode root)
         {
+            MNode current = root;
             int i = 0;
             for (PathPart p : parts)
             {
                 if (! p.condition.isEmpty ()) isDirect = false;
 
-                List<MNode> lineage = collectParents (root);
-                lineage.add (root);
+                List<MNode> lineage = collectParents (current);
+                lineage.add (current);
 
                 // Name-map the last path entry (the variable)
                 if (i == parts.size () - 1)
                 {
-                    MNode base = findBasePart (root);
+                    MNode base = findBasePart (current);
                     if (base != null)
                     {
                         NameMap nameMap = partMap.exportMap (base);
@@ -4057,8 +4103,32 @@ public class ImportJob extends XMLutility
                 // If that fails, check for a folded part
                 if (next == null)
                 {
-                    String inherit = root.get ("$inherit").replaceAll ("\"", "");
-                    if (p.partName.equals (inherit)) next = root;  // This can happen if the path name refers to an ionChannel folded into a channelPopulation.
+                    String inherit = current.get ("$inherit").replaceAll ("\"", "");
+                    if (p.partName.equals (inherit))  // When an ionChannel gets folded into a channelPopulation, and made into a standalone part, the standalone part is named after the embedded ionChannel.
+                    {
+                        next = current;
+                    }
+                }
+                // If that fails, check for folded connection
+                if (next == null)
+                {
+                    // Scan for connections that target current, and check if the other target matches the given name.
+                    MNode previous;
+                    if (i >= 2) previous = parts.get (i - 2).part;
+                    else        previous = root;
+                    String key = current.key ();
+                    for (MNode c : previous)  // c should be a peer of current
+                    {
+                        if (c == current) continue;
+                        if (! c.get ("B").equals (key)) continue;
+                        // Now we have a part that appears to name current as a connection target.
+                        String inherit = c.get ("$inherit").replace ("\"", "");
+                        if (p.partName.equals (inherit))
+                        {
+                            next = c;
+                            break;
+                        }
+                    }
                 }
 
                 // Check if connection
@@ -4073,9 +4143,9 @@ public class ImportJob extends XMLutility
                     }
                 }
 
-                root   = next;
-                p.part = next;
-                if (root == null) break;
+                p.part  = next;
+                current = next;
+                if (current == null) break;
                 i++;
             }
         }

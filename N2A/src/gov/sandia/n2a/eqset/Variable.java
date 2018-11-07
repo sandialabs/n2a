@@ -1092,15 +1092,16 @@ public class Variable implements Comparable<Variable>, Cloneable
         }
     }
 
-    public void setPriority (int value)
+    public void setPriority (int value, Variable from)
     {
         // Prevent infinite recursion
-        Variable p = visited;
+        Variable p = from;
         while (p != null)
         {
             if (p == this) return;
             p = p.visited;
         }
+        visited = from;
 
         // Ripple-increment priority
         if (value <= priority) return;
@@ -1109,8 +1110,7 @@ public class Variable implements Comparable<Variable>, Cloneable
         {
             if (v == this) continue; // This could be detected by the recursion test above, but our trail would still be damaged.
             if (v.container != container) continue;  // Don't exit the current equation set when setting priority.
-            v.visited = this;
-            v.setPriority (value);
+            v.setPriority (value, this);
         }
     }
 
