@@ -381,6 +381,7 @@ inline std::istream & getline (std::istream & in, String & result, char delimite
     else if (c < 0) in.setstate (std::istream::eofbit);
     int remaining = b - buffer;
     if (remaining) result.append (buffer, remaining);
+    return in;
 }
 
 #endif
