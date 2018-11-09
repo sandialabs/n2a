@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -8,7 +8,7 @@ package gov.sandia.n2a.ui.jobs;
 
 import java.awt.Component;
 import java.awt.FontMetrics;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.util.ArrayList;
 
 import javax.swing.JLabel;
@@ -25,9 +25,9 @@ public class Table extends OutputParser
 {
     int rows;
 
-    public Table (String path, boolean sorted)
+    public Table (Path path, boolean sorted)
     {
-    	parse (Paths.get (path), Double.NaN);
+    	parse (path, Double.NaN);
     	for (Column c : columns) rows = Math.max (rows, c.startRow + c.values.size ());
 
     	if (isXycePRN) columns.remove (0);  // get rid of Index column

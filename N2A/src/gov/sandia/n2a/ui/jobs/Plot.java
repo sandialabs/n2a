@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2016 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -7,64 +7,134 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.jobs;
 
 import java.awt.Color;
-import java.nio.file.Paths;
-
+import java.nio.file.Path;
+import java.util.Arrays;
 import javax.swing.JPanel;
 
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.NumberAxis;
-import org.jfree.chart.axis.ValueAxis;
+import org.jfree.chart.plot.DatasetRenderingOrder;
 import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.chart.plot.XYPlot;
 import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
 import org.jfree.chart.title.LegendTitle;
-import org.jfree.data.xy.XYDataset;
 import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
 
 public class Plot extends OutputParser
 {
-    public Plot (String path)
+    protected int                columnCount;
+    protected XYSeriesCollection dataset0;
+    protected XYSeriesCollection dataset1;
+    protected double             range0;
+    protected double             range1;
+
+    public Plot (Path path)
     {
-    	parse (Paths.get (path));
+    	parse (path);
     }
 
     public JPanel createGraphPanel ()
     {
-        XYDataset dataset = createDataset ();
-        JFreeChart chart = createChart (dataset);
+        createDatasets ();
+        JFreeChart chart = createChart ();
         return new ChartPanelDrag (chart);
     }
 
-    public XYDataset createDataset ()
+    public void createDatasets ()
     {
-        XYSeriesCollection dataset = new XYSeriesCollection();
-    	for (Column c : columns)
-        {
-        	if (c == time) continue;
-        	if (isXycePRN  &&  c == columns.get (0)) continue;
+        // Decide between one or two axis display
 
+        columnCount = columns.size () - 1;   // Subtract 1 to account for time column.
+        if (isXycePRN  &&  time != columns.get (0)) columnCount--;  // Account for Xyce step column.
+
+        Column[] sorted = new Column[columnCount];
+        int i = 0;
+        for (Column c : columns)
+        {
+            if (c == time) continue;
+            if (isXycePRN  &&  c == columns.get (0)) continue;
+
+            c.computeStats ();
+            sorted[i++] = c;
+        }
+        Arrays.sort (sorted, new ColumnComparator ());
+
+        int bestIndex = -1;
+        double largestRatio = 1;
+        for (i = 0; i < columnCount - 1; i++)
+        {
+            if (sorted[i].range == 0) continue;
+            double ratio = sorted[i+1].range / sorted[i].range;
+            if (ratio > largestRatio)
+            {
+                largestRatio = ratio;
+                bestIndex = i;
+            }
+        }
+
+        Column[] left  = sorted;
+        Column[] right = null;
+        if (bestIndex >= 0  &&  largestRatio >= 100)
+        {
+            int rightCount = bestIndex + 1;
+            right = new Column[rightCount];
+            left  = new Column[columnCount - rightCount];
+            for (i = 0; i < rightCount ; i++) right[i             ] = sorted[i];
+            for (     ; i < columnCount; i++) left [i - rightCount] = sorted[i];
+        }
+
+        // Generate data series
+
+        dataset0 = new XYSeriesCollection();
+        double min = Double.POSITIVE_INFINITY;
+        double max = Double.NEGATIVE_INFINITY;
+    	for (Column c : left)
+        {
         	XYSeries series = new XYSeries (c.header);
             for (int r = 0; r < c.values.size (); r++)
             {
                 Double value = c.values.get (r);
-                if (value.isInfinite ()) value = 0.0;  // JFreeChart chokes on infinity (how to determine a vertical scale for that?)
+                if (value.isInfinite ()  ||  value.isNaN ()) value = 0.0;  // JFreeChart chokes on infinity (how to determine a vertical scale for that?)
                 series.add (time.values.get (r + c.startRow), value);
             }
-            dataset.addSeries (series);
+            dataset0.addSeries (series);
+            min = Math.min (min, c.min);
+            max = Math.max (max, c.max);
         }
-        return dataset;
+    	range0 = max - min;
+
+    	if (right != null)
+    	{
+            dataset1 = new XYSeriesCollection();
+            min = Double.POSITIVE_INFINITY;
+            max = Double.NEGATIVE_INFINITY;
+            for (Column c : right)
+            {
+                XYSeries series = new XYSeries (c.header);
+                for (int r = 0; r < c.values.size (); r++)
+                {
+                    Double value = c.values.get (r);
+                    if (value.isInfinite ()  ||  value.isNaN ()) value = 0.0;  // JFreeChart chokes on infinity (how to determine a vertical scale for that?)
+                    series.add (time.values.get (r + c.startRow), value);
+                }
+                dataset1.addSeries (series);
+                min = Math.min (min, c.min);
+                max = Math.max (max, c.max);
+            }
+            range1 = max - min;
+    	}
     }
 
-    public JFreeChart createChart (final XYDataset dataset)
+    public JFreeChart createChart ()
     {
-        final JFreeChart chart = ChartFactory.createXYLineChart
+        JFreeChart chart = ChartFactory.createXYLineChart
         (
             null,                     // chart title
             null,                     // x axis label
             null,                     // y axis label
-            dataset,                  // data
+            dataset0,                 // data
             PlotOrientation.VERTICAL,
             true,                     // include legend
             true,                     // tooltips
@@ -72,7 +142,7 @@ public class Plot extends OutputParser
         );
 
         LegendTitle legend = chart.getLegend ();
-        legend.setVisible (dataset.getSeriesCount () <= 5);
+        legend.setVisible (columnCount <= 5);
 
         XYPlot plot = chart.getXYPlot();
         plot.setBackgroundPaint     (Color.white);
@@ -80,12 +150,30 @@ public class Plot extends OutputParser
         plot.setRangeGridlinePaint  (Color.lightGray);
         plot.setDomainPannable (true);
         plot.setRangePannable  (true);
-        ValueAxis axis = plot.getRangeAxis ();
-        if (axis instanceof NumberAxis) ((NumberAxis) axis).setAutoRangeIncludesZero (false);
+        NumberAxis axis0 = (NumberAxis) plot.getRangeAxis ();
+        axis0.setAutoRangeIncludesZero (false);
+        if (range0 > 0) axis0.setAutoRangeMinimumSize (range0 / 2);
 
         XYLineAndShapeRenderer renderer = new XYLineAndShapeRenderer();
-        for (int i = 0; i < dataset.getSeriesCount (); i++) renderer.setSeriesShapesVisible (i, false);
-        plot.setRenderer(renderer);
+        for (int i = 0; i < dataset0.getSeriesCount (); i++) renderer.setSeriesShapesVisible (i, false);
+        plot.setRenderer (renderer);
+
+        if (dataset1 != null)
+        {
+            plot.setDataset (1, dataset1);
+            plot.mapDatasetToRangeAxis (1, 1);
+
+            NumberAxis axis1 = new NumberAxis ();
+            axis1.setAutoRangeIncludesZero (false);
+            if (range1 > 0) axis1.setAutoRangeMinimumSize (range1 / 2);
+            axis1.setTickLabelFont (axis0.getTickLabelFont ());
+            plot.setRangeAxis (1, axis1);
+
+            renderer = new XYLineAndShapeRenderer();
+            for (int i = 0; i < dataset1.getSeriesCount (); i++) renderer.setSeriesShapesVisible (i, false);
+            plot.setRenderer (1, renderer);
+            plot.setDatasetRenderingOrder (DatasetRenderingOrder.REVERSE);
+        }
 
         return chart;
     }

@@ -26,9 +26,10 @@ import java.awt.event.KeyEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -354,17 +355,18 @@ public class PanelRun extends JPanel
                     saveScripts ();
 
                     // Execute script
-                    String path = "";
-                    if      (displayNode instanceof NodeJob ) path = ((NodeJob ) displayNode).source.get ();
-                    else if (displayNode instanceof NodeFile) path = ((NodeFile) displayNode).path.getAbsolutePath ();
-                    if (! path.isEmpty ())
+                    Path path = null;
+                    if      (displayNode instanceof NodeJob ) path = Paths.get (((NodeJob ) displayNode).source.get ());
+                    else if (displayNode instanceof NodeFile) path =            ((NodeFile) displayNode).path;
+                    if (path != null)
                     {
-                        String directory = new File (path).getParent ();
+                        String pathString = path.toAbsolutePath ().toString ();
+                        String dirString = path.getParent ().toAbsolutePath ().toString ();
                         System.out.println ("script=" + script);
-                        System.out.println ("path=" + path);
-                        System.out.println ("dir=" + directory);
-                        script = script.replaceAll ("\\%d", Matcher.quoteReplacement (directory));
-                        script = script.replaceAll ("\\%f", Matcher.quoteReplacement (path));
+                        System.out.println ("path=" + pathString);
+                        System.out.println ("dir=" + dirString);
+                        script = script.replaceAll ("\\%d", Matcher.quoteReplacement (dirString));
+                        script = script.replaceAll ("\\%f", Matcher.quoteReplacement (pathString));
                         try {Runtime.getRuntime ().exec (script);}
                         catch (IOException error) {error.printStackTrace ();}
                     }
@@ -461,21 +463,21 @@ public class PanelRun extends JPanel
                 //   small -- can load entirely into memory
                 //   big   -- too big for memory; must load/display in segments
                 //   huge  -- too big to store on local system, for example a supercomputer job; must be downloaded/displayed in segments
-                // The current code only handles small files. In particular, we don't actually do Step 1, but instead assume data is local.
+                // The current code only handles small files. In particular, we don't actually do Step 1, but simply assume data is local.
                 MNode job = ((NodeJob) node.getParent ()).source;
                 HostSystem env = HostSystem.get (job.getOrDefault ("$metadata", "host", "localhost"));
 
                 // Step 2 -- Load data
                 // The exact method depends on the current display mode, selected by pushbuttons and stored in viz
-                String path = node.path.getAbsolutePath ();
                 if (! viz.equals ("Text"))
                 {
                     // Determine if the file is actually a table that can be graphed
-                    boolean graphable = node.type == NodeFile.Type.Output  ||  node.type == NodeFile.Type.Result;
-                    if (node.type == NodeFile.Type.Other)  
+                    Path dir = node.path.getParent ();
+                    String fileName = node.path.getFileName ().toString ();
+                    boolean graphable = Files.exists (dir.resolve (fileName + ".columns"));  // An auxiliary column file is sufficient evidence that this is tabular data.
+                    if (! graphable)
                     {
-                        // Probe the file itself
-                        BufferedReader reader = new BufferedReader (new FileReader (new File (path)));
+                        BufferedReader reader = Files.newBufferedReader (node.path);
                         String line = reader.readLine ();
                         graphable = line.startsWith ("$t")  ||  line.startsWith ("Index");
                         if (! graphable)
@@ -500,7 +502,7 @@ public class PanelRun extends JPanel
                                     }
                                 }
                                 // At least 3 viable columns, and more than half are interpretable as numbers.
-                                graphable = columns > 3  &&  (double) columns / pieces.length > 0.7;
+                                graphable = columns >= 3  &&  (double) columns / pieces.length > 0.7;
                             }
                         }
                         reader.close ();
@@ -511,22 +513,22 @@ public class PanelRun extends JPanel
                         Component panel = null;
                         if (viz.equals ("Table"))
                         {
-                            Table table = new Table (path, false);
-                            panel = table.createVisualization ();
+                            Table table = new Table (node.path, false);
+                            if (table.hasData ()) panel = table.createVisualization ();
                         }
                         else if (viz.equals ("TableSorted"))
                         {
-                            Table table = new Table (path, true);
-                            panel = table.createVisualization ();
+                            Table table = new Table (node.path, true);
+                            if (table.hasData ()) panel = table.createVisualization ();
                         }
                         else if (viz.equals ("Graph"))
                         {
-                            Plot plot = new Plot (path);
-                            if (! plot.columns.isEmpty ()) panel = plot.createGraphPanel ();
+                            Plot plot = new Plot (node.path);
+                            if (plot.hasData ()) panel = plot.createGraphPanel ();
                         }
                         else if (viz.equals ("Raster"))
                         {
-                            Raster raster = new Raster (path);
+                            Raster raster = new Raster (node.path);
                             panel = raster.createGraphPanel ();
                         }
 
@@ -552,7 +554,7 @@ public class PanelRun extends JPanel
                 }
 
                 // Default is plain text
-                final String contents = env.getFileContents (path);
+                final String contents = env.getFileContents (node.path.toString ());
                 if (stop) return;
 
                 EventQueue.invokeLater (new Runnable ()
@@ -683,7 +685,8 @@ public class PanelRun extends JPanel
                     }
                     else if (node instanceof NodeFile)
                     {
-                        ((NodeFile) node).path.delete ();
+                        try {Files.delete (((NodeFile) node).path);}
+                        catch (IOException e) {}
                     }
                 };
             }.start ();

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -11,17 +11,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 public class OutputParser
 {
-    public class Column
-    {
-    	public String header = "";
-    	public List<Double> values = new ArrayList<Double> ();
-    	public int startRow;
-    	public int textWidth;
-    }
     public List<Column> columns = new ArrayList<Column> ();
     public boolean      isXycePRN;
     public Column       time;
@@ -122,6 +116,44 @@ public class OutputParser
                 timeMatch = potentialMatch;
                 time = c;
             }
+        }
+    }
+
+    public boolean hasData ()
+    {
+        for (Column c : columns) if (! c.values.isEmpty ()) return true;
+        return false;
+    }
+
+    public static class Column
+    {
+        public String       header = "";
+        public List<Double> values = new ArrayList<Double> ();
+        public int          startRow;
+        public int          textWidth;
+        public double       min    = Double.POSITIVE_INFINITY;
+        public double       max    = Double.NEGATIVE_INFINITY;
+        public double       range;
+
+        public void computeStats ()
+        {
+            for (Double d : values)
+            {
+                min = Math.min (min, d);
+                max = Math.max (max, d);
+            }
+            range = max - min;
+        }
+    }
+
+    public static class ColumnComparator implements Comparator<Column>
+    {
+        public int compare (Column a, Column b)
+        {
+            // Should probably also trap NaN
+            if (a.range > b.range) return  1;
+            if (a.range < b.range) return -1;
+            return 0;
         }
     }
 }

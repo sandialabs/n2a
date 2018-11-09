@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2016 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -8,9 +8,9 @@ package gov.sandia.n2a.ui.jobs;
 
 import java.awt.Color;
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -42,9 +42,9 @@ public class Raster
     public List<Integer> columns = new ArrayList<Integer> ();
     public int nextColumn = -1;
 
-    public Raster (String path)
+    public Raster (Path path)
     {
-    	parsePrnFile (new File (path));
+    	parsePrnFile (path);
     }
 
     public JPanel createGraphPanel ()
@@ -53,7 +53,7 @@ public class Raster
         return new ChartPanelDrag (chart);
     }
 
-    public void parsePrnFile (File f)
+    public void parsePrnFile (Path f)
     {
         dataset = new XYSeriesCollection ();
         XYSeries series = new XYSeries ("Spikes");
@@ -64,7 +64,7 @@ public class Raster
             int row = 0;
             int timeColumn = -1;  // It's possible that there might not be a time column. In that case, we use raw row index;
 
-            BufferedReader br = new BufferedReader (new FileReader (f));
+            BufferedReader br = Files.newBufferedReader (f);
             while (true)
             {
                 String line = br.readLine ();

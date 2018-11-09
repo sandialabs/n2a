@@ -13,7 +13,6 @@ import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,7 +22,7 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.Set;
 import java.util.TreeMap;
-
+import java.util.function.Consumer;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.n2a.plugins.extpoints.Backend;
@@ -205,7 +204,7 @@ public class NodeJob extends NodeBase
         // If a job runs remotely, then we need to fetch its files to view them, so assume they will be downloaded to local dir when requested.
 
         NodeBase selected = (NodeBase) tree.getLastSelectedPathComponent ();
-        TreeMap<File,NodeFile> existing = new TreeMap<File,NodeFile> ();
+        TreeMap<Path,NodeFile> existing = new TreeMap<Path,NodeFile> ();
         if (children != null)
         {
             for (Object c : children)
@@ -216,52 +215,60 @@ public class NodeJob extends NodeBase
             }
         }
 
-        boolean changed = false;
-        File path = new File (source.get ()).getParentFile ();
-        for (File file : path.listFiles ())
+        class FileConsumer implements Consumer<Path>
         {
-            if (file.isDirectory ()) continue;
-
-            String fileName = file.getName ();
-            if (fileName.startsWith ("n2a_job" )) continue;
-            if (fileName.equals     ("model"   )) continue;  // This is the file associated with our own "source"
-            if (fileName.equals     ("started" )) continue;
-            if (fileName.equals     ("finished")) continue;
-            if (fileName.startsWith ("compile" )) continue;  // Piped files for compilation process. These will get copied to appropriate places if necessary.
-            if (fileName.endsWith   (".bin"    )) continue;  // Don't show generated binaries
-            if (fileName.endsWith   (".aplx"   )) continue;
-            if (fileName.endsWith   (".columns")) continue;  // Hint for column names when simulator doesn't output them.
-            if (fileName.endsWith   (".mod"    )) continue;  // NEURON files
-
-            NodeFile newNode;
-            if      (fileName.endsWith ("out"    )) newNode = new NodeFile (NodeFile.Type.Output,  file);
-            else if (fileName.endsWith ("err"    )) newNode = new NodeFile (NodeFile.Type.Error,   file);
-            else if (fileName.endsWith ("result" )) newNode = new NodeFile (NodeFile.Type.Result,  file);
-            else if (fileName.endsWith ("console")) newNode = new NodeFile (NodeFile.Type.Console, file);
-            else                                    newNode = new NodeFile (NodeFile.Type.Other,   file);
-
-            NodeFile oldNode = existing.get (newNode.path);
-            if (oldNode == null)
+            boolean changed;
+            public void accept (Path file)
             {
-                add (newNode);
-                changed = true;
+                if (Files.isDirectory (file)) return;
+                try {if (Files.size (file) == 0) return;}
+                catch (IOException e) {return;}
+
+                String fileName = file.getFileName ().toString ();
+                if (fileName.startsWith ("n2a_job" )) return;
+                if (fileName.equals     ("model"   )) return;  // This is the file associated with our own "source"
+                if (fileName.equals     ("started" )) return;
+                if (fileName.equals     ("finished")) return;
+                if (fileName.startsWith ("compile" )) return;  // Piped files for compilation process. These will get copied to appropriate places if necessary.
+                if (fileName.endsWith   (".bin"    )) return;  // Don't show generated binaries
+                if (fileName.endsWith   (".aplx"   )) return;
+                if (fileName.endsWith   (".columns")) return;  // Hint for column names when simulator doesn't output them.
+                if (fileName.endsWith   (".mod"    )) return;  // NEURON files
+
+                NodeFile newNode;
+                if      (fileName.endsWith ("out"    )) newNode = new NodeFile (NodeFile.Type.Output,  file);
+                else if (fileName.endsWith ("err"    )) newNode = new NodeFile (NodeFile.Type.Error,   file);
+                else if (fileName.endsWith ("result" )) newNode = new NodeFile (NodeFile.Type.Result,  file);
+                else if (fileName.endsWith ("console")) newNode = new NodeFile (NodeFile.Type.Console, file);
+                else                                    newNode = new NodeFile (NodeFile.Type.Other,   file);
+
+                NodeFile oldNode = existing.get (newNode.path);
+                if (oldNode == null)
+                {
+                    add (newNode);
+                    changed = true;
+                }
+                else
+                {
+                    oldNode.found = true;
+                }
             }
-            else
-            {
-                oldNode.found = true;
-            }
-        }
+        };
+        FileConsumer consumer = new FileConsumer ();
+        Path dir = Paths.get (source.get ()).getParent ();
+        try {Files.list (dir).forEach (consumer);}
+        catch (IOException e) {}
 
         for (NodeFile nf : existing.values ())
         {
             if (! nf.found)
             {
                 remove (nf);
-                changed = true;
+                consumer.changed = true;
             }
         }
 
-        if (changed)
+        if (consumer.changed)
         {
             if (selected != null)
             {
