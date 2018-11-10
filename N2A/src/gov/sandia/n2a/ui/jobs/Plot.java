@@ -76,7 +76,7 @@ public class Plot extends OutputParser
 
         Column[] left  = sorted;
         Column[] right = null;
-        if (bestIndex >= 0  &&  largestRatio >= 100)
+        if (bestIndex >= 0  &&  largestRatio >= 10)
         {
             int rightCount = bestIndex + 1;
             right = new Column[rightCount];

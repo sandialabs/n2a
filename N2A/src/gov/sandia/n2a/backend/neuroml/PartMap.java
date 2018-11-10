@@ -250,6 +250,10 @@ public class PartMap
                     if (internalVariableName.equals ("u" )) return "U";
                     if (internalVariableName.equals ("u'")) return "U'";
                 }
+                else if (neuromlPartName.endsWith ("GeneratorDL"))
+                {
+                    if (internalVariableName.equals ("I")) return "I";  // The default is to translate to lowercase i, but "DL" parts use uppercase I instead.
+                }
 
                 // Try sequencer
                 SequencerElement se = PluginNeuroML.sequencer.getSequencerElement (neuromlPartName);

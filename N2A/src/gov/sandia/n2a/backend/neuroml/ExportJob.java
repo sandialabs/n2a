@@ -300,7 +300,7 @@ public class ExportJob extends XMLutility
 
         // Collate
         Element root;
-        if (componentTypes.isEmpty ())
+        if (componentTypes.isEmpty ()  &&  ! forBackend)
         {
             root = doc.createElement ("neuroml");
             root.setAttribute ("xmlns",              "http://www.neuroml.org/schema/neuroml2");
@@ -365,18 +365,18 @@ public class ExportJob extends XMLutility
         else if (type.contains ("Input")  ||  type.contains ("Generator")  ||  type.contains ("Clamp")  ||  type.contains ("spikeArray")  ||  type.contains ("PointCurrent"))
         {
             requiresNML = true;
-            input (source, elements, null);
+            input (source, elements, null, false);
         }
         else if (type.contains ("Synapse"))
         {
             requiresNML = true;
-            Synapse s = addSynapse (source, false);
+            Synapse s = addSynapse (source, false, false);
             s.id = source.key ();
         }
         else if (inherit.contains ("Coupling"))
         {
             requiresNML = true;
-            Synapse s = addSynapse (source, true);
+            Synapse s = addSynapse (source, true, false);
             s.id = source.key ();
         }
         else  // generic Component instantiation, but could still be a NueroML part
@@ -448,29 +448,34 @@ public class ExportJob extends XMLutility
             {
                 MPart p = (MPart) c;
                 if (! p.isPart ()) continue;
+
+                boolean DL = false;
+                Population population = populations.get (c.get ("B"));
+                if (population != null) DL = population.cell.DL;
+
                 String type = p.get ("$metadata", "backend.lems.part");
                 String inherit = p.get ("$inherit").replace ("\"", "");
                 if (type.contains ("Synapse"))
                 {
                     Element result = addElement ("projection", networkElements);
-                    Synapse s = addSynapse (p, false);
+                    Synapse s = addSynapse (p, false, DL);
                     result.setAttribute ("synapse", s.id);
                     connections (p, result, "connection", "", "");
                 }
                 else if (type.contains ("Projection"))  // gap junctions and split synapses. These use the special projection types.
                 {
-                    projectionSplit (p);
+                    projectionSplit (p, DL);
                 }
                 else if (inherit.equals ("Coupling"))
                 {
                     // TODO: convert electricalProjection to Coupling during import
                     Element result = addElement ("electricalProjection", networkElements);
-                    Synapse s = addSynapse (p, true);
+                    Synapse s = addSynapse (p, true, DL);
                     connections (source, result, "electricalConnection", s.id, s.id);
                 }
                 else if (type.contains ("Input")  ||  type.contains ("Generator")  ||  type.contains ("Clamp")  ||  type.contains ("spikeArray")  ||  type.contains ("PointCurrent"))  // unary connection with embedded input
                 {
-                    String inputID = input (p, elements, null);
+                    String inputID = input (p, elements, null, DL);
                     if (! Operator.containsConnect (p.get ("B")))  // There are NeuroML files that create an input without incorporating it into a network, yet our importer wraps the whole result in a network. This guard prevents a malformed element in the output.
                     {
                         Element result = addElement ("inputList", networkElements);
@@ -504,6 +509,7 @@ public class ExportJob extends XMLutility
         {
             public String       id;
             public AbstractCell cell;
+            public boolean      list;
 
             public Population (MPart source)
             {
@@ -518,7 +524,6 @@ public class ExportJob extends XMLutility
 
                 // Determine type of spatial layout
                 MNode xyzNode = source.child ("$xyz");
-                boolean list = false;
                 if (xyzNode != null)
                 {
                     if (xyzNode.size () > 0)
@@ -708,7 +713,7 @@ public class ExportJob extends XMLutility
             }
         }
 
-        public void projectionSplit (MPart source)
+        public void projectionSplit (MPart source, boolean DL)
         {
             // Determine the two sides of the connection
             MPart preNode  = null;
@@ -736,8 +741,8 @@ public class ExportJob extends XMLutility
             String projectionType = electrical ? "electricalProjection" : "continuousProjection";
             String connectionType = electrical ? "electricalConnection" : "continuousConnection";
 
-            String preComponent  = addSynapse (preNode, electrical).id;
-            String postComponent = addSynapse (postNode, electrical).id;
+            String preComponent  = addSynapse (preNode, electrical, DL).id;
+            String postComponent = addSynapse (postNode, electrical, DL).id;
 
             Element result = addElement (projectionType, networkElements);
             connections (source, result, connectionType, preComponent, postComponent);
@@ -748,18 +753,18 @@ public class ExportJob extends XMLutility
             result.setAttribute ("id", source.key ());
 
             String[] pieces = source.get ("A").split ("\\.");
-            String prePopulation = pieces[0];
+            String prePopulationID = pieces[0];
             AbstractCell preCell = null;
-            Population pop = populations.get (prePopulation);
-            if (pop != null) preCell = pop.cell;
+            Population prePopulation = populations.get (prePopulationID);
+            if (prePopulation != null) preCell = prePopulation.cell;
             String preSegment = "";
             if (pieces.length > 1) preSegment = pieces[1];
 
             pieces = source.get ("B").split ("\\.");
-            String postPopulation = pieces[0];
+            String postPopulationID = pieces[0];
             AbstractCell postCell = null;
-            pop = populations.get (postPopulation);
-            if (pop != null) postCell = pop.cell;
+            Population postPopulation = populations.get (postPopulationID);
+            if (postPopulation != null) postCell = postPopulation.cell;
             String postSegment = "";
             if (pieces.length > 1) postSegment = pieces[1];
 
@@ -768,12 +773,12 @@ public class ExportJob extends XMLutility
             boolean isConnection = type.equals ("connection");
             if (inputList)
             {
-                result.setAttribute ("population", postPopulation);
+                result.setAttribute ("population", postPopulationID);
             }
             else
             {
-                result.setAttribute ("presynapticPopulation", prePopulation);
-                result.setAttribute ("postsynapticPopulation", postPopulation);
+                result.setAttribute ("presynapticPopulation",  prePopulationID);
+                result.setAttribute ("postsynapticPopulation", postPopulationID);
             }
 
             // Prepare list of conditions
@@ -874,6 +879,8 @@ public class ExportJob extends XMLutility
                             if (! mappedID.equals ("0")) connection.setAttribute ("pre" + Segment, mappedID);
                         }
                     }
+                    if (prePopulation.list) index = "../" + prePopulationID + "/" + index +  "/" + preCell.id;
+                    else                    index = "../" + prePopulationID + "[" + index + "]";
                     connection.setAttribute ("pre" + Cell, index);
                 }
 
@@ -895,6 +902,8 @@ public class ExportJob extends XMLutility
                         }
                     }
                 }
+                if (postPopulation.list) index = "../" + postPopulationID + "/" + index +  "/" + postCell.id;
+                else                     index = "../" + postPopulationID + "[" + index + "]";
                 if (inputList) connection.setAttribute ("target",      index);
                 else           connection.setAttribute ("post" + Cell, index);
 
@@ -936,9 +945,10 @@ public class ExportJob extends XMLutility
         }
     }
 
-    public Synapse addSynapse (MPart source, boolean electrical)
+    public Synapse addSynapse (MPart source, boolean electrical, boolean DL)
     {
-        Synapse s = new Synapse (source, electrical);
+        // Construct unique synapse object
+        Synapse s = new Synapse (source, electrical, DL);
         int index = synapses.indexOf (s);
         if (index >= 0)
         {
@@ -953,7 +963,7 @@ public class ExportJob extends XMLutility
         // Check for chained synapse (embedded input)
         MPart A = (MPart) source.child ("A");
         if (A == null  ||  A.size () == 0) return s;
-        Synapse s2 = new Synapse (s.id, A);
+        Synapse s2 = new Synapse (s.id, A, DL);
 
         index = synapses.indexOf (s2);
         if (index >= 0)
@@ -970,17 +980,19 @@ public class ExportJob extends XMLutility
 
     public class Synapse
     {
-        String     id;
-        String     chainID = "";
-        MPart      source;
-        MNode      base    = new MVolatile ();
-        boolean    electrical;  // A hint about context. Shouldn't change identity.
-        boolean    usedInCell;  // This is a Coupling between segments in a single cell model, and thus should not be emitted. (Parameter overrides, such as to G, are not supported in this case.)
+        String  id;
+        String  chainID = "";
+        MPart   source;
+        MNode   base    = new MVolatile ();
+        boolean electrical;  // A hint about context. Shouldn't change identity.
+        boolean usedInCell;  // This is a Coupling between segments in a single cell model, and thus should not be emitted. (Parameter overrides, such as to G, are not supported in this case.)
+        boolean DL;
 
-        public Synapse (MPart source, boolean electrical)
+        public Synapse (MPart source, boolean electrical, boolean DL)
         {
             this.source     = source;
             this.electrical = electrical;
+            this.DL         = DL;
 
             // Assemble a part that best recreates the underlying synapse before it got incorporated into a projection
             base.merge (source);
@@ -1003,10 +1015,11 @@ public class ExportJob extends XMLutility
             }
         }
 
-        public Synapse (String chainID, MPart source)
+        public Synapse (String chainID, MPart source, boolean DL)
         {
             this.chainID = chainID;
             this.source  = source;
+            this.DL      = DL;
 
             String lemsID = source.get ("$metadata", "backend.lems.id");
             if (! lemsID.isEmpty ()) id = lemsID;
@@ -1018,7 +1031,7 @@ public class ExportJob extends XMLutility
 
             if (! chainID.isEmpty ())  // We have embedded input, so the main synapse will be emitted elsewhere.
             {
-                input (source, elements, this);
+                input (source, elements, this, DL);
                 return;
             }
 
@@ -1070,7 +1083,7 @@ public class ExportJob extends XMLutility
             Element s = addElement (type, elements);
             s.setAttribute ("id", id);
             sequencer.append (s, synapseElements);
-            genericPart (source, s, skip);
+            genericPart (source, s, DL, skip);
         }
 
         public boolean equals (Object o)
@@ -1085,7 +1098,7 @@ public class ExportJob extends XMLutility
         }
     }
 
-    public String input (MPart source, List<Element> parentElements, Synapse synapse)
+    public String input (MPart source, List<Element> parentElements, Synapse synapse, boolean DL)
     {
         String type = source.get ("$metadata", "backend.lems.part");
 
@@ -1097,7 +1110,7 @@ public class ExportJob extends XMLutility
             if (p.isPart ())
             {
                 skip.add (p.key ());
-                input (p, inputElements, null);
+                input (p, inputElements, null, DL);
             }
             else if (p.key ().equals ("times"))
             {
@@ -1131,6 +1144,11 @@ public class ExportJob extends XMLutility
                 if (source.get ("high2").equals ("high1")) type = "pulseGenerator";
                 else                                       type = "rampGenerator";
             }
+            if (DL) type += "DL";
+        }
+        else if (type.startsWith ("sine"))
+        {
+            if (DL) type += "DL";
         }
         else if (type.contains (","))  // more action is needed
         {
@@ -1149,6 +1167,13 @@ public class ExportJob extends XMLutility
             type = type.split (",")[0];  // remove any remaining ambiguity
         }
 
+        if (DL)
+        {
+            // Stash chosen LEMS part, so we can map output variables (if any) correctly.
+            EquationSet e = getEquations (source);
+            e.setNamedValue ("backend.lems.extends", type);
+        }
+
         Element input = addElement (type, parentElements);
         String id;
         if (synapse == null)
@@ -1164,7 +1189,7 @@ public class ExportJob extends XMLutility
         }
         input.setAttribute ("id", id);
         standalone (source, input, inputElements);
-        genericPart (source, input, skip);
+        genericPart (source, input, DL, skip);
         sequencer.append (input, inputElements);
         return id;
     }
@@ -1196,9 +1221,10 @@ public class ExportJob extends XMLutility
 
     public class AbstractCell extends SimulationTarget
     {
-        public MPart source;
-        public MNode base;
-        public int   populationSize;  // Ideally this would be a member of Population, but cells can be created outside a network, and N2A (but not NeuroML) allows them to have $n > 1.
+        public MPart   source;
+        public MNode   base;
+        public int     populationSize;  // Ideally this would be a member of Population, but cells can be created outside a network, and N2A (but not NeuroML) allows them to have $n > 1.
+        public boolean DL;
 
         public AbstractCell (MPart source)
         {
@@ -1233,6 +1259,7 @@ public class ExportJob extends XMLutility
             {
                 // Check if crucial variables have been touched
                 if (anyOverride (source, "C", "k", "vr", "vt")) type = "izhikevich2007Cell";
+                else DL = true;
             }
             else if (type.startsWith ("iaf"))
             {
@@ -1269,22 +1296,7 @@ public class ExportJob extends XMLutility
             Element cell = addElement (type, elements);
             cell.setAttribute ("id", id);
             standalone (source, cell);
-            genericPart (source, cell, skip);
-
-            if (type.equals ("izhikevichCell"))  // strip units
-            {
-                for (String v : new String[] {"a", "b", "c", "d"})
-                {
-                    MPart p = (MPart) source.child (v);
-                    String value = p.get ();
-                    int index = findUnits (value);
-                    if (index < value.length ())
-                    {
-                        value = value.substring (0, index);
-                        cell.setAttribute (v, value);
-                    }
-                }
-            }
+            genericPart (source, cell, DL, skip);
         }
 
         public boolean anyOverride (MPart source, String... names)
@@ -1357,7 +1369,7 @@ public class ExportJob extends XMLutility
                     if (! c.source.get ("$inherit").contains ("Coupling")) continue;
                     if (! c.source.get ("A").equals (part.name)) continue;
                     if (! c.source.get ("B").equals (part.name)) continue;
-                    Synapse s = addSynapse ((MPart) c.source, true);
+                    Synapse s = addSynapse ((MPart) c.source, true, DL);
                     s.usedInCell = true;
                     connectSegments (c, blockNames);
                 }
@@ -2223,7 +2235,7 @@ public class ExportJob extends XMLutility
         public Element appendWrapper (List<Element> containerElements, List<String> skipList)
         {
             Element result = addElement (type, containerElements);
-            genericPart (source, result, skipList);
+            genericPart (source, result, false, skipList);
             result.setAttribute ("id", source.key ());
             result.setAttribute ("ionChannel", id);
             String ion = source.get ("$metadata", "species");
@@ -2685,21 +2697,27 @@ public class ExportJob extends XMLutility
             AccessVariable av = (AccessVariable) output.operands[1];
             EquationSet container = av.reference.variable.container;
 
-            MNode source = container.source;
-            String targetType = source.get ("$metadata", "backend.lems.extends");
-            if (targetType.isEmpty ()) targetType = source.get ("$metadata", "backend.lems.part").split (",")[0];
-            NameMap nameMap = partMap.exportMap (source);
+            String                     targetType = container.getNamedValue ("backend.lems.extends");
+            if (targetType.isEmpty ()) targetType = container.getNamedValue ("backend.lems.part").split (",")[0];
+            NameMap nameMap = partMap.exportMap (container.source);
             String name = nameMap.exportName (av.name, targetType);
 
             EquationSet p = container;
+            if (container.connectionBindings != null)
+            {
+                // For some reason, LEMS acts as if an input is embedded in the destination part.
+                String id = p.getNamedValue ("backend.lems.id");
+                if (id.isEmpty ()) id = p.name;
+                name = id + "/" + name;
+                p = p.findConnection ("B").endpoint;
+            }
             while (p != null)
             {
                 if (! p.getNamedValue ("backend.lems.target").isEmpty ()) break;
                 String prefix = p.name;
                 if (! p.getNamedValue ("backend.lems.enumerate").isEmpty ()) prefix += "[0]";
-                if (p.getNamedValue ("backend.lems.part").contains ("ionChannel"))
+                if (p.getNamedValue ("backend.lems.part").contains ("ionChannel"))  // an ionChannel folded into a channelPopulation
                 {
-                    // The current path name is a folded part, consisting of both an ionChannel and a channelPopulation.
                     // Determine if the path name below this one (processed in previous loop) is
                     // specifically a member of the ionChannel rather than the channelPopulation.
                     // In that case, we must insert the ionChannel name into the path as well as the channelPopulation.
@@ -3558,10 +3576,10 @@ public class ExportJob extends XMLutility
 
     public void genericPart (MPart part, Element result, String... skip)
     {
-        genericPart (part, result, Arrays.asList (skip));
+        genericPart (part, result, false, Arrays.asList (skip));
     }
 
-    public void genericPart (MPart part, Element result, List<String> skipList)
+    public void genericPart (MPart part, Element result, boolean DL, List<String> skipList)
     {
         EquationSet partEquations = getEquations (part);
         List<Element> resultElements = new ArrayList<Element> ();
@@ -3645,6 +3663,15 @@ public class ExportJob extends XMLutility
                             }
                         }
                         catch (Exception e) {}
+                    }
+                    if (DL  &&  nameMap.dimensions != null)  // dimensionless, so strip units
+                    {
+                        String unitName = nameMap.dimensions.get (key);
+                        if (unitName != null)
+                        {
+                            UnitParser up = new UnitParser (value);
+                            if (up.unit != null) value = up.printDimensionless (unitName);
+                        }
                     }
                     result.setAttribute (name, biophysicalUnits (value));  // biophysicalUnits() should return strings (non-numbers) unmodified
                 }
@@ -3942,6 +3969,18 @@ public class ExportJob extends XMLutility
         public String print ()
         {
             return ExportJob.print (value) + nml;
+        }
+
+        public String printDimensionless (String targetUnitName)
+        {
+            Unit<?> targetUnit = UCUM.parse (targetUnitName);
+            try
+            {
+                UnitConverter converter = unit.getConverterToAny (targetUnit);
+                value = converter.convert (value);
+            }
+            catch (Exception error) {}
+            return ExportJob.print (value);
         }
     }
 
