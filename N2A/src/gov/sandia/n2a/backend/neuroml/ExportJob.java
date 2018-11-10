@@ -478,6 +478,7 @@ public class ExportJob extends XMLutility
                     String inputID = input (p, elements, null, DL);
                     if (! Operator.containsConnect (p.get ("B")))  // There are NeuroML files that create an input without incorporating it into a network, yet our importer wraps the whole result in a network. This guard prevents a malformed element in the output.
                     {
+                        //connections (p, null, networkElements, "explicitInput", inputID, "");
                         Element result = addElement ("inputList", networkElements);
                         result.setAttribute ("component", inputID);
                         connections (p, result, "input", "", "");
@@ -751,7 +752,13 @@ public class ExportJob extends XMLutility
         public void connections (MPart source, Element result, String type, String preComponent, String postComponent)
         {
             result.setAttribute ("id", source.key ());
+            List<Element> projectionElements = new ArrayList<Element> ();
+            connections (source, result, projectionElements, type, preComponent, postComponent);
+            sequencer.append (result, projectionElements);
+        }
 
+        public void connections (MPart source, Element result, List<Element> projectionElements, String type, String preComponent, String postComponent)
+        {
             String[] pieces = source.get ("A").split ("\\.");
             String prePopulationID = pieces[0];
             AbstractCell preCell = null;
@@ -768,14 +775,15 @@ public class ExportJob extends XMLutility
             String postSegment = "";
             if (pieces.length > 1) postSegment = pieces[1];
 
-            boolean electrical   = type.contains ("electrical");
-            boolean inputList    = type.equals ("input");
-            boolean isConnection = type.equals ("connection");
+            boolean electrical    = type.contains ("electrical");
+            boolean inputList     = type.equals   ("input");
+            boolean explicitInput = type.equals   ("explicitInput");
+            boolean isConnection  = type.equals   ("connection");
             if (inputList)
             {
                 result.setAttribute ("population", postPopulationID);
             }
-            else
+            else if (! explicitInput)
             {
                 result.setAttribute ("presynapticPopulation",  prePopulationID);
                 result.setAttribute ("postsynapticPopulation", postPopulationID);
@@ -820,7 +828,6 @@ public class ExportJob extends XMLutility
             }
 
             // Scan conditions and emit connection for each one
-            List<Element> projectionElements = new ArrayList<Element> ();
             int count = 0;
             for (MNode c : p)
             {
@@ -852,7 +859,7 @@ public class ExportJob extends XMLutility
                 String typeWD = type;
                 if (isConnection  &&  !(weight == 1  &&  delay == 0)) typeWD += "WD";
                 Element connection = addElement (typeWD, projectionElements);
-                connection.setAttribute ("id", String.valueOf (count++));
+                if (! explicitInput) connection.setAttribute ("id", String.valueOf (count++));
 
                 String Cell    = "Cell";
                 String Segment = "Segment";
@@ -862,7 +869,7 @@ public class ExportJob extends XMLutility
                     Segment += "Id";
                 }
 
-                if (! inputList)
+                if (! inputList  &&  ! explicitInput)
                 {
                     String index;
                     if (preSegment.isEmpty ())  // point cell
@@ -902,16 +909,17 @@ public class ExportJob extends XMLutility
                         }
                     }
                 }
-                if (postPopulation.list) index = "../" + postPopulationID + "/" + index +  "/" + postCell.id;
-                else                     index = "../" + postPopulationID + "[" + index + "]";
-                if (inputList) connection.setAttribute ("target",      index);
-                else           connection.setAttribute ("post" + Cell, index);
+                if (postPopulation.list) index = postPopulationID + "/" + index +  "/" + postCell.id;
+                else                     index = postPopulationID + "[" + index + "]";
+                if (! explicitInput) index = "../" + index;
+                if (inputList  ||  explicitInput) connection.setAttribute ("target",      index);
+                else                              connection.setAttribute ("post" + Cell, index);
 
                 if (inputList)
                 {
                     if (postFraction != 0.5) connection.setAttribute ("fractionAlong", print (postFraction));
                 }
-                else
+                else if (! explicitInput)
                 {
                     if (weight       != 1  ) connection.setAttribute ("weight",            print (weight));
                     if (delay        != 0  ) connection.setAttribute ("delay",             print (delay));
@@ -927,13 +935,17 @@ public class ExportJob extends XMLutility
                 {
                     connection.setAttribute ("destination", "synapses");
                 }
+                else if (explicitInput)
+                {
+                    connection.setAttribute ("destination", "synapses");
+                    connection.setAttribute ("input", preComponent);  // Not strictly a preComponent. Instead, we are re-purposing the parameter.
+                }
                 else
                 {
                     if (! preComponent .isEmpty ()) connection.setAttribute ("preComponent",  preComponent);
                     if (! postComponent.isEmpty ()) connection.setAttribute ("postComponent", postComponent);
                 }
             }
-            sequencer.append (result, projectionElements);
         }
 
         public double conditionalParameter (MPart source, String name, String condition, double defaultValue)

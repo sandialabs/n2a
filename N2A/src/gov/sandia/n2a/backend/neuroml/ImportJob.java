@@ -2715,7 +2715,6 @@ public class ImportJob extends XMLutility
 
             public void finish ()
             {
-                System.out.println ("Line.finish");
                 // Resolve XPath to determine final location of output() statement, and identity of target variable.
                 Path variablePath = new Path (quantity);
                 variablePath.resolve (part);
