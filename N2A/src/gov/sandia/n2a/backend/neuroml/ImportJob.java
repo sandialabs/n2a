@@ -476,7 +476,7 @@ public class ImportJob extends XMLutility
                 }
                 if (proxy)
                 {
-                    source.set ("$inherit", "\"" + inherit + "\"");  // proxies only have single inheritance
+                    source.set ("$inherit", inherit);  // proxies only have single inheritance
                     MNode parent = AppData.models.child (inherit);
                     if (parent == null)
                     {
@@ -607,7 +607,7 @@ public class ImportJob extends XMLutility
                 }
                 else if (isConnect)
                 {
-                    dependent.set ("connect(\"" + inherit + "\")");
+                    dependent.set ("connect(" + inherit + ")");
                     //dependent.set ("0", id);  // TODO: Store ID with abstract connections
                 }
                 else
@@ -643,7 +643,7 @@ public class ImportJob extends XMLutility
         inherit = nameMap.internal;
 
         MNode part = models.childOrCreate (modelName, id);  // Expect to always create this part rather than fetch an existing child.
-        part.set ("$inherit", "\"" + inherit + "\"");
+        part.set ("$inherit", inherit);
         addDependency (part, inherit);
         if (! species.isEmpty ()) part.set ("$metadata", "species", species);
 
@@ -668,7 +668,7 @@ public class ImportJob extends XMLutility
         MNode part = container.set (id, "");
         NameMap nameMap = partMap.importMap ("baseQ10Settings");  // This isn't the correct name for use with ion channel, but it will still work.
         String inherit = nameMap.internal;
-        part.set ("$inherit", "\"" + inherit + "\"");
+        part.set ("$inherit", inherit);
         addDependency (part, inherit);
 
         NamedNodeMap attributes = node.getAttributes ();
@@ -698,7 +698,7 @@ public class ImportJob extends XMLutility
         NameMap nameMap = partMap.importMap (inherit);
         inherit = nameMap.internal;
         MNode part = container.set (id, "");
-        part.set ("$inherit", "\"" + inherit + "\"");
+        part.set ("$inherit", inherit);
         addDependency (part, inherit);
 
         addAttributes (node, part, nameMap, "id", "type");
@@ -721,7 +721,7 @@ public class ImportJob extends XMLutility
                 case "openState":
                 case "closedState":
                     id = getAttribute (child, "id");
-                    part.set (id, "$inherit", "\"Kinetic State\"");
+                    part.set (id, "$inherit", "Kinetic State");
                     part.set (id, "relativeConductance", name.equals ("openState") ? "1" : "0");
                     break;
                 case "forwardTransition":
@@ -741,7 +741,7 @@ public class ImportJob extends XMLutility
         String id = getAttribute (node, "id");
         MNode part = container.set (id, "");
         NameMap nameMap = partMap.importMap (node.getNodeName ());
-        part.set ("$inherit", "\"" + nameMap.internal + "\"");
+        part.set ("$inherit", nameMap.internal);
 
         addAttributes (node, part, nameMap, "id");
 
@@ -788,7 +788,7 @@ public class ImportJob extends XMLutility
         MNode part = container.set (name, "");
         NameMap nameMap = partMap.importMap (inherit);
         inherit = nameMap.internal;
-        part.set ("$inherit", "\"" + inherit + "\"");
+        part.set ("$inherit", inherit);
         addDependency (part, inherit);
 
         addAttributes (node, part, nameMap, "type");
@@ -800,7 +800,7 @@ public class ImportJob extends XMLutility
         String id = getAttribute (node, "id");
         MNode part = models.childOrCreate (modelName, id);
         NameMap nameMap = partMap.importMap (node.getNodeName ());
-        part.set ("$inherit", "\"" + nameMap.internal + "\"");
+        part.set ("$inherit", nameMap.internal);
 
         addAttributes (node, part, nameMap, "id");
 
@@ -1286,7 +1286,7 @@ public class ImportJob extends XMLutility
                         MNode subpart = property.iterator ().next ();
                         String concentrationModel = subpart.get ("concentrationModel");
                         subpart.clear ("concentrationModel");
-                        subpart.set ("$inherit", "\"" + concentrationModel + "\"");  // Dependency will be tagged when this property is added to segments.
+                        subpart.set ("$inherit", concentrationModel);  // Dependency will be tagged when this property is added to segments.
                         NameMap nameMap = exportMap (concentrationModel);
                         remap (subpart, nameMap);
                         if (subpart.child ("z") == null)
@@ -1547,7 +1547,7 @@ public class ImportJob extends XMLutility
                         part.set ("$metadata", "neuroLexID", neuroLexID);
                     }
                 }
-                part.set ("$inherit", "\"" + inheritSegment + "\"");
+                part.set ("$inherit", inheritSegment);
                 addDependency (part, inheritSegment);
                 for (MNode property : part)
                 {
@@ -1643,7 +1643,7 @@ public class ImportJob extends XMLutility
                 if (connection == null)
                 {
                     connection = cell.set (connectionName, "");
-                    connection.set ("$inherit", "\"Coupling\"");  // Explicit non-NeuroML part, so no need for mapping
+                    connection.set ("$inherit", "Coupling");  // Explicit non-NeuroML part, so no need for mapping
                     connection.set ("A", s.parent.part.key ());
                     connection.set ("B", s       .part.key ());
                 }
@@ -1851,7 +1851,7 @@ public class ImportJob extends XMLutility
         else if (name.contains ("GHK"   )) potential = "Potential GHK";
         if (potential.isEmpty ())
         {
-            part.set ("$inherit", "\"" + ionChannel + "\"");
+            part.set ("$inherit", ionChannel);
         }
         else
         {
@@ -1860,7 +1860,7 @@ public class ImportJob extends XMLutility
             if (name.contains ("Ca2")) species = "ca2";
             species = models.getOrDefault (modelName, ionChannel, "$metadata", "species", species);
             part.set ("c", species);  // connect to species/concentration model, which the user is responsible to create 
-            part.set ("$inherit", "\"" + potential + "\",\"" + ionChannel + "\"");
+            part.set ("$inherit", potential + "," + ionChannel);
             if (doDependency) addDependency (part, potential);
         }
         if (doDependency) addDependency (part, ionChannel);
@@ -2048,7 +2048,7 @@ public class ImportJob extends XMLutility
             String component = getAttribute (node, "component");  // Should always be defined.
 
             MNode part = network.set (id, "");
-            part.set ("$inherit", "\"" + component + "\"");
+            part.set ("$inherit", component);
             addDependency (part, component);
             if (n > 1) part.set ("$n", n);
 
@@ -2305,7 +2305,7 @@ public class ImportJob extends XMLutility
 
                     if (! inherit.isEmpty ())
                     {
-                        connection.part.set ("$inherit", "\"" + inherit + "\"");
+                        connection.part.set ("$inherit", inherit);
                         addDependency (connection.part, inherit);
                     }
                     if (! component.isEmpty()  &&  ! A.isEmpty()) addDependencyFromConnection (connection.part.child ("A"), A);
@@ -2314,12 +2314,12 @@ public class ImportJob extends XMLutility
                     if (! connection.postGroup.isEmpty ()) connection.part.set ("B", B + "." + connection.postGroup);
                     if (! connection.preComponent.isEmpty ())
                     {
-                        connection.part.set ("preComponent", "$inherit", "\"" + connection.preComponent + "\"");
+                        connection.part.set ("preComponent", "$inherit", connection.preComponent);
                         addDependency (connection.part.child ("preComponent"), connection.preComponent);
                     }
                     if (! connection.postComponent.isEmpty ())
                     {
-                        connection.part.set ("postComponent", "$inherit", "\"" + connection.postComponent + "\"");
+                        connection.part.set ("postComponent", "$inherit", connection.postComponent);
                         addDependency (connection.part.child ("postComponent"), connection.postComponent);
                     }
                 }
@@ -2380,7 +2380,7 @@ public class ImportJob extends XMLutility
                 MNode part = network.set (id, base);
                 if (! inherit.isEmpty ())
                 {
-                    part.set ("$inherit", "\"" + inherit + "\"");
+                    part.set ("$inherit", inherit);
                     addDependency (part, inherit);
                 }
                 part.set ("$p", "0");  // No connections at all
@@ -2454,7 +2454,7 @@ public class ImportJob extends XMLutility
             String synapse = sourcePart.get ("$metadata", "backend.lems.synapse");
             if (synapse.isEmpty ())
             {
-                part.set ("$inherit", "\"" + input + "\"");
+                part.set ("$inherit", input);
                 addDependency (part, input);
                 // The unresolved question here is whether sourcePart is shared with any other input.
                 // The only way to be certain is to check after all inputs have been created.
@@ -2464,7 +2464,7 @@ public class ImportJob extends XMLutility
             }
             else
             {
-                part.set ("$inherit", "\"" + synapse + "\"");
+                part.set ("$inherit", synapse);
                 addDependency (part, synapse);
                 MNode connection = part.set ("A", input);
                 addDependencyFromConnection (connection, input);
@@ -2793,7 +2793,7 @@ public class ImportJob extends XMLutility
             // It will still map parameter names correctly for import.
             nameMap = partMap.exportMap (inherit);
         }
-        part.set ("$inherit", "\"" + inherit + "\"");
+        part.set ("$inherit", inherit);
         addDependency (part, inherit);
 
         parents = collectParents (part);  // Now we follow our own inheritance chain, not our container's.
@@ -2817,7 +2817,7 @@ public class ImportJob extends XMLutility
             if (isPart (name, parents))
             {
                 inherit = value;
-                part.set (name, "$inherit", "\"" + inherit + "\"");
+                part.set (name, "$inherit", inherit);
                 addDependency (part.child (name), inherit);
                 addAlias (inherit, name);
             }
@@ -3177,7 +3177,7 @@ public class ImportJob extends XMLutility
                     part.set ("$metadata", "backend.lems.extends", inherit);  // Remember the original "extends" value, because inherited backend.lems.part usually conflates several base types.
                     inherit = nameMap.internal;
                 }
-                part.set ("$inherit", "\"" + inherit + "\"");
+                part.set ("$inherit", inherit);
                 addDependencyFromLEMS (part, inherit);
             }
             if (! description.isEmpty ()) part.set ("$metadata", "description", description);
@@ -3287,7 +3287,7 @@ public class ImportJob extends XMLutility
                         inherit     = getAttribute (child, "type");
                         description = getAttribute (child, "description");
                         if (models.child (modelName, inherit) == null) inherit = partMap.importName (inherit);
-                        part.set (name, "connect(\"" + inherit + "\")");
+                        part.set (name, "connect(" + inherit + ")");
                         if (! inherit    .isEmpty ()) addDependencyFromLEMS (part.child (name), inherit);
                         if (! description.isEmpty ()) part.set (name, "$metadata", "description", description);
                         break;
@@ -3848,10 +3848,10 @@ public class ImportJob extends XMLutility
                 String inherit = sourceNode.get ();  // Will either be blank or a connect() line
                 if (inherit.startsWith ("connect("))
                 {
-                    inherit = inherit.replace ("connect(\"", "");
-                    inherit = inherit.replace ("\")",        "");
+                    inherit = inherit.replace ("connect(", "");
+                    inherit = inherit.replace (")",        "");
                     targetNode.set ("");
-                    targetNode.set ("$inherit", "\"" + inherit + "\"");
+                    targetNode.set ("$inherit", inherit);
                     if (sourceNode != targetNode) addDependencyFromLEMS (targetNode, inherit);
                     // No need to call addDependency() if sourcePart is local, because it was already called when the connect() line was created.
                 }
@@ -4136,8 +4136,8 @@ public class ImportJob extends XMLutility
                     String connection = next.get ();
                     if (connection.startsWith ("connect("))
                     {
-                        connection = connection.replace ("connect(\"", "");
-                        connection = connection.replace ("\")",        "");
+                        connection = connection.replace ("connect(", "");
+                        connection = connection.replace (")",        "");
                         if (! connection.isEmpty ()) next = models.child (modelName, connection);
                     }
                 }
