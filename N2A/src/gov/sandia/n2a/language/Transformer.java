@@ -14,7 +14,7 @@ public class Transformer
     /**
         @return The modified Operator, or null if no action was taken. When null is
         returned, the Operator performs its own default action, which is generally
-        to recurse down the tree.
+        to recurse down the tree then return itself.
     **/
     public Operator transform (Operator op)
     {

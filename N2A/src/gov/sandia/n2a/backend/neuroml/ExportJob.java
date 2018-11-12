@@ -63,9 +63,11 @@ import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Visitor;
+import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.AND;
+import gov.sandia.n2a.language.operator.EQ;
 import gov.sandia.n2a.language.operator.GE;
 import gov.sandia.n2a.language.operator.GT;
 import gov.sandia.n2a.language.operator.LE;
@@ -3113,56 +3115,157 @@ public class ExportJob extends XMLutility
 
             // Collect Variables
             Map<Variable,MNode> variables = new HashMap<Variable,MNode> ();
+            Variable regimeVariable = null;
             for (MNode m : source)  // source, not base, because we want to include parameters which were excluded from comparison.
             {
                 String key = m.key ();
                 if (key.startsWith ("$")) continue;  // Should only be $inherit and $metadata
                 MPart p = (MPart) m;
                 if (p.isPart ()) continue;  // There shouldn't be any of these.
-                if (! p.isFromTopDocument ()  &&  p.getSource ().getParent () instanceof MDoc) continue;  // Eliminate non-local items
-
                 Variable v = equations.find (Variable.fromLHS (key));
-                if (v != null) variables.put (v, m);  // If v is null, then it was revoked.
+                if (v == null) continue;  // If v is null, then it was revoked.
+                if (m.child ("$metadata", "backend.lems.regime") != null) regimeVariable = v;
+                if (p.isFromTopDocument ()  ||  ! (p.getSource ().getParent () instanceof MDoc)) variables.put (v, m);  // Eliminate non-local items
             }
 
-            // Detect regimes
-            Variable regimeVariable = null;
-            List<Variable> regimeNames = new ArrayList<Variable> ();
-            for (Variable v : new ArrayList<Variable> (variables.keySet ()))
+            // Collect regimes
+            if (regimeVariable == null) regimeVariable = equations.find (new Variable ("regime"));
+            Map<Variable,Regime> regimes = new HashMap<Variable,Regime> ();
+            if (regimeVariable != null)
             {
-                MNode m = variables.get (v);
-                if (m.child ("$metadata", "backend.lems.regime") != null)
+                boolean onlyConstants = true;  // A true regime variable must be multi-conditional with only simple constant expressions.
+                for (EquationEntry e : regimeVariable.equations)
                 {
-                    regimeVariable = v;
-                    break;
+                    if (e.expression == null  ||  e.condition == null  ||  ! (e.expression instanceof AccessVariable))
+                    {
+                        onlyConstants = false;
+                        break;
+                    }
+                    AccessVariable av = (AccessVariable) e.expression;
+                    Variable v = av.reference.variable;
+
+                    // Must directly test for constant, since we have not run EquationSet.findConstants().
+                    boolean constant = false;
+                    if (v.equations.size () == 1)
+                    {
+                        EquationEntry e2 = v.equations.first ();
+                        constant = e2.condition == null  &&  e2.expression instanceof gov.sandia.n2a.language.Constant;
+                    }
+                    if (! constant)
+                    {
+                        onlyConstants = false;
+                        break;
+                    }
+                    if (! regimes.containsKey (v)) regimes.put (v, new Regime (v.name));  // Regime names don't get mapped like regular variable names. Just use directly.
+                    if (e.ifString.equals ("$init")) regimes.get (v).initial = true;
                 }
-                if (v.name.equals ("regime"))
+                if (onlyConstants)
                 {
-                    // The name "regime" without the metadata tag might not actually be a regime variable.
-                    // However, if the equation has the right form, it is very likely.
-                    // Specifically, if it is a conditional assignment of only constants.
-                    boolean onlyConstants = true;
-                    for (EquationEntry e : v.equations)
+                    variables.remove (regimeVariable);
+                    for (Variable v : regimes.keySet ()) variables.remove (v);
+                }
+                else
+                {
+                    regimeVariable = null;
+                }
+            }
+
+            class RegimeFinder extends Visitor
+            {
+                Variable regimeVariable;  // What we search for.
+                Regime regime;
+                Event event;  // If non-null, then the condition is actually a transition into the given regime.
+
+                public void find (Operator condition)
+                {
+                    regime = null;
+                    event  = null;
+                    if (condition == null) return;
+                    condition.visit (this);
+                }
+
+                public boolean visit (Operator op)
+                {
+                    if (op instanceof EQ)
                     {
-                        if (e.expression == null) continue;
-                        if (e.expression instanceof gov.sandia.n2a.language.Constant) continue;
-                        if (! (e.expression instanceof AccessVariable))
+                        EQ e = (EQ) op;
+                        if (e.operand0 instanceof AccessVariable  &&  e.operand1 instanceof AccessVariable)
                         {
-                            onlyConstants = false;
-                            break;
-                        }
-                        AccessVariable av = (AccessVariable) e.expression;
-                        if (! av.reference.variable.hasAttribute ("constant"))
-                        {
-                            onlyConstants = false;
-                            break;
+                            Variable v0 = ((AccessVariable) e.operand0).reference.variable;
+                            Variable v1 = ((AccessVariable) e.operand1).reference.variable;
+                            // Only handles regime variable on left side of ==
+                            if (v0 == regimeVariable)
+                            {
+                                regime = regimes.get (v1);
+                                if (e.parent instanceof Event) event = (Event) e.parent;
+                                return false;
+                            }
                         }
                     }
-                    if (onlyConstants)
+                    return true;
+                }
+            }
+            RegimeFinder regimeFinder = new RegimeFinder ();
+            regimeFinder.regimeVariable = regimeVariable;
+
+            class RegimeRemover extends Transformer
+            {
+                public Variable regimeVariable;
+
+                // Strip regime from the condition.
+                // Do this in the AST rather than the original text.
+                public Operator remove (Operator condition)
+                {
+                    return condition.deepCopy ().transform (this);
+                }
+
+                public Operator transform (Operator op)
+                {
+                    if (op instanceof EQ)
                     {
-                        regimeVariable = v;
-                        // But don't break here, because we might still find a variable specifically tagged as regime.
+                        EQ eq = (EQ) op;
+                        if (eq.operand0 instanceof AccessVariable  &&  eq.operand1 instanceof AccessVariable)
+                        {
+                            // Only handles regime variable on left side of ==
+                            if (((AccessVariable) eq.operand0).reference.variable == regimeVariable)
+                            {
+                                return new gov.sandia.n2a.language.Constant (1);
+                            }
+                        }
+                        return null;
                     }
+                    if (op instanceof AND)
+                    {
+                        AND and = (AND) op;
+                        and.operand0 = and.operand0.transform (this);
+                        and.operand1 = and.operand1.transform (this);
+                        if (and.operand0.getDouble () != 0) return and.operand1;
+                        if (and.operand1.getDouble () != 0) return and.operand0;
+                        return null;
+                    }
+                    return null;
+                }
+            }
+            RegimeRemover regimeRemover = new RegimeRemover ();
+            regimeRemover.regimeVariable = regimeVariable;
+
+            // Regime transitions
+            if (regimeVariable != null)
+            {
+                for (EquationEntry e : regimeVariable.equations)
+                {
+                    if (e.ifString.equals ("$init")) continue;
+
+                    // Due to earlier testing, we are assured that e.expression is always an AccessVariable pointing to a regime constant.
+                    Regime to = regimes.get (((AccessVariable) e.expression).reference.variable);
+                    regimeFinder.find (e.condition);
+                    if (regimeFinder.regime == null) continue;  // This should never happen.
+                    Regime from = regimeFinder.regime;
+
+                    Operator condition = regimeRemover.remove (e.condition);
+                    OnCondition onCondition = addOnCondition (condition, from.onConditions);
+                    Element transition = addElement ("Transition", onCondition.elements);
+                    transition.setAttribute ("regime", to.name);
                 }
             }
 
@@ -3173,6 +3276,7 @@ public class ExportJob extends XMLutility
             List<Constant> constants = new ArrayList<Constant> ();
             for (Variable v : new ArrayList<Variable> (variables.keySet ()))
             {
+                if (v.assignment != Variable.REPLACE) continue;  // A variable with a reduction cannot be a declared constant in LEMS.
                 MNode m = variables.get (v);
 
                 boolean parameter = m.child ("$metadata", "param") != null;
@@ -3216,12 +3320,14 @@ public class ExportJob extends XMLutility
 
                 boolean conditional = false;
                 boolean hasInit     = false;
+                boolean hasRegime   = false;
                 for (EquationEntry e : v.equations)
                 {
                     if (e.condition != null)
                     {
                         conditional = true;
                         if (e.ifString.equals ("$init")) hasInit = true;
+                        if (e.ifString.contains (regimeVariable.name)) hasRegime = true;
                     }
                 }
 
@@ -3234,6 +3340,18 @@ public class ExportJob extends XMLutility
                         // The only way to express conditional values for a derivative is to create separate regimes.
                         // For now, we will not attempt to translate arbitrary internal models, but rather assume
                         // they are the result of an import. In that case, they already have regimes set up.
+                        // TODO: create regimes on-the-fly, using entry condition to distinguish them.
+                        for (EquationEntry e : v.equations)
+                        {
+                            regimeFinder.find (e.condition);
+                            if (regimeFinder.regime != null)
+                            {
+                                // We should be able to safely ignore regimeFinder.event
+                                Element timeDerivative = addElement ("TimeDerivative", regimeFinder.regime.elements);
+                                timeDerivative.setAttribute ("variable", name);
+                                renderer.setAttribute (timeDerivative, "value", e.expression);
+                            }
+                        }
                     }
                     else
                     {
@@ -3242,23 +3360,51 @@ public class ExportJob extends XMLutility
                         renderer.setAttribute (timeDerivative, "value", v.equations.first ().expression);
                     }
                 }
-                else if (v.derivative != null  ||  hasInit) // StateVariable
+                else if (v.derivative != null  ||  hasInit  ||  hasRegime) // StateVariable
                 {
-                    element = addElement ("StateVariable", dynamicsElements);
+                    boolean port = ! m.get ("$metadata", "backend.lems.port").isEmpty ();
+                    if (! port) element = addElement ("StateVariable", dynamicsElements);
                     for (EquationEntry e : v.equations)
                     {
-                        Element stateAssignment;
-                        if (e.ifString.isEmpty ()  ||  e.ifString.equals ("$init"))  // OnStart
+                        Element stateAssignment = null;
+                        regimeFinder.find (e.condition);
+                        if (e.ifString.isEmpty ()  ||  e.ifString.equals ("$init")  ||  regimeFinder.event != null)  // OnStart
                         {
-                            stateAssignment = addElement ("StateAssignment", onStartElements);
+                            if (! port)
+                            {
+                                List<Element> useElements = onStartElements;
+                                if (regimeFinder.event != null) useElements = regimeFinder.regime.onEntry;
+                                stateAssignment = addElement ("StateAssignment", useElements);
+                            }
                         }
                         else  // OnCondition
                         {
-                            OnCondition onCondition = addOnCondition (e.condition);
-                            stateAssignment = addElement ("StateAssignment", onCondition.elements);
+                            OnCondition onCondition;
+                            if (regimeFinder.regime == null)
+                            {
+                                onCondition = addOnCondition (e.condition, onConditions);
+                            }
+                            else
+                            {
+                                Operator condition = regimeRemover.remove (e.condition);
+                                onCondition = addOnCondition (condition, regimeFinder.regime.onConditions);
+                            }
+
+                            if (port)
+                            {
+                                Element eventOut = addElement ("EventOut", onCondition.elements);
+                                eventOut.setAttribute ("port", name);
+                            }
+                            else
+                            {
+                                stateAssignment = addElement ("StateAssignment", onCondition.elements);
+                            }
                         }
-                        stateAssignment.setAttribute ("variable", name);
-                        renderer.setAttribute (stateAssignment, "value", e.expression);
+                        if (stateAssignment != null)
+                        {
+                            stateAssignment.setAttribute ("variable", name);
+                            renderer.setAttribute (stateAssignment, "value", e.expression);
+                        }
                     }
                 }
                 else  // DerivedVariable
@@ -3286,7 +3432,7 @@ public class ExportJob extends XMLutility
                         else
                         {
                             String select = "Unable to determine for standalone part";
-                            if (v.hasUsers ())  // In a fully-built and compiled model, we can find the variables that are being reduced to this variable.
+                            if (v.hasUsers ())  // In a fully built and compiled model, we can find the variables that are being reduced to this variable.
                             {
                                 for (Object o : v.usedBy)
                                 {
@@ -3354,7 +3500,7 @@ public class ExportJob extends XMLutility
                 sequencer.append (OnStart, onStartElements);
             }
 
-            for (OnCondition oc : onConditions) oc.append (renderer, dynamicsElements);
+            for (OnCondition oc : onConditions) oc.append (dynamicsElements);
 
             for (OnEvent oe : onEvents)
             {
@@ -3362,6 +3508,8 @@ public class ExportJob extends XMLutility
                 onEvent.setAttribute ("port", oe.port);
                 sequencer.append (onEvent, oe.elements);
             }
+
+            for (Regime r : regimes.values ()) r.append (dynamicsElements);
 
             if (! dynamicsElements.isEmpty ())
             {
@@ -3443,7 +3591,7 @@ public class ExportJob extends XMLutility
             }
         }
 
-        public OnCondition addOnCondition (Operator condition)
+        public OnCondition addOnCondition (Operator condition, List<OnCondition> onConditions)
         {
             OnCondition result = new OnCondition ();
             result.test = renderer.string (condition);
@@ -3459,7 +3607,7 @@ public class ExportJob extends XMLutility
             public String        test;
             public List<Element> elements;
 
-            public void append (Renderer renderer, List<Element> containerElements)
+            public void append (List<Element> containerElements)
             {
                 Element onCondition = addElement ("OnCondition", containerElements);
                 onCondition.setAttribute ("test", test);
@@ -3490,14 +3638,30 @@ public class ExportJob extends XMLutility
         {
             public String            name;
             public boolean           initial;
-            public List<Element>     timeDerivatives;
-            public List<Element>     onEntry;
-            public List<OnCondition> onConditions;
+            public List<Element>     onEntry      = new ArrayList<Element> ();
+            public List<OnCondition> onConditions = new ArrayList<OnCondition> ();
+            public List<Element>     elements     = new ArrayList<Element> ();  // Everything else, but that's just timeDerivatives
 
-            public boolean equals (Object o)
+            public Regime (String name)
             {
-                Regime that = (Regime) o;
-                return name.equals (that.name);
+                this.name = name;
+            }
+
+            public void append (List<Element> dynamicsElements)
+            {
+                Element regime = addElement ("Regime", dynamicsElements);
+                regime.setAttribute ("name", name);
+                if (initial) regime.setAttribute ("initial", "true");
+
+                if (! onEntry.isEmpty ())
+                {
+                    Element oe = addElement ("OnEntry", elements);
+                    for (Element e : onEntry) oe.appendChild (e);
+                }
+
+                for (OnCondition oc : onConditions) oc.append (elements);
+
+                sequencer.append (regime, elements);
             }
         }
 

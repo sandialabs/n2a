@@ -371,6 +371,7 @@ public class ImportJob extends XMLutility
         if (primaryModel.isEmpty ())
         {
             if (networks.size () == 1) primaryModel = networks.entrySet ().iterator ().next ().getValue ().id;
+            else if (models.child (modelName, modelName) != null) primaryModel = modelName;  // A part has the same name as the overall input file, so probably the main payload.
             // Otherwise there is no prime model. Could pick one arbitrarily (with preference for higher-level parts).
             // It may be cleaner to keep them all bundled as subparts and let the user pull them out as needed.
         }
@@ -416,7 +417,7 @@ public class ImportJob extends XMLutility
                 MNode dest = models.childOrCreate (modelName, p.key ());
                 dest.merge (p);
             }
-            models.set (modelName, "$metadata", "backend.lems.id", primaryModel);
+            if (! primaryModel.equals (modelName)) models.set (modelName, "$metadata", "backend.lems.id", primaryModel);
         }
 
         if (models.child (modelName).size () == 0) models.clear (modelName);
