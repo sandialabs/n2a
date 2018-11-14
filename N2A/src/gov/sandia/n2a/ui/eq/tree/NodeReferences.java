@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -21,7 +21,8 @@ import javax.swing.ImageIcon;
 import javax.swing.JTree;
 import javax.swing.tree.TreePath;
 
-public class NodeReferences extends NodeContainer
+@SuppressWarnings("serial")
+public class NodeReferences extends NodeFilter
 {
     protected static ImageIcon icon = ImageUtil.getImage ("properties.gif");
 
@@ -42,7 +43,7 @@ public class NodeReferences extends NodeContainer
     public boolean visible (int filterLevel)
     {
         if (filterLevel <= FilteredTreeModel.ALL)   return true;
-        if (filterLevel == FilteredTreeModel.PARAM) return true;
+        if (filterLevel == FilteredTreeModel.PARAM) return false;
         // FilteredTreeModel.LOCAL ...
         return source.isFromTopDocument ();
     }

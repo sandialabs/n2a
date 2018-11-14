@@ -39,6 +39,7 @@ import javax.swing.JTree;
 import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 
+@SuppressWarnings("serial")
 public class NodePart extends NodeFilter
 {
     protected static ImageIcon iconCompartment = ImageUtil.getImage ("comp.gif");
@@ -140,9 +141,8 @@ public class NodePart extends NodeFilter
     @Override
     public boolean visible (int filterLevel)
     {
-        if (filterLevel <= FilteredTreeModel.ALL) return true;
-        if (source.isFromTopDocument ()) return true;
-        if (filterLevel >= FilteredTreeModel.LOCAL) return false;  // Since we already fail the "local" requirement
+        if (filterLevel <= FilteredTreeModel.ALL)   return true;
+        if (filterLevel >= FilteredTreeModel.LOCAL) return source.isFromTopDocument ();
         // FilteredTreeModel.PARAM ...
         if (children != null  &&  children.size () > 0  &&  (filtered == null  ||  filtered.size () > 0)) return true;  // We have subnodes, and at least some of them are visible (which can only happen at this point if they are public).
         return source.child ("$metadata", "param") != null;

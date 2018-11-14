@@ -33,6 +33,7 @@ import javax.swing.ImageIcon;
 import javax.swing.JTree;
 import javax.swing.tree.TreePath;
 
+@SuppressWarnings("serial")
 public class NodeVariable extends NodeFilter
 {
     protected static ImageIcon iconVariable = ImageUtil.getImage ("delta.png");
@@ -168,11 +169,10 @@ public class NodeVariable extends NodeFilter
     {
         if (filterLevel == FilteredTreeModel.REVOKED) return true;
         if (source.get ().startsWith ("$kill"))       return false;
-        if (filterLevel == FilteredTreeModel.ALL    ) return true;
-        if (source.isFromTopDocument ())              return true;
-        if (filterLevel >= FilteredTreeModel.LOCAL)   return false;  // Since we already fail the "local" requirement
-        // FilteredTreeModel.PARAM ...
-        return source.child ("$metadata", "param") != null;
+        if (filterLevel == FilteredTreeModel.ALL)     return true;
+        if (filterLevel == FilteredTreeModel.PARAM)   return source.child ("$metadata", "param") != null;
+        // LOCAL ...
+        return source.isFromTopDocument ();
     }
 
     @Override
