@@ -2930,9 +2930,9 @@ public class ExportJob extends XMLutility
         public MNode  base;  // for comparisons
 
         public Map<String,String> rename;
-        public List<OnCondition>  onConditions;
-        public List<OnEvent>      onEvents;
         public RendererLEMS       renderer;
+        public List<EventPort>    eventPorts;
+        public List<OnEvent>      onEvents;
 
         public ComponentType (MNode source, MNode base)
         {
@@ -2949,13 +2949,17 @@ public class ExportJob extends XMLutility
 
         public void append ()
         {
-            List<Element> componentTypeElements = new ArrayList<Element> ();
-            List<Element> dynamicsElements      = new ArrayList<Element> ();
-            List<Element> onStartElements       = new ArrayList<Element> ();
-            rename       = new HashMap<String,String> ();
-            renderer     = new RendererLEMS ();
-            onConditions = new ArrayList<OnCondition> ();
-            onEvents     = new ArrayList<OnEvent> ();
+            rename     = new HashMap<String,String> ();
+            renderer   = new RendererLEMS ();
+            eventPorts = new ArrayList<EventPort> ();
+            onEvents   = new ArrayList<OnEvent> ();
+            List<Element>              componentTypeElements = new ArrayList<Element> ();
+            List<Element>              dynamicsElements      = new ArrayList<Element> ();
+            List<Element>              onStartElements       = new ArrayList<Element> ();
+            List<OnCondition>          onConditions          = new ArrayList<OnCondition> ();
+            List<NamedDimensionalType> requirements          = new ArrayList<NamedDimensionalType> ();
+            List<NamedDimensionalType> requirementsInherited = new ArrayList<NamedDimensionalType> ();
+            ArrayList<Attachment>      attachments           = new ArrayList<Attachment> ();
 
             // Assemble a working EquationSet
             EquationSet equations;
@@ -2986,9 +2990,6 @@ public class ExportJob extends XMLutility
             String description = base.get ("$metadata", "description");
             if (description.isEmpty ()) description = base.get ("$metadata", "notes");
 
-            List<NamedDimensionalType> requirements          = new ArrayList<NamedDimensionalType> ();
-            List<NamedDimensionalType> requirementsInherited = new ArrayList<NamedDimensionalType> ();
-
             MNode metadata = source.child ("$metadata");
             if (metadata != null)
             {
@@ -3005,16 +3006,54 @@ public class ExportJob extends XMLutility
 
                     if (key.startsWith ("children."))
                     {
+                        key = key.substring (9);
+                        String[] types = value.split (",");
+
+                        Attachment a = new Attachment ();
+                        a.collectionName = key;
+                        a.partName = types[0];
+                        if (types.length > 1) a.partExtends = types[1];
+
                         if (local)
                         {
-                            key = key.substring (9);
-                            String[] types = value.split (",");
                             String type;
                             if (types.length > 1) type = types[1];
                             else                  type = partMap.exportName (types[0]);
                             Element children = addElement ("Children", componentTypeElements);
                             children.setAttribute ("name", key);
                             children.setAttribute ("type", type);
+
+                            attachments.add (0, a);
+                        }
+                        else
+                        {
+                            attachments.add (a);
+                        }
+                    }
+                    else if (key.startsWith ("attachments."))
+                    {
+                        key = key.substring (12);
+                        String[] types = value.split (",");
+
+                        Attachment a = new Attachment ();
+                        a.collectionName = key;
+                        a.partName = types[0];
+                        if (types.length > 1) a.partExtends = types[1];
+
+                        if (local)
+                        {
+                            String type;
+                            if (types.length > 1) type = types[1];
+                            else                  type = partMap.exportName (types[0]);
+                            Element attach = addElement ("Attachments", componentTypeElements);
+                            attach.setAttribute ("name", key);
+                            attach.setAttribute ("type", type);
+
+                            attachments.add (0, a);
+                        }
+                        else
+                        {
+                            attachments.add (a);
                         }
                     }
                     else if (key.startsWith ("requirement."))
@@ -3318,6 +3357,13 @@ public class ExportJob extends XMLutility
                 String name = rename.get (v.name);
                 if (name == null) name = v.name;
 
+                MPart port = (MPart) m.child ("$metadata", "backend.lems.port");
+                if (port != null  &&  (port.isFromTopDocument ()  ||  ! (((MPersistent) ((MPersistent) port.getSource ().getParent ()).getParent ()).getParent () instanceof MDoc)))
+                {
+                    String portDescription = m.get ("$metadata", "description");
+                    addEventPort (name, port.get (), portDescription);
+                }
+
                 boolean conditional = false;
                 boolean hasInit     = false;
                 boolean hasRegime   = false;
@@ -3362,19 +3408,31 @@ public class ExportJob extends XMLutility
                 }
                 else if (v.derivative != null  ||  hasInit  ||  hasRegime) // StateVariable
                 {
-                    boolean port = ! m.get ("$metadata", "backend.lems.port").isEmpty ();
-                    if (! port) element = addElement ("StateVariable", dynamicsElements);
+                    if (port == null) element = addElement ("StateVariable", dynamicsElements);
                     for (EquationEntry e : v.equations)
                     {
                         Element stateAssignment = null;
                         regimeFinder.find (e.condition);
                         if (e.ifString.isEmpty ()  ||  e.ifString.equals ("$init")  ||  regimeFinder.event != null)  // OnStart
                         {
-                            if (! port)
+                            if (port == null)
                             {
                                 List<Element> useElements = onStartElements;
                                 if (regimeFinder.event != null) useElements = regimeFinder.regime.onEntry;
                                 stateAssignment = addElement ("StateAssignment", useElements);
+                            }
+                        }
+                        else if (source.child (e.ifString) != null)  // The condition is simply an event indicator.
+                        {
+                            OnEvent onEvent = addOnEvent (e.ifString);
+                            if (port == null)
+                            {
+                                stateAssignment = addElement ("StateAssignment", onEvent.elements);
+                            }
+                            else
+                            {
+                                Element eventOut = addElement ("EventOut", onEvent.elements);
+                                eventOut.setAttribute ("port", name);
                             }
                         }
                         else  // OnCondition
@@ -3390,14 +3448,14 @@ public class ExportJob extends XMLutility
                                 onCondition = addOnCondition (condition, regimeFinder.regime.onConditions);
                             }
 
-                            if (port)
+                            if (port == null)
                             {
-                                Element eventOut = addElement ("EventOut", onCondition.elements);
-                                eventOut.setAttribute ("port", name);
+                                stateAssignment = addElement ("StateAssignment", onCondition.elements);
                             }
                             else
                             {
-                                stateAssignment = addElement ("StateAssignment", onCondition.elements);
+                                Element eventOut = addElement ("EventOut", onCondition.elements);
+                                eventOut.setAttribute ("port", name);
                             }
                         }
                         if (stateAssignment != null)
@@ -3407,7 +3465,7 @@ public class ExportJob extends XMLutility
                         }
                     }
                 }
-                else  // DerivedVariable
+                else if (port == null) // DerivedVariable
                 {
                     if (conditional)
                     {
@@ -3431,7 +3489,7 @@ public class ExportJob extends XMLutility
                         }
                         else
                         {
-                            String select = "Unable to determine for standalone part";
+                            String select = null;
                             if (v.hasUsers ())  // In a fully built and compiled model, we can find the variables that are being reduced to this variable.
                             {
                                 for (Object o : v.usedBy)
@@ -3452,6 +3510,25 @@ public class ExportJob extends XMLutility
                                     break;
                                 }
                             }
+                            if (select == null)  // Try contained collections
+                            {
+                                String query = "$up." + v.name;
+                                for (Attachment a : attachments)
+                                {
+                                    MNode doc = AppData.models.child (a.partName);
+                                    if (doc == null) continue;
+                                    MPart part = new MPart ((MPersistent) doc);
+                                    MNode node = part.child (query);
+                                    if (node == null) continue;
+                                    NameMap nameMap = partMap.exportMap (a.partName);
+                                    String localName = node.get ();
+                                    localName = new Variable.ParsedValue (localName).expression;
+                                    localName = nameMap.exportName (localName, a.partExtends);
+                                    select = a.collectionName + "[*]/" + localName;
+                                    break;
+                                }
+                            }
+                            if (select == null) select = "Unable to determine for standalone part";
                             element.setAttribute ("select", select);
                             
                             // TODO: trap assignment types that LEMS does not handle
@@ -3467,8 +3544,8 @@ public class ExportJob extends XMLutility
                 {
                     element.setAttribute ("name", name);
 
-                    String dimension = "";
-                    if (v.unit != null) dimension = printDimension (v.unit);
+                    String dimension = m.get ("$metadata", "backend.lems.dimension");
+                    if (dimension.isEmpty ()  &&  v.unit != null) dimension = printDimension (v.unit);
                     if (! dimension.isEmpty ()) element.setAttribute ("dimension", dimension);
 
                     String vdescription = m.get ("$metadata", "desription");
@@ -3499,17 +3576,10 @@ public class ExportJob extends XMLutility
                 Element OnStart = addElement ("OnStart", dynamicsElements);
                 sequencer.append (OnStart, onStartElements);
             }
-
             for (OnCondition oc : onConditions) oc.append (dynamicsElements);
-
-            for (OnEvent oe : onEvents)
-            {
-                Element onEvent = addElement ("OnEvent", dynamicsElements);
-                onEvent.setAttribute ("port", oe.port);
-                sequencer.append (onEvent, oe.elements);
-            }
-
+            for (OnEvent oe : onEvents) oe.append (dynamicsElements);
             for (Regime r : regimes.values ()) r.append (dynamicsElements);
+            for (EventPort ep : eventPorts) ep.append (componentTypeElements);
 
             if (! dynamicsElements.isEmpty ())
             {
@@ -3522,6 +3592,13 @@ public class ExportJob extends XMLutility
             if (! extension.isEmpty ()) componentType.setAttribute ("extends", extension);
             if (! description.isEmpty ()) componentType.setAttribute ("description", description);
             sequencer.append (componentType, componentTypeElements);
+        }
+
+        public class Attachment
+        {
+            public String collectionName;
+            public String partName;
+            public String partExtends = "";
         }
 
         public class NamedDimensionalType
@@ -3622,15 +3699,59 @@ public class ExportJob extends XMLutility
             }
         }
 
+        public OnEvent addOnEvent (String port)
+        {
+            OnEvent onEvent = new OnEvent ();
+            onEvent.port = port;
+            int index = onEvents.indexOf (onEvent);
+            if (index >= 0) return onEvents.get (index);
+            onEvents.add (onEvent);
+            onEvent.elements = new ArrayList<Element> ();
+            return onEvent;
+        }
+
         public class OnEvent
         {
             public String        port;
             public List<Element> elements;
 
+            public void append (List<Element> dynamicsElements)
+            {
+                Element onEvent = addElement ("OnEvent", dynamicsElements);
+                onEvent.setAttribute ("port", port);
+                sequencer.append (onEvent, elements);
+            }
+
             public boolean equals (Object o)
             {
                 OnEvent that = (OnEvent) o;
                 return port.equals (that.port);
+            }
+        }
+
+        public void addEventPort (String name, String direction, String description)
+        {
+            EventPort eventPort = new EventPort ();
+            eventPort.name = name;
+            int index = eventPorts.indexOf (eventPort);
+            if (index >= 0) eventPort = eventPorts.get (index);
+            else            eventPorts.add (eventPort);
+            if (eventPort.direction  .isEmpty ()) eventPort.direction   = direction;
+            if (eventPort.description.isEmpty ()) eventPort.description = description;
+        }
+
+        public class EventPort
+        {
+            String name;
+            String direction   = "";
+            String description = "";
+
+            public void append (List<Element> componentTypeElements)
+            {
+                Element eventPort = addElement ("EventPort", componentTypeElements);
+                eventPort.setAttribute ("name",      name);
+                eventPort.setAttribute ("direction", direction);
+                if (! description.isEmpty ()) eventPort.setAttribute ("description", description);
             }
         }
 

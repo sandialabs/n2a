@@ -3148,9 +3148,9 @@ public class ImportJob extends XMLutility
         MNode            part;
         MNode            regime;
         int              nextRegimeIndex = 1;  // Never allocate regime 0, because that is the default initial value for all variables. We only want to enter an initial regime explicitly.
-        Set<EventChild>  eventChildren  = new HashSet<EventChild> ();   // Events that try to reference a parent port. Attempt to resolve these in postprocessing.
-        Map<String,Path> directPaths    = new HashMap<String,Path> ();
-        Set<String>      childInstances = new HashSet<String> ();
+        Set<EventChild>  eventChildren   = new HashSet<EventChild> ();   // Events that try to reference a parent port. Attempt to resolve these in postprocessing.
+        List<Path>       paths           = new ArrayList<Path> ();
+        Set<String>      childInstances  = new HashSet<String> ();
 
         public ComponentType (MNode part)
         {
@@ -3318,6 +3318,8 @@ public class ImportJob extends XMLutility
             String required    = getAttribute (node, "required");
             String select      = getAttribute (node, "select");
 
+            MNode result = part.childOrCreate (name);
+
             String combiner = "";
             if (nodeName.contains ("DerivedVariable")  &&  (exposure.isEmpty ()  ||  ! exposure.equals (name))) combiner = ":";
 
@@ -3325,37 +3327,24 @@ public class ImportJob extends XMLutility
             if (value.isEmpty ()  &&  ! select.isEmpty ())
             {
                 Path variablePath = new Path (select);
+                variablePath.reduceTo = name;
+                variablePath.required = required.equals ("true");
                 variablePath.resolve (part);
-                MNode container = variablePath.container ();
+                if (variablePath.isDirect) value = variablePath.directName ();
+                else if (! dimension.isEmpty ()) result.set ("$metadata", "backend.lems.dimension", dimension);  // Need to stash dimension, since there's no way to compute it.
+
+                // At this point we don't know enough about the path, because some requisite parts may
+                // not be defined yet. Re-evaluate during postprocessing.
+                paths.add (variablePath);
 
                 switch (reduce)
                 {
                     case "multiply": combiner = "*"; break;
                     case "add"     : combiner = "+"; break;
                 }
-
-                if (variablePath.isDirect  ||  container == null)
-                {
-                    // At this point we don't know enough about the path, because some requisite parts may
-                    // not be defined yet. Re-evaluate during postprocessing.
-                    value = variablePath.directName ();
-                    directPaths.put (name, variablePath);
-                }
-                else
-                {
-                    // TODO: if path specifies which instances, then add a condition to select them
-                    String up        = variablePath.up ();
-                    String target    = variablePath.target ();
-                    String condition = variablePath.condition ();
-                    if (condition.isEmpty ()) container.set (up + name, combiner + target);
-                    else                      container.set (up + name, combiner + target + "@" + condition);
-                    if (required.equals ("true")) container.set (up + name, "$metadata", "backend.lems.required", "");
-                }
             }
 
-            MNode result = part.childOrCreate (name);
             int equationCount = Variable.equationCount (result);
-
             String existingValue = result.get ();
             if (! existingValue.isEmpty ()  &&  ! Variable.isCombiner (existingValue))
             {
@@ -3861,32 +3850,6 @@ public class ImportJob extends XMLutility
 
         public void finish2 ()
         {
-            // Paths
-            for (Entry<String,Path> e : directPaths.entrySet ())
-            {
-                Path   path = e.getValue ();
-                String name = e.getKey ();
-                path.resolve (part);
-                if (path.isDirect)
-                {
-                    path.finishDirectPath (part, name);
-                }
-                else
-                {
-                    String combiner = part.get (name);
-                    if (combiner.length () > 1) combiner = combiner.substring (0, 1);
-                    if (! Variable.isCombiner (combiner)  ||  combiner.equals (":")) combiner = "";
-                    part.set (name, combiner);
-
-                    MNode  container = path.container ();
-                    String up        = path.up ();
-                    String target    = path.target ();
-                    String condition = path.condition ();
-                    if (condition.isEmpty ()) container.set (up + name, combiner + target);
-                    else                      container.set (up + name, combiner + target + "@" + condition);
-                }
-            }
-
             for (EventChild ec : eventChildren) ec.process ();
 
             // Clean ups:
@@ -4003,6 +3966,32 @@ public class ImportJob extends XMLutility
             if (part.child ("t") == null) pp.rename.put ("t", "$t");  // If t is not locally defined, then it is the same as $t.
 
             pp.process (part);
+
+            // Paths
+            for (Path path : paths)
+            {
+                String name = pp.mapName (path.reduceTo);
+                path.resolve (part);
+                if (path.isDirect)
+                {
+                    path.finishDirectPath (part, name);
+                }
+                else
+                {
+                    String combiner = part.get (name);
+                    if (combiner.length () > 1) combiner = combiner.substring (0, 1);
+                    if (! Variable.isCombiner (combiner)  ||  combiner.equals (":")) combiner = "";
+                    part.set (name, combiner);
+
+                    MNode  container = path.container ();
+                    String up        = path.up ();
+                    String target    = path.target ();
+                    String condition = path.condition ();
+                    if (condition.isEmpty ()) container.set (up + name, combiner + target);
+                    else                      container.set (up + name, combiner + target + "@" + condition);
+                    if (path.required) container.set (up + name, "$metadata", "backend.lems.required", "");
+                }
+            }
         }
     }
 
@@ -4043,6 +4032,9 @@ public class ImportJob extends XMLutility
     {
         public List<PathPart> parts    = new ArrayList<PathPart> ();
         public boolean        isDirect = true;  // Indicates that a direct reference is possible. Each element of the path must be a single subpart of the one above it.
+        // For reductions ...
+        public boolean        required;  // There must be at least one item in the reduction.
+        public String         reduceTo;  // Name of variable that receives the reduction.
 
         public Path (String path)
         {
@@ -4247,6 +4239,13 @@ public class ImportJob extends XMLutility
     {
         Map<String,String> rename = new TreeMap<String,String> ();
 
+        public String mapName (String name)
+        {
+            String result = rename.get (name);
+            if (result != null) return result;
+            return name;
+        }
+
         @SuppressWarnings("rawtypes")
         public boolean render (Operator op)
         {
@@ -4285,9 +4284,7 @@ public class ImportJob extends XMLutility
             else if (op instanceof AccessVariable)
             {
                 AccessVariable av = (AccessVariable) op;
-                String name = rename.get (av.name);
-                if (name == null) name = av.name;
-                result.append (name);
+                result.append (mapName (av.name));
                 return true;
             }
             else if (op instanceof AccessElement)  // This is how an unknown function shows up.

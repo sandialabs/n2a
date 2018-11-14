@@ -333,8 +333,15 @@ public class PartMap
 
     public NameMap exportMap (String internalPartName)
     {
+        // Simple lookup.
         NameMap map = outward.get (internalPartName);
         if (map != null) return map;
+
+        // Attempt to follow inheritance hierarchy.
+        MNode part = AppData.models.child (internalPartName);
+        if (part != null) return exportMap (part);
+
+        // Give up and return neutral map.
         return new NameMap (internalPartName);
     }
 
