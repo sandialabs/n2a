@@ -1,19 +1,17 @@
 /*
-Copyright 2016 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.db;
 
-import java.io.File;
 import java.io.IOException;
 import java.lang.ref.SoftReference;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
@@ -25,7 +23,6 @@ import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
-
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
@@ -39,7 +36,7 @@ import javax.swing.event.ChangeListener;
 public class MDir extends MNode
 {
     protected String  name;    // MDirs could be held in a collection, so this provides a way to reference them.
-	protected File    root;    // The directory containing the files or subdirs that constitute the children of this node
+	protected Path    root;    // The directory containing the files or subdirs that constitute the children of this node
 	protected String  suffix;  // Relative path to document file, or null if documents are directly under root
 	protected boolean loaded;  // Indicates that an initial read of the dir has been done. After that, it is not necessary to monitor the dir, only keep track of documents internally.
 
@@ -65,22 +62,22 @@ public class MDir extends MNode
         }
     }
 
-    public MDir (File root)
+    public MDir (Path root)
     {
         this (null, root, null);
     }
 
-	public MDir (File root, String suffix)
+	public MDir (Path root, String suffix)
 	{
 	    this (null, root, suffix);
 	}
 
-    public MDir (String name, File root, String suffix)
+    public MDir (String name, Path root, String suffix)
     {
         this.name = name;
         this.root = root;
         this.suffix = suffix;
-        root.mkdirs ();  // We take the liberty of forcing the dir to exist.
+        root.toFile ().mkdirs ();  // We take the liberty of forcing the dir to exist.
     }
 
 	public String key ()
@@ -92,19 +89,19 @@ public class MDir extends MNode
 	public String getOrDefault (String defaultValue)
 	{
 	    if (root == null) return defaultValue;  // This should never happen.
-	    return root.getAbsolutePath ();
+	    return root.toAbsolutePath ().toString ();
 	}
 
-	public File pathForChild (String index)
+	public Path pathForChild (String index)
 	{
-        File result = new File (root, index);
-        if (suffix != null  &&  ! suffix.isEmpty ()) result = new File (result, suffix);
+	    Path result = root.resolve (index);
+        if (suffix != null  &&  ! suffix.isEmpty ()) result = result.resolve (suffix);
         return result;
 	}
 
 	public static String validFilenameFrom (String name)
 	{
-	    // TODO: This is only sufficient for Linux. See what else is needed for Windows.
+	    // TODO: This is only sufficient for Linux. What else is needed for Windows?
         name = name.replace ("\\", "-");
         name = name.replace ("/", "-");
         return name;
@@ -118,7 +115,7 @@ public class MDir extends MNode
 	    if (reference != null) result = reference.get ();
 	    if (result == null)  // We have never loaded this document, or it has been garbage collected.
 	    {
-	        if (! pathForChild (index).canRead ()) return null;
+	        if (! Files.isReadable (pathForChild (index))) return null;
 	        result = new MDoc (this, index);
 	        children.put (index, new SoftReference<MDoc> (result));
 	    }
@@ -135,7 +132,7 @@ public class MDir extends MNode
         writeQueue.clear ();
         try
         {
-            Files.walkFileTree (Paths.get (root.getAbsolutePath ()), new SimpleFileVisitor<Path> ()
+            Files.walkFileTree (root.toAbsolutePath (), new SimpleFileVisitor<Path> ()
             {
                 public FileVisitResult visitFile (final Path file, final BasicFileAttributes attrs) throws IOException
                 {
@@ -145,7 +142,7 @@ public class MDir extends MNode
 
                 public FileVisitResult postVisitDirectory (final Path dir, final IOException e) throws IOException
                 {
-                    if (! dir.equals (Paths.get (root.getAbsolutePath ()))) Files.delete (dir);
+                    if (! dir.equals (root.toAbsolutePath ())) Files.delete (dir);
                     return FileVisitResult.CONTINUE;
                 }
             });
@@ -161,16 +158,18 @@ public class MDir extends MNode
     {
         SoftReference<MDoc> ref = children.remove (index);
         if (ref != null) writeQueue.remove (ref.get ());
-        pathForChild (index).delete ();
+        try {Files.delete (pathForChild (index));}
+        catch (IOException e) {}
 
         fireChanged ();
     }
 
     public synchronized int size ()
 	{
-        if (writeQueue.isEmpty ()) return root.list ().length;
+        String[] list = root.toFile ().list ();
+        if (writeQueue.isEmpty ()) return list.length;
 
-        Set<String> files = new HashSet<String> (Arrays.asList (root.list ()));
+        Set<String> files = new HashSet<String> (Arrays.asList (list));
         for (MDoc doc : writeQueue) files.add (doc.get ());
         return files.size ();
 	}
@@ -224,8 +223,8 @@ public class MDir extends MNode
         save ();  // If this turns out to be too much work, then scan the write queue for fromIndex and save it directly.
 
         // This operation is independent of bookkeeping in children
-        Path fromPath = Paths.get (pathForChild (fromIndex).getAbsolutePath ());
-        Path toPath   = Paths.get (pathForChild (toIndex  ).getAbsolutePath ());
+        Path fromPath = pathForChild (fromIndex).toAbsolutePath ();
+        Path toPath   = pathForChild (toIndex  ).toAbsolutePath ();
         try
         {
             Files.deleteIfExists (toPath);
@@ -294,7 +293,7 @@ public class MDir extends MNode
         if (loaded) return;
 
         NavigableMap<String,SoftReference<MDoc>> newChildren = new TreeMap<String,SoftReference<MDoc>> ();
-        for (String index : root.list ())  // This may cost a lot of time in some cases. However, N2A should never have more than about 10,000 models in a dir.
+        for (String index : root.toFile ().list ())  // This may cost a lot of time in some cases. However, N2A should never have more than about 10,000 models in a dir.
         {
             if (index.startsWith (".")) continue; // Filter out special files. This allows, for example, a git repo to share the models dir.
             newChildren.put (index, null);

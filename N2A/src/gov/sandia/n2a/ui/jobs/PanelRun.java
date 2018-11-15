@@ -57,6 +57,7 @@ import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 import javax.swing.tree.TreeSelectionModel;
 
+@SuppressWarnings("serial")
 public class PanelRun extends JPanel
 {
     public NodeBase         root;

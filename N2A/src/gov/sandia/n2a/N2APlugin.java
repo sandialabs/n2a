@@ -23,7 +23,6 @@ import gov.sandia.n2a.ui.ref.ActivityReference;
 import gov.sandia.n2a.ui.settings.ActivitySettings;
 import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 import gov.sandia.n2a.ui.settings.SettingsAbout;
-import gov.sandia.n2a.ui.settings.SettingsBackup;
 import gov.sandia.n2a.ui.settings.SettingsGeneral;
 
 import javax.swing.ImageIcon;
@@ -84,7 +83,6 @@ public class N2APlugin extends Plugin
             //new RunEnsembleRecordHandler (),
             new ActivitySettings (),
             new SettingsAbout (),
-            new SettingsBackup (),
             new SettingsGeneral (),
             new SettingsLookAndFeel ()
         };

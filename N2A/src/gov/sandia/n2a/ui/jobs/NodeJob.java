@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -34,6 +34,7 @@ import javax.swing.JTree;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 
+@SuppressWarnings("serial")
 public class NodeJob extends NodeBase
 {
     protected static ImageIcon iconComplete = ImageUtil.getImage ("complete.gif");

@@ -6,11 +6,10 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.db;
 
-import java.io.File;
-import java.io.FileOutputStream;
+import java.io.BufferedWriter;
 import java.io.IOException;
-import java.io.OutputStreamWriter;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.Iterator;
@@ -73,7 +72,7 @@ public class MDoc extends MPersistent
             return value;
         }
 
-        return ((MDir) parent).pathForChild (name).getAbsolutePath ();
+        return ((MDir) parent).pathForChild (name).toAbsolutePath ().toString ();
     }
 
     public synchronized void markChanged ()
@@ -165,9 +164,9 @@ public class MDoc extends MPersistent
         return super.iterator ();
     }
 
-    public synchronized File path ()
+    public synchronized Path path ()
     {
-        if (parent == null) return new File (value);
+        if (parent == null) return Paths.get (value);
         return ((MDir) parent).pathForChild (name);
     }
 
@@ -178,11 +177,11 @@ public class MDoc extends MPersistent
 	{
 	    if (children != null) return;  // already loaded
 	    children = new TreeMap<String,MNode> (comparator);
-        File file = path ();
+        Path file = path ();
         try
         {
             needsWrite = true;  // lie to ourselves, to prevent being put onto the MDir write queue
-            schema.readAll (Files.newBufferedReader (file.toPath ()), this);
+            schema.readAll (Files.newBufferedReader (file), this);
         }
         catch (IOException e)
         {
@@ -194,11 +193,11 @@ public class MDoc extends MPersistent
 	public synchronized void save ()
 	{
 	    if (! needsWrite) return;
-        File file = path ();
+        Path file = path ();
 	    try
 	    {
-	        file.getParentFile ().mkdirs ();
-	        OutputStreamWriter writer = new OutputStreamWriter (new FileOutputStream (file), "UTF-8");
+	        file.getParent ().toFile ().mkdirs ();  // Files.createDirectories() throws an exception for existing dir, even though it promises not to.
+	        BufferedWriter writer = Files.newBufferedWriter (file);
 	        schema.writeAll (writer, this);
 	        writer.close ();
 	        clearChanged ();
@@ -206,6 +205,7 @@ public class MDoc extends MPersistent
 	    catch (IOException e)
 	    {
             System.err.println ("Failed to write file: " + file);
+            e.printStackTrace ();
 	    }
 	}
 }
