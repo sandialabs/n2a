@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -25,6 +25,7 @@ import javax.swing.JPanel;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.event.HyperlinkListener;
 
+@SuppressWarnings("serial")
 public class SettingsAbout extends JPanel implements Settings
 {
     public SettingsAbout ()

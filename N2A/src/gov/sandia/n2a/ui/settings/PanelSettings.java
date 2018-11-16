@@ -30,6 +30,7 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
 // TODO: force tabs to render left-aligned, as described in this post: http://stackoverflow.com/questions/26308859/jtabbedpane-tab-placement-set-to-left-but-icons-are-not-aligned
+@SuppressWarnings("serial")
 public class PanelSettings extends JTabbedPane
 {
     protected int                            lastSelectedIndex = 0;

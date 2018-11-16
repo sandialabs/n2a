@@ -171,7 +171,7 @@ public class NodeReference extends NodeBase
             }
             else
             {
-                MPart mparent = source.getParent ();
+                MPart mparent = source.parent ();
                 MPart partAfter = (MPart) mparent.child (name);
                 if (partAfter != null  &&  partAfter.isFromTopDocument ()) name = oldName;
             }

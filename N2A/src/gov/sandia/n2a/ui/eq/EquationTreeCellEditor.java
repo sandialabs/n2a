@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -60,6 +60,7 @@ import gov.sandia.n2a.ui.eq.tree.NodeVariable;
     * Selects the value portion of an equation, facilitating the user to make simple changes.
     * Instant one-click edit mode, rather than 1.2s delay.
 **/
+@SuppressWarnings("serial")
 public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCellEditor, TreeSelectionListener
 {
     protected JTree                    tree;

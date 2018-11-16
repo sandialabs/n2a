@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2016 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -18,6 +18,7 @@ import gov.sandia.n2a.ui.eq.tree.NodeBase;
     Extends the standard tree cell renderer to get icon and text style from NodeBase.
     This is the core code that makes NodeBase work as a tree node representation.
 **/
+@SuppressWarnings("serial")
 public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
 {
     protected Font  baseFont;

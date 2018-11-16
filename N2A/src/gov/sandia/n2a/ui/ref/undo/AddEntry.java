@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -7,7 +7,6 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.ref.undo;
 
 import gov.sandia.n2a.db.AppData;
-import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Undoable;
@@ -72,7 +71,7 @@ public class AddEntry extends Undoable
         mep.panelEntry.recordDeleted (doc);
         mep.panelMRU.removeDoc (doc);
         int result = mep.panelSearch.removeDoc (doc);
-        ((MDoc) doc).delete ();
+        AppData.references.clear (id);
         mep.panelSearch.lastSelection = Math.min (mep.panelSearch.model.size () - 1, result);
         if (fromSearchPanel)
         {

@@ -3002,7 +3002,7 @@ public class ExportJob extends XMLutility
 
                     MPart p = (MPart) m;
                     // The immediate parent of p is $metadata, so we need to check p's grandparent to see if this is an embedded LEMS part.
-                    boolean local = p.isFromTopDocument ()  ||  ! (((MPersistent) p.getSource ().getParent ()).getParent () instanceof MDoc);
+                    boolean local = p.isFromTopDocument ()  ||  ! (p.getSource ().parent ().parent () instanceof MDoc);
 
                     if (key.startsWith ("children."))
                     {
@@ -3137,7 +3137,7 @@ public class ExportJob extends XMLutility
                 String key = m.key ();
                 if (key.startsWith ("$")) continue;
                 MPart p = (MPart) m;
-                if (! p.isFromTopDocument ()  &&  p.getSource ().getParent () instanceof MDoc) continue;
+                if (! p.isFromTopDocument ()  &&  p.getSource ().parent () instanceof MDoc) continue;
                 Variable v = equations.find (Variable.fromLHS (key));
                 if (v == null) continue;
                 requirementVisitor.v = v;
@@ -3164,7 +3164,7 @@ public class ExportJob extends XMLutility
                 Variable v = equations.find (Variable.fromLHS (key));
                 if (v == null) continue;  // If v is null, then it was revoked.
                 if (m.child ("$metadata", "backend.lems.regime") != null) regimeVariable = v;
-                if (p.isFromTopDocument ()  ||  ! (p.getSource ().getParent () instanceof MDoc)) variables.put (v, m);  // Eliminate non-local items
+                if (p.isFromTopDocument ()  ||  ! (p.getSource ().parent () instanceof MDoc)) variables.put (v, m);  // Eliminate non-local items
             }
 
             // Collect regimes
@@ -3358,7 +3358,7 @@ public class ExportJob extends XMLutility
                 if (name == null) name = v.name;
 
                 MPart port = (MPart) m.child ("$metadata", "backend.lems.port");
-                if (port != null  &&  (port.isFromTopDocument ()  ||  ! (((MPersistent) ((MPersistent) port.getSource ().getParent ()).getParent ()).getParent () instanceof MDoc)))
+                if (port != null  &&  (port.isFromTopDocument ()  ||  ! (port.getSource ().parent ().parent ().parent () instanceof MDoc)))
                 {
                     String portDescription = m.get ("$metadata", "description");
                     addEventPort (name, port.get (), portDescription);
@@ -3558,9 +3558,9 @@ public class ExportJob extends XMLutility
                         element.setAttribute ("exposure", exposureName);
 
                         MPart mpart = (MPart) expose;
-                        MPersistent meta = (MPersistent) mpart.getSource ().getParent (); // $metadata that contains expose
-                        MPersistent mvar = (MPersistent) meta.getParent ();               // containing variable
-                        MNode       mdp  = mvar.getParent ();                             // containing doc or embedded part
+                        MPersistent meta = (MPersistent) mpart.getSource ().parent (); // $metadata that contains expose
+                        MPersistent mvar = (MPersistent) meta.parent ();               // containing variable
+                        MNode       mdp  = mvar.parent ();                             // containing doc or embedded part
                         if (mpart.isFromTopDocument ()  ||  ! (mdp instanceof MDoc))
                         {
                             Element Exposure = addElement ("Exposure", componentTypeElements);
@@ -3915,7 +3915,7 @@ public class ExportJob extends XMLutility
                 continue;
             }
 
-            MNode parent = p.getSource ().getParent ();
+            MNode parent = p.getSource ().parent ();
             boolean overridden = p.isFromTopDocument ()  ||  parent.get ("$metadata", "backend.lems.part").isEmpty ();
             if (p.isPart ())
             {
@@ -4079,7 +4079,7 @@ public class ExportJob extends XMLutility
         while (parent != null)
         {
             path.add (parent.key ());
-            parent = parent.getParent ();
+            parent = parent.parent ();
         }
 
         EquationSet result = equations;
@@ -4316,6 +4316,7 @@ public class ExportJob extends XMLutility
         return result;
     }
 
+    @SuppressWarnings ({"rawtypes", "unchecked"})
     public void appendUnits (boolean assumeNML)
     {
         // Purge pure dimensions (added independent of specific unit) if they are standard and NML dimensions are available.

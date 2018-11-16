@@ -22,6 +22,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 
+@SuppressWarnings("serial")
 public class SettingsGeneral extends JPanel implements Settings
 {
     public JPanel addField (final String key, String description, int width, String defaultValue)

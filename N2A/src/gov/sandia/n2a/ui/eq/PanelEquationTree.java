@@ -22,15 +22,11 @@ import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.MainTabbedPane;
-import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
-import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
-import gov.sandia.n2a.ui.eq.undo.ChangeLock;
-import gov.sandia.n2a.ui.eq.undo.DeleteAnnotation;
 import gov.sandia.n2a.ui.eq.undo.Move;
 import gov.sandia.n2a.ui.eq.undo.Outsource;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -106,7 +102,7 @@ public class PanelEquationTree extends JPanel
     public    FilteredTreeModel     model;
     public    NodePart              root;
     public    MNode                 record;
-    public    boolean               locked;  // Indicates state of $metadata.lock node, as well as buttonLock. All three items are kept synchronized by the buttonLock listener.
+    public    boolean               locked;
     protected JScrollPane           scrollPane;
     protected Map<MNode,StoredPath> focusCache = new HashMap<MNode,StoredPath> ();
     protected boolean               needsFullRepaint;
@@ -118,14 +114,10 @@ public class PanelEquationTree extends JPanel
     protected JButton buttonAddEquation;
     protected JButton buttonAddAnnotation;
     protected JButton buttonAddReference;
-    protected JButton buttonDelete;
-    protected JButton buttonMoveUp;
-    protected JButton buttonMoveDown;
+    protected JButton buttonFilter;
     protected JButton buttonRun;
     protected JButton buttonExport;
     protected JButton buttonImport;
-    protected JButton buttonFilter;
-    protected JButton buttonLock;
 
     protected JPopupMenu menuPopup;
     protected JPopupMenu menuFilter;
@@ -144,6 +136,7 @@ public class PanelEquationTree extends JPanel
     **/
     public static final DataFlavor nodeFlavor = new DataFlavor (TransferableNode.class, null);
 
+    @SuppressWarnings("deprecation")
     public class TransferableNode implements Transferable, ClipboardOwner
     {
         public String       data;
@@ -623,26 +616,6 @@ public class PanelEquationTree extends JPanel
         buttonAddReference.setActionCommand ("Reference");
         buttonAddReference.addActionListener (listenerAdd);
 
-        buttonDelete = new JButton (ImageUtil.getImage ("remove.gif"));
-        buttonDelete.setMargin (new Insets (2, 2, 2, 2));
-        buttonDelete.setFocusable (false);
-        buttonDelete.setToolTipText ("Delete");
-        buttonDelete.addActionListener (listenerDelete);
-
-        buttonMoveUp = new JButton (ImageUtil.getImage ("up.gif"));
-        buttonMoveUp.setMargin (new Insets (2, 2, 2, 2));
-        buttonMoveUp.setFocusable (false);
-        buttonMoveUp.setToolTipText ("Move Up");
-        buttonMoveUp.setActionCommand ("-1");
-        buttonMoveUp.addActionListener (listenerMove);
-
-        buttonMoveDown = new JButton (ImageUtil.getImage ("down.gif"));
-        buttonMoveDown.setMargin (new Insets (2, 2, 2, 2));
-        buttonMoveDown.setFocusable (false);
-        buttonMoveDown.setToolTipText ("Move Down");
-        buttonMoveDown.setActionCommand ("1");
-        buttonMoveDown.addActionListener (listenerMove);
-
         buttonRun = new JButton (ImageUtil.getImage ("run.gif"));
         buttonRun.setMargin (new Insets (2, 2, 2, 2));
         buttonRun.setFocusable (false);
@@ -676,36 +649,6 @@ public class PanelEquationTree extends JPanel
             }
         });
 
-        buttonLock = new JButton (iconUnlocked);
-        buttonLock.setMargin (new Insets (2, 2, 2, 2));
-        buttonLock.setFocusable (false);
-        buttonLock.setToolTipText ("Editable (ctrl-shift-click to lock)");
-        buttonLock.addActionListener (new ActionListener ()
-        {
-            public void actionPerformed (ActionEvent e)
-            {
-                int mask = ActionEvent.CTRL_MASK | ActionEvent.SHIFT_MASK;
-                if ((e.getModifiers () & mask) == mask)
-                {
-                    // The state of the button is updated by the undo object ...
-                    NodeBase nodeLock = null;
-                    NodeBase metadata = root.child ("$metadata");
-                    if (metadata != null) nodeLock = metadata.child ("lock");
-                    UndoManager um = PanelModel.instance.undoManager;
-                    if (locked)  // Currently locked, so change to unlocked
-                    {
-                        // If we're locked, then nodeLock must be non-null
-                        um.add (new DeleteAnnotation (nodeLock, false));
-                    }
-                    else  // Currently unlocked, so change to locked
-                    {
-                        if (nodeLock == null) um.add (new AddAnnotation (root, 0, "lock", ""));
-                        else                  um.add (new ChangeLock (metadata));
-                    }
-                }
-            }
-        });
-
         Lay.BLtg (this,
             "N", Lay.WL ("L",
                 buttonAddModel,
@@ -716,12 +659,6 @@ public class PanelEquationTree extends JPanel
                 buttonAddAnnotation,
                 buttonAddReference,
                 Box.createHorizontalStrut (15),
-                buttonDelete,
-                Box.createHorizontalStrut (15),
-                buttonMoveUp,
-                buttonMoveDown,
-                Box.createHorizontalStrut (15),
-                buttonLock,
                 buttonFilter,
                 Box.createHorizontalStrut (15),
                 buttonRun,
@@ -879,19 +816,8 @@ public class PanelEquationTree extends JPanel
 
     public void updateLock ()
     {
-        locked = record.child ("$metadata", "lock") != null;  // This is a direct member of record, not inherited, because we aren't using the collated tree.
-        if (locked)
-        {
-            buttonLock.setToolTipText ("Read-only (ctrl-shift-click to unlock)");
-            buttonLock.setIcon (iconLocked);
-            tree.setEditable (false);
-        }
-        else
-        {
-            buttonLock.setToolTipText ("Editable (ctrl-shift-click to lock)");
-            buttonLock.setIcon (iconUnlocked);
-            tree.setEditable (true);
-        }
+        locked = ! AppData.models.isWriteable (record);
+        tree.setEditable (! locked);
     }
 
     ActionListener listenerAdd = new ActionListener ()

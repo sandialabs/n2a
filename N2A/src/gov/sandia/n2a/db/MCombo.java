@@ -1,0 +1,177 @@
+/*
+Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Under the terms of Contract DE-NA0003525 with NTESS,
+the U.S. Government retains certain rights in this software.
+*/
+
+package gov.sandia.n2a.db;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.NavigableMap;
+import java.util.TreeMap;
+
+/**
+    Presents several different sets of MPersistent children as a single set.
+    The children continue to point to their original parent, so they are stored properly.
+**/
+public class MCombo extends MNode
+{
+    protected String      name;
+    protected List<MNode> containers;
+	protected boolean     loaded;
+	protected MNode       primary;  // The one source we are allowed to modify. Always set to first object in sources.
+
+	protected NavigableMap<String,MNode> children = new TreeMap<String,MNode> ();  // from key to source; requires second lookup to retrieve actual child
+
+    public MCombo (String name, List<MNode> containers)
+    {
+        this.name = name;
+        init (containers);
+    }
+
+    public void init (List<MNode> containers)
+    {
+        this.containers = containers;
+        if (containers.size () > 0) primary = containers.get (0);
+        else                        primary = new MVolatile ();
+        children.clear ();
+        loaded = false;
+    }
+
+    public String key ()
+    {
+        if (name == null) return "";
+        return name;
+    }
+
+    public MNode getContainer (int index)
+    {
+        return containers.get (index);
+    }
+
+    public boolean isWriteable (MNode doc)
+    {
+        load ();
+        return doc.parent () == primary;
+    }
+
+    public MNode child (String index)
+    {
+        load ();
+        MNode container = children.get (index);
+        if (container == null) return null;
+        return container.child (index);
+    }
+
+    public synchronized void clear ()
+    {
+        // This does not remove the original objects, only our links to them.
+        containers.clear ();
+        children  .clear ();
+    }
+
+    public void clear (String index)
+    {
+        // This actually does remove the original object.
+        load ();
+        MNode container = children.get (index);
+        if (container == primary)
+        {
+            children.remove (index);
+            container.clear (index);
+        }
+    }
+
+    public int size ()
+	{
+        load ();
+        return children.size ();
+	}
+
+    public synchronized MNode set (String index, String value)
+    {
+        load ();
+        children.put (index, primary);
+        return primary.set (index, value);
+    }
+
+    /**
+        Renames an MDoc on disk.
+        If you already hold a reference to the MDoc named by fromIndex, then that reference remains valid
+        after the move.
+    **/
+    public void move (String fromIndex, String toIndex)
+    {
+        load ();
+        MNode container = children.get (fromIndex);
+        if (container != primary) return;
+        primary.move (fromIndex, toIndex);
+    }
+
+    public class IteratorCombo implements Iterator<MNode>
+    {
+        List<String>     keys;
+        Iterator<String> iterator;
+        String           key;  // of most recent node returned by next()
+
+        public IteratorCombo (List<String> keys)
+        {
+            this.keys = keys;
+            iterator = keys.iterator ();
+        }
+
+        public boolean hasNext ()
+        {
+            return iterator.hasNext ();
+        }
+
+        /**
+            If a document is deleted while the iterator is running, this could return null.
+            If a document is added, it will not be included.
+        **/
+        public MNode next ()
+        {
+            key = iterator.next ();
+            return child (key);
+        }
+
+        public void remove ()
+        {
+            clear (key);
+            iterator.remove ();
+        }
+    }
+
+    public synchronized Iterator<MNode> iterator ()
+    {
+        load ();
+        return new IteratorCombo (new ArrayList<String> (children.keySet ()));  // Duplicate the keys, to avoid concurrent modification
+    }
+
+    public synchronized void save ()
+    {
+        for (MNode c : containers) if (c instanceof MDir) ((MDir) c).save ();
+    }
+
+    public synchronized void load ()
+    {
+        if (loaded) return;
+        for (int i = containers.size () - 1; i >= 0; i--)
+        {
+            MNode container = containers.get (i);
+            if (container instanceof MDir)  // Avoid forcing the load of every file!
+            {
+                MDir dir = (MDir) container;
+                dir.load ();
+                for (String key : dir.children.keySet ()) children.put (key, container);
+            }
+            else  // General case
+            {
+                for (MNode c : container) children.put (c.key (), container);
+            }
+        }
+        loaded = true;
+    }
+}

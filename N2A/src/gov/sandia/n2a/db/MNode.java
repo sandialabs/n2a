@@ -32,6 +32,11 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         return "";
     }
 
+    public MNode parent ()
+    {
+        return null;
+    }
+
     /**
         Returns the child indicated by the given index, or null if it doesn't exist.
     **/

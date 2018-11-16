@@ -279,7 +279,7 @@ public class MPart extends MNode
         return original != source;
     }
 
-    public MPart getParent ()
+    public MPart parent ()
     {
         return container;
     }
@@ -417,7 +417,7 @@ public class MPart extends MNode
     {
         if (source != original  &&  source.get ().equals (original.get ())  &&  ! overrideNecessary ())
         {
-            source.getParent ().clear (source.key ());  // delete ourselves from the top-level document
+            source.parent ().clear (source.key ());  // delete ourselves from the top-level document
             source = original;
             container.clearPath ();
         }
@@ -553,7 +553,7 @@ public class MPart extends MNode
         if (overrideNecessary) return false;
         if (source != original  &&  source.get ().equals (original.get ()))
         {
-            source.getParent ().clear (source.key ());
+            source.parent ().clear (source.key ());
             source = original;
         }
         return ! isFromTopDocument ();

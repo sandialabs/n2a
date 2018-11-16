@@ -82,7 +82,7 @@ public class AddDoc extends Undoable
         int result = mep.panelSearch.removeDoc (doc);
         String id = doc.get ("$metadata", "id");
         if (! id.isEmpty ()) AppData.set (id, null);
-        ((MDoc) doc).delete ();
+        AppData.models.clear (name);
         mep.panelSearch.lastSelection = Math.min (mep.panelSearch.model.size () - 1, result);
         if (fromSearchPanel)
         {

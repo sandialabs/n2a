@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2016,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -23,6 +23,7 @@ import javax.swing.undo.CannotUndoException;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.ui.UndoManager;
 
+@SuppressWarnings("serial")
 public class PanelModel extends JPanel
 {
     public static PanelModel instance;  ///< Technically, this class is a singleton, because only one would normally be created.

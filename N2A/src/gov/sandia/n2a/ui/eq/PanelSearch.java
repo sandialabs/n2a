@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -18,6 +18,7 @@ import gov.sandia.n2a.ui.eq.PanelEquationTree.TransferableNode;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
 import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
 
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.datatransfer.DataFlavor;
@@ -58,6 +59,8 @@ import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultHighlighter;
 import javax.swing.text.Highlighter;
 
+
+@SuppressWarnings("serial")
 public class PanelSearch extends JPanel
 {
     public JTextField               textQuery;
@@ -93,7 +96,7 @@ public class PanelSearch extends JPanel
             public void actionPerformed (ActionEvent e)
             {
                 MNode deleteMe = list.getSelectedValue ().doc;
-                if (deleteMe == null) return;
+                if (deleteMe == null  ||  ! AppData.models.isWriteable (deleteMe)) return;
                 PanelModel.instance.undoManager.add (new DeleteDoc ((MDoc) deleteMe));
             }
         });
@@ -448,6 +451,9 @@ public class PanelSearch extends JPanel
             String name = holder.doc.key ();
             if (name.isEmpty ()) name = holder.doc.get ();
             setText (name);
+
+            if (AppData.models.isWriteable (holder.doc)) setForeground (Color.black);
+            else                                         setForeground (Color.blue);
 
             if (isSelected)
             {

@@ -30,7 +30,7 @@ public class MPersistent extends MVolatile
         this.parent = parent;
     }
 
-    public MNode getParent ()
+    public MNode parent ()
     {
         return parent;
     }

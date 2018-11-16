@@ -77,7 +77,8 @@ public class MDir extends MNode
         this.name = name;
         this.root = root;
         this.suffix = suffix;
-        root.toFile ().mkdirs ();  // We take the liberty of forcing the dir to exist.
+        try {Files.createDirectories (root);}  // We take the liberty of forcing the dir to exist.
+        catch (IOException e) {}
     }
 
 	public String key ()
@@ -251,8 +252,9 @@ public class MDir extends MNode
 
     public class IteratorWrapperSoft implements Iterator<MNode>
     {
-        List<String> keys;
+        List<String>     keys;
         Iterator<String> iterator;
+        String           key;  // of the most recent node returned by next()
 
         public IteratorWrapperSoft (List<String> keys)
         {
@@ -271,11 +273,13 @@ public class MDir extends MNode
         **/
         public MNode next ()
         {
-            return child (iterator.next ());
+            key = iterator.next ();
+            return child (key);
         }
 
         public void remove ()
         {
+            clear (key);
             iterator.remove ();
         }
     }
@@ -283,9 +287,7 @@ public class MDir extends MNode
     public synchronized Iterator<MNode> iterator ()
     {
         load ();
-        List<String> keys = new ArrayList<String> ();
-        keys.addAll (children.keySet ());  // Duplicate the keys, to avoid concurrent modification
-        return new IteratorWrapperSoft (keys);
+        return new IteratorWrapperSoft (new ArrayList<String> (children.keySet ()));  // Duplicate the keys, to avoid concurrent modification
     }
 
     public synchronized void load ()

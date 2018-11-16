@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -72,6 +72,7 @@ import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoManager;
 
+@SuppressWarnings("serial")
 public class PanelEntry extends JPanel
 {
     // Table
@@ -86,6 +87,7 @@ public class PanelEntry extends JPanel
 
     public static final DataFlavor tagFlavor = new DataFlavor (TransferableTag.class, null);
 
+    @SuppressWarnings("deprecation")
     public class TransferableTag implements Transferable, ClipboardOwner
     {
         public String  data;
