@@ -67,6 +67,11 @@ public class MDir extends MNode
         this (null, root, null);
     }
 
+    public MDir (String name, Path root)
+    {
+        this (name, root, null);
+    }
+
 	public MDir (Path root, String suffix)
 	{
 	    this (null, root, suffix);
@@ -76,6 +81,7 @@ public class MDir extends MNode
     {
         this.name = name;
         this.root = root;
+        if (suffix != null  &&  suffix.isEmpty ()) suffix = null;
         this.suffix = suffix;
         try {Files.createDirectories (root);}  // We take the liberty of forcing the dir to exist.
         catch (IOException e) {}
@@ -96,7 +102,7 @@ public class MDir extends MNode
 	public Path pathForChild (String index)
 	{
 	    Path result = root.resolve (index);
-        if (suffix != null  &&  ! suffix.isEmpty ()) result = result.resolve (suffix);
+        if (suffix != null) result = result.resolve (suffix);
         return result;
 	}
 
@@ -116,7 +122,14 @@ public class MDir extends MNode
 	    if (reference != null) result = reference.get ();
 	    if (result == null)  // We have never loaded this document, or it has been garbage collected.
 	    {
-	        if (! Files.isReadable (pathForChild (index))) return null;
+	        Path childPath = pathForChild (index);
+	        if (! Files.isReadable (childPath))
+	        {
+	            if (suffix == null) return null;
+	            // We allow the possibility that the dir exists but lacks its special file.
+	            Path parentPath = childPath.getParent ();
+	            if (! Files.isReadable (parentPath)) return null;
+	        }
 	        result = new MDoc (this, index);
 	        children.put (index, new SoftReference<MDoc> (result));
 	    }
@@ -131,9 +144,15 @@ public class MDir extends MNode
     {
         children.clear ();
         writeQueue.clear ();
+        deleteTree (root.toAbsolutePath (), false);
+        fireChanged ();
+    }
+
+    public static void deleteTree (Path start, boolean includeStartDir)
+    {
         try
         {
-            Files.walkFileTree (root.toAbsolutePath (), new SimpleFileVisitor<Path> ()
+            Files.walkFileTree (start, new SimpleFileVisitor<Path> ()
             {
                 public FileVisitResult visitFile (final Path file, final BasicFileAttributes attrs) throws IOException
                 {
@@ -143,7 +162,7 @@ public class MDir extends MNode
 
                 public FileVisitResult postVisitDirectory (final Path dir, final IOException e) throws IOException
                 {
-                    if (! dir.equals (root.toAbsolutePath ())) Files.delete (dir);
+                    if (includeStartDir  ||  ! dir.equals (start)) Files.delete (dir);
                     return FileVisitResult.CONTINUE;
                 }
             });
@@ -151,17 +170,17 @@ public class MDir extends MNode
         catch (IOException e)
         {
         }
-
-        fireChanged ();
     }
 
+    /**
+        When suffix is defined, the entire subdirectory that contains the document will be deleted,
+        including any auxiliary files.
+    **/
     public synchronized void clear (String index)
     {
         SoftReference<MDoc> ref = children.remove (index);
         if (ref != null) writeQueue.remove (ref.get ());
-        try {Files.delete (pathForChild (index));}
-        catch (IOException e) {}
-
+        deleteTree (root.resolve (index).toAbsolutePath (), true);
         fireChanged ();
     }
 
@@ -176,16 +195,9 @@ public class MDir extends MNode
 	}
 
     /**
-        Creates a new MDoc in this directory, or renames it if it already exists.
-        The reason setting the value moves an MDoc is that MDoc treats its value as its file name (in addition
-        to the index, which is also its file name). These semantics are arbitrary, but they create a 
-        convenient way to specify a file rename without adding another function. We simply force everything to
-        be consistent with the newly-set value. In the case of a new file, the index takes precedence, so the
-        value is ignored. It is sufficient to pass value="" to create a new file.
-        
-        @param index The file name for a new document, or the source file name for a move.
-        @param value The destination file name for a move. Ignored if a file named by the given index does not exist.
-     */
+        Creates a new MDoc in this directory if it does not already exist.
+        MDocs that are children of an MDir ignore value, so it doesn't matter what is passed for that field.
+    **/
     public synchronized MNode set (String index, String value)
     {
         MDoc result = (MDoc) child (index);
@@ -195,21 +207,15 @@ public class MDir extends MNode
             children.put (index, new SoftReference<MDoc> (result));
 
             // Set the new document to save.
-            // Due to subtle interactions with MDoc.save() and load(), this will not actually force an empty MDoc to exist.
-            // Specifically, load() on a non-existent file with clear the needsWrite flag. The load() call is forced by
-            // the save() call in order to iterate of children. If, OTOH, children are added and removed before save(),
-            // the empty MDoc will still be flagged to write. Whether this is a bug or a feature is debatable. The
-            // net effect for the N2A application is that new models that are not actually filled in will evaporate.
+            // Due to subtle interactions with MDoc.save() and load(), this will not force an empty MDoc to exist.
+            // Specifically, load() on a non-existent file will clear the needsWrite flag. save() forces load()
+            // in order to iterate children. OTOH, if children are added and removed before save(),
+            // an empty MDoc will still be flagged to write. Whether this is a bug or a feature is debatable. The
+            // net effect for the N2A application is that new models which are not actually filled will evaporate.
             result.markChanged ();
+
+            fireChanged ();
         }
-        else  // existing document; move if needed
-        {
-            if (value == null  ||  value.isEmpty ()  ||  value.equals (index)) return result;
-            result.set (value);  // MDoc does all the low-level work, including updating our children collection with the new index
-            // Note: We don't need to mark this document to be saved, since we are moving an existing file on disk.
-            // However, if the document currently has unsaved changes, they will eventually get written to the new location.
-        }
-        fireChanged ();
         return result;
     }
 
@@ -224,11 +230,11 @@ public class MDir extends MNode
         save ();  // If this turns out to be too much work, then scan the write queue for fromIndex and save it directly.
 
         // This operation is independent of bookkeeping in children
-        Path fromPath = pathForChild (fromIndex).toAbsolutePath ();
-        Path toPath   = pathForChild (toIndex  ).toAbsolutePath ();
+        Path fromPath = root.resolve (fromIndex).toAbsolutePath ();
+        Path toPath   = root.resolve (toIndex  ).toAbsolutePath ();
         try
         {
-            Files.deleteIfExists (toPath);
+            if (Files.exists (toPath)) deleteTree (toPath, true);
             Files.move (fromPath, toPath, StandardCopyOption.REPLACE_EXISTING);
         }
         catch (IOException e)

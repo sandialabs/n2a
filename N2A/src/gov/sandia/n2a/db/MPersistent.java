@@ -13,18 +13,18 @@ public class MPersistent extends MVolatile
     protected MNode parent;
     protected boolean needsWrite; // indicates that this node is new or has changed since it was last read from disk (and therefore should be written out)
 
-    public MPersistent (MPersistent parent)
+    public MPersistent (MNode parent)
 	{
         this.parent = parent;
 	}
 
-	public MPersistent (MPersistent parent, String value)
+	public MPersistent (MNode parent, String value)
 	{
 	    super (value);
 	    this.parent = parent;
 	}
 
-    public MPersistent (MPersistent parent, String name, String value)
+    public MPersistent (MNode parent, String name, String value)
     {
         super (name, value);
         this.parent = parent;
@@ -46,7 +46,7 @@ public class MPersistent extends MVolatile
 	{
 	    if (! needsWrite)
 	    {
-	        ((MPersistent) parent).markChanged ();
+	        if (parent instanceof MPersistent) ((MPersistent) parent).markChanged ();
 	        needsWrite = true;
 	    }
 	}
@@ -124,9 +124,9 @@ public class MPersistent extends MVolatile
         if (source != null)
         {
             children.put (toIndex, source);
-            MPersistent p = (MPersistent) source;
+            MPersistent p = (MPersistent) source;  // We can safely assume any child is MPersistent.
             p.name = toIndex;
-            p.markChanged ();  // Cast should be a safe assumption
+            p.markChanged ();
         }
         markChanged ();
     }

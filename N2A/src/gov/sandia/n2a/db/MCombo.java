@@ -107,7 +107,22 @@ public class MCombo extends MNode
         load ();
         MNode container = children.get (fromIndex);
         if (container != primary) return;
+
         primary.move (fromIndex, toIndex);
+        children.remove (fromIndex);
+        children.put (toIndex, primary);
+
+        // Check if the move exposed a model of the same name from another repo.
+        // It shouldn't hurt anything to do this check on the primary repo, since the old model should be gone from there.
+        for (MNode c : containers)
+        {
+            MNode child = c.child (fromIndex);
+            if (child != null)
+            {
+                children.put (fromIndex, child);
+                break;
+            }
+        }
     }
 
     public class IteratorCombo implements Iterator<MNode>

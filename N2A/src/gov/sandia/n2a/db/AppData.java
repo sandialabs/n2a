@@ -29,6 +29,7 @@ public class AppData
     public static MNode  properties;
     public static MDoc   state;
     public static MDir   runs;
+    public static MDir   repos;
     public static MCombo models;
     public static MCombo references;
 
@@ -43,17 +44,43 @@ public class AppData
         properties = new MVolatile ();
         properties.set ("resourceDir", root);
 
-        state = new MDoc (root.resolve ("client.state").toString ());
+        state = new MDoc (root.resolve ("state"));
         runs  = new MDir (root.resolve ("jobs"), "model");  // "model" is our internal housekeeping data, in MNode serialization form. Backend output generally goes into a simulator-specific file.
+        Path reposDir = root.resolve ("repos");
+        repos = new MDir (reposDir, "state");
+
+        String reposOrderString = state.get ("Repos", "order");
+        List<String> reposOrder = new ArrayList<String> ();
+        for (String repoName : reposOrderString.split (",")) reposOrder.add (repoName);
+        for (MNode repo : repos)
+        {
+            String repoName = repo.key ();
+            if (! reposOrder.contains (repoName))
+            {
+                reposOrder.add (repoName);
+                reposOrderString += "," + repoName;
+            }
+        }
+        if (reposOrderString.startsWith (",")) reposOrderString = reposOrderString.substring (1);
+        state.set ("Repos", "order", reposOrderString);
+
+        String primary = state.get ("Repos", "primary");
+        if (! primary.isEmpty ()  &&  reposOrder.indexOf (primary) != 0)  // Also covers the case where primary is not in the list at all.
+        {
+            reposOrder.remove (primary);
+            reposOrder.add (0, primary);
+        }
+        if (reposOrder.size () > 0) state.set ("Repos", "primary", reposOrder.get (0));
 
         List<MNode> modelContainers     = new ArrayList<MNode> ();
         List<MNode> referenceContainers = new ArrayList<MNode> ();
-        Path reposDir = root.resolve ("repos");
-        for (MNode repo : state.childOrCreate ("Repos"))
+        for (String repoName : reposOrder)
         {
-            Path repoDir = reposDir.resolve (repo.get ());  // key() is index number, which establishes precedence order
-            modelContainers    .add (new MDir (repoDir.resolve ("models")));
-            referenceContainers.add (new MDir (repoDir.resolve ("references")));
+            MNode repo = repos.child (repoName);
+            if (repo == null  ||  repo.getInt ("visible") == 0  &&  ! repoName.equals (primary)) continue;
+            Path repoDir = reposDir.resolve (repoName);
+            modelContainers    .add (new MDir (repoName, repoDir.resolve ("models")));
+            referenceContainers.add (new MDir (repoName, repoDir.resolve ("references")));
         }
         models     = new MCombo ("models",     modelContainers);
         references = new MCombo ("references", referenceContainers);
@@ -82,9 +109,12 @@ public class AppData
 
     public static void checkInitialDB ()
     {
-        if (state.childOrCreate ("Repos").size () > 0) return;
-        state.set ("Repos", "0", "local");
-        state.set ("Repos", "1", "base");
+        if (repos.size () > 0) return;
+
+        repos.set ("local", "visible", 1);
+        repos.set ("base", "visible", 1);
+        state.set ("Repos", "order", "local,base");
+        state.set ("Repos", "primary", "local");
 
         Path root = Paths.get (properties.get ("resourceDir")).toAbsolutePath ();
         Path reposDir = root.resolve ("repos");
@@ -163,10 +193,11 @@ public class AppData
 
     public synchronized static void save ()
     {
+        state.save ();
+        runs.save ();  // The reason to save runs is if we record data in them about process status. If no data is changed, could get rid of this save.
+        repos.save ();
         models.save ();
         references.save ();
-        runs.save ();  // The reason to save runs is if we record data in them about process status. If no data is changed, could get rid of this save.
-        state.save ();
     }
 
     public static void quit ()

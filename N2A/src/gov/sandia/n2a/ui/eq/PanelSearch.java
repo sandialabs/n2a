@@ -359,15 +359,29 @@ public class PanelSearch extends JPanel
     }
 
     /**
-        Indirect access to MDoc, because something calls toString(), which loads and returns the entire document.
+        Indirect access to MDoc, because toString() would otherwise load and return the entire document.
     **/
     public static class Holder
     {
         public MNode doc;
+        public Color color;
 
         public Holder (MNode doc)
         {
             this.doc = doc;
+
+            color = Color.black;
+            if (! AppData.models.isWriteable (doc))
+            {
+                MNode repo = AppData.repos.child (doc.parent ().key ());
+                String colorName = repo.get ("color");
+                if (! colorName.isEmpty ())
+                {
+                    try {color = Color.decode (colorName);}
+                    catch (NumberFormatException e) {}
+                }
+                if (color.equals (Color.black)) color = Color.blue;
+            }
         }
 
         public Transferable createTransferable ()
@@ -448,12 +462,11 @@ public class PanelSearch extends JPanel
 
         public Component getListCellRendererComponent (JList<? extends Holder> list, Holder holder, int index, boolean isSelected, boolean cellHasFocus)
         {
-            String name = holder.doc.key ();
-            if (name.isEmpty ()) name = holder.doc.get ();
+            MNode doc = holder.doc;
+            String name = doc.key ();
+            if (name.isEmpty ()) name = doc.get ();
             setText (name);
-
-            if (AppData.models.isWriteable (holder.doc)) setForeground (Color.black);
-            else                                         setForeground (Color.blue);
+            setForeground (holder.color);
 
             if (isSelected)
             {

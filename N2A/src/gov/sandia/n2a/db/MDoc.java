@@ -46,15 +46,14 @@ public class MDoc extends MPersistent
         Constructs a stand-alone document.
         In this case, the value contains the full path to the file on disk.
     **/
-    public MDoc (String path)
+    public MDoc (Path path)
     {
-        this (null, null, path);
+        this (null, null, path.toAbsolutePath ().toString ());
     }
 
-    public MDoc (MDir parent, String name, String path)
+    protected MDoc (MDir parent, String name, String path)
     {
-        super (null, name, path);  // We cheat a little here, since MDir is not an MPersistent.
-        this.parent = parent;
+        super (parent, name, path);
     }
 
     /**
@@ -66,20 +65,16 @@ public class MDoc extends MPersistent
     **/
     public synchronized String getOrDefault (String defaultValue)
     {
-        if (parent == null)
-        {
-            if (value == null) return defaultValue;
-            return value;
-        }
-
-        return ((MDir) parent).pathForChild (name).toAbsolutePath ().toString ();
+        if (parent instanceof MDir) return ((MDir) parent).pathForChild (name).toAbsolutePath ().toString ();
+        if (value == null) return defaultValue;
+        return value;
     }
 
     public synchronized void markChanged ()
     {
         if (! needsWrite)
         {
-            if (parent != null)
+            if (parent instanceof MDir)
             {
                 synchronized (parent)
                 {
@@ -128,12 +123,13 @@ public class MDoc extends MPersistent
     }
 
     /**
-        If this is a stand-alone document, then moves the file on disk.
-        Otherwise, does nothing.
+        If this is a stand-alone document, then move the file on disk.
+        Otherwise, do nothing. DeleteDoc.undo() relies on this class to do nothing for a regular doc,
+        because it uses merge() to restore the data, and merge() will touch the root value.
     **/
     public synchronized void set (String value)
     {
-        if (parent != null) return;  // Alternately, we could parse out the "index" portion of the file name, but this use-case will never occur.
+        if (parent != null) return;
         try
         {
             Files.move (Paths.get (this.value), Paths.get (value), StandardCopyOption.REPLACE_EXISTING);
@@ -166,8 +162,8 @@ public class MDoc extends MPersistent
 
     public synchronized Path path ()
     {
-        if (parent == null) return Paths.get (value);
-        return ((MDir) parent).pathForChild (name);
+        if (parent instanceof MDir) return ((MDir) parent).pathForChild (name);
+        return Paths.get (value);
     }
 
 	/**

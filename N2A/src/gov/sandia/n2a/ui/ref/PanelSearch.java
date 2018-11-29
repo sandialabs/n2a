@@ -16,6 +16,7 @@ import gov.sandia.n2a.ui.SafeTextTransferHandler;
 import gov.sandia.n2a.ui.ref.undo.AddEntry;
 import gov.sandia.n2a.ui.ref.undo.DeleteEntry;
 
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.datatransfer.DataFlavor;
@@ -378,6 +379,20 @@ public class PanelSearch extends JPanel
             String name = doc.get ("title");
             if (name.isEmpty ()) name = doc.key ();
             setText (name);
+
+            Color color = Color.black;
+            if (! AppData.references.isWriteable (doc))
+            {
+                MNode repo = AppData.repos.child (doc.parent ().key ());
+                String colorName = repo.get ("color");
+                if (! colorName.isEmpty ())
+                {
+                    try {color = Color.decode (colorName);}
+                    catch (NumberFormatException e) {}
+                }
+                if (color.equals (Color.black)) color = Color.blue;
+            }
+            setForeground (color);
 
             if (isSelected)
             {
