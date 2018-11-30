@@ -19,6 +19,9 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.FontMetrics;
 import java.awt.Point;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.StringSelection;
+import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
@@ -32,9 +35,11 @@ import java.util.Map;
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
 import javax.swing.BorderFactory;
+import javax.swing.DropMode;
 import javax.swing.ImageIcon;
 import javax.swing.InputMap;
 import javax.swing.JColorChooser;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -42,6 +47,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
+import javax.swing.TransferHandler;
 import javax.swing.border.Border;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -72,6 +78,8 @@ public class SettingsRepo extends JPanel implements Settings
         table.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
         table.setCellSelectionEnabled (true);
         table.setSurrendersFocusOnKeystroke (true);
+        table.setDragEnabled (true);
+        table.setDropMode (DropMode.ON);
 
         table.addMouseListener (new MouseAdapter ()
         {
@@ -174,6 +182,46 @@ public class SettingsRepo extends JPanel implements Settings
                 int row    = table.getSelectedRow ();
                 int column = table.getSelectedColumn ();
                 if (! model.toggle (row, column)) table.editCellAt (row, column, e);
+            }
+        });
+
+        table.setTransferHandler (new TransferHandler ()
+        {
+            public boolean canImport (TransferSupport xfer)
+            {
+                return xfer.isDataFlavorSupported (DataFlavor.stringFlavor);
+            }
+
+            public boolean importData (TransferSupport xfer)
+            {
+                if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE) return false;
+
+                int sourceRow = -1;
+                try
+                {
+                    Transferable xferable = xfer.getTransferable ();
+                    sourceRow = Integer.valueOf ((String) xferable.getTransferData (DataFlavor.stringFlavor));
+                }
+                catch (Exception e)
+                {
+                    return false;
+                }
+                if (sourceRow < 0  ||  sourceRow >= model.repos.size ()) return false;
+
+                int destinationRow = ((JTable.DropLocation) xfer.getDropLocation ()).getRow ();  // TODO: does need a range check?
+                model.move (sourceRow, destinationRow);
+                return true;
+            }
+
+            public int getSourceActions (JComponent comp)
+            {
+                return MOVE;
+            }
+
+            protected Transferable createTransferable (JComponent comp)
+            {
+                // TODO: is row selection updated at start of drag? If not, need to enforce that somewhere.
+                return new StringSelection (String.valueOf (table.getSelectedRow ()));
             }
         });
 
@@ -443,21 +491,25 @@ public class SettingsRepo extends JPanel implements Settings
 
         public void moveSelected (int direction)
         {
-            int column    = table.getSelectedColumn ();
             int rowBefore = table.getSelectedRow ();
             if (rowBefore < 0) return;
 
             int rowAfter = rowBefore + direction;
-            if (rowAfter >= 0  &&  rowAfter < repos.size ())
-            {
-                MNode repo = repos.remove (rowBefore);
-                repos.add (rowAfter, repo);
-                updateOrder ();
-                if (direction < 0) fireTableRowsUpdated (rowAfter,  rowBefore);
-                else               fireTableRowsUpdated (rowBefore, rowAfter);
-                table.changeSelection (rowAfter, column, false, false);
-                needRebuild = true;
-            }
+            if (rowAfter >= 0  &&  rowAfter < repos.size ()) move (rowBefore, rowAfter);
+        }
+
+        public void move (int rowBefore, int rowAfter)
+        {
+            if (rowAfter == rowBefore) return;
+
+            MNode repo = repos.remove (rowBefore);
+            repos.add (rowAfter, repo);
+            updateOrder ();
+            int column = table.getSelectedColumn ();
+            if (rowAfter < rowBefore) fireTableRowsUpdated (rowAfter,  rowBefore);
+            else                      fireTableRowsUpdated (rowBefore, rowAfter);
+            table.changeSelection (rowAfter, column, false, false);
+            needRebuild = true;
         }
 
         public void updateOrder ()
