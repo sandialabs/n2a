@@ -112,7 +112,7 @@ public class AppData
         if (repos.size () > 0) return;
 
         repos.set ("local", "visible", 1);
-        repos.set ("base", "visible", 1);
+        repos.set ("base",  "visible", 1);
         state.set ("Repos", "order", "local,base");
         state.set ("Repos", "primary", "local");
 

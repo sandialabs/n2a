@@ -12,8 +12,10 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.extpoints.Settings;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.images.ImageUtil;
+import gov.sandia.n2a.ui.ref.PanelEntry;
 import gov.sandia.n2a.ui.ref.PanelReference;
 import java.awt.Color;
 import java.awt.Component;
@@ -36,6 +38,7 @@ import javax.swing.ImageIcon;
 import javax.swing.InputMap;
 import javax.swing.JColorChooser;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
@@ -93,16 +96,73 @@ public class SettingsData extends JPanel implements Settings
         {
             public void actionPerformed (ActionEvent e)
             {
-                // TODO: new repo with auto-generated name "local#"
+                int row = table.getSelectedRow ();
+                if (row < 0) row = 0;
+
+                String name = "local";
+                int suffix = 2;
+                while (AppData.repos.child (name) != null) name = "local" + suffix++;
+
+                AppData.repos.set (name, "visible", 1);
+                Path baseDir = reposDir.resolve (name);
+                existingModels    .put (name, new MDir (baseDir.resolve ("models")));
+                existingReferences.put (name, new MDir (baseDir.resolve ("references")));
                 needRebuild = true;
+
+                model.repos.add (row, AppData.repos.child (name));
+                model.updateOrder ();
+                model.fireTableRowsInserted (row, row);
             }
         });
         actionMap.put ("delete", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                // TODO: dialog box to confirm erasure of repo, but only if dir is not empty
+                int row = table.getSelectedRow ();
+                if (row < 0) return;
+                MNode repo = model.repos.get (row);
+                String name = repo.key ();
+
+                // Show a dialog if any data is about to be destroyed
+                MDir models     = (MDir) existingModels    .get (name);
+                MDir references = (MDir) existingReferences.get (name);
+                if (models.size () > 0  ||  references.size () > 0)
+                {
+                    int response = JOptionPane.showConfirmDialog
+                    (
+                        MainFrame.instance,
+                        "<html><body><p style='width:300px'>Permanently erase all models and references in repository \"" + name + "\"?</p></body></html>",
+                        "Delete Repository",
+                        JOptionPane.OK_CANCEL_OPTION,
+                        JOptionPane.WARNING_MESSAGE
+                    );
+                    if (response != JOptionPane.OK_OPTION) return;
+                }
+
+                // If a record from the repo is currently on display, inform UI that it is going away.
+                PanelEquationTree mep = PanelModel.instance.panelEquations;
+                MNode doc = mep.record;
+                if (doc != null  &&  doc.parent () == models) mep.recordDeleted (doc);
+                PanelModel.instance.panelMRU   .removeDoc (doc);
+                PanelModel.instance.panelSearch.removeDoc (doc);
+
+                PanelEntry pe = PanelReference.instance.panelEntry;
+                doc = pe.model.record;
+                if (doc != null  &&  doc.parent () == references) pe.recordDeleted (doc);
+                PanelReference.instance.panelMRU   .removeDoc (doc);
+                PanelReference.instance.panelSearch.removeDoc (doc);
+
+                AppData.repos.clear (name);
+                existingModels    .remove (name);
+                existingReferences.remove (name);
                 needRebuild = true;
+
+                model.repos.remove (row);
+                model.updateOrder ();
+                int column = table.getSelectedColumn ();
+                model.fireTableRowsDeleted (row, row);
+                if (row >= model.repos.size ()) row = model.repos.size () - 1;
+                if (row >= 0) table.changeSelection (row, column, false, false);
             }
         });
         actionMap.put ("startEditing", new AbstractAction ()
@@ -169,6 +229,8 @@ public class SettingsData extends JPanel implements Settings
                 // Trigger background threads to update search lists.
                 PanelModel    .instance.panelSearch.search ();
                 PanelReference.instance.panelSearch.search ();
+                PanelModel    .instance.panelMRU.loadMRU ();
+                PanelReference.instance.panelMRU.loadMRU ();
             }
         });
 
@@ -359,17 +421,29 @@ public class SettingsData extends JPanel implements Settings
 
                     String primary = AppData.state.get ("Repos", "primary");
                     if (oldName.equals (primary)) AppData.state.set ("Repos", "primary", newName);
-
-                    String order = "";
-                    for (MNode r : repos) order += "," + r.key ();
-                    if (! order.isEmpty ()) order = order.substring (1);
-                    AppData.state.set ("Repos", "order", order);
+                    updateOrder ();
 
                     // No need to rebuild, because all object identities are maintained.
                     return;
             }
         }
-   }
+
+        public void updateOrder ()
+        {
+            String primary = AppData.state.get ("Repos", "primary");
+            boolean primaryFound = false;
+            String order = "";
+            for (MNode r : repos)
+            {
+                String repoName = r.key ();
+                if (repoName.equals (primary)) primaryFound = true;
+                order += "," + repoName;
+            }
+            if (! order.isEmpty ()) order = order.substring (1);
+            AppData.state.set ("Repos", "order", order);
+            if (! primaryFound  &&  repos.size () > 0) AppData.state.set ("Repos", "primary", repos.get (0).key ());
+        }
+    }
 
     public class ColorRenderer extends JPanel implements TableCellRenderer
     {

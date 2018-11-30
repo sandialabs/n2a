@@ -44,7 +44,12 @@ public class PanelMRU extends JPanel
         setLayout (new BorderLayout ());
         add (list, BorderLayout.CENTER);
 
-        // Load MRU from app data
+        loadMRU ();
+    }
+
+    public void loadMRU ()
+    {
+        model.clear ();
         int index = 0;
         for (MNode n : AppData.state.childOrCreate ("PanelReference", "MRU"))
         {
