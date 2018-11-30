@@ -449,6 +449,11 @@ public class PanelEntry extends JPanel
         if (doc == model.record) model.setRecord (null);
     }
 
+    public void checkVisible ()
+    {
+        if (! AppData.references.isVisible (model.record)) recordDeleted (model.record);
+    }
+
     public static class Form
     {
         public List<String> required = new ArrayList<String> ();

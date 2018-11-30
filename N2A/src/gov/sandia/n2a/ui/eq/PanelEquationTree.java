@@ -805,6 +805,11 @@ public class PanelEquationTree extends JPanel
         tree.paintImmediately (scrollPane.getViewport ().getViewRect ());
     }
 
+    public void checkVisible ()
+    {
+        if (! AppData.models.isVisible (record)) recordDeleted (record);
+    }
+
     public void yieldFocus ()
     {
         if (tree.getSelectionCount () > 0)

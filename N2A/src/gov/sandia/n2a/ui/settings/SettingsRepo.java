@@ -12,10 +12,8 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.extpoints.Settings;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
-import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.images.ImageUtil;
-import gov.sandia.n2a.ui.ref.PanelEntry;
 import gov.sandia.n2a.ui.ref.PanelReference;
 import java.awt.Color;
 import java.awt.Component;
@@ -52,7 +50,7 @@ import javax.swing.table.TableColumn;
 import javax.swing.table.TableColumnModel;
 
 @SuppressWarnings("serial")
-public class SettingsData extends JPanel implements Settings
+public class SettingsRepo extends JPanel implements Settings
 {
     protected JTable            table;
     protected MNodeTableModel   model;
@@ -62,9 +60,9 @@ public class SettingsData extends JPanel implements Settings
     protected Map<String,MNode> existingReferences = AppData.references.getContainerMap ();
     protected Path              reposDir           = Paths.get (AppData.properties.get ("resourceDir")).resolve ("repos");
 
-    public SettingsData ()
+    public SettingsRepo ()
     {
-        setName ("Data");  // Necessary to fulfill Settings interface.
+        setName ("Repositories");  // Necessary to fulfill Settings interface.
 
         model      = new MNodeTableModel ();
         table      = new JTable (model);
@@ -87,11 +85,27 @@ public class SettingsData extends JPanel implements Settings
         });
 
         InputMap inputMap = table.getInputMap (WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
-        inputMap.put (KeyStroke.getKeyStroke ("INSERT"), "add");
-        inputMap.put (KeyStroke.getKeyStroke ("DELETE"), "delete");
-        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),  "startEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("shift UP"),   "moveUp");
+        inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"), "moveDown");
+        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),     "add");
+        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),     "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),      "startEditing");
 
         ActionMap actionMap = table.getActionMap ();
+        actionMap.put ("moveUp", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                model.moveSelected (-1);
+            }
+        });
+        actionMap.put ("moveDown", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                model.moveSelected (1);
+            }
+        });
         actionMap.put ("add", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
@@ -112,13 +126,15 @@ public class SettingsData extends JPanel implements Settings
                 model.repos.add (row, AppData.repos.child (name));
                 model.updateOrder ();
                 model.fireTableRowsInserted (row, row);
+                table.editCellAt (row, 3, e);
             }
         });
         actionMap.put ("delete", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                int row = table.getSelectedRow ();
+                int column = table.getSelectedColumn ();
+                int row    = table.getSelectedRow ();
                 if (row < 0) return;
                 MNode repo = model.repos.get (row);
                 String name = repo.key ();
@@ -139,19 +155,6 @@ public class SettingsData extends JPanel implements Settings
                     if (response != JOptionPane.OK_OPTION) return;
                 }
 
-                // If a record from the repo is currently on display, inform UI that it is going away.
-                PanelEquationTree mep = PanelModel.instance.panelEquations;
-                MNode doc = mep.record;
-                if (doc != null  &&  doc.parent () == models) mep.recordDeleted (doc);
-                PanelModel.instance.panelMRU   .removeDoc (doc);
-                PanelModel.instance.panelSearch.removeDoc (doc);
-
-                PanelEntry pe = PanelReference.instance.panelEntry;
-                doc = pe.model.record;
-                if (doc != null  &&  doc.parent () == references) pe.recordDeleted (doc);
-                PanelReference.instance.panelMRU   .removeDoc (doc);
-                PanelReference.instance.panelSearch.removeDoc (doc);
-
                 AppData.repos.clear (name);
                 existingModels    .remove (name);
                 existingReferences.remove (name);
@@ -159,7 +162,6 @@ public class SettingsData extends JPanel implements Settings
 
                 model.repos.remove (row);
                 model.updateOrder ();
-                int column = table.getSelectedColumn ();
                 model.fireTableRowsDeleted (row, row);
                 if (row >= model.repos.size ()) row = model.repos.size () - 1;
                 if (row >= 0) table.changeSelection (row, column, false, false);
@@ -184,53 +186,7 @@ public class SettingsData extends JPanel implements Settings
             public void focusLost (FocusEvent e)
             {
                 if (e.isTemporary ()  ||  table.isEditing ()) return;  // The shift to the editing component appears as a loss of focus.
-                if (! needRebuild) return;
-
-                // Rebuild the combo directories.
-                // This is lightweight enough that it can be done on the main UI thread.
-                List<MNode> modelContainers     = new ArrayList<MNode> ();
-                List<MNode> referenceContainers = new ArrayList<MNode> ();
-                String primary = AppData.state.get ("Repos", "primary");
-                for (MNode repo : model.repos)
-                {
-                    String repoName = repo.key ();
-                    boolean isPrimary = repoName.equals (primary);
-                    if (repo.getInt ("visible") == 0  &&  ! isPrimary) continue;
-
-                    MNode models     = existingModels    .get (repoName);
-                    MNode references = existingReferences.get (repoName);
-                    Path repoDir = reposDir.resolve (repoName);
-                    if (models == null)
-                    {
-                        models = new MDir (repoName, repoDir.resolve ("models"));
-                        existingModels.put (repoName, models);
-                    }
-                    if (references == null)
-                    {
-                        references = new MDir (repoName, repoDir.resolve ("references"));
-                        existingReferences.put (repoName, references);
-                    }
-
-                    if (isPrimary)
-                    {
-                        modelContainers    .add (0, models);
-                        referenceContainers.add (0, references);
-                    }
-                    else
-                    {
-                        modelContainers    .add (models);
-                        referenceContainers.add (references);
-                    }
-                }
-                AppData.models    .init (modelContainers);
-                AppData.references.init (referenceContainers);
-                needRebuild = false;
-
-                // Trigger background threads to update search lists.
-                PanelModel    .instance.panelSearch.search ();
-                PanelReference.instance.panelSearch.search ();
-                PanelModel    .instance.panelMRU.loadMRU ();
-                PanelReference.instance.panelMRU.loadMRU ();
+                rebuild ();
             }
         });
 
@@ -239,18 +195,18 @@ public class SettingsData extends JPanel implements Settings
         TableColumnModel cols = table.getColumnModel ();
 
         TableColumn col = cols.getColumn (0);
-        int width = fm.stringWidth ("Write") + em;
-        col.setPreferredWidth (width);
+        int width = fm.stringWidth (model.getColumnName (0)) + em;
+        //col.setPreferredWidth (width);
         col.setMaxWidth (width);
 
         col = cols.getColumn (1);
-        width = fm.stringWidth ("Visible") + em;
-        col.setPreferredWidth (width);
+        width = fm.stringWidth (model.getColumnName (1)) + em;
+        //col.setPreferredWidth (width);
         col.setMaxWidth (width);
 
         col = cols.getColumn (2);
-        width = fm.stringWidth ("Color") + em;
-        col.setPreferredWidth (width);
+        width = fm.stringWidth (model.getColumnName (2)) + em;
+        //col.setPreferredWidth (width);
         col.setMaxWidth (width);
         col.setCellRenderer (new ColorRenderer ());
 
@@ -283,6 +239,63 @@ public class SettingsData extends JPanel implements Settings
         return panel;
     }
 
+    /**
+        Rebuild the combo directories.
+        This is lightweight enough that it can be done on the main UI thread.
+    **/
+    public void rebuild ()
+    {
+        if (! needRebuild) return;
+
+        List<MNode> modelContainers     = new ArrayList<MNode> ();
+        List<MNode> referenceContainers = new ArrayList<MNode> ();
+        String primary = AppData.state.get ("Repos", "primary");
+        for (MNode repo : model.repos)
+        {
+            String repoName = repo.key ();
+            boolean isPrimary = repoName.equals (primary);
+            if (repo.getInt ("visible") == 0  &&  ! isPrimary) continue;
+
+            MNode models     = existingModels    .get (repoName);
+            MNode references = existingReferences.get (repoName);
+            Path repoDir = reposDir.resolve (repoName);
+            if (models == null)
+            {
+                models = new MDir (repoName, repoDir.resolve ("models"));
+                existingModels.put (repoName, models);
+            }
+            if (references == null)
+            {
+                references = new MDir (repoName, repoDir.resolve ("references"));
+                existingReferences.put (repoName, references);
+            }
+
+            if (isPrimary)
+            {
+                modelContainers    .add (0, models);
+                referenceContainers.add (0, references);
+            }
+            else
+            {
+                modelContainers    .add (models);
+                referenceContainers.add (references);
+            }
+        }
+        AppData.models    .init (modelContainers);
+        AppData.references.init (referenceContainers);
+        needRebuild = false;
+
+        // Trigger background threads to update search lists.
+        PanelModel    .instance.panelSearch.search ();
+        PanelReference.instance.panelSearch.search ();
+        PanelModel    .instance.panelMRU.loadMRU ();
+        PanelReference.instance.panelMRU.loadMRU ();
+
+        // Take down currently-editing records if they are no longer in the combo dataset.
+        PanelModel.instance.panelEquations.checkVisible ();
+        PanelReference.instance.panelEntry.checkVisible ();
+    }
+
     public class MNodeTableModel extends AbstractTableModel
     {
         List<MNode> repos = new ArrayList<MNode> ();
@@ -310,8 +323,8 @@ public class SettingsData extends JPanel implements Settings
         {
             switch (column)
             {
-                case 0: return "Write";
-                case 1: return "Visible";
+                case 0: return "Primary";
+                case 1: return "Enable";
                 case 2: return "Color";
                 case 3: return "Name";
             }
@@ -425,6 +438,25 @@ public class SettingsData extends JPanel implements Settings
 
                     // No need to rebuild, because all object identities are maintained.
                     return;
+            }
+        }
+
+        public void moveSelected (int direction)
+        {
+            int column    = table.getSelectedColumn ();
+            int rowBefore = table.getSelectedRow ();
+            if (rowBefore < 0) return;
+
+            int rowAfter = rowBefore + direction;
+            if (rowAfter >= 0  &&  rowAfter < repos.size ())
+            {
+                MNode repo = repos.remove (rowBefore);
+                repos.add (rowAfter, repo);
+                updateOrder ();
+                if (direction < 0) fireTableRowsUpdated (rowAfter,  rowBefore);
+                else               fireTableRowsUpdated (rowBefore, rowAfter);
+                table.changeSelection (rowAfter, column, false, false);
+                needRebuild = true;
             }
         }
 

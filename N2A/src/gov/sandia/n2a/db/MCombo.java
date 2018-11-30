@@ -59,6 +59,18 @@ public class MCombo extends MNode
         return doc.parent () == primary;
     }
 
+    public synchronized boolean isVisible (MNode doc)
+    {
+        if (doc == null) return false;
+        String key = doc.key ();
+        for (MNode c : containers)
+        {
+            MNode child = c.child (key);
+            if (child != null) return doc == child;
+        }
+        return false;
+    }
+
     public synchronized MNode child (String index)
     {
         load ();
