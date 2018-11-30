@@ -364,24 +364,10 @@ public class PanelSearch extends JPanel
     public static class Holder
     {
         public MNode doc;
-        public Color color;
 
         public Holder (MNode doc)
         {
             this.doc = doc;
-
-            color = Color.black;
-            if (! AppData.models.isWriteable (doc))
-            {
-                MNode repo = AppData.repos.child (doc.parent ().key ());
-                String colorName = repo.get ("color");
-                if (! colorName.isEmpty ())
-                {
-                    try {color = Color.decode (colorName);}
-                    catch (NumberFormatException e) {}
-                }
-                if (color.equals (Color.black)) color = Color.blue;
-            }
         }
 
         public Transferable createTransferable ()
@@ -466,7 +452,20 @@ public class PanelSearch extends JPanel
             String name = doc.key ();
             if (name.isEmpty ()) name = doc.get ();
             setText (name);
-            setForeground (holder.color);
+
+            Color color = Color.black;
+            if (! AppData.models.isWriteable (doc))
+            {
+                MNode repo = AppData.repos.child (doc.parent ().key ());
+                String colorName = repo.get ("color");
+                if (! colorName.isEmpty ())
+                {
+                    try {color = Color.decode (colorName);}
+                    catch (NumberFormatException e) {}
+                }
+                if (color.equals (Color.black)) color = Color.blue;
+            }
+            setForeground (color);
 
             if (isSelected)
             {

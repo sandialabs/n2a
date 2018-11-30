@@ -91,7 +91,7 @@ public class PanelSearch extends JPanel
             public void actionPerformed (ActionEvent e)
             {
                 MNode deleteMe = list.getSelectedValue ();
-                if (deleteMe == null) return;
+                if (deleteMe == null  ||  ! AppData.references.isWriteable (deleteMe)) return;
                 PanelReference.instance.undoManager.add (new DeleteEntry ((MDoc) deleteMe));
             }
         });

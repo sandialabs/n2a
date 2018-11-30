@@ -9,6 +9,7 @@ package gov.sandia.n2a.db;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
@@ -31,7 +32,7 @@ public class MCombo extends MNode
         init (containers);
     }
 
-    public void init (List<MNode> containers)
+    public synchronized void init (List<MNode> containers)
     {
         this.containers = containers;
         if (containers.size () > 0) primary = containers.get (0);
@@ -46,18 +47,19 @@ public class MCombo extends MNode
         return name;
     }
 
-    public MNode getContainer (int index)
+    public synchronized Map<String,MNode> getContainerMap ()
     {
-        return containers.get (index);
+        Map<String,MNode> result = new TreeMap<String,MNode> ();
+        for (MNode c : containers) result.put (c.key (), c);
+        return result;
     }
 
     public boolean isWriteable (MNode doc)
     {
-        load ();
         return doc.parent () == primary;
     }
 
-    public MNode child (String index)
+    public synchronized MNode child (String index)
     {
         load ();
         MNode container = children.get (index);
@@ -72,7 +74,7 @@ public class MCombo extends MNode
         children  .clear ();
     }
 
-    public void clear (String index)
+    public synchronized void clear (String index)
     {
         // This actually does remove the original object.
         load ();
@@ -84,7 +86,7 @@ public class MCombo extends MNode
         }
     }
 
-    public int size ()
+    public synchronized int size ()
 	{
         load ();
         return children.size ();
@@ -102,7 +104,7 @@ public class MCombo extends MNode
         If you already hold a reference to the MDoc named by fromIndex, then that reference remains valid
         after the move.
     **/
-    public void move (String fromIndex, String toIndex)
+    public synchronized void move (String fromIndex, String toIndex)
     {
         load ();
         MNode container = children.get (fromIndex);

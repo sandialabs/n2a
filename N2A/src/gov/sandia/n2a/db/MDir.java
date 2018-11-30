@@ -195,6 +195,16 @@ public class MDir extends MNode
 	}
 
     /**
+        Point to a new location on disk.
+        Must be called before actually moving the dir, since we need to flush the write queue.
+    **/
+    public synchronized void set (Path value)
+    {
+        save ();
+        root = value;
+    }
+
+    /**
         Creates a new MDoc in this directory if it does not already exist.
         MDocs that are children of an MDir ignore value, so it doesn't matter what is passed for that field.
     **/

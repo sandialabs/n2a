@@ -250,7 +250,7 @@ public class PanelEntry extends JPanel
                     if (data.startsWith ("@")) return PanelReference.instance.panelSearch.list.getTransferHandler ().importData (xfer);
                     return false;
                 }
-                if (model.record == null) return false;  // Nothing to import into, and we don't really want to mess with instant entry creation. (If we do, then need compound edit.)
+                if (model.locked) return false;  // Nothing to import into, and we don't really want to mess with instant entry creation. (If we do, then need compound edit.)
 
                 int row;
                 int col;
@@ -317,7 +317,7 @@ public class PanelEntry extends JPanel
 
             protected void exportDone (JComponent source, Transferable data, int action)
             {
-                if (action == MOVE  &&  ! ((TransferableTag) data).drag)
+                if (action == MOVE  &&  ! ((TransferableTag) data).drag  &&  ! model.locked)
                 {
                     try
                     {
@@ -422,7 +422,7 @@ public class PanelEntry extends JPanel
         {
             PanelReference.instance.undoManager.add (new AddEntry ());
         }
-        else
+        else if (! model.locked)
         {
             int row = table.getSelectedRow ();
             if (row < 0) row = model.keys.size ();
@@ -433,6 +433,7 @@ public class PanelEntry extends JPanel
 
     public void deleteTag ()
     {
+        if (model.locked) return;
         int row = table.getSelectedRow ();
         if (row < 3) return;  // Protect id, form and title
         PanelReference.instance.undoManager.add (new DeleteTag (model.record, row));
@@ -493,6 +494,7 @@ public class PanelEntry extends JPanel
     public class MNodeTableModel extends AbstractTableModel
     {
         public MNode        record;
+        public boolean      locked;
         public List<String> keys = new ArrayList<String> ();
         public boolean      editNewRow;
         public Form         form;
@@ -501,6 +503,8 @@ public class PanelEntry extends JPanel
         {
             if (this.record == record) return;
             this.record = record;
+            if (record == null) locked = true;
+            else                locked = ! AppData.references.isWriteable (record);
             build ();
         }
 
@@ -596,6 +600,7 @@ public class PanelEntry extends JPanel
 
         public boolean isCellEditable (int row, int column)
         {
+            if (locked) return false;
             if (column == 0  &&  row < 3) return false;  // protect id, form and title
             return true;
         }
