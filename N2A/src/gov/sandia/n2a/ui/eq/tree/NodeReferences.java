@@ -22,7 +22,7 @@ import javax.swing.JTree;
 import javax.swing.tree.TreePath;
 
 @SuppressWarnings("serial")
-public class NodeReferences extends NodeFilter
+public class NodeReferences extends NodeContainer
 {
     protected static ImageIcon icon = ImageUtil.getImage ("properties.gif");
 

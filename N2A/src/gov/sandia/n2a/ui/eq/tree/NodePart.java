@@ -40,7 +40,7 @@ import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 
 @SuppressWarnings("serial")
-public class NodePart extends NodeFilter
+public class NodePart extends NodeContainer
 {
     protected static ImageIcon iconCompartment = ImageUtil.getImage ("comp.gif");
     protected static ImageIcon iconConnection  = ImageUtil.getImage ("connection.png");
@@ -55,7 +55,6 @@ public class NodePart extends NodeFilter
     public NodePart (MPart source)
     {
         this.source = source;
-        setUserObject ();
     }
 
     public void setUserObject ()
@@ -276,21 +275,11 @@ public class NodePart extends NodeFilter
             PanelModel.instance.undoManager.add (aa);  // aa will automagically insert a $metadata block if needed
             return aa.createdNode;
         }
-        else if (type.equals ("Annotations"))
-        {
-            // TODO: figure out how to handle this case
-            return null;
-        }
         else if (type.equals ("Reference"))
         {
             AddReference ar = new AddReference (this, metadataIndex, data);
             PanelModel.instance.undoManager.add (ar);
             return ar.createdNode;
-        }
-        else if (type.equals ("References"))
-        {
-            // TODO: figure out how to handle this case
-            return null;
         }
         else if (type.equals ("Part"))
         {

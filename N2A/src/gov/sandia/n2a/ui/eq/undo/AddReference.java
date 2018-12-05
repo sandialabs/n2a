@@ -1,19 +1,28 @@
 /*
-Copyright 2016 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.ui.eq.undo;
 
+import java.awt.FontMetrics;
 import java.util.List;
 
+import javax.swing.JTree;
+import javax.swing.tree.TreeNode;
+import javax.swing.undo.CannotRedoException;
+import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoableEdit;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
+import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.PanelEquationTree;
+import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
+import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeReference;
 import gov.sandia.n2a.ui.eq.tree.NodeReferences;
 
@@ -35,39 +44,146 @@ public class AddReference extends Undoable
         this.index = index;
         if (data == null)
         {
-            name = AddAnnotation.uniqueName (parent, "$reference", "r", false);
+            name = uniqueName (parent, "r", false);
         }
         else
         {
-            name = AddAnnotation.uniqueName (parent, "$reference", data.key (), true);
+            name = uniqueName (parent, data.key (), true);
             value = data.get ();
         }
+    }
+
+    public static String uniqueName (NodeBase parent, String prefix, boolean allowEmptySuffix)
+    {
+        MPart block = (MPart) parent.source.child ("$reference");
+        if (allowEmptySuffix  &&  (block == null  ||  block.child (prefix) == null)) return prefix;
+        int suffix = 1;
+        if (block != null)
+        {
+            while (block.child (prefix + suffix) != null) suffix++;
+        }
+        return prefix + suffix;
     }
 
     public void undo ()
     {
         super.undo ();
-        AddAnnotation.destroy (path, false, name, "$reference");
+        destroy (path, false, name);
+    }
+
+    public static void destroy (List<String> path, boolean canceled, String name)
+    {
+        // Retrieve created node
+        NodeBase parent = NodeBase.locateNode (path);
+        if (parent == null) throw new CannotUndoException ();
+        NodeBase container = parent;
+        if (parent instanceof NodePart) container = parent.child ("$reference");
+        NodeBase createdNode = container.child (name);
+
+        PanelEquationTree pet = PanelModel.instance.panelEquations;
+        JTree tree = pet.tree;
+        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+        FontMetrics fm = createdNode.getFontMetrics (tree);
+
+        boolean containerIsVisible = true;
+        TreeNode[] createdPath = createdNode.getPath ();
+        int index = container.getIndexFiltered (createdNode);
+        if (canceled) index--;
+
+        MPart block = (MPart) parent.source.child ("$reference");
+        block.clear (name);
+        if (block.child (name) == null)  // There is no overridden value, so this node goes away completely.
+        {
+            model.removeNodeFromParent (createdNode);
+            if (block.size () == 0)
+            {
+                parent.source.clear ("$reference");  // commit suicide
+                if (parent instanceof NodePart)
+                {
+                    model.removeNodeFromParent (container);
+                    // No need to update order, because we just destroyed $metadata, where order is stored.
+                    // No need to update tab stops in grandparent, because block nodes don't offer any tab stops.
+                    containerIsVisible = false;
+                }
+            }
+        }
+        else  // Just exposed an overridden value, so update display.
+        {
+            if (container.visible (model.filterLevel))  // We are always visible, but our parent could disappear.
+            {
+                createdNode.updateColumnWidths (fm);
+            }
+            else
+            {
+                containerIsVisible = false;
+            }
+        }
+
+        if (containerIsVisible)
+        {
+            container.updateTabStops (fm);
+            container.allNodesChanged (model);
+        }
+        pet.updateVisibility (createdPath, index);
+        if (path.size () == 1  &&  name.equals ("lock")) pet.updateLock ();
     }
 
     public void redo ()
     {
         super.redo ();
-        NodeFactory factory = new NodeFactory ()
+        createdNode = create (path, index, name, value);
+    }
+
+    public static NodeBase create (List<String> path, int index, String name, String value)
+    {
+        NodeBase parent = NodeBase.locateNode (path);
+        if (parent == null) throw new CannotRedoException ();
+        MPart block = (MPart) parent.source.childOrCreate ("$reference");
+
+        PanelEquationTree pet = PanelModel.instance.panelEquations;
+        JTree tree = pet.tree;
+        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+        NodeBase container = parent;  // If this is a variable, then mix metadata with equations and references
+        if (parent instanceof NodePart)  // If this is a part, then display special block
         {
-            public NodeBase create (MPart part)
+            if (block.size () == 0)  // empty implies the node is absent
             {
-                return new NodeReference (part);
+                container = new NodeReferences (block);
+                model.insertNodeIntoUnfiltered (container, parent, index);
+                index = 0;
             }
-        };
-        NodeFactory factoryBlock = new NodeFactory ()
+            else  // the node is present, so retrieve it
+            {
+                container = parent.child ("$reference");
+            }
+        }
+
+        NodeBase createdNode = container.child (name);
+        boolean alreadyExists = createdNode != null;
+        MPart createdPart = (MPart) block.set (name, value);
+        if (! alreadyExists) createdNode = new NodeReference (createdPart);
+
+        FontMetrics fm = createdNode.getFontMetrics (tree);
+        if (container.getChildCount () > 0)
         {
-            public NodeBase create (MPart part)
-            {
-                return new NodeReferences (part);
-            }
-        };
-        createdNode = AddAnnotation.create (path, index, name, value, "$reference", factory, factoryBlock);
+            NodeBase firstChild = (NodeBase) container.getChildAt (0);
+            if (firstChild.needsInitTabs ()) firstChild.initTabs (fm);
+        }
+
+        if (value == null) createdNode.setUserObject ("");  // pure create, so about to go into edit mode. This should only happen on first application of the create action, and should only be possible if visibility is already correct.
+        createdNode.updateColumnWidths (fm);  // preempt initialization; uses actual name, not user value
+        if (! alreadyExists) model.insertNodeIntoUnfiltered (createdNode, container, index);
+        if (value != null)  // create was merged with change name/value
+        {
+            container.updateTabStops (fm);
+            container.allNodesChanged (model);
+            TreeNode[] createdPath = createdNode.getPath ();
+            pet.updateOrder (createdPath);
+            pet.updateVisibility (createdPath);
+            if (path.size () == 1  &&  name.equals ("lock")) pet.updateLock ();
+        }
+
+        return createdNode;
     }
 
     public boolean addEdit (UndoableEdit edit)

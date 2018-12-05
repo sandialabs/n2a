@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -40,7 +40,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     /**
         Returns the child indicated by the given index, or null if it doesn't exist.
     **/
-    public MNode child (String index)
+    protected MNode getChild (String index)
     {
         return null;
     }
@@ -48,13 +48,13 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     /**
         Returns a child node from arbitrary depth, or null if any part of the path doesn't exist.
     **/
-    public synchronized MNode child (String index0, String... deeperIndices)
+    public synchronized MNode child (String... indices)
     {
-        MNode c = child (index0);
-        for (int i = 0; i < deeperIndices.length; i++)
+        MNode c = getChild (indices[0]);
+        for (int i = 1; i < indices.length; i++)
         {
             if (c == null) return null;
-            c = c.child (deeperIndices[i]);
+            c = c.getChild (indices[i]);
         }
         return c;
     }
@@ -70,7 +70,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         MNode result = this;
         for (int i = 0; i < indices.length; i++)
         {
-            MNode c = result.child (indices[i]);
+            MNode c = result.getChild (indices[i]);
             if (c == null) c = result.set (indices[i], "");
             result = c;
         }
@@ -86,22 +86,27 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     }
 
     /**
-        Remove child with the given index, if it exists.
+        Removes child with the given index, if it exists.
+        Outside this package, use clear(String...) for most purposes.
     **/
-    public void clear (String index)
+    protected void clearChild (String index)
     {
     }
 
-    public synchronized void clear (String index0, String... deeperIndices)
+    /**
+        Removes child with arbitrary depth.
+        If no index is specified, then removes all children of this node.
+    **/
+    public synchronized void clear (String... indices)
     {
-        MNode c = child (index0);
-        int last = deeperIndices.length - 1;
+        MNode c = this;
+        int last = indices.length - 1;
         for (int i = 0; i < last; i++)
         {
+            c = c.getChild (indices[i]);
             if (c == null) return;  // Nothing to clear
-            c = c.child (deeperIndices[i]);
         }
-        if (c != null) c.clear (deeperIndices[last]);
+        c.clearChild (indices[last]);
     }
 
     /**
@@ -165,11 +170,11 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
         int last = parms.length - 1;
         String defaultValue = parms[last];
-        MNode c = child (parm0);
+        MNode c = getChild (parm0);
         if (c == null) return defaultValue;
         for (int i = 0; i < last; i++)
         {
-            c = c.child (parms[i]);
+            c = c.getChild (parms[i]);
             if (c == null) return defaultValue;
         }
         return c.getOrDefault (defaultValue);
@@ -329,7 +334,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     public synchronized MNode set (String index, MNode value)
     {
-        clear (index);
+        clearChild (index);
         MNode result = set (index, "");
         result.merge (value);
         return result;
@@ -340,17 +345,17 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     **/
     public synchronized void set (String index0, String index1, String... deeperIndices)
     {
-        MNode c = child (index0);
+        MNode c = getChild (index0);
         if (c == null) c = set (index0, "");
 
-        MNode d = c.child (index1);
+        MNode d = c.getChild (index1);
         if (d == null) d = c.set (index1, "");
         c = d;
 
         int last = deeperIndices.length - 1;
         for (int i = 0; i < last; i++)
         {
-            d = c.child (deeperIndices[i]);
+            d = c.getChild (deeperIndices[i]);
             if (d == null) d = c.set (deeperIndices[i], "");
             c = d;
         }
@@ -371,16 +376,11 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         int last = length - 1;
         if (parms[last] instanceof MNode)
         {
-            MNode c = child (string0);
-            if (c == null) c = set (string0, "");
-            for (int i = 0; i < last; i++)
-            {
-                String s = parms[i].toString ();
-                MNode d = c.child (s);
-                if (d == null) d = c.set (s, "");
-                c = d;
-            }
-            c.set ((MNode) parms[last]);
+            String[] names = new String[length];
+            names[0] = string0;
+            for (int i = 0; i < last; i++) names[i+1] = parms[i].toString ();
+            childOrCreate (names).set ((MNode) parms[last]);
+            return;
         }
 
         String string1 = parms[0].toString ();
@@ -407,7 +407,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         for (MNode thatChild : that)
         {
             String index = thatChild.key ();
-            MNode c = child (index);
+            MNode c = getChild (index);
             if (c == null) c = set (index, "");  // ensure a target child node exists
             c.merge (thatChild);
         }
@@ -422,7 +422,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         for (MNode thatChild : that)
         {
             String index = thatChild.key ();
-            MNode c = child (index);
+            MNode c = getChild (index);
             if (c == null) set (index, thatChild);
             else           c.mergeUnder (thatChild);
         }
@@ -438,13 +438,13 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     public synchronized void move (String fromIndex, String toIndex)
     {
         if (toIndex.equals (fromIndex)) return;
-        clear (toIndex);
-        MNode source = child (fromIndex);
+        clearChild (toIndex);
+        MNode source = getChild (fromIndex);
         if (source != null)
         {
             MNode destination = set (toIndex, "");
             destination.merge (source);
-            clear (fromIndex);
+            clearChild (fromIndex);
         }
     }
 
@@ -754,7 +754,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         if (size () != that.size ()) return false;
         for (MNode a : this)
         {
-            MNode b = that.child (a.key ());
+            MNode b = that.getChild (a.key ());
             if (b == null) return false;
             if (! a.equalsRecursive (b)) return false;
         }

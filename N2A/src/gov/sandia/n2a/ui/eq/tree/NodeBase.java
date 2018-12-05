@@ -224,7 +224,7 @@ public class NodeBase extends DefaultMutableTreeNode
         if (count == 0) return;
 
         int sum = 0;
-        for (int i = 0; i < count; i++) tabs.set (i, sum += tabs.get (i).intValue ());
+        for (int i = 0; i < count; i++) tabs.set (i, sum += tabs.get (i));
 
         for (int index : filtered) ((NodeBase) children.get (index)).applyTabStops (tabs, fm);
     }

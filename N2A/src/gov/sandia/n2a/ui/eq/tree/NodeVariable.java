@@ -34,7 +34,7 @@ import javax.swing.JTree;
 import javax.swing.tree.TreePath;
 
 @SuppressWarnings("serial")
-public class NodeVariable extends NodeFilter
+public class NodeVariable extends NodeContainer
 {
     protected static ImageIcon iconVariable = ImageUtil.getImage ("delta.png");
     protected static ImageIcon iconBinding  = ImageUtil.getImage ("connect.gif");
@@ -65,7 +65,6 @@ public class NodeVariable extends NodeFilter
         // We may actually make small changes to the database here, which is not ideal,
         // but should do little harm.
         if (source.isFromTopDocument ()) enforceOneLine (source);
-        setUserObject (source.key () + "=" + getValue ());
         for (MNode n : source)
         {
             if (n.key ().startsWith ("@")) add (new NodeEquation ((MPart) n));
@@ -74,7 +73,12 @@ public class NodeVariable extends NodeFilter
         MPart metadata = (MPart) source.child ("$metadata");
         if (metadata != null)
         {
-            for (MNode m : metadata) add (new NodeAnnotation ((MPart) m));
+            for (MNode m : metadata)
+            {
+                NodeAnnotation a = new NodeAnnotation ((MPart) m);
+                add (a);
+                a.build ();
+            }
         }
 
         MPart references = (MPart) source.child ("$reference");
@@ -258,8 +262,8 @@ public class NodeVariable extends NodeFilter
         while (cf.hasMoreElements ())
         {
             NodeBase child = (NodeBase) cf.nextElement ();
-            if      (child instanceof NodeAnnotation) n.set ("$metadata",  child.source.key (), child.source.get ());
-            else if (child instanceof NodeReference)  n.set ("$reference", child.source.key (), child.source.get ());
+            if      (child instanceof NodeAnnotation) child.copy (n.childOrCreate ("$metadata"));
+            else if (child instanceof NodeReference)  child.copy (n.childOrCreate ("$reference"));
             else     child.copy (n);
         }
     }
@@ -267,9 +271,9 @@ public class NodeVariable extends NodeFilter
     @Override
     public NodeBase add (String type, JTree tree, MNode data)
     {
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         if (type.isEmpty ())
         {
+            FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
             if (model.getChildCount (this) == 0  ||  tree.isCollapsed (new TreePath (getPath ()))) return ((NodeBase) getParent ()).add ("Variable", tree, data);
             type = "Equation";
         }

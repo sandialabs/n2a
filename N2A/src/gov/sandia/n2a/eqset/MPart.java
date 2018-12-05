@@ -296,7 +296,7 @@ public class MPart extends MNode
         return source;
     }
 
-    public synchronized MNode child (String index)
+    protected synchronized MNode getChild (String index)
     {
         if (children == null) return null;
         return children.get (index);
@@ -337,7 +337,7 @@ public class MPart extends MNode
         The child may disappear, if it existed only due to override.
         In general, acts as if the clear is applied in the top-level document, followed by a full collation of the tree.
     **/
-    public synchronized void clear (String index)
+    protected synchronized void clearChild (String index)
     {
         if (children == null) return;
         if (! isFromTopDocument ()) return;  // This node is not overridden, so none of the children will be.
@@ -493,7 +493,7 @@ public class MPart extends MNode
         MNode thatInherit = that.child ("$inherit");
         if (thatInherit != null)
         {
-            MPart inherit = (MPart) child ("$inherit");
+            MPart inherit = (MPart) getChild ("$inherit");
             boolean existing =  inherit != null;
             if (! existing) inherit = (MPart) set ("$inherit", "");
             
@@ -505,7 +505,7 @@ public class MPart extends MNode
             for (MNode thatInheritChild : thatInherit)
             {
                 String index = thatInheritChild.key ();
-                MNode c = inherit.child (index);
+                MNode c = inherit.getChild (index);
                 if (c == null) c = inherit.set (index, "");
                 c.merge (thatInheritChild);
             }
@@ -531,7 +531,7 @@ public class MPart extends MNode
         {
             if (thatChild == thatInherit) continue;
             String index = thatChild.key ();
-            MNode c = child (index);
+            MNode c = getChild (index);
             if (c == null) c = set (index, "");  // ensure a target child node exists
             c.merge (thatChild);
         }
@@ -562,13 +562,13 @@ public class MPart extends MNode
     public synchronized void move (String fromIndex, String toIndex)
     {
         if (toIndex.equals (fromIndex)) return;
-        clear (toIndex);  // By definition, no top-level document nodes are allowed to remain at the destination. However, underrides may exist.
-        MPart fromPart = (MPart) child (fromIndex);
+        clearChild (toIndex);  // By definition, no top-level document nodes are allowed to remain at the destination. However, underrides may exist.
+        MPart fromPart = (MPart) getChild (fromIndex);
         if (fromPart == null) return;
         if (! fromPart.isFromTopDocument ()) return;  // We only move top-document nodes.
 
         MNode fromDoc = source.child (fromIndex);
-        MNode toPart = child (toIndex);
+        MNode toPart = getChild (toIndex);
         if (toPart == null)  // No node at the destination, so merge at level of top-document.
         {
             MPersistent toDoc = (MPersistent) source.set (toIndex, "");
@@ -582,7 +582,7 @@ public class MPart extends MNode
         {
             toPart.merge (fromDoc);
         }
-        clear (fromIndex);
+        clearChild (fromIndex);
     }
 
     /**

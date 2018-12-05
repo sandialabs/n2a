@@ -33,7 +33,6 @@ public class AddPart extends Undoable
     public    NodeBase     createdNode;  ///< Used by caller to initiate editing. Only valid immediately after call to redo().
 
     /**
-        @param parent Must be the node that contains $metadata, not the $metadata node itself.
         @param index Position in the unfiltered tree where the node should be inserted.
     **/
     public AddPart (NodeBase parent, int index, MNode data)

@@ -14,6 +14,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.ChangeAnnotation;
 import gov.sandia.n2a.ui.eq.undo.DeleteAnnotation;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -21,16 +22,56 @@ import gov.sandia.n2a.ui.images.ImageUtil;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
+import javax.swing.tree.TreeNode;
+import javax.swing.tree.TreePath;
 
 @SuppressWarnings("serial")
-public class NodeAnnotation extends NodeBase
+public class NodeAnnotation extends NodeContainer
 {
-    public static ImageIcon icon = ImageUtil.getImage ("edit.gif");
-    protected List<Integer> columnWidths;
+    public static ImageIcon     icon = ImageUtil.getImage ("edit.gif");
+    protected     List<Integer> columnWidths;
+    public        MPart         folded;
 
     public NodeAnnotation (MPart source)
     {
         this.source = source;
+        folded = source;
+    }
+
+    @Override
+    public void build ()
+    {
+        removeAllChildren ();
+        folded = source;
+        buildFolded ();
+    }
+
+    public void buildFolded ()
+    {
+        if (folded.size () == 1  &&  folded.get ().isEmpty ())
+        {
+            folded = (MPart) folded.iterator ().next ();  // Retrieve the only child.
+            buildFolded ();
+            return;
+        }
+        for (MNode m : folded)
+        {
+            NodeAnnotation a = new NodeAnnotation ((MPart) m);
+            add (a);
+            a.build ();
+        }
+    }
+
+    public String key ()
+    {
+        MPart p = folded;
+        String result = p.key ();
+        while (p != source)
+        {
+            p = p.parent ();
+            result = p.key () + "." + result;
+        }
+        return result;
     }
 
     @Override
@@ -39,7 +80,7 @@ public class NodeAnnotation extends NodeBase
         if (filterLevel <= FilteredTreeModel.ALL)   return true;
         if (filterLevel == FilteredTreeModel.PARAM) return false;
         // FilteredTreeModel.LOCAL ...
-        return source.isFromTopDocument ();
+        return source.isFromTopDocument ();  // It shouldn't make a difference whether we check source or folded.
     }
 
     @Override
@@ -54,8 +95,8 @@ public class NodeAnnotation extends NodeBase
         String result = toString ();
         if (editing  &&  ! result.isEmpty ())  // An empty user object indicates a newly created node, which we want to edit as a blank.
         {
-            result       = source.key ();
-            String value = source.get ();
+            result       = key ();
+            String value = folded.get ();
             if (! value.isEmpty ()) result = result + "=" + value;
         }
         return result;
@@ -76,14 +117,15 @@ public class NodeAnnotation extends NodeBase
     @Override
     public void updateColumnWidths (FontMetrics fm)
     {
-        boolean pure = getParent () instanceof NodeAnnotations;
+        TreeNode parent = getParent ();
+        boolean pure = parent instanceof NodeAnnotations  ||  parent instanceof NodeAnnotation;
         if (columnWidths == null)
         {
             columnWidths = new ArrayList<Integer> (1);
             columnWidths.add (0);
-            if (! pure) columnWidths.add (0);
+            if (! pure) columnWidths.add (0);  // To function alongside equations
         }
-        int width = fm.stringWidth (source.key () + " ");
+        int width = fm.stringWidth (key () + " ");
         if (pure) columnWidths.set (0, width);  // We are in a $metadata block, so only need the first tab stop.
         else      columnWidths.set (1, width);  // Stash column width in higher position, so it doesn't interfere with multi-line equations under a variable.
     }
@@ -97,14 +139,17 @@ public class NodeAnnotation extends NodeBase
     @Override
     public void applyTabStops (List<Integer> tabs, FontMetrics fm)
     {
-        String result = source.key ();
-        String value  = source.get ();
+        String result = key ();
+        String value  = folded.get ();
         if (! value.isEmpty ())
         {
-            int offset = tabs.get (0).intValue ();
-            if (! (getParent () instanceof NodeAnnotations))  // not in a $metadata block, so may share tab stops with equations
+            int offset = tabs.get (0);
+
+            TreeNode parent = getParent ();
+            boolean pure = parent instanceof NodeAnnotations  ||  parent instanceof NodeAnnotation;
+            if (! pure)  // not in a $metadata block, so may share tab stops with equations
             {
-                offset = tabs.get (1).intValue () - offset;
+                offset = tabs.get (1) - offset;
             }
             int width = PanelModel.instance.panelEquations.tree.getWidth () - offset;  // Available width for displaying value (not including key).
 
@@ -132,9 +177,38 @@ public class NodeAnnotation extends NodeBase
     }
 
     @Override
+    public void copy (MNode result)
+    {
+        // There may be a deep tree of annotations under this node.
+        // However, if this one is visible (implied by receiving this call),
+        // then all the children are visible as well.
+        result.set (source.key (), source);
+    }
+
+    @Override
     public NodeBase add (String type, JTree tree, MNode data)
     {
         if (type.isEmpty ()) type = "Annotation";  // By context, we assume the user wants to add another annotation.
+        if (type.equals ("Annotation"))
+        {
+            FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+            if (model.getChildCount (this) > 0  &&  ! tree.isCollapsed (new TreePath (getPath ())))  // Open node
+            {
+                // Add a new annotation to our children
+                int index = getChildCount () - 1;
+                TreePath path = tree.getSelectionPath ();
+                if (path != null)
+                {
+                    NodeBase selected = (NodeBase) path.getLastPathComponent ();
+                    if (isNodeChild (selected)) index = getIndex (selected);  // unfiltered index
+                }
+                index++;
+                AddAnnotation aa = new AddAnnotation (this, index, data);
+                PanelModel.instance.undoManager.add (aa);
+                return aa.createdNode;
+            }
+            // else let the request travel up to our parent
+        }
         return ((NodeBase) getParent ()).add (type, tree, data);
     }
 
@@ -155,8 +229,8 @@ public class NodeAnnotation extends NodeBase
         else                  value = "";
 
         NodeBase parent = (NodeBase) getParent ();
-        String oldName  = source.key ();
-        String oldValue = source.get ();
+        String oldName  = key ();
+        String oldValue = folded.get ();
         if (! name.equals (oldName))
         {
             // Check if name change is forbidden
@@ -166,10 +240,21 @@ public class NodeAnnotation extends NodeBase
             }
             else
             {
+                // We don't want to overwrite a node that has already been defined in the top document.
+                // However, if it is part of folded path, we can define a new non-empty value for it.
                 MPart mparent = source.parent ();
-                MPart partAfter = (MPart) mparent.child (name);
-                if (partAfter != null  &&  partAfter.isFromTopDocument ()) name = oldName;
-
+                MPart partAfter = mparent;
+                String[] names = name.split ("\\.");
+                for (String n : names)
+                {
+                    partAfter = (MPart) partAfter.child (n);
+                    if (partAfter == null) break;
+                }
+                if (   partAfter != null  &&  partAfter.isFromTopDocument ()
+                    && (source.size () > 0  ||  partAfter.size () != 1  ||  ! partAfter.get ().isEmpty ()))
+                {
+                    name = oldName;
+                }
             }
         }
         if (name.equals (oldName)  &&  value.equals (oldValue))
@@ -181,7 +266,7 @@ public class NodeAnnotation extends NodeBase
             return;
         }
 
-        PanelModel.instance.undoManager.add (new ChangeAnnotation (parent, oldName, oldValue, name, value));
+        PanelModel.instance.undoManager.add (new ChangeAnnotation (this, name, value));
     }
 
     @Override

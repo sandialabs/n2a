@@ -114,7 +114,7 @@ public class MDir extends MNode
         return name;
 	}
 
-	public synchronized MNode child (String index)
+	protected synchronized MNode getChild (String index)
     {
 	    if (index.isEmpty ()) return null;  // The file-existence code below can be fooled by an empty string, so explicitly guard against it.
 	    MDoc result = null;
@@ -176,7 +176,7 @@ public class MDir extends MNode
         When suffix is defined, the entire subdirectory that contains the document will be deleted,
         including any auxiliary files.
     **/
-    public synchronized void clear (String index)
+    protected synchronized void clearChild (String index)
     {
         SoftReference<MDoc> ref = children.remove (index);
         if (ref != null) writeQueue.remove (ref.get ());
@@ -210,7 +210,7 @@ public class MDir extends MNode
     **/
     public synchronized MNode set (String index, String value)
     {
-        MDoc result = (MDoc) child (index);
+        MDoc result = (MDoc) getChild (index);
         if (result == null)  // new document
         {
             result = new MDoc (this, index);
@@ -290,12 +290,12 @@ public class MDir extends MNode
         public MNode next ()
         {
             key = iterator.next ();
-            return child (key);
+            return getChild (key);
         }
 
         public void remove ()
         {
-            clear (key);
+            clearChild (key);
             iterator.remove ();
         }
     }

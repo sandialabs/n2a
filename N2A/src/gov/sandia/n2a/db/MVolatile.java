@@ -1,5 +1,5 @@
 /*
-Copyright 2016 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -38,7 +38,7 @@ public class MVolatile extends MNode
 	    return name;
 	}
 
-	public synchronized MNode child (String index)
+	protected synchronized MNode getChild (String index)
     {
         if (children == null) return null;
         return children.get (index);
@@ -49,7 +49,7 @@ public class MVolatile extends MNode
 	    if (children != null) children.clear ();
 	}
 
-    public synchronized void clear (String index)
+    protected synchronized void clearChild (String index)
     {
         if (children == null) return;
         children.remove (index);

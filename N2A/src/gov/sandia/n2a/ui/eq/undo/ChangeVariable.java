@@ -60,17 +60,17 @@ public class ChangeVariable extends Undoable
     {
         super.undo ();
         savedTree.set (valueBefore);
-        apply (path, nameAfter, nameBefore, savedTree);
+        apply (nameAfter, nameBefore);
     }
 
     public void redo ()
     {
         super.redo ();
         savedTree.set (valueAfter);
-        apply (path, nameBefore, nameAfter, savedTree);
+        apply (nameBefore, nameAfter);
     }
 
-    public static void apply (List<String> path, String nameBefore, String nameAfter, MNode savedTree)
+    public void apply (String nameBefore, String nameAfter)
     {
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();

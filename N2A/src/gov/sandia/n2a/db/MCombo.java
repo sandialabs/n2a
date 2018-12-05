@@ -71,7 +71,7 @@ public class MCombo extends MNode
         return false;
     }
 
-    public synchronized MNode child (String index)
+    protected synchronized MNode getChild (String index)
     {
         load ();
         MNode container = children.get (index);
@@ -86,9 +86,9 @@ public class MCombo extends MNode
         children  .clear ();
     }
 
-    public synchronized void clear (String index)
+    protected synchronized void clearChild (String index)
     {
-        // This actually does remove the original object.
+        // This actually removes the original object.
         load ();
         MNode container = children.get (index);
         if (container == primary)
@@ -163,12 +163,12 @@ public class MCombo extends MNode
         public MNode next ()
         {
             key = iterator.next ();
-            return child (key);
+            return getChild (key);
         }
 
         public void remove ()
         {
-            clear (key);
+            clearChild (key);
             iterator.remove ();
         }
     }

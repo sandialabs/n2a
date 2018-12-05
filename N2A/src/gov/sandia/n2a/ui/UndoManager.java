@@ -8,6 +8,7 @@ package gov.sandia.n2a.ui;
 
 import javax.swing.undo.UndoableEdit;
 
+@SuppressWarnings("serial")
 public class UndoManager extends javax.swing.undo.UndoManager
 {
     public synchronized boolean add (Undoable edit)

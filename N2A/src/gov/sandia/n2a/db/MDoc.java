@@ -104,16 +104,16 @@ public class MDoc extends MPersistent
         else parent.clear (name);
     }
 
-    public synchronized MNode child (String index)
+    protected synchronized MNode getChild (String index)
     {
         if (children == null) load ();  // redundant with the guard in load(), but should save time in the common case that file is already loaded
         return children.get (index);
     }
 
-    public synchronized void clear (String index)
+    protected synchronized void clearChild (String index)
     {
         if (children == null) load ();
-        super.clear (index);
+        super.clearChild (index);
     }
 
     public synchronized int size ()

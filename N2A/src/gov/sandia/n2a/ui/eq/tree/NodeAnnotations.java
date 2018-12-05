@@ -14,18 +14,13 @@ import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.DeleteAnnotations;
-import gov.sandia.n2a.ui.images.ImageUtil;
-
 import javax.swing.Icon;
-import javax.swing.ImageIcon;
 import javax.swing.JTree;
 import javax.swing.tree.TreePath;
 
 @SuppressWarnings("serial")
-public class NodeAnnotations extends NodeFilter
+public class NodeAnnotations extends NodeContainer
 {
-    protected static ImageIcon icon = ImageUtil.getImage ("properties.gif");
-
     public NodeAnnotations (MPart source)
     {
         this.source = source;
@@ -36,7 +31,12 @@ public class NodeAnnotations extends NodeFilter
     public void build ()
     {
         removeAllChildren ();
-        for (MNode c : source) add (new NodeAnnotation ((MPart) c));
+        for (MNode c : source)
+        {
+            NodeAnnotation a = new NodeAnnotation ((MPart) c);
+            add (a);
+            a.build ();
+        }
     }
 
     @Override
@@ -51,7 +51,6 @@ public class NodeAnnotations extends NodeFilter
     @Override
     public Icon getIcon (boolean expanded)
     {
-        if (expanded) return icon;
         return NodeAnnotation.icon;
     }
 
@@ -64,7 +63,14 @@ public class NodeAnnotations extends NodeFilter
     @Override
     public NodeBase add (String type, JTree tree, MNode data)
     {
-        if (type.isEmpty ()  ||  type.equals ("Annotation"))
+        if (type.isEmpty ())
+        {
+            FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+            if (model.getChildCount (this) == 0  ||  tree.isCollapsed (new TreePath (getPath ()))) type = "Variable";
+            else                                                                                   type = "Annotation";
+        }
+
+        if (type.equals ("Annotation"))
         {
             // Add a new annotation to our children
             int index = getChildCount () - 1;
@@ -75,10 +81,11 @@ public class NodeAnnotations extends NodeFilter
                 if (isNodeChild (selected)) index = getIndex (selected);  // unfiltered index
             }
             index++;
-            AddAnnotation aa = new AddAnnotation ((NodeBase) getParent (), index, data);
+            AddAnnotation aa = new AddAnnotation (this, index, data);
             PanelModel.instance.undoManager.add (aa);
             return aa.createdNode;
         }
+
         return ((NodeBase) getParent ()).add (type, tree, data);
     }
 
