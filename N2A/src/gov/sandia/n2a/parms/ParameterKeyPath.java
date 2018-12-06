@@ -9,6 +9,7 @@ package gov.sandia.n2a.parms;
 import java.util.ArrayList;
 import java.util.Collection;
 
+@SuppressWarnings("serial")
 public class ParameterKeyPath extends ArrayList<Object> {
 
     public boolean useColon;

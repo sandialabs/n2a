@@ -1052,48 +1052,55 @@ public class Lay {
     // COMBO BOX //
     ///////////////
 
-    public static JComboBox<?> cb() {
-        return new JComboBox ();
+    public static JComboBox<Object> cb ()
+    {
+        return new JComboBox<Object> ();
     }
-    public static JComboBox cb(Object... args) {
+
+    @SuppressWarnings("unchecked")
+    public static JComboBox<Object> cb (Object... args)
+    {
         // TODO: Can add special hint for this method so
         // that subsequent strings can be interpreted as
         // elements for the combo box array model.
-        HintList hints = new HintList();
-        List aModel = new ArrayList();
-        ComboBoxModel cModel = null;
+        HintList hints = new HintList ();
+        List<Object> aModel = new ArrayList<Object> ();
+        ComboBoxModel<Object> cModel = null;
         boolean strElems = false;
-        for(Object arg : args) {
-            if(arg instanceof String) {
-                if(((String)arg).equalsIgnoreCase("!strelems")) {
-                    strElems = true;
-                }
-                if(strElems) {
-                    aModel.add(arg);
-                } else {
-                    hints.addHints(parseHints((String) arg));
-                }
-            } else if(arg != null) {
-                if(arg.getClass().isArray()) {
-                    for(int a = 0; a < Array.getLength(arg); a++) {
-                        aModel.add(Array.get(arg, a));
+        for (Object arg : args)
+        {
+            if (arg instanceof String)
+            {
+                if (((String) arg).equalsIgnoreCase ("!strelems")) strElems = true;
+                if (strElems) aModel.add (arg);
+                else          hints.addHints (parseHints ((String) arg));
+            }
+            else if (arg != null)
+            {
+                if (arg.getClass ().isArray ())
+                {
+                    for (int a = 0; a < Array.getLength (arg); a++)
+                    {
+                        aModel.add (Array.get (arg, a));
                     }
-                } else {
-                    aModel.add(arg);
+                }
+                else
+                {
+                    aModel.add (arg);
                 }
             }
-            if(arg instanceof ComboBoxModel) {
-                cModel = (ComboBoxModel) arg;
+            if (arg instanceof ComboBoxModel)
+            {
+                cModel = (ComboBoxModel<Object>) arg;
             }
         }
-        JComboBox cbo;
-        if (cModel != null) cbo = new JComboBox(cModel);
-        else                cbo = new JComboBox(aModel.toArray());
+        JComboBox<Object> cbo;
+        if (cModel != null) cbo = new JComboBox<Object> (cModel);
+        else                cbo = new JComboBox<Object> (aModel.toArray ());
         if (hints.contains ("white")) cbo.setBackground (Color.white);
-        setHints(cbo, hints);
+        setHints (cbo, hints);
         return cbo;
     }
-
 
     // --------------------------------------------//
     // ------------ SUPPORTING METHODS ------------//
@@ -1555,10 +1562,10 @@ public class Lay {
         hintProcessors.put("underline", new HintProcessor() {
             @Override
             void process(String value, Component cmp, HintList allHints) throws Exception {
-                Font original = cmp.getFont();
-                Map attributes = original.getAttributes();
-                attributes.put(TextAttribute.UNDERLINE, TextAttribute.UNDERLINE_ON);
-                cmp.setFont(original.deriveFont(attributes));
+                Font original = cmp.getFont ();
+                Map<TextAttribute,Object> attributes = new HashMap<TextAttribute,Object> ();
+                attributes.put (TextAttribute.UNDERLINE, TextAttribute.UNDERLINE_ON);
+                cmp.setFont (original.deriveFont (attributes));
             }
         });
         hintProcessors.put("hsb", new HintProcessor() {
@@ -1697,6 +1704,7 @@ public class Lay {
         }
     }
 
+    @SuppressWarnings("serial")
     public static class HintList extends ArrayList<HintPair> {
         private Map<String, String> map = new HashMap<String, String>();
         public void add(String key, String value) {

@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -19,7 +19,6 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -438,7 +437,7 @@ public class PluginManager {
     private static void addURL(URL u) throws IOException
     {
         URLClassLoader sysloader = (URLClassLoader) ClassLoader.getSystemClassLoader();
-        Class sysclass = URLClassLoader.class;
+        Class<?> sysclass = URLClassLoader.class;
         try {
             Method method = sysclass.getDeclaredMethod("addURL", new Class[] {URL.class});
             method.setAccessible(true);
@@ -449,32 +448,27 @@ public class PluginManager {
         }
     }
 
-    public static String[] listJarClasses(File jarFile) throws IOException {
-        JarFile jar = new JarFile(jarFile);
-        Enumeration<JarEntry> entries = jar.entries();
-        Set<String> extractedClasses = new HashSet<String>();
-        String filter = ".*\\.class";
-        while(entries.hasMoreElements()) {
-            JarEntry entry = entries.nextElement();
-
-            if(filter != null) {
-                boolean passesFilter = entry.toString().equals(filter) ||
-                    entry.toString().matches(filter);
-
-                if(!passesFilter) {
-                    continue;
+    public static String[] listJarClasses (File path) throws IOException
+    {
+        try (JarFile jar = new JarFile (path))
+        {
+            Set<String> extractedClasses = new HashSet<String> ();
+            Enumeration<JarEntry> entries = jar.entries ();
+            while (entries.hasMoreElements ())
+            {
+                JarEntry entry = entries.nextElement ();
+                String name = entry.toString ();
+                if (! name.endsWith (".class")) continue;
+                if (! name.contains ("$"))
+                {
+                    name = name.replaceAll ("/", ".");
+                    name = name.replaceAll ("\\.class$", "");
+                    extractedClasses.add (name);
                 }
             }
 
-            String str = entry.toString();
-            if(!str.contains("$")) {
-                str = str.replaceAll("/", ".");
-                str = str.replaceAll("\\.class$", "");
-                extractedClasses.add(str);
-            }
+            return extractedClasses.toArray (new String[0]);
         }
-
-        return extractedClasses.toArray(new String[0]);
     }
 
     public static void loadFromJarsInDirectory(File directory) {
@@ -563,22 +557,34 @@ public class PluginManager {
         return extPoints;
     }
 
-    private static void findExtPoints(Class<?> clazz, List<Class<? extends ExtensionPoint>> found) {
-        Class<?> clazzParent = clazz.getSuperclass();
-        Class<?>[] clazzImpl = clazz.getInterfaces();
-        if(clazzParent != null) {
-            if(clazzParent.equals(ExtensionPoint.class)) {
-                found.add((Class<? extends ExtensionPoint>) clazz);
-            } else {
-                findExtPoints(clazzParent, found);
+    @SuppressWarnings("unchecked")
+    private static void findExtPoints (Class<?> clazz, List<Class<? extends ExtensionPoint>> found)
+    {
+        Class<?> clazzParent = clazz.getSuperclass ();
+        if (clazzParent != null)
+        {
+            if (clazzParent.equals (ExtensionPoint.class))
+            {
+                found.add ((Class<? extends ExtensionPoint>) clazz);
+            }
+            else
+            {
+                findExtPoints (clazzParent, found);
             }
         }
-        if(clazzImpl != null) {
-            for(Class<?> impl : clazzImpl) {
-                if(impl.equals(ExtensionPoint.class)) {
-                    found.add((Class<? extends ExtensionPoint>) clazz);
-                } else {
-                    findExtPoints(impl, found);
+
+        Class<?>[] clazzImpl = clazz.getInterfaces ();
+        if (clazzImpl != null)
+        {
+            for (Class<?> impl : clazzImpl)
+            {
+                if (impl.equals (ExtensionPoint.class))
+                {
+                    found.add ((Class<? extends ExtensionPoint>) clazz);
+                }
+                else
+                {
+                    findExtPoints (impl, found);
                 }
             }
         }

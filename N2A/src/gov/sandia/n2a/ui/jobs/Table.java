@@ -76,6 +76,7 @@ public class Table extends OutputParser
         return result;
     }
 
+    @SuppressWarnings("serial")
     public class OutputTableModel extends AbstractTableModel
     {
         public int getRowCount ()

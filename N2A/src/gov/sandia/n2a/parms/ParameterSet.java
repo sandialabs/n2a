@@ -9,6 +9,7 @@ package gov.sandia.n2a.parms;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 
+@SuppressWarnings("serial")
 public class ParameterSet extends LinkedHashMap<Object, Object> {
 
     // Nothing more than a LinkedHashMap at this point.

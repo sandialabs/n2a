@@ -35,6 +35,7 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.MouseInputAdapter;
 
+@SuppressWarnings("serial")
 public class MainTabbedPane extends JTabbedPane
 {
     protected boolean   dragged;  // Becomes true if a mouse dragged event is received.

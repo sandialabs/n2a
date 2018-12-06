@@ -13,6 +13,7 @@ import java.io.StringWriter;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+@SuppressWarnings("serial")
 public class PluginInitializationErrors implements Serializable {
     private Map<String, Exception> memErrors = new LinkedHashMap<String, Exception>();
     private Map<File, Exception> jarErrors = new LinkedHashMap<File, Exception>();

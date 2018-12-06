@@ -14,6 +14,7 @@ import gov.sandia.n2a.ui.images.ImageUtil;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 
+@SuppressWarnings("serial")
 public class NodeFile extends NodeBase
 {
     public enum Type

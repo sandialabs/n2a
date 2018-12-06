@@ -13,6 +13,7 @@ import java.awt.geom.Rectangle2D;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.plot.Pannable;
 
+@SuppressWarnings("serial")
 public class ChartPanelDrag extends org.jfree.chart.ChartPanel
 {
     public ChartPanelDrag (JFreeChart chart)

@@ -8,6 +8,7 @@ package gov.sandia.n2a.ui;
 
 import javax.swing.undo.UndoableEdit;
 
+@SuppressWarnings("serial")
 public class CompoundEdit extends javax.swing.undo.CompoundEdit
 {
     /**

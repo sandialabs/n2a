@@ -15,7 +15,6 @@ import java.awt.im.InputContext;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import javax.swing.JComponent;
@@ -31,6 +30,7 @@ import gov.sandia.n2a.db.Schema;
 /**
     Supports basic CCP and DnD for JTextComponents while rejecting any drop/paste which contains N2A data.
 **/
+@SuppressWarnings("serial")
 public class SafeTextTransferHandler extends TransferHandler
 {
     public List<String> safeTypes;

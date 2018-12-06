@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.plugins;
 
+@SuppressWarnings("serial")
 public class LoadPluginException extends Exception {
     public LoadPluginException() {
         super();

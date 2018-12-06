@@ -8,6 +8,7 @@ package gov.sandia.n2a.language;
 
 import java.io.PrintStream;
 
+@SuppressWarnings("serial")
 public class ParseException extends Exception
 {
     public String line = "";

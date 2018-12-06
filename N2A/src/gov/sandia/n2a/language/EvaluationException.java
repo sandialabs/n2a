@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language;
 
+@SuppressWarnings("serial")
 public class EvaluationException extends RuntimeException
 {
     public EvaluationException (String message)

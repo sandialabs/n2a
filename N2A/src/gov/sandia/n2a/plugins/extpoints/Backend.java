@@ -38,6 +38,7 @@ public abstract class Backend implements ExtensionPoint
         text to the err PrintStream. Implicitly, the thrower has already printed
         out a sufficient message, and a java stack trace would simply add clutter.
     **/
+    @SuppressWarnings("serial")
     public static class AbortRun extends RuntimeException
     {
     }

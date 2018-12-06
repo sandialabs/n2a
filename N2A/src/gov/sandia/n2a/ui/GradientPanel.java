@@ -76,6 +76,7 @@ import javax.swing.JPanel;
  * @author Derek Trumbo
  */
 
+@SuppressWarnings("serial")
 public class GradientPanel extends JPanel {
 
     ////////////

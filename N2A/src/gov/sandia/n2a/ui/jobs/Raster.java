@@ -136,6 +136,7 @@ public class Raster
         }
     }
 
+    @SuppressWarnings("serial")
     public JFreeChart createChart (final XYDataset dataset)
     {
         final JFreeChart chart = ChartFactory.createScatterPlot
