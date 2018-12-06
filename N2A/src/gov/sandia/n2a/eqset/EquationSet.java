@@ -8,6 +8,7 @@ package gov.sandia.n2a.eqset;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
@@ -47,12 +48,9 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
 import java.util.NavigableSet;
 import java.util.PriorityQueue;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.TreeSet;
 
 import javax.swing.ImageIcon;
@@ -69,7 +67,7 @@ public class EquationSet implements Comparable<EquationSet>
     public NavigableSet<AccountableConnection> accountableConnections; // Connections which declare a $min or $max w.r.t. this part. Note: connected can be true even if accountableConnections is null.
     public List<ConnectionBinding>             dependentConnections;   // Connection bindings which include this equation set along their path. Used to update the paths during flattening.
     public boolean                             needInstanceTracking;   // Instance tracking is necessary due to a connection path that runs through this part.
-    public Map<String, String>                 metadata;
+    public MNode                               metadata;
     public List<Variable>                      ordered;
     public List<ArrayList<EquationSet>>        splits;                 // Enumeration of the $type splits this part can go through
     public boolean                             lethalN;                // our population could shrink
@@ -230,7 +228,7 @@ public class EquationSet implements Comparable<EquationSet>
         this.container = container;
         variables      = new TreeSet<Variable> ();
         parts          = new TreeSet<EquationSet> ();
-        metadata       = new TreeMap<String, String> ();
+        metadata       = new MVolatile ();
 
         // Sort equations by object-oriented operation
         boolean exception = false;
@@ -241,7 +239,7 @@ public class EquationSet implements Comparable<EquationSet>
             if (index.equals ("$reference")) continue;
             if (index.equals ("$metadata"))
             {
-                for (MNode m : e) metadata.put (m.key (), m.get ());
+                metadata.merge (e);
                 continue;
             }
 
@@ -1002,16 +1000,7 @@ public class EquationSet implements Comparable<EquationSet>
             if (s.connected) continue;
 
             // For similar reasons, if the part contains backend-related metadata, it should remain separate.
-            boolean hasBackendMetadata = false;
-            for (Entry<String,String> m : s.metadata.entrySet ())
-            {
-                if (m.getKey ().startsWith (backend))
-                {
-                    hasBackendMetadata = true;
-                    break;
-                }
-            }
-            if (hasBackendMetadata) continue;
+            if (s.metadata.child ("backend", backend) != null) continue;
 
             // Check if $n==1
             if (! s.isSingleton (true)) continue;
@@ -1098,10 +1087,7 @@ public class EquationSet implements Comparable<EquationSet>
             }
 
             //   Metadata
-            for (Entry<String, String> e : s.metadata.entrySet ())
-            {
-                metadata.put (prefix + "." + e.getKey (), e.getValue ());
-            }
+            if (s.metadata.size () > 0) metadata.set (prefix, s.metadata);
 
             //   Dependent connections (paths that pass through s)
             if (s.dependentConnections != null)
@@ -1208,7 +1194,7 @@ public class EquationSet implements Comparable<EquationSet>
                 v.unit = AbstractUnit.ONE;
                 try
                 {
-                    String duration = getNamedValue ("duration", "1");  // limit sim time to 1 second, if not otherwise specified
+                    String duration = metadata.getOrDefault ("duration", "1");  // limit sim time to 1 second, if not otherwise specified
                     v.add (new EquationEntry ("$t<" + duration));
                 }
                 catch (Exception parseError)
@@ -2152,7 +2138,7 @@ public class EquationSet implements Comparable<EquationSet>
                     }
                 };
                 Type result = value.eval (instance);
-                if (result instanceof Scalar) setNamedValue ("duration", new Double (((Scalar) result).value).toString ());
+                if (result instanceof Scalar) metadata.set ("duration", ((Scalar) result).value);
             }
         }
     }
@@ -2906,28 +2892,6 @@ public class EquationSet implements Comparable<EquationSet>
         // Construct
         ConnectionMatrix cm = new ConnectionMatrix (ct.found);
         if (cm.rowMapping != null  &&  cm.colMapping != null) connectionMatrix = cm;
-    }
-
-    public String getNamedValue (String name)
-    {
-        return getNamedValue (name, "");
-    }
-
-    public String getNamedValue (String name, String defaultValue)
-    {
-        if (metadata.containsKey (name)) return metadata.get (name);
-        return defaultValue;
-    }
-
-    public void setNamedValue (String name, String value)
-    {
-        metadata.put (name, value);
-    }
-
-    public Set<Entry<String,String>> getMetadata ()
-    {
-        if (metadata == null) metadata = new TreeMap<String, String> ();
-        return metadata.entrySet ();
     }
 
     public int compareTo (EquationSet that)

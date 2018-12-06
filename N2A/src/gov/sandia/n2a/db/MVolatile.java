@@ -13,8 +13,9 @@ import java.util.TreeMap;
 
 public class MVolatile extends MNode
 {
-    protected String name;
-	protected String value;
+    protected String                     name;
+	protected String                     value;
+    protected MNode                      parent;
 	protected NavigableMap<String,MNode> children;
 
 	public MVolatile ()
@@ -32,11 +33,30 @@ public class MVolatile extends MNode
         if (value != null  &&  ! value.isEmpty ()) this.value = value;
     }
 
-	public String key ()
-	{
-	    if (name == null) return "";
-	    return name;
-	}
+    public MVolatile (String name, String value, MNode parent)
+    {
+        if (name  != null  &&  ! name .isEmpty ()) this.name  = name;
+        if (value != null  &&  ! value.isEmpty ()) this.value = value;
+        this.parent = parent;
+    }
+
+    public String key ()
+    {
+        if (name == null) return "";
+        return name;
+    }
+
+    public MNode parent ()
+    {
+        return parent;
+    }
+
+    public MNode getRoot ()
+    {
+        MVolatile result = this;
+        while (result.parent instanceof MVolatile) result = (MVolatile) result.parent;
+        return result;
+    }
 
 	protected synchronized MNode getChild (String index)
     {
@@ -75,17 +95,11 @@ public class MVolatile extends MNode
 
     public synchronized MNode set (String index, String value)
     {
-        if (children == null)
-        {
-            children = new TreeMap<String,MNode> (comparator);
-            MNode result = new MVolatile (index, value);
-            children.put (index, result);
-            return result;
-        }
+        if (children == null) children = new TreeMap<String,MNode> (comparator);
         MNode result = children.get (index);
         if (result == null)
         {
-            result = new MVolatile (index, value);
+            result = new MVolatile (index, value, this);
             children.put (index, result);
             return result;
         }

@@ -622,8 +622,11 @@ public class PanelRun extends JPanel
         contents.append ("\n");
         if (job.dateStarted  != null) contents.append ("  started:  " + job.dateStarted  + "\n");
         if (job.dateFinished != null) contents.append ("  finished: " + job.dateFinished + "\n");
-        MNode metadata = doc.child ("$metadata");
-        if (metadata != null) contents.append ("\n" + metadata);  // TODO: filter out irrelevant items, like "gui.order"
+        contents.append ("\n");
+        appendMetadata (doc, contents, "backend");
+        appendMetadata (doc, contents, "duration");
+        appendMetadata (doc, contents, "host");
+        appendMetadata (doc, contents, "pid");
 
         synchronized (displayText)
         {
@@ -632,6 +635,18 @@ public class PanelRun extends JPanel
         }
         if (displayPane.getViewport ().getView () != displayText) displayPane.setViewportView (displayText);
         displayPane.paintImmediately (displayPane.getBounds ());
+    }
+
+    public void appendMetadata (MNode doc, StringBuilder result, String... indices)
+    {
+        MNode child = doc.child ("$metadata");
+        if (child == null) return;
+        child = child.child (indices);
+        if (child == null) return;
+        String name = "";
+        for (String i : indices) name += "." + i;
+        name = name.substring (1);
+        result.append (name + "=" + child.get () + "\n");
     }
 
     public void delete ()

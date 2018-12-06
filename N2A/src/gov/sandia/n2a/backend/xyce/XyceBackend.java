@@ -157,9 +157,9 @@ class XyceBackend extends Backend
                     Files.createFile (jobDir.resolve ("started"));
 
                     // Ensure essential metadata is set
-                    if (job.child ("$metadata", "duration"               ) == null) job.set ("$metadata", "duration",                "1.0");
-                    if (job.child ("$metadata", "seed"                   ) == null) job.set ("$metadata", "seed",                    System.currentTimeMillis ());
-                    if (job.child ("$metadata", "backend.xyce.integrator") == null) job.set ("$metadata", "backend.xyce.integrator", "trapezoid");
+                    if (job.child ("$metadata", "duration"                     ) == null) job.set ("$metadata", "duration",                      "1.0");
+                    if (job.child ("$metadata", "seed"                         ) == null) job.set ("$metadata", "seed",                          System.currentTimeMillis ());
+                    if (job.child ("$metadata", "backend", "xyce", "integrator") == null) job.set ("$metadata", "backend", "xyce", "integrator", "trapezoid");
 
                     // set up job info
                     HostSystem env = HostSystem.get (job.getOrDefault ("$metadata", "host", "localhost"));
@@ -172,7 +172,7 @@ class XyceBackend extends Backend
                     analyze (e);
 
                     // Just in case a $p expression says something different than $metadata.duration
-                    String duration = e.getNamedValue ("duration");
+                    String duration = e.metadata.get ("duration");
                     if (! duration.isEmpty ()) job.set (duration, "$metadata", "duration");
 
                     FileWriter writer = new FileWriter (cirFile.toFile ());
@@ -247,7 +247,7 @@ class XyceBackend extends Backend
         writer.append ("\n");
         writer.append ("* seed: " + job.get ("$metadata", "seed") + "\n");
         writer.append (".tran 0 " + job.get ("$metadata", "duration") + "\n");
-        //job.get ("$metadata", "xyce.integrator")  // TODO: add this to netlist
+        //job.get ("$metadata", "xyce", "integrator")  // TODO: add this to netlist
 
         // Equations
         for (Instance i : simulator)

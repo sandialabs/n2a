@@ -45,7 +45,7 @@ public class RemoteGateway extends RemoteHost
     @Override
     public void submitJob (MNode job, String command) throws Exception
     {
-        String jobDir = job.get ("$metadata", "remote.dir");  // Of course, this is a dir this class generated for the job.
+        String jobDir = job.get ("$metadata", "remote", "dir");  // Of course, this is a dir this class generated for the job.
         Connection.exec (command + " > '" + jobDir + "/out' 2> '" + jobDir + "/err' &", true);
 
         // Get PID of newly-created job

@@ -39,7 +39,7 @@ public class RemoteParallel extends RemoteHost
     @Override
     public void submitJob (MNode job, String command) throws Exception
     {
-        String jobDir = job.get          ("$metadata", "remote.dir");
+        String jobDir = job.get          ("$metadata", "remote", "dir");
         String cores  = job.getOrDefault ("$metadata", "cores",        "1");
         String nodes  = job.getOrDefault ("$metadata", "remote.nodes", "1");
 

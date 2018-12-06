@@ -267,7 +267,7 @@ public class ExportJob extends XMLutility
 
     public void process (MPart source)
     {
-        if (source.get ("$metadata", "backend.lems.part").isEmpty ())
+        if (source.get ("$metadata", "backend", "lems", "part").isEmpty ())
         {
             for (EquationSet p : equations.parts) topLevelPart ((MPart) p.source);
         }
@@ -341,7 +341,7 @@ public class ExportJob extends XMLutility
 
     public void topLevelPart (MPart source)
     {
-        String           type    = source.get ("$metadata", "backend.lems.part");
+        String           type    = source.get ("$metadata", "backend", "lems", "part");
         String           inherit = source.get ("$inherit");
         SimulationTarget target  = null;
 
@@ -400,8 +400,8 @@ public class ExportJob extends XMLutility
                 // Indicate that this eqset is the sim target, so don't build XPath names above it.
                 // It does no harm for multiple objects get this tag, since XPaths on multiple sim
                 // targets will fail for other reasons.
-                e.setNamedValue ("backend.lems.target", "1");
-                duration = e.getNamedValue ("duration");
+                e.metadata.set ("backend", "lems", "target", "1");
+                duration = e.metadata.get ("duration");
             }
         }
     }
@@ -429,7 +429,7 @@ public class ExportJob extends XMLutility
         public Network (MPart source)
         {
             id = source.key ();
-            String lemsID = source.get ("$metadata", "backend.lems.id");
+            String lemsID = source.get ("$metadata", "backend", "lems", "id");
             if (! lemsID.isEmpty ()) id = lemsID;
 
             // Collect populations first, because they contain info needed by projections and inputs.
@@ -437,7 +437,7 @@ public class ExportJob extends XMLutility
             {
                 MPart p = (MPart) c;
                 if (! p.isPart ()) continue;
-                String type = p.get ("$metadata", "backend.lems.part");
+                String type = p.get ("$metadata", "backend", "lems", "part");
                 if (type.equals ("cell")  ||  type.equals ("segment")  ||  type.endsWith ("Cell")  ||  type.contains ("baseCell"))
                 {
                     Population pop = new Population (p);
@@ -455,7 +455,7 @@ public class ExportJob extends XMLutility
                 Population population = populations.get (c.get ("B"));
                 if (population != null) DL = population.cell.DL;
 
-                String type = p.get ("$metadata", "backend.lems.part");
+                String type = p.get ("$metadata", "backend", "lems", "part");
                 String inherit = p.get ("$inherit").replace ("\"", "");
                 if (type.contains ("Synapse"))
                 {
@@ -520,7 +520,7 @@ public class ExportJob extends XMLutility
                 cell = addCell (source, false);
 
                 EquationSet part = getEquations (source);
-                part.setNamedValue ("backend.lems.enumerate", "1");  // This part requires XPath subscript.
+                part.metadata.set ("backend", "lems", "enumerate", "1");  // This part requires XPath subscript.
                 Variable n = part.find (new Variable ("$n", 0));
                 int size = 1;
                 if (n != null) size = (int) Math.floor (((Scalar) n.eval (context)).value);
@@ -726,7 +726,7 @@ public class ExportJob extends XMLutility
             for (MNode c : source)
             {
                 MPart p = (MPart) c;
-                String type = c.get ("$metadata", "backend.lems.part");
+                String type = c.get ("$metadata", "backend", "lems", "part");
                 if (! type.contains ("Synapse")) continue;
                 if (c.get ("V").contains ("A"))
                 {
@@ -1011,7 +1011,7 @@ public class ExportJob extends XMLutility
             // Assemble a part that best recreates the underlying synapse before it got incorporated into a projection
             base.merge (source);
             for (String key : new String[] {"A", "B", "$p", "weight", "delay", "preFraction", "postFraction"}) base.clear (key);
-            String type = source.get ("$metadata", "backend.lems.part");
+            String type = source.get ("$metadata", "backend", "lems", "part");
             if (type.contains ("gapJunction")  ||  type.contains ("silentSynapse")  ||  type.contains ("gradedSynapse"))
             {
                 for (String key : new String[] {"A.I", "B.I", "V", "Vpeer"}) base.clear (key);
@@ -1024,7 +1024,7 @@ public class ExportJob extends XMLutility
             }
             else
             {
-                id = source.get ("$metadata", "backend.lems.id");
+                id = source.get ("$metadata", "backend", "lems", "id");
                 if (id.isEmpty ()) id = "N2A_Synapse" + synapses.size ();
             }
         }
@@ -1035,7 +1035,7 @@ public class ExportJob extends XMLutility
             this.source  = source;
             this.DL      = DL;
 
-            String lemsID = source.get ("$metadata", "backend.lems.id");
+            String lemsID = source.get ("$metadata", "backend", "lems", "id");
             if (! lemsID.isEmpty ()) id = lemsID;
         }
 
@@ -1061,7 +1061,7 @@ public class ExportJob extends XMLutility
                 return;
             }
 
-            String type = source.get ("$metadata", "backend.lems.part").split (",")[0];
+            String type = source.get ("$metadata", "backend", "lems", "part").split (",")[0];
             if (type.startsWith ("gap")  &&  ! electrical) type = "linearGradedSynapse";
 
             List<Element> synapseElements = new ArrayList<Element> ();
@@ -1070,7 +1070,7 @@ public class ExportJob extends XMLutility
             {
                 MPart p = (MPart) c;
                 String key = p.key ();
-                String partType = p.get ("$metadata", "backend.lems.part").split (",")[0];
+                String partType = p.get ("$metadata", "backend", "lems", "part").split (",")[0];
                 if (partType.startsWith ("tsodyksMarkramDep"))
                 {
                     skip.add (key);
@@ -1114,7 +1114,7 @@ public class ExportJob extends XMLutility
 
     public String input (MPart source, List<Element> parentElements, Synapse synapse, boolean DL)
     {
-        String type = source.get ("$metadata", "backend.lems.part");
+        String type = source.get ("$metadata", "backend", "lems", "part");
 
         List<Element> inputElements = new ArrayList<Element> ();
         List<String> skip = new ArrayList<String> ();
@@ -1185,14 +1185,14 @@ public class ExportJob extends XMLutility
         {
             // Stash chosen LEMS part, so we can map output variables (if any) correctly.
             EquationSet e = getEquations (source);
-            e.setNamedValue ("backend.lems.extends", type);
+            e.metadata.set ("backend", "lems", "extends", type);
         }
 
         Element input = addElement (type, parentElements);
         String id;
         if (synapse == null)
         {
-            id = source.get ("$metadata", "backend.lems.id");
+            id = source.get ("$metadata", "backend", "lems", "id");
             if (id.isEmpty ()) id = source.key ();
         }
         else
@@ -1211,7 +1211,7 @@ public class ExportJob extends XMLutility
     public AbstractCell addCell (MPart source, boolean topLevel)
     {
         AbstractCell cell = null;
-        String type = source.get ("$metadata", "backend.lems.part");
+        String type = source.get ("$metadata", "backend", "lems", "part");
         if (type.equals ("cell")  ||  type.equals ("segment"))  // multi-compartment cell, or HH segment pretending to be a point cell
         {
             cell = new Cell (source);
@@ -1244,7 +1244,7 @@ public class ExportJob extends XMLutility
         {
             this.source = source;
 
-            id = source.get ("$metadata", "backend.lems.id");
+            id = source.get ("$metadata", "backend", "lems", "id");
             if (id.isEmpty ())
             {
                 String inherit = source.get ("$inherit").replace ("\"", "");
@@ -1266,8 +1266,8 @@ public class ExportJob extends XMLutility
 
         public void append ()
         {
-            String               type = source.get ("$metadata", "backend.lems.name");
-            if (type.isEmpty ()) type = source.get ("$metadata", "backend.lems.part").split (",")[0];
+            String               type = source.get ("$metadata", "backend", "lems", "name");
+            if (type.isEmpty ()) type = source.get ("$metadata", "backend", "lems", "part").split (",")[0];
             List<String> skip = new ArrayList<String> ();
             if (type.equals ("izhikevichCell"))
             {
@@ -1352,7 +1352,7 @@ public class ExportJob extends XMLutility
         {
             super (source);
 
-            if (source.get ("$metadata", "backend.lems.part").equals ("segment"))  // This is a standalone segment, pretending to be a cell.
+            if (source.get ("$metadata", "backend", "lems", "part").equals ("segment"))  // This is a standalone segment, pretending to be a cell.
             {
                 populationSize = 1;  // Since SegmentBlock also interprets $n, and that is the right place to do it in this case.
             }
@@ -1367,7 +1367,7 @@ public class ExportJob extends XMLutility
             // Collect Segments and transform them into distinct property sets.
             // This reverses the import process, which converts property sets into distinct segment populations.
             EquationSet part = getEquations (source);
-            if (source.get ("$metadata", "backend.lems.part").equals ("segment"))  // segment pretending to be a cell (such as HH)
+            if (source.get ("$metadata", "backend", "lems", "part").equals ("segment"))  // segment pretending to be a cell (such as HH)
             {
                 Map<String,SegmentBlock> blockNames = new TreeMap<String,SegmentBlock> ();  // for easy lookup by name
                 SegmentBlock sb = new SegmentBlock (part);
@@ -1393,7 +1393,7 @@ public class ExportJob extends XMLutility
                 Map<String,SegmentBlock> blockNames = new TreeMap<String,SegmentBlock> ();  // for easy lookup by name
                 for (EquationSet s : part.parts)
                 {
-                    if (! s.source.get ("$metadata", "backend.lems.part").equals ("segment")) continue;  // Generally, the only other component will be a "Coupling", which we must ignore.
+                    if (! s.source.get ("$metadata", "backend", "lems", "part").equals ("segment")) continue;  // Generally, the only other component will be a "Coupling", which we must ignore.
                     SegmentBlock sb = new SegmentBlock (s);
                     blocks.add (sb);
                     blockNames.put (s.name, sb);
@@ -1525,8 +1525,8 @@ public class ExportJob extends XMLutility
 
             public Segment (MNode source, int index)
             {
-                name       = source.get ("$metadata", "backend.lems.id" + index);
-                neuroLexID = source.get ("$metadata", "neuroLexID"      + index);
+                name       = source.get ("$metadata", "backend", "lems", "id" + index);
+                neuroLexID = source.get ("$metadata", "neuroLexID"            + index);
             }
 
             public void addChild (Segment child)
@@ -1678,7 +1678,7 @@ public class ExportJob extends XMLutility
                 for (EquationSet p : part.parts)
                 {
                     MPart ps = (MPart) p.source;
-                    String type = ps.get ("$metadata", "backend.lems.part");
+                    String type = ps.get ("$metadata", "backend", "lems", "part");
                     if (type.contains ("ConcentrationModel")) addUnique (new PropertyConcentration (ps));
                     else                                      addUnique (new PropertyChannel (ps));
                 }
@@ -2100,14 +2100,14 @@ public class ExportJob extends XMLutility
             public void append ()
             {
                 String  ion      = source.key ();  // Concentration models are always named after their ion.
-                String  type     = source.get ("$metadata", "backend.lems.part").split (",")[0];
+                String  type     = source.get ("$metadata", "backend", "lems", "part").split (",")[0];
                 String  inherit  = source.get ("$inherit").replace ("\"", "");
                 NameMap nameMap  = partMap.exportMap (inherit);
                 String  inside0  = nameMap.importName ("initialConcentration");
                 String  outside0 = nameMap.importName ("initialExtConcentration");
 
                 Element concentration = addElement (type, elements);
-                String concentrationID = source.get ("$metadata", "backend.lems.id");
+                String concentrationID = source.get ("$metadata", "backend", "lems", "id");
                 if (concentrationID.isEmpty ()) concentrationID = "N2A_Concentration" + countConcentration++;
                 concentration.setAttribute ("id",  concentrationID);
                 concentration.setAttribute ("ion", ion);
@@ -2191,7 +2191,7 @@ public class ExportJob extends XMLutility
             }
             else
             {
-                id = source.get ("$metadata", "backend.lems.id");
+                id = source.get ("$metadata", "backend", "lems", "id");
                 if (id.isEmpty ()) id = "N2A_Channel" + channels.size ();
             }
         }
@@ -2294,7 +2294,7 @@ public class ExportJob extends XMLutility
             {
                 MPart p = (MPart) c;
                 if (! p.isPart ()) continue;
-                type = p.get ("$metadata", "backend.lems.part");
+                type = p.get ("$metadata", "backend", "lems", "part");
                 if      (type.contains ("Q10"))  q10 (p, "q10ConductanceScaling", channelElements);
                 else if (type.contains ("gate")) gate (p, channelElements);
                 else                             genericPart (p, channelElements);
@@ -2342,7 +2342,7 @@ public class ExportJob extends XMLutility
                 MPart p = (MPart) c;
                 if (! p.isPart ()) continue;
 
-                String type = p.get ("$metadata", "backend.lems.part");
+                String type = p.get ("$metadata", "backend", "lems", "part");
                 if (type.contains ("Q10"))
                 {
                     q10 (p, "q10Settings", gateElements);
@@ -2455,11 +2455,11 @@ public class ExportJob extends XMLutility
                 case inf  : name = "steadyState"; break;
             }
 
-            String type = part.get ("$metadata", "backend.lems.name");
+            String type = part.get ("$metadata", "backend", "lems", "name");
             if (type.isEmpty ())
             {
                 type = "unknown";
-                String[] types = part.get ("$metadata", "backend.lems.part").split (",");
+                String[] types = part.get ("$metadata", "backend", "lems", "part").split (",");
                 String search = "Variable";
                 if (name.contains ("Rate")) search = "Rate";
                 for (String t : types)
@@ -2502,7 +2502,7 @@ public class ExportJob extends XMLutility
                 if (p.isPart ()) rate (p, typeMap, transitionElements);
             }
 
-            String type = part.get ("$metadata", "backend.lems.part");  // allows for vHalfTransition
+            String type = part.get ("$metadata", "backend", "lems", "part");  // allows for vHalfTransition
             switch (flags)
             {
                 case alpha     : type = "forwardTransition"; break;
@@ -2609,7 +2609,7 @@ public class ExportJob extends XMLutility
                 step = new UnitParser (value.unit, value.getDouble ());
             }
             equations.determineDuration ();  // Result is stored in metadata, always in seconds.
-            String durationString = equations.getNamedValue ("duration");
+            String durationString = equations.metadata.get ("duration");
             if (! durationString.isEmpty ())
             {
                 double value = Double.valueOf (durationString);
@@ -2711,8 +2711,8 @@ public class ExportJob extends XMLutility
             AccessVariable av = (AccessVariable) output.operands[1];
             EquationSet container = av.reference.variable.container;
 
-            String                     targetType = container.getNamedValue ("backend.lems.extends");
-            if (targetType.isEmpty ()) targetType = container.getNamedValue ("backend.lems.part").split (",")[0];
+            String                     targetType = container.metadata.get ("backend", "lems", "extends");
+            if (targetType.isEmpty ()) targetType = container.metadata.get ("backend", "lems", "part").split (",")[0];
             NameMap nameMap = partMap.exportMap (container.source);
             String name = nameMap.exportName (av.name, targetType);
 
@@ -2720,17 +2720,17 @@ public class ExportJob extends XMLutility
             if (container.connectionBindings != null)
             {
                 // For some reason, LEMS acts as if an input is embedded in the destination part.
-                String id = p.getNamedValue ("backend.lems.id");
+                String id = p.metadata.get ("backend", "lems", "id");
                 if (id.isEmpty ()) id = p.name;
                 name = id + "/" + name;
                 p = p.findConnection ("B").endpoint;
             }
             while (p != null)
             {
-                if (! p.getNamedValue ("backend.lems.target").isEmpty ()) break;
+                if (! p.metadata.get ("backend", "lems", "target").isEmpty ()) break;
                 String prefix = p.name;
-                if (! p.getNamedValue ("backend.lems.enumerate").isEmpty ()) prefix += "[0]";
-                if (p.getNamedValue ("backend.lems.part").contains ("ionChannel"))  // an ionChannel folded into a channelPopulation
+                if (! p.metadata.get ("backend", "lems", "enumerate").isEmpty ()) prefix += "[0]";
+                if (p.metadata.get ("backend", "lems", "part").contains ("ionChannel"))  // an ionChannel folded into a channelPopulation
                 {
                     // Determine if the path name below this one (processed in previous loop) is
                     // specifically a member of the ionChannel rather than the channelPopulation.
@@ -2917,7 +2917,7 @@ public class ExportJob extends XMLutility
             inherit = inherit.replace ("\"", "");
             MNode part = AppData.models.child (inherit);
             if (part == null) continue;
-            if (! part.get ("$metadata", "backend.lems.part").isEmpty ()) continue;  // Don't add base parts.
+            if (! part.get ("$metadata", "backend", "lems", "part").isEmpty ()) continue;  // Don't add base parts.
             addComponentType (part, part);
         }
         // TODO: add children and other dependencies
@@ -2936,7 +2936,7 @@ public class ExportJob extends XMLutility
 
         public ComponentType (MNode source, MNode base)
         {
-            name = source.get ("$metadata", "backend.lems.name");
+            name = source.get ("$metadata", "backend", "lems", "name");
             if (name.isEmpty ())
             {
                 name = source.key ();
@@ -2984,92 +2984,101 @@ public class ExportJob extends XMLutility
             }
 
             // Declarations from $metadata
-            String extension = base.get ("$metadata", "backend.lems.extends");
-            if (extension.isEmpty ()) extension = base.get ("$metadata", "backend.lems.part").split (",")[0];
+
+            String extension = base.get ("$metadata", "backend", "lems", "extends");
+            if (extension.isEmpty ()) extension = base.get ("$metadata", "backend", "lems", "part").split (",")[0];
 
             String description = base.get ("$metadata", "description");
             if (description.isEmpty ()) description = base.get ("$metadata", "notes");
 
-            MNode metadata = source.child ("$metadata");
+            MNode metadata = source.child ("$metadata", "backend", "lems", "children");
             if (metadata != null)
             {
                 for (MNode m : metadata)
                 {
-                    String key = m.key ();
-                    if (! key.startsWith ("backend.lems.")) continue;
-                    key = key.substring (13);
-                    String value = m.get ();
-
                     MPart p = (MPart) m;
-                    // The immediate parent of p is $metadata, so we need to check p's grandparent to see if this is an embedded LEMS part.
-                    boolean local = p.isFromTopDocument ()  ||  ! (p.getSource ().parent ().parent () instanceof MDoc);
+                    // Need to check the parent of $metadata (5 levels up from p) to see if this is an embedded LEMS part.
+                    boolean local = p.isFromTopDocument ()  ||  ! (p.getSource ().parent ().parent ().parent ().parent ().parent () instanceof MDoc);
 
-                    if (key.startsWith ("children."))
+                    String key = m.key ();
+                    String[] types = m.get ().split (",");
+
+                    Attachment a = new Attachment ();
+                    a.collectionName = key;
+                    a.partName = types[0];
+                    if (types.length > 1) a.partExtends = types[1];
+
+                    if (local)
                     {
-                        key = key.substring (9);
-                        String[] types = value.split (",");
+                        String type;
+                        if (types.length > 1) type = types[1];
+                        else                  type = partMap.exportName (types[0]);
+                        Element children = addElement ("Children", componentTypeElements);
+                        children.setAttribute ("name", key);
+                        children.setAttribute ("type", type);
 
-                        Attachment a = new Attachment ();
-                        a.collectionName = key;
-                        a.partName = types[0];
-                        if (types.length > 1) a.partExtends = types[1];
-
-                        if (local)
-                        {
-                            String type;
-                            if (types.length > 1) type = types[1];
-                            else                  type = partMap.exportName (types[0]);
-                            Element children = addElement ("Children", componentTypeElements);
-                            children.setAttribute ("name", key);
-                            children.setAttribute ("type", type);
-
-                            attachments.add (0, a);
-                        }
-                        else
-                        {
-                            attachments.add (a);
-                        }
+                        attachments.add (0, a);
                     }
-                    else if (key.startsWith ("attachments."))
+                    else
                     {
-                        key = key.substring (12);
-                        String[] types = value.split (",");
-
-                        Attachment a = new Attachment ();
-                        a.collectionName = key;
-                        a.partName = types[0];
-                        if (types.length > 1) a.partExtends = types[1];
-
-                        if (local)
-                        {
-                            String type;
-                            if (types.length > 1) type = types[1];
-                            else                  type = partMap.exportName (types[0]);
-                            Element attach = addElement ("Attachments", componentTypeElements);
-                            attach.setAttribute ("name", key);
-                            attach.setAttribute ("type", type);
-
-                            attachments.add (0, a);
-                        }
-                        else
-                        {
-                            attachments.add (a);
-                        }
+                        attachments.add (a);
                     }
-                    else if (key.startsWith ("requirement."))
+                }
+            }
+
+            metadata = source.child ("$metadata", "backend", "lems", "attachments");
+            if (metadata != null)
+            {
+                for (MNode m : metadata)
+                {
+                    MPart p = (MPart) m;
+                    boolean local = p.isFromTopDocument ()  ||  ! (p.getSource ().parent ().parent ().parent ().parent ().parent () instanceof MDoc);
+
+                    String key = m.key ();
+                    String[] types = m.get ().split (",");
+
+                    Attachment a = new Attachment ();
+                    a.collectionName = key;
+                    a.partName = types[0];
+                    if (types.length > 1) a.partExtends = types[1];
+
+                    if (local)
                     {
-                        NamedDimensionalType r = new NamedDimensionalType ();
-                        r.internal = key.substring (12);
-                        r.parse (value);
-                        if (local)
-                        {
-                            r.dimension = useDimension (r.dimension);
-                            if (! requirements.contains (r)) requirements.add (r);
-                        }
-                        else
-                        {
-                            if (! requirementsInherited.contains (r)) requirementsInherited.add (r);
-                        }
+                        String type;
+                        if (types.length > 1) type = types[1];
+                        else                  type = partMap.exportName (types[0]);
+                        Element attach = addElement ("Attachments", componentTypeElements);
+                        attach.setAttribute ("name", key);
+                        attach.setAttribute ("type", type);
+
+                        attachments.add (0, a);
+                    }
+                    else
+                    {
+                        attachments.add (a);
+                    }
+                }
+            }
+
+            metadata = source.child ("$metadata", "backend", "lems", "requirement");
+            if (metadata != null)
+            {
+                for (MNode m : metadata)
+                {
+                    MPart p = (MPart) m;
+                    boolean local = p.isFromTopDocument ()  ||  ! (p.getSource ().parent ().parent ().parent ().parent ().parent () instanceof MDoc);
+
+                    NamedDimensionalType r = new NamedDimensionalType ();
+                    r.internal = m.key ();
+                    r.parse (m.get ());
+                    if (local)
+                    {
+                        r.dimension = useDimension (r.dimension);
+                        if (! requirements.contains (r)) requirements.add (r);
+                    }
+                    else
+                    {
+                        if (! requirementsInherited.contains (r)) requirementsInherited.add (r);
                     }
                 }
             }
@@ -3116,7 +3125,7 @@ public class ExportJob extends XMLutility
 
                             NamedDimensionalType r = new NamedDimensionalType ();
                             r.internal = v2.name;  // Not nameString(), because LEMS doesn't handle direct references to derivatives.
-                            r.external = v2.getNamedValue ("backend.lems.param").split (",")[0];
+                            r.external = v2.getMetadata ().get ("backend", "lems", "param").split (",")[0];
                             if (r.external.isEmpty ()) r.external = r.internal;
                             if (! requirementsInherited.contains (r)  &&  ! requirements.contains (r))
                             {
@@ -3163,7 +3172,7 @@ public class ExportJob extends XMLutility
                 if (p.isPart ()) continue;  // There shouldn't be any of these.
                 Variable v = equations.find (Variable.fromLHS (key));
                 if (v == null) continue;  // If v is null, then it was revoked.
-                if (m.child ("$metadata", "backend.lems.regime") != null) regimeVariable = v;
+                if (m.child ("$metadata", "backend", "lems", "regime") != null) regimeVariable = v;
                 if (p.isFromTopDocument ()  ||  ! (p.getSource ().parent () instanceof MDoc)) variables.put (v, m);  // Eliminate non-local items
             }
 
@@ -3357,8 +3366,9 @@ public class ExportJob extends XMLutility
                 String name = rename.get (v.name);
                 if (name == null) name = v.name;
 
-                MPart port = (MPart) m.child ("$metadata", "backend.lems.port");
-                if (port != null  &&  (port.isFromTopDocument ()  ||  ! (port.getSource ().parent ().parent ().parent () instanceof MDoc)))
+                MPart port = (MPart) m.child ("$metadata", "backend", "lems", "port");
+                // Need to check the parent of the variable, which is 5 levels up from port.
+                if (port != null  &&  (port.isFromTopDocument ()  ||  ! (port.getSource ().parent ().parent ().parent ().parent ().parent () instanceof MDoc)))
                 {
                     String portDescription = m.get ("$metadata", "description");
                     addEventPort (name, port.get (), portDescription);
@@ -3535,7 +3545,7 @@ public class ExportJob extends XMLutility
                             if (v.assignment == Variable.ADD) element.setAttribute ("reduce", "add");
                             else                              element.setAttribute ("reduce", "multiply");
 
-                            if (m.child ("$metadata", "backend.lems.required") != null) element.setAttribute ("required", "true");
+                            if (m.child ("$metadata", "backend", "lems", "required") != null) element.setAttribute ("required", "true");
                         }
                     }
                 }
@@ -3544,14 +3554,14 @@ public class ExportJob extends XMLutility
                 {
                     element.setAttribute ("name", name);
 
-                    String dimension = m.get ("$metadata", "backend.lems.dimension");
+                    String dimension = m.get ("$metadata", "backend", "lems", "dimension");
                     if (dimension.isEmpty ()  &&  v.unit != null) dimension = printDimension (v.unit);
                     if (! dimension.isEmpty ()) element.setAttribute ("dimension", dimension);
 
                     String vdescription = m.get ("$metadata", "desription");
                     if (! vdescription.isEmpty ()) element.setAttribute ("description", vdescription);
 
-                    MNode expose = m.child ("$metadata", "backend.lems.expose");
+                    MNode expose = m.child ("$metadata", "backend", "lems", "expose");
                     if (expose != null)
                     {
                         String exposureName = expose.getOrDefault (name);
@@ -3647,19 +3657,15 @@ public class ExportJob extends XMLutility
                 if (parent != null)
                 {
                     // Load requirements
-                    MNode metadata = parent.child ("$metadata");
+                    MNode metadata = parent.child ("$metadata", "backend", "lems", "requirement");
                     if (metadata != null)
                     {
                         for (MNode m : metadata)
                         {
-                            String key = m.key ();
-                            if (key.startsWith ("backend.lems.requirement."))
-                            {
-                                NamedDimensionalType r = new NamedDimensionalType ();
-                                r.internal = key.substring (25);
-                                r.parse (m.get ());
-                                list.add (r);
-                            }
+                            NamedDimensionalType r = new NamedDimensionalType ();
+                            r.internal = m.key ();
+                            r.parse (m.get ());
+                            list.add (r);
                         }
                     }
                     // Expand grandparents
@@ -3858,7 +3864,7 @@ public class ExportJob extends XMLutility
     public Element genericPart (MPart part, List<Element> elements)
     {
         String id   = part.key ();
-        String type = part.get ("$metadata", "backend.lems.part").split (",")[0];  // first part should be preferred output type
+        String type = part.get ("$metadata", "backend", "lems", "part").split (",")[0];  // first part should be preferred output type
         if (type.isEmpty ()  ||  ! sequencer.hasID (type))
         {
             type = id;
@@ -3904,23 +3910,26 @@ public class ExportJob extends XMLutility
                 }
                 else if (key.equals ("$metadata"))
                 {
-                    for (MNode m : p)
+                    MNode backendLems = p.child ("backend", "lems");
+                    if (backendLems != null)
                     {
-                        String mkey = m.key ();
-                        if (! mkey.startsWith ("backend.lems.")) continue;
-                        if (mkey.endsWith ("id")) continue;
-                        componentType.set ("$metadata", mkey, m.get ());
+                        for (MNode m : backendLems)
+                        {
+                            String mkey = m.key ();
+                            if (mkey.endsWith ("id")) continue;
+                            componentType.set ("$metadata", "backend", "lems", mkey, m);
+                        }
                     }
                 }
                 continue;
             }
 
             MNode parent = p.getSource ().parent ();
-            boolean overridden = p.isFromTopDocument ()  ||  parent.get ("$metadata", "backend.lems.part").isEmpty ();
+            boolean overridden = p.isFromTopDocument ()  ||  parent.get ("$metadata", "backend", "lems", "part").isEmpty ();
             if (p.isPart ())
             {
                 if (! overridden) continue;
-                if (p.get ("$metadata", "backend.lems.part").contains ("ionChannel"))
+                if (p.get ("$metadata", "backend", "lems", "part").contains ("ionChannel"))
                 {
                     IonChannel ic = addChannel (p, false, false);
                     ic.appendWrapper (resultElements, ic.skipList);
@@ -4013,11 +4022,13 @@ public class ExportJob extends XMLutility
             {
                 if (! ((MPart) m).isFromTopDocument ()) continue;
                 String key = m.key ();
-                if (key.startsWith ("backend")) continue;
-                if (key.startsWith ("gui")) continue;
-                if (key.equals ("id")) continue;  // our internal id, not NeuroML id
                 switch (key)
                 {
+                    case "backend":
+                    case "gui":
+                    case "id":  // our internal id, not NeuroML id
+                        // ignore
+                        break;
                     case "description":
                         node.setAttribute ("description", m.get ());
                         break;

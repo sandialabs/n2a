@@ -58,22 +58,19 @@ public class PartMap
         public void build (MNode part)
         {
             internal = part.key ();
-            String pieces[] = part.get ("$metadata", "backend.lems.part").split (",");
+            String pieces[] = part.get ("$metadata", "backend", "lems", "part").split (",");
             for (String n : pieces)
             {
                 neuroml.add (n);
             }
             if (neuroml.size () == 0) neuroml.add (internal);  // Simply a tagged part, with no name change.
 
-            MNode metadata = part.child ("$metadata");
+            MNode metadata = part.child ("$metadata", "backend", "lems", "children");
             if (metadata != null)
             {
                 for (MNode m : metadata)
                 {
-                    if (m.key ().startsWith ("backend.lems.children"))
-                    {
-                        children.add (m.get ().split (",")[0]);
-                    }
+                    children.add (m.get ().split (",")[0]);
                 }
             }
 
@@ -91,7 +88,7 @@ public class PartMap
 
                 // Add name mapping
                 String key = c.key ();
-                String param = c.get ("$metadata", "backend.lems.param");
+                String param = c.get ("$metadata", "backend", "lems", "param");
                 if (! param.isEmpty ())
                 {
                     pieces = param.split (",");
@@ -105,7 +102,7 @@ public class PartMap
                 }
 
                 // Add default unit
-                MNode metaDL = c.child ("$metadata", "backend.lems.DL");
+                MNode metaDL = c.child ("$metadata", "backend", "lems", "DL");
                 if (metaDL != null)
                 {
                     if (dimensions == null) dimensions = new HashMap<String,String> ();
@@ -311,7 +308,7 @@ public class PartMap
     {
         for (MNode c : AppData.models)
         {
-            if (c.child ("$metadata", "backend.lems.part") == null) continue;  // Must directly declare a NeuroML part to be included.
+            if (c.child ("$metadata", "backend", "lems", "part") == null) continue;  // Must directly declare a NeuroML part to be included.
             NameMap map = new NameMap (new MPart ((MPersistent) c));  // Create map using fully-collated part, not just the immediate one.
             outward.put (map.internal, map);
             for (String n : map.neuroml) inward.put (n, map);

@@ -26,6 +26,7 @@ import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
+import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
 import gov.sandia.n2a.ui.eq.undo.Move;
 import gov.sandia.n2a.ui.eq.undo.Outsource;
@@ -1282,18 +1283,13 @@ public class PanelEquationTree extends JPanel
         }
         if (metadataNode == null) return;
 
-        i = metadataNode.children ();
-        while (i.hasMoreElements ())
+        NodeBase a = AddAnnotation.resolve (metadataNode, "gui.order");
+        if (a != metadataNode)
         {
-            NodeAnnotation a = (NodeAnnotation) i.nextElement ();
-            if (a.source.key ().equals ("gui.order"))
-            {
-                a.source.set (order);
-                FontMetrics fm = a.getFontMetrics (tree);
-                metadataNode.updateTabStops (fm);
-                model.nodeChanged (a);
-                break;
-            }
+            ((NodeAnnotation) a).folded.set (order);
+            FontMetrics fm = a.getFontMetrics (tree);
+            metadataNode.updateTabStops (fm);
+            model.nodeChanged (a);
         }
     }
 

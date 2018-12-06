@@ -75,7 +75,7 @@ public class NodePart extends NodeContainer
         setUserObject ();
         removeAllChildren ();
 
-        String order = source.get ("$metadata", "gui.order");
+        String order = source.get ("$metadata", "gui", "order");
         Set<String> sorted = new HashSet<String> ();
         String[] subkeys = order.split (",");  // comma-separated list
         for (String k : subkeys)

@@ -1,12 +1,11 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.ui.eq.undo;
 
-import java.awt.FontMetrics;
 import java.util.List;
 
 import javax.swing.JTree;
@@ -14,11 +13,11 @@ import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoableEdit;
 
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelModel;
-import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
@@ -34,7 +33,7 @@ public class Move extends Undoable
     public Move (NodePart parent, int indexBefore, int indexAfter)
     {
         path        = parent.getKeyPath ();
-        orderAbsent = parent.source.child ("$metadata", "gui.order") == null;
+        orderAbsent = parent.source.child ("$metadata", "gui", "order") == null;
 
         if (orderAbsent)
         {
@@ -75,33 +74,41 @@ public class Move extends Undoable
         NodeBase moveNode = (NodeBase) parent.getChildAt (indexBefore);
         model.removeNodeFromParent (moveNode);
 
-        NodeBase metadataNode = parent.child ("$metadata");
+        NodeAnnotations metadataNode = (NodeAnnotations) parent.child ("$metadata");
+        boolean needBuild = false;
         if (createOrder)
         {
             if (metadataNode == null)
             {
-                metadataNode = new NodeAnnotations ((MPart) parent.source.set ("$metadata", ""));
+                metadataNode = new NodeAnnotations ((MPart) parent.source.childOrCreate ("$metadata"));
                 model.insertNodeIntoUnfiltered (metadataNode, parent, indexMetadata);
             }
-            NodeBase orderNode = new NodeAnnotation ((MPart) metadataNode.source.set ("gui.order", ""));
-            model.insertNodeIntoUnfiltered (orderNode, metadataNode, metadataNode.getChildCount ());
+            metadataNode.source.childOrCreate ("gui", "order");
+            needBuild = true;
         }
         if (destroyOrder)
         {
-            NodeBase orderNode = metadataNode.child ("gui.order");
-            FontMetrics fm = orderNode.getFontMetrics (tree);
-
-            metadataNode.source.clear ("gui.order");
-            model.removeNodeFromParent (metadataNode.child ("gui.order"));
-            if (metadataNode.getChildCount () == 0)
+            MNode mparent = metadataNode.source;
+            mparent.clear ("gui", "order");
+            if (mparent.size () == 0)
             {
                 parent.source.clear ("$metadata");
                 model.removeNodeFromParent (metadataNode);
             }
             else
             {
-                metadataNode.updateTabStops (fm);
-                metadataNode.allNodesChanged (model);
+                needBuild = true;
+            }
+        }
+        if (needBuild)
+        {
+            List<String> expanded = AddAnnotation.saveExpandedNodes (tree, metadataNode);
+            metadataNode.build ();
+            metadataNode.filter (model.filterLevel);
+            if (metadataNode.visible (model.filterLevel))
+            {
+                model.nodeStructureChanged (metadataNode);
+                AddAnnotation.restoreExpandedNodes (tree, metadataNode, expanded);
             }
         }
 

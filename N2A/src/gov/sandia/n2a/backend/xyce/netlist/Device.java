@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.backend.xyce.netlist;
 
 import gov.sandia.n2a.backend.xyce.device.XyceDevice;
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
@@ -48,13 +49,6 @@ import java.util.Map.Entry;
 
 public class Device
 {
-    public static final String DEVICE_TAG = "backend.xyce.device";
-    public static final String PARAM_TAG  = "backend.xyce.param";
-    public static final String NODE_TAG   = "backend.xyce.nodeIndex";
-    public static final String INPUT_TAG  = "backend.xyce.inputIndex";
-    public static final String IVAR_TAG   = "backend.xyce.internalVar";
-    public static final String IGNORE_TAG = "backend.xyce.ignore";
-
     public static Variable ground = new Variable ("0");
     public static Variable empty  = new Variable ("");
 
@@ -87,8 +81,8 @@ public class Device
     {
         eqSet = s;
 
-        String deviceName = s.getNamedValue (DEVICE_TAG);
-        if (deviceName != null) device = XyceDevice.createFor (deviceName);
+        String deviceName = s.metadata.get ("backend", "xyce", "device");
+        if (! deviceName.isEmpty ()) device = XyceDevice.createFor (deviceName);
         if (device == null)
         {
             Backend.err.get ().println ("unrecognized device name " + deviceName + " for " + eqSet.name);
@@ -110,49 +104,55 @@ public class Device
         // This checks for equations with 'xyce' annotations and saves the appropriate information
         for (Variable v : eqSet.variables)
         {
-            for (Entry<String,String> m : v.getMetadata ())
-            {
-                String metaKey = m.getKey ();
-                String value = m.getValue ().replace ("\"", "");
+            MNode backend = v.getMetadata ().child ("backend", "xyce");
+            if (backend == null) continue;
 
-                if (metaKey.equals (PARAM_TAG))
+            MNode m = backend.child ("param");
+            if (m != null)
+            {
+                String value = m.get ();
+                if (! device.isAllowedModelParameter (value))
                 {
-                    if (! device.isAllowedModelParameter (value))
-                    {
-                        Backend.err.get ().println ("unrecognized parameter " + value + " for device " + deviceName);
-                        throw new Backend.AbortRun ();
-                    }
-                    paramList.put (value.toUpperCase (), v);
+                    Backend.err.get ().println ("unrecognized parameter " + value + " for device " + deviceName);
+                    throw new Backend.AbortRun ();
                 }
-                else if (metaKey.equals (NODE_TAG ))
+                paramList.put (value.toUpperCase (), v);
+            }
+
+            m = backend.child ("nodeIndex");
+            if (m != null)
+            {
+                // is RHS of node index hint a number?
+                // is that number within the range of expected device nodes?
+                // assumes node indices in xyce hints start at 1
+                int index = m.getInt () - 1;
+                if (! device.isValidNodeIndex (index))
                 {
-                    // is RHS of node index hint a number?
-                    // is that number within the range of expected device nodes?
-                    // assumes node indices in xyce hints start at 1
-                    int index = Integer.parseInt (value) - 1;
-                    if (! device.isValidNodeIndex (index))
-                    {
-                        Backend.err.get ().println ("unrecognized/illegal node index " + index + " for device " + deviceName + " variable " + v.name);
-                        throw new Backend.AbortRun ();
-                    }
-                    varnames.set (index, v);
+                    Backend.err.get ().println ("unrecognized/illegal node index " + index + " for device " + deviceName + " variable " + v.name);
+                    throw new Backend.AbortRun ();
                 }
-                else if (metaKey.equals (IVAR_TAG ))
+                varnames.set (index, v);
+            }
+
+            m = backend.child ("internalVar");
+            if (m != null)
+            {
+                // IVAR_TAG - designates 'internal variables' in Xyce devices,
+                // like 'u' in level 7 neuron
+                // Main purpose would be in case user wants to output those vars
+                String value = m.get ();
+                if (! device.isInternalVariable (value))
                 {
-                    // IVAR_TAG - designates 'internal variables' in Xyce devices,
-                    // like 'u' in level 7 neuron
-                    // Main purpose would be in case user wants to output those vars
-                    if (! device.isInternalVariable (value))
-                    {
-                        Backend.err.get ().println ("unrecognized internal variable " + value + " for device " + deviceName);
-                        throw new Backend.AbortRun ();
-                    }
-                    ivars.put (v, value);
+                    Backend.err.get ().println ("unrecognized internal variable " + value + " for device " + deviceName);
+                    throw new Backend.AbortRun ();
                 }
-                else if (metaKey.equals (INPUT_TAG))
-                {
-                    inputs.put (Integer.parseInt (value) - 1, v);
-                }
+                ivars.put (v, value);
+            }
+
+            m = backend.child ("inputIndex");
+            if (m != null)
+            {
+                inputs.put (m.getInt () - 1, v);
             }
         }
     }
@@ -248,7 +248,7 @@ public class Device
 
     public static boolean isXyceDevice (EquationSet s)
     {
-        return s.getNamedValue (DEVICE_TAG, null) != null;
+        return s.metadata.child ("backend", "xyce", "device") != null;
     }
 
     public static boolean ignoreEquation (EquationEntry eq)
@@ -256,14 +256,10 @@ public class Device
         // These equations don't have to be translated like others;
         // device already implements them or doesn't need them.
         // Parameter and input equations DO have to be processed/understood elsewhere
-        for (Entry<String,String> m : eq.variable.getMetadata ())
-        {
-            String metaKey = m.getKey ();
-            if (metaKey.equals (IGNORE_TAG)  ||  metaKey.equals (NODE_TAG)  ||  metaKey.equals (IVAR_TAG))
-            {
-                return true;
-            }
-        }
+        MNode metadata = eq.variable.getMetadata ();
+        if (metadata.child ("backend", "xyce", "ignore"     ) != null) return true;
+        if (metadata.child ("backend", "xyce", "nodeIndex"  ) != null) return true;
+        if (metadata.child ("backend", "xyce", "internalVar") != null) return true;
         return false;
     }
 }

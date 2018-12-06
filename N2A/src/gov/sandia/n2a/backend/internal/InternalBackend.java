@@ -91,12 +91,12 @@ public class InternalBackend extends Backend
                 //dumpBackendData (digestedModel);
 
                 // Any new metadata generated after MPart is collated must be injected back into job
-                String duration = digestedModel.getNamedValue ("duration");
+                String duration = digestedModel.metadata.get ("duration");
                 if (! duration.isEmpty ()) job.set ("$metadata", "duration", duration);
 
                 long seed = job.getOrDefaultLong ("$metadata", "seed", "0");
 
-                String e = job.get ("$metadata", "backend.internal.event");
+                String e = job.get ("$metadata", "backend", "internal", "event");
                 int                      eventMode = Simulator.DURING;
                 if (e.equals ("after"))  eventMode = Simulator.AFTER;
                 if (e.equals ("before")) eventMode = Simulator.BEFORE;
@@ -209,7 +209,7 @@ public class InternalBackend extends Backend
     public static Simulator constructStaticNetwork (EquationSet e, String jobDir) throws Exception
     {
         digestModel (e, jobDir);
-        long seed = Long.parseLong (e.getNamedValue ("seed", "0"));
+        long seed = Long.parseLong (e.metadata.getOrDefault ("seed", "0"));
         Simulator result = new Simulator (new Wrapper (e), seed);
         result.init ();
         return result;
@@ -219,7 +219,7 @@ public class InternalBackend extends Backend
     {
         System.setProperty ("user.dir", new File (jobDir).getAbsolutePath ());  // Make paths relative to job directory
 
-        String backend = e.getNamedValue ("backend", "internal");
+        String backend = e.metadata.getOrDefault ("backend", "internal");
         if (backend.isEmpty ()) backend = "none";  // Should not match any backend metadata entries, since they are all supposed to start with "backend".
         else                    backend = "backend." + backend;
 

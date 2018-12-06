@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.eqset;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
@@ -34,10 +35,8 @@ import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.NavigableSet;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.TreeSet;
 
 import javax.measure.Unit;
@@ -51,7 +50,7 @@ public class Variable implements Comparable<Variable>, Cloneable
     public Set<String>                  attributes;
     public NavigableSet<EquationEntry>  equations;
     public int                          assignment;
-    public Map<String, String>          metadata;
+    public MNode                        metadata;
 
     // resolution
     public EquationSet                  container;  // non-null iff this variable is contained in an EquationSet.variables collection
@@ -104,6 +103,7 @@ public class Variable implements Comparable<Variable>, Cloneable
     {
         this.container = container;
         equations = new TreeSet<EquationEntry> ();  // It is possible for Variable to be parsed from MNode without any equations, but code that relies on this ctor expects a non-null equations member.
+        metadata = new MVolatile ();
 
         parseLHS (source.key ());
         try
@@ -123,11 +123,7 @@ public class Variable implements Comparable<Variable>, Cloneable
                     EquationEntry e = new EquationEntry (i);
                     if (e.expression != null) add (e);
                 }
-                if (key.equals ("$metadata"))
-                {
-                    if (metadata == null) metadata = new TreeMap<String,String> ();
-                    for (MNode m : i) metadata.put (m.key (), m.get ());
-                }
+                if (key.equals ("$metadata")) metadata.merge (i);
                 // Ignore references, as they have no function in simulation.
             }
 
@@ -719,7 +715,8 @@ public class Variable implements Comparable<Variable>, Cloneable
         }
 
         // User-specified exponent overrides any calculated value.
-        String magnitude = getNamedValue ("median");
+        String magnitude = "";
+        if (metadata != null) magnitude = metadata.get ("median");
         if (! magnitude.isEmpty ())
         {
             if (exponent != Operator.UNKNOWN) return changed;  // Already processed the hint.
@@ -1232,31 +1229,13 @@ public class Variable implements Comparable<Variable>, Cloneable
         else                    return attributes.toString ();
     }
 
-    public String getNamedValue (String name)
-    {
-        return getNamedValue (name, "");
-    }
-
-    public String getNamedValue (String name, String defaultValue)
-    {
-        if (metadata == null) return defaultValue;
-        if (metadata.containsKey (name)) return metadata.get (name);
-        return defaultValue;
-    }
-
-    public void setNamedValue (String name, String value)
-    {
-        if (metadata == null) metadata = new TreeMap<String, String> ();
-        metadata.put (name, value);
-    }
-
     /**
-        Safe method to access metadata for iteration
+        Safe method to access metadata.
     **/
-    public Set<Entry<String,String>> getMetadata ()
+    public MNode getMetadata ()
     {
-        if (metadata == null) metadata = new TreeMap<String, String> ();
-        return metadata.entrySet ();
+        if (metadata == null) metadata = new MVolatile ();
+        return metadata;
     }
 
     /**

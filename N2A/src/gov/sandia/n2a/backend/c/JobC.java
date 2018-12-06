@@ -93,7 +93,7 @@ public class JobC extends Thread
         {
             Files.createFile (jobDir.resolve ("started"));
 
-            T = job.getOrDefault ("$metadata", "backend.c.type", "float");
+            T = job.getOrDefault ("$metadata", "backend", "c", "type", "float");
             if (T.startsWith ("int")  &&  T.length () > 3)
             {
                 T = "int";
@@ -113,11 +113,11 @@ public class JobC extends Thread
 
             model = new EquationSet (job);
             digestModel ();
-            String duration = model.getNamedValue ("duration");
+            String duration = model.metadata.get ("duration");
             if (! duration.isEmpty ()) job.set ("$metadata", "duration", duration);
 
             eventMode = Simulator.DURING;
-            String e = job.get ("$metadata", "backend.internal.event");  // TODO: Need naming convention for parameters shared by more than one backend.
+            String e = job.get ("$metadata", "backend", "internal", "event");  // TODO: Need naming convention for parameters shared by more than one backend.
             if (e.equals ("after"))  eventMode = Simulator.AFTER;
             if (e.equals ("before")) eventMode = Simulator.BEFORE;
 
@@ -294,7 +294,7 @@ public class JobC extends Thread
     public void digestModel () throws Exception
     {
         model.resolveConnectionBindings ();
-        model.flatten ("backend.c");
+        model.flatten ("c");
         model.addGlobalConstants ();
         model.addSpecials ();  // $connect, $index, $init, $n, $t, $t', $type
         model.addAttribute ("global",      0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
@@ -327,7 +327,7 @@ public class JobC extends Thread
         if (T.equals ("int"))
         {
             double duration = 0;
-            String durationString = model.getNamedValue ("duration");
+            String durationString = model.metadata.get ("duration");
             if (! durationString.isEmpty ()) duration = Double.valueOf (durationString);
             model.determineExponents (duration);
         }
@@ -597,7 +597,7 @@ public class JobC extends Thread
             Variable dt = model.find (new Variable ("$t", 1));
             result.append ("    Event<int>::exponent = " + dt.exponent + ";\n");
         }
-        String integrator = model.getNamedValue ("c.integrator", "Euler");
+        String integrator = model.metadata.getOrDefault ("c.integrator", "Euler");
         if (integrator.equalsIgnoreCase ("RungeKutta")) integrator = "RungeKutta";
         else                                            integrator = "Euler";
         result.append ("    Simulator<" + T + ">::instance.integrator = new " + integrator + "<" + T + ">;\n");

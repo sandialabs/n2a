@@ -10,7 +10,6 @@ import java.util.TreeMap;
 
 public class MPersistent extends MVolatile
 {
-    protected MNode parent;
     protected boolean needsWrite; // indicates that this node is new or has changed since it was last read from disk (and therefore should be written out)
 
     public MPersistent (MNode parent)
@@ -28,18 +27,6 @@ public class MPersistent extends MVolatile
     {
         super (name, value);
         this.parent = parent;
-    }
-
-    public MNode parent ()
-    {
-        return parent;
-    }
-
-    public MNode getRoot ()
-    {
-        MPersistent result = this;
-        while (result.parent instanceof MPersistent) result = (MPersistent) result.parent;
-        return result;
     }
 
 	public synchronized void markChanged ()
