@@ -85,6 +85,9 @@ public class AppData
         models     = new MCombo ("models",     modelContainers);
         references = new MCombo ("references", referenceContainers);
 
+        //convert (modelContainers);
+        //convert (referenceContainers);
+
         stop = false;
         saveThread = new Thread ("Save AppData")
         {
@@ -164,6 +167,21 @@ public class AppData
         {
             System.err.println ("Unable to load some or all of initial DB");
             e.printStackTrace ();
+        }
+    }
+
+    // Utility for converting documents to latest schema.
+    // This simply tags them as needing to be saved. MDir always saves in the latest format.
+    protected static void convert (List<MNode> containers)
+    {
+        for (MNode c : containers)
+        {
+            for (MNode d : c)
+            {
+                MDoc doc = (MDoc) d;
+                doc.load ();
+                doc.markChanged ();
+            }
         }
     }
 

@@ -56,13 +56,13 @@ public class Schema1 extends Schema
             // Parse the line into key=value. Must pay special attention when multiple "=" are present
             String line = reader.line.trim ();
             String[] pieces = line.split ("=", -1);  // Negative limit means to create empty string in resulting array for any zero-length pieces (as opposed to ignoring them). The following algorithm depends on this.
-            String index = pieces[0];
+            String key = pieces[0];
             int i = 1;
             for (; i < pieces.length; i++)  // Note: It is OK if everything goes in the index, leaving an empty value.
             {
-                if (pieces[i].isEmpty ()  ||  index.endsWith ("=")  ||  index.endsWith ("<")  ||  index.endsWith (">")  ||  index.endsWith ("!"))
+                if (pieces[i].isEmpty ()  ||  key.endsWith ("=")  ||  key.endsWith ("<")  ||  key.endsWith (">")  ||  key.endsWith ("!"))
                 {
-                    index = index + "=" + pieces[i];
+                    key = key + "=" + pieces[i];
                     continue;
                 }
                 break;
@@ -73,7 +73,7 @@ public class Schema1 extends Schema
                 value = pieces[i++];
                 while (i < pieces.length) value = value + "=" + pieces[i++];
             }
-            index = index.trim ();
+            key   = key  .trim ();
             value = value.trim ();
 
             if (value.startsWith ("|"))  // go into string reading mode
@@ -97,7 +97,7 @@ public class Schema1 extends Schema
             {
                 reader.getNextLine ();
             }
-            MNode child = node.set (index, value);  // Create a child with the given value
+            MNode child = node.set (key, value);  // Create a child with the given value
             if (reader.whitespaces > whitespaces) read (child, reader, reader.whitespaces);  // Recursively populate child. When this call returns, reader.whitespaces <= whitespaces in this function, because that is what ends the recursion.
             if (reader.whitespaces < whitespaces) return;  // end recursion
         }
@@ -112,11 +112,11 @@ public class Schema1 extends Schema
     **/
     public void write (MNode node, Writer writer, String indent) throws IOException
     {
-        String index = node.key ();
+        String key   = node.key ();
         String value = node.get ();
         if (value.isEmpty ())
         {
-            writer.write (String.format ("%s%s%n", indent, index));
+            writer.write (String.format ("%s%s%n", indent, key));
         }
         else
         {
@@ -126,7 +126,7 @@ public class Schema1 extends Schema
                 value = value.replace (newLine, newLine + indent + "  ");
                 value = "|" + newLine + indent + "  " + value;
             }
-            writer.write (String.format ("%s%s=%s%n", indent, index, value));
+            writer.write (String.format ("%s%s=%s%n", indent, key, value));
         }
 
         String space2 = indent + " ";
@@ -151,7 +151,6 @@ public class Schema1 extends Schema
         public void getNextLine () throws IOException
         {
             // Scan for non-empty line
-            // Only ignore lines which start with a comment character, or which are perfectly empty.
             while (true)
             {
                 line = reader.readLine ();
@@ -161,34 +160,24 @@ public class Schema1 extends Schema
                     return;
                 }
                 if (line.isEmpty ()) continue;
-                if (line.startsWith ("#")) continue;
                 break;
             }
 
             // Count leading whitespace
             int length = line.length ();
             whitespaces = 0;
-            while (whitespaces < length)
-            {
-                char c = line.charAt (whitespaces);
-                if (c != ' '  &&  c != '\t') break;
-                whitespaces++;
-            }
+            while (whitespaces < length  &&  line.charAt (whitespaces) == ' ') whitespaces++;
         }
 
         public void close ()
         {
-            if (reader != originalReader)
+            if (reader == originalReader) return;
+            try
             {
-                try
-                {
-                    reader.close ();
-                    reader = null;  // Poison it
-                }
-                catch (IOException e)
-                {
-                }
+                reader.close ();
+                reader = null;  // Poison it
             }
+            catch (IOException e) {}
         }
     }
 }
