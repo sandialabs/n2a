@@ -157,8 +157,7 @@ public class AppData
                 }
                 MDoc doc = (MDoc) dir.set (pieces[2], "");
                 BufferedReader reader = new BufferedReader (new InputStreamReader (zip, "UTF-8"));
-                reader.readLine ();  // dispose of schema line
-                doc.read (reader);
+                Schema.readAll (doc, reader);
             }
         }
         catch (Exception e)

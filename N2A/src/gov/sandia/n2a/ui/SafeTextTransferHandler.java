@@ -61,11 +61,8 @@ public class SafeTextTransferHandler extends TransferHandler
             {
                 if (safeTypes == null) return false;
 
-                Schema         schema = new Schema ();
-                MNode          nodes  = new MVolatile ();
                 BufferedReader br     = new BufferedReader (new StringReader (data));
-
-                schema.read (br);
+                Schema         schema = Schema.read (br);
                 if (schema.type.startsWith ("Clip")) schema.type = schema.type.substring (4);
                 if (! safeTypes.contains (schema.type))
                 {
@@ -73,7 +70,8 @@ public class SafeTextTransferHandler extends TransferHandler
                     return false;
                 }
 
-                nodes.read (br);
+                MNode nodes = new MVolatile ();
+                schema.read (nodes, br);
                 br.close ();
 
                 // Process into a suitable string

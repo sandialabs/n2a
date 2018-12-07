@@ -30,8 +30,6 @@ import java.util.TreeMap;
 **/
 public class MDoc extends MPersistent
 {
-    Schema schema = new Schema (1, "");
-
     /**
         Constructs a document as a child of an MDir.
         In this case, the key contains the file name in the dir, and the full path is constructed
@@ -177,7 +175,7 @@ public class MDoc extends MPersistent
         try
         {
             needsWrite = true;  // lie to ourselves, to prevent being put onto the MDir write queue
-            schema.readAll (Files.newBufferedReader (file), this);
+            Schema.readAll (this, Files.newBufferedReader (file));
         }
         catch (IOException e)
         {
@@ -194,7 +192,7 @@ public class MDoc extends MPersistent
 	    {
 	        file.getParent ().toFile ().mkdirs ();  // Files.createDirectories() throws an exception for existing dir, even though it promises not to.
 	        BufferedWriter writer = Files.newBufferedWriter (file);
-	        schema.writeAll (writer, this);
+	        Schema.latest ().writeAll (this, writer);
 	        writer.close ();
 	        clearChanged ();
 	    }

@@ -409,13 +409,13 @@ public class PanelEquationTree extends JPanel
                 if (locked) return false;
 
                 MNode data = new MVolatile ();
-                Schema schema = new Schema ();
+                Schema schema;
                 TransferableNode xferNode = null;  // used only to detect if the source is ourselves (equation tree)
                 try
                 {
                     Transferable xferable = xfer.getTransferable ();
                     StringReader reader = new StringReader ((String) xferable.getTransferData (DataFlavor.stringFlavor));
-                    schema.readAll (reader, data);
+                    schema = Schema.readAll (data, reader);
                     if (xferable.isDataFlavorSupported (PanelEquationTree.nodeFlavor)) xferNode = (TransferableNode) xferable.getTransferData (PanelEquationTree.nodeFlavor);
                 }
                 catch (IOException | UnsupportedFlavorException e)
@@ -504,12 +504,13 @@ public class PanelEquationTree extends JPanel
                 node.copy (copy);
                 if (node == root) copy.set (node.source.key (), "");  // Remove file information from root node, if that is what we are sending.
 
-                Schema schema = new Schema (1, "Clip" + node.getTypeName ());
+                Schema schema = Schema.latest ();
+                schema.type = "Clip" + node.getTypeName ();
                 StringWriter writer = new StringWriter ();
                 try
                 {
                     schema.write (writer);
-                    for (MNode c : copy) c.write (writer);
+                    for (MNode c : copy) schema.write (c, writer);
                     writer.close ();
 
                     return new TransferableNode (writer.toString (), node, drag);

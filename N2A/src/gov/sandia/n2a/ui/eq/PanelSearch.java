@@ -159,13 +159,13 @@ public class PanelSearch extends JPanel
                 }
                 else if (xfer.isDataFlavorSupported (DataFlavor.stringFlavor))
                 {
-                    Schema schema = new Schema ();
+                    Schema schema;
                     MNode data = new MVolatile ();
                     TransferableNode xferNode = null;
                     try
                     {
                         StringReader reader = new StringReader ((String) xferable.getTransferData (DataFlavor.stringFlavor));
-                        schema.readAll (reader, data);
+                        schema = Schema.readAll (data, reader);
                         if (xferable.isDataFlavorSupported (PanelEquationTree.nodeFlavor)) xferNode = (TransferableNode) xferable.getTransferData (PanelEquationTree.nodeFlavor);
                     }
                     catch (IOException | UnsupportedFlavorException e)
@@ -372,13 +372,14 @@ public class PanelSearch extends JPanel
 
         public Transferable createTransferable ()
         {
-            Schema schema = new Schema (1, "Part");
+            Schema schema = Schema.latest ();
+            schema.type = "Part";
             StringWriter writer = new StringWriter ();
             try
             {
                 schema.write (writer);
                 writer.write (doc.key () + String.format ("%n"));
-                for (MNode c : doc) c.write (writer, " ");
+                for (MNode c : doc) schema.write (c, writer, " ");
                 writer.close ();
                 return new StringSelection (writer.toString ());
             }

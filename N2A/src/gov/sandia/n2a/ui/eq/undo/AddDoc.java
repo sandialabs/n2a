@@ -42,7 +42,8 @@ public class AddDoc extends Undoable
 
         // Insert ID, if given doc does not already have one.
         MNode id = saved.childOrCreate ("$metadata", "id");
-        if (id.get ().isEmpty ()  ||  ! this.name.equals (name)) id.set (generateID ());
+        String idString = id.get ();
+        if (idString.isEmpty ()  ||  AppData.getModel (idString) != null) id.set (generateID ());
     }
 
     /**

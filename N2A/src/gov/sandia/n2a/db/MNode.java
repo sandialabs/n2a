@@ -6,11 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.db;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.Reader;
 import java.io.StringWriter;
-import java.io.Writer;
 import java.util.Comparator;
 import java.util.Iterator;
 
@@ -491,196 +487,6 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         for (MNode c : this) c.visit (v);  // We are an Iterable. In particular, we iterate over the children nodes.
     }
 
-    /**
-        Brings in data from a stream. See write(Writer,String) for format.
-        This method only processes children. The direct value of this node
-        must be set by the caller.
-
-        Wraps the given Reader in a BufferedReader, unless it is already a
-        BufferedReader (see the inner class LineReader). If you wish to continue
-        using the Reader after this function returns, for example if the
-        stream contains a YAML terminator (---) followed by another serialized
-        object, then you must pass in a BufferedReader to begin with. Otherwise,
-        the position in the original Reader is not well defined.
-    **/
-    public synchronized void read (Reader reader)
-    {
-        clear ();
-        try
-        {
-            LineReader lineReader = new LineReader (reader);
-            read (lineReader, 0);
-            lineReader.close ();
-        }
-        catch (IOException e)
-        {
-        }
-    }
-
-    /**
-        Recursive version of read(Reader) for loading children.
-        We assume LineReader always holds the next unprocessed line.
-    **/
-    public synchronized void read (LineReader reader, int whitespaces) throws IOException
-    {
-        while (true)
-        {
-            if (reader.line == null) return;  // stop at end of file
-            // At this point, reader.whitespaces == whitespaces
-
-            // Parse the line into key=value. Must pay special attention when multiple "=" are present
-            String line = reader.line.trim ();
-            String[] pieces = line.split ("=", -1);  // Negative limit means to create empty string in resulting array for any zero-length pieces (as opposed to ignoring them). The following algorithm depends on this.
-            String index = pieces[0];
-            int i = 1;
-            for (; i < pieces.length; i++)  // Note: It is OK if everything goes in the index, leaving an empty value.
-            {
-                if (pieces[i].isEmpty ()  ||  index.endsWith ("=")  ||  index.endsWith ("<")  ||  index.endsWith (">")  ||  index.endsWith ("!"))
-                {
-                    index = index + "=" + pieces[i];
-                    continue;
-                }
-                break;
-            }
-            String value = "";
-            if (i < pieces.length)
-            {
-                value = pieces[i++];
-                while (i < pieces.length) value = value + "=" + pieces[i++];
-            }
-            index = index.trim ();
-            value = value.trim ();
-
-            if (value.startsWith ("|"))  // go into string reading mode
-            {
-                StringBuilder block = new StringBuilder ();
-                reader.getNextLine ();
-                if (reader.whitespaces > whitespaces)
-                {
-                    int blockIndent = reader.whitespaces;
-                    while (true)
-                    {
-                        block.append (reader.line.substring (blockIndent));
-                        reader.getNextLine ();
-                        if (reader.whitespaces < blockIndent) break;
-                        block.append (String.format ("%n"));
-                    }
-                }
-                value = block.toString ();
-            }
-            else
-            {
-                reader.getNextLine ();
-            }
-            MNode child = set (index, value);  // Create a child with the given value
-            if (reader.whitespaces > whitespaces) child.read (reader, reader.whitespaces);  // Recursively populate child. When this call returns, reader.whitespaces <= whitespaces in this function, because that is what ends the recursion.
-            if (reader.whitespaces < whitespaces) return;  // end recursion
-        }
-    }
-
-    public static class LineReader
-    {
-        public Reader         originalReader;
-        public BufferedReader reader;
-        public String         line;
-        public int            whitespaces;
-
-        public LineReader (Reader reader) throws IOException
-        {
-            originalReader = reader;
-            if (reader instanceof BufferedReader) this.reader = (BufferedReader) reader;
-            else                                  this.reader = new BufferedReader (reader);
-            getNextLine ();
-        }
-
-        public void getNextLine () throws IOException
-        {
-            // Scan for non-empty line
-            // Only ignore lines which start with a comment character, or which are perfectly empty.
-            while (true)
-            {
-                line = reader.readLine ();
-                if (line == null)  // end of file
-                {
-                    whitespaces = -1;
-                    return;
-                }
-                if (line.isEmpty ()) continue;
-                if (line.startsWith ("#")) continue;
-                break;
-            }
-
-            // Count leading whitespace
-            int length = line.length ();
-            whitespaces = 0;
-            while (whitespaces < length)
-            {
-                char c = line.charAt (whitespaces);
-                if (c != ' '  &&  c != '\t') break;
-                whitespaces++;
-            }
-        }
-
-        public void close ()
-        {
-            if (reader != originalReader)
-            {
-                try
-                {
-                    reader.close ();
-                    reader = null;  // Poison it
-                }
-                catch (IOException e)
-                {
-                }
-            }
-        }
-    }
-
-    /**
-        Convenience function for calling write(Writer,String) with no initial indent.
-    **/
-    public synchronized void write (Writer writer)
-    {
-        try
-        {
-            write (writer, "");
-        }
-        catch (IOException e)
-        {
-        }
-    }
-
-    /**
-        Produces an indented hierarchical list of indices and values from entire tree.
-        Note that this function is not exactly idempotent with read(). Rather, this function
-        writes the node, then its children. read() only reads children. To use write() in
-        a way that is exactly idempotent with read(), use a line like:
-        <code>for (MNode c : NodeWhoseChildrenYouWantToWrite) c.write (writer, indent);</code>
-    **/
-    public synchronized void write (Writer writer, String space) throws IOException
-    {
-        String index = key ();
-        String value = get ();
-        if (value.isEmpty ())
-        {
-            writer.write (String.format ("%s%s%n", space, index));
-        }
-        else
-        {
-            String newLine = String.format ("%n");
-            if (value.contains (newLine))  // go into extended text write mode
-            {
-                value = value.replace (newLine, newLine + space + "  ");
-                value = "|" + newLine + space + "  " + value;
-            }
-            writer.write (String.format ("%s%s=%s%n", space, index, value));
-        }
-
-        String space2 = space + " ";
-        for (MNode c : this) c.write (writer, space2);  // if this node has no children, nothing at all is written
-    }
-
     // It might be possible to write a more efficient M collation routine by sifting through
     // each string, character by character. It would do the usual string comparison while
     // simultaneously converting each string into a number. As long as a string still
@@ -764,7 +570,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     public String toString ()
     {
         StringWriter writer = new StringWriter ();
-        write (writer);
+        Schema.latest ().write (this, writer);
         return writer.toString ();
     }
 }

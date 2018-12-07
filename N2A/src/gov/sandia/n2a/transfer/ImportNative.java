@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.transfer;
 
 import gov.sandia.n2a.db.MVolatile;
+import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.plugins.extpoints.Importer;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
@@ -29,9 +30,8 @@ public class ImportNative implements Importer
     {
         try (BufferedReader reader = Files.newBufferedReader (source.toPath ()))
         {
-            reader.readLine ();  // dispose of schema line
             MVolatile doc = new MVolatile ();
-            doc.read (reader);
+            Schema.readAll (doc, reader);
             PanelModel.instance.undoManager.add (new AddDoc (source.getName (), doc));
         }
         catch (IOException e)

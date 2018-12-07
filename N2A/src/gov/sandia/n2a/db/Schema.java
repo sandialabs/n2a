@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -12,19 +12,21 @@ import java.io.Reader;
 import java.io.Writer;
 
 /**
-    Identifies the serialization method used by this application.
-    Reads/writes the header on serialized objects.
+    Encapsulates the serialization method used for a particular file.
+    This encompasses two related mechanisms:
+    <ol>
+    <li>The serialization method. Everything past the first line of the file is expressed in this format.
+    <li>The general interpretation of the data.
+    </ol>
+
+    Each subclass provides a particular implementation of the serialization/deserialization process,
+    and also informs the data consumer of the expected interpretation. This base class defines the
+    interface and provides some utility functions.
 **/
 public class Schema
 {
-    public int    version;  // of schema
+    public int    version;  // of schema. Version 0 means unknown. Version -1 means no-care. Otherwise, version is always positive and increments by 1 with each significant change.
     public String type;
-
-    public Schema ()
-    {
-        version = 1;
-        type    = "";
-    }
 
     public Schema (int version, String type)
     {
@@ -32,31 +34,47 @@ public class Schema
         this.type    = type;
     }
 
+    public static Schema latest ()
+    {
+        return new Schema2 (2, "");
+    }
+
     /**
         Convenience method which reads the header and loads all the objects as children of the given node.
     **/
-    public void readAll (Reader reader, MNode node) throws IOException
+    public static Schema readAll (MNode node, Reader reader) throws IOException
     {
         BufferedReader br;
         boolean alreadyBuffered = reader instanceof BufferedReader;
         if (alreadyBuffered) br =    (BufferedReader) reader;
         else                 br = new BufferedReader (reader);
-        read (br);
-        node.read (br);
+        Schema result = read (br);
+        result.read (node, br);
         if (! alreadyBuffered) br.close ();
+        return result;
     }
 
-    public void read (BufferedReader reader) throws IOException
+    public static Schema read (BufferedReader reader) throws IOException
     {
         String line = reader.readLine ().trim ();
-        String[] pieces = line.split ("=", 2);
-        if (pieces.length < 2  ||  ! pieces[0].equals ("N2A.schema"))
-        {
-            throw new IOException ("Schema line not found.");
-        }
-        pieces = pieces[1].trim ().split (",", 2);
-        version = Integer.parseInt (pieces[0]);
+        if (! line.startsWith ("N2A.schema")) throw new IOException ("Schema line not found.");
+        if (line.length () < 12) throw new IOException ("Malformed schema line.");
+        char delimiter = line.charAt (10);
+        if (delimiter != '=') throw new IOException ("Malformed schema line.");
+        line = line.substring (11);
+        String[] pieces = line.split (",", 2);
+        int version = Integer.parseInt (pieces[0]);
+        String type = "";
         if (pieces.length >= 2) type = pieces[1].trim ();
+
+        // Note: A single schema subclass could handle multiple versions.
+        if (version == 1) return new Schema1 (version, type);
+        return new Schema2 (version, type);
+    }
+
+    public void read (MNode node, Reader reader)
+    {
+        throw new RuntimeException ("Must use specific schema to read file.");
     }
 
     /**
@@ -64,10 +82,10 @@ public class Schema
         The node itself (that is, its key and value) are not written out. The node simply acts
         as a container for the nodes that get written.
     **/
-    public void writeAll (Writer writer, MNode node) throws IOException
+    public void writeAll (MNode node, Writer writer) throws IOException
     {
         write (writer);
-        for (MNode c : node) c.write (writer, "");
+        for (MNode c : node) write (c, writer, "");
     }
 
     public void write (Writer writer) throws IOException
@@ -75,5 +93,19 @@ public class Schema
         writer.write ("N2A.schema=" + version);
         if (! type.isEmpty ()) writer.write ("," + type);
         writer.write (String.format ("%n"));
+    }
+
+    /**
+        Convenience function for calling write(MNode,Writer,String) with no initial indent.
+    **/
+    public void write (MNode node, Writer writer)
+    {
+        try {write (node, writer, "");}
+        catch (IOException e) {}
+    }
+
+    public void write (MNode node, Writer writer, String indent) throws IOException
+    {
+        throw new RuntimeException ("Must use specific schema to write file.");
     }
 }

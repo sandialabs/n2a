@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.transfer;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.plugins.extpoints.Exporter;
 
 import java.io.BufferedWriter;
@@ -29,8 +30,9 @@ public class ExportNative implements Exporter
         {
             // Write a standard repository file. See MDoc.save()
             BufferedWriter writer = Files.newBufferedWriter (destination.toPath ());
-            writer.write (String.format ("N2A.schema=1%n"));
-            for (MNode n : source) n.write (writer, "");
+            Schema schema = Schema.latest ();
+            schema.write (writer);
+            for (MNode n : source) schema.write (n, writer, "");
             writer.close ();
         }
         catch (IOException e)
