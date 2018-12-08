@@ -14,13 +14,18 @@ import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.DeleteAnnotations;
+import gov.sandia.n2a.ui.images.ImageUtil;
+
 import javax.swing.Icon;
+import javax.swing.ImageIcon;
 import javax.swing.JTree;
 import javax.swing.tree.TreePath;
 
 @SuppressWarnings("serial")
 public class NodeAnnotations extends NodeContainer
 {
+    protected static ImageIcon icon = ImageUtil.getImage ("properties.gif");
+
     public NodeAnnotations (MPart source)
     {
         this.source = source;
@@ -51,6 +56,7 @@ public class NodeAnnotations extends NodeContainer
     @Override
     public Icon getIcon (boolean expanded)
     {
+        if (expanded) return icon;
         return NodeAnnotation.icon;
     }
 
