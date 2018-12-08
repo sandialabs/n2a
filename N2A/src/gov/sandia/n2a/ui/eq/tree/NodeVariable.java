@@ -174,7 +174,11 @@ public class NodeVariable extends NodeContainer
         if (filterLevel == FilteredTreeModel.REVOKED) return true;
         if (source.get ().startsWith ("$kill"))       return false;
         if (filterLevel == FilteredTreeModel.ALL)     return true;
-        if (filterLevel == FilteredTreeModel.PARAM)   return source.child ("$metadata", "param") != null;
+        if (filterLevel == FilteredTreeModel.PARAM)
+        {
+            MNode param = source.child ("$metadata", "param");
+            return param != null  &&  param.getOrDefaultInt ("1") != 0;
+        }
         // LOCAL ...
         return source.isFromTopDocument ();
     }
