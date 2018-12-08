@@ -33,6 +33,7 @@ import gov.sandia.n2a.ui.eq.undo.Outsource;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.PanelRun;
 
+import java.awt.EventQueue;
 import java.awt.FontMetrics;
 import java.awt.Insets;
 import java.awt.Rectangle;
@@ -754,6 +755,21 @@ public class PanelEquationTree extends JPanel
         groupFilter.add (itemFilterAll);
         groupFilter.add (itemFilterPublic);
         groupFilter.add (itemFilterLocal);
+
+        EventQueue.invokeLater (new Runnable ()
+        {
+            public void run ()
+            {
+                MNode lastUsedNode = null;
+                String lastUsedKey = AppData.state.get ("PanelModel", "lastUsed");
+                if (! lastUsedKey.isEmpty ()) lastUsedNode = AppData.models.child (lastUsedKey);
+                if (lastUsedNode != null)
+                {
+                    loadRootFromDB (lastUsedNode);
+                    tree.requestFocusInWindow ();
+                }
+            }
+        });
     }
 
     public void loadRootFromDB (MNode doc)
@@ -774,6 +790,7 @@ public class PanelEquationTree extends JPanel
             model.setRoot (root);  // triggers repaint, but may be too slow
             updateLock ();
             needsFullRepaint = true;  // next call to repaintSouth() will repaint everything
+            AppData.state.set ("PanelModel", "lastUsed", doc.key ());
 
             StoredPath sp = focusCache.get (record);
             if (sp == null)

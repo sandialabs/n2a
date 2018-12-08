@@ -84,12 +84,22 @@ public class PanelMRU extends JPanel
     public void loadMRU ()
     {
         model.clear ();
-        int index = 0;
         for (MNode n : AppData.state.childOrCreate ("PanelModel", "MRU"))
         {
             String name = n.get ();
             MNode part = AppData.models.child (name);
-            if (part != null) model.add (index++, new PanelSearch.Holder (part));
+            if (part != null) model.addElement (new PanelSearch.Holder (part));
+        }
+
+        // Check for first run.
+        if (model.size () == 0)
+        {
+            MNode part = AppData.models.child ("Example Hodgkin-Huxley Cable");
+            if (part != null)
+            {
+                model.addElement (new PanelSearch.Holder (part));
+                AppData.state.set ("PanelModel", "lastUsed", "Example Hodgkin-Huxley Cable");
+            }
         }
     }
 
