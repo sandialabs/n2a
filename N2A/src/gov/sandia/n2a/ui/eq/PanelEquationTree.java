@@ -809,7 +809,8 @@ public class PanelEquationTree extends JPanel
 
     public void checkVisible ()
     {
-        if (! AppData.models.isVisible (record)) recordDeleted (record);
+        if (AppData.models.isVisible (record)) updateLock ();
+        else                                   recordDeleted (record);
     }
 
     public void yieldFocus ()

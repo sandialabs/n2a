@@ -451,7 +451,8 @@ public class PanelEntry extends JPanel
 
     public void checkVisible ()
     {
-        if (! AppData.references.isVisible (model.record)) recordDeleted (model.record);
+        if (AppData.references.isVisible (model.record)) model.updateLock ();
+        else                                             recordDeleted (model.record);
     }
 
     public static class Form
@@ -508,9 +509,14 @@ public class PanelEntry extends JPanel
         {
             if (this.record == record) return;
             this.record = record;
+            updateLock ();
+            build ();
+        }
+
+        public void updateLock ()
+        {
             if (record == null) locked = true;
             else                locked = ! AppData.references.isWriteable (record);
-            build ();
         }
 
         public void build ()
