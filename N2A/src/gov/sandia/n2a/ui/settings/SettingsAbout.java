@@ -8,20 +8,26 @@ package gov.sandia.n2a.ui.settings;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.n2a.plugins.extpoints.Settings;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import java.awt.Component;
 import java.awt.Desktop;
+import java.awt.Font;
 import java.awt.event.InputEvent;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URISyntaxException;
 
 import javax.swing.ImageIcon;
 import javax.swing.JEditorPane;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTabbedPane;
+import javax.swing.JTextArea;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.event.HyperlinkListener;
 
@@ -44,25 +50,7 @@ public class SettingsAbout extends JPanel implements Settings
             "<p>Coders: Fred Rothganger, Derek Trumbo, Christy Warrender</p>" +
             "<p>Concept development: Brad Aimone, Corinne Teeter, Steve Verzi, Asmeret Bier, Brandon Rohrer, Ann Speed, Felix Wang</p>" +
             "<p>Technical support: <a href=\"mailto:frothga@sandia.gov\">frothga@sandia.gov</a></p>" +
-            "<hr/>" +
-            "<p>&copy;2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).</p>" +
-            "<p>Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.</p>" +
-            "<p>Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:</p>" +
-            "<ul>" +
-            "<li>Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.</li>" +
-            "<li>Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.</li>" +
-            "<li>Neither the name of NTESS nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.</li>" +
-            "</ul>" +
-            "<p>THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\" AND" +
-            "ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED" +
-            "WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE" +
-            "DISCLAIMED. IN NO EVENT SHALL SANDIA CORPORATION BE LIABLE FOR ANY" +
-            "DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES" +
-            "(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;" +
-            "LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND" +
-            "ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT" +
-            "(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS" +
-            "SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</p>" +
+            "<p>Licenses:</p>" +
             "</body></html>"
         );
         html.setEditable (false);
@@ -89,9 +77,44 @@ public class SettingsAbout extends JPanel implements Settings
             }
         });
 
+        JTabbedPane licenses = new JTabbedPane ();
+        addLicense (licenses, "N2A", loadResource ("LICENSE"));
+
+        // Units of Measurement
+        // Combine several license files into one big list for display.
+        StringBuilder content = new StringBuilder ();
+        content.append (loadResource ("unit-api"));
+        content.append ("\n");
+        content.append ("\n");
+        content.append ("===============================================================================\n");
+        content.append ("\n");
+        content.append (loadResource ("uom-lib"));
+        content.append ("\n");
+        content.append ("\n");
+        content.append ("===============================================================================\n");
+        content.append ("\n");
+        content.append (loadResource ("uom-se"));
+        content.append ("\n");
+        content.append ("===============================================================================\n");
+        content.append ("\n");
+        content.append ("uom-systems\n");
+        content.append (loadResource ("uom-systems"));
+        content.append ("\n");
+        content.append ("===============================================================================\n");
+        content.append ("\n");
+        content.append ("si-units\n");
+        content.append (loadResource ("si-units"));
+        addLicense (licenses, "Units of Measurement", content.toString ());
+
+        addLicense (licenses, "JFreeChart", loadResource ("jfreechart"));
+        addLicense (licenses, "JSch",       loadResource ("jsch"));
+
         Lay.BLtg (this,
             "N", Lay.lb (ImageUtil.getImage ("n2a-splash.png")),
-            "C", html, "eb=10"
+            "C", Lay.BL (
+                "N", html, "eb=10",
+                "C", licenses
+            )
         );
     }
 
@@ -111,5 +134,32 @@ public class SettingsAbout extends JPanel implements Settings
     public Component getInitialFocus (Component panel)
     {
         return panel;
+    }
+
+    public void addLicenseHTML (JTabbedPane licenses, String name, String content)
+    {
+        JEditorPane editorPane = new JEditorPane ("text/html", content);
+        JScrollPane scrollPane = new JScrollPane (editorPane);
+        licenses.addTab (name, null, scrollPane, null);
+    }
+
+    public void addLicense (JTabbedPane licenses, String name, String content)
+    {
+        JTextArea textArea = new JTextArea (content);
+        textArea.setFont (new Font (Font.MONOSPACED, Font.PLAIN, textArea.getFont ().getSize ()));
+        JScrollPane scrollPane = new JScrollPane (textArea);
+        licenses.addTab (name, null, scrollPane, null);
+    }
+
+    public String loadResource (String fileName)
+    {
+        try (InputStream stream = SettingsAbout.class.getResource ("licenses/" + fileName).openStream ())
+        {
+            return HostSystem.streamToString (stream);
+        }
+        catch (IOException e)
+        {
+            return "";
+        }
     }
 }
