@@ -25,6 +25,7 @@ import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeReference;
 import gov.sandia.n2a.ui.eq.tree.NodeReferences;
+import gov.sandia.n2a.ui.ref.PanelReference;
 
 public class AddReference extends Undoable
 {
@@ -42,20 +43,30 @@ public class AddReference extends Undoable
     {
         path = parent.getKeyPath ();
         this.index = index;
+
+        MPart block = (MPart) parent.source.child ("$reference");
         if (data == null)
         {
-            name = uniqueName (parent, "r", false);
+            // First attempt to use the currently selected record on the Reference tab.
+            name = "";
+            MNode ref = PanelReference.instance.panelEntry.model.record;
+            if (ref != null)
+            {
+                name = ref.key ();
+                if (block != null  &&  block.child (name) != null) name = "";  // Already used this reference.
+                else value = "";  // Try this like a paste rather than pure create.
+            }
+            if (name.isEmpty ()) name = uniqueName (block, "r", false);
         }
         else
         {
-            name = uniqueName (parent, data.key (), true);
+            name = uniqueName (block, data.key (), true);
             value = data.get ();
         }
     }
 
-    public static String uniqueName (NodeBase parent, String prefix, boolean allowEmptySuffix)
+    public static String uniqueName (MNode block, String prefix, boolean allowEmptySuffix)
     {
-        MPart block = (MPart) parent.source.child ("$reference");
         if (allowEmptySuffix  &&  (block == null  ||  block.child (prefix) == null)) return prefix;
         int suffix = 1;
         if (block != null)
@@ -125,7 +136,6 @@ public class AddReference extends Undoable
             container.allNodesChanged (model);
         }
         pet.updateVisibility (createdPath, index);
-        if (path.size () == 1  &&  name.equals ("lock")) pet.updateLock ();
     }
 
     public void redo ()
@@ -180,7 +190,6 @@ public class AddReference extends Undoable
             TreeNode[] createdPath = createdNode.getPath ();
             pet.updateOrder (createdPath);
             pet.updateVisibility (createdPath);
-            if (path.size () == 1  &&  name.equals ("lock")) pet.updateLock ();
         }
 
         return createdNode;
