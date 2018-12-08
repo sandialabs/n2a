@@ -13,16 +13,6 @@ Some things N2A is NOT:
   * Not a simulator. Rather, the tool compiles the language for a given target (NEURON, NEST, C++, Python, etc.).
   * Not deep learning, nor machine learning in general. The goal of N2A is to build an integrated understanding of the whole brain, in a form that can be both analyzed and computed.
 
-## Development Status ##
-
-N2A is a work in progress, almost ready for [Release 1.0](https://github.com/frothga/n2a/milestones). At a minimum it will support:
-
-  * Editing models along the conceptual lines described above.
-  * NeuroML import/export. (The long-term goal is full integration with other neuroinformatic projects.)
-  * At least one commonly-used simulator.
-
-In the meantime, you can try the program in its current state following the instructions below. Alternately, you can build from source. Even better, join the project and help us complete it more quickly!
-
 ## Download ##
 
 [Installation](https://github.com/frothga/n2a/wiki/Installation) -- How to download and install N2A, and set up at least one simulator.
