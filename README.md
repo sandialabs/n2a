@@ -17,6 +17,6 @@ Some things N2A is NOT:
 
 [Installation](https://github.com/frothga/n2a/wiki/Installation) -- How to download and install N2A, and set up at least one simulator.
 
-[Getting Started](https://github.com/frothga/n2a/wiki/GettingStarted) -- Run a simple "Hello World" example: the Hodgkin-Huxley cable equations.
+[Getting Started](https://github.com/frothga/n2a/wiki/Getting%20Started) -- Run a simple "Hello World" example: the Hodgkin-Huxley cable equations.
 
-[Contributing Code](https://github.com/frothga/n2a/wiki/DeveloperHowTo) -- How to set up a development environment, if you would like to volunteer on this project or simply wish to build from source.
+[Contributing Code](https://github.com/frothga/n2a/wiki/Developer%20HowTo) -- How to set up a development environment, if you would like to volunteer on this project or simply wish to build from source.
