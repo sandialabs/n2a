@@ -17,6 +17,7 @@ import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.ref.PanelReference;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.EventQueue;
 import java.awt.FontMetrics;
 import java.awt.Point;
 import java.awt.datatransfer.DataFlavor;
@@ -27,11 +28,13 @@ import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
 import javax.swing.BorderFactory;
@@ -49,76 +52,92 @@ import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.TransferHandler;
 import javax.swing.border.Border;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumn;
 import javax.swing.table.TableColumnModel;
 
+import org.eclipse.jgit.internal.storage.file.FileRepository;
+import org.eclipse.jgit.lib.BranchConfig;
+import org.eclipse.jgit.lib.BranchTrackingStatus;
+import org.eclipse.jgit.lib.IndexDiff;
+import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.lib.StoredConfig;
+import org.eclipse.jgit.transport.RemoteConfig;
+import org.eclipse.jgit.transport.URIish;
+import org.eclipse.jgit.treewalk.FileTreeIterator;
+
 @SuppressWarnings("serial")
 public class SettingsRepo extends JPanel implements Settings
 {
-    protected JTable            table;
-    protected MNodeTableModel   model;
-    protected JScrollPane       scrollPane;
+    protected JTable            repoTable;
+    protected RepoTableModel    repoModel;
+    protected JScrollPane       repoScrollPane;
     protected boolean           needRebuild;  // need to re-collate AppData.models and AppData.references
+    protected boolean           needSave;     // need to flush repositories to disk for git status
     protected Map<String,MNode> existingModels     = AppData.models    .getContainerMap ();
     protected Map<String,MNode> existingReferences = AppData.references.getContainerMap ();
     protected Path              reposDir           = Paths.get (AppData.properties.get ("resourceDir")).resolve ("repos");
+    protected GitTableModel     gitModel;
+    protected JTable            gitTable;
+    protected JScrollPane       gitScrollPane;
 
     public SettingsRepo ()
     {
         setName ("Repositories");  // Necessary to fulfill Settings interface.
 
-        model      = new MNodeTableModel ();
-        table      = new JTable (model);
-        scrollPane = new JScrollPane (table);
+        repoModel      = new RepoTableModel ();
+        repoTable      = new JTable (repoModel);
+        repoScrollPane = new JScrollPane (repoTable);
 
-        table.setAutoResizeMode (JTable.AUTO_RESIZE_OFF);
-        table.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
-        table.setCellSelectionEnabled (true);
-        table.setSurrendersFocusOnKeystroke (true);
-        table.setDragEnabled (true);
-        table.setDropMode (DropMode.ON);
+        repoTable.setAutoResizeMode (JTable.AUTO_RESIZE_LAST_COLUMN);
+        repoTable.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
+        repoTable.setCellSelectionEnabled (true);
+        repoTable.setSurrendersFocusOnKeystroke (true);
+        repoTable.setDragEnabled (true);
+        repoTable.setDropMode (DropMode.ON);
 
-        table.addMouseListener (new MouseAdapter ()
+        repoTable.addMouseListener (new MouseAdapter ()
         {
             public void mouseClicked (MouseEvent e)
             {
                 Point p = e.getPoint ();
-                int row    = table.rowAtPoint (p);
-                int column = table.columnAtPoint (p);
-                if (row >= 0  &&  column >= 0) model.toggle (row, column);
+                int row    = repoTable.rowAtPoint (p);
+                int column = repoTable.columnAtPoint (p);
+                if (row >= 0  &&  column >= 0) repoModel.toggle (row, column);
             }
         });
 
-        InputMap inputMap = table.getInputMap (WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
+        InputMap inputMap = repoTable.getInputMap (WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
         inputMap.put (KeyStroke.getKeyStroke ("shift UP"),   "moveUp");
         inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"), "moveDown");
         inputMap.put (KeyStroke.getKeyStroke ("INSERT"),     "add");
         inputMap.put (KeyStroke.getKeyStroke ("DELETE"),     "delete");
         inputMap.put (KeyStroke.getKeyStroke ("ENTER"),      "startEditing");
 
-        ActionMap actionMap = table.getActionMap ();
+        ActionMap actionMap = repoTable.getActionMap ();
         actionMap.put ("moveUp", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                model.moveSelected (-1);
+                repoModel.moveSelected (-1);
             }
         });
         actionMap.put ("moveDown", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                model.moveSelected (1);
+                repoModel.moveSelected (1);
             }
         });
         actionMap.put ("add", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                int row = table.getSelectedRow ();
+                int row = repoTable.getSelectedRow ();
                 if (row < 0) row = 0;
 
                 String name = "local";
@@ -131,20 +150,20 @@ public class SettingsRepo extends JPanel implements Settings
                 existingReferences.put (name, new MDir (baseDir.resolve ("references")));
                 needRebuild = true;
 
-                model.repos.add (row, AppData.repos.child (name));
-                model.updateOrder ();
-                model.fireTableRowsInserted (row, row);
-                table.editCellAt (row, 3, e);
+                repoModel.repos.add (row, AppData.repos.child (name));
+                repoModel.updateOrder ();
+                repoModel.fireTableRowsInserted (row, row);
+                repoTable.editCellAt (row, 3, e);
             }
         });
         actionMap.put ("delete", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                int column = table.getSelectedColumn ();
-                int row    = table.getSelectedRow ();
+                int column = repoTable.getSelectedColumn ();
+                int row    = repoTable.getSelectedRow ();
                 if (row < 0) return;
-                MNode repo = model.repos.get (row);
+                MNode repo = repoModel.repos.get (row);
                 String name = repo.key ();
 
                 // Show a dialog if any data is about to be destroyed
@@ -168,24 +187,24 @@ public class SettingsRepo extends JPanel implements Settings
                 existingReferences.remove (name);
                 needRebuild = true;
 
-                model.repos.remove (row);
-                model.updateOrder ();
-                model.fireTableRowsDeleted (row, row);
-                if (row >= model.repos.size ()) row = model.repos.size () - 1;
-                if (row >= 0) table.changeSelection (row, column, false, false);
+                repoModel.repos.remove (row);
+                repoModel.updateOrder ();
+                repoModel.fireTableRowsDeleted (row, row);
+                if (row >= repoModel.repos.size ()) row = repoModel.repos.size () - 1;
+                if (row >= 0) repoTable.changeSelection (row, column, false, false);
             }
         });
         actionMap.put ("startEditing", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                int row    = table.getSelectedRow ();
-                int column = table.getSelectedColumn ();
-                if (! model.toggle (row, column)) table.editCellAt (row, column, e);
+                int row    = repoTable.getSelectedRow ();
+                int column = repoTable.getSelectedColumn ();
+                if (! repoModel.toggle (row, column)) repoTable.editCellAt (row, column, e);
             }
         });
 
-        table.setTransferHandler (new TransferHandler ()
+        repoTable.setTransferHandler (new TransferHandler ()
         {
             public boolean canImport (TransferSupport xfer)
             {
@@ -206,10 +225,10 @@ public class SettingsRepo extends JPanel implements Settings
                 {
                     return false;
                 }
-                if (sourceRow < 0  ||  sourceRow >= model.repos.size ()) return false;
+                if (sourceRow < 0  ||  sourceRow >= repoModel.repos.size ()) return false;
 
                 int destinationRow = ((JTable.DropLocation) xfer.getDropLocation ()).getRow ();  // TODO: does need a range check?
-                model.move (sourceRow, destinationRow);
+                repoModel.move (sourceRow, destinationRow);
                 return true;
             }
 
@@ -221,51 +240,123 @@ public class SettingsRepo extends JPanel implements Settings
             protected Transferable createTransferable (JComponent comp)
             {
                 // TODO: is row selection updated at start of drag? If not, need to enforce that somewhere.
-                return new StringSelection (String.valueOf (table.getSelectedRow ()));
+                return new StringSelection (String.valueOf (repoTable.getSelectedRow ()));
             }
         });
 
-        table.addFocusListener (new FocusListener ()
+        FocusListener rebuildListener = new FocusListener ()
         {
             public void focusGained (FocusEvent e)
             {
+                if (needSave)  // Indicates that focus left this settings tab in previous event.
+                {
+                    int row = repoTable.getSelectedRow ();
+                    if (row < 0)
+                    {
+                        if (repoModel.getRowCount () == 0) return;
+                        row = 0;
+                    }
+                    gitModel.current = null;
+                    gitModel.setCurrent (row);
+                }
             }
 
             public void focusLost (FocusEvent e)
             {
-                if (e.isTemporary ()  ||  table.isEditing ()) return;  // The shift to the editing component appears as a loss of focus.
+                Component to = e.getOppositeComponent ();
+                if (to == gitTable  ||  to == repoTable  ||  to == SettingsRepo.this) return;  // Loss is still within current tab, so ignore.
+                if (e.isTemporary ()  ||  repoTable.isEditing ()) return;  // The shift to the editing component appears as a loss of focus.
+                repoModel.clearStatus ();
+                needSave = true;
                 rebuild ();
+            }
+        };
+        repoTable.addFocusListener (rebuildListener);
+
+        repoTable.getSelectionModel ().addListSelectionListener (new ListSelectionListener ()
+        {
+            public void valueChanged (ListSelectionEvent e)
+            {
+                int row = repoTable.getSelectedRow ();
+                gitModel.setCurrent (row);
             }
         });
 
-        FontMetrics fm = table.getFontMetrics (table.getFont ());
+        FontMetrics fm = repoTable.getFontMetrics (repoTable.getFont ());
         int em = fm.charWidth ('M');
-        TableColumnModel cols = table.getColumnModel ();
+        TableColumnModel cols = repoTable.getColumnModel ();
 
         TableColumn col = cols.getColumn (0);
-        int width = fm.stringWidth (model.getColumnName (0)) + em;
-        //col.setPreferredWidth (width);
+        int width = fm.stringWidth (repoModel.getColumnName (0)) + em;
         col.setMaxWidth (width);
 
         col = cols.getColumn (1);
-        width = fm.stringWidth (model.getColumnName (1)) + em;
-        //col.setPreferredWidth (width);
+        width = fm.stringWidth (repoModel.getColumnName (1)) + em;
         col.setMaxWidth (width);
 
         col = cols.getColumn (2);
-        width = fm.stringWidth (model.getColumnName (2)) + em;
-        //col.setPreferredWidth (width);
+        width = fm.stringWidth (repoModel.getColumnName (2)) + em;
         col.setMaxWidth (width);
         col.setCellRenderer (new ColorRenderer ());
 
         col = cols.getColumn (3);
-        col.setPreferredWidth (40 * em);
+        width = fm.stringWidth (repoModel.getColumnName (3));
+        for (MNode r : AppData.repos) width = Math.max (width, fm.stringWidth (r.key ()));
+        width += em;
+        col.setMinWidth (width);
+        col.setPreferredWidth (width);
         col.setCellRenderer (new ColorTextRenderer ());
 
-        ((DefaultTableCellRenderer) table.getTableHeader ().getDefaultRenderer ()).setHorizontalAlignment (JLabel.LEFT);
+        col = cols.getColumn (4);
+        width = fm.stringWidth (repoModel.getColumnName (4));
+        for (GitWrapper w : repoModel.gitRepos)
+        {
+            String url = w.upstreamURL ();
+            if (url == null) continue;
+            width = Math.max (width, fm.stringWidth (url));
+        }
+        width += em;
+        col.setMinWidth (width);
+        col.setPreferredWidth (width);
+
+        ((DefaultTableCellRenderer) repoTable.getTableHeader ().getDefaultRenderer ()).setHorizontalAlignment (JLabel.LEFT);
+
+
+        gitModel      = new GitTableModel ();
+        gitTable      = new JTable (gitModel);
+        gitScrollPane = new JScrollPane (gitTable);
+
+        gitTable.setAutoResizeMode (JTable.AUTO_RESIZE_LAST_COLUMN);
+        gitTable.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
+        gitTable.setCellSelectionEnabled (true);
+        gitTable.setSurrendersFocusOnKeystroke (true);
+        gitTable.addFocusListener (rebuildListener);
+        gitTable.addMouseListener (new MouseAdapter ()
+        {
+            public void mouseClicked (MouseEvent e)
+            {
+                Point p = e.getPoint ();
+                int row    = gitTable.rowAtPoint (p);
+                int column = gitTable.columnAtPoint (p);
+                if (row >= 0  &&  column == 0) gitModel.toggle (row);
+            }
+        });
+
+        fm = gitTable.getFontMetrics (gitTable.getFont ());
+        em = fm.charWidth ('M');
+        cols = gitTable.getColumnModel ();
+
+        col = cols.getColumn (0);
+        width = fm.stringWidth (gitModel.getColumnName (0)) + em;
+        col.setMaxWidth (width);
+
+        ((DefaultTableCellRenderer) gitTable.getTableHeader ().getDefaultRenderer ()).setHorizontalAlignment (JLabel.LEFT);
+
 
         Lay.BLtg (this,
-            "C", scrollPane
+            "C", repoScrollPane,
+            // We'll eventually need some buttons in here to direct repo actions.
+            "S", gitScrollPane
         );
     }
 
@@ -298,7 +389,7 @@ public class SettingsRepo extends JPanel implements Settings
         List<MNode> modelContainers     = new ArrayList<MNode> ();
         List<MNode> referenceContainers = new ArrayList<MNode> ();
         String primary = AppData.state.get ("Repos", "primary");
-        for (MNode repo : model.repos)
+        for (MNode repo : repoModel.repos)
         {
             String repoName = repo.key ();
             boolean isPrimary = repoName.equals (primary);
@@ -344,17 +435,25 @@ public class SettingsRepo extends JPanel implements Settings
         PanelReference.instance.panelEntry.checkVisible ();
     }
 
-    public class MNodeTableModel extends AbstractTableModel
+    public class RepoTableModel extends AbstractTableModel
     {
-        List<MNode> repos = new ArrayList<MNode> ();
+        List<MNode>      repos    = new ArrayList<MNode> ();
+        List<GitWrapper> gitRepos = new ArrayList<GitWrapper> ();
 
-        public MNodeTableModel ()
+        public RepoTableModel ()
         {
             for (String key : AppData.state.get ("Repos", "order").split (","))
             {
                 MNode child = AppData.repos.child (key);
-                if (child != null) repos.add (child);
+                if (child == null) continue;
+                repos.add (child);
+                gitRepos.add (new GitWrapper (reposDir.resolve (key).resolve (".git")));
             }
+        }
+
+        public void clearStatus ()
+        {
+            for (GitWrapper g : gitRepos) g.clearStatus ();
         }
 
         public int getRowCount ()
@@ -364,7 +463,7 @@ public class SettingsRepo extends JPanel implements Settings
 
         public int getColumnCount ()
         {
-            return 4;
+            return 5;
         }
 
         public String getColumnName (int column)
@@ -375,6 +474,7 @@ public class SettingsRepo extends JPanel implements Settings
                 case 1: return "Enable";
                 case 2: return "Color";
                 case 3: return "Name";
+                case 4: return "Git Remote";
             }
             return "";
         }
@@ -395,15 +495,16 @@ public class SettingsRepo extends JPanel implements Settings
         {
             MNode repo = repos.get (row);
             String name = repo.key ();
-            String primary = AppData.state.get ("Repos", "primary");
             switch (column)
             {
                 case 0:
+                    String primary = AppData.state.get ("Repos", "primary");
                     if (primary.isEmpty ()) return row == 0;
                     else                    return name.equals (primary);
                 case 1: return repo.get ("visible").equals ("1");
                 case 2: return getColor (row);
                 case 3: return name;
+                case 4: return gitRepos.get (row).upstreamURL ();
             }
             return null;
         }
@@ -491,7 +592,7 @@ public class SettingsRepo extends JPanel implements Settings
 
         public void moveSelected (int direction)
         {
-            int rowBefore = table.getSelectedRow ();
+            int rowBefore = repoTable.getSelectedRow ();
             if (rowBefore < 0) return;
 
             int rowAfter = rowBefore + direction;
@@ -505,10 +606,10 @@ public class SettingsRepo extends JPanel implements Settings
             MNode repo = repos.remove (rowBefore);
             repos.add (rowAfter, repo);
             updateOrder ();
-            int column = table.getSelectedColumn ();
+            int column = repoTable.getSelectedColumn ();
             if (rowAfter < rowBefore) fireTableRowsUpdated (rowAfter,  rowBefore);
             else                      fireTableRowsUpdated (rowBefore, rowAfter);
-            table.changeSelection (rowAfter, column, false, false);
+            repoTable.changeSelection (rowAfter, column, false, false);
             needRebuild = true;
         }
 
@@ -534,7 +635,7 @@ public class SettingsRepo extends JPanel implements Settings
         public Component getTableCellRendererComponent (JTable table, Object text, boolean isSelected, boolean hasFocus, int row, int column)
         {
             setOpaque (true);
-            setBackground (model.getColor (row));
+            setBackground (repoModel.getColor (row));
 
             Color marginColor;
             if (isSelected) marginColor = table.getSelectionBackground ();
@@ -564,7 +665,7 @@ public class SettingsRepo extends JPanel implements Settings
             }
             else
             {
-                Color color = model.getColor (row);
+                Color color = repoModel.getColor (row);
                 if (color.equals (Color.black)) color = Color.blue;
                 setForeground (color);
             }
@@ -572,6 +673,209 @@ public class SettingsRepo extends JPanel implements Settings
             setFont (table.getFont ());
 
             return this;
+        }
+    }
+
+    public class ThreadGitStatus extends Thread
+    {
+        public void run ()
+        {
+            GitWrapper gitRepo = gitModel.current;
+            List<Delta> deltas = gitRepo.getDeltas ();
+            synchronized (gitModel)
+            {
+                if (gitRepo != gitModel.current) return;
+                gitModel.deltas = deltas;
+                EventQueue.invokeLater (new Runnable ()
+                {
+                    public void run ()
+                    {
+                        gitModel.fireTableDataChanged ();
+                    }
+                });
+            }
+        }
+    }
+
+    public static class Delta
+    {
+        public String  name;
+        public boolean deleted;
+    }
+
+    public class GitWrapper
+    {
+        public Path         gitDir;
+        public Repository   gitRepo;
+        public StoredConfig config;
+        public String       head;
+        public BranchConfig branch;
+        public RemoteConfig remote;
+        public int          ahead;
+        public int          behind;
+        public IndexDiff    status;
+
+        public GitWrapper (Path gitDir)
+        {
+            this.gitDir = gitDir;
+            // We don't care whether .git actually exists.
+            // Ultimately we want to put everything under source control. 
+            try
+            {
+                gitRepo = new FileRepository (gitDir.toFile ());
+                head = gitRepo.getBranch ();
+                config = gitRepo.getConfig ();
+                config.load ();
+
+                if (head == null) return;
+                branch = new BranchConfig (config, head);
+                String remoteName = branch.getRemote ();
+                if (remoteName == null) return;
+                remote = new RemoteConfig (config, remoteName);
+            }
+            catch (Exception e) {}
+        }
+
+        public String upstreamURL ()
+        {
+            if (remote == null) return null;
+            List<URIish> URIs = remote.getURIs ();
+            if (URIs.size () == 0) return null;
+            return URIs.get (0).toString ();
+        }
+
+        public synchronized void checkStatus ()
+        {
+            if (status != null) return;
+            if (needSave)
+            {
+                AppData.save ();
+                needSave = false;
+            }
+            try
+            {
+                status = new IndexDiff (gitRepo, "HEAD", new FileTreeIterator (gitRepo));
+                status.diff ();
+            }
+            catch (IOException e) {e.printStackTrace ();}
+        }
+
+        public synchronized void clearStatus ()
+        {
+            status = null;
+        }
+
+        public Delta addDelta (String name, TreeMap<String,Delta> map)
+        {
+            if (! name.contains ("/")) return new Delta ();  // A throw away object, which won't get included in map and thus not in final result.
+
+            Delta d = map.get (name);
+            if (d == null)
+            {
+                d = new Delta ();
+                d.name = name;
+                map.put (name, d);
+            }
+            return d;
+        }
+
+        public synchronized List<Delta> getDeltas ()
+        {
+            checkStatus ();
+            if (status == null) return new ArrayList<Delta> ();
+
+            TreeMap<String,Delta> sorted = new TreeMap<String,Delta> ();
+            for (String s : status.getUntracked ()) addDelta (s, sorted);
+            for (String s : status.getModified ())  addDelta (s, sorted);
+            for (String s : status.getMissing ())   addDelta (s, sorted).deleted = true;
+            return new ArrayList<Delta> (sorted.values ());
+        }
+
+        public void getRemoteTracking ()
+        {
+            ahead  = 0;
+            behind = 0;
+            if (head == null) return;
+            try
+            {
+                BranchTrackingStatus track = BranchTrackingStatus.of (gitRepo, head);
+                if (track != null)
+                {
+                    ahead  = track.getAheadCount ();
+                    behind = track.getBehindCount ();
+                }
+            }
+            catch (IOException e) {}
+        }
+    }
+
+    public class GitTableModel extends AbstractTableModel
+    {
+        GitWrapper  current;
+        MNode       repo;
+        List<Delta> deltas = new ArrayList<Delta> ();
+
+        public void setCurrent (int row)
+        {
+            GitWrapper gitRepo = repoModel.gitRepos.get (row);
+            if (current == gitRepo) return;
+            current = gitRepo;
+            repo = repoModel.repos.get (row);
+            Thread thread = new ThreadGitStatus ();
+            thread.setDaemon (true);
+            thread.run ();
+
+            gitRepo.getRemoteTracking ();
+        }
+
+        public synchronized int getRowCount ()
+        {
+           return deltas.size ();
+        }
+
+        public int getColumnCount ()
+        {
+            return 2;
+        }
+
+        public String getColumnName (int column)
+        {
+            switch (column)
+            {
+                case 0: return "Commit";
+                case 1: return "Filename";
+            }
+            return "";
+        }
+
+        public Class<?> getColumnClass (int column)
+        {
+            if (column == 0) return Boolean.class;
+            return super.getColumnClass (column);
+        }
+
+        public boolean isCellEditable (int row, int column)
+        {
+            return false;
+        }
+
+        public synchronized Object getValueAt (int row, int column)
+        {
+            String name = deltas.get (row).name;
+            switch (column)
+            {
+                case 0: return repo.child ("ignore", name) == null;
+                case 1: return name;
+            }
+            return null;
+        }
+
+        public void toggle (int row)
+        {
+            String name = deltas.get (row).name;
+            if (repo.child ("ignore", name) == null) repo.set   ("ignore", name, "");
+            else                                     repo.clear ("ignore", name);
+            fireTableCellUpdated (row, 0);
         }
     }
 }

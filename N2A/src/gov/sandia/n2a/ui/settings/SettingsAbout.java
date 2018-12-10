@@ -34,6 +34,8 @@ import javax.swing.event.HyperlinkListener;
 @SuppressWarnings("serial")
 public class SettingsAbout extends JPanel implements Settings
 {
+    Listener hyperlinkListener = new Listener ();
+
     public SettingsAbout ()
     {
         setName ("About");  // Necessary to fulfill Settings interface.
@@ -47,7 +49,7 @@ public class SettingsAbout extends JPanel implements Settings
             "<html><body>" +
             "<p><span style='font-size:150%'>" + pc.get ("name") + "</span> version " + pc.get ("version") + "</p>" +
             "<hr/>" +
-            "<p>Coders: Fred Rothganger, Derek Trumbo, Christy Warrender</p>" +
+            "<p>Programmers: Fred Rothganger, Derek Trumbo, Christy Warrender</p>" +
             "<p>Concept development: Brad Aimone, Corinne Teeter, Steve Verzi, Asmeret Bier, Brandon Rohrer, Ann Speed, Felix Wang</p>" +
             "<p>Technical support: <a href=\"mailto:frothga@sandia.gov\">frothga@sandia.gov</a></p>" +
             "<p>Licenses:</p>" +
@@ -55,27 +57,7 @@ public class SettingsAbout extends JPanel implements Settings
         );
         html.setEditable (false);
         html.setOpaque (false);
-        html.addHyperlinkListener (new HyperlinkListener ()
-        {
-            public void hyperlinkUpdate (HyperlinkEvent e)
-            {
-                InputEvent ie = e.getInputEvent ();
-                if (ie instanceof MouseEvent  &&  ((MouseEvent) ie).getClickCount () > 0)
-                {
-                    if (Desktop.isDesktopSupported ())
-                    {
-                        Desktop desktop = Desktop.getDesktop ();
-                        try
-                        {
-                            desktop.browse (e.getURL ().toURI ());
-                        }
-                        catch (IOException | URISyntaxException exception)
-                        {
-                        }
-                    }
-                }
-            }
-        });
+        html.addHyperlinkListener (hyperlinkListener);
 
         JTabbedPane licenses = new JTabbedPane ();
         addLicense (licenses, "N2A", loadResource ("LICENSE"));
@@ -106,8 +88,11 @@ public class SettingsAbout extends JPanel implements Settings
         content.append (loadResource ("si-units"));
         addLicense (licenses, "Units of Measurement", content.toString ());
 
-        addLicense (licenses, "JFreeChart", loadResource ("jfreechart"));
-        addLicense (licenses, "JSch",       loadResource ("jsch"));
+        addLicense     (licenses, "JFreeChart", loadResource ("jfreechart"));
+        addLicense     (licenses, "JSch",       loadResource ("jsch"));
+        addLicense     (licenses, "JGit",       loadResource ("jgit"));
+        addLicense     (licenses, "SLF4J",      loadResource ("slf4j"));
+        addLicenseHTML (licenses, "Eclipse",    loadResource ("eclipse"));
 
         Lay.BLtg (this,
             "N", Lay.lb (ImageUtil.getImage ("n2a-splash.png")),
@@ -139,6 +124,8 @@ public class SettingsAbout extends JPanel implements Settings
     public void addLicenseHTML (JTabbedPane licenses, String name, String content)
     {
         JEditorPane editorPane = new JEditorPane ("text/html", content);
+        editorPane.setEditable (false);
+        editorPane.addHyperlinkListener (hyperlinkListener);
         JScrollPane scrollPane = new JScrollPane (editorPane);
         licenses.addTab (name, null, scrollPane, null);
     }
@@ -160,6 +147,28 @@ public class SettingsAbout extends JPanel implements Settings
         catch (IOException e)
         {
             return "";
+        }
+    }
+
+    public static class Listener implements HyperlinkListener
+    {
+        public void hyperlinkUpdate (HyperlinkEvent e)
+        {
+            InputEvent ie = e.getInputEvent ();
+            if (ie instanceof MouseEvent  &&  ((MouseEvent) ie).getClickCount () > 0)
+            {
+                if (Desktop.isDesktopSupported ())
+                {
+                    Desktop desktop = Desktop.getDesktop ();
+                    try
+                    {
+                        desktop.browse (e.getURL ().toURI ());
+                    }
+                    catch (IOException | URISyntaxException exception)
+                    {
+                    }
+                }
+            }
         }
     }
 }
