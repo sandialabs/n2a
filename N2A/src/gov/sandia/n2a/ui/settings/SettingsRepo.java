@@ -19,6 +19,7 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.FontMetrics;
+import java.awt.Insets;
 import java.awt.Point;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
@@ -38,9 +39,11 @@ import java.util.TreeMap;
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
 import javax.swing.BorderFactory;
+import javax.swing.Box;
 import javax.swing.DropMode;
 import javax.swing.ImageIcon;
 import javax.swing.InputMap;
+import javax.swing.JButton;
 import javax.swing.JColorChooser;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
@@ -71,29 +74,38 @@ import org.eclipse.jgit.transport.URIish;
 import org.eclipse.jgit.treewalk.FileTreeIterator;
 
 @SuppressWarnings("serial")
-public class SettingsRepo extends JPanel implements Settings
+public class SettingsRepo extends JScrollPane implements Settings
 {
-    protected JTable            repoTable;
-    protected RepoTableModel    repoModel;
-    protected JScrollPane       repoScrollPane;
+    protected JTable         repoTable;
+    protected RepoTableModel repoModel;
+    protected GitTableModel  gitModel;
+    protected JTable         gitTable;
+    protected JButton        buttonRevert;
+    protected JButton        buttonRefresh;
+    protected JLabel         labelStatus;
+    protected JButton        buttonPull;
+    protected JButton        buttonCommit;
+    protected JButton        buttonPush;
+
     protected boolean           needRebuild;  // need to re-collate AppData.models and AppData.references
     protected boolean           needSave;     // need to flush repositories to disk for git status
     protected Map<String,MNode> existingModels     = AppData.models    .getContainerMap ();
     protected Map<String,MNode> existingReferences = AppData.references.getContainerMap ();
     protected Path              reposDir           = Paths.get (AppData.properties.get ("resourceDir")).resolve ("repos");
-    protected GitTableModel     gitModel;
-    protected JTable            gitTable;
-    protected JScrollPane       gitScrollPane;
 
     public SettingsRepo ()
     {
         setName ("Repositories");  // Necessary to fulfill Settings interface.
+        JPanel panel = new JPanel ();
+        setViewportView (panel);
 
-        repoModel      = new RepoTableModel ();
-        repoTable      = new JTable (repoModel);
-        repoScrollPane = new JScrollPane (repoTable);
+        repoModel = new RepoTableModel ();
+        repoTable = new JTable (repoModel);
+        JPanel repoPanel = new JPanel ();
+        repoPanel.setAlignmentX (LEFT_ALIGNMENT);
+        Lay.BLtg (repoPanel, "N", repoTable.getTableHeader (), "C", repoTable);
 
-        repoTable.setAutoResizeMode (JTable.AUTO_RESIZE_LAST_COLUMN);
+        repoTable.setAutoResizeMode (JTable.AUTO_RESIZE_OFF);
         repoTable.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
         repoTable.setCellSelectionEnabled (true);
         repoTable.setSurrendersFocusOnKeystroke (true);
@@ -144,15 +156,17 @@ public class SettingsRepo extends JPanel implements Settings
                 int suffix = 2;
                 while (AppData.repos.child (name) != null) name = "local" + suffix++;
 
-                AppData.repos.set (name, "visible", 1);
+                AppData.repos.set (name, "visible", 1);  // Implicitly creates the repo node.
                 Path baseDir = reposDir.resolve (name);
                 existingModels    .put (name, new MDir (baseDir.resolve ("models")));
                 existingReferences.put (name, new MDir (baseDir.resolve ("references")));
                 needRebuild = true;
 
-                repoModel.repos.add (row, AppData.repos.child (name));
+                repoModel.repos   .add (row, AppData.repos.child (name));
+                repoModel.gitRepos.add (row, new GitWrapper (baseDir.resolve (".git")));
                 repoModel.updateOrder ();
                 repoModel.fireTableRowsInserted (row, row);
+                repoTable.changeSelection (row, 3, false, false);
                 repoTable.editCellAt (row, 3, e);
             }
         });
@@ -187,7 +201,8 @@ public class SettingsRepo extends JPanel implements Settings
                 existingReferences.remove (name);
                 needRebuild = true;
 
-                repoModel.repos.remove (row);
+                repoModel.repos   .remove (row);
+                repoModel.gitRepos.remove (row);
                 repoModel.updateOrder ();
                 repoModel.fireTableRowsDeleted (row, row);
                 if (row >= repoModel.repos.size ()) row = repoModel.repos.size () - 1;
@@ -302,6 +317,7 @@ public class SettingsRepo extends JPanel implements Settings
         col = cols.getColumn (3);
         width = fm.stringWidth (repoModel.getColumnName (3));
         for (MNode r : AppData.repos) width = Math.max (width, fm.stringWidth (r.key ()));
+        width = Math.max (width, 15 * em);
         width += em;
         col.setMinWidth (width);
         col.setPreferredWidth (width);
@@ -315,6 +331,7 @@ public class SettingsRepo extends JPanel implements Settings
             if (url == null) continue;
             width = Math.max (width, fm.stringWidth (url));
         }
+        width = Math.max (width, 40 * em);
         width += em;
         col.setMinWidth (width);
         col.setPreferredWidth (width);
@@ -322,11 +339,13 @@ public class SettingsRepo extends JPanel implements Settings
         ((DefaultTableCellRenderer) repoTable.getTableHeader ().getDefaultRenderer ()).setHorizontalAlignment (JLabel.LEFT);
 
 
-        gitModel      = new GitTableModel ();
-        gitTable      = new JTable (gitModel);
-        gitScrollPane = new JScrollPane (gitTable);
+        gitModel = new GitTableModel ();
+        gitTable = new JTable (gitModel);
+        JPanel gitPanel = new JPanel ();
+        gitPanel.setAlignmentX (LEFT_ALIGNMENT);
+        Lay.BLtg (gitPanel, "N", gitTable.getTableHeader (), "C", gitTable);
 
-        gitTable.setAutoResizeMode (JTable.AUTO_RESIZE_LAST_COLUMN);
+        gitTable.setAutoResizeMode (JTable.AUTO_RESIZE_OFF);
         gitTable.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
         gitTable.setCellSelectionEnabled (true);
         gitTable.setSurrendersFocusOnKeystroke (true);
@@ -350,13 +369,50 @@ public class SettingsRepo extends JPanel implements Settings
         width = fm.stringWidth (gitModel.getColumnName (0)) + em;
         col.setMaxWidth (width);
 
+        col = cols.getColumn (1);
+        width = fm.stringWidth (gitModel.getColumnName (1));
+        width = Math.max (width, 40 * em);
+        width += em;
+        col.setMinWidth (width);
+
         ((DefaultTableCellRenderer) gitTable.getTableHeader ().getDefaultRenderer ()).setHorizontalAlignment (JLabel.LEFT);
 
 
-        Lay.BLtg (this,
-            "C", repoScrollPane,
-            // We'll eventually need some buttons in here to direct repo actions.
-            "S", gitScrollPane
+        buttonRevert = new JButton (ImageUtil.getImage ("revert.gif"));
+        buttonRevert.setMargin (new Insets (2, 2, 2, 2));
+        buttonRevert.setFocusable (false);
+        buttonRevert.setToolTipText ("Revert");
+
+        buttonRefresh = new JButton (ImageUtil.getImage ("refresh.gif"));
+        buttonRefresh.setMargin (new Insets (2, 2, 2, 2));
+        buttonRefresh.setFocusable (false);
+        buttonRefresh.setToolTipText ("Refresh");
+
+        buttonPull = new JButton (ImageUtil.getImage ("pull.png"));
+        buttonPull.setMargin (new Insets (2, 2, 2, 2));
+        buttonPull.setFocusable (false);
+        buttonPull.setToolTipText ("Pull");
+
+        buttonCommit = new JButton (ImageUtil.getImage ("commit.png"));
+        buttonCommit.setMargin (new Insets (2, 2, 2, 2));
+        buttonCommit.setFocusable (false);
+        buttonCommit.setToolTipText ("Commit");
+
+        buttonPush = new JButton (ImageUtil.getImage ("push.png"));
+        buttonPush.setMargin (new Insets (2, 2, 2, 2));
+        buttonPush.setFocusable (false);
+        buttonPush.setToolTipText ("Push");
+
+        labelStatus = new JLabel ("Ahead ?, Behind ?");
+        buttonPush.setMargin (new Insets (2, 2, 2, 2));
+
+
+        Lay.BLtg (panel,
+            "N", Lay.BxL (
+                Lay.BL ("W", repoPanel),
+                Lay.WL ("L", buttonRevert, Box.createHorizontalStrut (15), labelStatus, buttonRefresh, buttonPull, buttonCommit, buttonPush, "hgap=10,vgap=10"),
+                Lay.BL ("W", gitPanel)
+            )
         );
     }
 
@@ -817,6 +873,14 @@ public class SettingsRepo extends JPanel implements Settings
 
         public void setCurrent (int row)
         {
+            if (row < 0  ||  row >= repoModel.gitRepos.size ())
+            {
+                current = null;
+                repo = null;
+                deltas.clear ();
+                return;
+            }
+
             GitWrapper gitRepo = repoModel.gitRepos.get (row);
             if (current == gitRepo) return;
             current = gitRepo;
