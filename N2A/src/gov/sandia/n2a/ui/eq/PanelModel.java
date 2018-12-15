@@ -21,10 +21,12 @@ import javax.swing.KeyStroke;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MNodeListener;
 import gov.sandia.n2a.ui.UndoManager;
 
 @SuppressWarnings("serial")
-public class PanelModel extends JPanel
+public class PanelModel extends JPanel implements MNodeListener
 {
     public static PanelModel instance;  ///< Technically, this class is a singleton, because only one would normally be created.
 
@@ -98,5 +100,73 @@ public class PanelModel extends JPanel
                 catch (CannotRedoException e) {}
             }
         });
+
+        AppData.models.addListener (this);
+    }
+
+    public void changed ()
+    {
+        panelMRU.loadMRU ();
+        panelSearch.search ();
+        panelEquations.checkVisible ();
+    }
+
+    public void childAdded (String key)
+    {
+        MNode doc = AppData.models.child (key);
+        panelMRU.insertDoc (doc);
+        panelSearch.insertDoc (doc);
+    }
+
+    public void childDeleted (String key)
+    {
+        panelMRU.removeDoc (key);
+        panelSearch.removeDoc (key);
+        panelEquations.checkVisible ();
+    }
+
+    public void childChanged (String oldKey, String newKey)
+    {
+        // Holders in search and MRU should associate newKey with correct doc.
+        MNode newDoc = AppData.models.child (newKey);
+        panelMRU.updateDoc (newDoc);
+        panelSearch.updateDoc (newDoc);
+
+        String key = "";
+        MNode record = panelEquations.record;
+        if (record != null) key = record.key ();
+
+        boolean contentOnly = oldKey.equals (newKey);
+        if (key.equals (newKey))
+        {
+            if (contentOnly)
+            {
+                panelEquations.record = null;  // Force rebuild of display
+                panelEquations.loadRootFromDB (newDoc);
+            }
+            else
+            {
+                panelEquations.checkVisible ();
+            }
+        }
+        if (contentOnly) return;
+
+        MNode oldDoc = AppData.models.child (oldKey);
+        if (oldDoc == null)  // deleted
+        {
+            panelMRU.removeDoc (oldKey);
+            panelSearch.removeDoc (oldKey);
+            panelEquations.checkVisible ();
+        }
+        else  // oldDoc has changed identity
+        {
+            panelMRU.updateDoc (oldDoc);
+            panelSearch.updateDoc (oldDoc);
+            if (key.equals (oldKey))
+            {
+                panelEquations.record = null;
+                panelEquations.loadRootFromDB (oldDoc);
+            }
+        }
     }
 }

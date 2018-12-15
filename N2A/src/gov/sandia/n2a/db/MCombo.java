@@ -17,14 +17,15 @@ import java.util.TreeMap;
     Presents several different sets of MPersistent children as a single set.
     The children continue to point to their original parent, so they are stored properly.
 **/
-public class MCombo extends MNode
+public class MCombo extends MNode implements MNodeListener
 {
-    protected String      name;
-    protected List<MNode> containers;
-	protected boolean     loaded;
-	protected MNode       primary;  // The one source we are allowed to modify. Always set to first object in sources.
+    protected String  name;
+	protected boolean loaded;
+	protected MNode   primary;  // The one source we are allowed to modify. Always set to first object in sources.
 
-	protected NavigableMap<String,MNode> children = new TreeMap<String,MNode> ();  // from key to source; requires second lookup to retrieve actual child
+    protected List<MNode>                containers = new ArrayList<MNode> ();
+	protected NavigableMap<String,MNode> children   = new TreeMap<String,MNode> ();  // from key to source; requires second lookup to retrieve actual child
+    protected List<MNodeListener>        listeners  = new ArrayList<MNodeListener> ();
 
     public MCombo (String name, List<MNode> containers)
     {
@@ -34,11 +35,15 @@ public class MCombo extends MNode
 
     public synchronized void init (List<MNode> containers)
     {
+        for (MNode c : this.containers) c.removeListener (this);
+        for (MNode c :      containers) c.addListener (this);
+
         this.containers = containers;
         if (containers.size () > 0) primary = containers.get (0);
         else                        primary = new MVolatile ();
         children.clear ();
         loaded = false;
+        fireChanged ();
     }
 
     public String key ()
@@ -71,6 +76,12 @@ public class MCombo extends MNode
         return false;
     }
 
+    public synchronized MNode rescanContainer (String key)
+    {
+        for (MNode c : containers) if (c.child (key) != null) return c;
+        return null;
+    }
+
     protected synchronized MNode getChild (String index)
     {
         load ();
@@ -84,6 +95,7 @@ public class MCombo extends MNode
         // This does not remove the original objects, only our links to them.
         containers.clear ();
         children  .clear ();
+        fireChanged ();
     }
 
     protected synchronized void clearChild (String index)
@@ -91,11 +103,7 @@ public class MCombo extends MNode
         // This actually removes the original object.
         load ();
         MNode container = children.get (index);
-        if (container == primary)
-        {
-            children.remove (index);
-            container.clear (index);
-        }
+        if (container == primary) container.clear (index);  // Triggers childDeleted() call from MDir, which updates our children collection.
     }
 
     public synchronized int size ()
@@ -107,8 +115,7 @@ public class MCombo extends MNode
     public synchronized MNode set (String index, String value)
     {
         load ();
-        children.put (index, primary);
-        return primary.set (index, value);
+        return primary.set (index, value);  // Triggers childAdded() call from MDir, which updates our children collection.
     }
 
     /**
@@ -121,22 +128,91 @@ public class MCombo extends MNode
         load ();
         MNode container = children.get (fromIndex);
         if (container != primary) return;
+        primary.move (fromIndex, toIndex);  // Triggers childChanged() call from MDir, which updates our children collection.
+    }
 
-        primary.move (fromIndex, toIndex);
-        children.remove (fromIndex);
-        children.put (toIndex, primary);
+    public synchronized void addListener (MNodeListener listener)
+    {
+        listeners.add (listener);
+    }
 
-        // Check if the move exposed a model of the same name from another repo.
-        // It shouldn't hurt anything to do this check on the primary repo, since the old model should be gone from there.
-        for (MNode c : containers)
+    public synchronized void removeListener (MNodeListener listener)
+    {
+        listeners.remove (listener);
+    }
+
+    public synchronized void fireChanged ()
+    {
+        for (MNodeListener l : listeners) l.changed ();
+    }
+
+    public synchronized void fireChildAdded (String key)
+    {
+        for (MNodeListener l : listeners) l.childAdded (key);
+    }
+
+    public synchronized void fireChildDeleted (String key)
+    {
+        for (MNodeListener l : listeners) l.childDeleted (key);
+    }
+
+    public synchronized void fireChildChanged (String oldKey, String newKey)
+    {
+        for (MNodeListener l : listeners) l.childChanged (oldKey, newKey);
+    }
+
+    public void changed ()
+    {
+        // Force a rebuild of children.
+        children.clear ();
+        loaded = false;
+        fireChanged ();
+    }
+
+    public void childAdded (String key)
+    {
+        MNode oldChild = child (key);
+        MNode newContainer = rescanContainer (key);
+        MNode newChild = newContainer.child (key);
+        if (oldChild == newChild) return;  // Change is hidden by higher-precedence dataset.
+        children.put (key, newContainer);
+        if (oldChild == null) fireChildAdded (key);
+        fireChildChanged (key, key);
+    }
+
+    public void childDeleted (String key)
+    {
+        MNode newContainer = rescanContainer (key);
+        if (newContainer == null)
         {
-            MNode child = c.child (fromIndex);
-            if (child != null)
-            {
-                children.put (fromIndex, child);
-                break;
-            }
+            children.remove (key);
+            fireChildDeleted (key);
+            return;
         }
+        // A hidden node was exposed by the delete.
+        // It's also possible that the deleted node was hidden so no effective change occurred.
+        // It's not worth the extra work to detect the "still hidden" case.
+        children.put (key, newContainer);
+        fireChildChanged (key, key);
+    }
+
+    public void childChanged (String oldKey, String newKey)
+    {
+        if (! oldKey.equals (newKey))  // Not a simple change of content, but rather a move of some sort.
+        {
+            // Update container mapping at both oldKey and newKey
+            MNode container = rescanContainer (oldKey);
+            if (container == null) children.remove (oldKey);
+            else                   children.put (oldKey, container);
+            container = rescanContainer (newKey);
+            if (container == null) children.remove (newKey);
+            else                   children.put (newKey, container);
+        }
+
+        // It's possible that both oldKey and newKey are hidden by higher-precedent datasets,
+        // producing no effective change. We should avoid forwarding the message in that case,
+        // but it's not worth the effort to detect.
+        fireChildChanged (oldKey, newKey);
     }
 
     public class IteratorCombo implements Iterator<MNode>

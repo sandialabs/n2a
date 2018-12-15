@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -17,7 +17,7 @@ public class DeleteEntry extends Undoable
 {
     protected MVolatile saved;
     protected boolean   neutralized;
-    protected int       index;  ///< Position of this doc in the search panel before it was deleted.
+    protected String    keyAfter;  // key of the doc in the search list immediately after the one being deleted, or empty string is this is the end of the list
     protected boolean   fromSearchPanel;
     protected boolean   wasShowing;
 
@@ -28,14 +28,18 @@ public class DeleteEntry extends Undoable
 
         PanelReference mep = PanelReference.instance;
         fromSearchPanel = mep.panelSearch.list.isFocusOwner ();
-        index           = mep.panelSearch.indexOf (doc);
+        keyAfter        = mep.panelSearch.keyAfter (doc);
         wasShowing      = mep.panelEntry.model.record == doc;
     }
 
     public void undo ()
     {
         super.undo ();
-        AddEntry.create (saved.key (), saved, index, fromSearchPanel, wasShowing);
+        PanelReference mep = PanelReference.instance;
+        mep.panelMRU.dontInsert = true;
+        int index = mep.panelSearch.indexOf (keyAfter);
+        if (index < 0) index = 0;
+        AddEntry.create (saved.key (), saved, index, fromSearchPanel, wasShowing, false);
     }
 
     public void redo ()

@@ -8,6 +8,8 @@ package gov.sandia.n2a.ui.eq;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.ui.eq.PanelSearch.Holder;
+
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.datatransfer.DataFlavor;
@@ -26,6 +28,7 @@ public class PanelMRU extends JPanel
 {
     public JList<PanelSearch.Holder>            list;
     public DefaultListModel<PanelSearch.Holder> model;
+    public boolean                              dontInsert;  // Ignore next call to insertDoc()
 
     public PanelMRU ()
     {
@@ -114,18 +117,51 @@ public class PanelMRU extends JPanel
         }
     }
 
-    public void removeDoc (MNode doc)
+    public void removeDoc (String key)
     {
-        int index = model.indexOf (new PanelSearch.Holder (doc));
-        if (index >= 0) model.remove (index);
-        saveMRU ();
+        int count = model.size ();
+        for (int i = 0; i < count; i++)
+        {
+            Holder h = model.get (i);
+            if (h.doc.key ().equals (key))
+            {
+                model.remove (i);
+                saveMRU ();
+                return;
+            }
+        }
+    }
+
+    public void updateDoc (MNode doc)
+    {
+        String key = doc.key ();
+        int count = model.size ();
+        for (int i = 0; i < count; i++)
+        {
+            Holder h = model.get (i);
+            if (h.doc.key ().equals (key))
+            {
+                if (h.doc != doc)
+                {
+                    h.doc = doc;
+                    model.setElementAt (h, i);  // Force repaint of the associated row.
+                }
+                return;
+            }
+        }
     }
 
     public void insertDoc (MNode doc)
     {
+        if (dontInsert)
+        {
+            dontInsert = false;
+            return;
+        }
         PanelSearch.Holder h = new PanelSearch.Holder (doc);
         int index = model.indexOf (h);
-        if (index < 0) model.add (0, h);
+        if (index >= 0) return;  // nothing to do
+        model.add (0, h);
         saveMRU ();
     }
 

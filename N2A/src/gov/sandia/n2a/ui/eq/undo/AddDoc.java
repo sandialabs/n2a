@@ -1,5 +1,5 @@
 /*
-Copyright 2016,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -16,20 +16,15 @@ import gov.sandia.n2a.ui.eq.PanelModel;
 
 public class AddDoc extends Undoable
 {
-    public    String  name;  // public so we can use the name in a potential Outsource operation
-    protected boolean fromSearchPanel;
-    protected int     index;  // 0 by default
-    public    MNode   saved;  // public so we can fill it in with imported model after creating an instance of this class
-    public    boolean wasShowing = true;
+    public String  name;
+    public MNode   saved;
+    public boolean fromSearchPanel;
+    public String  keyAfter;  // key of doc at the location in search list where we should insert the new doc. The other doc will get pushed down a row.
+    public boolean wasShowing = true;
 
     public AddDoc ()
     {
         this ("New Model", new MVolatile ());
-    }
-
-    public AddDoc (String name)
-    {
-        this (name, new MVolatile ());
     }
 
     public AddDoc (String name, MNode saved)
@@ -39,6 +34,7 @@ public class AddDoc extends Undoable
 
         PanelModel mep = PanelModel.instance;
         fromSearchPanel = mep.panelSearch.list.isFocusOwner ();  // Otherwise, assume focus is on equation tree
+        keyAfter = mep.panelSearch.currentKey ();
 
         // Insert ID, if given doc does not already have one.
         MNode id = saved.childOrCreate ("$metadata", "id");
@@ -74,58 +70,57 @@ public class AddDoc extends Undoable
         destroy (name, fromSearchPanel);
     }
 
-    public static int destroy (String name, boolean fromSearchPanel)
+    public static void destroy (String name, boolean fromSearchPanel)
     {
         MNode doc = AppData.models.child (name);
-        PanelModel mep = PanelModel.instance;
-        mep.panelEquations.recordDeleted (doc);
-        mep.panelMRU.removeDoc (doc);
-        int result = mep.panelSearch.removeDoc (doc);
         String id = doc.get ("$metadata", "id");
         if (! id.isEmpty ()) AppData.set (id, null);
-        AppData.models.clear (name);
-        mep.panelSearch.lastSelection = Math.min (mep.panelSearch.model.size () - 1, result);
+        AppData.models.clear (name);  // Triggers PanelModel.childDeleted(name), which removes doc from all 3 sub-panels.
+
+        PanelModel mep = PanelModel.instance;
         if (fromSearchPanel)
         {
-            mep.panelSearch.list.setSelectedIndex (mep.panelSearch.lastSelection);
+            mep.panelSearch.showSelection ();
             mep.panelSearch.list.requestFocusInWindow ();
         }
-        else
-        {
-            mep.panelEquations.tree.requestFocusInWindow ();
-        }
-        return result;
+        // else leave the focus wherever it's at. We shift focus to make user aware of the delete, but this is only meaningful in the search list.
     }
 
     public void redo ()
     {
         super.redo ();
-        create (name, saved, 0, fromSearchPanel, wasShowing);
+        int index = 0;
+        if (! keyAfter.isEmpty ())
+        {
+            index = PanelModel.instance.panelSearch.indexOf (keyAfter);
+            if (index < 0) index = 0;
+        }
+        create (name, saved, index, fromSearchPanel, wasShowing, wasShowing);
     }
 
-    public static int create (String name, MNode saved, int index, boolean fromSearchPanel, boolean wasShowing)
+    public static void create (String name, MNode saved, int index, boolean fromSearchPanel, boolean wasShowing, boolean willEdit)
     {
-        MDoc doc = (MDoc) AppData.models.set (name, "");
+        PanelModel mep = PanelModel.instance;
+        mep.panelSearch.insertNextAt (index);
+
+        MDoc doc = (MDoc) AppData.models.set (name, "");  // Triggers PanelModel.childAdded(name), which updates the select and MRU panels, but not the equation tree panel.
         doc.merge (saved);
         new MPart (doc).clearRedundantOverrides ();
         AppData.set (doc.get ("$metadata", "id"), doc);
 
-        PanelModel mep = PanelModel.instance;
-        mep.panelMRU.insertDoc (doc);
-        int result = mep.panelSearch.insertDoc (doc, index);
-        if (wasShowing) mep.panelEquations.loadRootFromDB (doc);
-        mep.panelSearch.lastSelection = index;
-        if (fromSearchPanel)
+        if (wasShowing) mep.panelEquations.loadRootFromDB (doc);  // Also highlights selection, so this must be cleared if focus goes to search list.
+        if (willEdit  ||  ! fromSearchPanel)
         {
-            if (wasShowing) mep.panelEquations.tree.clearSelection ();
-            mep.panelSearch.list.setSelectedIndex (result);
-            mep.panelSearch.list.requestFocusInWindow ();
+            mep.panelSearch.hideSelection ();
+            mep.panelSearch.lastSelection = index;  // Because hideSelection() stores current selection, which was one row past index.
+            mep.panelEquations.tree.requestFocusInWindow ();
         }
         else
         {
-            mep.panelEquations.tree.requestFocusInWindow ();
+            mep.panelEquations.yieldFocus ();
+            mep.panelSearch.list.setSelectedIndex (index);
+            mep.panelSearch.list.requestFocusInWindow ();
         }
-        return result;
     }
 
  

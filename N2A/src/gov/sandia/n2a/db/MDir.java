@@ -23,8 +23,6 @@ import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
 
 /**
     A top-level node which maps to a directory on the file system.
@@ -36,31 +34,13 @@ import javax.swing.event.ChangeListener;
 public class MDir extends MNode
 {
     protected String  name;    // MDirs could be held in a collection, so this provides a way to reference them.
-	protected Path    root;    // The directory containing the files or subdirs that constitute the children of this node
-	protected String  suffix;  // Relative path to document file, or null if documents are directly under root
-	protected boolean loaded;  // Indicates that an initial read of the dir has been done. After that, it is not necessary to monitor the dir, only keep track of documents internally.
+    protected Path    root;    // The directory containing the files or subdirs that constitute the children of this node
+    protected String  suffix;  // Relative path to document file, or null if documents are directly under root
+    protected boolean loaded;  // Indicates that an initial read of the dir has been done. After that, it is not necessary to monitor the dir, only keep track of documents internally.
 
-	protected NavigableMap<String,SoftReference<MDoc>> children = new TreeMap<String,SoftReference<MDoc>> ();
-	protected Set<MDoc> writeQueue = new HashSet<MDoc> ();  // By storing strong references to docs that need to be saved, we prevent them from being garbage collected until that is done.
-
-    protected List<ChangeListener> listeners = new ArrayList<ChangeListener> ();
-
-    /**
-        Adds a listener that will be notified whenever a change occurs to our collection of children.
-    **/
-    public synchronized void addChangeListener (ChangeListener listener)
-    {
-        listeners.add (listener);
-    }
-
-    public synchronized void fireChanged ()
-    {
-        if (listeners.size () > 0)
-        {
-            ChangeEvent e = new ChangeEvent (this);
-            for (ChangeListener c : listeners) c.stateChanged (e);
-        }
-    }
+    protected NavigableMap<String,SoftReference<MDoc>> children   = new TreeMap<String,SoftReference<MDoc>> ();
+    protected Set<MDoc>                                writeQueue = new HashSet<MDoc> ();  // By storing strong references to docs that need to be saved, we prevent them from being garbage collected until that is done.
+    protected List<MNodeListener>                      listeners  = new ArrayList<MNodeListener> ();
 
     public MDir (Path root)
     {
@@ -72,10 +52,10 @@ public class MDir extends MNode
         this (name, root, null);
     }
 
-	public MDir (Path root, String suffix)
-	{
-	    this (null, root, suffix);
-	}
+    public MDir (Path root, String suffix)
+    {
+        this (null, root, suffix);
+    }
 
     public MDir (String name, Path root, String suffix)
     {
@@ -87,59 +67,59 @@ public class MDir extends MNode
         catch (IOException e) {}
     }
 
-	public String key ()
-	{
-	    if (name == null) return root.toString ();
-	    return name;
-	}
-
-	public String getOrDefault (String defaultValue)
-	{
-	    if (root == null) return defaultValue;  // This should never happen.
-	    return root.toAbsolutePath ().toString ();
-	}
-
-	public Path pathForChild (String index)
-	{
-	    Path result = root.resolve (index);
-        if (suffix != null) result = result.resolve (suffix);
-        return result;
-	}
-
-	public static String validFilenameFrom (String name)
-	{
-	    // TODO: This is only sufficient for Linux. What else is needed for Windows?
-        name = name.replace ("\\", "-");
-        name = name.replace ("/", "-");
-        return name;
-	}
-
-	protected synchronized MNode getChild (String index)
+    public String key ()
     {
-	    if (index.isEmpty ()) return null;  // The file-existence code below can be fooled by an empty string, so explicitly guard against it.
-	    MDoc result = null;
-	    SoftReference<MDoc> reference = children.get (index);
-	    if (reference != null) result = reference.get ();
-	    if (result == null)  // We have never loaded this document, or it has been garbage collected.
-	    {
-	        Path childPath = pathForChild (index);
-	        if (! Files.isReadable (childPath))
-	        {
-	            if (suffix == null) return null;
-	            // We allow the possibility that the dir exists but lacks its special file.
-	            Path parentPath = childPath.getParent ();
-	            if (! Files.isReadable (parentPath)) return null;
-	        }
-	        result = new MDoc (this, index);
-	        children.put (index, new SoftReference<MDoc> (result));
-	    }
+        if (name == null) return root.toString ();
+        return name;
+    }
+
+    public String getOrDefault (String defaultValue)
+    {
+        if (root == null) return defaultValue;  // This should never happen.
+        return root.toAbsolutePath ().toString ();
+    }
+
+    public Path pathForChild (String index)
+    {
+        Path result = root.resolve (index);
+        if (suffix != null) result = result.resolve (suffix);
         return result;
     }
 
-	/**
-	    Empty this directory of all files.
-	    This is an extremely dangerous function! It destroys all data in the directory on disk and all data pending in memory.
-	**/
+    public static String validFilenameFrom (String name)
+    {
+        // TODO: This is only sufficient for Linux. What else is needed for Windows?
+        name = name.replace ("\\", "-");
+        name = name.replace ("/", "-");
+        return name;
+    }
+
+    protected synchronized MNode getChild (String index)
+    {
+        if (index.isEmpty ()) return null;  // The file-existence code below can be fooled by an empty string, so explicitly guard against it.
+        MDoc result = null;
+        SoftReference<MDoc> reference = children.get (index);
+        if (reference != null) result = reference.get ();
+        if (result == null)  // We have never loaded this document, or it has been garbage collected.
+        {
+            Path childPath = pathForChild (index);
+            if (! Files.isReadable (childPath))
+            {
+                if (suffix == null) return null;
+                // We allow the possibility that the dir exists but lacks its special file.
+                Path parentPath = childPath.getParent ();
+                if (! Files.isReadable (parentPath)) return null;
+            }
+            result = new MDoc (this, index);
+            children.put (index, new SoftReference<MDoc> (result));
+        }
+        return result;
+    }
+
+    /**
+        Empty this directory of all files.
+        This is an extremely dangerous function! It destroys all data in the directory on disk and all data pending in memory.
+    **/
     public synchronized void clear ()
     {
         children.clear ();
@@ -181,7 +161,7 @@ public class MDir extends MNode
         SoftReference<MDoc> ref = children.remove (index);
         if (ref != null) writeQueue.remove (ref.get ());
         deleteTree (root.resolve (index).toAbsolutePath (), true);
-        fireChanged ();
+        fireChildDeleted (index);
     }
 
     public synchronized int size ()
@@ -224,7 +204,7 @@ public class MDir extends MNode
             // net effect for the N2A application is that new models which are not actually filled will evaporate.
             result.markChanged ();
 
-            fireChanged ();
+            fireChildAdded (index);
         }
         return result;
     }
@@ -252,18 +232,89 @@ public class MDir extends MNode
             // This can happen if a new doc has not yet been flushed to disk.
         }
 
-        MDoc source = null;
-        SoftReference<MDoc> ref = children.get (fromIndex);
-        if (ref != null) source = ref.get ();
-        children.remove (toIndex);
+        SoftReference<MDoc> fromReference = children.get (fromIndex);
+        SoftReference<MDoc> toReference   = children.get (toIndex);
         children.remove (fromIndex);
-        if (source != null)
+        children.remove (toIndex);
+        if (fromReference == null)
         {
-            source.name = toIndex;
-            children.put (toIndex, new SoftReference<MDoc> (source));
+            if (toReference != null) fireChildDeleted (toIndex);  // Because we overwrote an existing node with a non-existing node, causing the destination to cease to exist.
+        }
+        else
+        {
+            MDoc from = fromReference.get ();
+            if (from != null) from.name = toIndex;
+            children.put (toIndex, fromReference);
+            fireChildChanged (fromIndex, toIndex);
+        }
+    }
+
+    public synchronized void addListener (MNodeListener listener)
+    {
+        listeners.add (listener);
+    }
+
+    public synchronized void removeListener (MNodeListener listener)
+    {
+        listeners.remove (listener);
+    }
+
+    public synchronized void fireChanged ()
+    {
+        for (MNodeListener l : listeners) l.changed ();
+    }
+
+    public synchronized void fireChildAdded (String key)
+    {
+        for (MNodeListener l : listeners) l.childAdded (key);
+    }
+
+    public synchronized void fireChildDeleted (String key)
+    {
+        for (MNodeListener l : listeners) l.childDeleted (key);
+    }
+
+    public synchronized void fireChildChanged (String oldKey, String newKey)
+    {
+        for (MNodeListener l : listeners) l.childChanged (oldKey, newKey);
+    }
+
+    /**
+        Used by repository manager to notify us about changes made directly to disk.
+    **/
+    public synchronized void nodeChanged (String key)
+    {
+        // Check if it exists on disk. If not, then this is a delete.
+        if (key.isEmpty ()) return;
+        Path childPath = pathForChild (key);
+        if (! Files.isReadable (childPath))
+        {
+            children.remove (key);
+            fireChildDeleted (key);
+            return;
         }
 
-        fireChanged ();
+        // Synchronize with updated/restored doc on disk.
+        SoftReference<MDoc> reference = children.get (key);
+        if (reference == null)  // added back into db
+        {
+            MDoc child = new MDoc (this, key);
+            reference = new SoftReference<MDoc> (child);
+            children.put (key, reference);
+            fireChildAdded (key);
+        }
+        else  // reverted to previous state
+        {
+            MDoc child = reference.get ();
+            if (child != null)
+            {
+                // Put doc into same state as newly-read directory entry.
+                // All old children are invalid, and listeners should completely reload data.
+                child.needsWrite = false;
+                child.children = null;
+            }
+            fireChildChanged (key, key);
+        }
     }
 
     public class IteratorWrapperSoft implements Iterator<MNode>

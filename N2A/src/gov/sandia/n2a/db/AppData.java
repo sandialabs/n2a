@@ -220,7 +220,6 @@ public class AppData
     public static void quit ()
     {
         stop = true;
-        saveThread.interrupt ();
         save ();
     }
 }

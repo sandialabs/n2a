@@ -22,10 +22,12 @@ import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MNodeListener;
 import gov.sandia.n2a.ui.UndoManager;
 
 @SuppressWarnings("serial")
-public class PanelReference extends JPanel
+public class PanelReference extends JPanel implements MNodeListener
 {
     public static PanelReference instance;  ///< Technically, this class is a singleton, because only one would normally be created.
 
@@ -98,5 +100,73 @@ public class PanelReference extends JPanel
                 catch (CannotRedoException e) {}
             }
         });
+
+        AppData.references.addListener (this);
+    }
+
+    public void changed ()
+    {
+        panelMRU.loadMRU ();
+        panelSearch.search ();
+        panelEntry.checkVisible ();
+    }
+
+    public void childAdded (String key)
+    {
+        MNode doc = AppData.references.child (key);
+        panelMRU.insertDoc (doc);
+        panelSearch.insertDoc (doc);
+    }
+
+    public void childDeleted (String key)
+    {
+        panelMRU.removeDoc (key);
+        panelSearch.removeDoc (key);
+        panelEntry.checkVisible ();
+    }
+
+    public void childChanged (String oldKey, String newKey)
+    {
+        // Holders in search and MRU should associate newKey with correct doc.
+        MNode newDoc = AppData.references.child (newKey);
+        panelMRU.updateDoc (newDoc);
+        panelSearch.updateDoc (newDoc);
+
+        String key = "";
+        MNode record = panelEntry.model.record;
+        if (record != null) key = record.key ();
+
+        boolean contentOnly = oldKey.equals (newKey);
+        if (key.equals (newKey))
+        {
+            if (contentOnly)
+            {
+                panelEntry.model.record = null;  // Force rebuild of display
+                panelEntry.model.setRecord (newDoc);
+            }
+            else
+            {
+                panelEntry.checkVisible ();
+            }
+        }
+        if (contentOnly) return;  // nothing more to do
+
+        MNode oldDoc = AppData.models.child (oldKey);
+        if (oldDoc == null)  // deleted
+        {
+            panelMRU.removeDoc (oldKey);
+            panelSearch.removeDoc (oldKey);
+            panelEntry.checkVisible ();
+        }
+        else  // oldDoc has changed identity
+        {
+            panelMRU.updateDoc (oldDoc);
+            panelSearch.updateDoc (oldDoc);
+            if (key.equals (oldKey))
+            {
+                panelEntry.model.record = null;
+                panelEntry.model.setRecord (oldDoc);
+            }
+        }
     }
 }

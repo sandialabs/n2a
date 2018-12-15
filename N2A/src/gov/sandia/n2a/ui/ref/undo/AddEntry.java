@@ -10,24 +10,20 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Undoable;
+import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.ref.PanelReference;
 
 public class AddEntry extends Undoable
 {
-    protected String  id;
-    protected boolean fromSearchPanel;
-    protected int     index;  // 0 by default
-    protected MNode   saved;
-    public    boolean wasShowing = true;
+    public String  id;
+    public MNode   saved;
+    public boolean fromSearchPanel;
+    public String  keyAfter;  // key of doc at the location in search list where we should insert the new doc. The other doc will get pushed down a row.
+    public boolean wasShowing = true;
 
     public AddEntry ()
     {
         this ("ref", new MVolatile ());
-    }
-
-    public AddEntry (String id)
-    {
-        this (id, new MVolatile ());
     }
 
     public AddEntry (String id, MNode saved)
@@ -36,6 +32,7 @@ public class AddEntry extends Undoable
 
         PanelReference mep = PanelReference.instance;
         fromSearchPanel = mep.panelSearch.list.isFocusOwner ();  // Otherwise, assume focus is on the entry panel
+        keyAfter = mep.panelSearch.currentKey ();
 
         // Determine unique name in database
         MNode references = AppData.references;
@@ -64,52 +61,50 @@ public class AddEntry extends Undoable
         destroy (id, fromSearchPanel);
     }
 
-    public static int destroy (String id, boolean fromSearchPanel)
+    public static void destroy (String id, boolean fromSearchPanel)
     {
-        MNode doc = AppData.references.child (id);
+        AppData.references.clear (id);  // Triggers PanelReference.childDeleted(name), which removes doc from all 3 sub-panels.
+
         PanelReference mep = PanelReference.instance;
-        mep.panelEntry.recordDeleted (doc);
-        mep.panelMRU.removeDoc (doc);
-        int result = mep.panelSearch.removeDoc (doc);
-        AppData.references.clear (id);
-        mep.panelSearch.lastSelection = Math.min (mep.panelSearch.model.size () - 1, result);
         if (fromSearchPanel)
         {
-            mep.panelSearch.list.setSelectedIndex (mep.panelSearch.lastSelection);
+            mep.panelSearch.showSelection ();
             mep.panelSearch.list.requestFocusInWindow ();
         }
-        else
-        {
-            mep.panelEntry.table.requestFocusInWindow ();
-        }
-        return result;
+        // else leave the focus wherever it's at. We shift focus to make user aware of the delete, but this is only meaningful in the search list.
     }
 
     public void redo ()
     {
         super.redo ();
-        create (id, saved, 0, fromSearchPanel, wasShowing);
+        int index = 0;
+        if (! keyAfter.isEmpty ())
+        {
+            index = PanelModel.instance.panelSearch.indexOf (keyAfter);
+            if (index < 0) index = 0;
+        }
+        create (id, saved, index, fromSearchPanel, wasShowing, wasShowing);
     }
 
-    public static int create (String id, MNode saved, int index, boolean fromSearchPanel, boolean wasShowing)
+    public static void create (String id, MNode saved, int index, boolean fromSearchPanel, boolean wasShowing, boolean willEdit)
     {
-        MNode doc = AppData.references.set (id, "");
-        doc.merge (saved);
         PanelReference mep = PanelReference.instance;
-        mep.panelMRU.insertDoc (doc);
-        int result = mep.panelSearch.insertDoc (doc, index);
+        mep.panelSearch.insertNextAt (index);
+
+        MNode doc = AppData.references.set (id, "");  // Triggers PanelReference.childAdded(name), which updates the select and MRU panels, but not the entry panel.
+        doc.merge (saved);
+
         if (wasShowing) mep.panelEntry.model.setRecord (doc);
-        mep.panelSearch.lastSelection = index;
-        if (fromSearchPanel)
+        if (willEdit  ||  ! fromSearchPanel)
         {
-            if (wasShowing) mep.panelEntry.table.clearSelection ();
-            mep.panelSearch.list.setSelectedIndex (result);
-            mep.panelSearch.list.requestFocusInWindow ();
+            mep.panelSearch.hideSelection ();
+            mep.panelSearch.lastSelection = index;  // Because hideSelection() stores current selection, which was one row past index.
+            mep.panelEntry.table.requestFocusInWindow ();
         }
         else
         {
-            mep.panelEntry.table.requestFocusInWindow ();
+            mep.panelSearch.list.setSelectedIndex (index);
+            mep.panelSearch.list.requestFocusInWindow ();
         }
-        return result;
     }
 }

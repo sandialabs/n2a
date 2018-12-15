@@ -63,6 +63,7 @@ public class PanelSearch extends JPanel
     public JList<MNode>            list;
     public DefaultListModel<MNode> model;
     public int                     lastSelection = -1;
+    public int                     insertAt;
     public MNodeRenderer           renderer = new MNodeRenderer ();
 
     public PanelSearch ()
@@ -92,6 +93,7 @@ public class PanelSearch extends JPanel
             {
                 MNode deleteMe = list.getSelectedValue ();
                 if (deleteMe == null  ||  ! AppData.references.isWriteable (deleteMe)) return;
+                lastSelection = list.getSelectedIndex ();
                 PanelReference.instance.undoManager.add (new DeleteEntry ((MDoc) deleteMe));
             }
         });
@@ -115,11 +117,7 @@ public class PanelSearch extends JPanel
         {
             public void focusGained (FocusEvent e)
             {
-                if (list.getSelectedIndex () < 0)
-                {
-                    if (lastSelection < 0  ||  lastSelection >= model.getSize ()) list.setSelectedIndex (0);
-                    else                                                          list.setSelectedIndex (lastSelection);
-                }
+                showSelection ();
             }
 
             public void focusLost (FocusEvent e)
@@ -137,6 +135,8 @@ public class PanelSearch extends JPanel
 
             public boolean importData (TransferSupport xfer)
             {
+                if (! list.isFocusOwner ()) hideSelection ();
+
                 ParserBibtex parser = new ParserBibtex ();
                 MNode data = new MVolatile ();
                 try
@@ -247,17 +247,7 @@ public class PanelSearch extends JPanel
 
     public void search ()
     {
-        if (thread != null)
-        {
-            thread.stop = true;
-            try
-            {
-                thread.join ();
-            }
-            catch (InterruptedException e)
-            {
-            }
-        }
+        if (thread != null) thread.stop = true;
 
         String query = textQuery.getText ();
         thread = new SearchThread (query.trim ());
@@ -290,38 +280,87 @@ public class PanelSearch extends JPanel
 
     public void hideSelection ()
     {
-        lastSelection = list.getSelectedIndex ();
+        int index = list.getSelectedIndex ();
+        if (index >= 0) lastSelection = index;
         list.clearSelection ();
     }
 
-    public int indexOf (MNode doc)
+    public void showSelection ()
     {
-        return model.indexOf (doc);
+        if (list.getSelectedIndex () < 0)
+        {
+            int last = model.getSize () - 1;
+            if      (lastSelection < 0   ) list.setSelectedIndex (0);
+            else if (lastSelection > last) list.setSelectedIndex (last);
+            else                           list.setSelectedIndex (lastSelection);
+        }
     }
 
-    public int removeDoc (MNode doc)
+    public String currentKey ()
+    {
+        int index = list.getSelectedIndex ();
+        if (index < 0) return "";
+        return model.get (index).key ();
+    }
+
+    public String keyAfter (MNode doc)
     {
         int index = model.indexOf (doc);
-        if (index >= 0)
-        {
-            model.remove (index);
-            if (lastSelection > index) lastSelection--;
-            lastSelection = Math.min (model.size () - 1, lastSelection);
-        }
-        return index;
+        if (index < 0  ||  index == model.getSize () - 1) return "";  // indexOf(String) will return end-of-list in response to this value.
+        return model.get (index + 1).key ();
     }
 
-    public int insertDoc (MNode doc, int at)
+    public int indexOf (String key)
+    {
+        int count = model.size ();
+        if (key.isEmpty ()) return count;
+        for (int i = 0; i < count; i++) if (model.get (i).key ().equals (key)) return i;
+        return -1;
+    }
+
+    public void removeDoc (String key)
+    {
+        int index = indexOf (key);
+        if (index < 0) return;
+        model.remove (index);
+        if (lastSelection > index) lastSelection--;
+        lastSelection = Math.min (model.size () - 1, lastSelection);
+    }
+
+    /**
+        For multirepo, if the key of the doc in a Holder gets claimed by another doc,
+        then the Holder should be updated to point to the new doc. This could, for example,
+        change what color it gets displayed as.
+    **/
+    public void updateDoc (MNode doc)
+    {
+        String key = doc.key ();
+        int index = indexOf (key);
+        if (index < 0) return;
+        MNode n = model.get (index);
+        if (n == doc) return;
+        model.setElementAt (n, index);
+    }
+
+    public void insertNextAt (int at)
+    {
+        insertAt = at;
+    }
+
+    public void insertDoc (MNode doc)
     {
         int index = model.indexOf (doc);
         if (index < 0)
         {
-            if (at > model.size ()) at = 0;  // The list has changed, perhaps due to filtering, and our position is no longer valid, so simply insert at top.
-            model.add (at, doc);
-            lastSelection = at;
-            return at;
+            if (insertAt > model.size ()) insertAt = 0;  // The list has changed, perhaps due to filtering, and our position is no longer valid, so simply insert at top.
+            model.add (insertAt, doc);
+            lastSelection = insertAt;
         }
-        return index;
+        else
+        {
+            lastSelection = index;
+        }
+        insertAt = 0;
     }
 
     public void updateUI ()
@@ -335,7 +374,6 @@ public class PanelSearch extends JPanel
     {
         public String query;
         public boolean stop;
-        public List<MNode> results = new LinkedList<MNode> ();
 
         public SearchThread (String query)
         {
@@ -345,10 +383,11 @@ public class PanelSearch extends JPanel
         @Override
         public void run ()
         {
+            List<MNode> results = new LinkedList<MNode> ();
             for (MNode i : AppData.references)
             {
-                if (i.key ().toLowerCase ().contains (query)) results.add (i);
                 if (stop) return;
+                if (i.key ().toLowerCase ().contains (query)) results.add (i);
             }
 
             // Update of list should be atomic with respect to other ui events.
@@ -356,8 +395,16 @@ public class PanelSearch extends JPanel
             {
                 public void run ()
                 {
-                    model.clear ();
-                    for (MNode record : results) model.addElement (record);
+                    synchronized (model)
+                    {
+                        if (stop) return;
+                        model.clear ();
+                        for (MNode record : results)
+                        {
+                            if (stop) return;
+                            model.addElement (record);
+                        }
+                    }
                 }
             });
         }

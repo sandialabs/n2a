@@ -444,6 +444,14 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         }
     }
 
+    public void addListener (MNodeListener listener)
+    {
+    }
+
+    public void removeListener (MNodeListener listener)
+    {
+    }
+
     public static class IteratorEmpty implements Iterator<MNode>
     {
         public boolean hasNext ()

@@ -67,6 +67,7 @@ public class PanelSearch extends JPanel
     public JList<Holder>            list;
     public DefaultListModel<Holder> model;
     public int                      lastSelection = -1;
+    public int                      insertAt;
     public MNodeRenderer            renderer = new MNodeRenderer ();
     public TransferHandler          transferHandler;
 
@@ -97,6 +98,7 @@ public class PanelSearch extends JPanel
             {
                 MNode deleteMe = list.getSelectedValue ().doc;
                 if (deleteMe == null  ||  ! AppData.models.isWriteable (deleteMe)) return;
+                lastSelection = list.getSelectedIndex ();
                 PanelModel.instance.undoManager.add (new DeleteDoc ((MDoc) deleteMe));
             }
         });
@@ -121,11 +123,7 @@ public class PanelSearch extends JPanel
             public void focusGained (FocusEvent e)
             {
                 PanelModel.instance.panelEquations.yieldFocus ();
-                if (list.getSelectedIndex () < 0)
-                {
-                    if (lastSelection < 0  ||  lastSelection >= model.getSize ()) list.setSelectedIndex (0);
-                    else                                                          list.setSelectedIndex (lastSelection);
-                }
+                showSelection ();
             }
 
             public void focusLost (FocusEvent e)
@@ -143,6 +141,8 @@ public class PanelSearch extends JPanel
 
             public boolean importData (TransferSupport xfer)
             {
+                if (! list.isFocusOwner ()) hideSelection ();
+
                 Transferable xferable = xfer.getTransferable ();
                 if (xfer.isDataFlavorSupported (DataFlavor.javaFileListFlavor))
                 {
@@ -269,22 +269,13 @@ public class PanelSearch extends JPanel
             "C", Lay.sp (list)
         );
 
-        search ();  // This will safely block until the models dir is loaded. If that takes too long for comfort, other arrangements are possible.
+        search ();
     }
 
     public void search ()
     {
-        if (thread != null)
-        {
-            thread.stop = true;
-            try
-            {
-                thread.join ();
-            }
-            catch (InterruptedException e)
-            {
-            }
-        }
+        if (thread != null) thread.stop = true;
+        // Don't wait for thread to stop.
 
         String query = textQuery.getText ();
         thread = new SearchThread (query.trim ());
@@ -317,39 +308,89 @@ public class PanelSearch extends JPanel
 
     public void hideSelection ()
     {
-        lastSelection = list.getSelectedIndex ();
+        int index = list.getSelectedIndex ();
+        if (index >= 0) lastSelection = index;
         list.clearSelection ();
     }
 
-    public int indexOf (MNode doc)
+    public void showSelection ()
     {
-        return model.indexOf (new Holder (doc));
+        if (list.getSelectedIndex () < 0)
+        {
+            int last = model.getSize () - 1;
+            if      (lastSelection < 0   ) list.setSelectedIndex (0);
+            else if (lastSelection > last) list.setSelectedIndex (last);
+            else                           list.setSelectedIndex (lastSelection);
+        }
     }
 
-    public int removeDoc (MNode doc)
+    public String currentKey ()
+    {
+        int index = list.getSelectedIndex ();
+        if (index < 0) return "";
+        return model.get (index).doc.key ();
+    }
+
+    public String keyAfter (MNode doc)
     {
         int index = model.indexOf (new Holder (doc));
-        if (index >= 0)
-        {
-            model.remove (index);
-            if (lastSelection > index) lastSelection--;
-            lastSelection = Math.min (model.size () - 1, lastSelection);
-        }
-        return index;
+        if (index < 0  ||  index == model.getSize () - 1) return "";  // indexOf(String) will return end-of-list in response to this value.
+        return model.get (index + 1).doc.key ();
     }
 
-    public int insertDoc (MNode doc, int at)
+    public int indexOf (String key)
+    {
+        int count = model.size ();
+        if (key.isEmpty ()) return count;
+        for (int i = 0; i < count; i++) if (model.get (i).doc.key ().equals (key)) return i;
+        return -1;
+    }
+
+    public void removeDoc (String key)
+    {
+        int index = indexOf (key);
+        if (index < 0) return;
+        model.remove (index);
+        if (lastSelection > index) lastSelection--;
+        lastSelection = Math.min (model.size () - 1, lastSelection);
+    }
+
+    /**
+        For multirepo, if the key of the doc in a Holder gets claimed by another doc,
+        then the Holder should be updated to point to the new doc. This could, for example,
+        change what color it gets displayed as.
+    **/
+    public void updateDoc (MNode doc)
+    {
+        String key = doc.key ();
+        int index = indexOf (key);
+        if (index < 0) return;
+        Holder h = model.get (index);
+        if (h.doc == doc) return;
+        h.doc = doc;
+        model.setElementAt (h, index);  // Doesn't change the entry in model, just forces repaint of the associated row.
+    }
+
+    public void insertNextAt (int at)
+    {
+        insertAt = at;
+    }
+
+    public void insertDoc (MNode doc)
     {
         Holder h = new Holder (doc);
         int index = model.indexOf (h);
         if (index < 0)
         {
-            if (at > model.size ()) at = 0;  // The list has changed, perhaps due to filtering, and our position is no longer valid, so simply insert at top.
-            model.add (at, h);
-            lastSelection = at;
-            return at;
+            if (insertAt > model.size ()) insertAt = 0;  // The list has changed, perhaps due to filtering, and our position is no longer valid, so simply insert at top.
+            model.add (insertAt, h);
+            lastSelection = insertAt;
         }
-        return index;
+        else
+        {
+            lastSelection = index;
+        }
+        insertAt = 0;
     }
 
     public void updateUI ()
@@ -408,7 +449,6 @@ public class PanelSearch extends JPanel
     {
         public String query;
         public boolean stop;
-        public List<MNode> results = new LinkedList<MNode> ();
 
         public SearchThread (String query)
         {
@@ -418,10 +458,11 @@ public class PanelSearch extends JPanel
         @Override
         public void run ()
         {
+            List<MNode> results = new LinkedList<MNode> ();
             for (MNode i : AppData.models)
             {
-                if (i.key ().toLowerCase ().contains (query)) results.add (i);
                 if (stop) return;
+                if (i.key ().toLowerCase ().contains (query)) results.add (i);
             }
 
             // Update of list should be atomic with respect to other ui events.
@@ -429,8 +470,17 @@ public class PanelSearch extends JPanel
             {
                 public void run ()
                 {
-                    model.clear ();
-                    for (MNode record : results) model.addElement (new Holder (record));
+                    synchronized (model)
+                    {
+                        if (stop) return;
+                        model.clear ();
+                        lastSelection = -1;
+                        for (MNode record : results)
+                        {
+                            if (stop) return;
+                            model.addElement (new Holder (record));
+                        }
+                    }
                 }
             });
         }

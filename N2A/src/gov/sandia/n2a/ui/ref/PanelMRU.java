@@ -22,6 +22,7 @@ public class PanelMRU extends JPanel
 {
     public JList<MNode>            list;
     public DefaultListModel<MNode> model;
+    public boolean                 dontInsert;  // Ignore next call to insertDoc()
 
     public PanelMRU ()
     {
@@ -70,17 +71,46 @@ public class PanelMRU extends JPanel
         }
     }
 
-    public void removeDoc (MNode doc)
+    public void removeDoc (String key)
     {
-        int index = model.indexOf (doc);
-        if (index >= 0) model.remove (index);
-        saveMRU ();
+        int count = model.size ();
+        for (int i = 0; i < count; i++)
+        {
+            MNode n = model.get (i);
+            if (n.key ().equals (key))
+            {
+                model.remove (i);
+                saveMRU ();
+                return;
+            }
+        }
+    }
+
+    public void updateDoc (MNode doc)
+    {
+        String key = doc.key ();
+        int count = model.size ();
+        for (int i = 0; i < count; i++)
+        {
+            MNode n = model.get (i);
+            if (n.key ().equals (key))
+            {
+                if (n != doc) model.setElementAt (doc, i);
+                return;
+            }
+        }
     }
 
     public void insertDoc (MNode doc)
     {
+        if (dontInsert)
+        {
+            dontInsert = false;
+            return;
+        }
         int index = model.indexOf (doc);
-        if (index < 0) model.add (0, doc);
+        if (index >= 0) return;  // nothing to do
+        model.add (0, doc);
         saveMRU ();
     }
 

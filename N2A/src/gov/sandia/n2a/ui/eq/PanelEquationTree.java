@@ -824,6 +824,12 @@ public class PanelEquationTree extends JPanel
         tree.paintImmediately (scrollPane.getViewport ().getViewRect ());
     }
 
+    public void updateLock ()
+    {
+        locked = ! AppData.models.isWriteable (record);
+        tree.setEditable (! locked);
+    }
+
     public void checkVisible ()
     {
         if (AppData.models.isVisible (record)) updateLock ();
@@ -837,12 +843,6 @@ public class PanelEquationTree extends JPanel
             focusCache.put (record, new StoredPath (tree));
             tree.clearSelection ();
         }
-    }
-
-    public void updateLock ()
-    {
-        locked = ! AppData.models.isWriteable (record);
-        tree.setEditable (! locked);
     }
 
     ActionListener listenerAdd = new ActionListener ()
