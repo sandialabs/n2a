@@ -54,6 +54,8 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.TransferHandler;
@@ -65,12 +67,23 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumn;
 import javax.swing.table.TableColumnModel;
+import javax.swing.undo.CannotRedoException;
+import javax.swing.undo.CannotUndoException;
+import javax.swing.undo.UndoManager;
 
+import org.eclipse.jgit.api.AddCommand;
+import org.eclipse.jgit.api.CommitCommand;
+import org.eclipse.jgit.api.CreateBranchCommand;
+import org.eclipse.jgit.api.CreateBranchCommand.SetupUpstreamMode;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.PushCommand;
 import org.eclipse.jgit.api.RemoteSetUrlCommand;
+import org.eclipse.jgit.api.RmCommand;
+import org.eclipse.jgit.awtui.AwtCredentialsProvider;
 import org.eclipse.jgit.internal.storage.file.FileRepository;
 import org.eclipse.jgit.lib.BranchConfig;
 import org.eclipse.jgit.lib.BranchTrackingStatus;
+import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.IndexDiff;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.lib.StoredConfig;
@@ -91,6 +104,10 @@ public class SettingsRepo extends JScrollPane implements Settings
     protected JButton        buttonPull;
     protected JButton        buttonCommit;
     protected JButton        buttonPush;
+    protected JTextField     fieldAuthor;
+    protected JTextArea      fieldMessage;
+    protected JScrollPane    paneMessage;
+    protected UndoManager    undoManager;
 
     protected boolean           needRebuild;  // need to re-collate AppData.models and AppData.references
     protected boolean           needSave;     // need to flush repositories to disk for git status
@@ -201,13 +218,12 @@ public class SettingsRepo extends JScrollPane implements Settings
                     if (response != JOptionPane.OK_OPTION) return;
                 }
 
+                repoModel.gitRepos.get (row).close ();
                 AppData.repos.clear (name);
                 existingModels    .remove (name);
                 existingReferences.remove (name);
-                needRebuild = true;
 
-                GitWrapper gitRepo = repoModel.gitRepos.get (row);
-                gitRepo.close ();
+                needRebuild = true;
                 repoModel.gitRepos.remove (row);
                 repoModel.repos   .remove (row);
                 repoModel.updateOrder ();
@@ -249,7 +265,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                 }
                 if (sourceRow < 0  ||  sourceRow >= repoModel.repos.size ()) return false;
 
-                int destinationRow = ((JTable.DropLocation) xfer.getDropLocation ()).getRow ();  // TODO: does need a range check?
+                int destinationRow = ((JTable.DropLocation) xfer.getDropLocation ()).getRow ();
                 repoModel.move (sourceRow, destinationRow);
                 return true;
             }
@@ -261,7 +277,6 @@ public class SettingsRepo extends JScrollPane implements Settings
 
             protected Transferable createTransferable (JComponent comp)
             {
-                // TODO: is row selection updated at start of drag? If not, need to enforce that somewhere.
                 return new StringSelection (String.valueOf (repoTable.getSelectedRow ()));
             }
         });
@@ -428,7 +443,13 @@ public class SettingsRepo extends JScrollPane implements Settings
         {
             public void actionPerformed (ActionEvent e)
             {
+                // This is the main purpose of the refresh button: to check on the remote repo.
                 gitModel.refreshTrack ();
+
+                // However, it adds little cost to rescan the local repo as well.
+                gitModel.current.clearDiff ();
+                gitModel.refreshDiff ();
+                // Should we also update name and email?
             }
         });
 
@@ -441,21 +462,85 @@ public class SettingsRepo extends JScrollPane implements Settings
         buttonCommit.setMargin (new Insets (2, 2, 2, 2));
         buttonCommit.setFocusable (false);
         buttonCommit.setToolTipText ("Commit");
+        buttonCommit.addActionListener (new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                gitModel.commit ();
+            }
+        });
 
         buttonPush = new JButton (ImageUtil.getImage ("push.png"));
         buttonPush.setMargin (new Insets (2, 2, 2, 2));
         buttonPush.setFocusable (false);
         buttonPush.setToolTipText ("Push");
+        buttonPush.addActionListener (new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                gitModel.push ();
+            }
+        });
 
         labelStatus = new JLabel ("Ahead ?, Behind ?");
         buttonPush.setMargin (new Insets (2, 2, 2, 2));
+
+        fieldAuthor = new JTextField ();
+        fieldAuthor.setColumns (30);
+
+        fieldMessage = new JTextArea ();
+        paneMessage = new JScrollPane (fieldMessage);
+        fieldMessage.setLineWrap (true);
+        fieldMessage.setWrapStyleWord (true);
+        fieldMessage.setRows (6);
+        fieldMessage.setTabSize (4);
+
+        undoManager = new UndoManager ();
+        fieldMessage.getDocument ().addUndoableEditListener (undoManager);
+        inputMap = fieldMessage.getInputMap ();
+        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+        inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
+        actionMap = fieldMessage.getActionMap ();
+        actionMap.put ("Undo", new AbstractAction ("Undo")
+        {
+            public void actionPerformed (ActionEvent evt)
+            {
+                try {undoManager.undo ();}
+                catch (CannotUndoException e) {}
+            }
+        });
+        actionMap.put ("Redo", new AbstractAction ("Redo")
+        {
+            public void actionPerformed (ActionEvent evt)
+            {
+                try {undoManager.redo();}
+                catch (CannotRedoException e) {}
+            }
+        });
+
+        // Use JGit utility class to preset username/password prompt for remote access.
+        AwtCredentialsProvider.install ();
 
 
         Lay.BLtg (panel,
             "N", Lay.BxL (
                 Lay.BL ("W", repoPanel),
                 Lay.WL ("L", buttonRevert, Box.createHorizontalStrut (15), labelStatus, buttonRefresh, buttonPull, buttonCommit, buttonPush, "hgap=10,vgap=10"),
-                Lay.BL ("W", gitPanel)
+                Lay.BL ("W",
+                    Lay.BxL ("H",
+                        Lay.BL ("N", gitPanel),
+                        Box.createHorizontalStrut (5),
+                        Lay.BL (
+                            "N", Lay.BxL ("L",
+                                Lay.FL (Lay.lb ("Author"), fieldAuthor),
+                                Box.createVerticalStrut (5),
+                                Lay.BL ("W", Lay.lb ("Commit message:")),
+                                paneMessage
+                            )
+                        )
+                    )
+                )
             )
         );
     }
@@ -792,6 +877,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         public int          ahead;
         public int          behind;
         public IndexDiff    diff;
+        public String       message;
 
         public GitWrapper (Path gitDir)
         {
@@ -813,7 +899,7 @@ public class SettingsRepo extends JScrollPane implements Settings
 
                 BranchConfig branch = new BranchConfig (config, head);
                 String remoteName = branch.getRemote ();
-                if (remoteName == null) remoteName = "origin";
+                if (remoteName == null) remoteName = Constants.DEFAULT_REMOTE_NAME;
                 remote = new RemoteConfig (config, remoteName);
             }
             catch (Exception e)
@@ -848,7 +934,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             {
                 valueURI = new URIish (value);
             }
-            catch (URISyntaxException e1)
+            catch (URISyntaxException e)
             {
                 return;
             }
@@ -866,6 +952,35 @@ public class SettingsRepo extends JScrollPane implements Settings
             command.setUri (valueURI);
             try {remote = command.call ();}
             catch (Exception e) {}
+        }
+
+        public String getAuthor ()
+        {
+            String name  = config.getString ("user", null, "name");
+            String email = config.getString ("user", null, "email");
+            String result = "";
+            if (name != null) result = name;
+            if (email != null)
+            {
+                if (! result.isEmpty ()) result += " <" + email + ">";
+                else                     result  =  "<" + email + ">";
+            }
+            return result;
+        }
+
+        public void setAuthor (String author)
+        {
+            if (author.equals (getAuthor())) return;  // Avoid adding to local config unless there is a real change.
+
+            String[] pieces = author.split ("<", 2);
+            String name = pieces[0].trim ();
+            String email = "";
+            if (pieces.length > 1) email = pieces[1].split (">")[0];
+
+            config.setString ("user", null, "name",  name);
+            config.setString ("user", null, "email", email);
+            try {config.save ();}
+            catch (IOException e) {}
         }
 
         public synchronized void clearDiff ()
@@ -916,9 +1031,9 @@ public class SettingsRepo extends JScrollPane implements Settings
         {
             ahead  = 0;
             behind = 0;
-            if (head == null) return;
             try
             {
+                // TODO: fetch first
                 BranchTrackingStatus track = BranchTrackingStatus.of (gitRepo, head);
                 if (track != null)
                 {
@@ -929,14 +1044,83 @@ public class SettingsRepo extends JScrollPane implements Settings
             catch (IOException e) {}
         }
 
-        public void checkout (String name)
+        public synchronized void checkout (String name)
         {
-            try
-            {
-                git.checkout ().addPath (name).call ();
-            }
+            try {git.checkout ().addPath (name).call ();}
             catch (Exception e) {}
             clearDiff ();  // force update
+        }
+
+        public synchronized void commit (List<Delta> deltas, String author, String message)
+        {
+            clearDiff ();  // Because it won't be valid after the commit.
+
+            AddCommand add = null;
+            RmCommand  rm  = null;
+            for (Delta d : deltas)
+            {
+                if (d.deleted)
+                {
+                    if (rm == null) rm = git.rm ();
+                    rm.addFilepattern (d.name);
+                }
+                else
+                {
+                    if (add == null) add = git.add ();
+                    add.addFilepattern (d.name);
+                }
+            }
+            try
+            {
+                if (add != null) add.call ();
+                if (rm  != null) rm .call ();
+            }
+            catch (Exception e)
+            {
+                // This should never happen, since file list is constructed automatically.
+                e.printStackTrace ();
+                return;
+            }
+
+            String[] pieces = author.split ("<", 2);
+            String name = pieces[0].trim ();
+            String email = "";
+            if (pieces.length > 1) email = pieces[1].split (">")[0];
+
+            CommitCommand commit = git.commit ();
+            commit.setAuthor (name, email);
+            commit.setMessage (message);
+            try
+            {
+                commit.call ();
+            }
+            catch (Exception e)
+            {
+            }
+        }
+
+        public synchronized void push ()
+        {
+            PushCommand push = git.push ();
+            try {push.call ();}
+            catch (Exception e)
+            {
+                return;  // In case we have an invalid remote.
+            }
+
+            // If this is a newly-created repo, we need to set head to track remote origin.
+            BranchConfig branch = new BranchConfig (config, head);
+            if (branch.getRemote () == null)  // head is not tracking remote
+            {
+                System.out.println ("adding remote");
+                CreateBranchCommand create = git.branchCreate ();
+                create.setUpstreamMode (SetupUpstreamMode.SET_UPSTREAM);
+                create.setName (head);
+                create.setForce (true);  // Because head already exists.
+                create.setStartPoint (remote.getName () + "/" + head);
+                try {create.call ();}
+                catch (Exception e) {}
+            }
         }
     }
 
@@ -948,20 +1132,43 @@ public class SettingsRepo extends JScrollPane implements Settings
 
         public synchronized void setCurrent (int repoIndex)
         {
+            if (current != null)
+            {
+                current.setAuthor (fieldAuthor .getText ());
+                current.message  = fieldMessage.getText ();
+            }
+
             if (repoIndex < 0  ||  repoIndex >= repoModel.gitRepos.size ())
             {
                 current = null;
                 repo = null;
                 deltas.clear ();
+                fieldAuthor .setText ("");
+                fieldMessage.setText ("");
                 return;
             }
 
             GitWrapper gitRepo = repoModel.gitRepos.get (repoIndex);
-            if (current == gitRepo) return;
+            if (gitRepo == current) return;
             current = gitRepo;
             repo = repoModel.repos.get (repoIndex);
+
+            fieldAuthor .setText (current.getAuthor ());
+            fieldMessage.setText (current.message);
             refreshDiff ();
             refreshTrack ();
+        }
+
+        public synchronized void refreshTable ()
+        {
+            int column = gitTable.getSelectedColumn ();
+            int row = gitTable.getSelectedRow ();
+
+            fireTableDataChanged ();
+
+            if (column < 0) column = 1;
+            if (row >= deltas.size ()) row = deltas.size () - 1;
+            if (row >= 0) gitTable.changeSelection (row, column, false, false);
         }
 
         public void refreshDiff ()
@@ -971,13 +1178,13 @@ public class SettingsRepo extends JScrollPane implements Settings
                 public void run ()
                 {
                     MNode      mrepo;
-                    GitWrapper gitRepo;
-                    synchronized (gitModel)  // Same as GitTableModel.this, just simpler to write.
+                    GitWrapper working;
+                    synchronized (GitTableModel.this)
                     {
                         mrepo   = repo;
-                        gitRepo = current;
+                        working = current;
                     }
-                    List<Delta> deltas = gitRepo.getDeltas ();
+                    List<Delta> newDeltas = working.getDeltas ();
 
                     // Remove any "ignore" entries that are not in the current diff list.
                     // This prevents any surprises when an item is re-added in the future.
@@ -985,7 +1192,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                     if (ignore != null)
                     {
                         Set<String> names = new TreeSet<String> ();
-                        for (Delta d : deltas) names.add (d.name);
+                        for (Delta d : newDeltas) names.add (d.name);
                         for (MNode i : ignore)
                         {
                             String key = i.key ();
@@ -993,25 +1200,18 @@ public class SettingsRepo extends JScrollPane implements Settings
                         }
                     }
 
-                    synchronized (gitModel)
+                    synchronized (GitTableModel.this)
                     {
-                        if (gitRepo != gitModel.current) return;
-                        gitModel.deltas = deltas;
-                        EventQueue.invokeLater (new Runnable ()
-                        {
-                            public void run ()
-                            {
-                                int column = gitTable.getSelectedColumn ();
-                                int row = gitTable.getSelectedRow ();
-
-                                gitModel.fireTableDataChanged ();
-
-                                if (column < 0) column = 1;
-                                if (row >= deltas.size ()) row = deltas.size () - 1;
-                                if (row >= 0) gitTable.changeSelection (row, column, false, false);
-                            }
-                        });
+                        if (working != current) return;
+                        deltas = newDeltas;
                     }
+                    EventQueue.invokeLater (new Runnable ()
+                    {
+                        public void run ()
+                        {
+                            gitModel.refreshTable ();
+                        }
+                    });
                 }
             };
             thread.setDaemon (true);
@@ -1024,19 +1224,12 @@ public class SettingsRepo extends JScrollPane implements Settings
             {
                 public void run ()
                 {
-                    GitWrapper gitRepo = gitModel.current;
-                    gitRepo.getRemoteTracking ();  // If this actually calls the remote server, then it could take a long time.
-                    synchronized (gitModel)
+                    GitWrapper working = current;
+                    working.getRemoteTracking ();  // If this actually calls the remote server, then it could take a long time.
+                    synchronized (GitTableModel.this)
                     {
-                        if (gitRepo != gitModel.current) return;
-                        labelStatus.setText ("Ahead " + gitRepo.ahead + ", Behind " + gitRepo.behind);
-                        EventQueue.invokeLater (new Runnable ()
-                        {
-                            public void run ()
-                            {
-                                labelStatus.repaint ();
-                            }
-                        });
+                        if (working != current) return;
+                        labelStatus.setText ("Ahead " + working.ahead + ", Behind " + working.behind);
                     }
                 }
             };
@@ -1124,6 +1317,60 @@ public class SettingsRepo extends JScrollPane implements Settings
             else                             dir = (MDir) existingReferences.get (repoName);
             dir.nodeChanged (pieces[1]);
             // TODO: create an undo object for the checkout, so it can integrate with other edit actions in the UI.
+        }
+
+        public synchronized void commit ()
+        {
+            GitWrapper working = current;
+
+            // Assemble data based on what is currently visible to user.
+
+            String author  = fieldAuthor .getText ();
+            String message = fieldMessage.getText ();
+            working.setAuthor (author);
+            working.message = message;
+
+            List<Delta> files     = new ArrayList<Delta> ();
+            List<Delta> newDeltas = new ArrayList<Delta> ();
+            for (Delta d : deltas)
+            {
+                if (repo.child ("ignore", d.name) == null) files    .add (d);
+                else                                       newDeltas.add (d);
+            }
+
+            fieldMessage.setText ("");
+            working.message = "";
+            deltas = newDeltas;
+            refreshTable ();
+
+            Thread thread = new Thread ()
+            {
+                public void run ()
+                {
+                    working.commit (files, author, message);
+                    if (working != current) return;
+                    refreshDiff ();
+                    refreshTrack ();
+                }
+            };
+            thread.setDaemon (true);
+            thread.run ();
+        }
+
+        public synchronized void push ()
+        {
+            GitWrapper working = current; 
+            Thread thread = new Thread ()
+            {
+                public void run ()
+                {
+                    working.push ();
+                    if (working != current) return;
+                    refreshTrack ();
+                }
+            };
+            thread.setDaemon (true);
+            thread.run ();
         }
     }
 
