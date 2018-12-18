@@ -12,6 +12,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.extpoints.Settings;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.SafeTextTransferHandler;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import java.awt.Color;
 import java.awt.Component;
@@ -33,6 +34,7 @@ import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.EventObject;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,6 +42,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 import javax.swing.AbstractAction;
+import javax.swing.AbstractCellEditor;
 import javax.swing.ActionMap;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -60,10 +63,12 @@ import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.TransferHandler;
 import javax.swing.border.Border;
+import javax.swing.border.EmptyBorder;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.TableCellEditor;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumn;
 import javax.swing.table.TableColumnModel;
@@ -107,7 +112,7 @@ public class SettingsRepo extends JScrollPane implements Settings
     protected JTextField     fieldAuthor;
     protected JTextArea      fieldMessage;
     protected JScrollPane    paneMessage;
-    protected UndoManager    undoManager;
+    protected UndoManager    undoMessage;
 
     protected boolean           needRebuild;  // need to re-collate AppData.models and AppData.references
     protected boolean           needSave;     // need to flush repositories to disk for git status
@@ -173,23 +178,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             {
                 int row = repoTable.getSelectedRow ();
                 if (row < 0) row = 0;
-
-                String name = "local";
-                int suffix = 2;
-                while (AppData.repos.child (name) != null) name = "local" + suffix++;
-
-                AppData.repos.set (name, "visible", 1);  // Implicitly creates the repo node.
-                Path baseDir = reposDir.resolve (name);
-                existingModels    .put (name, new MDir (baseDir.resolve ("models")));
-                existingReferences.put (name, new MDir (baseDir.resolve ("references")));
-                needRebuild = true;
-
-                repoModel.repos   .add (row, AppData.repos.child (name));
-                repoModel.gitRepos.add (row, new GitWrapper (baseDir.resolve (".git")));
-                repoModel.updateOrder ();
-                repoModel.fireTableRowsInserted (row, row);
-                repoTable.changeSelection (row, 3, false, false);
-                repoTable.editCellAt (row, 3, e);
+                repoModel.create (row, "");
             }
         });
         actionMap.put ("delete", new AbstractAction ()
@@ -203,9 +192,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                 String name = repo.key ();
 
                 // Show a dialog if any data is about to be destroyed
-                MDir models     = (MDir) existingModels    .get (name);
-                MDir references = (MDir) existingReferences.get (name);
-                if (models.size () > 0  ||  references.size () > 0)
+                if (! isEmpty (name))
                 {
                     int response = JOptionPane.showConfirmDialog
                     (
@@ -218,18 +205,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                     if (response != JOptionPane.OK_OPTION) return;
                 }
 
-                repoModel.gitRepos.get (row).close ();
-                AppData.repos.clear (name);
-                existingModels    .remove (name);
-                existingReferences.remove (name);
-
-                needRebuild = true;
-                repoModel.gitRepos.remove (row);
-                repoModel.repos   .remove (row);
-                repoModel.updateOrder ();
-                repoModel.fireTableRowsDeleted (row, row);
-                if (row >= repoModel.repos.size ()) row = repoModel.repos.size () - 1;
-                if (row >= 0) repoTable.changeSelection (row, column, false, false);
+                repoModel.delete (row, column);  // column is just a hint for updating focus
             }
         });
         actionMap.put ("startEditing", new AbstractAction ()
@@ -251,20 +227,60 @@ public class SettingsRepo extends JScrollPane implements Settings
 
             public boolean importData (TransferSupport xfer)
             {
-                if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE) return false;
-
-                int sourceRow = -1;
+                String value;
                 try
                 {
                     Transferable xferable = xfer.getTransferable ();
-                    sourceRow = Integer.valueOf ((String) xferable.getTransferData (DataFlavor.stringFlavor));
+                    value = (String) xferable.getTransferData (DataFlavor.stringFlavor);
+                }
+                catch (Exception e)
+                {
+                    return false;
+                }
+
+                // Paste, or drop type other than MOVE --> Could be a Git remote URI
+                if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE)
+                {
+                    // Must have the form of a Git URI
+                    try
+                    {
+                        new URIish (value);
+                    }
+                    catch (URISyntaxException e)
+                    {
+                        return false;
+                    }
+
+                    // Must not already exist in list
+                    for (GitWrapper w : repoModel.gitRepos) if (value.equals (w.getURL ())) return false;
+
+                    // Apply the URI
+                    int row;
+                    if (xfer.isDrop ()) row = ((JTable.DropLocation) xfer.getDropLocation ()).getRow ();
+                    else                row = repoTable.getSelectedRow ();
+                    if (row >= 0  &&  repoModel.getValueAt (row, 4) == null)  // URI cell is empty, so simply assign value.
+                    {
+                        repoModel.setValueAt (value, row, 4);
+                        repoModel.fireTableCellUpdated (row, 4);
+                        return true;
+                    }
+                    // Clone new repo
+                    if (row < 0) row = repoModel.getRowCount ();
+                    repoModel.create (row, value);
+                    return true;
+                }
+
+                // Drop of type MOVE --> Reordering of repository precedence
+                int sourceRow = -1;
+                try
+                {
+                    sourceRow = Integer.valueOf (value);
                 }
                 catch (Exception e)
                 {
                     return false;
                 }
                 if (sourceRow < 0  ||  sourceRow >= repoModel.repos.size ()) return false;
-
                 int destinationRow = ((JTable.DropLocation) xfer.getDropLocation ()).getRow ();
                 repoModel.move (sourceRow, destinationRow);
                 return true;
@@ -344,6 +360,8 @@ public class SettingsRepo extends JScrollPane implements Settings
         col.setMinWidth (width);
         col.setPreferredWidth (width);
         col.setCellRenderer (new ColorTextRenderer ());
+        TextCellEditor cellEditor = new TextCellEditor ();
+        col.setCellEditor (cellEditor);
 
         col = cols.getColumn (4);
         width = fm.stringWidth (repoModel.getColumnName (4));
@@ -357,6 +375,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         width += em;
         col.setMinWidth (width);
         col.setPreferredWidth (width);
+        col.setCellEditor (cellEditor);
 
         ((DefaultTableCellRenderer) repoTable.getTableHeader ().getDefaultRenderer ()).setHorizontalAlignment (JLabel.LEFT);
 
@@ -495,8 +514,8 @@ public class SettingsRepo extends JScrollPane implements Settings
         fieldMessage.setRows (6);
         fieldMessage.setTabSize (4);
 
-        undoManager = new UndoManager ();
-        fieldMessage.getDocument ().addUndoableEditListener (undoManager);
+        undoMessage = new UndoManager ();
+        fieldMessage.getDocument ().addUndoableEditListener (undoMessage);
         inputMap = fieldMessage.getInputMap ();
         inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
         inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
@@ -506,7 +525,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         {
             public void actionPerformed (ActionEvent evt)
             {
-                try {undoManager.undo ();}
+                try {undoMessage.undo ();}
                 catch (CannotUndoException e) {}
             }
         });
@@ -514,7 +533,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         {
             public void actionPerformed (ActionEvent evt)
             {
-                try {undoManager.redo();}
+                try {undoMessage.redo();}
                 catch (CannotRedoException e) {}
             }
         });
@@ -608,6 +627,13 @@ public class SettingsRepo extends JScrollPane implements Settings
         AppData.models    .init (modelContainers);     // Triggers change() call to PanelModel
         AppData.references.init (referenceContainers); // Triggers change() call to PanelReference
         needRebuild = false;
+    }
+
+    public boolean isEmpty (String key)
+    {
+        MDir models     = (MDir) existingModels    .get (key);
+        MDir references = (MDir) existingReferences.get (key);
+        return  models.size () == 0  &&  references.size () == 0;
     }
 
     public class RepoTableModel extends AbstractTableModel
@@ -740,10 +766,10 @@ public class SettingsRepo extends JScrollPane implements Settings
 
         public void setValueAt (Object value, int row, int column)
         {
+            MNode repo = repos.get (row);
             switch (column)
             {
                 case 3:
-                    MNode repo = repos.get (row);
                     String newName = value.toString ();
                     String oldName = repo.key ();
                     if (newName.isEmpty ()  ||  newName.equals (oldName)) return;
@@ -756,10 +782,13 @@ public class SettingsRepo extends JScrollPane implements Settings
                     existingReferences.remove (oldName);
                     existingModels    .put (newName, models);
                     existingReferences.put (newName, references);
+
+                    gitRepos.get (row).close ();
                     Path repoDir = reposDir.resolve (newName);
                     models    .set (repoDir.resolve ("models"));  // Flushes write queue, so save thread won't interfere with the move.
                     references.set (repoDir.resolve ("references"));
                     AppData.repos.move (oldName, newName);
+                    gitRepos.set (row, new GitWrapper (repoDir.resolve (".git")));
 
                     String primary = AppData.state.get ("Repos", "primary");
                     if (oldName.equals (primary)) AppData.state.set ("Repos", "primary", newName);
@@ -770,8 +799,94 @@ public class SettingsRepo extends JScrollPane implements Settings
                 case 4:
                     GitWrapper gitRepo = gitRepos.get (row);
                     gitRepo.setURL (value.toString ());
+                    if (isEmpty (repo.key ())) pullNew (gitRepo, repo.key ());  // New empty repository, so do initial pull
                     return;
             }
+        }
+
+        public void pullNew (GitWrapper gitRepo, String repoKey)
+        {
+            MDir models     = (MDir) existingModels    .get (repoKey);
+            MDir references = (MDir) existingReferences.get (repoKey);
+            needRebuild = true;
+            Thread thread = new Thread ()
+            {
+                public void run ()
+                {
+                    // TODO: Prevent repo rename while pull is in progress. Simple approach is to add check to TextCellEditor.isCellEditable()
+                    gitRepo.pullNew ();
+                    models    .reload ();
+                    references.reload ();
+                    if (! needRebuild)  // UI focus has already shifted away from settings panel, and rebuild() may have been done before pull finished.
+                    {
+                        // Force another rebuild, to ensure that new files are visible to user.
+                        needRebuild = true;
+                        rebuild ();
+                    }
+                }
+            };
+            thread.setDaemon (true);
+            thread.start ();
+        }
+
+        public void create (int row, String URL)
+        {
+            String prefix;
+            if (URL.isEmpty ())
+            {
+                prefix = "local";
+            }
+            else
+            {
+                // Extract stem from URL
+                int position = URL.lastIndexOf ('/');
+                if (position < 0) prefix = URL;
+                else              prefix = URL.substring (position + 1);
+                position = prefix.lastIndexOf ('.');
+                if (position > 0) prefix = prefix.substring (0, position);
+            }
+
+            String name = prefix;
+            int suffix = 2;
+            while (AppData.repos.child (name) != null) name = prefix + suffix++;
+
+            // Sequencing here is important, to avoid creating the dir before call to Git.
+            // Git requires an empty or non-existent dir in order to clone.
+            Path baseDir = reposDir.resolve (name);
+            GitWrapper gitRepo = new GitWrapper (baseDir.resolve (".git"));
+            gitRepo.setURL (URL);
+            AppData.repos.set (name, "visible", 1);  // Implicitly creates the repo node.
+            existingModels    .put (name, new MDir (name, baseDir.resolve ("models")));
+            existingReferences.put (name, new MDir (name, baseDir.resolve ("references")));
+            needRebuild = true;
+
+            repoModel.repos   .add (row, AppData.repos.child (name));
+            repoModel.gitRepos.add (row, gitRepo);
+            repoModel.updateOrder ();
+            repoModel.fireTableRowsInserted (row, row);
+            repoTable.changeSelection (row, 3, false, false);
+
+            if (URL.isEmpty ()) repoTable.editCellAt (row, 3, null);
+            else                pullNew (gitRepo, name);
+        }
+
+        public void delete (int row, int column)
+        {
+            // Order is important. Close the git repo before deleting the directory structure.
+            gitRepos.get (row).close ();
+
+            String name = repos.get (row).key ();
+            AppData.repos.clear (name);
+            existingModels    .remove (name);
+            existingReferences.remove (name);
+
+            needRebuild = true;
+            gitRepos.remove (row);
+            repos   .remove (row);
+            updateOrder ();
+            fireTableRowsDeleted (row, row);
+            if (row >= repos.size ()) row = repos.size () - 1;
+            if (row >= 0) repoTable.changeSelection (row, column, false, false);
         }
 
         public void moveSelected (int direction)
@@ -787,8 +902,10 @@ public class SettingsRepo extends JScrollPane implements Settings
         {
             if (rowAfter == rowBefore) return;
 
-            MNode repo = repos.remove (rowBefore);
-            repos.add (rowAfter, repo);
+            MNode      repo    = repos   .remove (rowBefore);
+            GitWrapper gitRepo = gitRepos.remove (rowBefore);
+            repos   .add (rowAfter, repo);
+            gitRepos.add (rowAfter, gitRepo);
             updateOrder ();
             int column = repoTable.getSelectedColumn ();
             if (rowAfter < rowBefore) fireTableRowsUpdated (rowAfter,  rowBefore);
@@ -800,17 +917,17 @@ public class SettingsRepo extends JScrollPane implements Settings
         public void updateOrder ()
         {
             String primary = AppData.state.get ("Repos", "primary");
-            boolean primaryFound = false;
+            primaryRow = 0;
             String order = "";
-            for (MNode r : repos)
+            for (int i = 0; i < repos.size (); i++)
             {
-                String repoName = r.key ();
-                if (repoName.equals (primary)) primaryFound = true;
+                String repoName = repos.get (i).key ();
+                if (repoName.equals (primary)) primaryRow = i;
                 order += "," + repoName;
             }
             if (! order.isEmpty ()) order = order.substring (1);
             AppData.state.set ("Repos", "order", order);
-            if (! primaryFound  &&  repos.size () > 0) AppData.state.set ("Repos", "primary", repos.get (0).key ());  // and primaryRow should already be 0
+            if (repos.size () > 0) AppData.state.set ("Repos", "primary", repos.get (primaryRow).key ());
         }
     }
 
@@ -859,11 +976,97 @@ public class SettingsRepo extends JScrollPane implements Settings
         }
     }
 
+    public class TextCellEditor extends AbstractCellEditor implements TableCellEditor
+    {
+        protected UndoManager undoCell;
+        protected JTextField  editor;
+
+        public TextCellEditor ()
+        {
+            undoCell = new UndoManager ();
+
+            editor = new JTextField ();
+            editor.setBorder (new EmptyBorder (0, 0, 0, 0));
+
+            editor.getDocument ().addUndoableEditListener (undoCell);
+            InputMap inputMap = editor.getInputMap ();
+            inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+            inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+            inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
+            ActionMap actionMap = editor.getActionMap ();
+            actionMap.put ("Undo", new AbstractAction ("Undo")
+            {
+                public void actionPerformed (ActionEvent evt)
+                {
+                    try {undoCell.undo ();}
+                    catch (CannotUndoException e) {}
+                }
+            });
+            actionMap.put ("Redo", new AbstractAction ("Redo")
+            {
+                public void actionPerformed (ActionEvent evt)
+                {
+                    try {undoCell.redo();}
+                    catch (CannotRedoException e) {}
+                }
+            });
+
+            editor.addActionListener (new ActionListener ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    stopCellEditing ();
+                }
+            });
+
+            editor.addFocusListener (new FocusListener ()
+            {
+                public void focusGained (FocusEvent e)
+                {
+                }
+
+                public void focusLost (FocusEvent e)
+                {
+                    stopCellEditing ();
+                }
+            });
+
+            editor.setTransferHandler (new SafeTextTransferHandler ());
+        }
+
+        public boolean isCellEditable (EventObject e)
+        {
+            if (e instanceof MouseEvent) return ((MouseEvent) e).getClickCount () >= 2;
+            return true;
+        }
+
+        public Object getCellEditorValue ()
+        {
+            return editor.getText ();
+        }
+
+        public Component getTableCellEditorComponent (JTable table, Object value, boolean isSelected, int row, int column)
+        {
+            undoCell.discardAllEdits ();
+
+            String valueString = "";
+            if (value != null) valueString = value.toString ();
+            editor.setText (valueString);
+
+            editor.setFont (table.getFont ());
+            editor.setForeground (table.getForeground ());
+            editor.setBackground (table.getBackground ());
+
+            return editor;
+        }
+    }
+
     public static class Delta
     {
         public String  name;
         public boolean deleted;
         public boolean untracked;
+        public boolean ignore;
     }
 
     public class GitWrapper implements AutoCloseable
@@ -908,7 +1111,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             }
         }
 
-        public void close ()
+        public synchronized void close ()
         {
             try
             {
@@ -1044,11 +1247,33 @@ public class SettingsRepo extends JScrollPane implements Settings
             catch (IOException e) {}
         }
 
+        /**
+            Populates a new empty repo from remote.
+            Makes no attempt to rebase models, because there are not supposed to be any.
+            Configures branch to track remote.
+        **/
+        public void pullNew ()
+        {
+            try
+            {
+                git.pull ().call ();
+
+                // Update branch to track remote.
+                CreateBranchCommand create = git.branchCreate ();
+                create.setUpstreamMode (SetupUpstreamMode.SET_UPSTREAM);
+                create.setName (head);
+                create.setForce (true);  // Because head already exists.
+                create.setStartPoint (remote.getName () + "/" + head);
+                create.call ();
+            }
+            catch (Exception e) {}
+        }
+
         public synchronized void checkout (String name)
         {
+            clearDiff ();  // force update
             try {git.checkout ().addPath (name).call ();}
             catch (Exception e) {}
-            clearDiff ();  // force update
         }
 
         public synchronized void commit (List<Delta> deltas, String author, String message)
@@ -1059,6 +1284,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             RmCommand  rm  = null;
             for (Delta d : deltas)
             {
+                if (d.ignore) continue;
                 if (d.deleted)
                 {
                     if (rm == null) rm = git.rm ();
@@ -1138,6 +1364,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                 current.message  = fieldMessage.getText ();
             }
 
+            undoMessage.discardAllEdits ();
             if (repoIndex < 0  ||  repoIndex >= repoModel.gitRepos.size ())
             {
                 current = null;
@@ -1192,7 +1419,11 @@ public class SettingsRepo extends JScrollPane implements Settings
                     if (ignore != null)
                     {
                         Set<String> names = new TreeSet<String> ();
-                        for (Delta d : newDeltas) names.add (d.name);
+                        for (Delta d : newDeltas)
+                        {
+                            names.add (d.name);
+                            d.ignore = ignore.child (d.name) != null;
+                        }
                         for (MNode i : ignore)
                         {
                             String key = i.key ();
@@ -1273,7 +1504,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             Delta delta = deltas.get (row);
             switch (column)
             {
-                case 0: return repo.child ("ignore", delta.name) == null;
+                case 0: return ! delta.ignore;
                 case 1: return delta;
             }
             return null;
@@ -1281,9 +1512,10 @@ public class SettingsRepo extends JScrollPane implements Settings
 
         public synchronized void toggle (int row)
         {
-            String name = deltas.get (row).name;
-            if (repo.child ("ignore", name) == null) repo.set   ("ignore", name, "");
-            else                                     repo.clear ("ignore", name);
+            Delta delta = deltas.get (row);
+            delta.ignore = ! delta.ignore;
+            if (delta.ignore) repo.set   ("ignore", delta.name, "");
+            else              repo.clear ("ignore", delta.name);
             fireTableCellUpdated (row, 0);
         }
 
@@ -1334,10 +1566,11 @@ public class SettingsRepo extends JScrollPane implements Settings
             List<Delta> newDeltas = new ArrayList<Delta> ();
             for (Delta d : deltas)
             {
-                if (repo.child ("ignore", d.name) == null) files    .add (d);
-                else                                       newDeltas.add (d);
+                if (d.ignore) newDeltas.add (d);
+                else          files    .add (d);
             }
 
+            undoMessage.discardAllEdits ();
             fieldMessage.setText ("");
             working.message = "";
             deltas = newDeltas;

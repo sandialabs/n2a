@@ -19,7 +19,6 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
@@ -317,6 +316,21 @@ public class MDir extends MNode
         }
     }
 
+    /**
+        Used by repository manager to notify us about changes made directly to disk.
+        The caller should follow this sequence of operations:
+        <ol>
+        <li>MDir.save()
+        <li>make changes to directory
+        <li>MDir.reload()
+        </ol>
+    **/
+    public synchronized void reload ()
+    {
+        loaded = false;  // Forces a fresh run of load(). children collection will be preserved as much as possible, to maintain object identity.
+        fireChanged ();
+    }
+
     public class IteratorWrapperSoft implements Iterator<MNode>
     {
         List<String>     keys;
@@ -365,11 +379,7 @@ public class MDir extends MNode
         for (String index : root.toFile ().list ())  // This may cost a lot of time in some cases. However, N2A should never have more than about 10,000 models in a dir.
         {
             if (index.startsWith (".")) continue; // Filter out special files. This allows, for example, a git repo to share the models dir.
-            newChildren.put (index, null);
-        }
-        for (Entry<String,SoftReference<MDoc>> c : children.entrySet ())
-        {
-            newChildren.put (c.getKey (), c.getValue ());
+            newChildren.put (index, children.get (index));  // Some children could get orphaned, if they were deleted from disk by another process. In that case the UI should be rebuilt.
         }
         children = newChildren;
 
