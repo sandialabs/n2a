@@ -109,6 +109,17 @@ public class PanelReference extends JPanel implements MNodeListener
         panelMRU.loadMRU ();
         panelSearch.search ();
         panelEntry.checkVisible ();
+        MNode record = panelEntry.model.record;
+        if (record == null) return;
+        if (AppData.references.isVisible (record))
+        {
+            panelEntry.model.record = null;
+            panelEntry.model.setRecord (record);
+        }
+        else
+        {
+            panelEntry.recordDeleted (record);
+        }
     }
 
     public void childAdded (String key)

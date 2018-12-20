@@ -19,6 +19,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
@@ -317,7 +318,7 @@ public class MDir extends MNode
     }
 
     /**
-        Used by repository manager to notify us about changes made directly to disk.
+        Used by repository manager to notify us that entire directory may have changed on disk.
         The caller should follow this sequence of operations:
         <ol>
         <li>MDir.save()
@@ -327,7 +328,17 @@ public class MDir extends MNode
     **/
     public synchronized void reload ()
     {
-        loaded = false;  // Forces a fresh run of load(). children collection will be preserved as much as possible, to maintain object identity.
+        loaded = false;  // Force a fresh run of load(). children will be preserved as much as possible, to maintain object identity.
+        load ();
+        for (Entry<String,SoftReference<MDoc>> e : children.entrySet ())
+        {
+            SoftReference<MDoc> reference = e.getValue ();
+            if (reference == null) continue;
+            MDoc child = reference.get ();
+            if (child == null) continue;
+            child.needsWrite = false;
+            child.children = null;
+        }
         fireChanged ();
     }
 

@@ -92,6 +92,7 @@ import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.IndexDiff;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.lib.StoredConfig;
+import org.eclipse.jgit.transport.FetchResult;
 import org.eclipse.jgit.transport.RemoteConfig;
 import org.eclipse.jgit.transport.URIish;
 import org.eclipse.jgit.treewalk.FileTreeIterator;
@@ -104,10 +105,8 @@ public class SettingsRepo extends JScrollPane implements Settings
     protected GitTableModel  gitModel;
     protected JTable         gitTable;
     protected JButton        buttonRevert;
-    protected JButton        buttonRefresh;
     protected JLabel         labelStatus;
     protected JButton        buttonPull;
-    protected JButton        buttonCommit;
     protected JButton        buttonPush;
     protected JTextField     fieldAuthor;
     protected JTextArea      fieldMessage;
@@ -454,38 +453,15 @@ public class SettingsRepo extends JScrollPane implements Settings
             }
         });
 
-        buttonRefresh = new JButton (ImageUtil.getImage ("refresh.gif"));
-        buttonRefresh.setMargin (new Insets (2, 2, 2, 2));
-        buttonRefresh.setFocusable (false);
-        buttonRefresh.setToolTipText ("Refresh");
-        buttonRefresh.addActionListener (new ActionListener ()
-        {
-            public void actionPerformed (ActionEvent e)
-            {
-                // This is the main purpose of the refresh button: to check on the remote repo.
-                gitModel.refreshTrack ();
-
-                // However, it adds little cost to rescan the local repo as well.
-                gitModel.current.clearDiff ();
-                gitModel.refreshDiff ();
-                // Should we also update name and email?
-            }
-        });
-
         buttonPull = new JButton (ImageUtil.getImage ("pull.png"));
         buttonPull.setMargin (new Insets (2, 2, 2, 2));
         buttonPull.setFocusable (false);
         buttonPull.setToolTipText ("Pull");
-
-        buttonCommit = new JButton (ImageUtil.getImage ("commit.png"));
-        buttonCommit.setMargin (new Insets (2, 2, 2, 2));
-        buttonCommit.setFocusable (false);
-        buttonCommit.setToolTipText ("Commit");
-        buttonCommit.addActionListener (new ActionListener ()
+        buttonPull.addActionListener (new ActionListener ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                gitModel.commit ();
+                pull (gitModel.current, gitModel.repo.key ());
             }
         });
 
@@ -497,11 +473,11 @@ public class SettingsRepo extends JScrollPane implements Settings
         {
             public void actionPerformed (ActionEvent e)
             {
-                gitModel.push ();
+                gitModel.commit ();
             }
         });
 
-        labelStatus = new JLabel ("Ahead ?, Behind ?");
+        labelStatus = new JLabel ();
         buttonPush.setMargin (new Insets (2, 2, 2, 2));
 
         fieldAuthor = new JTextField ();
@@ -545,7 +521,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         Lay.BLtg (panel,
             "N", Lay.BxL (
                 Lay.BL ("W", repoPanel),
-                Lay.WL ("L", buttonRevert, Box.createHorizontalStrut (15), labelStatus, buttonRefresh, buttonPull, buttonCommit, buttonPush, "hgap=10,vgap=10"),
+                Lay.WL ("L", buttonRevert, Box.createHorizontalStrut (15), labelStatus, buttonPull, buttonPush, "hgap=10,vgap=10"),
                 Lay.BL ("W",
                     Lay.BxL ("H",
                         Lay.BL ("N", gitPanel),
@@ -634,6 +610,43 @@ public class SettingsRepo extends JScrollPane implements Settings
         MDir models     = (MDir) existingModels    .get (key);
         MDir references = (MDir) existingReferences.get (key);
         return  models.size () == 0  &&  references.size () == 0;
+    }
+
+    public void pull (GitWrapper gitRepo, String key)
+    {
+        MDir models     = (MDir) existingModels    .get (key);
+        MDir references = (MDir) existingReferences.get (key);
+        models    .save ();
+        references.save ();
+        boolean empty =  models.size () == 0  &&  references.size () == 0;
+        needRebuild = true;
+        Thread thread = new Thread ()
+        {
+            public void run ()
+            {
+                // TODO: Prevent repo rename while pull is in progress. Simple approach is to add check to TextCellEditor.isCellEditable()
+                if (empty) gitRepo.pullNew ();
+                else       gitRepo.pull ();
+                models    .reload ();
+                references.reload ();
+                if (needRebuild)  // UI focus is still on settings panel.
+                {
+                    if (gitRepo == gitModel.current)
+                    {
+                        gitModel.refreshDiff ();
+                        gitModel.refreshTrack ();
+                    }
+                }
+                else  // UI focus has shifted away from settings panel, and rebuild() may have been done before pull finished.
+                {
+                    // Force another rebuild, to ensure that new files are visible to user.
+                    needRebuild = true;
+                    rebuild ();
+                }
+            }
+        };
+        thread.setDaemon (true);
+        thread.start ();
     }
 
     public class RepoTableModel extends AbstractTableModel
@@ -767,11 +780,12 @@ public class SettingsRepo extends JScrollPane implements Settings
         public void setValueAt (Object value, int row, int column)
         {
             MNode repo = repos.get (row);
+            String key = repo.key ();
             switch (column)
             {
                 case 3:
                     String newName = value.toString ();
-                    String oldName = repo.key ();
+                    String oldName = key;
                     if (newName.isEmpty ()  ||  newName.equals (oldName)) return;
                     if (AppData.repos.child (newName) != null) return;
 
@@ -799,34 +813,9 @@ public class SettingsRepo extends JScrollPane implements Settings
                 case 4:
                     GitWrapper gitRepo = gitRepos.get (row);
                     gitRepo.setURL (value.toString ());
-                    if (isEmpty (repo.key ())) pullNew (gitRepo, repo.key ());  // New empty repository, so do initial pull
+                    if (isEmpty (key)) pull (gitRepo, key);  // New empty repository, so do initial pull
                     return;
             }
-        }
-
-        public void pullNew (GitWrapper gitRepo, String repoKey)
-        {
-            MDir models     = (MDir) existingModels    .get (repoKey);
-            MDir references = (MDir) existingReferences.get (repoKey);
-            needRebuild = true;
-            Thread thread = new Thread ()
-            {
-                public void run ()
-                {
-                    // TODO: Prevent repo rename while pull is in progress. Simple approach is to add check to TextCellEditor.isCellEditable()
-                    gitRepo.pullNew ();
-                    models    .reload ();
-                    references.reload ();
-                    if (! needRebuild)  // UI focus has already shifted away from settings panel, and rebuild() may have been done before pull finished.
-                    {
-                        // Force another rebuild, to ensure that new files are visible to user.
-                        needRebuild = true;
-                        rebuild ();
-                    }
-                }
-            };
-            thread.setDaemon (true);
-            thread.start ();
         }
 
         public void create (int row, String URL)
@@ -867,7 +856,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             repoTable.changeSelection (row, 3, false, false);
 
             if (URL.isEmpty ()) repoTable.editCellAt (row, 3, null);
-            else                pullNew (gitRepo, name);
+            else                pull (gitRepo, name);
         }
 
         public void delete (int row, int column)
@@ -1216,7 +1205,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                 }
                 try
                 {
-                    diff = new IndexDiff (gitRepo, "HEAD", new FileTreeIterator (gitRepo));
+                    diff = new IndexDiff (gitRepo, head, new FileTreeIterator (gitRepo));
                     diff.diff ();
                 }
                 catch (IOException e) {e.printStackTrace ();}
@@ -1234,9 +1223,12 @@ public class SettingsRepo extends JScrollPane implements Settings
         {
             ahead  = 0;
             behind = 0;
+
+            try {git.fetch ().call ();}
+            catch (Exception e) {}
+
             try
             {
-                // TODO: fetch first
                 BranchTrackingStatus track = BranchTrackingStatus.of (gitRepo, head);
                 if (track != null)
                 {
@@ -1269,6 +1261,24 @@ public class SettingsRepo extends JScrollPane implements Settings
             catch (Exception e) {}
         }
 
+        /**
+            @return true if any new change sets were received. false if nothing changed in repo.
+        **/
+        public synchronized boolean pull ()
+        {
+            clearDiff ();
+            try
+            {
+                // TODO: pull by itself is potentially destructive. Need to do fetch and our own fast-forward.
+                FetchResult result = git.pull ().call ().getFetchResult ();
+                return ! result.getTrackingRefUpdates ().isEmpty ();
+            }
+            catch (Exception e)
+            {
+                return false;
+            }
+        }
+
         public synchronized void checkout (String name)
         {
             clearDiff ();  // force update
@@ -1278,8 +1288,21 @@ public class SettingsRepo extends JScrollPane implements Settings
 
         public synchronized void commit (List<Delta> deltas, String author, String message)
         {
-            clearDiff ();  // Because it won't be valid after the commit.
+            // Ensure that repo is up to date before committing.
+            boolean changed = pull ();
+            if (changed)
+            {
+                JOptionPane.showMessageDialog
+                (
+                    MainFrame.instance,
+                    "Changes were fetched from remote. Please ensure local documents are correct, then push again.",
+                    "Fetch result",
+                    JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
 
+            // Commit current changes
             AddCommand add = null;
             RmCommand  rm  = null;
             for (Delta d : deltas)
@@ -1301,44 +1324,42 @@ public class SettingsRepo extends JScrollPane implements Settings
                 if (add != null) add.call ();
                 if (rm  != null) rm .call ();
             }
-            catch (Exception e)
+            catch (Exception e) {}
+
+            if (add != null  ||  rm != null)
             {
-                // This should never happen, since file list is constructed automatically.
-                e.printStackTrace ();
-                return;
+                String[] pieces = author.split ("<", 2);
+                String name = pieces[0].trim ();
+                String email = "";
+                if (pieces.length > 1) email = pieces[1].split (">")[0];
+
+                CommitCommand commit = git.commit ();
+                commit.setAuthor (name, email);
+                commit.setMessage (message);
+                try {commit.call ();}
+                catch (Exception e) {}
             }
 
-            String[] pieces = author.split ("<", 2);
-            String name = pieces[0].trim ();
-            String email = "";
-            if (pieces.length > 1) email = pieces[1].split (">")[0];
-
-            CommitCommand commit = git.commit ();
-            commit.setAuthor (name, email);
-            commit.setMessage (message);
-            try
-            {
-                commit.call ();
-            }
-            catch (Exception e)
-            {
-            }
-        }
-
-        public synchronized void push ()
-        {
+            // Push changes upstream
             PushCommand push = git.push ();
             try {push.call ();}
             catch (Exception e)
             {
-                return;  // In case we have an invalid remote.
+                // The push may fail if we have an invalid remote URI, or if the network is down.
+                JOptionPane.showMessageDialog
+                (
+                    MainFrame.instance,
+                    "Commit has been saved in local repo, but remote is unreachable.",
+                    "Push failed",
+                    JOptionPane.WARNING_MESSAGE
+                );
+                return;
             }
 
-            // If this is a newly-created repo, we need to set head to track remote origin.
+            // If this is a new repo, set head to track remote origin.
             BranchConfig branch = new BranchConfig (config, head);
             if (branch.getRemote () == null)  // head is not tracking remote
             {
-                System.out.println ("adding remote");
                 CreateBranchCommand create = git.branchCreate ();
                 create.setUpstreamMode (SetupUpstreamMode.SET_UPSTREAM);
                 create.setName (head);
@@ -1456,11 +1477,18 @@ public class SettingsRepo extends JScrollPane implements Settings
                 public void run ()
                 {
                     GitWrapper working = current;
-                    working.getRemoteTracking ();  // If this actually calls the remote server, then it could take a long time.
+                    working.getRemoteTracking ();
                     synchronized (GitTableModel.this)
                     {
                         if (working != current) return;
-                        labelStatus.setText ("Ahead " + working.ahead + ", Behind " + working.behind);
+                        String status = "";
+                        if (working.ahead != 0) status = "Ahead " + working.ahead;
+                        if (working.behind != 0)
+                        {
+                            if (! status.isEmpty ()) status += ", ";
+                            status += "Behind " + working.behind;
+                        }
+                        labelStatus.setText (status);
                     }
                 }
             };
@@ -1583,22 +1611,6 @@ public class SettingsRepo extends JScrollPane implements Settings
                     working.commit (files, author, message);
                     if (working != current) return;
                     refreshDiff ();
-                    refreshTrack ();
-                }
-            };
-            thread.setDaemon (true);
-            thread.run ();
-        }
-
-        public synchronized void push ()
-        {
-            GitWrapper working = current; 
-            Thread thread = new Thread ()
-            {
-                public void run ()
-                {
-                    working.push ();
-                    if (working != current) return;
                     refreshTrack ();
                 }
             };

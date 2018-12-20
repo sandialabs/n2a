@@ -108,7 +108,17 @@ public class PanelModel extends JPanel implements MNodeListener
     {
         panelMRU.loadMRU ();
         panelSearch.search ();
-        panelEquations.checkVisible ();
+        MNode record = panelEquations.record;
+        if (record == null) return;
+        if (AppData.models.isVisible (record))
+        {
+            panelEquations.record = null;
+            panelEquations.loadRootFromDB (record);
+        }
+        else
+        {
+            panelEquations.recordDeleted (record);
+        }
     }
 
     public void childAdded (String key)
