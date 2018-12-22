@@ -7,8 +7,10 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.db;
 
 import java.io.StringWriter;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
+import java.util.List;
 
 /**
     A hierarchical key-value storage system, with subclasses that provide persistence.
@@ -425,6 +427,39 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     }
 
     /**
+        Removes empty children from this node which have the same key as children in that node.
+        The process works bottom-up, so children of this node may get emptied before they are tested,
+        and thus get deleted.
+    **/
+    public synchronized void uniqueNodes (MNode that)
+    {
+        for (MNode c : this)
+        {
+            String key = c.key ();
+            MNode d = that.getChild (key);
+            if (d == null) continue;
+            c.uniqueNodes (d);
+            if (c.size () == 0) clearChild (key);
+        }
+    }
+
+    /**
+        Removes empty children from this node which match both key and value of children in that node.
+        The process works bottom-up, so children of this node may get emptied before they are tested.
+    **/
+    public synchronized void uniqueValues (MNode that)
+    {
+        for (MNode c : this)
+        {
+            String key = c.key ();
+            MNode d = that.getChild (key);
+            if (d == null) continue;
+            c.uniqueValues (d);
+            if (c.size () == 0  &&  c.get ().equals (d.get ())) clearChild (key);
+        }
+    }
+
+    /**
         Changes the key of a child.
         A move only happens if the given keys are different (same key is no-op).
         Any previously existing node at the destination key will be completely erased and replaced.
@@ -452,27 +487,43 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     {
     }
 
-    public static class IteratorEmpty implements Iterator<MNode>
+    public class IteratorWrapper implements Iterator<MNode>
     {
-        public boolean hasNext ()
+        List<String>     keys;
+        Iterator<String> iterator;
+        String           key;  // of the most recent node returned by next()
+
+        public IteratorWrapper (List<String> keys)
         {
-            return false;
+            this.keys = keys;
+            iterator = keys.iterator ();
         }
 
+        public boolean hasNext ()
+        {
+            return iterator.hasNext ();
+        }
+
+        /**
+            If a document is deleted while the iterator is running, this could return null.
+            If a document is added, it will not be included.
+        **/
         public MNode next ()
         {
-            return null;
+            key = iterator.next ();
+            return getChild (key);
         }
 
         public void remove ()
         {
-            // Do nothing, since the list is empty.
+            clearChild (key);
+            iterator.remove ();
         }
     }
 
     public Iterator<MNode> iterator ()
     {
-        return new MNode.IteratorEmpty ();
+        return new MNode.IteratorWrapper (new ArrayList<String> ());
     }
 
     public static class Visitor

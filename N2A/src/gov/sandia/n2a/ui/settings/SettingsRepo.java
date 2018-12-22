@@ -8,7 +8,10 @@ package gov.sandia.n2a.ui.settings;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDir;
+import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MVolatile;
+import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.plugins.extpoints.Settings;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
@@ -30,7 +33,9 @@ import java.awt.event.FocusListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.URISyntaxException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -81,6 +86,7 @@ import org.eclipse.jgit.api.CommitCommand;
 import org.eclipse.jgit.api.CreateBranchCommand;
 import org.eclipse.jgit.api.CreateBranchCommand.SetupUpstreamMode;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.PullCommand;
 import org.eclipse.jgit.api.PushCommand;
 import org.eclipse.jgit.api.RemoteSetUrlCommand;
 import org.eclipse.jgit.api.RmCommand;
@@ -90,12 +96,17 @@ import org.eclipse.jgit.lib.BranchConfig;
 import org.eclipse.jgit.lib.BranchTrackingStatus;
 import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.IndexDiff;
+import org.eclipse.jgit.lib.ObjectId;
+import org.eclipse.jgit.lib.ObjectLoader;
+import org.eclipse.jgit.lib.ObjectStream;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.lib.StoredConfig;
-import org.eclipse.jgit.transport.FetchResult;
+import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevTree;
 import org.eclipse.jgit.transport.RemoteConfig;
 import org.eclipse.jgit.transport.URIish;
 import org.eclipse.jgit.treewalk.FileTreeIterator;
+import org.eclipse.jgit.treewalk.TreeWalk;
 
 @SuppressWarnings("serial")
 public class SettingsRepo extends JScrollPane implements Settings
@@ -113,8 +124,8 @@ public class SettingsRepo extends JScrollPane implements Settings
     protected JScrollPane    paneMessage;
     protected UndoManager    undoMessage;
 
-    protected boolean           needRebuild;  // need to re-collate AppData.models and AppData.references
-    protected boolean           needSave;     // need to flush repositories to disk for git status
+    protected boolean           needRebuild;     // need to re-collate AppData.models and AppData.references
+    protected boolean           needSave = true; // need to flush repositories to disk for git status
     protected Map<String,MNode> existingModels     = AppData.models    .getContainerMap ();
     protected Map<String,MNode> existingReferences = AppData.references.getContainerMap ();
     protected Path              reposDir           = Paths.get (AppData.properties.get ("resourceDir")).resolve ("repos");
@@ -300,15 +311,11 @@ public class SettingsRepo extends JScrollPane implements Settings
         {
             public void focusGained (FocusEvent e)
             {
-                if (needSave)  // Indicates that focus left this settings tab in previous event.
+                if (needSave)  // Indicates that focus previously left this settings tab.
                 {
-                    int row = repoTable.getSelectedRow ();
-                    if (row < 0)
-                    {
-                        if (repoModel.getRowCount () == 0) return;
-                        row = 0;
-                    }
                     gitModel.current = null;
+                    int row = repoTable.getSelectedRow ();
+                    if (row < 0) return;
                     gitModel.setCurrent (row);
                 }
             }
@@ -616,8 +623,6 @@ public class SettingsRepo extends JScrollPane implements Settings
     {
         MDir models     = (MDir) existingModels    .get (key);
         MDir references = (MDir) existingReferences.get (key);
-        models    .save ();
-        references.save ();
         boolean empty =  models.size () == 0  &&  references.size () == 0;
         needRebuild = true;
         Thread thread = new Thread ()
@@ -1056,6 +1061,9 @@ public class SettingsRepo extends JScrollPane implements Settings
         public boolean deleted;
         public boolean untracked;
         public boolean ignore;
+
+        public MNode add;    // Changed and added nodes, relative to parent commit.
+        public MNode remove; // Removed nodes relative to parent commit.
     }
 
     public class GitWrapper implements AutoCloseable
@@ -1200,7 +1208,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             {
                 if (needSave)
                 {
-                    AppData.save ();
+                    AppData.save ();  // Flush all changes made outside this settings panel.
                     needSave = false;
                 }
                 try
@@ -1208,8 +1216,13 @@ public class SettingsRepo extends JScrollPane implements Settings
                     diff = new IndexDiff (gitRepo, head, new FileTreeIterator (gitRepo));
                     diff.diff ();
                 }
-                catch (IOException e) {e.printStackTrace ();}
+                catch (IOException e) {}
             }
+            return getDeltas (diff);
+        }
+
+        public List<Delta> getDeltas (IndexDiff diff)
+        {
             if (diff == null) return new ArrayList<Delta> ();
 
             TreeMap<String,Delta> sorted = new TreeMap<String,Delta> ();
@@ -1217,6 +1230,84 @@ public class SettingsRepo extends JScrollPane implements Settings
             for (String s : diff.getModified ())  addDelta (s, sorted);
             for (String s : diff.getMissing ())   addDelta (s, sorted).deleted = true;
             return new ArrayList<Delta> (sorted.values ());
+        }
+
+        public List<Delta> createStashInternal ()
+        {
+            List<Delta> stash = getDeltas ();
+            try
+            {
+                ObjectId commitId = gitRepo.resolve (head);
+                RevCommit commit = gitRepo.parseCommit (commitId);
+                RevTree tree = commit.getTree ();
+                try (TreeWalk treeWalk = new TreeWalk (gitRepo))
+                {
+                    treeWalk.addTree (tree);
+                    treeWalk.setRecursive (true);
+
+                    Map<String,Delta> map = new TreeMap<String,Delta> ();
+                    Path baseDir = gitDir.getParent ();
+                    for (Delta d : stash)
+                    {
+                        if (d.untracked)
+                        {
+                            // Preserve state of file.
+                            MDoc doc = new MDoc (baseDir.resolve (d.name));
+                            d.add = new MVolatile ();
+                            d.add.merge (doc);
+                            continue;  // No point in adding this delta to map, since it won't be accessed.
+                        }
+                        map.put (d.name, d);
+                    }
+                    while (treeWalk.next ())
+                    {
+                        String path = treeWalk.getPathString ();
+                        Delta d = map.get (path);
+                        if (d == null) continue;
+
+                        ObjectId objectId = treeWalk.getObjectId (0);  // The int index here selects which of the parallel trees to return id for. (But we are walking only one, so index is always 0.)
+                        ObjectLoader loader = gitRepo.open (objectId);
+                        ObjectStream stream = loader.openStream ();
+                        MNode original = new MVolatile ();
+                        Schema.readAll (original, new InputStreamReader (stream));
+
+                        // Create difference trees
+                        MDoc doc = new MDoc (baseDir.resolve (d.name));
+                        d.add = new MVolatile ();
+                        d.add.merge (doc);
+                        d.remove = new MVolatile ();
+                        d.remove.merge (original);
+                        d.remove.uniqueNodes (d.add);
+                        d.add.uniqueValues (original);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+            }
+            return stash;
+        }
+
+        public void applyStashInternal (List<Delta> stash)
+        {
+            Path baseDir = gitDir.getParent ();
+            for (Delta d : stash)
+            {
+                Path path = baseDir.resolve (d.name);
+                if (d.deleted)
+                {
+                    try {Files.delete (path);}
+                    catch (IOException e) {}
+                }
+                else
+                {
+                    MDoc doc = new MDoc (path);  // If the file already exists, then it will be loaded as needed.
+                    if (d.remove != null) doc.uniqueNodes (d.remove);
+                    if (d.add    != null) doc.merge       (d.add);
+                    doc.save ();
+                }
+            }
         }
 
         public void getRemoteTracking ()
@@ -1261,21 +1352,31 @@ public class SettingsRepo extends JScrollPane implements Settings
             catch (Exception e) {}
         }
 
-        /**
-            @return true if any new change sets were received. false if nothing changed in repo.
-        **/
-        public synchronized boolean pull ()
+        public synchronized void pull ()
         {
-            clearDiff ();
+            // TODO: not clear if git-diff is safe for N2A files. May need to implement our own rebase.
+            // At a minimum, we must never subject the user to a merge conflict of any kind.
             try
             {
-                // TODO: pull by itself is potentially destructive. Need to do fetch and our own fast-forward.
-                FetchResult result = git.pull ().call ().getFetchResult ();
-                return ! result.getTrackingRefUpdates ().isEmpty ();
+                // Clear away changes and new (untracked) files so they won't get in the way of pull.
+                List<Delta> stash = createStashInternal ();
+                Path baseDir = gitDir.getParent ();
+                for (Delta d : stash)
+                {
+                    try {Files.delete (baseDir.resolve (d.name));}
+                    catch (IOException e) {}
+                }
+
+                PullCommand pull = git.pull ();
+                pull.setRebase (true);
+                pull.call ();
+
+                applyStashInternal (stash);
+                clearDiff ();
             }
             catch (Exception e)
             {
-                return false;
+                e.printStackTrace ();
             }
         }
 
@@ -1288,20 +1389,6 @@ public class SettingsRepo extends JScrollPane implements Settings
 
         public synchronized void commit (List<Delta> deltas, String author, String message)
         {
-            // Ensure that repo is up to date before committing.
-            boolean changed = pull ();
-            if (changed)
-            {
-                JOptionPane.showMessageDialog
-                (
-                    MainFrame.instance,
-                    "Changes were fetched from remote. Please ensure local documents are correct, then push again.",
-                    "Fetch result",
-                    JOptionPane.WARNING_MESSAGE
-                );
-                return;
-            }
-
             // Commit current changes
             AddCommand add = null;
             RmCommand  rm  = null;
@@ -1345,14 +1432,6 @@ public class SettingsRepo extends JScrollPane implements Settings
             try {push.call ();}
             catch (Exception e)
             {
-                // The push may fail if we have an invalid remote URI, or if the network is down.
-                JOptionPane.showMessageDialog
-                (
-                    MainFrame.instance,
-                    "Commit has been saved in local repo, but remote is unreachable.",
-                    "Push failed",
-                    JOptionPane.WARNING_MESSAGE
-                );
                 return;
             }
 
@@ -1404,7 +1483,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             fieldAuthor .setText (current.getAuthor ());
             fieldMessage.setText (current.message);
             refreshDiff ();
-            refreshTrack ();
+            refreshTrackThread ();
         }
 
         public synchronized void refreshTable ()
@@ -1470,30 +1549,39 @@ public class SettingsRepo extends JScrollPane implements Settings
             thread.run ();
         }
 
-        public void refreshTrack ()
+        public void refreshTrackThread ()
         {
             Thread thread = new Thread ()
             {
                 public void run ()
                 {
-                    GitWrapper working = current;
-                    working.getRemoteTracking ();
-                    synchronized (GitTableModel.this)
-                    {
-                        if (working != current) return;
-                        String status = "";
-                        if (working.ahead != 0) status = "Ahead " + working.ahead;
-                        if (working.behind != 0)
-                        {
-                            if (! status.isEmpty ()) status += ", ";
-                            status += "Behind " + working.behind;
-                        }
-                        labelStatus.setText (status);
-                    }
+                    refreshTrack ();
                 }
             };
             thread.setDaemon (true);
             thread.run ();
+        }
+
+        public void refreshTrack ()
+        {
+            GitWrapper working = current;
+            working.getRemoteTracking ();
+            refreshTrackUI (working);
+        }
+
+        public synchronized void refreshTrackUI (GitWrapper working)
+        {
+            if (working != current) return;
+
+            buttonPush.setEnabled (working.behind == 0);
+            String status = "";
+            if (working.ahead != 0) status = "Ahead " + working.ahead;
+            if (working.behind != 0)
+            {
+                if (! status.isEmpty ()) status += ", ";
+                status += "Behind " + working.behind;
+            }
+            labelStatus.setText (status);
         }
 
         public synchronized int getRowCount ()
@@ -1566,7 +1654,6 @@ public class SettingsRepo extends JScrollPane implements Settings
                 if (response != JOptionPane.OK_OPTION) return;
             }
 
-            AppData.save ();
             current.checkout (delta.name);
             refreshDiff ();
 
@@ -1597,10 +1684,11 @@ public class SettingsRepo extends JScrollPane implements Settings
                 if (d.ignore) newDeltas.add (d);
                 else          files    .add (d);
             }
+            if (files.isEmpty ()) return;
 
-            undoMessage.discardAllEdits ();
+            // Give immediate visual feedback that commit has started.
             fieldMessage.setText ("");
-            working.message = "";
+            List<Delta> oldDeltas = deltas;
             deltas = newDeltas;
             refreshTable ();
 
@@ -1608,10 +1696,25 @@ public class SettingsRepo extends JScrollPane implements Settings
             {
                 public void run ()
                 {
+                    // Ensure that repo is up to date before committing.
+                    // The "Push" button should be disabled if we already know that we are behind the upstream repo.
+                    // Here we make a last-second check, just in case our information is out of date.
+                    refreshTrack ();
+                    if (working.behind > 0)
+                    {
+                        // Restore state of commit screen to show that commit was aborted.
+                        fieldMessage.setText (message);
+                        deltas = oldDeltas;
+                        refreshTable ();
+                        return;
+                    }
+                    undoMessage.discardAllEdits ();
+                    working.message = "";
+
                     working.commit (files, author, message);
                     if (working != current) return;
                     refreshDiff ();
-                    refreshTrack ();
+                    refreshTrackUI (working);
                 }
             };
             thread.setDaemon (true);

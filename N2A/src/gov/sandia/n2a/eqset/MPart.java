@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.eqset;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.NavigableMap;
@@ -13,7 +14,6 @@ import java.util.TreeMap;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MPersistent;
-import gov.sandia.n2a.db.MVolatile;
 
 /**
     Collates models following all the N2A language rules, and provides an interface
@@ -616,7 +616,7 @@ public class MPart extends MNode
 
     public synchronized Iterator<MNode> iterator ()
     {
-        if (children == null) return new MNode.IteratorEmpty ();
-        return new MVolatile.IteratorWrapper (children.entrySet ().iterator ());
+        if (children == null) return super.iterator ();
+        return new IteratorWrapper (new ArrayList<String> (children.keySet ()));
     }
 }

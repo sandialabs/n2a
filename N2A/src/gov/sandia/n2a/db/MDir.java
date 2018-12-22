@@ -342,44 +342,10 @@ public class MDir extends MNode
         fireChanged ();
     }
 
-    public class IteratorWrapperSoft implements Iterator<MNode>
-    {
-        List<String>     keys;
-        Iterator<String> iterator;
-        String           key;  // of the most recent node returned by next()
-
-        public IteratorWrapperSoft (List<String> keys)
-        {
-            this.keys = keys;
-            iterator = keys.iterator ();
-        }
-
-        public boolean hasNext ()
-        {
-            return iterator.hasNext ();
-        }
-
-        /**
-            If a document is deleted while the iterator is running, this could return null.
-            If a document is added, it will not be included.
-        **/
-        public MNode next ()
-        {
-            key = iterator.next ();
-            return getChild (key);
-        }
-
-        public void remove ()
-        {
-            clearChild (key);
-            iterator.remove ();
-        }
-    }
-
     public synchronized Iterator<MNode> iterator ()
     {
         load ();
-        return new IteratorWrapperSoft (new ArrayList<String> (children.keySet ()));  // Duplicate the keys, to avoid concurrent modification
+        return new IteratorWrapper (new ArrayList<String> (children.keySet ()));  // Duplicate the keys, to avoid concurrent modification
     }
 
     public synchronized void load ()

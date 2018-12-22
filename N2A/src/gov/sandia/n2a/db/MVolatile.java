@@ -6,8 +6,8 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.db;
 
+import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
@@ -120,34 +120,9 @@ public class MVolatile extends MNode
         }
     }
 
-    public static class IteratorWrapper implements Iterator<MNode>
-    {
-        Iterator<Entry<String,MNode>> iterator;
-
-        public IteratorWrapper (Iterator<Entry<String,MNode>> iterator)
-        {
-            this.iterator = iterator;
-        }
-
-        public boolean hasNext ()
-        {
-            return iterator.hasNext ();
-        }
-
-        public MNode next ()
-        {
-            return iterator.next ().getValue ();
-        }
-
-        public void remove ()
-        {
-            iterator.remove ();
-        }
-    }
-
     public synchronized Iterator<MNode> iterator ()
     {
-        if (children == null) return new MNode.IteratorEmpty ();
-        return new IteratorWrapper (children.entrySet ().iterator ());
+        if (children == null) return super.iterator ();
+        return new IteratorWrapper (new ArrayList<String> (children.keySet ()));  // Duplicate the keys, to avoid concurrent modification
     }
 }
