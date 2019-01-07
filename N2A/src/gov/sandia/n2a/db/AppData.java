@@ -70,7 +70,11 @@ public class AppData
             reposOrder.remove (primary);
             reposOrder.add (0, primary);
         }
-        if (reposOrder.size () > 0) state.set ("Repos", "primary", reposOrder.get (0));
+        if (reposOrder.size () > 0)
+        {
+            primary = reposOrder.get (0);
+            state.set ("Repos", "primary", primary);
+        }
 
         List<MNode> modelContainers     = new ArrayList<MNode> ();
         List<MNode> referenceContainers = new ArrayList<MNode> ();
