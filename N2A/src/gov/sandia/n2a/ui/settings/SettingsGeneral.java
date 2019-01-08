@@ -44,7 +44,35 @@ public class SettingsGeneral extends JPanel implements Settings
                 AppData.state.set ("General", key, field.getText ());
             }
         });
-        return Lay.FL ("H", label, field);
+        return Lay.BL ("W", Lay.FL ("H", label, field));
+    }
+
+    public JPanel addFieldSystemProperty (final String key, String description, int width, String systemPropertyName)
+    {
+        String value = AppData.state.get ("General", key);
+        if (! value.isEmpty ()) System.setProperty (systemPropertyName, value);
+
+        JLabel label = new JLabel (description);
+        final JTextField field = new JTextField (value, width);
+        field.addActionListener (new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent arg0)
+            {
+                String value = field.getText ();
+                AppData.state.set ("General", key, value);
+                if (! value.isEmpty ()) System.setProperty (systemPropertyName, value);
+            }
+        });
+        field.addFocusListener (new FocusAdapter ()
+        {
+            public void focusLost (FocusEvent e)
+            {
+                String value = field.getText ();
+                AppData.state.set ("General", key, value);
+                if (! value.isEmpty ()) System.setProperty (systemPropertyName, value);
+            }
+        });
+        return Lay.BL ("W", Lay.FL ("H", label, field));
     }
 
     public JPanel addCombo (final String key, String description, int defaultIndex, String... choices)
@@ -67,17 +95,21 @@ public class SettingsGeneral extends JPanel implements Settings
                 AppData.state.set ("General", key, field.getSelectedItem ());
             }
         });
-        return Lay.FL ("H", label, field);
+        return Lay.BL ("W", Lay.FL ("H", label, field));
     }
 
     public SettingsGeneral ()
     {
         JPanel constants = addField ("constants", "Model that provides global constants", 40, "Constants");
         JPanel dimension = addCombo ("dimension", "How to handle inconsistent dimensions", 1, "Don't check", "Warning", "Error");
+        JPanel proxyHost = addFieldSystemProperty ("httpsProxyHost", "HTTPS Proxy Host", 40, "https.proxyHost");
+        JPanel proxyPort = addFieldSystemProperty ("httpsProxyPort", "HTTPS Proxy Port", 5,  "https.proxyPort");
         JPanel form = Lay.BxL
         (
             constants,
-            dimension
+            dimension,
+            proxyHost,
+            proxyPort
         );
         Lay.BLtg (this, "N", form);
     }

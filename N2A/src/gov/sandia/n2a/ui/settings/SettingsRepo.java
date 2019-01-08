@@ -130,6 +130,8 @@ public class SettingsRepo extends JScrollPane implements Settings
     protected Map<String,MNode> existingReferences = AppData.references.getContainerMap ();
     protected Path              reposDir           = Paths.get (AppData.properties.get ("resourceDir")).resolve ("repos");
 
+    protected int timeout = 30;  // seconds; for git operations
+
     public SettingsRepo ()
     {
         setName ("Repositories");  // Necessary to fulfill Settings interface.
@@ -534,7 +536,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                         Lay.BL ("N", gitPanel),
                         Box.createHorizontalStrut (5),
                         Lay.BL (
-                            "N", Lay.BxL ("L",
+                            "N", Lay.BxL (
                                 Lay.FL (Lay.lb ("Author"), fieldAuthor),
                                 Box.createVerticalStrut (5),
                                 Lay.BL ("W", Lay.lb ("Commit message:")),
@@ -623,7 +625,7 @@ public class SettingsRepo extends JScrollPane implements Settings
     {
         MDir models     = (MDir) existingModels    .get (key);
         MDir references = (MDir) existingReferences.get (key);
-        boolean empty =  models.size () == 0  &&  references.size () == 0;
+        boolean empty = models.size () == 0  &&  references.size () == 0;
         needRebuild = true;
         Thread thread = new Thread ()
         {
@@ -1315,7 +1317,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             ahead  = 0;
             behind = 0;
 
-            try {git.fetch ().call ();}
+            try {git.fetch ().setTimeout (timeout).call ();}
             catch (Exception e) {}
 
             try
@@ -1339,7 +1341,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         {
             try
             {
-                git.pull ().call ();
+                git.pull ().setTimeout (timeout).call ();
 
                 // Update branch to track remote.
                 CreateBranchCommand create = git.branchCreate ();
@@ -1369,6 +1371,7 @@ public class SettingsRepo extends JScrollPane implements Settings
 
                 PullCommand pull = git.pull ();
                 pull.setRebase (true);
+                pull.setTimeout (timeout);
                 pull.call ();
 
                 applyStashInternal (stash);
@@ -1429,6 +1432,7 @@ public class SettingsRepo extends JScrollPane implements Settings
 
             // Push changes upstream
             PushCommand push = git.push ();
+            push.setTimeout (timeout);
             try {push.call ();}
             catch (Exception e)
             {
@@ -1546,7 +1550,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                 }
             };
             thread.setDaemon (true);
-            thread.run ();
+            thread.start ();
         }
 
         public void refreshTrackThread ()
@@ -1559,7 +1563,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                 }
             };
             thread.setDaemon (true);
-            thread.run ();
+            thread.start ();
         }
 
         public void refreshTrack ()
@@ -1617,6 +1621,7 @@ public class SettingsRepo extends JScrollPane implements Settings
 
         public synchronized Object getValueAt (int row, int column)
         {
+            if (row >= deltas.size ()) return null;  // It is possible for "deltas" to get changed (by refreshDiff thread) after the call to getRowCount(), so need guard here.
             Delta delta = deltas.get (row);
             switch (column)
             {
@@ -1718,7 +1723,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                 }
             };
             thread.setDaemon (true);
-            thread.run ();
+            thread.start ();
         }
     }
 
@@ -1728,18 +1733,24 @@ public class SettingsRepo extends JScrollPane implements Settings
 
         public Component getTableCellRendererComponent (JTable table, Object object, boolean isSelected, boolean hasFocus, int row, int column)
         {
-            Delta delta = (Delta) object;
-            setText (delta.name);
-
             setOpaque (true);
             if (isSelected) setBackground (table.getSelectionBackground ());
             else            setBackground (table.getBackground ());
 
-            if      (delta.deleted  ) setForeground (Color.red);
-            else if (delta.untracked) setForeground (green);
-            else                      setForeground (Color.black);
-
             setFont (table.getFont ());
+
+            Delta delta = (Delta) object;
+            if (delta == null)
+            {
+                setText ("");
+            }
+            else
+            {
+                setText (delta.name);
+                if      (delta.deleted  ) setForeground (Color.red);
+                else if (delta.untracked) setForeground (green);
+                else                      setForeground (Color.black);
+            }
 
             return this;
         }
