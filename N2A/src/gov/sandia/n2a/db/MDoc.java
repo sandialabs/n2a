@@ -127,7 +127,8 @@ public class MDoc extends MPersistent
     **/
     public synchronized void set (String value)
     {
-        if (parent != null) return;
+        if (parent != null) return;  // Not stand-alone, so ignore.
+        if (value.equals (this.value)) return;  // Don't call file move if location on disk has not changed.
         try
         {
             Files.move (Paths.get (this.value), Paths.get (value), StandardCopyOption.REPLACE_EXISTING);
