@@ -24,7 +24,9 @@ public class NodeFile extends NodeBase
         Error   ("Diagnostics", "file_err.gif"),
         Result  ("Result",      "file_prn.gif"),
         Console ("Console",     "file_cout.gif"),
-        Other   ("Other",       "file_obj.gif");
+        Other   ("Other",       "file_obj.gif"),
+        Video   ("Other",       "file_obj.gif"),
+        Picture ("Other",       "file_obj.gif");
 
         public String    label;
         public ImageIcon icon;
@@ -44,8 +46,8 @@ public class NodeFile extends NodeBase
     {
         this.path = path;
         this.type = type;
-        if (type == Type.Other) setUserObject (path.getFileName ().toString ());
-        else                    setUserObject (type.label);
+        if (type.label.equals ("Other")) setUserObject (path.getFileName ().toString ());
+        else                             setUserObject (type.label);
     }
 
     @Override

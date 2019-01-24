@@ -130,6 +130,12 @@ public class Input extends Function
         public boolean             timeColumnSet;
         public double              epsilon;
 
+        public void close ()
+        {
+            try {stream.close ();}
+            catch (IOException e) {}
+        }
+
         public void getRow (double requested) throws IOException
         {
             while (true)

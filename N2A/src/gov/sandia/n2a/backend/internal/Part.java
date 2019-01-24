@@ -188,9 +188,18 @@ public class Part extends Instance
         // Integrate variables
         for (Variable v : bed.localIntegrated)
         {
-            double a  = ((Scalar) get (v           )).value;
-            double aa = ((Scalar) get (v.derivative)).value;
-            setFinal (v, new Scalar (a + aa * dt));
+            if (v.type instanceof Scalar)
+            {
+                double a  = ((Scalar) get (v           )).value;
+                double aa = ((Scalar) get (v.derivative)).value;
+                setFinal (v, new Scalar (a + aa * dt));
+            }
+            else  // anything else (should be Matrix)
+            {
+                Type a  = get (v);
+                Type aa = get (v.derivative);
+                setFinal (v, a.add (aa.multiply (new Scalar (dt))));
+            }
         }
 
         for (int i = 0; i < populations; i++) ((Population) valuesObject[i]).integrate (simulator, dt);

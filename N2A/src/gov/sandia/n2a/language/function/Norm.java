@@ -108,8 +108,10 @@ public class Norm extends Function
 
     public Type eval (Instance context)
     {
-        Matrix A =  (Matrix) operands[0].eval (context);
-        double n = ((Scalar) operands[1].eval (context)).value;
+        Matrix A = (Matrix) operands[0].eval (context);
+        double n;
+        if (operands.length > 1) n = ((Scalar) operands[1].eval (context)).value;
+        else                     n = 2;
         return new Scalar (A.norm (n));
     }
 

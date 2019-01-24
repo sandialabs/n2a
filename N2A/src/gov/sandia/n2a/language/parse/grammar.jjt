@@ -104,6 +104,7 @@ TOKEN_MGR_DECLS:
           (<DIGIT>)+ "." (<DIGIT>)* (<EXPONENT>)?
         |            "." (<DIGIT>)+ (<EXPONENT>)?
         | (<DIGIT>)+                (<EXPONENT>)?
+        | "0" ("x"|"X") (<DIGIT>|"a"|"A"|"b"|"B"|"c"|"C"|"d"|"D"|"e"|"E"|"f"|"F")+
         | "." ("i"|"I") ("n"|"N") ("f"|"F")
         | "." ("n"|"N") ("a"|"A") ("n"|"N")
         | "∞"  // 0x221e
@@ -368,16 +369,20 @@ void Constant() #Constant : {Token t; Token u; String unitName = "";}
         try
         {
             String image = t.image.toLowerCase ();
-            if      (image.equals (".inf")) result.value = Double.POSITIVE_INFINITY;
+            boolean hex = image.startsWith ("0x");
+            if      (hex                  ) result.value = Integer.decode (t.image);
+            else if (image.equals (".inf")) result.value = Double.POSITIVE_INFINITY;
             else if (image.equals ("∞"   )) result.value = Double.POSITIVE_INFINITY;
             else if (image.equals (".nan")) result.value = Double.NaN;
             else                            result.value = Double.parseDouble (t.image);
-            image = image.split ("e")[0];  // Get rid of exponent
+            if (hex) image = image.substring (2);  // Get rid of 0x
+            else     image = image.split ("e")[0];  // Get rid of exponent
             image = image.replace ("-", "");
             image = image.replace (".", "");
             while (image.startsWith ("0")) image = image.substring (1);
             while (image.endsWith   ("0")) image = image.substring (0, image.length () - 1);
             result.digits = image.length ();
+            if (hex) result.digits = (int) Math.ceil (result.digits * 1.2);  // ratio of (4 bits per hex digit) / (3.32 bits per decimal digit)
         }
         catch (NumberFormatException e)
         {

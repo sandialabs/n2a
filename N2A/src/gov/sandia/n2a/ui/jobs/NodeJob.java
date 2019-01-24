@@ -19,7 +19,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Consumer;
@@ -28,6 +31,7 @@ import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
+import javax.imageio.ImageIO;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
@@ -41,6 +45,8 @@ public class NodeJob extends NodeBase
     protected static ImageIcon iconUnknown  = ImageUtil.getImage ("help.gif");
     protected static ImageIcon iconFailed   = ImageUtil.getImage ("remove.gif");
     protected static ImageIcon iconStopped  = ImageUtil.getImage ("stop.gif");
+
+    protected static List<String> imageFileSuffixes = Arrays.asList (ImageIO.getReaderFileSuffixes ());  // We don't expect to load image handling plugins after startup, so one-time initialization is fine.
 
     protected MNode   source;
     protected String  inherit         = "";
@@ -221,27 +227,53 @@ public class NodeJob extends NodeBase
             boolean changed;
             public void accept (Path file)
             {
-                if (Files.isDirectory (file)) return;
-                try {if (Files.size (file) == 0) return;}
-                catch (IOException e) {return;}
-
-                String fileName = file.getFileName ().toString ();
-                if (fileName.startsWith ("n2a_job" )) return;
-                if (fileName.equals     ("model"   )) return;  // This is the file associated with our own "source"
-                if (fileName.equals     ("started" )) return;
-                if (fileName.equals     ("finished")) return;
-                if (fileName.startsWith ("compile" )) return;  // Piped files for compilation process. These will get copied to appropriate places if necessary.
-                if (fileName.endsWith   (".bin"    )) return;  // Don't show generated binaries
-                if (fileName.endsWith   (".aplx"   )) return;
-                if (fileName.endsWith   (".columns")) return;  // Hint for column names when simulator doesn't output them.
-                if (fileName.endsWith   (".mod"    )) return;  // NEURON files
-
                 NodeFile newNode;
-                if      (fileName.endsWith ("out"    )) newNode = new NodeFile (NodeFile.Type.Output,  file);
-                else if (fileName.endsWith ("err"    )) newNode = new NodeFile (NodeFile.Type.Error,   file);
-                else if (fileName.endsWith ("result" )) newNode = new NodeFile (NodeFile.Type.Result,  file);
-                else if (fileName.endsWith ("console")) newNode = new NodeFile (NodeFile.Type.Console, file);
-                else                                    newNode = new NodeFile (NodeFile.Type.Other,   file);
+                if (Files.isDirectory (file))
+                {
+                    // Check for image sequence.
+                    // It's an image sequence if a random file from the dir has the right form: an integer with an standard image-file suffix.
+                    try
+                    {
+                        Optional<Path> someFile = Files.list (file).findAny ();
+                        if (! someFile.isPresent ()) return;
+                        Path p = someFile.get ();
+                        String[] pieces = p.getFileName ().toString ().split ("\\.");
+                        if (pieces.length != 2) return;
+                        try {Integer.valueOf (pieces[0]);}
+                        catch (NumberFormatException e) {return;}
+                        String suffix = pieces[1].toLowerCase ();
+                        if (imageFileSuffixes.indexOf (suffix) < 0) return;
+                        newNode = new NodeFile (NodeFile.Type.Video, file);
+                    }
+                    catch (Exception e) {return;}
+                }
+                else
+                {
+                    try {if (Files.size (file) == 0) return;}
+                    catch (IOException e) {return;}
+
+                    String fileName = file.getFileName ().toString ();
+                    if (fileName.startsWith ("n2a_job" )) return;
+                    if (fileName.equals     ("model"   )) return;  // This is the file associated with our own "source"
+                    if (fileName.equals     ("started" )) return;
+                    if (fileName.equals     ("finished")) return;
+                    if (fileName.startsWith ("compile" )) return;  // Piped files for compilation process. These will get copied to appropriate places if necessary.
+                    if (fileName.endsWith   (".bin"    )) return;  // Don't show generated binaries
+                    if (fileName.endsWith   (".aplx"   )) return;
+                    if (fileName.endsWith   (".columns")) return;  // Hint for column names when simulator doesn't output them.
+                    if (fileName.endsWith   (".mod"    )) return;  // NEURON files
+
+                    String suffix = "";
+                    String[] pieces = fileName.split ("\\.");
+                    if (pieces.length > 1) suffix = pieces[pieces.length-1].toLowerCase ();
+
+                    if      (fileName.endsWith ("out"    ))           newNode = new NodeFile (NodeFile.Type.Output,  file);
+                    else if (fileName.endsWith ("err"    ))           newNode = new NodeFile (NodeFile.Type.Error,   file);
+                    else if (fileName.endsWith ("result" ))           newNode = new NodeFile (NodeFile.Type.Result,  file);
+                    else if (fileName.endsWith ("console"))           newNode = new NodeFile (NodeFile.Type.Console, file);
+                    else if (imageFileSuffixes.indexOf (suffix) >= 0) newNode = new NodeFile (NodeFile.Type.Picture, file);
+                    else                                              newNode = new NodeFile (NodeFile.Type.Other,   file);
+                }
 
                 NodeFile oldNode = existing.get (newNode.path);
                 if (oldNode == null)

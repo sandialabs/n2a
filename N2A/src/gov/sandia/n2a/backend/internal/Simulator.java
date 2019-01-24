@@ -1,18 +1,18 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.backend.internal;
 
+import gov.sandia.n2a.language.function.Draw;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 
 import java.io.File;
-import java.io.IOException;
 import java.io.PrintStream;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -49,6 +49,7 @@ public class Simulator implements Iterable<Part>
     public Map<String,Matrix>        matrices = new HashMap<String,Matrix> ();
     public Map<String,Input .Holder> inputs   = new HashMap<String,Input .Holder> ();
     public Map<String,Output.Holder> outputs  = new HashMap<String,Output.Holder> ();
+    public Map<String,Draw  .Holder> drawings = new HashMap<String,Draw  .Holder> ();
     public PrintStream               out;
     // Note: System.in will get bound into an Input.Holder if used at all.
 
@@ -141,17 +142,9 @@ public class Simulator implements Iterable<Part>
 
     public void closeStreams ()
     {
-        for (Entry<String,Input.Holder> h : inputs.entrySet ())
-        {
-            try {h.getValue ().stream.close ();}
-            catch (IOException e) {}
-        }
-        for (Entry<String,Output.Holder> e : outputs.entrySet ())
-        {
-            Output.Holder h = e.getValue ();
-            h.writeTrace ();
-            h.out.close ();
-        }
+        for (Entry<String,Input .Holder> h : inputs  .entrySet ()) h.getValue ().close ();
+        for (Entry<String,Output.Holder> h : outputs .entrySet ()) h.getValue ().close ();
+        for (Entry<String,Draw  .Holder> h : drawings.entrySet ()) h.getValue ().close ();
     }
 
     public void integrate (Instance i)

@@ -13,7 +13,6 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.images.ImageUtil;
-
 import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.Font;
@@ -241,6 +240,7 @@ public class PanelRun extends JPanel
 
         displayText = new JTextArea ();
         displayText.setEditable(false);
+        displayText.setFont (new Font (Font.MONOSPACED, Font.PLAIN, displayText.getFont ().getSize ()));
         displayPane.setViewportView (displayText);
 
         buttonStop = new JButton (ImageUtil.getImage ("stop.gif"));
@@ -317,28 +317,6 @@ public class PanelRun extends JPanel
         buttons.add (buttonRaster);
         buttonText.setSelected (true);
 
-        final JToggleButton buttonMonospace = new JToggleButton ("Monospace");
-        buttonMonospace.setFont (new Font (Font.MONOSPACED, Font.PLAIN, buttonMonospace.getFont ().getSize ()));
-        buttonMonospace.setFocusable (false);
-        buttonMonospace.setToolTipText ("Use Fixed-Width Font");
-        buttonMonospace.setSelected (true);  // default to monospace font, so compiler errors make sense
-        displayText.setFont (new Font (Font.MONOSPACED, Font.PLAIN, displayText.getFont ().getSize ()));
-        buttonMonospace.addActionListener (new ActionListener()
-        {
-            public void actionPerformed (ActionEvent e)
-            {
-                int size = displayText.getFont ().getSize ();
-                if (buttonMonospace.isSelected ())
-                {
-                    displayText.setFont (new Font (Font.MONOSPACED, Font.PLAIN, size));
-                }
-                else
-                {
-                    displayText.setFont (new Font (Font.SANS_SERIF, Font.PLAIN, size));
-                }
-            }
-        });
-
         comboScript = new JComboBox<String> ();
         comboScript.setEditable (true);
         comboScript.setToolTipText ("Run Script");
@@ -408,8 +386,7 @@ public class PanelRun extends JPanel
                             buttonTable,
                             buttonTableSorted,
                             buttonGraph,
-                            buttonRaster,
-                            Lay.BL (buttonMonospace, "eb=20l20r"),
+                            buttonRaster, "eb=20r",
                             "hgap=5,vgap=1"
                         ),
                         "C", comboScript
@@ -469,8 +446,36 @@ public class PanelRun extends JPanel
                 HostSystem env = HostSystem.get (job.getOrDefault ("$metadata", "host", "localhost"));
 
                 // Step 2 -- Load data
-                // The exact method depends on the current display mode, selected by pushbuttons and stored in viz
-                if (! viz.equals ("Text"))
+                // The exact method depends on node type and the current display mode, selected by pushbuttons and stored in viz
+                if (node.type == NodeFile.Type.Video)
+                {
+                    final Video v = new Video (node.path);
+                    EventQueue.invokeLater (new Runnable ()
+                    {
+                        public void run ()
+                        {
+                            if (stop) return;
+                            displayPane.setViewportView (v);
+                            v.play ();
+                        }
+                    });
+                    return;
+                }
+                else if (node.type == NodeFile.Type.Picture)
+                {
+                    final Picture p = new Picture (node.path);
+                    EventQueue.invokeLater (new Runnable ()
+                    {
+                        public void run ()
+                        {
+                            if (stop) return;
+                            displayPane.setViewportView (p);
+                            displayPane.paintImmediately (displayPane.getBounds ());
+                        }
+                    });
+                    return;
+                }
+                else if (! viz.equals ("Text"))
                 {
                     // Determine if the file is actually a table that can be graphed
                     Path dir = node.path.getParent ();
@@ -539,7 +544,6 @@ public class PanelRun extends JPanel
                             final Component p = panel;
                             EventQueue.invokeLater (new Runnable ()
                             {
-                                @Override
                                 public void run ()
                                 {
                                     if (stop) return;
@@ -560,7 +564,6 @@ public class PanelRun extends JPanel
 
                 EventQueue.invokeLater (new Runnable ()
                 {
-                    @Override
                     public void run ()
                     {
                         synchronized (displayText)

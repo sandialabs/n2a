@@ -217,7 +217,8 @@ public class InternalBackend extends Backend
 
     public static void digestModel (EquationSet e, String jobDir) throws Exception
     {
-        System.setProperty ("user.dir", new File (jobDir).getAbsolutePath ());  // Make paths relative to job directory
+        // TODO: Don't rely on setting "user.dir". Instead, always resolve against jobDir explicitly. This requires making jobDir available everywhere in backend.
+        System.setProperty ("user.dir", new File (jobDir).getAbsolutePath ());  // Make paths relative to job directory.
 
         String backend = e.metadata.getOrDefault ("backend", "internal");
         if (backend.isEmpty ()) backend = "none";  // Should not match any backend metadata entries, since they are all supposed to start with "backend".

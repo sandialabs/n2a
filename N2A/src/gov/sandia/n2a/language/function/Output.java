@@ -108,12 +108,10 @@ public class Output extends Function
         public boolean             traceReceived;                                  ///< Indicates that at least one column was touched during the current cycle.
         public double              t;
         public PrintStream         out;
-        public Simulator           simulator;  ///< So we can get time associated with each trace() call.
         public boolean             raw;  ///< Indicates that column is an exact index.
 
         public Holder (Simulator simulator, String path)
         {
-            this.simulator = simulator;
             if (path.isEmpty ())
             {
                 out = simulator.out;
@@ -130,6 +128,12 @@ public class Output extends Function
                 }
             }
             simulator.outputs.put (path, this);
+        }
+
+        public void close ()
+        {
+            writeTrace ();
+            out.close ();
         }
 
         public void trace (double now, String column, float value)
