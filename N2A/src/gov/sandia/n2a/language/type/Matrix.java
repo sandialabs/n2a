@@ -166,12 +166,254 @@ public abstract class Matrix extends Type
 
     public Type EQ (Type that) throws EvaluationException
     {
-        return new Scalar (compareTo (that) == 0 ? 1 : 0);
+        if (that instanceof Matrix) return new Scalar (compareTo (that) == 0 ? 1 : 0);
+        if (that instanceof Scalar)
+        {
+            double b = ((Scalar) that).value;
+            int w = columns ();
+            int h = rows ();
+            MatrixDense result = new MatrixDense (h, w);
+            for (int c = 0; c < w; c++)
+            {
+                for (int r = 0; r < h; r++)
+                {
+                    result.value[c][r] = (get (r, c) == b) ? 1 : 0;
+                }
+            }
+            return result;
+        }
+        throw new EvaluationException ("type mismatch");
     }
 
     public Type NE (Type that) throws EvaluationException
     {
-        return new Scalar (compareTo (that) == 0 ? 0 : 1);
+        if (that instanceof Matrix) return new Scalar (compareTo (that) != 0 ? 1 : 0);
+        if (that instanceof Scalar)
+        {
+            double b = ((Scalar) that).value;
+            int w = columns ();
+            int h = rows ();
+            MatrixDense result = new MatrixDense (h, w);
+            for (int c = 0; c < w; c++)
+            {
+                for (int r = 0; r < h; r++)
+                {
+                    result.value[c][r] = (get (r, c) != b) ? 1 : 0;
+                }
+            }
+            return result;
+        }
+        throw new EvaluationException ("type mismatch");
+    }
+
+    public Type GT (Type that) throws EvaluationException
+    {
+        int w = columns ();
+        int h = rows ();
+        if (that instanceof Scalar)
+        {
+            double b = ((Scalar) that).value;
+            MatrixDense result = new MatrixDense (h, w);
+            for (int c = 0; c < w; c++)
+            {
+                for (int r = 0; r < h; r++)
+                {
+                    result.value[c][r] = (get (r, c) > b) ? 1 : 0;
+                }
+            }
+            return result;
+        }
+        if (that instanceof Matrix)
+        {
+            Matrix B = (Matrix) that;
+            w = Math.min (w, B.columns ());
+            h = Math.min (h, B.rows ());
+            MatrixDense result = new MatrixDense (h, w);
+            for (int c = 0; c < w; c++)
+            {
+                for (int r = 0; r < h; r++)
+                {
+                    result.value[c][r] = (get (r, c) > B.get (r, c)) ? 1 : 0;
+                }
+            }
+            return result;
+        }
+        throw new EvaluationException ("type mismatch");
+    }
+
+    public Type GE (Type that) throws EvaluationException
+    {
+        int w = columns ();
+        int h = rows ();
+        if (that instanceof Scalar)
+        {
+            double b = ((Scalar) that).value;
+            MatrixDense result = new MatrixDense (h, w);
+            for (int c = 0; c < w; c++)
+            {
+                for (int r = 0; r < h; r++)
+                {
+                    result.value[c][r] = (get (r, c) >= b) ? 1 : 0;
+                }
+            }
+            return result;
+        }
+        if (that instanceof Matrix)
+        {
+            Matrix B = (Matrix) that;
+            w = Math.min (w, B.columns ());
+            h = Math.min (h, B.rows ());
+            MatrixDense result = new MatrixDense (h, w);
+            for (int c = 0; c < w; c++)
+            {
+                for (int r = 0; r < h; r++)
+                {
+                    result.value[c][r] = (get (r, c) >= B.get (r, c)) ? 1 : 0;
+                }
+            }
+            return result;
+        }
+        throw new EvaluationException ("type mismatch");
+    }
+
+    public Type LT (Type that) throws EvaluationException
+    {
+        int w = columns ();
+        int h = rows ();
+        if (that instanceof Scalar)
+        {
+            double b = ((Scalar) that).value;
+            MatrixDense result = new MatrixDense (h, w);
+            for (int c = 0; c < w; c++)
+            {
+                for (int r = 0; r < h; r++)
+                {
+                    result.value[c][r] = (get (r, c) < b) ? 1 : 0;
+                }
+            }
+            return result;
+        }
+        if (that instanceof Matrix)
+        {
+            Matrix B = (Matrix) that;
+            w = Math.min (w, B.columns ());
+            h = Math.min (h, B.rows ());
+            MatrixDense result = new MatrixDense (h, w);
+            for (int c = 0; c < w; c++)
+            {
+                for (int r = 0; r < h; r++)
+                {
+                    result.value[c][r] = (get (r, c) < B.get (r, c)) ? 1 : 0;
+                }
+            }
+            return result;
+        }
+        throw new EvaluationException ("type mismatch");
+    }
+
+    public Type LE (Type that) throws EvaluationException
+    {
+        int w = columns ();
+        int h = rows ();
+        if (that instanceof Scalar)
+        {
+            double b = ((Scalar) that).value;
+            MatrixDense result = new MatrixDense (h, w);
+            for (int c = 0; c < w; c++)
+            {
+                for (int r = 0; r < h; r++)
+                {
+                    result.value[c][r] = (get (r, c) <= b) ? 1 : 0;
+                }
+            }
+            return result;
+        }
+        if (that instanceof Matrix)
+        {
+            Matrix B = (Matrix) that;
+            w = Math.min (w, B.columns ());
+            h = Math.min (h, B.rows ());
+            MatrixDense result = new MatrixDense (h, w);
+            for (int c = 0; c < w; c++)
+            {
+                for (int r = 0; r < h; r++)
+                {
+                    result.value[c][r] = (get (r, c) <= B.get (r, c)) ? 1 : 0;
+                }
+            }
+            return result;
+        }
+        throw new EvaluationException ("type mismatch");
+    }
+
+    public Type AND (Type that) throws EvaluationException
+    {
+        int w = columns ();
+        int h = rows ();
+        if (that instanceof Scalar)
+        {
+            double b = ((Scalar) that).value;
+            MatrixDense result = new MatrixDense (h, w);
+            for (int c = 0; c < w; c++)
+            {
+                for (int r = 0; r < h; r++)
+                {
+                    result.value[c][r] = (get (r, c) * b != 0) ? 1 : 0;
+                }
+            }
+            return result;
+        }
+        if (that instanceof Matrix)
+        {
+            Matrix B = (Matrix) that;
+            w = Math.min (w, B.columns ());
+            h = Math.min (h, B.rows ());
+            MatrixDense result = new MatrixDense (h, w);
+            for (int c = 0; c < w; c++)
+            {
+                for (int r = 0; r < h; r++)
+                {
+                    result.value[c][r] = (get (r, c) * B.get (r, c) != 0) ? 1 : 0;
+                }
+            }
+            return result;
+        }
+        throw new EvaluationException ("type mismatch");
+    }
+
+    public Type OR (Type that) throws EvaluationException
+    {
+        int w = columns ();
+        int h = rows ();
+        if (that instanceof Scalar)
+        {
+            double b = Math.abs (((Scalar) that).value);
+            MatrixDense result = new MatrixDense (h, w);
+            for (int c = 0; c < w; c++)
+            {
+                for (int r = 0; r < h; r++)
+                {
+                    result.value[c][r] = (Math.abs (get (r, c)) + b != 0) ? 1 : 0;
+                }
+            }
+            return result;
+        }
+        if (that instanceof Matrix)
+        {
+            Matrix B = (Matrix) that;
+            w = Math.min (w, B.columns ());
+            h = Math.min (h, B.rows ());
+            MatrixDense result = new MatrixDense (h, w);
+            for (int c = 0; c < w; c++)
+            {
+                for (int r = 0; r < h; r++)
+                {
+                    result.value[c][r] = (Math.abs (get (r, c)) + Math.abs (B.get (r, c)) != 0) ? 1 : 0;
+                }
+            }
+            return result;
+        }
+        throw new EvaluationException ("type mismatch");
     }
 
     public double det22 (int r0, int r1, int c0, int c1)
