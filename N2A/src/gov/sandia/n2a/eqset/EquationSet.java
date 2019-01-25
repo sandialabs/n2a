@@ -1746,7 +1746,7 @@ public class EquationSet implements Comparable<EquationSet>
             if (v.hasAttribute ("constant")) continue;
             if ((v.name.startsWith ("$")  ||  v.name.contains (".$"))  &&  ! v.name.startsWith ("$up.")) continue;
 
-            Type value;
+            Type value = null;
             if (v.derivative != null)  // and v is not "constant", but that is covered above
             {
                 value = find (new Variable (v.name, v.order + 1)).type;  // this should exist, so no need to verify result
@@ -1761,7 +1761,8 @@ public class EquationSet implements Comparable<EquationSet>
                         return r.variable.type;
                     }
                 };
-                value = v.eval (instance);  // can return null if no equation's condition is true
+                try {value = v.eval (instance);}  // can return null if no equation's condition is true
+                catch (Exception e) {}  // Value remains null if expression can't be evaluated. This can happen due to type mismatch, and may be a temporary condition while values are propagating.
             }
             if (value != null  &&  value.betterThan (v.reference.variable.type))
             {
