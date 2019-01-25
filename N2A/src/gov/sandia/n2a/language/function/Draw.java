@@ -135,6 +135,7 @@ public class Draw extends Function
                 y      *= width;
                 radius *= width;
             }
+            if (radius < 0.5) radius = 0.5;  // 1px diameter
 
             double w = 2 * radius;
             if (disc == null) disc = new Ellipse2D.Double (x - radius, y - radius, w, w);
@@ -156,6 +157,7 @@ public class Draw extends Function
                 y2        *= width;
                 thickness *= width;
             }
+            if (width < 1) width = 1;
 
             if (line == null) line = new Line2D.Double (x, y, x2, y2);
             else              line.setLine             (x, y, x2, y2);

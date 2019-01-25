@@ -124,15 +124,15 @@ public class Video extends JPanel
         try
         {
             image = ImageIO.read (dir.resolve (nextIndex + "." + suffix).toFile ());
-            index = nextIndex;
-            if (index > last)
+            if (nextIndex > last)
             {
-                last = index;
+                last = nextIndex;
                 scrollbar.setMaximum (last + 1);
             }
+            index = nextIndex;
             scrollbar.setValue (index);
         }
-        catch (IOException e) {}
+        catch (Exception e) {}
     }
 
     public void previousImage ()

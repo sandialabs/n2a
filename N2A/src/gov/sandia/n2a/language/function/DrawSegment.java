@@ -10,6 +10,7 @@ import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
+import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 
 public class DrawSegment extends Draw
@@ -41,12 +42,39 @@ public class DrawSegment extends Draw
         if (simulator.currentEvent == null) now = 0;
         else                                now = (float) simulator.currentEvent.t;
 
-        double x     = ((Scalar) operands[1].eval (context)).value;
-        double y     = ((Scalar) operands[2].eval (context)).value;
-        double x2    = ((Scalar) operands[3].eval (context)).value;
-        double y2    = ((Scalar) operands[4].eval (context)).value;
-        double width = ((Scalar) operands[5].eval (context)).value;
-        double color = ((Scalar) operands[6].eval (context)).value;
+        int i = 1;
+        double x;
+        double y;
+        Type t = operands[i++].eval (context);
+        if (t instanceof Matrix)
+        {
+            x = ((Matrix) t).get (0);
+            y = ((Matrix) t).get (1);
+        }
+        else
+        {
+            x = ((Scalar) t).value;
+            y = ((Scalar) operands[i++].eval (context)).value;
+        }
+        double x2;
+        double y2;
+        t = operands[i++].eval (context);
+        if (t instanceof Matrix)
+        {
+            x2 = ((Matrix) t).get (0);
+            y2 = ((Matrix) t).get (1);
+        }
+        else
+        {
+            x2 = ((Scalar) t).value;
+            y2 = ((Scalar) operands[i++].eval (context)).value;
+        }
+        double width;
+        if (operands.length > i) width = ((Scalar) operands[i++].eval (context)).value;
+        else                     width = 0;
+        double color;
+        if (operands.length > i) color = ((Scalar) operands[i  ].eval (context)).value;
+        else                     color = 0xFFFFFF;  // white
         H.drawSegment (now, x, y, x2, y2, width, (int) color);
 
         return new Scalar (0);
