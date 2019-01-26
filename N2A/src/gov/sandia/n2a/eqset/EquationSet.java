@@ -513,14 +513,27 @@ public class EquationSet implements Comparable<EquationSet>
         // Check $variables
         if (v.name.startsWith ("$"))
         {
-            if (v.name.startsWith ("$up."))
+            if (v.name.startsWith ("$up."))  // Probably not be a true $variable, just an up-reference.
             {
                 if (container == null) return null;  // Unresolved! We can't go up any farther.
                 v.name = v.name.substring (4);
                 v.reference.resolution.add (container);
                 return container.resolveEquationSet (v, create);
             }
-            return this;  // Other $variables are always treated as local, even if they are undefined. For example: you would never want to inherit $n from a container!
+
+            // $variables are always treated as local. For example, you would never want to inherit $n from a container!
+            if (variables.contains (v)) return this;
+            if (! create) return null;
+
+            // Usually, the important $variables have already been created by addSpecials(),
+            // so v is probably an unusual derivative or a user-defined variable
+            // (which really shouldn't have a $ prefix).
+            Variable cv = new Variable (v.name, v.order);
+            add (cv);
+            cv.reference = new VariableReference ();
+            cv.reference.variable = cv;
+            cv.equations = new TreeSet<EquationEntry> ();
+            return this;
         }
         if (   v.name.endsWith (".$k")
             || v.name.endsWith (".$max")
@@ -576,7 +589,8 @@ public class EquationSet implements Comparable<EquationSet>
         if (c != null)
         {
             v.reference.resolution.add (c);  // same kind of resolution path as if we went into connected part, but ...
-            v.name = "(connection)";         // don't match any variables within the connected part
+            v.name = "";                     // don't match any variables within the connected part
+            v.addAttribute ("instance");
             return c.endpoint;               // and terminate as if we found a variable there
         }
 
@@ -711,12 +725,14 @@ public class EquationSet implements Comparable<EquationSet>
                         query.reference.variable = dest.find (query);
                         if (query.reference.variable == null)
                         {
-                            if (query.name.equals ("(connection)"))
+                            if (query.hasAttribute ("instance"))
                             {
-                                query.reference.variable = new Variable ("(connection)");  // create a phantom variable.  TODO: should this be an attribute instead?
-                                query.reference.variable.container = dest;  // the container itself is really the target
-                                query.reference.variable.addAttribute ("initOnly"); // because instance variables are bound before the part is put into service, and remain constant for its entire life
-                                query.reference.variable.reference = query.reference;  // TODO: when connect() is implemented, instances should become first class variables in the equation set, and this circular reference will be created by resolveLHS()
+                                // Configure reference to destination container itself.
+                                query.reference.variable = query;  // Recycle the query variable as a pseudo target (one that doesn't actually exist in the container).
+                                query.container = dest;
+                                query.equations = new TreeSet<EquationEntry> ();
+                                query.type = new Instance ();
+                                query.readIndex = -2;  // Only for use by Internal backend. It's easier to set this here than to scan for "instance" variables in InternalBackendData.analyze().
                             }
                             else if (query.name.equals ("$count"))  // accountable endpoint
                             {
@@ -733,13 +749,9 @@ public class EquationSet implements Comparable<EquationSet>
                                     ac.count.type = new Scalar (0);
                                     ac.count.container = dest;
                                     ac.count.equations = new TreeSet<EquationEntry> ();
-                                    query.reference.variable = ac.count;
-                                    query.reference.variable.reference = query.reference;
+                                    ac.count.reference = query.reference;
                                 }
-                                else
-                                {
-                                    query.reference.variable = ac.count;
-                                }
+                                query.reference.variable = ac.count;
                             }
                             else
                             {
@@ -1314,7 +1326,7 @@ public class EquationSet implements Comparable<EquationSet>
 
     /**
         Add a variable for the lower-order integrated form of each derivative, if it does not already exist.
-        Depends on results of: none
+        Depends on results of: findLHS() -- to create any implicitly-defined derivatives
     **/
     public void fillIntegratedVariables ()
     {
@@ -1716,20 +1728,13 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 v.type = ((Constant) v.equations.first ().expression).value;
             }
-            else if (v.name.contains ("$")  &&  ! v.name.startsWith ("$up."))
+            else if (v.name.equals ("$xyz")  ||  v.name.endsWith (".$project"))  // are there always dots before $project?
             {
-                if (v.name.equals ("$xyz")  ||  v.name.endsWith (".$project")  ||  v.name.endsWith (".$project"))  // are there always dots before $project?
-                {
-                    v.type = new MatrixDense (3, 1);
-                }
-                else if (v.name.equals ("$init")  ||  v.name.equals ("$live")  ||  v.name.equals ("$p")  ||  v.name.equals ("$n")  ||  (v.name.equals ("$t")  &&  v.order == 1))
-                {
-                    v.type = new Scalar (1);
-                }
-                else
-                {
-                    v.type = new Scalar (0);
-                }
+                v.type = new MatrixDense (3, 1);
+            }
+            else if (v.name.equals ("$init")  ||  v.name.equals ("$live")  ||  v.name.equals ("$p")  ||  v.name.equals ("$n")  ||  (v.name.equals ("$t")  &&  v.order == 1))
+            {
+                v.type = new Scalar (1);
             }
             else
             {
@@ -1744,30 +1749,67 @@ public class EquationSet implements Comparable<EquationSet>
         for (final Variable v : variables)
         {
             if (v.hasAttribute ("constant")) continue;
-            if ((v.name.startsWith ("$")  ||  v.name.contains (".$"))  &&  ! v.name.startsWith ("$up.")) continue;
+
+            // Don't change type for $variables. Must detect true $variables, not just $up
+            boolean special = false;
+            String[] pieces = v.name.split ("\\.");
+            for (String p : pieces)
+            {
+                if (p.startsWith ("$")  &&  ! p.equals ("$up"))
+                {
+                    special = true;
+                    break;
+                }
+            }
+            if (special) continue;
 
             Type value = null;
-            if (v.derivative != null)  // and v is not "constant", but that is covered above
+            Instance instance = new Instance ()
             {
-                value = find (new Variable (v.name, v.order + 1)).type;  // this should exist, so no need to verify result
-            }
-            else
-            {
-                Instance instance = new Instance ()
+                // all AccessVariable objects will reach here first, and get back the Variable.type field
+                public Type get (VariableReference r) throws EvaluationException
                 {
-                    // all AccessVariable objects will reach here first, and get back the Variable.type field
-                    public Type get (VariableReference r) throws EvaluationException
-                    {
-                        return r.variable.type;
-                    }
-                };
-                try {value = v.eval (instance);}  // can return null if no equation's condition is true
-                catch (Exception e) {}  // Value remains null if expression can't be evaluated. This can happen due to type mismatch, and may be a temporary condition while values are propagating.
+                    return r.variable.type;
+                }
+            };
+            for (EquationEntry e : v.equations)
+            {
+                // We should only need to evaluate one equation, since they should all return the same type.
+                // However, scanning them all increase our chance of propagating correct values.
+                try
+                {
+                    Type temp = e.expression.eval (instance);
+                    if (value == null  ||  temp.betterThan (value)) value = temp;
+                }
+                catch (Exception x) {}  // This can happen due to type mismatch, and may be a temporary condition while values are propagating.
             }
-            if (value != null  &&  value.betterThan (v.reference.variable.type))
+
+            if (v.derivative != null)
+            {
+                if (value == null)
+                {
+                    value = v.derivative.type;
+                }
+                else if (v.derivative.type == null  ||  value.betterThan (v.derivative.type))
+                {
+                    v.derivative.type = value;
+                    changed = true;
+                }
+            }
+
+            if (value == null)
+            {
+                value = v.reference.variable.type;
+            }
+            else if (v.reference.variable.type == null  ||  value.betterThan (v.reference.variable.type))
             {
                 v.reference.variable.type = value;
-                v.type = value;  // convenience, so that a reference knows its type, not merely its target
+                changed = true;
+            }
+
+            if (v != v.reference.variable  &&  value != null  &&  value.betterThan (v.type))
+            {
+                v.type = value;
                 changed = true;
             }
         }
@@ -2416,7 +2458,9 @@ public class EquationSet implements Comparable<EquationSet>
 
     /**
         Identifies variables that are integrated from their derivative.
-        Depends on results of: resolveLHS()  (to identify references)
+        Depends on results of:
+          resolveLHS() -- to create implicitly-defined derivatives
+          fillIntegratedVariables() -- to create implicitly-defined integrands
     **/
     public void findIntegrated ()
     {

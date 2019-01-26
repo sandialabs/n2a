@@ -231,9 +231,9 @@ public class InternalBackend extends Backend
         e.addAttribute ("global",      0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
         e.addAttribute ("preexistent", 0, true,  new String[] {"$t'", "$t"});  // variables that are not stored because Instance.get/set intercepts them
         e.addAttribute ("readOnly",    0, true,  new String[] {"$t"});
+        e.resolveLHS ();
         e.fillIntegratedVariables ();
         e.findIntegrated ();
-        e.resolveLHS ();
         e.resolveRHS ();
         e.checkUnits ();
         e.findConstants ();

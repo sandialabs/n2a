@@ -87,23 +87,12 @@ public class Instance extends Type
     **/
     public Type get (Variable v)
     {
+        if (v.readIndex == -2) return this;
         if (v.readIndex < 0) return v.type;
         if (v.type instanceof Scalar) return new Scalar (valuesFloat[v.readIndex]);
         Type result = (Type) valuesObject[v.readIndex];
         if (result == null) return v.type;  // assumes that we never modify the returned object, and that previously it was set to the equivalent of 0
         return result;
-    }
-
-    /**
-        Convenience function for retrieving backend-specific parameters from a part.
-        Allows the variable to be null (not found), in which case we return the given default value.
-    **/
-    public double parm (Variable v, double d)
-    {
-        if (v == null) return d;
-        Type result = get (v);
-        if (result instanceof Scalar) return ((Scalar) result).value;
-        return d;
     }
 
     /**

@@ -299,9 +299,9 @@ public class JobC extends Thread
         model.addSpecials ();  // $connect, $index, $init, $n, $t, $t', $type
         model.addAttribute ("global",      0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
         model.addAttribute ("preexistent", 0, true,  new String[] {"$index", "$t'", "$t"});  // Technically, $index is not pre-existent, but rather always receives special handling which has the same effect.
+        model.resolveLHS ();
         model.fillIntegratedVariables ();
         model.findIntegrated ();
-        model.resolveLHS ();
         model.resolveRHS ();
         model.checkUnits ();
         model.findConstants ();
@@ -3965,7 +3965,7 @@ public class JobC extends Thread
 
         String containers = resolveContainer (r, context, base);
 
-        if (r.variable.name.equals ("(connection)"))
+        if (r.variable.hasAttribute ("instance"))
         {
             return stripDereference (containers);
         }

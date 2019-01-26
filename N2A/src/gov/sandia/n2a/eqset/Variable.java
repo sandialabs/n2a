@@ -1134,6 +1134,8 @@ public class Variable implements Comparable<Variable>, Cloneable
                 <dd>value is set at init time, and never changed after that.</dd>
             <dt>readOnly</dt>
                 <dd>the value can change, but it should never be written to directly.</dd>
+            <dt>instance</dt>
+                <dd>pointer to an instance, rather than a regular value</dd>
             <dt>reference</dt>
                 <dd>the actual value of the variable is stored in a different
                 equation set</dd>

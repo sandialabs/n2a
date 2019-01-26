@@ -4070,9 +4070,9 @@ public class ExportJob extends XMLutility
         {
             equations.addGlobalConstants ();
             equations.addSpecials ();  // $connect, $index, $init, $n, $t, $t', $type
+            equations.resolveLHS ();
             equations.fillIntegratedVariables ();
             equations.findIntegrated ();
-            equations.resolveLHS ();
             equations.resolveRHS ();
             equations.determineUnits ();
             if (findConstants) equations.findConstants ();  // This could hurt the analysis. It simplifies expressions and substitutes constants, breaking some dependency chains.
