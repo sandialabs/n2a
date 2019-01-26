@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.function;
 
+import gov.sandia.n2a.eqset.Equality;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
@@ -77,6 +78,15 @@ public class Tangent extends Function
             );
         }
         throw new EvaluationException ("type mismatch");
+    }
+
+    public void solve (Equality statement) throws EvaluationException
+    {
+        statement.lhs = operands[0];
+        Atan atan = new Atan ();
+        atan.operands = new Operator[1];
+        atan.operands[0] = statement.rhs;
+        statement.rhs = atan;
     }
 
     public String toString ()
