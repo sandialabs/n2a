@@ -953,10 +953,10 @@ public class EquationSet implements Comparable<EquationSet>
         // The population size of a connection depends on other objects, so can't be a singleton.
         if (connectionBindings != null) return false;
 
-        // No structural dynamics
-        // These tests are good heuristics, but they're actually too strict.
-        // If $p is constant 1, then part won't die. (But then, why write that?)
-        // If $type always has exactly one instance of original part, then part remains a singleton.
+        // Limit sources of structural dynamics
+        // These tests are good heuristics, but they're actually too strict. Some relaxations would be:
+        // * If $p is constant 1, then part won't die. (But then, why write that?)
+        // * If $type always has exactly one instance of original part, then part remains a singleton. (Again, why write that?)
         if (find (new Variable ("$p")) != null  &&  (strict  ||  container != null)) return false;
         if (find (new Variable ("$type")) != null) return false;
         Variable n = new Variable ("$n", 0);
@@ -969,22 +969,13 @@ public class EquationSet implements Comparable<EquationSet>
         // check contents of $n
         if (n.assignment != Variable.REPLACE) return false;
         if (n.equations.size () != 1) return false;
-
         EquationEntry ne = n.equations.first ();
-        if (ne.expression == null) return true;  // If we can't evaluate $n, then we treat it as 1
 
-        Instance bypass = new Instance ()
-        {
-            public Type get (VariableReference r) throws EvaluationException
-            {
-                if (r.variable.name.equals ("$init")) return new Scalar (1);  // we evaluate $n in init cycle
-                return new Scalar (0);  // During init all other vars are 0, even if they have an initialization conditioned on $init. IE: those values won't be seen until after the init cycle.
-            }
-        };
-        Type value = n.eval (bypass);
-        if (value instanceof Scalar  &&  ((Scalar) value).value != 1) return false;
-        // Notice that we could fall through if $n is not a Scalar. That is an error, but since $n can't be evaluated properly, we treat is as 1.
-        return true;
+        // Ideally we would evaluate the expression, but that's not possible when isSingleton() is called
+        // before resolveRHS(). Instead, we do a simple check for constant 1.
+        if (! ne.ifString.isEmpty ()  &&  ! ne.ifString.equals ("$init")) return false;  // Any condition besides $init indicates the potential to change during run.
+        if (ne.expression == null) return true;  // Treat missing expression as 1.
+        return ne.expression.getDouble () == 1;
     }
 
     public boolean isConnection ()

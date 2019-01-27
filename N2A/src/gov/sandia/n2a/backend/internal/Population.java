@@ -43,6 +43,10 @@ public class Population extends Instance
             n = 1;
             if (equations.connected) p.valuesFloat[bed.newborn] = 1;
         }
+        else if (bed.instances >= 0)
+        {
+            valuesObject[bed.instances] = new ArrayList<Part> ();
+        }
     }
 
     public void init (Simulator simulator)
@@ -85,7 +89,7 @@ public class Population extends Instance
             if (equations.connectionBindings == null)
             {
                 int requestedN = 1;
-                if (bed.n.hasAttribute ("constant")) requestedN = (int) ((Scalar) bed.n.eval (this)).value;
+                if (bed.n.hasAttribute ("constant")) requestedN = (int) ((Scalar) bed.n.eval (this)).value;  // n should be a constant holding a scalar. eval() just retrieves this.
                 else                                 requestedN = (int) ((Scalar) get (bed.n)).value;
                 resize (simulator, requestedN);
             }
@@ -743,11 +747,6 @@ public class Population extends Instance
             if (bed.instances >= 0)
             {
                 ArrayList<Part> instances = (ArrayList<Part>) valuesObject[bed.instances];
-                if (instances == null)
-                {
-                    instances = new ArrayList<Part> (index + 1);
-                    valuesObject[bed.instances] = instances;
-                }
                 for (int size = instances.size (); size <= index; size++) instances.add (null);
                 instances.set (index, p);
 
