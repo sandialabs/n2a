@@ -664,7 +664,10 @@ public class EquationSet implements Comparable<EquationSet>
                     && ! (   (target.assignment == Variable.MULTIPLY  &&  v.assignment == Variable.DIVIDE)  // This line and the next say that * and / are compatible with each other, so ignore that case.
                           || (target.assignment == Variable.DIVIDE    &&  v.assignment == Variable.MULTIPLY)))
                 {
-                    Backend.err.get ().println ("WARNING: Reference " + prefix () + "." + v.nameString () + " has different combining operator than target variable (" + target.container.prefix () + "." + target.nameString () + "). Resolving in favor of higher-precedence operator.");
+                    if (target.equations.size () != 0)  // Don't give warning message if referenced variable is newly created.
+                    {
+                        Backend.err.get ().println ("WARNING: Reference " + prefix () + "." + v.nameString () + " has different combining operator than target variable (" + target.container.prefix () + "." + target.nameString () + "). Resolving in favor of higher-precedence operator.");
+                    }
                     v.assignment = target.assignment = Math.max (v.assignment, target.assignment);
                 }
             }
@@ -1185,7 +1188,7 @@ public class EquationSet implements Comparable<EquationSet>
         v = new Variable ("$t", 1);  // $t'
         if (add (v))
         {
-            v.unit = UnitValue.seconds;
+            v.unit = UnitValue.seconds;  // seconds per cycle, but cycle is not a unit
             v.equations = new TreeSet<EquationEntry> ();
         }
 
@@ -1197,12 +1200,12 @@ public class EquationSet implements Comparable<EquationSet>
                 v.unit = AbstractUnit.ONE;
                 try
                 {
-                    String duration = metadata.getOrDefault ("duration", "1");  // limit sim time to 1 second, if not otherwise specified
+                    String duration = metadata.getOrDefault ("duration", "1s");  // limit sim time to 1 second, if not otherwise specified
                     v.add (new EquationEntry ("$t<" + duration));
                 }
                 catch (Exception parseError)
                 {
-                    try {v.add (new EquationEntry ("$t<1"));}
+                    try {v.add (new EquationEntry ("$t<1s"));}
                     catch (Exception parseError2) {} // This exception should never happen. We simply want to silence Java about it.
                 }
             }
@@ -1215,6 +1218,7 @@ public class EquationSet implements Comparable<EquationSet>
             v.addAttribute ("constant");  // default. Actual values should be set by setAttributeLive()
             EquationEntry e = new EquationEntry (v, "");
             e.expression = new Constant (new Scalar (1));
+            e.expression.unit = AbstractUnit.ONE;
             v.add (e);
         }
 
@@ -1232,6 +1236,7 @@ public class EquationSet implements Comparable<EquationSet>
                     v.addAttribute ("constant");
                     EquationEntry e = new EquationEntry (v, "");
                     e.expression = new Constant (new Scalar (0));
+                    e.expression.unit = AbstractUnit.ONE;
                     v.add (e);
                 }
                 else
@@ -1255,6 +1260,7 @@ public class EquationSet implements Comparable<EquationSet>
                 v.addAttribute ("constant");  // default. Actual values set by client code.
                 EquationEntry e = new EquationEntry (v, "");
                 e.expression = new Constant (new Scalar (1));
+                e.expression.unit = AbstractUnit.ONE;
                 v.add (e);
             }
         }
@@ -1373,6 +1379,7 @@ public class EquationSet implements Comparable<EquationSet>
             init.addAttribute ("constant");  // TODO: should really be "initOnly", since it changes value during (at the end of) the init cycle.
             EquationEntry e = new EquationEntry (init, "");
             e.expression = new Constant (new Scalar (value));
+            e.expression.unit = AbstractUnit.ONE;
             init.add (e);
             add (init);
         }
@@ -1401,6 +1408,7 @@ public class EquationSet implements Comparable<EquationSet>
             connect.addAttribute ("constant");
             EquationEntry e = new EquationEntry (connect, "");
             e.expression = new Constant (new Scalar (value));
+            e.expression.unit = AbstractUnit.ONE;
             connect.add (e);
             add (connect);
         }
@@ -1741,18 +1749,8 @@ public class EquationSet implements Comparable<EquationSet>
         {
             if (v.hasAttribute ("constant")) continue;
 
-            // Don't change type for $variables. Must detect true $variables, not just $up
-            boolean special = false;
-            String[] pieces = v.name.split ("\\.");
-            for (String p : pieces)
-            {
-                if (p.startsWith ("$")  &&  ! p.equals ("$up"))
-                {
-                    special = true;
-                    break;
-                }
-            }
-            if (special) continue;
+            // Don't change type for certain $variables.
+            if (v.name.equals ("$init")  ||  v.name.equals ("$live")  ||  v.name.equals ("$p")  ||  v.name.equals ("$n")  ||  (v.name.equals ("$t")  &&  v.order == 1)) continue;
 
             Type value = null;
             Instance instance = new Instance ()

@@ -789,7 +789,9 @@ public class Variable implements Comparable<Variable>, Cloneable
 
     public boolean determineUnit (boolean fatal) throws Exception
     {
+        boolean changed = false;
         Unit<?> nextUnit = null;
+
         for (EquationEntry e : equations)
         {
             if (e.condition != null) e.condition.determineUnit (fatal);
@@ -809,48 +811,63 @@ public class Variable implements Comparable<Variable>, Cloneable
                 }
             }
         }
-        if (derivative != null  &&  derivative.unit != null)
-        {
-            Unit<?> integrated = UnitValue.simplify (derivative.unit.multiply (UnitValue.seconds));
-            if (nextUnit == null  ||  nextUnit.isCompatible (AbstractUnit.ONE))
-            {
-                nextUnit = integrated;
-            }
-            else if (fatal  &&  ! integrated.isCompatible (AbstractUnit.ONE)  &&  ! integrated.isCompatible (nextUnit))
-            {
-                throw new Exception ("derivative " + derivative.unit + " versus " + nextUnit);
-            }
-        }
 
-        // Special cases where we should retain the current value of unit.
-        // reduction -- Because it will be set by incoming references.
-        // $variable -- EquationSet.addSpecials() sets it directly. 
-        boolean referenceOut = reference != null  &&  reference.variable != this;
-        boolean reduction = assignment != REPLACE  &&  ! referenceOut;
-        if (   unit != null
-            && (reduction  ||  equations.isEmpty ())  &&  derivative == null
-            && (nextUnit == null  ||  nextUnit.isCompatible (AbstractUnit.ONE)))
+        if (derivative != null)
         {
-            nextUnit = unit;
-        }
-
-        boolean changed = nextUnit != unit  &&  (unit == null  ||  nextUnit == null  ||  ! nextUnit.isCompatible (unit));
-        unit = nextUnit;
-
-        if (unit != null  &&  referenceOut)
-        {
-            if (reference.variable.unit == null  ||  reference.variable.unit.isCompatible (AbstractUnit.ONE))
+            boolean haveNext       =  nextUnit        != null  &&  ! nextUnit       .isCompatible (AbstractUnit.ONE);
+            boolean haveDerivative =  derivative.unit != null  &&  ! derivative.unit.isCompatible (AbstractUnit.ONE);
+            if (haveDerivative)
             {
-                if (reference.variable.unit == null  ||  ! unit.isCompatible (AbstractUnit.ONE))
+                Unit<?> integrated = UnitValue.simplify (derivative.unit.multiply (UnitValue.seconds));
+                if (haveNext)  // Have both, so ensure units are compatible
                 {
-                    reference.variable.unit = unit;
-                    changed = true;  // It's really the other variable that changed, but this is sufficient to force another eval cycle.
+                    if (fatal  &&  ! integrated.isCompatible (AbstractUnit.ONE)  &&  ! integrated.isCompatible (nextUnit))
+                    {
+                        throw new Exception ("derivative " + derivative.unit + " versus " + nextUnit);
+                    }
+                }
+                else
+                {
+                    nextUnit = integrated;
                 }
             }
-            else if (fatal  &&  ! reference.variable.unit.isCompatible (AbstractUnit.ONE)  &&  ! reference.variable.unit.isCompatible (unit))
+            else if (haveNext  ||  nextUnit != null  &&  derivative.unit == null)
             {
-                throw new Exception ("reference " + reference.variable.unit + " versus " + unit);
+                derivative.unit = UnitValue.simplify (nextUnit.divide (UnitValue.seconds));
+                changed = true;
             }
+        }
+
+        boolean referenceOut = reference != null  &&  reference.variable != this;
+        if (referenceOut)
+        {
+            boolean haveNext      =  nextUnit                != null  &&  ! nextUnit               .isCompatible (AbstractUnit.ONE);
+            boolean haveReference =  reference.variable.unit != null  &&  ! reference.variable.unit.isCompatible (AbstractUnit.ONE);
+            if (haveReference)
+            {
+                if (haveNext)
+                {
+                    if (fatal  &&  ! reference.variable.unit.isCompatible (nextUnit))
+                    {
+                        throw new Exception ("reference " + reference.variable.unit + " versus " + unit);
+                    }
+                }
+                else
+                {
+                    nextUnit = reference.variable.unit;
+                }
+            }
+            else if (haveNext  ||  nextUnit != null  &&  reference.variable.unit == null)
+            {
+                reference.variable.unit = nextUnit;
+                changed = true;
+            }
+        }
+
+        if (nextUnit != null  &&  (unit == null  ||  ! nextUnit.isCompatible (unit)))
+        {
+            changed = true;
+            unit = nextUnit;
         }
 
         return changed;

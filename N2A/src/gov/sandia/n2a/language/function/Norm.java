@@ -38,9 +38,13 @@ public class Norm extends Function
     public void determineExponent (Variable from)
     {
         Operator op0 = operands[0];  // A
-        Operator op1 = operands[1];  // n
         op0.determineExponent (from);
-        op1.determineExponent (from);
+        Operator op1 = null;  // n
+        if (operands.length > 1)
+        {
+            op1 = operands[1];
+            op1.determineExponent (from);
+        }
 
         Instance instance = new Instance ()
         {
@@ -85,20 +89,22 @@ public class Norm extends Function
     public void determineExponentNext (Variable from)
     {
         Operator op0 = operands[0];  // A
-        Operator op1 = operands[1];  // n
         op0.exponentNext = op0.exponent;
-        op1.exponentNext = Operator.MSB / 2;
         op0.determineExponentNext (from);
-        op1.determineExponentNext (from);
+        if (operands.length > 1)
+        {
+            Operator op1 = operands[1];  // n
+            op1.exponentNext = Operator.MSB / 2;
+            op1.determineExponentNext (from);
+        }
     }
 
     public void determineUnit (boolean fatal) throws Exception
     {
         Operator op0 = operands[0];  // A
-        Operator op1 = operands[1];  // n
         op0.determineUnit (fatal);
-        op1.determineUnit (fatal);
         unit = op0.unit;
+        if (operands.length > 1) operands[1].determineUnit (fatal);  // n
     }
 
     public Type getType ()
