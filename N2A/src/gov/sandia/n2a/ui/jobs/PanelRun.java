@@ -449,7 +449,7 @@ public class PanelRun extends JPanel
                 // The exact method depends on node type and the current display mode, selected by pushbuttons and stored in viz
                 if (node.type == NodeFile.Type.Video)
                 {
-                    final Video v = new Video (node.path);
+                    final Video v = new Video (node);
                     EventQueue.invokeLater (new Runnable ()
                     {
                         public void run ()

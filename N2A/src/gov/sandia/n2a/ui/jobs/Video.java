@@ -30,6 +30,7 @@ import gov.sandia.n2a.ui.Lay;
 @SuppressWarnings("serial")
 public class Video extends JPanel
 {
+    protected NodeJob       job;
     protected Path          dir;
     protected String        suffix;
     protected int           index = -1;
@@ -40,9 +41,10 @@ public class Video extends JPanel
     protected JPanel     panelImage;
     protected JScrollBar scrollbar;
 
-    public Video (Path dir)
+    public Video (NodeFile node)
     {
-        this.dir = dir;
+        job = (NodeJob) node.getParent ();
+        dir = node.path;
 
         try (Stream<Path> stream = Files.list (dir);)
         {
@@ -172,7 +174,19 @@ public class Video extends JPanel
             {
                 int oldIndex = index;
                 nextImage ();
-                if (index == oldIndex) break;
+                if (index == oldIndex)
+                {
+                    if (job.complete < 1)  // Busy-wait for new images to come from simulation.
+                    {
+                        try
+                        {
+                            Thread.sleep (100);  // Balance between jerkiness and load on processor.
+                            continue;
+                        }
+                        catch (InterruptedException e) {}
+                    }
+                    break;
+                }
                 CountDownLatch latch = new CountDownLatch (1);
                 EventQueue.invokeLater (new Runnable ()
                 {
