@@ -788,17 +788,26 @@ public class EquationSet implements Comparable<EquationSet>
                     for (String partName : split.names)
                     {
                         EquationSet part;
-                        if (partName.equals (self.name)) part = self;  // This allows for $type in top-level model.
+                        if (partName.equals (self.name)) part = self;  // This allows for $type in top-level model, where no higher container is available to search in.
                         else                             part = family.parts.floor (new EquationSet (partName));
                         if (part != null  &&  part.name.equals (partName))
                         {
                             split.parts.add (part);
-                            Variable type = part.find (new Variable ("$type", 0));  // This should always succeed, thanks to addSpecials().
-                            if (type != from)
+
+                            Variable query = new Variable ("$type", 0);
+                            Variable type = part.find (query);
+                            if (type == null)
                             {
-                                from.addDependencyOn (type);  // ensure that $type does not evaporate from resulting part
+                                type = query;
+                                part.add (type);
                                 type.addAttribute ("externalWrite");  // double-buffer it
+                                type.unit = AbstractUnit.ONE;
+                                type.equations = new TreeSet<EquationEntry> ();
+                                type.reference = new VariableReference ();
+                                type.reference.variable = type;
                             }
+
+                            if (type != from) from.addDependencyOn (type);
                         }
                         else
                         {
@@ -1204,13 +1213,6 @@ public class EquationSet implements Comparable<EquationSet>
         if (add (v))
         {
             v.unit = UnitValue.seconds;  // seconds per cycle, but cycle is not a unit
-            v.equations = new TreeSet<EquationEntry> ();
-        }
-
-        v = new Variable ("$type", 0);
-        if (add (v))
-        {
-            v.unit = AbstractUnit.ONE;
             v.equations = new TreeSet<EquationEntry> ();
         }
 

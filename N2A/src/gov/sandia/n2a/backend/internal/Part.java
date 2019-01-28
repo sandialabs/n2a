@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -155,6 +155,7 @@ public class Part extends Instance
 
         // zero external buffered variables that may be written before first finish()
         clearBufferedExternalWrite (temp.bed);
+        if (temp.bed.type != null) temp.set (temp.bed.type, new Scalar (0));
 
         // Request event monitors
         for (EventTarget et : temp.bed.eventTargets)
@@ -427,56 +428,52 @@ public class Part extends Instance
             if (type > 0)
             {
                 ArrayList<EquationSet> split = equations.splits.get (type - 1);
-                if (split.size () > 1  ||  split.get (0) != equations)  // Make sure $type != me. Otherwise it's a null operation
+                boolean used = false;  // indicates that this instance is one of the resulting parts
+                int countParts = split.size ();
+                for (int i = 0; i < countParts; i++)
                 {
-                    boolean used = false;  // indicates that this instance is one of the resulting parts
-                    int countParts = split.size ();
-                    for (int i = 0; i < countParts; i++)
+                    EquationSet other = split.get (i);
+                    Scalar splitPosition = new Scalar (i+1);
+                    if (other == equations  &&  ! used)
                     {
-                        EquationSet other = split.get (i);
-                        Scalar splitPosition = new Scalar (i+1);
-                        if (other == equations  &&  ! used)
-                        {
-                            used = true;
-                            setFinal (bed.type, splitPosition);
-                        }
-                        else
-                        {
-                            InternalBackendData otherBed = (InternalBackendData) other.backendData;
-                            Part p = new Part (other, (Part) container);
-
-                            // If this is a connection, keep the same bindings
-                            Conversion conversion = bed.conversions.get (other);
-                            if (conversion.bindings != null)
-                            {
-                                for (int j = 0; j < conversion.bindings.length; j++)
-                                {
-                                    p.valuesObject[otherBed.endpoints+conversion.bindings[j]] = valuesObject[bed.endpoints+j];
-                                }
-                            }
-
-                            event.enqueue (p);
-                            p.resolve ();
-                            p.init (simulator);  // accountable connections are updated here
-
-                            // Copy over variables
-                            int count = conversion.from.size ();
-                            for (int v = 0; v < count; v++)
-                            {
-                                Variable from = conversion.from.get (v);
-                                Variable to   = conversion.to  .get (v);
-                                p.setFinal (to, get (from));
-                            }
-
-                            // Set $type to be our position in the split
-                            p.setFinal (otherBed.type, splitPosition);
-                        }
+                        used = true;
+                        setFinal (bed.type, splitPosition);
                     }
-                    if (! used)
+                    else
                     {
-                        die ();
-                        return false;
+                        InternalBackendData otherBed = (InternalBackendData) other.backendData;
+                        Part p = new Part (other, (Part) container);  // zeroes all variables
+
+                        // If this is a connection, keep the same bindings
+                        Conversion conversion = bed.conversions.get (other);
+                        if (conversion.bindings != null)
+                        {
+                            for (int j = 0; j < conversion.bindings.length; j++)
+                            {
+                                p.valuesObject[otherBed.endpoints+conversion.bindings[j]] = valuesObject[bed.endpoints+j];
+                            }
+                        }
+
+                        event.enqueue (p);
+                        p.resolve ();
+
+                        // Copy over variables
+                        int count = conversion.from.size ();
+                        for (int v = 0; v < count; v++)
+                        {
+                            Variable from = conversion.from.get (v);
+                            Variable to   = conversion.to  .get (v);
+                            p.setFinal (to, get (from));
+                        }
+                        p.setFinal (otherBed.type, splitPosition);  // sets $type, which will appear during init cycle
+
+                        p.init (simulator);
                     }
+                }
+                if (! used)
+                {
+                    die ();
+                    return false;
                 }
             }
         }
@@ -539,7 +536,6 @@ public class Part extends Instance
         {
             switch (v.assignment)
             {
-                case Variable.REPLACE:
                 case Variable.ADD:
                     set (v, v.type);  // initial value is zero-equivalent (additive identity)
                     break;

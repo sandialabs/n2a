@@ -227,10 +227,11 @@ public class InternalBackend extends Backend
         e.resolveConnectionBindings ();
         e.flatten (backend);
         e.addGlobalConstants ();
-        e.addSpecials ();  // $connect, $index, $init, $n, $t, $t', $type
-        e.addAttribute ("global",      0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
-        e.addAttribute ("preexistent", 0, true,  new String[] {"$t'", "$t"});  // variables that are not stored because Instance.get/set intercepts them
-        e.addAttribute ("readOnly",    0, true,  new String[] {"$t"});
+        e.addSpecials ();  // $connect, $index, $init, $n, $t, $t'
+        e.addAttribute ("global",        0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
+        e.addAttribute ("preexistent",   0, true,  new String[] {"$t'", "$t"});  // variables that are not stored because Instance.get/set intercepts them
+        e.addAttribute ("readOnly",      0, true,  new String[] {"$t"});
+        e.addAttribute ("externalWrite", 0, true,  new String[] {"$type"});  // force $type to be double-buffered, with reset to zero each cycle
         e.resolveLHS ();
         e.fillIntegratedVariables ();
         e.findIntegrated ();
