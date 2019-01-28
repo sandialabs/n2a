@@ -152,16 +152,11 @@ public class Population extends Instance
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
 
-        // $n shares control with other specials, so coordinate them.
-        // This work is split between here and after the finalize code below.
-        if (bed.populationCanResize  &&  bed.populationCanGrowOrDie  &&  bed.n.derivative == null)
-        {
-            double oldN = ((Scalar) get      (bed.n)).value;
-            double newN = ((Scalar) getFinal (bed.n)).value;
-            if (newN != oldN) simulator.resize (this, (int) newN);  // $n was explicitly changed, so its value takes precedence
-            else              simulator.resize (this, -1);  // -1 means to update $n from this.n. This can only be done after other parts are finalized, as they may impose structural dynamics via $p or $type.
-        }
+        // Capture $n before finalize, so we can compare it for changes.
+        double oldN = 0;
+        if (bed.populationCanResize) oldN = ((Scalar) get (bed.n)).value;
 
+        // Finalize
         for (Variable v : bed.globalBufferedExternal) setFinal (v, getFinal (v));
         for (Variable v : bed.globalBufferedExternalWrite)
         {
@@ -188,20 +183,25 @@ public class Population extends Instance
             }
         }
 
+        // Structural dynamics
         if (bed.populationCanResize)
         {
-            int requestedN = (int) ((Scalar) get (bed.n)).value;  // This is the finalized value of $n.
-            if (bed.populationCanGrowOrDie)
+            int newN = (int) ((Scalar) get (bed.n)).value;  // This is the finalized value of $n.
+            if (bed.populationCanGrowOrDie)  // $n shares control with other specials, so coordinate them.
             {
-                if (bed.n.derivative != null)  // $n' exists
+                if (bed.n.derivative == null)
                 {
-                    // the rate of change in $n is pre-determined, so it relentlessly overrides any other structural dynamics
-                    simulator.resize (this, requestedN);
+                    if (newN != oldN) simulator.resize (this, (int) newN);  // $n was explicitly changed, so its value takes precedence
+                    else              simulator.resize (this, -1);  // -1 means to update $n from this.n. This can only be done after other parts are finalized, as they may impose structural dynamics via $p or $type.
+                }
+                else  // the rate of change in $n is pre-determined, so it relentlessly overrides any other structural dynamics
+                {
+                    simulator.resize (this, newN);
                 }
             }
             else  // $n is the only kind of structural dynamics, so only do a resize() when needed
             {
-                if (requestedN != n) simulator.resize (this, requestedN);
+                if (newN != n) simulator.resize (this, newN);
             }
         }
 

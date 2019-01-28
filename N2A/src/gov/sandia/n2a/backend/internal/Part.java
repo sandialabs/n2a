@@ -155,7 +155,7 @@ public class Part extends Instance
 
         // zero external buffered variables that may be written before first finish()
         clearBufferedExternalWrite (temp.bed);
-        if (temp.bed.type != null) temp.set (temp.bed.type, new Scalar (0));
+        if (temp.bed.type != null) temp.setFinal (temp.bed.type, new Scalar (0));
 
         // Request event monitors
         for (EventTarget et : temp.bed.eventTargets)

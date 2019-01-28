@@ -699,6 +699,8 @@ public class InternalBackendData
             endpoints = countLocalObject;  // Note that populations have already been allocated in the constructor.
             countLocalObject += s.connectionBindings.size ();
         }
+
+        List<String> forbiddenLocalInit = Arrays.asList ("$index", "$live", "$type");
         for (Variable v : s.ordered)  // we want the sub-lists to be ordered correctly
         {
             String className = "null";
@@ -820,10 +822,7 @@ public class InternalBackendData
                     }
                     else
                     {
-                        if (! unusedTemporary)
-                        {
-                            if (! v.name.equals ("$index")  &&  ! v.name.equals ("$live")) localInit.add (v);
-                        }
+                        if (! unusedTemporary  &&  ! forbiddenLocalInit.contains (v.name)) localInit.add (v);
                         if (! temporary  &&  ! v.hasAttribute ("dummy"))
                         {
                             if (! v.hasAttribute ("preexistent")) localMembers.add (v);
@@ -880,6 +879,7 @@ public class InternalBackendData
                 Backend.err.get ().println ("WARNING: $n can change (due to structural dynamics) but it was detected as a constant. Equations that depend on $n may give incorrect results.");
             }
         }
+        System.out.println ("  populationCanResize, populationCanGrowOrDie: " + populationCanResize + " " + populationCanGrowOrDie);
 
         if (index != null  &&  ! singleton)
         {

@@ -807,7 +807,7 @@ public class EquationSet implements Comparable<EquationSet>
                                 type.reference.variable = type;
                             }
 
-                            if (type != from) from.addDependencyOn (type);
+                            if (type != from) type.addDependencyOn (from);
                         }
                         else
                         {
@@ -1664,7 +1664,7 @@ public class EquationSet implements Comparable<EquationSet>
 
     public boolean canDie ()
     {
-        return lethalN  ||  lethalP  ||  lethalType  || lethalConnection  || lethalContainer;
+        return lethalN  ||  lethalP  ||  lethalType  ||  lethalConnection  ||  lethalContainer;
     }
 
     /**
@@ -1673,6 +1673,7 @@ public class EquationSet implements Comparable<EquationSet>
     **/
     public boolean canGrow ()
     {
+        // Do we have a $type split that produces two or more offspring of our own type?
         for (ArrayList<EquationSet> split : splits)
         {
             int count = 0;
@@ -1682,6 +1683,24 @@ public class EquationSet implements Comparable<EquationSet>
             }
             if (count >= 2) return true;
         }
+
+        // Are we the target of a $type split in another part which produces at least one offspring of this type?
+        Variable type = find (new Variable ("$type", 0));
+        if (type == null) return false;
+        System.out.println ("  canGrow " + type.usedBy.size ());
+        for (Object u : type.usedBy)
+        {
+            if (! (u instanceof Variable)) continue;
+            EquationSet other = ((Variable) u).container;
+            System.out.println ("    " + other.name);
+            for (ArrayList<EquationSet> split : other.splits) if (split.contains (this)) return true;
+        }
+
+        return false;
+    }
+
+    public boolean canGrow (EquationSet target)
+    {
         return false;
     }
 
