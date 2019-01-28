@@ -9,16 +9,19 @@ package gov.sandia.n2a.language;
 import java.util.ArrayList;
 
 import gov.sandia.n2a.eqset.EquationSet;
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.parse.ASTIdentifier;
 import gov.sandia.n2a.language.parse.ASTList;
 import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
+import tec.uom.se.AbstractUnit;
 
 public class Split extends Operator
 {
-    public String[]               names;  ///< Untranslated part names
-    public ArrayList<EquationSet> parts;  ///< List of parts to split the current one into
+    public String[]               names;  // Untranslated part names
+    public ArrayList<EquationSet> parts;  // List of parts to split the current one into
+    public int                    index;  // of parts in EquationSet.splits
 
     public void getOperandsFrom (SimpleNode node) throws ParseException
     {
@@ -34,40 +37,31 @@ public class Split extends Operator
         }
     }
 
+    public void determineExponent (Variable from)
+    {
+        updateExponent (from, MSB, 0);  // integer
+    }
+
+    public void determineUnit (boolean fatal) throws Exception
+    {
+        unit = AbstractUnit.ONE;
+    }
+
+    public Type getType ()
+    {
+        return new Scalar (0);
+    }
+
     public Type eval (Instance context) throws EvaluationException
     {
-        int index = context.equations.splits.indexOf (parts);
         return new Scalar (index + 1);
     }
 
     public String toString ()
     {
-        StringBuilder result = new StringBuilder ();
+        String result = new String ();
         int last = names.length - 1;
-        for (int i = 0; i <= last; i++)
-        {
-            result.append (names[i]);
-            if (i < last) result.append (", ");
-        }
-        return result.toString ();
-    }
-
-    public int compareTo (Operator that)
-    {
-        Class<? extends Operator> thisClass = getClass ();
-        Class<? extends Operator> thatClass = that.getClass ();
-        if (! thisClass.equals (thatClass)) return thisClass.hashCode () - thatClass.hashCode ();
-
-        // Same class as us, so compare split targets
-        Split s = (Split) that;
-        int difference = names.length - s.names.length;
-        if (difference != 0) return difference;
-        for (int i = 0; i < names.length; i++)
-        {
-            difference = names[i].compareTo (s.names[i]);
-            if (difference != 0) return difference;
-        }
-
-        return 0;
+        for (int i = 0; i <= last; i++) result += "," + names[i];
+        return result.substring (1);
     }
 }

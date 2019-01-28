@@ -154,7 +154,7 @@ public class Part extends Instance
         if (temp.bed.lastT != null) temp.setFinal (temp.bed.lastT, new Scalar (simulator.currentEvent.t));
 
         // zero external buffered variables that may be written before first finish()
-        for (Variable v : temp.bed.localBufferedExternalWrite) set (v, v.type);  // v.type should be pre-loaded with zero-equivalent values
+        clearBufferedExternalWrite (temp.bed);
 
         // Request event monitors
         for (EventTarget et : temp.bed.eventTargets)
@@ -419,30 +419,7 @@ public class Part extends Instance
         if (bed.lastT != null) setFinal (bed.lastT, new Scalar (simulator.currentEvent.t));
         for (Variable v : bed.localBufferedExternal) setFinal (v, getFinal (v));
         for (Integer i : bed.eventLatches) valuesFloat[i] = 0;
-        for (Variable v : bed.localBufferedExternalWrite)
-        {
-            switch (v.assignment)
-            {
-                case Variable.ADD:
-                    set (v, v.type);  // initial value is zero-equivalent (additive identity)
-                    break;
-                case Variable.MULTIPLY:
-                case Variable.DIVIDE:
-                    // multiplicative identity
-                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).identity ());
-                    else                          set (v, new Scalar (1));
-                    break;
-                case Variable.MIN:
-                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).clear (Double.POSITIVE_INFINITY));
-                    else                          set (v, new Scalar (Double.POSITIVE_INFINITY));
-                    break;
-                case Variable.MAX:
-                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).clear (Double.NEGATIVE_INFINITY));
-                    else                          set (v, new Scalar (Double.NEGATIVE_INFINITY));
-                    break;
-                // Must handle every assignment type. If any new ones are developed, add appropriate action here.
-            }
-        }
+        clearBufferedExternalWrite (bed);
 
         if (bed.type != null)
         {
@@ -553,6 +530,36 @@ public class Part extends Instance
         }
 
         return true;
+    }
+
+    public void clearBufferedExternalWrite (InternalBackendData bed)
+    {
+        // v.type should be pre-loaded with zero-equivalent values
+        for (Variable v : bed.localBufferedExternalWrite)
+        {
+            switch (v.assignment)
+            {
+                case Variable.REPLACE:
+                case Variable.ADD:
+                    set (v, v.type);  // initial value is zero-equivalent (additive identity)
+                    break;
+                case Variable.MULTIPLY:
+                case Variable.DIVIDE:
+                    // multiplicative identity
+                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).identity ());
+                    else                          set (v, new Scalar (1));
+                    break;
+                case Variable.MIN:
+                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).clear (Double.POSITIVE_INFINITY));
+                    else                          set (v, new Scalar (Double.POSITIVE_INFINITY));
+                    break;
+                case Variable.MAX:
+                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).clear (Double.NEGATIVE_INFINITY));
+                    else                          set (v, new Scalar (Double.NEGATIVE_INFINITY));
+                    break;
+                // Must handle every assignment type. If any new ones are developed, add appropriate action here.
+            }
+        }
     }
 
     public void setPart (int i, Part p)

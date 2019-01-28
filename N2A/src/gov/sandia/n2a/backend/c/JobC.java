@@ -2459,7 +2459,7 @@ public class JobC extends Thread
                         continue;
                     }
 
-                    result.append ("    case " + i + ":\n");
+                    result.append ("    case " + (i + 1) + ":\n");
                     result.append ("    {\n");
                     boolean used = false;  // indicates that this instance is one of the resulting parts
                     int countParts = split.size ();

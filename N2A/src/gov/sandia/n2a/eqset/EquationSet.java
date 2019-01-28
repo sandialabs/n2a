@@ -533,6 +533,7 @@ public class EquationSet implements Comparable<EquationSet>
             cv.reference = new VariableReference ();
             cv.reference.variable = cv;
             cv.equations = new TreeSet<EquationEntry> ();
+            cv.assignment = v.assignment;  // hinted combiner type
             return this;
         }
         if (   v.name.endsWith (".$k")
@@ -611,6 +612,7 @@ public class EquationSet implements Comparable<EquationSet>
             cv.reference = new VariableReference ();
             cv.reference.variable = cv;
             cv.equations = new TreeSet<EquationEntry> ();
+            cv.assignment = v.assignment;
             return this;
         }
 
@@ -645,6 +647,7 @@ public class EquationSet implements Comparable<EquationSet>
         {
             Variable query = new Variable (v.name, v.order);
             query.reference = new VariableReference ();
+            query.assignment = v.assignment;  // If referent is created in target eqset, then this hints the correct combiner type.
             EquationSet dest = resolveEquationSet (query, true);
             if (dest != null) query.reference.variable = dest.find (query);
             v.reference = query.reference;
@@ -664,10 +667,7 @@ public class EquationSet implements Comparable<EquationSet>
                     && ! (   (target.assignment == Variable.MULTIPLY  &&  v.assignment == Variable.DIVIDE)  // This line and the next say that * and / are compatible with each other, so ignore that case.
                           || (target.assignment == Variable.DIVIDE    &&  v.assignment == Variable.MULTIPLY)))
                 {
-                    if (target.equations.size () != 0)  // Don't give warning message if referenced variable is newly created.
-                    {
-                        Backend.err.get ().println ("WARNING: Reference " + prefix () + "." + v.nameString () + " has different combining operator than target variable (" + target.container.prefix () + "." + target.nameString () + "). Resolving in favor of higher-precedence operator.");
-                    }
+                    Backend.err.get ().println ("WARNING: Reference " + prefix () + "." + v.nameString () + " has different combining operator than target variable (" + target.container.prefix () + "." + target.nameString () + "). Resolving in favor of higher-precedence operator.");
                     v.assignment = target.assignment = Math.max (v.assignment, target.assignment);
                 }
             }
@@ -782,15 +782,30 @@ public class EquationSet implements Comparable<EquationSet>
                 if (op instanceof Split)
                 {
                     Split split = (Split) op;
-                    int count = split.names.length;
-                    split.parts = new ArrayList<EquationSet> (count);
-                    for (int i = 0; i < count; i++)
+                    split.parts = new ArrayList<EquationSet> (split.names.length);
+                    EquationSet self = from.reference.variable.container;
+                    EquationSet family = self.container;  // Could be null, if self is top-level model.
+                    for (String partName : split.names)
                     {
-                        String temp = split.names[i];
-                        EquationSet part = container.parts.floor (new EquationSet (temp));
-                        if (part.name.equals (temp)) split.parts.add (part);
-                        else unresolved.add (temp + "\t" + fromName ());
+                        EquationSet part;
+                        if (partName.equals (self.name)) part = self;  // This allows for $type in top-level model.
+                        else                             part = family.parts.floor (new EquationSet (partName));
+                        if (part != null  &&  part.name.equals (partName))
+                        {
+                            split.parts.add (part);
+                            Variable type = part.find (new Variable ("$type", 0));  // This should always succeed, thanks to addSpecials().
+                            if (type != from)
+                            {
+                                from.addDependencyOn (type);  // ensure that $type does not evaporate from resulting part
+                                type.addAttribute ("externalWrite");  // double-buffer it
+                            }
+                        }
+                        else
+                        {
+                            unresolved.add (partName + "\t" + fromName ());
+                        }
                     }
+                    return split;
                 }
                 return null;
             }
@@ -1189,6 +1204,13 @@ public class EquationSet implements Comparable<EquationSet>
         if (add (v))
         {
             v.unit = UnitValue.seconds;  // seconds per cycle, but cycle is not a unit
+            v.equations = new TreeSet<EquationEntry> ();
+        }
+
+        v = new Variable ("$type", 0);
+        if (add (v))
+        {
+            v.unit = AbstractUnit.ONE;
             v.equations = new TreeSet<EquationEntry> ();
         }
 

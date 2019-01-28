@@ -16,6 +16,7 @@ import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.Split;
 import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
@@ -916,6 +917,15 @@ public class InternalBackendData
                 {
                     Pdependencies.add (t);
                 }
+            }
+        }
+
+        if (type != null)
+        {
+            for (EquationEntry e : type.equations)
+            {
+                Split split = (Split) e.expression;
+                split.index = type.reference.variable.container.splits.indexOf (split.parts);
             }
         }
 
