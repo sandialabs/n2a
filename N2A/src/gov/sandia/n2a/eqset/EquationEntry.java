@@ -160,6 +160,19 @@ public class EquationEntry implements Comparable<EquationEntry>
             if (that.ifString.length () == 8) return -1;
         }
 
+        boolean thisType =      ifString.contains ("$type");
+        boolean thatType = that.ifString.contains ("$type");
+        if (thisType)
+        {
+            if (! thatType)              return -1;
+            if (ifString.length () == 5) return  1;
+        }
+        if (thatType)
+        {
+            if (! thisType)                   return  1;
+            if (that.ifString.length () == 5) return -1;
+        }
+
         boolean thisInit =      ifString.contains ("$init");
         boolean thatInit = that.ifString.contains ("$init");
         if (thisInit)

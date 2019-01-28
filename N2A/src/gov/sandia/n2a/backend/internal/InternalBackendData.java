@@ -31,6 +31,7 @@ import java.util.Comparator;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.TreeMap;
@@ -1159,9 +1160,12 @@ public class InternalBackendData
 
         for (VariableReference r : localReference ) r.resolution = translateResolution (r.resolution, s);
         for (VariableReference r : globalReference) r.resolution = translateResolution (r.resolution, s);
+    }
 
+    public void analyzeConversions (EquationSet s)
+    {
         // Type conversions
-        String [] forbiddenAttributes = new String [] {"global", "constant", "accessor", "reference", "temporary", "dummy", "preexistent"};
+        List<String> forbiddenVariables = Arrays.asList ("$type", "$live", "$index");  // forbid $index and all phase variables. TODO: create attributes just for this?
         for (EquationSet target : s.getConversionTargets ())
         {
             if (s.connectionBindings == null)
@@ -1177,12 +1181,12 @@ public class InternalBackendData
             conversions.put (target, conversion);
 
             // Match variables
-            for (Variable v : target.variables)
+            InternalBackendData targetBed = (InternalBackendData) target.backendData;
+            for (Variable v : targetBed.localMembers)
             {
-                if (v.name.equals ("$type")) continue;
-                if (v.hasAny (forbiddenAttributes)) continue;
+                if (forbiddenVariables.contains (v.name)) continue;
                 Variable v2 = s.find (v);
-                if (v2 != null  &&  v2.equals (v))
+                if (v2 != null  &&  v2.compareTo (v) == 0)  // compareTo() does not consider container
                 {
                     conversion.to  .add (v);
                     conversion.from.add (v2);

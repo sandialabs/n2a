@@ -263,6 +263,8 @@ public class InternalBackend extends Backend
         createBackendData (e);
         analyzeEvents (e);
         analyze (e);
+        analyzeConversions (e);
+        analyzeLastT (e);
         e.clearVariables ();
     }
 
@@ -290,7 +292,20 @@ public class InternalBackend extends Backend
         InternalBackendData bed = (InternalBackendData) s.backendData;
         bed.analyze (s);
         for (EquationSet p : s.parts) analyze (p);
+    }
+
+    public static void analyzeConversions (EquationSet s)
+    {
+        InternalBackendData bed = (InternalBackendData) s.backendData;
+        bed.analyzeConversions (s);
+        for (EquationSet p : s.parts) analyzeConversions (p);
+    }
+
+    public static void analyzeLastT (EquationSet s)
+    {
+        InternalBackendData bed = (InternalBackendData) s.backendData;
         bed.analyzeLastT (s);
+        for (EquationSet p : s.parts) analyzeLastT (p);
     }
 
     public void dumpBackendData (EquationSet s)
