@@ -2659,37 +2659,30 @@ public class EquationSet implements Comparable<EquationSet>
                     boolean isInitOnly = true;  // until something falsifies it
                     public boolean visit (Operator op)
                     {
-                        if (isInitOnly)
-                        {
-                            if (op instanceof AccessVariable)
-                            {
-                                AccessVariable av = (AccessVariable) op;
+                        if (! isInitOnly) return false;
 
-                                // Since constants have already been located (via simplify), we can be certain that any symbolic
-                                // constant has already been replaced. Therefore, only the "initOnly" attribute matters here.
-                                if (av.reference == null  ||  av.reference.variable == null) isInitOnly = false;
+                        if (op instanceof AccessVariable)
+                        {
+                            AccessVariable av = (AccessVariable) op;
+
+                            // Since constants have already been located (via simplify), we can be certain that any symbolic
+                            // constant has already been replaced. Therefore, only the "initOnly" attribute matters here.
+                            if (av.reference == null  ||  av.reference.variable == null)
+                            {
+                                isInitOnly = false;
+                            }
+                            else
+                            {
                                 Variable r = av.reference.variable;
                                 if (! r.hasAttribute ("initOnly")) isInitOnly = false;
-
-                                // Also verify that the variables we depend on are available during the appropriate phase of init
-                                if (isInitOnly  &&  ! r.hasAttribute ("temporary"))  // Note that temporaries are always available.
-                                {
-                                    if (v.name.startsWith ("$"))  // we are a $variable, so we can only depend on $index and phase indicators
-                                    {
-                                        if (! "$index,$connect,$init,$live".contains (r.name)) isInitOnly = false;
-                                    }
-                                    else  // we are a regular variable, so can only depend on $variables
-                                    {
-                                        if (! r.name.startsWith ("$")) isInitOnly = false;
-                                    }
-                                }
-                            }
-                            else if (op instanceof Function)
-                            {
-                                Function f = (Function) op;
-                                if (! f.canBeInitOnly ()) isInitOnly = false;
                             }
                         }
+                        else if (op instanceof Function)
+                        {
+                            Function f = (Function) op;
+                            if (! f.canBeInitOnly ()) isInitOnly = false;
+                        }
+
                         return isInitOnly;
                     }
                 }

@@ -483,6 +483,7 @@ public class Part extends Instance
             double p;
             if (bed.p.hasAttribute ("temporary"))
             {
+                // Probe $p in run phase (as opposed to connect phase).
                 InstanceTemporaries temp = new InstanceTemporaries (this, simulator);
                 for (Variable v : bed.Pdependencies)
                 {
@@ -595,6 +596,7 @@ public class Part extends Instance
 
     public double getP (Simulator simulator)
     {
+        // Probe $p in connect phase (as opposed to run phase).
         InstanceConnect temp = new InstanceConnect (this, simulator);
         if (temp.bed.p == null) return 1;  // N2A language defines default to be 1 (always create)
         for (Variable v : temp.bed.Pdependencies)
