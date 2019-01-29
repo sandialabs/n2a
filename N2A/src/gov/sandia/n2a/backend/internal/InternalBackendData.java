@@ -879,7 +879,6 @@ public class InternalBackendData
                 Backend.err.get ().println ("WARNING: $n can change (due to structural dynamics) but it was detected as a constant. Equations that depend on $n may give incorrect results.");
             }
         }
-        System.out.println ("  populationCanResize, populationCanGrowOrDie: " + populationCanResize + " " + populationCanGrowOrDie);
 
         if (index != null  &&  ! singleton)
         {

@@ -48,6 +48,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.NavigableSet;
 import java.util.PriorityQueue;
 import java.util.Set;
@@ -1687,12 +1688,10 @@ public class EquationSet implements Comparable<EquationSet>
         // Are we the target of a $type split in another part which produces at least one offspring of this type?
         Variable type = find (new Variable ("$type", 0));
         if (type == null) return false;
-        System.out.println ("  canGrow " + type.usedBy.size ());
-        for (Object u : type.usedBy)
+        for (Entry<Variable,Integer> u : type.uses.entrySet ())
         {
-            if (! (u instanceof Variable)) continue;
-            EquationSet other = ((Variable) u).container;
-            System.out.println ("    " + other.name);
+            EquationSet other = u.getKey ().container;
+            if (other == this) continue;  // Because the $type line can have dependencies on its own equation set, mainly through variables in the condition.
             for (ArrayList<EquationSet> split : other.splits) if (split.contains (this)) return true;
         }
 
