@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -15,7 +15,6 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -166,12 +165,8 @@ public class MDir extends MNode
 
     public synchronized int size ()
 	{
-        String[] list = root.toFile ().list ();
-        if (writeQueue.isEmpty ()) return list.length;
-
-        Set<String> files = new HashSet<String> (Arrays.asList (list));
-        for (MDoc doc : writeQueue) files.add (doc.get ());
-        return files.size ();
+        load ();
+        return children.size ();
 	}
 
     /**
@@ -186,7 +181,7 @@ public class MDir extends MNode
 
     /**
         Creates a new MDoc in this directory if it does not already exist.
-        MDocs that are children of an MDir ignore value, so it doesn't matter what is passed for that field.
+        MDocs that are children of an MDir ignore the value parameter, so it doesn't matter what is passed in that case.
     **/
     public synchronized MNode set (String index, String value)
     {
@@ -353,10 +348,17 @@ public class MDir extends MNode
         if (loaded) return;
 
         NavigableMap<String,SoftReference<MDoc>> newChildren = new TreeMap<String,SoftReference<MDoc>> ();
+        // Scan directory.
         for (String index : root.toFile ().list ())  // This may cost a lot of time in some cases. However, N2A should never have more than about 10,000 models in a dir.
         {
             if (index.startsWith (".")) continue; // Filter out special files. This allows, for example, a git repo to share the models dir.
             newChildren.put (index, children.get (index));  // Some children could get orphaned, if they were deleted from disk by another process. In that case the UI should be rebuilt.
+        }
+        // Include newly-created docs that have never been flushed to disk.
+        for (MDoc doc : writeQueue)
+        {
+            String key = doc.key ();
+            newChildren.put (key, children.get (key));
         }
         children = newChildren;
 

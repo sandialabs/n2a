@@ -1,5 +1,5 @@
 /*
-Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -171,7 +171,7 @@ public class MCombo extends MNode implements MNodeListener
 
     public void childAdded (String key)
     {
-        MNode oldChild = child (key);
+        MNode oldChild = getChild (key);
         MNode newContainer = rescanContainer (key);
         MNode newChild = newContainer.child (key);
         if (oldChild == newChild) return;  // Change is hidden by higher-precedence dataset.
