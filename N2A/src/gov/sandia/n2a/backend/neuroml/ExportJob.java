@@ -4129,7 +4129,7 @@ public class ExportJob extends XMLutility
     public String morphologyUnits (String value)
     {
         value = value.trim ();
-        int unitIndex = findUnits (value);
+        int unitIndex = UnitValue.findUnits (value);
         if (unitIndex == 0) return "0" + value;  // no number
         if (unitIndex >= value.length ()) return value;  // no unit
 
@@ -4168,7 +4168,7 @@ public class ExportJob extends XMLutility
         public UnitParser (String source)
         {
             source = source.trim ();
-            int unitIndex = findUnits (source);
+            int unitIndex = UnitValue.findUnits (source);
             if (unitIndex == 0  ||  unitIndex >= source.length ()) return;  // no number or no units, so probably something else
 
             String unitString   = source.substring (unitIndex).trim ();

@@ -15,6 +15,7 @@ import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorBinary;
+import gov.sandia.n2a.language.OperatorLogical;
 import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Split;
@@ -2583,18 +2584,55 @@ public class EquationSet implements Comparable<EquationSet>
 
     public static class ReplacePhaseIndicators extends Transformer
     {
-        public float init;
+        public double init;
+        public double connect;
+        public double type;
+        // Don't really need $live, since it's not used as a phase indicator. It is user-accessible, but not documented.
         public Operator transform (Operator op)
         {
             if (op instanceof AccessVariable)
             {
                 AccessVariable av = (AccessVariable) op;
                 if (av.name.equals ("$init"   )) return new Constant (init);
-                if (av.name.equals ("$connect")) return new Constant (0);
+                if (av.name.equals ("$connect")) return new Constant (connect);
+                if (av.name.equals ("$type"   )) return new Constant (type);
             }
             return null;
         }
     };
+
+    public static class VisitInitOnly extends Visitor
+    {
+        boolean isInitOnly = true;  // until something falsifies it
+        public boolean visit (Operator op)
+        {
+            if (! isInitOnly) return false;
+
+            if (op instanceof AccessVariable)
+            {
+                AccessVariable av = (AccessVariable) op;
+
+                // Since constants have already been located (via simplify), we can be certain that any symbolic
+                // constant has already been replaced. Therefore, only the "initOnly" attribute matters here.
+                if (av.reference == null  ||  av.reference.variable == null)  // guard against failed resolution. TODO: is this check really necessary?
+                {
+                    isInitOnly = false;
+                }
+                else  // successful resolution
+                {
+                    Variable r = av.reference.variable;
+                    if (! r.hasAttribute ("initOnly")) isInitOnly = false;
+                }
+            }
+            else if (op instanceof Function)
+            {
+                Function f = (Function) op;
+                if (! f.canBeInitOnly ()) isInitOnly = false;
+            }
+
+            return isInitOnly;
+        }
+    }
 
     public boolean findInitOnlyRecursive ()
     {
@@ -2606,6 +2644,7 @@ public class EquationSet implements Comparable<EquationSet>
         }
 
         ReplacePhaseIndicators replacePhase = new ReplacePhaseIndicators ();
+        VisitInitOnly visitor = new VisitInitOnly ();
 
         for (final Variable v : variables)
         {
@@ -2627,6 +2666,11 @@ public class EquationSet implements Comparable<EquationSet>
                 }
                 else
                 {
+                    // The following tests do simplification of the expression, rather than simple substitution
+                    // with a fake Instance. We don't really know the values of variables until runtime.
+                    // To be completely certain of an expression's value, it must reduce to a Scalar using only
+                    // values that we can know now (specifically, the state of the phase indicators).
+
                     // init
                     replacePhase.init = 1;
                     Operator test = e.condition.deepCopy ().transform (replacePhase).simplify (v);
@@ -2654,40 +2698,7 @@ public class EquationSet implements Comparable<EquationSet>
             else if (firesDuringUpdate == 1  &&  v.assignment == Variable.REPLACE)  // last chance to be "initOnly": must be exactly one equation that is not a combining operator
             {
                 // Determine if our single update equation depends only on constants and initOnly variables
-                class VisitInitOnly extends Visitor
-                {
-                    boolean isInitOnly = true;  // until something falsifies it
-                    public boolean visit (Operator op)
-                    {
-                        if (! isInitOnly) return false;
-
-                        if (op instanceof AccessVariable)
-                        {
-                            AccessVariable av = (AccessVariable) op;
-
-                            // Since constants have already been located (via simplify), we can be certain that any symbolic
-                            // constant has already been replaced. Therefore, only the "initOnly" attribute matters here.
-                            if (av.reference == null  ||  av.reference.variable == null)
-                            {
-                                isInitOnly = false;
-                            }
-                            else
-                            {
-                                Variable r = av.reference.variable;
-                                if (! r.hasAttribute ("initOnly")) isInitOnly = false;
-                            }
-                        }
-                        else if (op instanceof Function)
-                        {
-                            Function f = (Function) op;
-                            if (! f.canBeInitOnly ()) isInitOnly = false;
-                        }
-
-                        return isInitOnly;
-                    }
-                }
-                VisitInitOnly visitor = new VisitInitOnly ();
-
+                visitor.isInitOnly = true;
                 if (update.condition != null) update.condition.visit (visitor);
                 if (visitor.isInitOnly)
                 {
@@ -2828,6 +2839,67 @@ public class EquationSet implements Comparable<EquationSet>
                 if (stored  &&  canGrowOrDie  &&  v.derivative == null) v.addAttribute ("externalRead");
             }
         }
+    }
+
+    public double determinePoll ()
+    {
+        Variable p = find (new Variable ("p", 0));
+        if (p == null) return -1;
+
+        List<EquationEntry> fires = new ArrayList<EquationEntry> ();
+        ReplacePhaseIndicators replacePhase = new ReplacePhaseIndicators ();
+        replacePhase.connect = 1;  // And other indicators are 0
+        for (EquationEntry e : p.equations)
+        {
+            // Assume a condition always fires, unless we can prove it does not.
+            if (e.condition != null)
+            {
+                Operator test = e.condition.deepCopy ().transform (replacePhase).simplify (p);
+                if (test.isScalar ()  &&  test.getDouble () == 0) continue;
+            }
+            fires.add (e);
+        }
+        if (fires.isEmpty ()) return -1;  // $p=1 at connect, always
+
+        boolean needsPoll = fires.size () > 1;  // Multiple connect conditions means unpredictable, so needs polling.
+        if (! needsPoll)
+        {
+            // Determine if the expression for $p requires polling.
+            // The possibilities for NOT polling are:
+            // * a Scalar that is either 1 or 0
+            // * a boolean expression that depends on nothing more than initOnly variables
+            // Everything else requires polling. For example:
+            // * a Scalar in (0,1) -- requires random draw
+            // * a boolean expression that can vary during regular updates
+
+            EquationEntry e = fires.get (0);
+            if (e.expression.isScalar ())
+            {
+                double value = e.expression.getDouble ();
+                needsPoll = value > 0  &&  value < 1;
+            }
+            else
+            {
+                needsPoll = true;  // The default is to poll, unless we can prove that we don't need to.
+                VisitInitOnly visitor = new VisitInitOnly ();
+                if (e.condition != null) e.condition.visit (visitor);
+                if (visitor.isInitOnly)
+                {
+                    e.expression.visit (visitor);
+                    if (visitor.isInitOnly)
+                    {
+                        // We have an initOnly equation. Now determine if the result is in (0,1).
+                        // The only values we can be sure about are logical results, which are exactly 1 or 0, and therefore not in (0,1).
+                        needsPoll = ! (e.expression instanceof OperatorLogical);
+                    }
+                }
+            }
+        }
+
+        if (! needsPoll) return -1;
+        // Look up metadata to determine polling period.
+        String poll = source.getOrDefault ("$p", "poll", "0");
+        return new UnitValue (poll).get ();
     }
 
     /**

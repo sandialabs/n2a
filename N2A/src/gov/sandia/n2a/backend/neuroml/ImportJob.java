@@ -1884,7 +1884,7 @@ public class ImportJob extends XMLutility
     public String biophysicalUnits (String value, String defaultUnit)
     {
         value = value.trim ();
-        int unitIndex = findUnits (value);
+        int unitIndex = UnitValue.findUnits (value);
         if (unitIndex == 0) return value;  // no number
         if (unitIndex >= value.length ()) return value + defaultUnit;  // no unit, so use default (which may be empty)
 
@@ -1900,7 +1900,7 @@ public class ImportJob extends XMLutility
     public String morphologyUnits (String value)
     {
         value = value.trim ();
-        int unitIndex = findUnits (value);
+        int unitIndex = UnitValue.findUnits (value);
         if (unitIndex == 0) return value;  // no number
         if (unitIndex >= value.length ()) return value + "um";  // default morphology units are micrometers
 

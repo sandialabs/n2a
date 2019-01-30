@@ -8,7 +8,6 @@ package gov.sandia.n2a.backend.neuroml;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.measure.Dimension;
@@ -25,7 +24,6 @@ import tec.uom.se.AbstractUnit;
 
 public class XMLutility
 {
-    public static Pattern               floatParser   = Pattern.compile ("[-+]?(NaN|Infinity|([0-9]*\\.?[0-9]*([eE][-+]?[0-9]+)?))");
     public static Pattern               forbiddenUCUM = Pattern.compile ("[.,;><=!&|+\\-*/%\\^~]");
     public static SystemOfUnits         systemOfUnits = UnitValue.systemOfUnits;
     public static UnitFormat            UCUM          = UnitValue.UCUM;                   // To save a little typing, since it's used so much.
@@ -104,13 +102,6 @@ public class XMLutility
         Unit<?> unit = UCUM.parse (unitName);
         dimensionsNML.put (unit.getDimension (), dimensionName);
         nmlDimensions.put (dimensionName, unit);
-    }
-
-    public static int findUnits (String value)
-    {
-        Matcher m = floatParser.matcher (value);
-        m.find ();
-        return m.end ();
     }
 
     public static String cleanupUnits (String units)

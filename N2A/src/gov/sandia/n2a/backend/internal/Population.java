@@ -95,6 +95,12 @@ public class Population extends Instance
             }
             else
             {
+                if (bed.poll >= 0)
+                {
+                    // Set our first polling deadline in the future, so that this pass only processes new connections.
+                    double t = simulator.currentEvent.t;
+                    valuesFloat[bed.pollDeadline] = (float) (t + bed.poll);
+                }
                 simulator.connect (this);  // queue to evaluate our connections
             }
         }
@@ -205,6 +211,17 @@ public class Population extends Instance
             }
         }
 
+        if (equations.connectionBindings != null)
+        {
+            // TODO: check for newly-created parts in endpoint populations.
+            if (bed.poll >= 0)
+            {
+                double pollDeadline = valuesFloat[bed.pollDeadline];
+                double t = simulator.currentEvent.t;
+                if (t >= pollDeadline) simulator.connect (this);
+            }
+        }
+
         return true;
     }
 
@@ -218,6 +235,7 @@ public class Population extends Instance
     {
         public int                 index;
         public boolean             newOnly;        // Filter out old instances. Only an iterator with index==0 can set this true.
+        public boolean             poll;           // Indicates that every combination should be visited, so never set newOnly.
         public ConnectPopulation   permute;
         public boolean             contained;      // Another iterator holds us in its permute reference.
         public int                 max;
@@ -245,9 +263,10 @@ public class Population extends Instance
         public InternalBackendData cbed;
         public double              rank;  // heuristic value indicating how good a candidate this endpoint is to determine C.$xyz
 
-        public ConnectPopulation (int index, ConnectionBinding target, InternalBackendData cbed, Simulator simulator)
+        public ConnectPopulation (int index, ConnectionBinding target, InternalBackendData cbed, Simulator simulator, boolean poll)
         {
             this.index     = index;
+            this.poll      = poll;
             this.cbed      = cbed;
             this.simulator = simulator;
             pbed           = (InternalBackendData) target.endpoint.backendData;
@@ -446,18 +465,20 @@ public class Population extends Instance
                     if (permute == null)
                     {
                         if (stop > 0) return false;  // We already reset once, so done.
-                        // A unary connection should only iterate over new instances.
+                        // A unary connection (indicated by !contained) should only iterate over new instances, unless we're polling.
                         // The innermost (slowest) iterator of a multi-way connection should iterate over all instances.
-                        reset (! contained);
+                        reset (! contained  &&  ! poll);
                     }
                     else
                     {
                         if (! permute.next ()) return false;
-                        if (contained) reset (false);
-                        else           reset (permute.old ());
+                        if (contained  ||  poll) reset (false);
+                        else                     reset (permute.old ());
                     }
                 }
 
+                // TODO: in poll mode, filter against set of existing connections (prevent duplicates)
+                // be sure to allocate space in valuesObject for hashset
                 if (NN != null)
                 {
                     for (; i < stop; i++)
@@ -583,7 +604,7 @@ public class Population extends Instance
         }
     }
 
-    public ConnectIterator getIterators (Simulator simulator)
+    public ConnectIterator getIterators (Simulator simulator, boolean poll)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
 
@@ -594,13 +615,13 @@ public class Population extends Instance
         for (int i = 0; i < count; i++)
         {
             ConnectionBinding target = equations.connectionBindings.get (i);
-            ConnectPopulation it = new ConnectPopulation (i, target, bed, simulator);
+            ConnectPopulation it = new ConnectPopulation (i, target, bed, simulator, poll);
             if (it.instances == null  ||  it.instances.size () == 0) return null;  // Nothing to connect. This should never happen.
             iterators.add (it);
             if (it.firstborn < it.size) nothingNew = false;
             if (it.k > 0  ||  it.radius > 0) spatialFiltering = true;
         }
-        if (nothingNew) return null;
+        if (nothingNew  &&  ! poll) return null;
 
         ConnectionMatrix cm = equations.connectionMatrix;
         if (cm != null)  // Use sparse-matrix optimization
@@ -615,16 +636,19 @@ public class Population extends Instance
 
         // Sort so that population with the most old entries is the outermost iterator.
         // That allows the most number of old entries to be skipped.
-        // This is a simple insertion sort ...
-        for (int i = 1; i < count; i++)
+        if (! poll)
         {
-            for (int j = i; j > 0; j--)
+            // This is a simple insertion sort ...
+            for (int i = 1; i < count; i++)
             {
-                ConnectPopulation A = iterators.get (j-1);
-                ConnectPopulation B = iterators.get (j);
-                if (A.firstborn >= B.firstborn) break;
-                iterators.set (j-1, B);
-                iterators.set (j,   A);
+                for (int j = i; j > 0; j--)
+                {
+                    ConnectPopulation A = iterators.get (j-1);
+                    ConnectPopulation B = iterators.get (j);
+                    if (A.firstborn >= B.firstborn) break;
+                    iterators.set (j-1, B);
+                    iterators.set (j,   A);
+                }
             }
         }
 
@@ -671,6 +695,19 @@ public class Population extends Instance
 
     public void connect (Simulator simulator)
     {
+        boolean poll = false;  // If true, check all latent connections. If false, only check for new connections.
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
+        if (bed.poll >= 0)
+        {
+            double t = simulator.currentEvent.t;
+            double pollDeadline = valuesFloat[bed.pollDeadline];
+            if (t >= pollDeadline)
+            {
+                poll = true;
+                valuesFloat[bed.pollDeadline] = (float) (t + bed.poll);
+            }
+        }
+
         // TODO: implement $min, or consider eliminating it from the language
         // $max is easy, but $min requires one or more forms of expensive accounting to do correctly.
         // Problems include:
@@ -682,7 +719,7 @@ public class Population extends Instance
         // However, this is more difficult to implement for any but the outer loop. Could implement an
         // outer loop for each of the other populations, just for fulfilling $min.
 
-        ConnectIterator outer = getIterators (simulator);
+        ConnectIterator outer = getIterators (simulator, poll);
         if (outer == null) return;
         Part c = new Part (equations, (Part) container);
         outer.setProbe (c);

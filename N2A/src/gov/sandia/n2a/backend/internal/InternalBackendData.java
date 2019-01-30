@@ -109,6 +109,10 @@ public class InternalBackendData
     public boolean populationCanResize;     // by manipulating $n
     public int     populationIndex;         // in container.populations
 
+    public double  poll = -1;               // For connections, how much time is allowed to check full set of latent connections. Zero means every cycle. Negative means don't poll.
+    public int     pollDeadline;            // position in population valuesFloat of time by which current poll cycle must complete. Only valid if poll>=0.
+    public int     pollSorted;              // position in population valuesObject of sorted list of connections. Only valid if poll>=0.
+
     public int indexNext;      // position in population valuesFloat of index counter
     public int indexAvailable; // position in population valuesObject of list of dead indices
     public int instances = -1; // position in population valuesObject of instances list; -1 means don't track instances
@@ -354,8 +358,7 @@ public class InternalBackendData
         // All other code assumes populations are the first entries in valuesObject.
         for (EquationSet p : s.parts)
         {
-            countLocalObject++;
-            namesLocalObject.add (p.name);
+            allocateLocalObject (p.name);
         }
     }
 
@@ -389,15 +392,13 @@ public class InternalBackendData
 
             if (et.track != null  &&  et.track.name.startsWith ("eventAux"))
             {
-                et.track.readIndex = et.track.writeIndex = countLocalFloat++;
-                namesLocalFloat.add (et.track.name);
+                et.track.readIndex = et.track.writeIndex = allocateLocalFloat (et.track.name);
             }
 
             // Force multiple sources to generate only one event in a given cycle
             if (et.sources.size () > 1  &&  et.edge == EventTarget.NONZERO)
             {
-                et.timeIndex = countLocalFloat++;
-                namesLocalFloat.add ("eventTime" + eventIndex);
+                et.timeIndex = allocateLocalFloat ("eventTime" + eventIndex);
             }
 
             // TODO: What if two different event targets in this part reference the same source part? What if the condition is different? The same?
@@ -405,8 +406,7 @@ public class InternalBackendData
             {
                 EquationSet sourceContainer = es.container;
                 InternalBackendData sourceBed = (InternalBackendData) sourceContainer.backendData;
-                es.monitorIndex = sourceBed.countLocalObject++;
-                sourceBed.namesLocalObject.add ("eventMonitor_" + s.prefix ());  // TODO: Consolidate monitors that share the same trigger condition.
+                es.monitorIndex = sourceBed.allocateLocalObject ("eventMonitor_" + s.prefix ());  // TODO: Consolidate monitors that share the same trigger condition.
                 sourceBed.eventSources.add (es);
             }
 
@@ -653,8 +653,7 @@ public class InternalBackendData
     {
         if (globalReference.add (r))
         {
-            r.index = countGlobalObject++;
-            namesGlobalObject.add ("reference to " + r.variable.container.name);
+            r.index = allocateGlobalObject ("reference to " + r.variable.container.name);
         }
         else
         {
@@ -682,8 +681,7 @@ public class InternalBackendData
 
         if (localReference.add (r))
         {
-            r.index = countLocalObject++;
-            namesLocalObject.add ("reference to " + r.variable.container.name);
+            r.index = allocateLocalObject ("reference to " + r.variable.container.name);
         }
         else
         {
@@ -882,10 +880,8 @@ public class InternalBackendData
 
         if (index != null  &&  ! singleton)
         {
-            indexNext = countGlobalFloat++;
-            namesGlobalFloat.add ("indexNext");
-            indexAvailable = countGlobalObject++;
-            namesGlobalObject.add ("indexAvailable");
+            indexNext = allocateGlobalFloat ("indexNext");
+            indexAvailable = allocateGlobalObject ("indexAvailable");
         }
 
         if (singleton  ||  s.connected  ||  s.needInstanceTracking  ||  populationCanResize)  // track instances
@@ -893,18 +889,15 @@ public class InternalBackendData
             // The reason populationCanResize forces use of the instances array is to enable pruning of parts when $n decreases.
             // The reason to "track instances" for a singleton is to allocate a slot for direct storage of the single instance in valuesObject.
 
-            instances = countGlobalObject++;
-            namesGlobalObject.add ("instances");
+            instances = allocateGlobalObject ("instances");
 
             if (s.connected)  // in addition, track newly created instances
             {
                 if (! singleton)
                 {
-                    firstborn = countGlobalFloat++;
-                    namesGlobalFloat.add ("firstborn");
+                    firstborn = allocateGlobalFloat ("firstborn");
                 }
-                newborn = countLocalFloat++;
-                namesLocalFloat.add ("newborn");
+                newborn = allocateLocalFloat ("newborn");
             }
         }
 
@@ -917,6 +910,13 @@ public class InternalBackendData
                 {
                     Pdependencies.add (t);
                 }
+            }
+
+            poll = s.determinePoll ();
+            if (poll >= 0)
+            {
+                pollDeadline = allocateGlobalFloat ("pollDeadline");
+                pollSorted   = allocateGlobalObject ("pollSorted");
             }
         }
 
@@ -983,8 +983,7 @@ public class InternalBackendData
                     {
                         // Allocate space for counter in target part
                         InternalBackendData endpointBed = (InternalBackendData) c.endpoint.backendData;
-                        count[i] = endpointBed.countLocalFloat++;
-                        endpointBed.namesLocalFloat.add (s.prefix () + ".$count");
+                        count[i] = endpointBed.allocateLocalFloat (s.prefix () + ".$count");
                         if (ac.count != null)  // $count is referenced explicitly, so need to finish setting it up
                         {
                             ac.count.readIndex = ac.count.writeIndex = count[i];
@@ -1041,26 +1040,22 @@ public class InternalBackendData
             // in the type array rather than the float array.
             if (v.type instanceof Scalar  &&  v.reference.variable == v)
             {
-                v.readIndex = v.writeIndex = countLocalFloat++;
-                namesLocalFloat.add (v.nameString ());
+                v.readIndex = v.writeIndex = allocateLocalFloat (v.nameString ());
             }
             else
             {
-                v.readIndex = v.writeIndex = countLocalObject++;
-                namesLocalObject.add (v.nameString ());
+                v.readIndex = v.writeIndex = allocateLocalObject (v.nameString ());
             }
         }
         for (Variable v : localBufferedExternal)
         {
             if (v.type instanceof Scalar  &&  v.reference.variable == v)
             {
-                v.writeIndex = countLocalFloat++;
-                namesLocalFloat.add ("next_" + v.nameString ());
+                v.writeIndex = allocateLocalFloat ("next_" + v.nameString ());
             }
             else
             {
-                v.writeIndex = countLocalObject++;
-                namesLocalObject.add ("next_" + v.nameString ());
+                v.writeIndex = allocateLocalObject ("next_" + v.nameString ());
             }
         }
         for (Variable v : localBufferedInternal)
@@ -1068,13 +1063,11 @@ public class InternalBackendData
             v.writeTemp = true;
             if (v.type instanceof Scalar  &&  v.reference.variable == v)
             {
-                v.writeIndex = countLocalTempFloat++;
-                namesLocalTempFloat.add ("next_" + v.nameString ());
+                v.writeIndex = allocateLocalTempFloat ("next_" + v.nameString ());
             }
             else
             {
-                v.writeIndex = countLocalTempObject++;
-                namesLocalTempObject.add ("next_" + v.nameString ());
+                v.writeIndex = allocateLocalTempObject ("next_" + v.nameString ());
             }
         }
 
@@ -1083,26 +1076,22 @@ public class InternalBackendData
         {
             if (v.type instanceof Scalar  &&  v.reference.variable == v)
             {
-                v.readIndex = v.writeIndex = countGlobalFloat++;
-                namesGlobalFloat.add (v.nameString ());
+                v.readIndex = v.writeIndex = allocateGlobalFloat (v.nameString ());
             }
             else
             {
-                v.readIndex = v.writeIndex = countGlobalObject++;
-                namesGlobalObject.add (v.nameString ());
+                v.readIndex = v.writeIndex = allocateGlobalObject (v.nameString ());
             }
         }
         for (Variable v : globalBufferedExternal)
         {
             if (v.type instanceof Scalar  &&  v.reference.variable == v)
             {
-                v.writeIndex = countGlobalFloat++;
-                namesGlobalFloat.add ("next_" + v.nameString ());
+                v.writeIndex = allocateGlobalFloat ("next_" + v.nameString ());
             }
             else
             {
-                v.writeIndex = countGlobalObject++;
-                namesGlobalObject.add ("next_" + v.nameString ());
+                v.writeIndex = allocateGlobalObject ("next_" + v.nameString ());
             }
         }
         for (Variable v : globalBufferedInternal)
@@ -1110,13 +1099,11 @@ public class InternalBackendData
             v.writeTemp = true;
             if (v.type instanceof Scalar  &&  v.reference.variable == v)
             {
-                v.writeIndex = countGlobalTempFloat++;
-                namesGlobalTempFloat.add ("next_" + v.nameString ());
+                v.writeIndex = allocateGlobalTempFloat ("next_" + v.nameString ());
             }
             else
             {
-                v.writeIndex = countGlobalTempObject++;
-                namesGlobalTempObject.add ("next_" + v.nameString ());
+                v.writeIndex = allocateGlobalTempObject ("next_" + v.nameString ());
             }
         }
 
@@ -1129,26 +1116,22 @@ public class InternalBackendData
             {
                 if (v.type instanceof Scalar  &&  v.reference.variable == v)
                 {
-                    v.readIndex = v.writeIndex = countGlobalTempFloat++;
-                    namesGlobalTempFloat.add (v.nameString ());
+                    v.readIndex = v.writeIndex = allocateGlobalTempFloat (v.nameString ());
                 }
                 else
                 {
-                    v.readIndex = v.writeIndex = countGlobalTempObject++;
-                    namesGlobalTempObject.add (v.nameString ());
+                    v.readIndex = v.writeIndex = allocateGlobalTempObject (v.nameString ());
                 }
             }
             else
             {
                 if (v.type instanceof Scalar  &&  v.reference.variable == v)
                 {
-                    v.readIndex = v.writeIndex = countLocalTempFloat++;
-                    namesLocalTempFloat.add (v.nameString ());
+                    v.readIndex = v.writeIndex = allocateLocalTempFloat (v.nameString ());
                 }
                 else
                 {
-                    v.readIndex = v.writeIndex = countLocalTempObject++;
-                    namesLocalTempObject.add (v.nameString ());
+                    v.readIndex = v.writeIndex = allocateLocalTempObject (v.nameString ());
                 }
             }
         }
@@ -1241,10 +1224,57 @@ public class InternalBackendData
         if (hasIntegrated  &&  (eventTargets.size () > 0  ||  dtCanChange))
         {
             lastT = new Variable ("$lastT");
-            lastT.readIndex = lastT.writeIndex = countLocalFloat++;
-            namesLocalFloat.add (lastT.nameString ());
+            lastT.readIndex = lastT.writeIndex = allocateLocalFloat (lastT.nameString ());
             lastT.type = new Scalar (0);
         }
+    }
+
+    public int allocateGlobalFloat (String name)
+    {
+        namesGlobalFloat.add (name);
+        return countGlobalFloat++;
+    }
+
+    public int allocateGlobalObject (String name)
+    {
+        namesGlobalObject.add (name);
+        return countGlobalObject++;
+    }
+
+    public int allocateLocalFloat (String name)
+    {
+        namesLocalFloat.add (name);
+        return countLocalFloat++;
+    }
+
+    public int allocateLocalObject (String name)
+    {
+        namesLocalObject.add (name);
+        return countLocalObject++;
+    }
+
+    public int allocateGlobalTempFloat (String name)
+    {
+        namesGlobalTempFloat.add (name);
+        return countGlobalFloat++;
+    }
+
+    public int allocateGlobalTempObject (String name)
+    {
+        namesGlobalTempObject.add (name);
+        return countGlobalTempObject++;
+    }
+
+    public int allocateLocalTempFloat (String name)
+    {
+        namesLocalTempFloat.add (name);
+        return countLocalTempFloat++;
+    }
+
+    public int allocateLocalTempObject (String name)
+    {
+        namesLocalTempObject.add (name);
+        return countLocalTempObject++;
     }
 
     /**

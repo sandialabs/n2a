@@ -22,6 +22,7 @@ import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.ParseException;
+import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.operator.Negate;
 
 public class PartMap
@@ -118,7 +119,7 @@ public class PartMap
                             if (op.isScalar ())
                             {
                                 String value = pieces[0].trim ();
-                                int unitIndex = XMLutility.findUnits (value);
+                                int unitIndex = UnitValue.findUnits (value);
                                 if (unitIndex < value.length ()) unit = value.substring (unitIndex);
                             }
                         }
