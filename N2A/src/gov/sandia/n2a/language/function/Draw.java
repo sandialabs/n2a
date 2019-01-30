@@ -15,8 +15,6 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-
 import javax.imageio.ImageIO;
 
 import gov.sandia.n2a.backend.internal.Simulator;
@@ -90,7 +88,7 @@ public class Draw extends Function
         {
             simulator.drawings.put (filename, this);
 
-            Path file = Paths.get (filename);
+            Path file = simulator.jobDir.resolve (filename);
             Path parent = file.getParent ();
             filename = file.getFileName ().toString ();
             String[] pieces = filename.split ("\\.");
@@ -99,9 +97,7 @@ public class Draw extends Function
                 format = pieces[pieces.length - 1].toLowerCase ();
                 filename = filename.substring (0, filename.length () - format.length () - 1);
             }
-            file = Paths.get (filename);
-            if (parent == null) path = file;
-            else                path = parent.resolve (file);
+            path = parent.resolve (filename);
         }
 
         public void close ()

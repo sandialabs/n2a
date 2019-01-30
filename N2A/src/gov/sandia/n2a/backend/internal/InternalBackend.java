@@ -13,7 +13,6 @@ import gov.sandia.n2a.parms.Parameter;
 import gov.sandia.n2a.parms.ParameterDomain;
 
 import java.io.ByteArrayInputStream;
-import java.io.File;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.io.RandomAccessFile;
@@ -77,17 +76,17 @@ public class InternalBackend extends Backend
 
         public void run ()
         {
-            String jobDir = new File (job.get ()).getParent ();  // assumes the MNode "job" is really an MDoc. In any case, the value of the node should point to a file on disk where it is stored in a directory just for it.
-            try {err.set (new PrintStream (new FileOutputStream (new File (jobDir, "err"), true), false, "UTF-8"));}
+            Path jobDir = Paths.get (job.get ()).getParent ();  // assumes the MNode "job" is really an MDoc. In any case, the value of the node should point to a file on disk where it is stored in a directory just for it.
+            try {err.set (new PrintStream (new FileOutputStream (jobDir.resolve ("err").toFile (), true), false, "UTF-8"));}
             catch (Exception e) {}
 
             long elapsedTime = 0;
             try
             {
-                Files.createFile (Paths.get (jobDir, "started"));
+                Files.createFile (jobDir.resolve ("started"));
                 EquationSet digestedModel = new EquationSet (job);
-                digestModel (digestedModel, jobDir);
-                Files.copy (new ByteArrayInputStream (digestedModel.dump (false).getBytes ("UTF-8")), Paths.get (jobDir, "model.flat"));
+                digestModel (digestedModel);
+                Files.copy (new ByteArrayInputStream (digestedModel.dump (false).getBytes ("UTF-8")), jobDir.resolve ("model.flat"));
                 //dumpBackendData (digestedModel);
 
                 // Any new metadata generated after MPart is collated must be injected back into job
@@ -101,20 +100,20 @@ public class InternalBackend extends Backend
                 if (e.equals ("after"))  eventMode = Simulator.AFTER;
                 if (e.equals ("before")) eventMode = Simulator.BEFORE;
 
-                simulator = new Simulator (new Wrapper (digestedModel), seed);
+                simulator = new Simulator (new Wrapper (digestedModel), seed, jobDir);
                 simulator.eventMode = eventMode;
                 elapsedTime = System.nanoTime ();
                 simulator.init ();
                 simulator.run ();  // Does not return until simulation is finished.
                 elapsedTime = System.nanoTime () - elapsedTime;
-                if (simulator.stop) Files.copy (new ByteArrayInputStream ("killed" .getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
-                else                Files.copy (new ByteArrayInputStream ("success".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
+                if (simulator.stop) Files.copy (new ByteArrayInputStream ("killed" .getBytes ("UTF-8")), jobDir.resolve ("finished"));
+                else                Files.copy (new ByteArrayInputStream ("success".getBytes ("UTF-8")), jobDir.resolve ("finished"));
             }
             catch (Exception e)
             {
                 if (! (e instanceof AbortRun)) e.printStackTrace (err.get ());
 
-                try {Files.copy (new ByteArrayInputStream ("failure".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));}
+                try {Files.copy (new ByteArrayInputStream ("failure".getBytes ("UTF-8")), jobDir.resolve ("finished"));}
                 catch (Exception f) {}
             }
 
@@ -206,20 +205,17 @@ public class InternalBackend extends Backend
         Utility function to enable other backends to use Internal to prepare static network structures.
         @return A Simulator object which contains the constructed network.
     **/
-    public static Simulator constructStaticNetwork (EquationSet e, String jobDir) throws Exception
+    public static Simulator constructStaticNetwork (EquationSet e) throws Exception
     {
-        digestModel (e, jobDir);
+        digestModel (e);
         long seed = Long.parseLong (e.metadata.getOrDefault ("seed", "0"));
         Simulator result = new Simulator (new Wrapper (e), seed);
         result.init ();
         return result;
     }
 
-    public static void digestModel (EquationSet e, String jobDir) throws Exception
+    public static void digestModel (EquationSet e) throws Exception
     {
-        // TODO: Don't rely on setting "user.dir". Instead, always resolve against jobDir explicitly. This requires making jobDir available everywhere in backend.
-        System.setProperty ("user.dir", new File (jobDir).getAbsolutePath ());  // Make paths relative to job directory.
-
         String backend = e.metadata.getOrDefault ("backend", "internal");
         if (backend.isEmpty ()) backend = "none";  // Should not match any backend metadata entries, since they are all supposed to start with "backend".
         else                    backend = "backend." + backend;

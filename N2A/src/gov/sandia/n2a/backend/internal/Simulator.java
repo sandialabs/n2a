@@ -12,8 +12,10 @@ import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 
-import java.io.File;
+import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -46,6 +48,7 @@ public class Simulator implements Iterable<Part>
     public Random                      random;
 
     // Global shared data
+    public Path                      jobDir;
     public Map<String,Matrix>        matrices = new HashMap<String,Matrix> ();
     public Map<String,Input .Holder> inputs   = new HashMap<String,Input .Holder> ();
     public Map<String,Output.Holder> outputs  = new HashMap<String,Output.Holder> ();
@@ -72,14 +75,20 @@ public class Simulator implements Iterable<Part>
         }
     }
 
-    public Simulator (Wrapper wrapper, long seed)
+    public Simulator (Wrapper wrapper, long seed) throws IOException
     {
-        this (wrapper, seed, new EventFactory ());
+        this (wrapper, seed, Files.createTempDirectory ("n2a"));
     }
 
-    public Simulator (Wrapper wrapper, long seed, EventFactory factory)
+    public Simulator (Wrapper wrapper, long seed, Path jobDir)
     {
-        try {out = new PrintStream (new File ("out").getAbsoluteFile (), "UTF-8");}      // put in current working dir, which should be the job directory
+        this (wrapper, seed, jobDir, new EventFactory ());
+    }
+
+    public Simulator (Wrapper wrapper, long seed, Path jobDir, EventFactory factory)
+    {
+        this.jobDir = jobDir;
+        try {out = new PrintStream (jobDir.resolve ("out").toFile (), "UTF-8");}      // put in current working dir, which should be the job directory
         catch (Exception e) {out = System.out;}  // if that fails, just use the default stdout
 
         random = new Random (seed);

@@ -168,7 +168,7 @@ class XyceBackend extends Backend
                     Path prnFile = jobDir.resolve ("result");  // "prn" doesn't work, at least on windows
 
                     EquationSet e = new EquationSet (job);
-                    Simulator simulator = InternalBackend.constructStaticNetwork (e, jobDir.toString ());
+                    Simulator simulator = InternalBackend.constructStaticNetwork (e);
                     analyze (e);
 
                     // Just in case a $p expression says something different than $metadata.duration

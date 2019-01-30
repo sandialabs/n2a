@@ -6,7 +6,6 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.function;
 
-import java.io.File;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -120,7 +119,7 @@ public class Output extends Function
             {
                 try
                 {
-                    out = new PrintStream (new File (path).getAbsoluteFile (), "UTF-8");
+                    out = new PrintStream (simulator.jobDir.resolve (path).toFile (), "UTF-8");
                 }
                 catch (Exception e)
                 {
