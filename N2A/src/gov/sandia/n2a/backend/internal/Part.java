@@ -640,4 +640,40 @@ public class Part extends Instance
         for (int i = 1; i < count; i++) result += "-" + ((Part) valuesObject[bed.endpoints+i]).path ();
         return result;
     }
+
+    /**
+        Only supports connection matching to eliminate duplicates.
+    **/
+    public boolean equals (Object o)
+    {
+        if (! (o instanceof Part)) return false;
+        Part that = (Part) o;
+        if (equations.connectionBindings == null  ||  that.equations.connectionBindings == null) return false;  // We are only interested in connection instances.
+        if (equations != that.equations) return false;  // Object identity is necessary here.
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
+        int count = equations.connectionBindings.size ();
+        for (int i = 0; i < count; i++) if (valuesObject[bed.endpoints+i] != that.valuesObject[bed.endpoints+i]) return false;  // Again, we use object identity. The endpoints must be exactly the same instance to match.
+        return true;
+    }
+
+    /**
+        Only supports connection matching to eliminate duplicates.
+    **/
+    public int hashCode ()
+    {
+        if (equations.connectionBindings == null) return super.hashCode ();
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
+        int count = equations.connectionBindings.size ();
+        int shift = 32 / count;
+        int result = 0;
+        for (int i = 0; i < count; i++)
+        {
+            Part p = (Part) valuesObject[bed.endpoints+i];
+            InternalBackendData pbed = (InternalBackendData) p.equations.backendData;
+            // Every connection endpoint should have an index, at least for Internal backend.
+            int index = (int) p.valuesFloat[pbed.index.readIndex];
+            result = (result << shift) + index;
+        }
+        return result;
+    }
 }

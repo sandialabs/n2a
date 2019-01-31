@@ -2843,7 +2843,8 @@ public class EquationSet implements Comparable<EquationSet>
 
     public double determinePoll ()
     {
-        Variable p = find (new Variable ("p", 0));
+        if (connectionBindings == null) return -1;
+        Variable p = find (new Variable ("$p", 0));
         if (p == null) return -1;
 
         List<EquationEntry> fires = new ArrayList<EquationEntry> ();
@@ -2898,7 +2899,7 @@ public class EquationSet implements Comparable<EquationSet>
 
         if (! needsPoll) return -1;
         // Look up metadata to determine polling period.
-        String poll = source.getOrDefault ("$p", "poll", "0");
+        String poll = p.metadata.getOrDefault ("poll", "0");
         return new UnitValue (poll).get ();
     }
 

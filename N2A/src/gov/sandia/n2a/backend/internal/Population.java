@@ -743,7 +743,6 @@ public class Population extends Instance
                 valuesFloat[bed.pollDeadline] = (float) (t + bed.poll);
             }
         }
-        System.out.println ("poll = " + poll);
 
         // TODO: implement $min, or consider eliminating it from the language
         // $max is easy, but $min requires one or more forms of expensive accounting to do correctly.
@@ -822,7 +821,7 @@ public class Population extends Instance
                 index = availableIndex.remove (availableIndex.size () - 1);
                 if (availableIndex.size () < 1) valuesObject[bed.indexAvailable] = null;
             }
-            p.set (bed.index, new Scalar (index));
+            p.valuesFloat[bed.index.writeIndex] = index;
 
             if (bed.instances >= 0)
             {
@@ -850,7 +849,7 @@ public class Population extends Instance
         n--;  // presuming that p is actually here
         if (bed.index != null)
         {
-            int index = (int) ((Scalar) p.get (bed.index)).value;
+            int index = (int) p.valuesFloat[bed.index.readIndex];
 
             ArrayList<Integer> availableIndex = (ArrayList<Integer>) valuesObject[bed.indexAvailable];
             if (availableIndex == null)
