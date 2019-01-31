@@ -99,12 +99,6 @@ public class Population extends Instance
             }
             else
             {
-                if (bed.poll >= 0)
-                {
-                    // Set our first polling deadline in the future, so that this pass only processes new connections.
-                    double t = simulator.currentEvent.t;
-                    valuesFloat[bed.pollDeadline] = (float) (t + bed.poll);
-                }
                 simulator.connect (this);  // queue to evaluate our connections
             }
         }
@@ -466,7 +460,19 @@ public class Population extends Instance
                 List<KDTree.Entry> result = NN.find (xyz);
                 count = result.size ();
                 filtered = new ArrayList<Part> (count);
-                for (KDTree.Entry e : result) filtered.add ((Part) e.item);
+                if (newOnly)
+                {
+                    for (KDTree.Entry e : result)
+                    {
+                        Part ep = (Part) e.item;
+                        if (ep.valuesFloat[pbed.newborn] == 0) continue;
+                        filtered.add (ep);
+                    }
+                }
+                else
+                {
+                    for (KDTree.Entry e : result) filtered.add ((Part) e.item);
+                }
                 i = 0;
             }
             else
@@ -519,11 +525,8 @@ public class Population extends Instance
                     for (; i < stop; i++)
                     {
                         p = filtered.get (i);
-                        if (p.valuesFloat[pbed.newborn] != 0)
-                        {
-                            if (max == 0) break;
-                            if (p.valuesFloat[connectedCount] < max) break;
-                        }
+                        // newborn filter is handled by reset(), at same time as spatial filter
+                        if (max == 0  ||  p.valuesFloat[connectedCount] < max) break;
                     }
                 }
                 else if (newOnly)
@@ -531,11 +534,8 @@ public class Population extends Instance
                     for (; i < stop; i++)
                     {
                         p = instances.get (i % count + firstborn);
-                        if (p != null  &&  p.valuesFloat[pbed.newborn] != 0)
-                        {
-                            if (max == 0) break;
-                            if (p.valuesFloat[connectedCount] < max) break;
-                        }
+                        if (p == null  ||  p.valuesFloat[pbed.newborn] == 0) continue;
+                        if (max == 0  ||  p.valuesFloat[connectedCount] < max) break;
                     }
                 }
                 else
@@ -543,11 +543,8 @@ public class Population extends Instance
                     for (; i < stop; i++)
                     {
                         p = instances.get (i % count);
-                        if (p != null)
-                        {
-                            if (max == 0) break;
-                            if (p.valuesFloat[connectedCount] < max) break;
-                        }
+                        if (p == null) continue;
+                        if (max == 0  ||  p.valuesFloat[connectedCount] < max) break;
                     }
                 }
 
@@ -766,10 +763,18 @@ public class Population extends Instance
         outer.setProbe (c);
         while (outer.next ())
         {
-            if (poll  &&  pollSorted.contains (c)) continue;  // Prevent duplicates in poll mode. In non-poll mode, no need to check, because the connection iterator will only return new candidates.
             c.resolve ();
             double create = c.getP (simulator);
             if (create <= 0  ||  create < 1  &&  create < simulator.random.nextDouble ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
+
+            // In poll mode, prevent duplicates.
+            // This filter could also come any time before getP(). However, connections tend to be
+            // sparse in general, so most candidates will call getP() in any case.
+            // The ideal situation would be if duplicate detection cost nearly nothing, for example if we could
+            // iterate through a sorted list of existing connections and only check candidates in the gaps.
+            // In that case, testing for duplicates first would make sense.
+            if (poll  &&  pollSorted.contains (c)) continue;
+
             ((Part) container).event.enqueue (c);
             c.init (simulator);
             c = new Part (equations, (Part) container);
