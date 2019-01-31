@@ -26,6 +26,7 @@ import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.type.Instance;
+import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 
@@ -265,7 +266,35 @@ public class Output extends Function
         double now;
         if (simulator.currentEvent == null) now = 0;
         else                                now = (float) simulator.currentEvent.t;
-        H.trace (now, column, (float) ((Scalar) result).value);
+
+        if (result instanceof Matrix)
+        {
+            Matrix A = (Matrix) result;
+            int rows = A.rows ();
+            int cols = A.columns ();
+            if (rows == 1)
+            {
+                for (int c = 0; c < cols; c++) H.trace (now, column + "(" + c + ")", (float) A.get (0, c));
+            }
+            else if (cols == 1)
+            {
+                for (int r = 0; r < rows; r++) H.trace (now, column + "(" + r + ")", (float) A.get (r, 0));
+            }
+            else
+            {
+                for (int r = 0; r < rows; r++)
+                {
+                    for (int c = 0; c < cols; c++)
+                    {
+                        H.trace (now, column + "(" + r + "," + c + ")", (float) A.get (r, c));
+                    }
+                }
+            }
+        }
+        else
+        {
+            H.trace (now, column, (float) ((Scalar) result).value);
+        }
 
         return result;
     }
