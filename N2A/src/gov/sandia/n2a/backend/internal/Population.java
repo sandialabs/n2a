@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.backend.internal;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.TreeSet;
 
@@ -36,6 +37,7 @@ public class Population extends Instance
         this.container = container;
         InternalBackendData bed = (InternalBackendData) equations.backendData;
         allocate (bed.countGlobalFloat, bed.countGlobalObject);
+
         if (bed.singleton)
         {
             Part p = new Part (equations, container);
@@ -47,6 +49,8 @@ public class Population extends Instance
         {
             valuesObject[bed.instances] = new ArrayList<Part> ();
         }
+
+        if (bed.poll >= 0) valuesObject[bed.pollSorted] = new HashSet<Part> ();
     }
 
     public void init (Simulator simulator)
@@ -213,13 +217,46 @@ public class Population extends Instance
 
         if (equations.connectionBindings != null)
         {
-            // TODO: check for newly-created parts in endpoint populations.
+            // Check poll deadline.
+            boolean shouldConnect = false;
             if (bed.poll >= 0)
             {
                 double pollDeadline = valuesFloat[bed.pollDeadline];
                 double t = simulator.currentEvent.t;
-                if (t >= pollDeadline) simulator.connect (this);
+                if (t >= pollDeadline) shouldConnect = true;
             }
+
+            // Check for newly-created parts in endpoint populations.
+            // To limit work, only do this for shallow structures that don't require enumerating sub-populations.
+            if (! shouldConnect)
+            {
+                for (ConnectionBinding target : equations.connectionBindings)
+                {
+                    InternalBackendData cbed = (InternalBackendData) target.endpoint.backendData;
+                    if (cbed.singleton) continue;
+
+                    // Resolve binding
+                    Instance current = this;
+                    for (Object o : target.resolution)
+                    {
+                        Resolver r = (Resolver) o;
+                        if (r.shouldEnumerate (current)) break;
+                        current = r.resolve (current);
+                    }
+                    if (current.equations != target.endpoint) continue;
+
+                    int firstborn = (int) current.valuesFloat[cbed.firstborn];
+                    @SuppressWarnings("unchecked")
+                    int size      = (int) ((List<Part>) current.valuesObject[cbed.instances]).size ();
+                    if (firstborn < size)
+                    {
+                        shouldConnect = true;
+                        break;
+                    }
+                }
+            }
+
+            if (shouldConnect) simulator.connect (this);
         }
 
         return true;
@@ -477,8 +514,6 @@ public class Population extends Instance
                     }
                 }
 
-                // TODO: in poll mode, filter against set of existing connections (prevent duplicates)
-                // be sure to allocate space in valuesObject for hashset
                 if (NN != null)
                 {
                     for (; i < stop; i++)
@@ -693,6 +728,7 @@ public class Population extends Instance
         return iterators.get (0);
     }
 
+    @SuppressWarnings("unchecked")
     public void connect (Simulator simulator)
     {
         boolean poll = false;  // If true, check all latent connections. If false, only check for new connections.
@@ -707,6 +743,7 @@ public class Population extends Instance
                 valuesFloat[bed.pollDeadline] = (float) (t + bed.poll);
             }
         }
+        System.out.println ("poll = " + poll);
 
         // TODO: implement $min, or consider eliminating it from the language
         // $max is easy, but $min requires one or more forms of expensive accounting to do correctly.
@@ -721,10 +758,16 @@ public class Population extends Instance
 
         ConnectIterator outer = getIterators (simulator, poll);
         if (outer == null) return;
+
+        HashSet<Part> pollSorted;
+        if (poll) pollSorted = (HashSet<Part>) valuesObject[bed.pollSorted];
+        else      pollSorted = null;
+
         Part c = new Part (equations, (Part) container);
         outer.setProbe (c);
         while (outer.next ())
         {
+            if (poll  &&  pollSorted.contains (c)) continue;  // Prevent duplicates in poll mode. In non-poll mode, no need to check, because the connection iterator will only return new candidates.
             c.resolve ();
             double create = c.getP (simulator);
             if (create <= 0  ||  create < 1  &&  create < simulator.random.nextDouble ()) continue;  // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it should have no effect.
@@ -794,6 +837,8 @@ public class Population extends Instance
                 }
             }
         }
+
+        if (bed.poll >= 0) ((HashSet<Part>) valuesObject[bed.pollSorted]).add (p);
     }
 
     @SuppressWarnings("unchecked")
@@ -821,6 +866,8 @@ public class Population extends Instance
                 instances.set (index, null);
             }
         }
+
+        if (bed.poll >= 0) ((HashSet<Part>) valuesObject[bed.pollSorted]).remove (p);
     }
 
     @SuppressWarnings("unchecked")
