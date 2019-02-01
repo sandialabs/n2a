@@ -2648,7 +2648,10 @@ public class EquationSet implements Comparable<EquationSet>
 
         for (final Variable v : variables)
         {
-            if (v.hasAny (new String[] {"initOnly", "constant", "dummy"})) continue;  // Note: some variables get tagged "initOnly" by other means, so don't re-process
+            // Note: some variables get tagged "initOnly" by other means.
+            // Note: "externalWrite" implies not initOnly, even if the external source is initOnly, unless it can be established
+            //       that both the external part and this part always go through init at the same time.
+            if (v.hasAny (new String[] {"initOnly", "constant", "dummy", "externalWrite"})) continue;
 
             // Count equations
             int firesDuringInit   = 0;
