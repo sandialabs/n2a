@@ -71,9 +71,12 @@ public class Population extends Instance
         {
             Type result = v.eval (temp);
             if (result != null  &&  v.writeIndex >= 0) temp.setFinal (v, result);
+            // No need to handle references to external variables. These should all be classified as local rather than global equations.
         }
+        // However, there may be external references to our variables. For example, instances of another part might adjust our $n'.
         // zero external buffered variables that may be written before first finish()
-        for (Variable v : bed.globalBufferedExternalWrite) set (v, v.type);  // v.type should be pre-loaded with zero-equivalent values
+        clearExternalWriteBuffers (bed.globalBufferedExternalWrite);
+        for (Variable v : bed.globalBufferedExternalWrite) if (v.assignment == Variable.REPLACE) temp.set (v, temp.get (v));
 
         if (bed.index != null  &&  ! bed.singleton)
         {
@@ -121,28 +124,20 @@ public class Population extends Instance
         for (Variable v : temp.bed.globalUpdate)
         {
             Type result = v.eval (temp);
-            if (result == null)  // no condition matched
+            if (v.reference.variable.writeIndex < 0) continue;  // this is a "dummy" variable, so calling eval() was all we needed to do
+            if (result != null)
             {
-                if (v.reference.variable == v  &&  v.equations.size () > 0  &&  v.readIndex != v.writeIndex) temp.set (v, temp.get (v));
+                temp.applyResult (v, result);
             }
-            else if (v.reference.variable.writeIndex >= 0)  // ensure this is not a "dummy" variable
+            else if (v.reference.variable == v  &&  v.equations.size () > 0)  // No condition fired, and we need to provide some default value.
             {
-                if (v.assignment == Variable.REPLACE)
+                if (v.readIndex == v.writeIndex)  // not buffered
                 {
-                    temp.set (v, result);
+                    if (v.readTemp) temp.set (v, v.type);  // This is a pure temporary, so set value to default for use by later equations. Note that readTemp==writeTemp==true.
                 }
-                else
+                else  // buffered
                 {
-                    // the rest of these require knowing the current value of the working result, which is most likely external buffered
-                    Type current = temp.getFinal (v.reference);
-                    switch (v.assignment)
-                    {
-                        case Variable.ADD:      temp.set (v, current.add      (result)); break;
-                        case Variable.MULTIPLY: temp.set (v, current.multiply (result)); break;
-                        case Variable.DIVIDE:   temp.set (v, current.divide   (result)); break;
-                        case Variable.MIN:      temp.set (v, current.min      (result)); break;
-                        case Variable.MAX:      temp.set (v, current.max      (result)); break;
-                    }
+                    if (! v.externalWrite) temp.set (v, temp.get (v));  // Not an accumulator, so copy its value
                 }
             }
         }

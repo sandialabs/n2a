@@ -15,7 +15,6 @@ import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
-import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
 
@@ -125,40 +124,44 @@ public class Part extends Instance
     public void init (Simulator simulator)
     {
         InstanceTemporaries temp = new InstanceInit (this, simulator);
-        ((Population) container.valuesObject[temp.bed.populationIndex]).insert (this);  // update $n and assign $index
+        InternalBackendData bed = temp.bed;
+        ((Population) container.valuesObject[bed.populationIndex]).insert (this);  // update $n and assign $index
 
         // update accountable endpoints
         // Note: these do not require resolve(). Instead, they access their target directly through the endpoints array.
-        if (temp.bed.count != null)
+        if (bed.count != null)
         {
-            int length = temp.bed.count.length;
+            int length = bed.count.length;
             for (int i = 0; i < length; i++)
             {
-                if (temp.bed.count[i] >= 0)
+                if (bed.count[i] >= 0)
                 {
-                    Part p = (Part) valuesObject[temp.bed.endpoints+i];
-                    p.valuesFloat[temp.bed.count[i]]++;
+                    Part p = (Part) valuesObject[bed.endpoints+i];
+                    p.valuesFloat[bed.count[i]]++;
                 }
             }
         }
 
         // Initialize variables
-        if (temp.bed.liveStorage == InternalBackendData.LIVE_STORED) set (temp.bed.live, new Scalar (1));  // force $live to be set before anything else
-        for (Variable v : temp.bed.localInit)
+        // Note that some valuesObject entries could be left null. This is OK, because Instance.get() will return
+        // a zero-equivalent value if it finds null.
+        if (bed.liveStorage == InternalBackendData.LIVE_STORED) set (bed.live, new Scalar (1));  // force $live to be set before anything else
+        for (Variable v : bed.localInit)
         {
             Type result = v.eval (temp);
-            if (result != null  &&  v.writeIndex >= 0) temp.setFinal (v, result);
-            // Note that some valuesObject entries could be left null. This is OK, because Instance.get() will return
-            // a zero-equivalent value if it finds null.
+            if (result == null  ||  v.reference.variable.writeIndex < 0) continue;
+            if (v.reference.variable == v) temp.setFinal (v, result);
+            else                           temp.applyResult (v, result); // External reference, so need to do proper combining operation, just like regular update.
         }
-        if (temp.bed.lastT != null) temp.setFinal (temp.bed.lastT, new Scalar (simulator.currentEvent.t));
+        if (bed.lastT != null) temp.setFinal (bed.lastT, new Scalar (simulator.currentEvent.t));
+        if (bed.type != null) temp.setFinal (bed.type, new Scalar (0));
 
         // zero external buffered variables that may be written before first finish()
-        clearBufferedExternalWrite (temp.bed);
-        if (temp.bed.type != null) temp.setFinal (temp.bed.type, new Scalar (0));
+        clearExternalWriteBuffers (bed.localBufferedExternalWrite);
+        for (Variable v : bed.localBufferedExternalWrite) if (v.assignment == Variable.REPLACE) temp.set (v, temp.get (v));
 
         // Request event monitors
-        for (EventTarget et : temp.bed.eventTargets)
+        for (EventTarget et : bed.eventTargets)
         {
             for (EventSource es : et.sources)
             {
@@ -213,40 +216,19 @@ public class Part extends Instance
         {
             Type result = v.eval (temp);
             if (v.reference.variable.writeIndex < 0) continue;  // this is a "dummy" variable, so calling eval() was all we needed to do
-
-            if (result == null)  // no condition matched
+            if (result != null)
             {
-                if (v.reference.variable != v  ||  v.equations.size () == 0) continue;
+                temp.applyResult (v, result);
+            }
+            else if (v.reference.variable == v  &&  v.equations.size () > 0)  // No condition fired, and we need to provide some default value.
+            {
                 if (v.readIndex == v.writeIndex)  // not buffered
                 {
-                    if (v.readTemp) temp.set (v, v.type);  // This is a pure temporary for which no equation fired, so set value to default for use by later equations. Note that readTemp==writeTemp==true.
-                    continue;
+                    if (v.readTemp) temp.set (v, v.type);  // This is a pure temporary, so set value to default for use by later equations. Note that readTemp==writeTemp==true.
                 }
-
-                // Variable is buffered
-                if (v.assignment == Variable.REPLACE)  // not an accumulator
+                else  // buffered
                 {
-                    temp.set (v, temp.get (v));  // so copy its value
-                }
-                continue;
-            }
-            // Note: $type is explicitly evaluated to 0 in Variable.eval(), so it never returns null, even when no conditions match.
-
-            if (v.assignment == Variable.REPLACE)
-            {
-                temp.set (v, result);
-            }
-            else
-            {
-                // the rest of these require knowing the current value of the working result, which is most likely external buffered
-                Type current = temp.getFinal (v.reference);
-                switch (v.assignment)
-                {
-                    case Variable.ADD:      temp.set (v, current.add      (result)); break;
-                    case Variable.MULTIPLY: temp.set (v, current.multiply (result)); break;
-                    case Variable.DIVIDE:   temp.set (v, current.divide   (result)); break;
-                    case Variable.MIN:      temp.set (v, current.min      (result)); break;
-                    case Variable.MAX:      temp.set (v, current.max      (result)); break;
+                    if (! v.externalWrite) temp.set (v, temp.get (v));  // Not an accumulator, so copy its value
                 }
             }
         }
@@ -420,7 +402,7 @@ public class Part extends Instance
         if (bed.lastT != null) setFinal (bed.lastT, new Scalar (simulator.currentEvent.t));
         for (Variable v : bed.localBufferedExternal) setFinal (v, getFinal (v));
         for (Integer i : bed.eventLatches) valuesFloat[i] = 0;
-        clearBufferedExternalWrite (bed);
+        clearExternalWriteBuffers (bed.localBufferedExternalWrite);
 
         if (bed.type != null)
         {
@@ -528,35 +510,6 @@ public class Part extends Instance
         }
 
         return true;
-    }
-
-    public void clearBufferedExternalWrite (InternalBackendData bed)
-    {
-        // v.type should be pre-loaded with zero-equivalent values
-        for (Variable v : bed.localBufferedExternalWrite)
-        {
-            switch (v.assignment)
-            {
-                case Variable.ADD:
-                    set (v, v.type);  // initial value is zero-equivalent (additive identity)
-                    break;
-                case Variable.MULTIPLY:
-                case Variable.DIVIDE:
-                    // multiplicative identity
-                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).identity ());
-                    else                          set (v, new Scalar (1));
-                    break;
-                case Variable.MIN:
-                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).clear (Double.POSITIVE_INFINITY));
-                    else                          set (v, new Scalar (Double.POSITIVE_INFINITY));
-                    break;
-                case Variable.MAX:
-                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).clear (Double.NEGATIVE_INFINITY));
-                    else                          set (v, new Scalar (Double.NEGATIVE_INFINITY));
-                    break;
-                // Must handle every assignment type. If any new ones are developed, add appropriate action here.
-            }
-        }
     }
 
     public void setPart (int i, Part p)

@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -76,7 +76,8 @@ public class Variable implements Comparable<Variable>, Cloneable
     public boolean  readTemp;        // Read the temp Instance rather than the main one
     public int      writeIndex = -1; // Position Instance.values to write
     public boolean  writeTemp;       // Write the temp Instance rather than the main one
-    public boolean  global;          // redundant with "global" attribute; for faster execution, since it is a frequently checked
+    public boolean  global;          // redundant with "global" attribute; for faster execution
+    public boolean  externalWrite;   // redundant with "externalWrite" attribute; for faster execution
 
     // Assignment modes
     public static final int REPLACE  = 0;  // =      Note: because this is 0, it is the default state of assignment when this object is constructed
@@ -86,7 +87,8 @@ public class Variable implements Comparable<Variable>, Cloneable
     public static final int MIN      = 4;  // =<
     public static final int MAX      = 5;  // =>
     // Note that there is no =-, because the minus could be ambiguous with content of expression.
-    // DIVIDE is redundant with MULTIPLY, but may make some expressions easier to write. Since they are compatible, no error will be flagged if they are used together.
+    // DIVIDE is redundant with MULTIPLY, but may make some expressions easier to write.
+    // Since they are compatible, no error will be flagged if they are used together.
 
     public Variable (String name)
     {

@@ -247,7 +247,7 @@ public class BackendDataC
             {
                 if (updates  &&  ! unusedTemporary) localUpdate.add (v);
                 if (derivativeOrDependency) localDerivativeUpdate.add (v);
-                if (v.hasAttribute ("reference"))
+                if (v.hasAttribute ("reference"))  // TODO: references should be included in init cycle. See InternalBackendData for example.
                 {
                     if (v.reference.variable.container.canDie ()) localReference.add (v.reference);
                 }

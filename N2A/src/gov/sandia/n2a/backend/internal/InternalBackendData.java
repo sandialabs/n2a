@@ -677,7 +677,7 @@ public class InternalBackendData
         // 1) Get rid of of Instance.container and always store container in (say) valuesObject[0].
         //    Must unpack container everywhere it is used.
         // 2) Use VariableReference.index==-1 to indicate container (and -2 to indicate no reference). 
-        //    Muse add extra case everywhere that index is used.
+        //    Must add extra case everywhere that index is used.
 
         if (localReference.add (r))
         {
@@ -725,6 +725,7 @@ public class InternalBackendData
             boolean updates         = ! initOnly  &&  v.equations.size () > 0  &&  (v.derivative == null  ||  v.hasAttribute ("updates"));
             boolean temporary       = v.hasAttribute ("temporary");
             boolean unusedTemporary = temporary  &&  ! v.hasUsers ();
+            if (v.hasAttribute ("externalWrite")) v.externalWrite = true;
 
             if (v.hasAttribute ("global"))
             {
@@ -755,33 +756,30 @@ public class InternalBackendData
                 if (! v.hasAny (new String[] {"constant", "accessor", "readOnly"})  ||  v.hasAll (new String[] {"constant", "reference"}))  // eliminate non-computed values, unless they refer to a variable outside the immediate equation set
                 {
                     if (updates) globalUpdate.add (v);
+                    if (! unusedTemporary) globalInit.add (v);
                     if (v.hasAttribute ("reference"))
                     {
                         addReferenceGlobal (v.reference, s);
                     }
-                    else
+                    else if (! temporary  &&  ! v.hasAttribute ("dummy"))
                     {
-                        if (! unusedTemporary) globalInit.add (v);
-                        if (! temporary  &&  ! v.hasAttribute ("dummy"))
-                        {
-                            if (! v.hasAttribute ("preexistent")) globalMembers.add (v);
+                        if (! v.hasAttribute ("preexistent")) globalMembers.add (v);
 
-                            boolean external = false;
-                            if (v.hasAttribute ("externalWrite")  ||  v.assignment != Variable.REPLACE)
-                            {
-                                external = true;
-                                globalBufferedExternalWrite.add (v);
-                            }
-                            if (external  ||  (v.hasAttribute ("externalRead")  &&  updates))
-                            {
-                                external = true;
-                                globalBufferedExternal.add (v);
-                            }
-                            if (! external  &&  v.hasAttribute ("cycle"))
-                            {
-                                globalBufferedInternal.add (v);
-                                if (! initOnly) globalBufferedInternalUpdate.add (v);
-                            }
+                        boolean external = false;
+                        if (v.externalWrite  ||  v.assignment != Variable.REPLACE)
+                        {
+                            external = true;
+                            globalBufferedExternalWrite.add (v);
+                        }
+                        if (external  ||  (v.hasAttribute ("externalRead")  &&  updates))
+                        {
+                            external = true;
+                            globalBufferedExternal.add (v);
+                        }
+                        if (! external  &&  v.hasAttribute ("cycle"))
+                        {
+                            globalBufferedInternal.add (v);
+                            if (! initOnly) globalBufferedInternalUpdate.add (v);
                         }
                     }
                 }
@@ -814,33 +812,30 @@ public class InternalBackendData
                 if (! v.hasAny (new String[] {"constant", "accessor", "readOnly"})  ||  v.hasAll (new String[] {"constant", "reference"}))
                 {
                     if (updates) localUpdate.add (v);
+                    if (! unusedTemporary  &&  ! forbiddenLocalInit.contains (v.name)) localInit.add (v);
                     if (v.hasAttribute ("reference"))
                     {
                         addReferenceLocal (v.reference, s);
                     }
-                    else
+                    else if (! temporary  &&  ! v.hasAttribute ("dummy"))
                     {
-                        if (! unusedTemporary  &&  ! forbiddenLocalInit.contains (v.name)) localInit.add (v);
-                        if (! temporary  &&  ! v.hasAttribute ("dummy"))
-                        {
-                            if (! v.hasAttribute ("preexistent")) localMembers.add (v);
+                        if (! v.hasAttribute ("preexistent")) localMembers.add (v);
 
-                            boolean external = false;
-                            if (v.hasAttribute ("externalWrite")  ||  v.assignment != Variable.REPLACE)
-                            {
-                                external = true;
-                                localBufferedExternalWrite.add (v);
-                            }
-                            if (external  ||  (v.hasAttribute ("externalRead")  &&  updates))
-                            {
-                                external = true;
-                                localBufferedExternal.add (v);
-                            }
-                            if (! external  &&  v.hasAttribute ("cycle"))
-                            {
-                                localBufferedInternal.add (v);
-                                if (! initOnly) localBufferedInternalUpdate.add (v);
-                            }
+                        boolean external = false;
+                        if (v.externalWrite  ||  v.assignment != Variable.REPLACE)
+                        {
+                            external = true;
+                            localBufferedExternalWrite.add (v);
+                        }
+                        if (external  ||  (v.hasAttribute ("externalRead")  &&  updates))
+                        {
+                            external = true;
+                            localBufferedExternal.add (v);
+                        }
+                        if (! external  &&  v.hasAttribute ("cycle"))
+                        {
+                            localBufferedInternal.add (v);
+                            if (! initOnly) localBufferedInternalUpdate.add (v);
                         }
                     }
                 }

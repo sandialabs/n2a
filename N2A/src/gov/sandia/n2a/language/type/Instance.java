@@ -205,6 +205,60 @@ public class Instance extends Type
         }
     }
 
+    public void clearExternalWriteBuffers (List<Variable> list)
+    {
+        // v.type should be pre-loaded with zero-equivalent values
+        for (Variable v : list)
+        {
+            switch (v.assignment)
+            {
+                //case Variable.REPLACE: set (v, get (v)); break;
+                //  finish() does the reverse move -- setFinal (v, getFinal (v)) -- so it already leaves
+                //  the buffers in the desired condition. No need to repeat that work here. 
+                //  OTOH, init() needs an extra line of code to ensure the same condition holds.
+                case Variable.ADD:
+                    set (v, v.type);  // initial value is zero-equivalent (additive identity)
+                    break;
+                case Variable.MULTIPLY:
+                case Variable.DIVIDE:
+                    // multiplicative identity
+                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).identity ());
+                    else                          set (v, new Scalar (1));
+                    break;
+                case Variable.MIN:
+                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).clear (Double.POSITIVE_INFINITY));
+                    else                          set (v, new Scalar (Double.POSITIVE_INFINITY));
+                    break;
+                case Variable.MAX:
+                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).clear (Double.NEGATIVE_INFINITY));
+                    else                          set (v, new Scalar (Double.NEGATIVE_INFINITY));
+                    break;
+                // Must handle every assignment type. If any new ones are developed, add appropriate action here.
+            }
+        }
+    }
+
+    public void applyResult (Variable v, Type result)
+    {
+        if (v.assignment == Variable.REPLACE)
+        {
+            set (v, result);
+        }
+        else
+        {
+            // the rest of these require knowing the current value of the working result, which is most likely external buffered
+            Type current = getFinal (v.reference);
+            switch (v.assignment)
+            {
+                case Variable.ADD:      set (v, current.add      (result)); break;
+                case Variable.MULTIPLY: set (v, current.multiply (result)); break;
+                case Variable.DIVIDE:   set (v, current.divide   (result)); break;
+                case Variable.MIN:      set (v, current.min      (result)); break;
+                case Variable.MAX:      set (v, current.max      (result)); break;
+            }
+        }
+    }
+
     public Type EQ (Type that) throws EvaluationException
     {
         if (this == that) return new Scalar (1);
