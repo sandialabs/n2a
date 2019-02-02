@@ -1,11 +1,12 @@
 /*
-Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.db;
 
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -173,15 +174,12 @@ public class MDoc extends MPersistent
 	    if (children != null) return;  // already loaded
 	    children = new TreeMap<String,MNode> (comparator);
         Path file = path ();
-        try
+        needsWrite = true;  // lie to ourselves, to prevent being put onto the MDir write queue
+        try (BufferedReader br = Files.newBufferedReader (file))
         {
-            needsWrite = true;  // lie to ourselves, to prevent being put onto the MDir write queue
-            Schema.readAll (this, Files.newBufferedReader (file));
+            Schema.readAll (this, br);
         }
-        catch (IOException e)
-        {
-            // This exception is common for a newly created doc that has not yet been flushed to disk.
-        }
+        catch (IOException e) {}  // This exception is common for a newly created doc that has not yet been flushed to disk.
         clearChanged ();  // After load(), clear the slate so we can detect any changes and save the document.
 	}
 
@@ -192,9 +190,10 @@ public class MDoc extends MPersistent
 	    try
 	    {
 	        file.getParent ().toFile ().mkdirs ();  // Files.createDirectories() throws an exception for existing dir, even though it promises not to.
-	        BufferedWriter writer = Files.newBufferedWriter (file);
-	        Schema.latest ().writeAll (this, writer);
-	        writer.close ();
+	        try (BufferedWriter writer = Files.newBufferedWriter (file))
+	        {
+	            Schema.latest ().writeAll (this, writer);
+	        }
 	        clearChanged ();
 	    }
 	    catch (IOException e)

@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -26,6 +26,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
+
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.n2a.plugins.extpoints.Backend;
@@ -232,9 +234,9 @@ public class NodeJob extends NodeBase
                 {
                     // Check for image sequence.
                     // It's an image sequence if a random file from the dir has the right form: an integer with an standard image-file suffix.
-                    try
+                    try (Stream<Path> dirStream = Files.list (file))
                     {
-                        Optional<Path> someFile = Files.list (file).findAny ();
+                        Optional<Path> someFile = dirStream.findAny ();
                         if (! someFile.isPresent ()) return;
                         Path p = someFile.get ();
                         String[] pieces = p.getFileName ().toString ().split ("\\.");
@@ -289,7 +291,10 @@ public class NodeJob extends NodeBase
         };
         FileConsumer consumer = new FileConsumer ();
         Path dir = Paths.get (source.get ()).getParent ();
-        try {Files.list (dir).forEach (consumer);}
+        try (Stream<Path> dirStream = Files.list (dir))
+        {
+            dirStream.forEach (consumer);
+        }
         catch (IOException e) {}
 
         for (NodeFile nf : existing.values ())
