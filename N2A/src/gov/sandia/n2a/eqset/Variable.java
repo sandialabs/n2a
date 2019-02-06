@@ -142,10 +142,10 @@ public class Variable implements Comparable<Variable>, Cloneable
                         e = new EquationEntry ("1");
                         break;
                     case MIN:
-                        e = new EquationEntry ("inf");
+                        e = new EquationEntry ("∞");
                         break;
                     case MAX:
-                        e = new EquationEntry ("-inf");
+                        e = new EquationEntry ("-∞");
                         break;
                 }
                 if (e != null) add (e);
