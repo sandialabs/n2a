@@ -630,6 +630,7 @@ public class PanelRun extends JPanel
         appendMetadata (doc, contents, "duration");
         appendMetadata (doc, contents, "host");
         appendMetadata (doc, contents, "pid");
+        appendMetadata (doc, contents, "seed");
 
         synchronized (displayText)
         {

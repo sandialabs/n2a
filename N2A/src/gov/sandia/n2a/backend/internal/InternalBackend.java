@@ -93,7 +93,12 @@ public class InternalBackend extends Backend
                 String duration = digestedModel.metadata.get ("duration");
                 if (! duration.isEmpty ()) job.set ("$metadata", "duration", duration);
 
-                long seed = job.getOrDefaultLong ("$metadata", "seed", "0");
+                long seed = job.getOrDefaultLong ("$metadata", "seed", "-1");
+                if (seed < 0)
+                {
+                    seed = System.currentTimeMillis ();
+                    job.set ("$metadata", "seed", seed);
+                }
 
                 String e = job.get ("$metadata", "backend", "internal", "event");
                 int                      eventMode = Simulator.DURING;
