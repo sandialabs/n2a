@@ -1383,6 +1383,8 @@ public class EquationSet implements Comparable<EquationSet>
                 {
                     add (vo);
                     vo.equations = new TreeSet<EquationEntry> ();
+                    vo.reference = new VariableReference ();
+                    vo.reference.variable = vo;
                     found = vo;
                 }
                 found.addDependencyOn (last);
