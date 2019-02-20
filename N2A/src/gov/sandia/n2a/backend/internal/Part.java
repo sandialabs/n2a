@@ -145,7 +145,6 @@ public class Part extends Instance
         // Initialize variables
         // Note that some valuesObject entries could be left null. This is OK, because Instance.get() will return
         // a zero-equivalent value if it finds null.
-        if (bed.liveStorage == InternalBackendData.LIVE_STORED) set (bed.live, new Scalar (1));  // force $live to be set before anything else
         for (Variable v : bed.localInit)
         {
             Type result = v.eval (temp);
@@ -153,6 +152,7 @@ public class Part extends Instance
             if (v.reference.variable == v) temp.setFinal (v, result);
             else                           temp.applyResult (v, result); // External reference, so need to do proper combining operation, just like regular update.
         }
+        if (bed.liveStorage == InternalBackendData.LIVE_STORED) set (bed.live, new Scalar (1));
         if (bed.lastT != null) temp.setFinal (bed.lastT, new Scalar (simulator.currentEvent.t));
         if (bed.type != null) temp.setFinal (bed.type, new Scalar (0));
 

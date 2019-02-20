@@ -1201,10 +1201,21 @@ public class EquationSet implements Comparable<EquationSet>
             s.addSpecials ();
         }
 
-        setInit (0);     // force $init to exist
-        setConnect (0);  // and $connect
+        // Force phase indicators to exist.
+        setConnect (0);
+        setInit    (0);
+        Variable v = new Variable ("$live", 0);  // $live does not require a set method, so create it directly
+        if (add (v))
+        {
+            v.unit = AbstractUnit.ONE;
+            v.addAttribute ("constant");  // default. Actual values should be set by setAttributeLive()
+            EquationEntry e = new EquationEntry (v, "");
+            e.expression = new Constant (new Scalar (1));
+            e.expression.unit = AbstractUnit.ONE;
+            v.add (e);
+        }
 
-        Variable v = new Variable ("$t", 0);
+        v = new Variable ("$t", 0);
         if (add (v))
         {
             v.unit = UnitValue.seconds;
@@ -1235,17 +1246,6 @@ public class EquationSet implements Comparable<EquationSet>
                     catch (Exception parseError2) {} // This exception should never happen. We simply want to silence Java about it.
                 }
             }
-        }
-
-        v = new Variable ("$live", 0);  // $live functions much the same as $init or $connect
-        if (add (v))
-        {
-            v.unit = AbstractUnit.ONE;
-            v.addAttribute ("constant");  // default. Actual values should be set by setAttributeLive()
-            EquationEntry e = new EquationEntry (v, "");
-            e.expression = new Constant (new Scalar (1));
-            e.expression.unit = AbstractUnit.ONE;
-            v.add (e);
         }
 
         if (connectionBindings == null  ||  connected)  // Either a compartment, or a connection that also happens to be the endpoint of another connection.

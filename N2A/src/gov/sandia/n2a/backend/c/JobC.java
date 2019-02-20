@@ -2957,59 +2957,53 @@ public class JobC extends Thread
         }
 
         // Unit getP
-        if (s.connectionBindings != null)
+        if (bed.p != null  &&  s.connectionBindings != null)  // Only connections need to provide an accessor
         {
-            if (bed.p != null)
+            result.append (T + " " + ns + "getP ()\n");
+            result.append ("{\n");
+            s.setConnect (1);
+            if (! bed.p.hasAttribute ("constant"))
             {
-                result.append (T + " " + ns + "getP ()\n");
-                result.append ("{\n");
-                s.setConnect (1);
-                if (! bed.p.hasAttribute ("constant"))
+                // Generate any temporaries needed by $p
+                for (Variable t : s.variables)
                 {
-                    // Generate any temporaries needed by $p
-                    for (Variable t : s.variables)
+                    if (t.hasAttribute ("temporary")  &&  bed.p.dependsOn (t) != null)
                     {
-                        if (t.hasAttribute ("temporary")  &&  bed.p.dependsOn (t) != null)
-                        {
-                            multiconditional (t, context, "  ");
-                        }
+                        multiconditional (t, context, "  ");
                     }
-                    multiconditional (bed.p, context, "  ");  // $p is always calculated, because we are in a pseudo-init phase
                 }
-                result.append ("  return " + resolve (bed.p.reference, context, false) + ";\n");
-                s.setConnect (0);
-                result.append ("}\n");
-                result.append ("\n");
+                multiconditional (bed.p, context, "  ");  // $p is always calculated, because we are in a pseudo-init phase
             }
+            result.append ("  return " + resolve (bed.p.reference, context, false) + ";\n");
+            s.setConnect (0);
+            result.append ("}\n");
+            result.append ("\n");
         }
 
         // Unit getXYZ
-        if (s.connectionBindings == null)  // Connections can also have $xyz, but only compartments need to provide an accessor.
+        if (bed.xyz != null  &&  s.connected)  // Connection targets need to provide an accessor.
         {
-            if (bed.xyz != null)
+            result.append ("void " + ns + "getXYZ (MatrixFixed<" + T + ",3,1> & xyz)\n");
+            result.append ("{\n");
+            // $xyz is either stored, "temporary", or "constant"
+            // If "temporary", then we compute it on the spot.
+            // If "constant", then we use the static matrix created during variable analysis
+            // If stored, then simply copy into the return value.
+            if (bed.xyz.hasAttribute ("temporary"))
             {
-                result.append ("void " + ns + "getXYZ (MatrixFixed<" + T + ",3,1> & xyz)\n");
-                result.append ("{\n");
-                // $xyz is either stored, "temporary", or "constant"
-                // If "temporary", then we compute it on the spot.
-                // If "constant", then we use the static matrix created during variable analysis
-                // If stored, then simply copy into the return value.
-                if (bed.xyz.hasAttribute ("temporary"))
+                // Generate any temporaries needed by $xyz
+                for (Variable t : s.variables)
                 {
-                    // Generate any temporaries needed by $xyz
-                    for (Variable t : s.variables)
+                    if (t.hasAttribute ("temporary")  &&  bed.xyz.dependsOn (t) != null)
                     {
-                        if (t.hasAttribute ("temporary")  &&  bed.xyz.dependsOn (t) != null)
-                        {
-                            multiconditional (t, context, "    ");
-                        }
+                        multiconditional (t, context, "    ");
                     }
-                    multiconditional (bed.xyz, context, "    ");
                 }
-                result.append ("  xyz = " + resolve (bed.xyz.reference, context, false) + ";\n");
-                result.append ("}\n");
-                result.append ("\n");
+                multiconditional (bed.xyz, context, "    ");
             }
+            result.append ("  xyz = " + resolve (bed.xyz.reference, context, false) + ";\n");
+            result.append ("}\n");
+            result.append ("\n");
         }
 
         // Unit events
@@ -3424,15 +3418,29 @@ public class JobC extends Thread
             // Best approach is to deep-copy the equation set and optimize for each execution phase.
             // In that case, the phase indicator will be optimized away completely, leaving only an
             // unconditional equation.
-            if (init  &&  e.ifString.equals ("$init"))
+            if (init)
             {
-                defaultEquation = e;
-                break;
+                if (e.ifString.equals ("$init"))
+                {
+                    defaultEquation = e;
+                    break;
+                }
             }
-            if (connect  &&  e.ifString.equals ("$connect"))
+            else if (connect)
             {
-                defaultEquation = e;
-                break;
+                if (e.ifString.equals ("$connect"))
+                {
+                    defaultEquation = e;
+                    break;
+                }
+            }
+            else
+            {
+                if (e.ifString.equals ("$live"))  // Obscure case: explicit $live takes precedence over empty condition.
+                {
+                    defaultEquation = e;
+                    break;
+                }
             }
             if (e.ifString.isEmpty ()) defaultEquation = e;
         }
@@ -3456,18 +3464,22 @@ public class JobC extends Thread
             if (e == defaultEquation) continue;  // Must skip the default equation, as it will be emitted last.
 
             // Skip cases where the condition will never fire.
-            if (init)
-            {
-                if (e.ifString.isEmpty ()) continue;
-                if (e.ifString.equals ("$connect")) continue;
-            }
-            else if (connect)
+            // TODO: better to optimize these out. See comment above on selecting default equation.
+            if (connect)
             {
                 if (e.ifString.isEmpty ()) continue;
                 if (e.ifString.equals ("$init")) continue;
+                if (e.ifString.equals ("$live")) continue;
             }
-            else
+            else if (init)
             {
+                if (e.ifString.isEmpty ()) continue;
+                if (e.ifString.equals ("$connect")) continue;
+                if (e.ifString.equals ("$live")) continue;
+            }
+            else  // live
+            {
+                if (e.ifString.isEmpty ()  &&  defaultEquation != null) continue;  // Obscure case: an explicit $live overrode the empty condition.
                 if (e.ifString.equals ("$connect")) continue;
                 if (e.ifString.equals ("$init")) continue;
             }
@@ -3951,6 +3963,13 @@ public class JobC extends Thread
     public String resolve (VariableReference r, RendererC context, boolean lvalue, String base, boolean logical)
     {
         if (r == null  ||  r.variable == null) return "unresolved";
+
+        // Because $live has some rather complex access rules, take special care to ensure
+        // that it always returns false when either $connect or $init are true.
+        if (r.variable.name.equals ("$live")  &&  r.variable.container == context.part)
+        {
+            if (context.part.getConnect ()  ||  context.part.getInit ()) return "0";
+        }
 
         if (r.variable.hasAttribute ("constant"))
         {

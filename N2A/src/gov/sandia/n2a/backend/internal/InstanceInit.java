@@ -21,6 +21,7 @@ public class InstanceInit extends InstanceTemporaries
     public Type get (Variable v)
     {
         if (v == bed.init) return new Scalar (1);
+        if (v == bed.live) return new Scalar (0);
         return super.get (v);
     }
 }
