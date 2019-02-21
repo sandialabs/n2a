@@ -80,23 +80,30 @@ public class AddAnnotation extends Undoable
             // Determine prefix
             prefix = "";
             String[] names = name.split ("\\.");
-            for (String n : names)
+            if (mparent == null)
             {
-                prefix += "." + n;
-                mparent = mparent.child (n);
-                if (mparent == null) break;
+                prefix = names[0];
             }
-            prefix = prefix.substring (1);
-
-            // Ensure that last path element is unique
-            if (mparent != null)
+            else
             {
-                int last = names.length - 1;
-                names[last] = uniqueName (mparent, names[last], true);
-                name = "";
-                for (String n : names) name += "." + n;
-                name = name.substring (1);
-                prefix = name;
+                for (String n : names)
+                {
+                    prefix += "." + n;
+                    mparent = mparent.child (n);
+                    if (mparent == null) break;
+                }
+                prefix = prefix.substring (1);
+
+                // Ensure that last path element is unique
+                if (mparent != null)
+                {
+                    int last = names.length - 1;
+                    names[last] = uniqueName (mparent, names[last], true);
+                    name = "";
+                    for (String n : names) name += "." + n;
+                    name = name.substring (1);
+                    prefix = name;
+                }
             }
 
             nameIsGenerated = false;

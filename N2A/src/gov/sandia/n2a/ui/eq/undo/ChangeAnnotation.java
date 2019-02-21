@@ -49,7 +49,7 @@ public class ChangeAnnotation extends Undoable
         savedTree = new MVolatile ();
         if (node.folded.isFromTopDocument ()) savedTree.merge (node.folded.getSource ());
 
-        if (nameBefore.equals (nameAfter)) prefixBefore = "";  // In this, prefixBefore is actually ignored.
+        if (nameBefore.equals (nameAfter)) prefixBefore = "";  // In this case, prefixBefore is actually ignored.
         else                               prefixBefore = nameBefore.split ("\\.")[0];
 
         prefixAfter = "";
