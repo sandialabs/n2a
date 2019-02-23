@@ -124,10 +124,10 @@ public class AddAnnotation extends Undoable
     public void undo ()
     {
         super.undo ();
-        destroy (path, false, name, prefix, createSubtree);
+        destroy (path, false, name, prefix);
     }
 
-    public static void destroy (List<String> path, boolean canceled, String name, String prefix, MNode createSubtree)
+    public static void destroy (List<String> path, boolean canceled, String name, String prefix)
     {
         // Retrieve created node
         NodeBase parent = NodeBase.locateNode (path);
@@ -142,7 +142,7 @@ public class AddAnnotation extends Undoable
         MPart mparent = parent.source;
         if (parent instanceof NodePart  ||  parent instanceof NodeVariable) mparent = (MPart) mparent.child ("$metadata");
         else if (parent instanceof NodeAnnotation) mparent = ((NodeAnnotation) parent).folded;
-        // else parent is a NodeAnnotations, which can be used directly.
+        // else parent is a NodeAnnotations, so mparent is $metadata, which should be used directly.
 
         boolean killBlock = false;
         if (! prefix.isEmpty ())
@@ -202,7 +202,7 @@ public class AddAnnotation extends Undoable
         MPart mparent = parent.source;
         if (parent instanceof NodePart  ||  parent instanceof NodeVariable) mparent = (MPart) mparent.childOrCreate ("$metadata");
         else if (parent instanceof NodeAnnotation) mparent = ((NodeAnnotation) parent).folded;
-        // else parent is a NodeAnnotations, which can be used directly.
+        // else parent is a NodeAnnotations, so mparent is $metadata, which can be used directly.
 
         // For a simple add, name has only one path element. However, if a ChangeAnnotation was
         // merged into this, then the name may have several path elements.
@@ -219,16 +219,13 @@ public class AddAnnotation extends Undoable
         NodeContainer container = (NodeContainer) parent;
         if (parent instanceof NodePart)  // If this is a part, then display special block.
         {
-            if (mparent.size () == 0)  // empty implies the node is absent
+            container = (NodeContainer) parent.child ("$metadata");
+            if (container == null)
             {
                 container = new NodeAnnotations (mparent);
                 model.insertNodeIntoUnfiltered (container, parent, index);
                 // TODO: update order?
                 index = 0;
-            }
-            else  // the node is present, so retrieve it
-            {
-                container = (NodeContainer) parent.child ("$metadata");
             }
         }
 
@@ -266,21 +263,29 @@ public class AddAnnotation extends Undoable
         return createdNode;
     }
 
+    /**
+        Returns the closest node that contains the given name.
+    **/
     public static NodeBase resolve (NodeBase container, String name)
     {
         int count = container.getChildCount ();
         if (count > 0)
         {
+            String[] names = name.split ("\\.");
             for (int i = 0; i < count; i++)
             {
                 NodeBase a = (NodeBase) container.getChildAt (i);  // unfiltered
                 if (! (a instanceof NodeAnnotation)) continue;  // For example, an equation at the same level as annotation under a variable.
                 String key = ((NodeAnnotation) a).key ();
-                if (key.startsWith (name)) return a;
-                if (name.startsWith (key))
+                String[] keys = key.split ("\\.");
+                int length = Math.min (names.length, keys.length);
+                int j = 0;
+                for (; j < length; j++) if (! names[j].equals (keys[j])) break;
+                if (j > 0)  // At least one element of path matched
                 {
-                    String suffix = name.substring (key.length ());
-                    if (suffix.startsWith (".")) return resolve (a, suffix.substring (1));
+                    if (j < length  ||  length == names.length) return a;  // Partial match, or name is fully matched.
+                    // key is fully matched, but some suffix of name remains, so keep searching in sub-node.
+                    return resolve (a, name.substring (key.length () + 1));  // The +1 removes the next dot in the path
                 }
             }
         }

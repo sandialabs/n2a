@@ -14,6 +14,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
+import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 
 public class DeleteAnnotation extends Undoable
@@ -29,11 +30,30 @@ public class DeleteAnnotation extends Undoable
     public DeleteAnnotation (NodeAnnotation node, boolean canceled)
     {
         NodeBase container = (NodeBase) node.getParent ();
-        path          = container.getKeyPath ();
         index         = container.getIndex (node);
         this.canceled = canceled;
         name          = node.key ();
         prefix        = name.split ("\\.")[0];
+
+        if (container instanceof NodeAnnotations)
+        {
+            if (container.getChildCount () == 1)  // $metadata node that will go away
+            {
+                NodeBase part = (NodeBase) container.getParent ();
+                index = part.getIndex (container);
+            }
+        }
+        else if (container instanceof NodeAnnotation)
+        {
+            if (container.getChildCount () == 2  &&  ((NodeAnnotation) container).folded.get ().isEmpty ())  // Container will get folded into grandparent.
+            {
+                String key = ((NodeAnnotation) container).key ();
+                name   = key + "." + name;
+                prefix = key + "." + prefix;
+                container = (NodeBase) container.getParent ();
+            }
+        }
+        path = container.getKeyPath ();
 
         savedSubtree = new MVolatile ();
         savedSubtree.merge (node.folded.getSource ());
@@ -48,7 +68,7 @@ public class DeleteAnnotation extends Undoable
     public void redo ()
     {
         super.redo ();
-        AddAnnotation.destroy (path, canceled, name, prefix, savedSubtree);
+        AddAnnotation.destroy (path, canceled, name, prefix);
     }
 
     public boolean replaceEdit (UndoableEdit edit)

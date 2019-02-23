@@ -42,14 +42,14 @@ public class ChangeAnnotation extends Undoable
         path = parent.getKeyPath ();
 
         nameBefore  = node.key ();
-        valueBefore = node.source.get ();
+        valueBefore = node.folded.get ();
         this.nameAfter  = nameAfter;
         this.valueAfter = valueAfter;
 
         savedTree = new MVolatile ();
         if (node.folded.isFromTopDocument ()) savedTree.merge (node.folded.getSource ());
 
-        if (nameBefore.equals (nameAfter)) prefixBefore = "";  // In this case, prefixBefore is actually ignored.
+        if (nameBefore.equals (nameAfter)) prefixBefore = "";  // In this case, prefixBefore is ignored.
         else                               prefixBefore = nameBefore.split ("\\.")[0];
 
         prefixAfter = "";
@@ -59,16 +59,24 @@ public class ChangeAnnotation extends Undoable
             prefixAfter = ((NodeAnnotation) prefixNode).key () + "." + prefixAfter;
             prefixNode = (NodeBase) prefixNode.getParent ();
         }
-        if (prefixAfter.endsWith (".")) prefixAfter = prefixAfter.substring (0, prefixAfter.length () - 1);
-        if (prefixAfter.length () >= nameAfter.length ())  // The entire destination path already exists.
+        if (! prefixAfter.isEmpty ()) prefixAfter = prefixAfter.substring (0, prefixAfter.length () - 1);
+        String[] nameAfters   = nameAfter.  split ("\\.");
+        String[] prefixAfters = prefixAfter.split ("\\.");
+        prefixAfter = "";
+        int length = Math.min (nameAfters.length, prefixAfters.length);
+        int i = 0;
+        for (; i < length; i++)
+        {
+            if (! nameAfters[i].equals (prefixAfters[i])) break;
+            prefixAfter += "." + nameAfters[i];
+        }
+        if (i == nameAfters.length)  // The entire destination path already exists.
         {
             prefixAfter = "";  // Indicate that undo() should not to clear any nodes.
         }
-        else
+        else  // Only part of the destination path exists, so note the first path element that does not already exist.
         {
-            if (! prefixAfter.isEmpty ()) prefixAfter += ".";
-            String suffix = nameAfter.substring (prefixAfter.length ());
-            prefixAfter += suffix.split ("\\.")[0];
+            prefixAfter = (prefixAfter + "." + nameAfters[i]).substring (1);
         }
     }
 
@@ -141,8 +149,8 @@ public class ChangeAnnotation extends Undoable
         NodeBase parent    = NodeBase.locateNode (path);
         NodeBase node      = AddAnnotation.resolve (parent, nameAfter);
         NodeBase container = (NodeBase) node.getParent ();
-        if (   container != parent  &&  container.getChildCount () == 2  // node has a sibling
-            && ! prefixAfter.isEmpty ()  // node will be deleted
+        if (   container != parent  &&  container.getChildCount () == 2  // node has exactly one sibling
+            && ! prefixAfter.isEmpty ()  // node will be deleted during undo
             && container instanceof NodeAnnotation  &&  ((NodeAnnotation) container).folded.get ().isEmpty ())  // sibling can be folded back into container
         {
             // Path to container can change, so we need to select a higher node where the path will remain constant.

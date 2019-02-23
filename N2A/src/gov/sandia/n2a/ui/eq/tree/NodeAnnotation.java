@@ -240,20 +240,26 @@ public class NodeAnnotation extends NodeContainer
             }
             else
             {
-                // We don't want to overwrite a node that has already been defined in the top document.
-                // However, if it is part of folded path, we can define a new non-empty value for it.
-                MPart mparent = source.parent ();
-                MPart partAfter = mparent;
+                // If the first name along the new path matches the first name along the old path,
+                // then this is merely a rename internal the current node, which is allowed.
                 String[] names = name.split ("\\.");
-                for (String n : names)
+                String[] oldNames = oldName.split ("\\.");
+                if (! names[0].equals (oldNames[0]))
                 {
-                    partAfter = (MPart) partAfter.child (n);
-                    if (partAfter == null) break;
-                }
-                if (   partAfter != null  &&  partAfter.isFromTopDocument ()
-                    && (source.size () > 0  ||  partAfter.size () != 1  ||  ! partAfter.get ().isEmpty ()))
-                {
-                    name = oldName;
+                    // We don't want to overwrite a node that has already been defined in the top document.
+                    // However, if it is part of folded path, we can define a new non-empty value for it.
+                    MPart mparent = source.parent ();
+                    MPart partAfter = mparent;
+                    for (String n : names)
+                    {
+                        partAfter = (MPart) partAfter.child (n);
+                        if (partAfter == null) break;
+                    }
+                    if (   partAfter != null  &&  partAfter.isFromTopDocument ()
+                        && (source.size () > 0  ||  partAfter.size () != 1  ||  ! partAfter.get ().isEmpty ()))
+                    {
+                        name = oldName;
+                    }
                 }
             }
         }
