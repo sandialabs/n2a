@@ -140,11 +140,8 @@ public class NodePart extends NodeContainer
     @Override
     public boolean visible (int filterLevel)
     {
-        if (filterLevel <= FilteredTreeModel.ALL)   return true;
         if (filterLevel >= FilteredTreeModel.LOCAL) return source.isFromTopDocument ();
-        // FilteredTreeModel.PARAM ...
-        if (children != null  &&  children.size () > 0  &&  (filtered == null  ||  filtered.size () > 0)) return true;  // We have subnodes, and at least some of them are visible (which can only happen at this point if they are public).
-        return source.child ("$metadata", "param") != null;
+        return true;  // Almost always visible, except for most stringent filter mode.
     }
 
     @Override
