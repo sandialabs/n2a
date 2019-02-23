@@ -26,6 +26,7 @@ import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
+import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
 import gov.sandia.n2a.ui.eq.undo.Move;
@@ -78,6 +79,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
+import javax.swing.ToolTipManager;
 import javax.swing.TransferHandler;
 import javax.swing.event.CellEditorListener;
 import javax.swing.event.ChangeEvent;
@@ -213,6 +215,22 @@ public class PanelEquationTree extends JPanel
                 if (value == null) return "";
                 return ((NodeBase) value).getText (expanded, false);
             }
+
+            @Override
+            public String getToolTipText (MouseEvent e)
+            {
+                TreePath path = getPathForLocation (e.getX (), e.getY ());
+                if (path == null) return null;
+                NodeBase node = (NodeBase) path.getLastPathComponent ();
+                if (node instanceof NodeVariable)
+                {
+                    MPart source = node.source;
+                    String notes = source.get ("$metadata", "notes");
+                    if (notes.isEmpty ()) notes = source.get ("$metadata", "note");
+                    if (! notes.isEmpty ()) return notes;
+                }
+                return null;
+            }
         };
 
         tree.setExpandsSelectedPaths (true);
@@ -222,6 +240,7 @@ public class PanelEquationTree extends JPanel
         tree.setInvokesStopCellEditing (true);  // auto-save current edits, as much as possible
         tree.setDragEnabled (true);
         tree.setToggleClickCount (0);  // Disable expand/collapse on double-click
+        ToolTipManager.sharedInstance ().registerComponent (tree);
 
         EquationTreeCellRenderer renderer = new EquationTreeCellRenderer ();
         tree.setCellRenderer (renderer);
