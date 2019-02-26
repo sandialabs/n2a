@@ -25,7 +25,6 @@ import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Split;
-import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Input;
@@ -50,7 +49,6 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.NavigableSet;
 import java.util.Set;
@@ -494,63 +492,6 @@ public class JobC extends Thread
         bed.analyzeLastT (s);
     }
 
-    /**
-        Optimizes a given subset of variables with the assumption that $init=1.
-        Starts by replacing the variables with deep copies so that any changes do not
-        damage the original equation set.
-    **/
-    public static void simplifyInit (List<Variable> list)
-    {
-        Variable.deepCopy (list);
-
-        class ReplaceConstants extends Transformer
-        {
-            public Variable self;
-            public Operator transform (Operator op)
-            {
-                if (op instanceof AccessVariable)
-                {
-                    AccessVariable av = (AccessVariable) op;
-                    Operator result = null;
-                    if      (av.name.equals ("$init"   ))   result = new Constant (1);
-                    else if (av.name.equals ("$connect"))   result = new Constant (0);
-                    else if (av.reference.variable == self) result = new Constant (0);  // Self-reference is always 0 at init time, but reference to other variables is not, because they may be initialized before this one.
-                    if (result != null)
-                    {
-                        result.parent = av.parent;
-                        return result;
-                    }
-                }
-                return null;
-            }
-        };
-        ReplaceConstants replace = new ReplaceConstants ();
-        for (Variable v : list)
-        {
-            replace.self = v;
-            v.transform (replace);
-        }
-
-        boolean changed = true;
-        while (changed)
-        {
-            changed = false;
-            Iterator<Variable> it = list.iterator ();
-            while (it.hasNext ())
-            {
-                Variable v = it.next ();
-                if (v.simplify ()) changed = true;
-                if (v.equations.isEmpty ()  ||  v.hasAttribute ("temporary")  &&  ! v.hasUsers ())
-                {
-                    it.remove ();
-                    changed = true;
-                }
-            }
-        }
-
-        EquationSet.determineOrderInit (list);
-    }
-
     public void generateCode (Path source) throws Exception
     {
         StringBuilder result = new StringBuilder ();
@@ -636,6 +577,13 @@ public class JobC extends Thread
             public boolean global;
             public boolean visit (Operator op)
             {
+                if (op instanceof BuildMatrix)
+                {
+                    BuildMatrix m = (BuildMatrix) op;
+                    m.name = "Matrix" + matrixNames.size ();
+                    matrixNames.put (m, m.name);
+                    return false;
+                }
                 if (op instanceof Constant)
                 {
                     Constant constant = (Constant) op;
@@ -1365,7 +1313,8 @@ public class JobC extends Thread
         {
             result.append ("  " + type (bed.n) + " " + mangle (bed.n) + ";\n");
         }
-        simplifyInit (bed.globalInit);
+        s.simplify ("$init", bed.globalInit);
+        EquationSet.determineOrderInit (bed.globalInit);
         List<Variable> buffered = bed.globalBuffered;
         bed.globalBuffered = new ArrayList<Variable> ();  // Trick multiconditional() and its subroutines into directly updating members.
         for (Variable v : bed.globalInit)
@@ -1456,6 +1405,7 @@ public class JobC extends Thread
             {
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
             }
+            s.simplify ("$live", bed.globalUpdate);
             for (Variable v : bed.globalUpdate)
             {
                 multiconditional (v, context, "  ");
@@ -1582,6 +1532,7 @@ public class JobC extends Thread
             {
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
             }
+            s.simplify ("$live", bed.globalDerivativeUpdate);  // This is unlikely to make any difference. Just being thorough before call to multiconditional().
             for (Variable v : bed.globalDerivativeUpdate)
             {
                 multiconditional (v, context, "  ");
@@ -2193,9 +2144,10 @@ public class JobC extends Thread
             {
                 result.append ("  lastT = Simulator<" + T + ">::instance.currentEvent->t;\n");
             }
+            s.simplify ("$init", bed.localInit);
+            EquationSet.determineOrderInit (bed.localInit);
             //   The following code tricks multiconditional() into treating all variables
             //   as unbuffered and non-accumulating.
-            simplifyInit (bed.localInit);
             List<Variable> buffered = bed.localBuffered;
             bed.localBuffered = new ArrayList<Variable> ();
             for (Variable v : bed.localInit)
@@ -2313,6 +2265,7 @@ public class JobC extends Thread
             {
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
             }
+            s.simplify ("$live", bed.localUpdate);
             for (Variable v : bed.localUpdate)
             {
                 multiconditional (v, context, "  ");
@@ -2514,15 +2467,15 @@ public class JobC extends Thread
                 {
                     if (bed.p.hasAttribute ("temporary"))
                     {
-                        // Generate any temporaries needed by $p
-                        for (Variable t : s.variables)
+                        // Assemble a minimal set of expressions to evaluate $p
+                        List<Variable> list = new ArrayList<Variable> ();
+                        for (Variable t : s.variables) if (t.hasAttribute ("temporary")  &&  bed.p.dependsOn (t) != null) list.add (t);
+                        list.add (bed.p);
+                        s.simplify ("$live", list, bed.p);
+                        for (Variable v : list)
                         {
-                            if (t.hasAttribute ("temporary")  &&  bed.p.dependsOn (t) != null)
-                            {
-                                multiconditional (t, context, "  ");
-                            }
+                            multiconditional (v, context, "  ");
                         }
-                        multiconditional (bed.p, context, "  ");
                     }
 
                     result.append ("  if (" + mangle ("$p") + " <= 0  ||  " + mangle ("$p") + " < " + context.print (1, bed.p.exponent) + "  &&  pow (" + mangle ("$p") + ", " + resolve (bed.dt.reference, context, false));
@@ -2586,6 +2539,7 @@ public class JobC extends Thread
             {
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
             }
+            s.simplify ("$live", bed.localDerivativeUpdate);
             for (Variable v : bed.localDerivativeUpdate)
             {
                 multiconditional (v, context, "  ");
@@ -2858,14 +2812,15 @@ public class JobC extends Thread
                     result.append ("    {\n");
                     if (project.hasAttribute ("temporary"))  // it could also be "constant", but no other type
                     {
-                        for (Variable t : s.variables)
+                        // Assemble a minimal set of expressions to evaluate $project
+                        List<Variable> list = new ArrayList<Variable> ();
+                        for (Variable t : s.variables) if (t.hasAttribute ("temporary")  &&  project.dependsOn (t) != null) list.add (t);
+                        list.add (project);
+                        s.simplify ("$connect", list, project);
+                        for (Variable v : list)
                         {
-                            if (t.hasAttribute ("temporary")  &&  project.dependsOn (t) != null)
-                            {
-                                multiconditional (t, context, "      ");
-                            }
+                            multiconditional (v, context, "      ");
                         }
-                        multiconditional (project, context, "      ");
                     }
                     result.append ("      xyz = " + resolve (project.reference, context, false) + ";\n");
                     result.append ("      break;\n");
@@ -2964,15 +2919,15 @@ public class JobC extends Thread
             s.setConnect (1);
             if (! bed.p.hasAttribute ("constant"))
             {
-                // Generate any temporaries needed by $p
-                for (Variable t : s.variables)
+                // Assemble a minimal set of expressions to evaluate $p
+                List<Variable> list = new ArrayList<Variable> ();
+                for (Variable t : s.variables) if (t.hasAttribute ("temporary")  &&  bed.p.dependsOn (t) != null) list.add (t);
+                list.add (bed.p);
+                s.simplify ("$connect", list, bed.p);
+                for (Variable v : list)
                 {
-                    if (t.hasAttribute ("temporary")  &&  bed.p.dependsOn (t) != null)
-                    {
-                        multiconditional (t, context, "  ");
-                    }
+                    multiconditional (v, context, "  ");
                 }
-                multiconditional (bed.p, context, "  ");  // $p is always calculated, because we are in a pseudo-init phase
             }
             result.append ("  return " + resolve (bed.p.reference, context, false) + ";\n");
             s.setConnect (0);
@@ -2991,15 +2946,15 @@ public class JobC extends Thread
             // If stored, then simply copy into the return value.
             if (bed.xyz.hasAttribute ("temporary"))
             {
-                // Generate any temporaries needed by $xyz
-                for (Variable t : s.variables)
+                // Assemble a minimal set of expressions to evaluate $xyz
+                List<Variable> list = new ArrayList<Variable> ();
+                for (Variable t : s.variables) if (t.hasAttribute ("temporary")  &&  bed.xyz.dependsOn (t) != null) list.add (t);
+                list.add (bed.xyz);
+                s.simplify ("$live", list, bed.xyz);  // evaluate in $live phase, because endpoints already exist when connection is evaluated.
+                for (Variable v : list)
                 {
-                    if (t.hasAttribute ("temporary")  &&  bed.xyz.dependsOn (t) != null)
-                    {
-                        multiconditional (t, context, "    ");
-                    }
+                    multiconditional (v, context, "    ");
                 }
-                multiconditional (bed.xyz, context, "    ");
             }
             result.append ("  xyz = " + resolve (bed.xyz.reference, context, false) + ";\n");
             result.append ("}\n");
@@ -3017,6 +2972,7 @@ public class JobC extends Thread
             {
                 result.append ("    case " + et.valueIndex + ":\n");
                 result.append ("    {\n");
+                s.simplify ("$live", et.dependencies);
                 for (Variable v : et.dependencies)
                 {
                     multiconditional (v, context, "      ");
@@ -3402,6 +3358,10 @@ public class JobC extends Thread
         result.append (pad + "spike->t = event->t + delay;\n");
     }
 
+    /**
+        Emit the equations associated with a variable.
+        Assumes that phase indicators have already been factored out by simplify().
+    **/
     public void multiconditional (Variable v, RendererC context, String pad) throws Exception
     {
         boolean connect = context.part.getConnect ();
@@ -3412,38 +3372,7 @@ public class JobC extends Thread
 
         // Select the default equation
         EquationEntry defaultEquation = null;
-        for (EquationEntry e : v.equations)
-        {
-            // TODO: also handle $init==1, or any other equivalent expression
-            // Best approach is to deep-copy the equation set and optimize for each execution phase.
-            // In that case, the phase indicator will be optimized away completely, leaving only an
-            // unconditional equation.
-            if (init)
-            {
-                if (e.ifString.equals ("$init"))
-                {
-                    defaultEquation = e;
-                    break;
-                }
-            }
-            else if (connect)
-            {
-                if (e.ifString.equals ("$connect"))
-                {
-                    defaultEquation = e;
-                    break;
-                }
-            }
-            else
-            {
-                if (e.ifString.equals ("$live"))  // Obscure case: explicit $live takes precedence over empty condition.
-                {
-                    defaultEquation = e;
-                    break;
-                }
-            }
-            if (e.ifString.isEmpty ()) defaultEquation = e;
-        }
+        for (EquationEntry e : v.equations) if (e.ifString.isEmpty ()) defaultEquation = e;
 
         // Initialize static objects, and dump dynamic objects needed by conditions
         for (EquationEntry e : v.equations)
@@ -3462,27 +3391,6 @@ public class JobC extends Thread
         for (EquationEntry e : v.equations)
         {
             if (e == defaultEquation) continue;  // Must skip the default equation, as it will be emitted last.
-
-            // Skip cases where the condition will never fire.
-            // TODO: better to optimize these out. See comment above on selecting default equation.
-            if (connect)
-            {
-                if (e.ifString.isEmpty ()) continue;
-                if (e.ifString.equals ("$init")) continue;
-                if (e.ifString.equals ("$live")) continue;
-            }
-            else if (init)
-            {
-                if (e.ifString.isEmpty ()) continue;
-                if (e.ifString.equals ("$connect")) continue;
-                if (e.ifString.equals ("$live")) continue;
-            }
-            else  // live
-            {
-                if (e.ifString.isEmpty ()  &&  defaultEquation != null) continue;  // Obscure case: an explicit $live overrode the empty condition.
-                if (e.ifString.equals ("$connect")) continue;
-                if (e.ifString.equals ("$init")) continue;
-            }
 
             if (e.condition != null)
             {
@@ -3736,9 +3644,6 @@ public class JobC extends Thread
                     BuildMatrix m = (BuildMatrix) op;
                     int rows = m.getRows ();
                     int cols = m.getColumns ();
-
-                    m.name = "Matrix" + matrixNames.size ();
-                    matrixNames.put (m, m.name);
                     context.result.append (pad + "MatrixFixed<" + T + "," + rows + "," + cols + "> " + m.name + ";\n");
                     for (int r = 0; r < rows; r++)
                     {

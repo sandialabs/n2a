@@ -46,10 +46,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.NavigableSet;
 import java.util.PriorityQueue;
 import java.util.Set;
@@ -72,6 +72,7 @@ public class EquationSet implements Comparable<EquationSet>
     public MNode                               metadata;
     public List<Variable>                      ordered;
     public List<ArrayList<EquationSet>>        splits;                 // Enumeration of the $type splits this part can go through
+    public HashSet<EquationSet>                splitSources;           // Equation sets that might create an instance of this equation set via a $type split. Can include ourself.
     public boolean                             lethalN;                // our population could shrink
     public boolean                             lethalP;                // we could have a non-zero probability of dying in some cycle 
     public boolean                             lethalType;             // we can be killed by a part split
@@ -1466,7 +1467,8 @@ public class EquationSet implements Comparable<EquationSet>
             s.collectSplits ();
         }
 
-        if (splits == null) splits = new ArrayList<ArrayList<EquationSet>> ();
+        if (splits       == null) splits       = new ArrayList<ArrayList<EquationSet>> ();
+        if (splitSources == null) splitSources = new HashSet<EquationSet> ();
         for (Variable v : variables)
         {
             if (v.reference == null  ||  v.reference.variable == null  ||  ! v.reference.variable.name.equals ("$type")) continue;
@@ -1487,6 +1489,11 @@ public class EquationSet implements Comparable<EquationSet>
                 if (! container.splits.contains (split))
                 {
                     container.splits.add (split);
+                    for (EquationSet t : split)
+                    {
+                        if (t.splitSources == null) t.splitSources = new HashSet<EquationSet> ();
+                        t.splitSources.add (container);
+                    }
                 }
             }
         }
@@ -1689,16 +1696,8 @@ public class EquationSet implements Comparable<EquationSet>
         }
 
         // Are we the target of a $type split in another part which produces at least one offspring of this type?
-        Variable type = find (new Variable ("$type", 0));
-        if (type == null) return false;
-        for (Entry<Variable,Integer> u : type.uses.entrySet ())
-        {
-            EquationSet other = u.getKey ().container;
-            if (other == this) continue;  // Because the $type line can have dependencies on its own equation set, mainly through variables in the condition.
-            for (ArrayList<EquationSet> split : other.splits) if (split.contains (this)) return true;
-        }
-
-        return false;
+        int count = splitSources.size ();
+        return  count > 1  ||  count == 1  &&  ! splitSources.contains (this);
     }
 
     public boolean canGrow (EquationSet target)
@@ -2488,6 +2487,78 @@ public class EquationSet implements Comparable<EquationSet>
         queuePriority.addAll (list);
         list.clear ();
         for (Variable v = queuePriority.poll (); v != null; v = queuePriority.poll ()) list.add (v);
+    }
+
+    public void simplify (String phase, List<Variable> list)
+    {
+        simplify (phase, list, null);
+    }
+
+    /**
+        Optimizes a given subset of variables with the assumption that specified phase indicator is true.
+        Starts by replacing the variables with deep copies so that any changes do not
+        damage the original equation set.
+    **/
+    public void simplify (String phase, List<Variable> list, Variable bless)
+    {
+        Variable.deepCopy (list);
+        if (bless != null)
+        {
+            int i = list.indexOf (bless);
+            if (i >= 0) list.get (i).addUser (this);
+        }
+
+        boolean init        = phase.equals ("$init");
+        boolean splitTarget = ! splitSources.isEmpty ();
+
+        class ReplaceConstants extends Transformer
+        {
+            public Variable self;
+            public List<String> phases = Arrays.asList ("$connect", "$init", "$live");
+            public Operator transform (Operator op)
+            {
+                if (op instanceof AccessVariable)
+                {
+                    AccessVariable av = (AccessVariable) op;
+                    Operator result = null;
+                    if      (phase .equals   (av.name)) result = new Constant (1);
+                    else if (phases.contains (av.name)) result = new Constant (0);
+                    // Self-reference returns 0 at init time, but references to other variables may return nonzero
+                    // if they are initialized before this one. Self might also be initialized by a type split.
+                    // TODO: check if individual variable is target of split, not simply the equation set as a whole.
+                    else if (av.reference.variable == self  &&  init  &&  ! splitTarget) result = new Constant (0);
+                    if (result != null)
+                    {
+                        result.parent = av.parent;
+                        return result;
+                    }
+                }
+                return null;
+            }
+        };
+        ReplaceConstants replace = new ReplaceConstants ();
+        for (Variable v : list)
+        {
+            replace.self = v;
+            v.transform (replace);
+        }
+
+        boolean changed = true;
+        while (changed)
+        {
+            changed = false;
+            Iterator<Variable> it = list.iterator ();
+            while (it.hasNext ())
+            {
+                Variable v = it.next ();
+                if (v.simplify ()) changed = true;
+                if (v.equations.isEmpty ()  ||  v.hasAttribute ("temporary")  &&  ! v.hasUsers ())
+                {
+                    it.remove ();
+                    changed = true;
+                }
+            }
+        }
     }
 
     /**
