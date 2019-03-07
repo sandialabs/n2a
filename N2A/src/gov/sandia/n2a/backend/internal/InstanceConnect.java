@@ -22,6 +22,7 @@ public class InstanceConnect extends InstanceTemporaries
     {
         if (v == bed.connect) return new Scalar (1);
         if (v == bed.live   ) return new Scalar (0);
+        if (v == bed.dt     ) return new Scalar (((Part) wrapped.container).event.dt);  // Refer to container, because during connect phase, part has not yet been added to event.
         return super.get (v);
     }
 }
