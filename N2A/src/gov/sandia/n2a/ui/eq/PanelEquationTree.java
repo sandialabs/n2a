@@ -222,14 +222,21 @@ public class PanelEquationTree extends JPanel
                 TreePath path = getPathForLocation (e.getX (), e.getY ());
                 if (path == null) return null;
                 NodeBase node = (NodeBase) path.getLastPathComponent ();
-                if (node instanceof NodeVariable)
-                {
-                    MPart source = node.source;
-                    String notes = source.get ("$metadata", "notes");
-                    if (notes.isEmpty ()) notes = source.get ("$metadata", "note");
-                    if (! notes.isEmpty ()) return notes;
-                }
-                return null;
+                if (! (node instanceof NodeVariable)) return null;
+
+                MPart source = node.source;
+                String notes = source.get ("$metadata", "notes");
+                if (notes.isEmpty ()) notes = source.get ("$metadata", "note");
+                if (notes.isEmpty ()) return null;
+
+                int paneWidth = scrollPane.getWidth ();
+                FontMetrics fm = getFontMetrics (getFont ());
+                int notesWidth = fm.stringWidth (notes);
+                if (notesWidth < paneWidth) return notes;
+
+                paneWidth = Math.max (300, paneWidth);
+                notes = notes.replace ("\n", "<br>");
+                return "<html><p  width=\"" + paneWidth + "\">" + notes + "</p></html>";
             }
         };
 
