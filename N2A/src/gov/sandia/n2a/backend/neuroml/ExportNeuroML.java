@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -9,7 +9,7 @@ package gov.sandia.n2a.backend.neuroml;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.extpoints.Exporter;
 
-import java.io.File;
+import java.nio.file.Path;
 
 public class ExportNeuroML implements Exporter
 {
@@ -20,12 +20,12 @@ public class ExportNeuroML implements Exporter
     }
 
     @Override
-    public void export (MNode source, File destination)
+    public void export (MNode source, Path destination)
     {
         export (source, destination, false);
     }
 
-    public ExportJob export (MNode source, File destination, boolean forBackend)
+    public ExportJob export (MNode source, Path destination, boolean forBackend)
     {
         if (PluginNeuroML.partMap == null) PluginNeuroML.partMap = new PartMap ();
         if (PluginNeuroML.sequencer == null)

@@ -15,8 +15,9 @@ import gov.sandia.n2a.ui.eq.undo.AddDoc;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 public class ImportNeuroML implements Importer
 {
@@ -27,7 +28,7 @@ public class ImportNeuroML implements Importer
     }
 
     @Override
-    public void process (File source)
+    public void process (Path source)
     {
         if (PluginNeuroML.partMap == null) PluginNeuroML.partMap = new PartMap ();
 
@@ -76,13 +77,13 @@ public class ImportNeuroML implements Importer
     }
 
     @Override
-    public float isIn (File source)
+    public float isIn (Path source)
     {
-        String name = source.getName ();
+        String name = source.getFileName ().toString ();
         int lastDot = name.lastIndexOf ('.');
         if (lastDot >= 0  &&  name.substring (lastDot).equalsIgnoreCase (".nml")) return 1;
 
-        try (BufferedReader reader = new BufferedReader (new FileReader (source)))
+        try (BufferedReader reader = Files.newBufferedReader (source))
         {
             String line = reader.readLine ();
             if (line.startsWith ("<Lems")) return 1.0f;

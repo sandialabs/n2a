@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -150,7 +150,7 @@ public class PanelSearch extends JPanel
                     {
                         @SuppressWarnings("unchecked")
                         List<File> files = (List<File>) xferable.getTransferData (DataFlavor.javaFileListFlavor);
-                        for (File path : files) PanelEquationTree.importFile (path);
+                        for (File file : files) PanelEquationTree.importFile (file.toPath ());
                         return true;
                     }
                     catch (IOException | UnsupportedFlavorException e)

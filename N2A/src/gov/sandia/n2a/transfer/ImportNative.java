@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -16,6 +16,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 
 public class ImportNative implements Importer
 {
@@ -26,13 +27,13 @@ public class ImportNative implements Importer
     }
 
     @Override
-    public void process (File source)
+    public void process (Path source)
     {
-        try (BufferedReader reader = Files.newBufferedReader (source.toPath ()))
+        try (BufferedReader reader = Files.newBufferedReader (source))
         {
             MVolatile doc = new MVolatile ();
             Schema.readAll (doc, reader);
-            PanelModel.instance.undoManager.add (new AddDoc (source.getName (), doc));
+            PanelModel.instance.undoManager.add (new AddDoc (source.getFileName ().toString (), doc));
         }
         catch (IOException e)
         {
@@ -40,9 +41,9 @@ public class ImportNative implements Importer
     }
 
     @Override
-    public float isIn (File source)
+    public float isIn (Path source)
     {
-        try (BufferedReader reader = Files.newBufferedReader (source.toPath ()))
+        try (BufferedReader reader = Files.newBufferedReader (source))
         {
             String line = reader.readLine ();
             if (line.startsWith ("N2A.schema")) return 1;

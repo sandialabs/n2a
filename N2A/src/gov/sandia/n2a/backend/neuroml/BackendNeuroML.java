@@ -1,5 +1,5 @@
 /*
-Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -81,7 +81,7 @@ public class BackendNeuroML extends Backend
                 String inherit = job.get ("$inherit").replace ("\"", "");
                 MNode doc = AppData.models.child (inherit);
                 modelPath = jobDir.resolve ("model.nml");
-                ExportJob exportJob = PluginNeuroML.exporter.export (doc, modelPath.toFile (), true);
+                ExportJob exportJob = PluginNeuroML.exporter.export (doc, modelPath, true);
 
                 // Record metadata
                 if (! exportJob.duration.isEmpty ()) job.set ("$metadata", "duration", exportJob.duration);

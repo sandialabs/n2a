@@ -30,11 +30,11 @@ import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
 import systems.uom.ucum.internal.format.TokenException;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -71,8 +71,8 @@ import tec.uom.se.unit.Units;;
 public class ImportJob extends XMLutility
 {
     PartMap                     partMap;
-    LinkedList<File>            sources         = new LinkedList<File> ();
-    Set<File>                   alreadyIncluded = new HashSet<File> ();         // Similar to "sources", but keeps all history.
+    LinkedList<Path>            sources         = new LinkedList<Path> ();
+    Set<Path>                   alreadyIncluded = new HashSet<Path> ();         // Similar to "sources", but keeps all history.
     MNode                       models          = new MVolatile ();
     String                      modelName       = "";
     String                      primaryModel    = "";                           // A part tagged to be elevated to main model. When set, all other parts should be pushed out to independent models, and this one raised one level to assume the identity of the prime model.
@@ -98,7 +98,7 @@ public class ImportJob extends XMLutility
         for (Entry<Unit<?>,String> e : unitsNML.entrySet ()) ExpressionParser.namedUnits.put (e.getValue (), e.getKey ());
     }
 
-    public void process (File source)
+    public void process (Path source)
     {
         // Guard against repeat include
         if (alreadyIncluded.contains (source)) return;
@@ -114,7 +114,7 @@ public class ImportJob extends XMLutility
             factory.setIgnoringElementContentWhitespace (true);
             factory.setXIncludeAware (true);  // Doesn't seem to actually include other files, at least on the samples I've tried so far. Must be missing something.
             DocumentBuilder builder = factory.newDocumentBuilder ();
-            Document doc = builder.parse (source);
+            Document doc = builder.parse (source.toFile ());
 
             // Extract models
             process (doc);
@@ -154,13 +154,13 @@ public class ImportJob extends XMLutility
 
     public void neuroml (Node node)
     {
-        File source = sources.getLast ();
+        Path source = sources.getLast ();
         if (modelName.isEmpty ())
         {
             modelName = getAttribute (node, "id");
             if (modelName.isEmpty ())  // then get it from the filename
             {
-                modelName = source.getName ();
+                modelName = source.getFileName ().toString ();
                 int index = modelName.lastIndexOf ('.');
                 if (index > 0) modelName = modelName.substring (0, index);
             }
@@ -181,11 +181,11 @@ public class ImportJob extends XMLutility
             {
                 case "include":  // NeuroML include
                     // TODO: what if href actually references a web document?
-                    File nextSource = new File (source.getParentFile (), getAttribute (child, "href"));
+                    Path nextSource = source.getParent ().resolve (getAttribute (child, "href"));
                     process (nextSource);
                     break;
                 case "Include":  // LEMS include
-                    nextSource = new File (source.getParentFile (), getAttribute (child, "file"));
+                    nextSource = source.getParent ().resolve (getAttribute (child, "file"));
                     process (nextSource);
                     break;
 
@@ -2718,7 +2718,7 @@ public class ImportJob extends XMLutility
             public void finish ()
             {
                 // Resolve XPath to determine final location of output() statement, and identity of target variable.
-                Path variablePath = new Path (quantity);
+                XPath variablePath = new XPath (quantity);
                 variablePath.resolve (part);
                 MNode container = variablePath.container ();
                 if (container == null) return;
@@ -3150,7 +3150,7 @@ public class ImportJob extends XMLutility
         MNode            regime;
         int              nextRegimeIndex = 1;  // Never allocate regime 0, because that is the default initial value for all variables. We only want to enter an initial regime explicitly.
         Set<EventChild>  eventChildren   = new HashSet<EventChild> ();   // Events that try to reference a parent port. Attempt to resolve these in postprocessing.
-        List<Path>       paths           = new ArrayList<Path> ();
+        List<XPath>      paths           = new ArrayList<XPath> ();
         Set<String>      childInstances  = new HashSet<String> ();
 
         public ComponentType (MNode part)
@@ -3327,7 +3327,7 @@ public class ImportJob extends XMLutility
             String value = cleanupExpression (getAttributes (node, "value", "defaultValue"));
             if (value.isEmpty ()  &&  ! select.isEmpty ())
             {
-                Path variablePath = new Path (select);
+                XPath variablePath = new XPath (select);
                 variablePath.reduceTo = name;
                 variablePath.required = required.equals ("true");
                 variablePath.resolve (part);
@@ -3975,7 +3975,7 @@ public class ImportJob extends XMLutility
             pp.process (part);
 
             // Paths
-            for (Path path : paths)
+            for (XPath path : paths)
             {
                 String name = pp.mapName (path.reduceTo);
                 path.resolve (part);
@@ -4002,13 +4002,13 @@ public class ImportJob extends XMLutility
         }
     }
 
-    public class PathPart
+    public class XPathPart
     {
         public String partName;
         public String condition = "";
         public MNode  part;
 
-        public PathPart (String part)
+        public XPathPart (String part)
         {
             String[] pieces = part.split ("\\[", 2);
             partName = pieces[0];
@@ -4035,18 +4035,18 @@ public class ImportJob extends XMLutility
         }
     }
 
-    public class Path
+    public class XPath
     {
-        public List<PathPart> parts    = new ArrayList<PathPart> ();
-        public boolean        isDirect = true;  // Indicates that a direct reference is possible. Each element of the path must be a single subpart of the one above it.
+        public List<XPathPart> parts    = new ArrayList<XPathPart> ();
+        public boolean         isDirect = true;  // Indicates that a direct reference is possible. Each element of the path must be a single subpart of the one above it.
         // For reductions ...
-        public boolean        required;  // There must be at least one item in the reduction.
-        public String         reduceTo;  // Name of variable that receives the reduction.
+        public boolean         required;  // There must be at least one item in the reduction.
+        public String          reduceTo;  // Name of variable that receives the reduction.
 
-        public Path (String path)
+        public XPath (String path)
         {
             String[] pieces = path.split ("/");
-            for (String p : pieces) parts.add (new PathPart (p));
+            for (String p : pieces) parts.add (new XPathPart (p));
         }
 
         /**
@@ -4056,7 +4056,7 @@ public class ImportJob extends XMLutility
         {
             MNode current = root;
             int i = 0;
-            for (PathPart p : parts)
+            for (XPathPart p : parts)
             {
                 if (! p.condition.isEmpty ()) isDirect = false;
 
@@ -4159,7 +4159,7 @@ public class ImportJob extends XMLutility
             String up = "";
             for (int i = parts.size () - 2; i >= 0; i--)
             {
-                PathPart p = parts.get (i);
+                XPathPart p = parts.get (i);
                 String condition = p.condition;
                 if (! condition.isEmpty ())
                 {
@@ -4195,14 +4195,14 @@ public class ImportJob extends XMLutility
 
         public String target ()
         {
-            PathPart p = parts.get (parts.size () - 1);
+            XPathPart p = parts.get (parts.size () - 1);
             return p.partName;
         }
 
         public String directName ()
         {
             String result = "";
-            for (PathPart p : parts)
+            for (XPathPart p : parts)
             {
                 if (! result.isEmpty ()) result += ".";
                 if      (  p.partName.equals ("..")) result += "$up";
@@ -4216,7 +4216,7 @@ public class ImportJob extends XMLutility
             MNode source = root;
             for (int i = 0; i < parts.size () - 1; i++)
             {
-                PathPart p = parts.get (i);
+                XPathPart p = parts.get (i);
                 if (source.get (p.partName).startsWith ("connect(")) return;  // We only modify the variable if it does not go through a connection, that is, only if the variable is fully contained under us.
 
                 name = "$up." + name;

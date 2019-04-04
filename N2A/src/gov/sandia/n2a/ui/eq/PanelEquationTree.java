@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -54,6 +54,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
 import java.io.StringWriter;
+import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Enumeration;
@@ -997,7 +998,7 @@ public class PanelEquationTree extends JPanel
             // Do export
             if (result == JFileChooser.APPROVE_OPTION)
             {
-                File path = fc.getSelectedFile ();
+                Path path = fc.getSelectedFile ().toPath ();
                 ExporterFilter filter = (ExporterFilter) fc.getFileFilter ();
                 filter.exporter.export (record, path);
             }
@@ -1050,13 +1051,13 @@ public class PanelEquationTree extends JPanel
             // Do import
             if (result == JFileChooser.APPROVE_OPTION)
             {
-                File path = fc.getSelectedFile ();
+                Path path = fc.getSelectedFile ().toPath ();
                 importFile (path);
             }
         }
     };
 
-    public static void importFile (File path)
+    public static void importFile (Path path)
     {
         Importer bestImporter = null;
         float    bestP        = 0;

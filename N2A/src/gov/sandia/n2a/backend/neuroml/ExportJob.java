@@ -1,5 +1,5 @@
 /*
-Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -7,7 +7,6 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.backend.neuroml;
 
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintStream;
@@ -114,7 +113,7 @@ public class ExportJob extends XMLutility
         this.sequencer = sequencer;
     }
 
-    public void process (MNode source, File destination)
+    public void process (MNode source, Path destination)
     {
         ByteArrayOutputStream boas = new ByteArrayOutputStream ();
         try {Backend.err.set (new PrintStream (boas, false, "UTF-8"));}
@@ -136,7 +135,7 @@ public class ExportJob extends XMLutility
             process (mpart);  // Convert top-level N2A part into top-level NeuroML elements
 
             DOMSource dom = new DOMSource (doc);
-            StreamResult stream = new StreamResult (new OutputStreamWriter (new FileOutputStream (destination), "UTF-8"));
+            StreamResult stream = new StreamResult (new OutputStreamWriter (new FileOutputStream (destination.toFile ()), "UTF-8"));
             TransformerFactory factoryXform = TransformerFactory.newInstance ();
             factoryXform.setAttribute ("indent-number", 4);
             javax.xml.transform.Transformer xform = factoryXform.newTransformer ();
