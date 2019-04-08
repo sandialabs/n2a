@@ -308,7 +308,7 @@ public class NodeBase extends DefaultMutableTreeNode
     {
         String result = "";
         int space = fm.charWidth (' ');
-        while (offset > space)
+        while (offset >= space)
         {
             result += " ";
             offset -= space;
@@ -316,7 +316,7 @@ public class NodeBase extends DefaultMutableTreeNode
         if (offset > 0)
         {
             space = fm.charWidth (0x200A);  // hairline space
-            while (offset > space)
+            while (offset >= space)
             {
                 result += "\u200A";
                 offset -= space;

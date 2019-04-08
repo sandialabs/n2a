@@ -111,7 +111,7 @@ public class NodeEquation extends NodeBase
         String result = source.get ();
         if (! key.equals ("@")  ||  result.length () == 0)  // Condition always starts with @, but might otherwise be empty, if it is the default equation. Generally, don't show the @ for the default equation, unless it has been revoked.
         {
-            int offset = tabs.get (0).intValue () - fm.stringWidth (result);
+            int offset = tabs.get (0) - fm.stringWidth (result);
             result = result + pad (offset, fm) + "@ " + key.substring (1);
         }
         setUserObject (result);

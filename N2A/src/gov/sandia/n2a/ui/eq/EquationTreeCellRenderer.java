@@ -42,7 +42,7 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
         setFont (f);
         if (n.needsInitTabs ())
         {
-            n.initTabs (tree.getGraphics ().getFontMetrics (f));
+            n.initTabs (tree.getFontMetrics (f));
             // convertValueToText() is called first thing in super.getTreeCellRendererComponent(),
             // but text very likely has changed, so we need to call it again here.
             setText (tree.convertValueToText (value, selected, expanded, leaf, row, hasFocus));

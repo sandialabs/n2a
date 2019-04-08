@@ -106,10 +106,10 @@ public class NodeReference extends NodeBase
         String value  = source.get ();
         if (! value.isEmpty ())
         {
-            int offset = tabs.get (0).intValue ();
+            int offset = tabs.get (0);
             if (! (getParent () instanceof NodeReferences))  // not in a $reference block, so may share tab stops with equations and annotations
             {
-                offset = tabs.get (2).intValue () - tabs.get (1).intValue () - offset;
+                offset = tabs.get (2) - tabs.get (1) - offset;
             }
             int width = PanelModel.instance.panelEquations.tree.getWidth () - offset;  // Available width for displaying value (not including key).
 
