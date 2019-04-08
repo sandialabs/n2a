@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -29,6 +29,7 @@ import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 
 public class Output extends Function
 {
@@ -100,7 +101,7 @@ public class Output extends Function
         }
     }
 
-    public static class Holder
+    public static class Holder implements gov.sandia.n2a.backend.internal.Holder
     {
         public Map<String,Integer> columnMap    = new HashMap<String,Integer> ();  ///< Maps from column name to column position.
         public List<Float>         columnValues = new ArrayList<Float> ();         ///< Holds current value for each column.
@@ -127,7 +128,6 @@ public class Output extends Function
                     out = simulator.out;
                 }
             }
-            simulator.outputs.put (path, this);
         }
 
         public void close ()
@@ -237,12 +237,20 @@ public class Output extends Function
         if (simulator == null) return result;
 
         String path = ((Text) operands[0].eval (context)).value;
-        Holder H = simulator.outputs.get (path);
-        if (H == null)
+        Holder H;
+        Object o = simulator.holders.get (path);
+        if (o == null)
         {
             H = new Holder (simulator, path);
             if (operands.length > 3) H.raw = operands[3].eval (context).toString ().contains ("raw");
+            simulator.holders.put (path, H);
         }
+        else if (! (o instanceof Holder))
+        {
+            Backend.err.get ().println ("ERROR: Reopening file as a different resource type.");
+            throw new Backend.AbortRun ();
+        }
+        else H = (Holder) o;
 
         // Determine column name
         String column;

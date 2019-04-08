@@ -6,10 +6,8 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.type;
 
-import java.io.File;
-import java.io.FileInputStream;
+import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringReader;
 import java.util.ArrayList;
@@ -60,16 +58,9 @@ public class MatrixDense extends Matrix
         }
     }
 
-    public MatrixDense (File path) throws EvaluationException
+    public MatrixDense (BufferedReader reader) throws EvaluationException
     {
-        try
-        {
-            load (new InputStreamReader (new FileInputStream (path)));
-        }
-        catch (IOException exception)
-        {
-            throw new EvaluationException ("Can't open matrix file");
-        }
+        load (reader);
     }
 
     public MatrixDense (Text that) throws EvaluationException

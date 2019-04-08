@@ -25,6 +25,7 @@ import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 import tec.uom.se.AbstractUnit;
 
 public class Draw extends Function
@@ -64,7 +65,7 @@ public class Draw extends Function
         return new Scalar ();
     }
 
-    public static class Holder
+    public static class Holder implements gov.sandia.n2a.backend.internal.Holder
     {
         public Path    path;
         public boolean single;              // Store a single frame rather than an image sequence.
@@ -86,8 +87,6 @@ public class Draw extends Function
 
         public Holder (Simulator simulator, String filename)
         {
-            simulator.drawings.put (filename, this);
-
             Path file = simulator.jobDir.resolve (filename);
             Path parent = file.getParent ();
             filename = file.getFileName ().toString ();
@@ -192,10 +191,12 @@ public class Draw extends Function
     public Holder getHolder (Simulator simulator, Instance context)
     {
         String path = ((Text) operands[0].eval (context)).value;
-        Holder H = simulator.drawings.get (path);
-        if (H == null)
+        Object o = simulator.holders.get (path);
+        if (o == null)
         {
-            H = new Holder (simulator, path);
+            Holder H = new Holder (simulator, path);
+            simulator.holders.put (path, H);
+
             if (operands.length > 3)
             {
                 String mode = operands[operands.length-1].getString ();  // mode should not require eval, just retrieval
@@ -229,7 +230,13 @@ public class Draw extends Function
                     }
                 }
             }
+            return H;
         }
-        return H;
+        if (! (o instanceof Holder))
+        {
+            Backend.err.get ().println ("ERROR: Reopening file as a different resource type.");
+            throw new Backend.AbortRun ();
+        }
+        return (Holder) o;
     }
 }

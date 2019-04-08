@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -7,10 +7,9 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.function;
 
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -113,7 +112,7 @@ public class Input extends Function
         unit = AbstractUnit.ONE;
     }
 
-    public static class Holder
+    public static class Holder implements gov.sandia.n2a.backend.internal.Holder
     {
         public static final double[] empty = {0};
 
@@ -224,20 +223,27 @@ public class Input extends Function
         {
             // get an input holder
             String path = ((Text) operands[0].eval (context)).value;
-            H = simulator.inputs.get (path);
-            if (H == null)
+            Object o = simulator.holders.get (path);
+            if (o == null)
             {
                 H = new Holder ();
 
                 if (path.isEmpty ()) H.stream = new BufferedReader (new InputStreamReader (System.in));  // not ideal; reading stdin should be reserved for headless operation
-                else                 H.stream = new BufferedReader (new FileReader (new File (path).getAbsoluteFile ()));
+                else                 H.stream = Files.newBufferedReader (simulator.jobDir.resolve (path));
 
                 H.time = time;
                 H.epsilon = Math.sqrt (Math.ulp (1.0));  // sqrt (epsilon for time representation (currently double)), about 1e-8
                 if (time  &&  simulator.currentEvent instanceof EventStep) H.epsilon = Math.min (H.epsilon, ((EventStep) simulator.currentEvent).dt / 1000);
 
-                simulator.inputs.put (path, H);
+                simulator.holders.put (path, H);
             }
+            else if (! (o instanceof Holder))
+            {
+                Backend.err.get ().println ("ERROR: Reopening file as a different resource type.");
+                throw new Backend.AbortRun ();
+            }
+            else H = (Holder) o;
+
             if (H.time != time  &&  ! timeWarning)
             {
                 Backend.err.get ().println ("WARNING: Changed time mode for input(" + path + ")");

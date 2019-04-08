@@ -6,12 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.backend.internal;
 
-import gov.sandia.n2a.language.function.Draw;
-import gov.sandia.n2a.language.function.Input;
-import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.type.Instance;
-import gov.sandia.n2a.language.type.Matrix;
-
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
@@ -48,12 +43,9 @@ public class Simulator implements Iterable<Part>
     public Random                      random;
 
     // Global shared data
-    public Path                      jobDir;
-    public Map<String,Matrix>        matrices = new HashMap<String,Matrix> ();
-    public Map<String,Input .Holder> inputs   = new HashMap<String,Input .Holder> ();
-    public Map<String,Output.Holder> outputs  = new HashMap<String,Output.Holder> ();
-    public Map<String,Draw  .Holder> drawings = new HashMap<String,Draw  .Holder> ();
-    public PrintStream               out;
+    public Path               jobDir;
+    public Map<String,Holder> holders = new HashMap<String,Holder> ();
+    public PrintStream        out;
     // Note: System.in will get bound into an Input.Holder if used at all.
 
     public static int BEFORE = -1;
@@ -151,9 +143,7 @@ public class Simulator implements Iterable<Part>
 
     public void closeStreams ()
     {
-        for (Entry<String,Input .Holder> h : inputs  .entrySet ()) h.getValue ().close ();
-        for (Entry<String,Output.Holder> h : outputs .entrySet ()) h.getValue ().close ();
-        for (Entry<String,Draw  .Holder> h : drawings.entrySet ()) h.getValue ().close ();
+        for (Holder h : holders.values ()) h.close ();
     }
 
     public void integrate (Instance i)

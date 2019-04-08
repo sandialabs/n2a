@@ -1,13 +1,12 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.language.function;
 
-import java.io.File;
-
+import gov.sandia.n2a.backend.internal.Holder;
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Function;
@@ -17,6 +16,7 @@ import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 import tec.uom.se.AbstractUnit;
 
 public class ReadMatrix extends Function
@@ -101,13 +101,18 @@ public class ReadMatrix extends Function
         if (simulator == null) return null;  // absence of simulator indicates analysis phase, so opening files is unnecessary
 
         String path = ((Text) operands[0].eval (context)).value;
-        Matrix A = simulator.matrices.get (path);
+        Holder A = simulator.holders.get (path);
         if (A == null)
         {
-            A = Matrix.factory (new File (path).getAbsoluteFile ());
-            simulator.matrices.put (path, A);
+            A = Matrix.factory (simulator.jobDir.resolve (path));
+            simulator.holders.put (path, A);
         }
-        return A;
+        else if (! (A instanceof Matrix))
+        {
+            Backend.err.get ().println ("ERROR: Reopening file as a different resource type.");
+            throw new Backend.AbortRun ();
+        }
+        return (Matrix) A;
     }
 
     public Type getType ()
@@ -122,11 +127,7 @@ public class ReadMatrix extends Function
 
         String mode = "";
         int lastParm = operands.length - 1;
-        if (lastParm > 0)
-        {
-            Type parmValue = operands[lastParm].eval (context);
-            if (parmValue instanceof Text) mode = ((Text) parmValue).value;
-        }
+        if (lastParm > 0) mode = operands[lastParm].getString ();  // Must be a constant string, not computed.
         if (mode.equals ("columns")) return new Scalar (A.columns ());
         if (mode.equals ("rows"   )) return new Scalar (A.rows    ());
 

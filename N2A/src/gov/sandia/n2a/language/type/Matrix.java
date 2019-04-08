@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -7,37 +7,47 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.type;
 
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.StringWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Iterator;
 
+import gov.sandia.n2a.backend.internal.Holder;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Type;
 
-public abstract class Matrix extends Type
+public abstract class Matrix extends Type implements Holder
 {
     public interface Visitor
     {
         double apply (double a);
     }
 
-    public static Matrix factory (File path) throws EvaluationException
+    public static Matrix factory (Path path) throws EvaluationException
     {
-        try (BufferedReader reader = new BufferedReader (new InputStreamReader ((new FileInputStream (path)))))
+        try (BufferedReader reader = Files.newBufferedReader (path))
         {
-            String line = reader.readLine ();
-            if (line.toLowerCase ().contains ("sparse")) return new MatrixSparse (path);
+            char buffer[] = new char[10];
+            reader.mark (buffer.length + 1);
+            reader.read (buffer);  // just assume buffer is filled completely
+            String line = new String (buffer);
+            reader.reset ();
+
+            if (line.toLowerCase ().startsWith ("sparse")) return new MatrixSparse (reader);
             // Could do further triage on file format, and call various appropriate versions of MatrixDense.load directly.
             // TODO: import Matlab format.
-            return new MatrixDense (path);
+            return new MatrixDense (reader);
         }
         catch (IOException exception)
         {
             throw new EvaluationException ("Can't open matrix file");
         }
+    }
+
+    public void close ()
+    {
+        // Don't do anything, since we load the entire matrix into memory, so have already closed the file.
     }
 
     public abstract int rows ();

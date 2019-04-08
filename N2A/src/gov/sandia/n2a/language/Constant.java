@@ -86,7 +86,7 @@ public class Constant extends Operator
             updateExponent (from, exponentNew, centerNew);
         }
         // Matrix constants are built by BuildMatrix with their exponent and center values set correctly.
-        // Text and reference types are simply ignored (and should have exponent=Integer.MIN_VALUE).
+        // Text and reference types are simply ignored (and should have exponent=UNKNOWN).
     }
 
     /**

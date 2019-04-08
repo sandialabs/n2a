@@ -7,11 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.type;
 
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.Reader;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -44,26 +40,19 @@ public class MatrixSparse extends Matrix
         for (int c = 0; c < columns; c++) data.add (null);
     }
 
-    public MatrixSparse (File path) throws EvaluationException
+    public MatrixSparse (BufferedReader reader)
+    {
+        load (reader, false);
+    }
+
+    public void load (BufferedReader reader) throws EvaluationException
+    {
+        load (reader, false);
+    }
+
+    public void load (BufferedReader reader, boolean units) throws EvaluationException
     {
         try
-        {
-            load (new InputStreamReader (new FileInputStream (path)));
-        }
-        catch (IOException exception)
-        {
-            throw new EvaluationException ("Can't open matrix file");
-        }
-    }
-
-    public void load (Reader stream) throws EvaluationException
-    {
-        load (stream, false);
-    }
-
-    public void load (Reader stream, boolean units) throws EvaluationException
-    {
-        try (BufferedReader reader = new BufferedReader (stream))
         {
             String line = reader.readLine ();  // Throw away "Sparse" line
             while (true)
