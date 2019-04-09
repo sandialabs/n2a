@@ -130,11 +130,8 @@ public class NodeInherit extends NodeBase
     {
         String result = source.key ();
 
-        int offset = tabs.get (0) - fm.stringWidth (result);
-        result = result + pad (offset, fm) + "=";
-
-        offset = tabs.get (1) - fm.stringWidth (result);
-        result = result + pad (offset, fm) + source.get ();
+        result = pad (result, tabs.get (0), fm) + "=";
+        result = pad (result, tabs.get (1), fm) + source.get ();
 
         if (showID) result = result + " (" + IDs () + ")";
 

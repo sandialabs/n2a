@@ -170,8 +170,7 @@ public class NodeAnnotation extends NodeContainer
             }
             if (addEllipsis) value += " ...";
 
-            offset -= fm.stringWidth (result);
-            result = result + pad (offset, fm) + "= " + value;
+            result = pad (result, offset, fm) + "= " + value;
         }
         setUserObject (result);
     }

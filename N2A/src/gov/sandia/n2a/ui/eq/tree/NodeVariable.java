@@ -248,11 +248,8 @@ public class NodeVariable extends NodeContainer
         String result = source.key ();
         Variable.ParsedValue pieces = new Variable.ParsedValue (getValue ());
 
-        int offset = tabs.get (0) - fm.stringWidth (result);
-        result = result + pad (offset, fm) + "=" + pieces.combiner;
-
-        offset = tabs.get (1) - fm.stringWidth (result);
-        result = result + pad (offset, fm) + pieces.expression;
+        result = pad (result, tabs.get (0), fm) + "=" + pieces.combiner;
+        result = pad (result, tabs.get (1), fm) + pieces.expression;
         if (! pieces.condition.isEmpty ()) result = result + " @ " + pieces.condition;
 
         setUserObject (result);

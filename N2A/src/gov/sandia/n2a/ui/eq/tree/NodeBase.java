@@ -304,23 +304,26 @@ public class NodeBase extends DefaultMutableTreeNode
     {
     }
 
-    public static String pad (int offset, FontMetrics fm)
+    public static String pad (String result, int offset, FontMetrics fm)
     {
-        String result = "";
-        int space = fm.charWidth (' ');
-        while (offset >= space)
+        // Full-width spaces
+        int length = fm.stringWidth (result);
+        while (length < offset)
         {
-            result += " ";
-            offset -= space;
+            String next = result + " ";
+            int nextLength = fm.stringWidth (next);
+            if (nextLength > offset) break;
+            result = next;
+            length = nextLength;
         }
-        if (offset > 0)
+        // Hairline spaces
+        while (length < offset)
         {
-            space = fm.charWidth (0x200A);  // hairline space
-            while (offset >= space)
-            {
-                result += "\u200A";
-                offset -= space;
-            }
+            String next = result + "\u200A";
+            int nextLength = fm.stringWidth (next);
+            if (nextLength > offset) break;
+            result = next;
+            length = nextLength;
         }
         return result;
     }
