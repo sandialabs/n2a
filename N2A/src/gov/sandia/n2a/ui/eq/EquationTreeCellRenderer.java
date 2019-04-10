@@ -24,14 +24,13 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
     protected Font  baseFont;
     protected float baseFontSize;
 
-    @Override
     public Component getTreeCellRendererComponent (JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
     {
         super.getTreeCellRendererComponent (tree, value, selected, expanded, leaf, row, hasFocus);
 
         if (baseFont == null)
         {
-            baseFont = getFont ().deriveFont (Font.PLAIN);
+            baseFont = tree.getFont ().deriveFont (Font.PLAIN);
             baseFontSize = baseFont.getSize2D ();
         }
 
@@ -42,7 +41,7 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
         setFont (f);
         if (n.needsInitTabs ())
         {
-            n.initTabs (tree.getFontMetrics (f));
+            n.initTabs (getFontMetrics (f));
             // convertValueToText() is called first thing in super.getTreeCellRendererComponent(),
             // but text very likely has changed, so we need to call it again here.
             setText (tree.convertValueToText (value, selected, expanded, leaf, row, hasFocus));

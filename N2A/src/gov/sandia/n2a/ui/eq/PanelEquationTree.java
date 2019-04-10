@@ -103,14 +103,15 @@ public class PanelEquationTree extends JPanel
     protected int jobCount = 0;  // for launching jobs
 
     // Tree
-    public    JTree                 tree;
-    public    FilteredTreeModel     model;
-    public    NodePart              root;
-    public    MNode                 record;
-    public    boolean               locked;
-    protected JScrollPane           scrollPane;
-    protected Map<MNode,StoredPath> focusCache = new HashMap<MNode,StoredPath> ();
-    protected boolean               needsFullRepaint;
+    public    JTree                    tree;
+    public    EquationTreeCellRenderer renderer;
+    public    FilteredTreeModel        model;
+    public    NodePart                 root;
+    public    MNode                    record;
+    public    boolean                  locked;
+    protected JScrollPane              scrollPane;
+    protected Map<MNode,StoredPath>    focusCache = new HashMap<MNode,StoredPath> ();
+    protected boolean                  needsFullRepaint;
 
     // Controls
     protected JButton buttonAddModel;
@@ -207,17 +208,16 @@ public class PanelEquationTree extends JPanel
     // The main constructor. Most of the real work of setting up the UI is here, including some fairly elaborate listeners.
     public PanelEquationTree ()
     {
-        model = new FilteredTreeModel (null);
-        tree  = new JTree (model)
+        model    = new FilteredTreeModel (null);
+        renderer = new EquationTreeCellRenderer ();
+        tree     = new JTree (model)
         {
-            @Override
             public String convertValueToText (Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
             {
                 if (value == null) return "";
                 return ((NodeBase) value).getText (expanded, false);
             }
 
-            @Override
             public String getToolTipText (MouseEvent e)
             {
                 TreePath path = getPathForLocation (e.getX (), e.getY ());
@@ -239,6 +239,14 @@ public class PanelEquationTree extends JPanel
                 notes = notes.replace ("\n", "<br>");
                 return "<html><p  width=\"" + paneWidth + "\">" + notes + "</p></html>";
             }
+
+            public void updateUI ()
+            {
+                // We need to reset the renderer font first, before the rest of JTree's updateUI() procedure,
+                // because JTree does not call renderer.updateUI() until after it has polled for cell sizes.
+                renderer.baseFont = null;
+                super.updateUI ();
+            }
         };
 
         tree.setExpandsSelectedPaths (true);
@@ -249,8 +257,6 @@ public class PanelEquationTree extends JPanel
         tree.setDragEnabled (true);
         tree.setToggleClickCount (0);  // Disable expand/collapse on double-click
         ToolTipManager.sharedInstance ().registerComponent (tree);
-
-        EquationTreeCellRenderer renderer = new EquationTreeCellRenderer ();
         tree.setCellRenderer (renderer);
 
         final EquationTreeCellEditor editor = new EquationTreeCellEditor (tree, renderer);
