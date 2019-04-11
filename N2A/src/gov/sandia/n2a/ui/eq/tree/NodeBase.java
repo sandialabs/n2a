@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -13,7 +13,6 @@ import gov.sandia.n2a.ui.eq.EquationTreeCellRenderer;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelModel;
 
-import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.util.ArrayList;
@@ -29,6 +28,11 @@ import javax.swing.tree.TreeNode;
 public class NodeBase extends DefaultMutableTreeNode
 {
     public MPart source;
+
+    public static final int INHERIT  = 0;
+    public static final int OVERRIDE = 1;
+    public static final int KILL     = 2;
+
 
     // Filtering -------------------------------------------------------------
 
@@ -173,10 +177,10 @@ public class NodeBase extends DefaultMutableTreeNode
         return toString ();  // parent class uses the "user object", which is the string we set elsewhere
     }
 
-    public Color getForegroundColor ()
+    public int getForegroundColor ()
     {
-        if (source.isFromTopDocument ()) return Color.black;
-        return                                  Color.blue;
+        if (source.isFromTopDocument ()) return OVERRIDE;
+        return                                  INHERIT;
     }
 
     /**

@@ -1,15 +1,17 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.ui.eq;
 
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Font;
 import javax.swing.Icon;
 import javax.swing.JTree;
+import javax.swing.UIManager;
 import javax.swing.tree.DefaultTreeCellRenderer;
 
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -24,6 +26,50 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
     protected Font  baseFont;
     protected float baseFontSize;
 
+    // These colors may get changed when look & feel is changed.
+    public static Color colorInherit          = Color.blue;
+    public static Color colorOverride         = Color.black;
+    public static Color colorKill             = Color.red;
+    public static Color colorSelectedInherit  = Color.blue;
+    public static Color colorSelectedOverride = Color.black;
+    public static Color colorSelectedKill     = Color.red;
+
+    public void earlyUpdateUI ()
+    {
+        baseFont = null;
+
+        // Check colors to see if text is dark or light.
+        Color fg = UIManager.getColor ("Tree.textForeground");
+        float[] hsb = Color.RGBtoHSB (fg.getRed (), fg.getGreen (), fg.getBlue (), null);
+        if (hsb[2] > 0.5)  // Light text
+        {
+            colorInherit  = new Color (0xC0C0FF);  // light blue
+            colorOverride = Color.white;
+            colorKill     = Color.pink;
+        }
+        else  // Dark text
+        {
+            colorInherit  = Color.blue;
+            colorOverride = Color.black;
+            colorKill     = Color.red;
+        }
+
+        fg = UIManager.getColor ("Tree.selectionForeground");
+        Color.RGBtoHSB (fg.getRed (), fg.getGreen (), fg.getBlue (), hsb);
+        if (hsb[2] > 0.5)  // Light text
+        {
+            colorSelectedInherit  = new Color (0xC0C0FF);
+            colorSelectedOverride = Color.white;
+            colorSelectedKill     = Color.pink;
+        }
+        else  // Dark text
+        {
+            colorSelectedInherit  = Color.blue;
+            colorSelectedOverride = Color.black;
+            colorSelectedKill     = Color.red;
+        }
+    }
+
     public Component getTreeCellRendererComponent (JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
     {
         super.getTreeCellRendererComponent (tree, value, selected, expanded, leaf, row, hasFocus);
@@ -35,7 +81,22 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
         }
 
         NodeBase n = (NodeBase) value;
-        setForeground (n.getForegroundColor ());
+
+        Color fg;
+        int color = n.getForegroundColor ();
+        switch (color)
+        {
+            case NodeBase.OVERRIDE:
+                fg = selected ? colorSelectedOverride : colorOverride;
+                break;
+            case NodeBase.KILL:
+                fg = selected ? colorSelectedKill : colorKill;
+                break;
+            default:  // INHERIT
+                fg = selected ? colorSelectedInherit : colorInherit;
+        }
+        setForeground (fg);
+
         setIcon (getIconFor (n, expanded, leaf));
         Font f = getFontFor (n);
         setFont (f);

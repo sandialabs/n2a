@@ -244,7 +244,9 @@ public class PanelEquationTree extends JPanel
             {
                 // We need to reset the renderer font first, before the rest of JTree's updateUI() procedure,
                 // because JTree does not call renderer.updateUI() until after it has polled for cell sizes.
-                renderer.baseFont = null;
+                renderer.earlyUpdateUI ();
+                if (root != null) root.filter (model.filterLevel);  // Force update to tab stops, in case font has changed.
+
                 super.updateUI ();
             }
         };

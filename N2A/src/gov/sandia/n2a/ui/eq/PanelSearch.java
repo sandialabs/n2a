@@ -491,22 +491,30 @@ public class PanelSearch extends JPanel
     {
         protected static DefaultHighlighter.DefaultHighlightPainter painter;
 
+        // These colors may get changed when look & feel is changed.
+        public static Color colorInherit          = Color.blue;
+        public static Color colorOverride         = Color.black;
+        public static Color colorSelectedInherit  = Color.blue;
+        public static Color colorSelectedOverride = Color.black;
+
         public MNodeRenderer ()
         {
             painter = new DefaultHighlighter.DefaultHighlightPainter (UIManager.getColor ("List.selectionBackground"));
             setBorder (new EmptyBorder (0, 0, 0, 0));
         }
 
-        public Component getListCellRendererComponent (JList<? extends Holder> list, Holder holder, int index, boolean isSelected, boolean cellHasFocus)
+        public Component getListCellRendererComponent (JList<? extends Holder> list, Holder holder, int index, boolean selected, boolean focused)
         {
             MNode doc = holder.doc;
             String name = doc.key ();
             if (name.isEmpty ()) name = doc.get ();
             setText (name);
 
-            Color color = Color.black;
+            Color color = selected ? colorSelectedOverride : colorOverride;
             if (! AppData.models.isWriteable (doc))
             {
+                color = selected ? colorSelectedInherit : colorInherit;
+
                 String colorName = "";
                 MNode repo = AppData.repos.child (doc.parent ().key ());  // This can return null if multirepo structure changes and this panel is repainted before the change notification arrives.
                 if (repo != null) colorName = repo.get ("color");
@@ -515,11 +523,11 @@ public class PanelSearch extends JPanel
                     try {color = Color.decode (colorName);}
                     catch (NumberFormatException e) {}
                 }
-                if (color.equals (Color.black)) color = Color.blue;
+                // TODO: This does not handle the case where color has been explicitly set to default (black). Need a way to clear color selection in SettingsRepo.
             }
             setForeground (color);
 
-            if (isSelected)
+            if (selected)
             {
                 Highlighter h = getHighlighter ();
                 h.removeAllHighlights ();
@@ -539,6 +547,34 @@ public class PanelSearch extends JPanel
         {
             super.updateUI ();
             painter = new DefaultHighlighter.DefaultHighlightPainter (UIManager.getColor ("List.selectionBackground"));
+
+            // Check colors to see if text is dark or light.
+            Color fg = UIManager.getColor ("List.foreground");
+            float[] hsb = Color.RGBtoHSB (fg.getRed (), fg.getGreen (), fg.getBlue (), null);
+            if (hsb[2] > 0.5)  // Light text
+            {
+                colorInherit  = new Color (0xC0C0FF);  // light blue
+                colorOverride = Color.white;
+            }
+            else  // Dark text
+            {
+                colorInherit  = Color.blue;
+                colorOverride = Color.black;
+            }
+
+            fg = UIManager.getColor ("List.selectionForeground");  // for Metal, and many other L&Fs
+            if (fg == null) fg = UIManager.getColor ("List[Selected].textForeground");  // for Nimbus
+            Color.RGBtoHSB (fg.getRed (), fg.getGreen (), fg.getBlue (), hsb);
+            if (hsb[2] > 0.5)  // Light text
+            {
+                colorSelectedInherit  = new Color (0xC0C0FF);
+                colorSelectedOverride = Color.white;
+            }
+            else  // Dark text
+            {
+                colorSelectedInherit  = Color.blue;
+                colorSelectedOverride = Color.black;
+            }
         }
     }
 }

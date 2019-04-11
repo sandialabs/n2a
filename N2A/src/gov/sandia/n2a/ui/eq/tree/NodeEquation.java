@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -7,7 +7,6 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.tree;
 
-import java.awt.Color;
 import java.awt.FontMetrics;
 import java.util.ArrayList;
 import java.util.List;
@@ -68,10 +67,10 @@ public class NodeEquation extends NodeBase
     }
 
     @Override
-    public Color getForegroundColor ()
+    public int getForegroundColor ()
     {
         String value = source.get ();
-        if (value.isEmpty ()  ||  value.startsWith ("$kill")) return Color.red;
+        if (value.isEmpty ()  ||  value.startsWith ("$kill")) return KILL;
         return super.getForegroundColor ();
     }
 
