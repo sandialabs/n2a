@@ -34,6 +34,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.regex.Matcher;
 
+import javax.swing.Box;
 import javax.swing.ButtonGroup;
 import javax.swing.Icon;
 import javax.swing.JButton;
@@ -381,12 +382,14 @@ public class PanelRun extends JPanel
                         "W", Lay.FL
                         (
                             "L",
-                            Lay.BL (buttonStop, "eb=20r"),
+                            buttonStop,
+                            Box.createHorizontalStrut (15),
                             buttonText,
                             buttonTable,
                             buttonTableSorted,
                             buttonGraph,
-                            buttonRaster, "eb=20r",
+                            buttonRaster,
+                            Box.createHorizontalStrut (15),
                             "hgap=5,vgap=1"
                         ),
                         "C", comboScript
