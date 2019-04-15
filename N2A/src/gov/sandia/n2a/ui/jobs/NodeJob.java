@@ -98,7 +98,7 @@ public class NodeJob extends NodeBase
 
         if (inherit.isEmpty ())
         {
-            inherit = source.getOrDefault ("$inherit", source.key ()).split (",", 2)[0].replace ("\"", "");
+            inherit = source.getOrDefault (source.key (), "$inherit").split (",", 2)[0].replace ("\"", "");
             setUserObject (inherit);
             if (complete >= 1)
             {

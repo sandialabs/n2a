@@ -1860,7 +1860,7 @@ public class ImportJob extends XMLutility
             // For now, assume that ion channel is already defined
             String species = "ca";
             if (name.contains ("Ca2")) species = "ca2";
-            species = models.getOrDefault (modelName, ionChannel, "$metadata", "species", species);
+            species = models.getOrDefault (species, modelName, ionChannel, "$metadata", "species");
             part.set ("c", species);  // connect to species/concentration model, which the user is responsible to create 
             part.set ("$inherit", potential + "," + ionChannel);
             if (doDependency) addDependency (part, potential);

@@ -213,7 +213,7 @@ public class InternalBackend extends Backend
     public static Simulator constructStaticNetwork (EquationSet e) throws Exception
     {
         digestModel (e);
-        long seed = Long.parseLong (e.metadata.getOrDefault ("seed", "0"));
+        long seed = e.metadata.getOrDefault (0l, "seed");
         Simulator result = new Simulator (new Wrapper (e), seed);
         result.init ();
         return result;
@@ -221,7 +221,7 @@ public class InternalBackend extends Backend
 
     public static void digestModel (EquationSet e) throws Exception
     {
-        String backend = e.metadata.getOrDefault ("backend", "internal");
+        String backend = e.metadata.getOrDefault ("internal", "backend");
         if (backend.isEmpty ()) backend = "none";  // Should not match any backend metadata entries, since they are all supposed to start with "backend".
         else                    backend = "backend." + backend;
 

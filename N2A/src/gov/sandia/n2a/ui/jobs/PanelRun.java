@@ -446,7 +446,7 @@ public class PanelRun extends JPanel
                 //   huge  -- too big to store on local system, for example a supercomputer job; must be downloaded/displayed in segments
                 // The current code only handles small files. In particular, we don't actually do Step 1, but simply assume data is local.
                 MNode job = ((NodeJob) node.getParent ()).source;
-                HostSystem env = HostSystem.get (job.getOrDefault ("$metadata", "host", "localhost"));
+                HostSystem env = HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host"));
 
                 // Step 2 -- Load data
                 // The exact method depends on node type and the current display mode, selected by pushbuttons and stored in viz
@@ -695,7 +695,7 @@ public class PanelRun extends JPanel
                         synchronized (job) {job.deleted = true;}
 
                         MDoc doc = (MDoc) job.source;
-                        HostSystem env = HostSystem.get (doc.getOrDefault ("$metadata", "host", "localhost"));
+                        HostSystem env = HostSystem.get (doc.getOrDefault ("localhost", "$metadata", "host"));
                         String jobName = doc.key ();
                         try
                         {

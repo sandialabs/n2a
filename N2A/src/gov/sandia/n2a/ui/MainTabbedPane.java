@@ -54,7 +54,7 @@ public class MainTabbedPane extends JTabbedPane
     {
         // Load all panels provided by plugins.
         // Create tabs in the order the user has specified.
-        String order = AppData.state.getOrDefault ("MainTabbedPane", "order", "Model");
+        String order = AppData.state.getOrDefault ("Model", "MainTabbedPane", "order");
         Set<String> sorted = new HashSet<String> ();
         String[] titles = order.split (",");  // comma-separated list
         Map<String,Activity> activities = new TreeMap<String,Activity> ();

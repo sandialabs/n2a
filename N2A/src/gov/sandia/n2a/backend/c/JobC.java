@@ -91,7 +91,7 @@ public class JobC extends Thread
         {
             Files.createFile (jobDir.resolve ("started"));
 
-            T = job.getOrDefault ("$metadata", "backend", "c", "type", "float");
+            T = job.getOrDefault ("float", "$metadata", "backend", "c", "type");
             if (T.startsWith ("int")  &&  T.length () > 3)
             {
                 T = "int";
@@ -103,9 +103,9 @@ public class JobC extends Thread
                 Backend.err.get ().println ("WARNING: Unsupported numeric type. Defaulting to single-precision float.");
             }
 
-            HostSystem env = HostSystem.get (job.getOrDefault ("$metadata", "host", "localhost"));
+            HostSystem env = HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host"));
             Path resourceDir = Paths.get (AppData.properties.get ("resourceDir"));
-            gcc              = Paths.get (AppData.state.getOrDefault ("BackendC", "gcc", "g++"));
+            gcc              = Paths.get (AppData.state.getOrDefault ("g++", "BackendC", "gcc"));
             runtimeDir       = resourceDir.resolve ("cruntime");
             rebuildRuntime ();
 
@@ -538,7 +538,7 @@ public class JobC extends Thread
             Variable dt = model.find (new Variable ("$t", 1));
             result.append ("    Event<int>::exponent = " + dt.exponent + ";\n");
         }
-        String integrator = model.metadata.getOrDefault ("c.integrator", "Euler");
+        String integrator = model.metadata.getOrDefault ("Euler", "c.integrator");
         if (integrator.equalsIgnoreCase ("RungeKutta")) integrator = "RungeKutta";
         else                                            integrator = "Euler";
         result.append ("    Simulator<" + T + ">::instance.integrator = new " + integrator + "<" + T + ">;\n");

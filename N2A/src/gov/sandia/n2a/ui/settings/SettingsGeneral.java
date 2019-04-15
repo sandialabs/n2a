@@ -28,7 +28,7 @@ public class SettingsGeneral extends JPanel implements Settings
     public JPanel addField (final String key, String description, int width, String defaultValue)
     {
         JLabel label = new JLabel (description);
-        String value = AppData.state.getOrDefault ("General", key, defaultValue);
+        String value = AppData.state.getOrDefault (defaultValue, "General", key);
         final JTextField field = new JTextField (value, width);
         field.addActionListener (new ActionListener ()
         {
@@ -78,7 +78,7 @@ public class SettingsGeneral extends JPanel implements Settings
     public JPanel addCombo (final String key, String description, int defaultIndex, String... choices)
     {
         JLabel label = new JLabel (description);
-        String value = AppData.state.getOrDefault ("General", key, choices[defaultIndex]);
+        String value = AppData.state.getOrDefault (choices[defaultIndex], "General", key);
         final JComboBox<String> field = new JComboBox<String> (choices);
         field.setSelectedItem (value);
         field.addActionListener (new ActionListener ()

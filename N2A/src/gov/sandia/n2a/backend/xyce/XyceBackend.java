@@ -79,7 +79,7 @@ class XyceBackend extends Backend
     @Override
     public boolean canRunNow (MNode job)
     {
-        HostSystem execEnv = HostSystem.get (job.getOrDefault ("$metadata", "host", "localhost"));
+        HostSystem execEnv = HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host"));
 
         // TODO - estimate what memory and CPU resources this sim needs
         // getting good estimates could be very difficult...
@@ -162,7 +162,7 @@ class XyceBackend extends Backend
                     if (job.child ("$metadata", "backend", "xyce", "integrator") == null) job.set ("$metadata", "backend", "xyce", "integrator", "trapezoid");
 
                     // set up job info
-                    HostSystem env = HostSystem.get (job.getOrDefault ("$metadata", "host", "localhost"));
+                    HostSystem env = HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host"));
                     String xyce  = env.getNamedValue ("xyce.binary");
                     Path cirFile = jobDir.resolve ("model.cir");
                     Path prnFile = jobDir.resolve ("result");  // "prn" doesn't work, at least on windows
@@ -211,7 +211,7 @@ class XyceBackend extends Backend
         {
             try
             {
-                HostSystem.get (job.getOrDefault ("$metadata", "host", "localhost")).killJob (pid);
+                HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host")).killJob (pid);
                 String jobDir = new File (job.get ()).getParent ();
                 Files.copy (new ByteArrayInputStream ("killed".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
             }

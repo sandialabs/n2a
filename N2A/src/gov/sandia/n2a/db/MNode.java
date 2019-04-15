@@ -50,13 +50,14 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     **/
     public synchronized MNode child (String... indices)
     {
-        MNode c = getChild (indices[0]);
-        for (int i = 1; i < indices.length; i++)
+        MNode result = this;
+        for (int i = 0; i < indices.length; i++)
         {
+            MNode c = result.getChild (indices[i]);
             if (c == null) return null;
-            c = c.getChild (indices[i]);
+            result = c;
         }
-        return c;
+        return result;  // If no indices are specified, we return this node.
     }
 
     /**
@@ -74,7 +75,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
             if (c == null) c = result.set (indices[i], "");
             result = c;
         }
-        return result;  // If no indices are specified, we actually return this node.
+        return result;
     }
 
     /**
@@ -82,7 +83,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     **/
     public synchronized void clear ()
     {
-        for (MNode n : this) clear (n.key ());
+        for (MNode n : this) clearChild (n.key ());
     }
 
     /**
@@ -100,6 +101,12 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     **/
     public synchronized void clear (String... indices)
     {
+        if (indices.length == 0)
+        {
+            clear ();
+            return;
+        }
+
         MNode c = this;
         int last = indices.length - 1;
         for (int i = 0; i < last; i++)
@@ -131,12 +138,9 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     **/
     public String get (String... indices)
     {
-        int length = indices.length;
-        String[] shiftedIndices = new String[length];
-        String index0 = indices[0];
-        for (int i = 1; i < length; i++) shiftedIndices[i-1] = indices[i];
-        shiftedIndices[length-1] = "";
-        return getOrDefault (index0, shiftedIndices);
+        MNode c = child (indices);
+        if (c == null) return "";
+        return c.get ();
     }
 
     /**
@@ -144,12 +148,9 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     **/
     public String get (Object... indices)
     {
-        int length = indices.length;
-        String[] shiftedIndices = new String[length];
-        String index0 = indices[0].toString ();
-        for (int i = 1; i < length; i++) shiftedIndices[i-1] = indices[i].toString ();
-        shiftedIndices[length-1] = "";
-        return getOrDefault (index0, shiftedIndices);
+        String[] stringIndices = new String[indices.length];
+        for (int i = 0; i < indices.length; i++) stringIndices[i] = indices[i].toString ();
+        return get (stringIndices);
     }
 
     /**
@@ -163,65 +164,20 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     }
 
     /**
-        Digs down tree as far as possible to retrieve value; returns last arg if necessary.
+        Digs down tree as far as possible to retrieve value; returns given defaultValue if node does not exist or is set to "".
     **/
-    public synchronized String getOrDefault (String parm0, String... parms)
-    {
-        if (parms.length == 0) return getOrDefault (parm0);  // This could happen indirectly through getOrDefaultType(), where Type is a specific basic type.
-
-        int last = parms.length - 1;
-        String defaultValue = parms[last];
-        MNode c = getChild (parm0);
-        if (c == null) return defaultValue;
-        for (int i = 0; i < last; i++)
-        {
-            c = c.getChild (parms[i]);
-            if (c == null) return defaultValue;
-        }
-        return c.getOrDefault (defaultValue);
-    }
-
-    public boolean getBoolean (Object... indices)
+    public String getOrDefault (String defaultValue, String... indices)
     {
         String value = get (indices);
-        if (value.trim ().equals ("1")) return true;
-        return Boolean.parseBoolean (value);
+        if (value.isEmpty ()) return defaultValue;
+        return value;
     }
 
-    public int getInt (Object... indices)
+    public String getOrDefault (String defaultValue, Object... indices)
     {
-        try
-        {
-            return Integer.parseInt (get (indices));
-        }
-        catch (NumberFormatException e)
-        {
-            return 0;
-        }
-    }
-
-    public long getLong (Object... indices)
-    {
-        try
-        {
-            return Long.parseLong (get (indices));
-        }
-        catch (NumberFormatException e)
-        {
-            return 0;
-        }
-    }
-
-    public double getDouble (Object... indices)
-    {
-        try
-        {
-            return Double.parseDouble (get (indices));
-        }
-        catch (NumberFormatException e)
-        {
-            return 0;
-        }
+        String value = get (indices);
+        if (value.isEmpty ()) return defaultValue;
+        return value;
     }
 
     public boolean getOrDefault (boolean defaultValue, Object... indices)
@@ -267,6 +223,49 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         try
         {
             return Double.parseDouble (value);
+        }
+        catch (NumberFormatException e)
+        {
+            return 0;
+        }
+    }
+
+    public boolean getBoolean (Object... indices)
+    {
+        String value = get (indices);
+        if (value.trim ().equals ("1")) return true;
+        return Boolean.parseBoolean (value);
+    }
+
+    public int getInt (Object... indices)
+    {
+        try
+        {
+            return Integer.parseInt (get (indices));
+        }
+        catch (NumberFormatException e)
+        {
+            return 0;
+        }
+    }
+
+    public long getLong (Object... indices)
+    {
+        try
+        {
+            return Long.parseLong (get (indices));
+        }
+        catch (NumberFormatException e)
+        {
+            return 0;
+        }
+    }
+
+    public double getDouble (Object... indices)
+    {
+        try
+        {
+            return Double.parseDouble (get (indices));
         }
         catch (NumberFormatException e)
         {

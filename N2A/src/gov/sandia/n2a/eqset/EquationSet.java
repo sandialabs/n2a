@@ -220,7 +220,7 @@ public class EquationSet implements Comparable<EquationSet>
     {
         if (container == null)  // top-level model, so pay special attention to name
         {
-            name = source.getOrDefault ("$inherit", "Model").split (",", 2)[0].replace ("\"", "");
+            name = source.getOrDefault ("Model", "$inherit").split (",", 2)[0].replace ("\"", "");
         }
         else
         {
@@ -1173,7 +1173,7 @@ public class EquationSet implements Comparable<EquationSet>
 
     public void addGlobalConstants () throws ParseException
     {
-        String key = AppData.state.getOrDefault ("General", "constants", "Constants");
+        String key = AppData.state.getOrDefault ("Constants", "General", "constants");
         MNode constants = AppData.models.child (key);
         if (constants == null) return;
         for (MNode c : constants)
@@ -1238,7 +1238,7 @@ public class EquationSet implements Comparable<EquationSet>
                 v.unit = AbstractUnit.ONE;
                 try
                 {
-                    String duration = metadata.getOrDefault ("duration", "1s");  // limit sim time to 1 second, if not otherwise specified
+                    String duration = metadata.getOrDefault ("1s", "duration");  // limit sim time to 1 second, if not otherwise specified
                     v.add (new EquationEntry ("$t<" + duration));
                 }
                 catch (Exception parseError)
@@ -2120,7 +2120,7 @@ public class EquationSet implements Comparable<EquationSet>
     **/
     public void checkUnits () throws AbortRun
     {
-        String dimension = AppData.state.getOrDefault ("General", "dimension", "Warning");
+        String dimension = AppData.state.getOrDefault ("Warning", "General", "dimension");
         if (! dimension.equals ("Warning")  &&  ! dimension.equals ("Error")) return;  // "Don't check"
 
         determineUnits ();
@@ -2975,7 +2975,7 @@ public class EquationSet implements Comparable<EquationSet>
 
         if (! needsPoll) return -1;
         // Look up metadata to determine polling period.
-        String poll = p.metadata.getOrDefault ("poll", "0");
+        String poll = p.metadata.getOrDefault ("0", "poll");
         return new UnitValue (poll).get ();
     }
 

@@ -36,7 +36,7 @@ public class BackendNeuron extends BackendNeuroML
 
         public void submitJob () throws Exception
         {
-            HostSystem env = HostSystem.get (job.getOrDefault ("$metadata", "host", "localhost"));
+            HostSystem env = HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host"));
             String command = "JNML_HOME=" + jnmlHome + " " + env.quotePath (jnmlCommand) + " " + env.quotePath (modelPath) + " -neuron -run -nogui";
             env.submitJob (job, command);
         }

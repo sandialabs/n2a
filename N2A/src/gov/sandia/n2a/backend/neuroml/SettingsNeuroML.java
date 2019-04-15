@@ -35,7 +35,7 @@ public class SettingsNeuroML extends JPanel implements Settings
         public Item (String text, String key, String defaultValue, int length)
         {
             label = new JLabel (text);
-            field = new JTextField (AppData.state.getOrDefault ("BackendNeuroML", key, defaultValue), length);
+            field = new JTextField (AppData.state.getOrDefault (defaultValue, "BackendNeuroML", key), length);
             field.addActionListener (new ActionListener ()
             {
                 public void actionPerformed (ActionEvent arg0)

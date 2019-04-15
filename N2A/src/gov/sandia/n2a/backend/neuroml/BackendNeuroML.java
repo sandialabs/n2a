@@ -45,7 +45,7 @@ public class BackendNeuroML extends Backend
         {
             try
             {
-                HostSystem.get (job.getOrDefault ("$metadata", "host", "localhost")).killJob (pid);
+                HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host")).killJob (pid);
                 Path jobDir = Paths.get (job.get ()).getParent ();
                 Files.copy (new ByteArrayInputStream ("killed" .getBytes ("UTF-8")), jobDir.resolve ("finished"));
             }
@@ -170,7 +170,7 @@ public class BackendNeuroML extends Backend
 
         public void submitJob () throws Exception
         {
-            HostSystem env = HostSystem.get (job.getOrDefault ("$metadata", "host", "localhost"));
+            HostSystem env = HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host"));
             String command = "JNML_HOME=" + jnmlHome + " " + env.quotePath (jnmlCommand) + " " + env.quotePath (modelPath) + " -nogui";
             env.submitJob (job, command);
         }
