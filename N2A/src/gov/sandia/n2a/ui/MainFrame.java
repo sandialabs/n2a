@@ -59,14 +59,14 @@ public class MainFrame extends JFrame
         );
 
         MNode winProps = AppData.state.childOrCreate ("WinLayout");
-        int w = winProps.getOrDefaultInt ("width",  "800");
-        int h = winProps.getOrDefaultInt ("height", "600");
-        int x = winProps.getOrDefaultInt ("x",      "-1");
-        int y = winProps.getOrDefaultInt ("y",      "-1");
+        int w = winProps.getOrDefault (800, "width");
+        int h = winProps.getOrDefault (600, "height");
+        int x = winProps.getOrDefault (-1,  "x");
+        int y = winProps.getOrDefault (-1,  "y");
         if (w >= 0  &&  h >= 0) setSize (w, h);
         if (x >= 0  &&  y >= 0) setLocation (x, y);
         else                    setLocationRelativeTo (null);
-        setExtendedState (winProps.getOrDefaultInt ("state", "0"));
+        setExtendedState (winProps.getOrDefault (0, "state"));
         setVisible (true);
 
         addComponentListener (new ComponentAdapter ()

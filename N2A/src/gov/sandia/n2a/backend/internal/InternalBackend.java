@@ -93,7 +93,7 @@ public class InternalBackend extends Backend
                 String duration = digestedModel.metadata.get ("duration");
                 if (! duration.isEmpty ()) job.set ("$metadata", "duration", duration);
 
-                long seed = job.getOrDefaultLong ("$metadata", "seed", "-1");
+                long seed = job.getOrDefault (-1l, "$metadata", "seed");
                 if (seed < 0)
                 {
                     seed = System.currentTimeMillis ();

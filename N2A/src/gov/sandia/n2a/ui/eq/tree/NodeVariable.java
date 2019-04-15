@@ -176,7 +176,7 @@ public class NodeVariable extends NodeContainer
         if (filterLevel == FilteredTreeModel.PARAM)
         {
             MNode param = source.child ("$metadata", "param");
-            return param != null  &&  param.getOrDefaultInt ("1") != 0;
+            return param != null  &&  param.getOrDefault (1) != 0;
         }
         // LOCAL ...
         return source.isFromTopDocument ();

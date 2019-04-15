@@ -742,7 +742,7 @@ public class PanelEquationTree extends JPanel
         menuPopup.add (itemDelete);
 
         // Filter menu
-        int filterLevel = AppData.state.getOrDefaultInt ("PanelModel", "filter", String.valueOf (FilteredTreeModel.PARAM));
+        int filterLevel = AppData.state.getOrDefault (FilteredTreeModel.PARAM, "PanelModel", "filter");
         model.setFilterLevel (filterLevel, tree);  // root is still null, so this has no immediate effect
         switch (filterLevel)
         {

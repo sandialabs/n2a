@@ -156,7 +156,7 @@ public class NodeJob extends NodeBase
                 if (currentTime - lastLiveCheck > 1000000)  // a million milliseconds is about 20 minutes
                 {
                     HostSystem env = HostSystem.get (source.get ("$metadata", "host"));
-                    long pid = source.getOrDefaultLong ("$metadata", "pid", "0");
+                    long pid = source.getOrDefault (0l, "$metadata", "pid");
                     try
                     {
                         Set<Long> pids = env.getActiveProcs ();
@@ -177,7 +177,7 @@ public class NodeJob extends NodeBase
 
         if (complete >= 0  &&  complete < 1)
         {
-            if (expectedSimTime == 0) expectedSimTime = source.getOrDefaultDouble ("$metadata", "duration", "0");
+            if (expectedSimTime == 0) expectedSimTime = source.getOrDefault (0.0, "$metadata", "duration");
             if (expectedSimTime > 0)
             {
                 Backend simulator = Backend.getBackend (source.get ("$metadata", "backend"));

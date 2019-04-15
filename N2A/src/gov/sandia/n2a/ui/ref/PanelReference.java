@@ -56,7 +56,7 @@ public class PanelReference extends JPanel implements MNodeListener
         // Determine the split positions.
 
         FontMetrics fm = panelSearch.list.getFontMetrics (panelSearch.list.getFont ());
-        splitMRU.setDividerLocation (AppData.state.getOrDefaultInt ("PanelReference", "dividerMRU", String.valueOf (fm.getHeight () * 4)));
+        splitMRU.setDividerLocation (AppData.state.getOrDefault (fm.getHeight () * 4, "PanelReference", "dividerMRU"));
         splitMRU.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
             public void propertyChange (PropertyChangeEvent e)
@@ -66,7 +66,7 @@ public class PanelReference extends JPanel implements MNodeListener
             }
         });
 
-        split.setDividerLocation (AppData.state.getOrDefaultInt ("PanelReference", "divider", "400"));  // The default requested width for the app is 800px. This is roughly half of that.
+        split.setDividerLocation (AppData.state.getOrDefault (400, "PanelReference", "divider"));  // The default requested width for the app is 800px. This is roughly half of that.
         split.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
             public void propertyChange (PropertyChangeEvent e)

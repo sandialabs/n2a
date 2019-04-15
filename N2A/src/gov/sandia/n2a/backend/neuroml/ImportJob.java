@@ -522,8 +522,8 @@ public class ImportJob extends XMLutility
                 }
                 else if (connected)
                 {
-                    if (dependent.getOrDefaultInt ("$n", "1") == 1  &&  count == 1) count = -1;  // One dependent, with only one connection target, so OK to embed.
-                    else                                                            count = -4;  // Otherwise, the source should be separate from the connection part.
+                    if (dependent.getOrDefault (1, "$n") == 1  &&  count == 1) count = -1;  // One dependent, with only one connection target, so OK to embed.
+                    else                                                       count = -4;  // Otherwise, the source should be separate from the connection part.
                 }
                 else if (count == 1)
                 {
@@ -1651,8 +1651,8 @@ public class ImportJob extends XMLutility
                 }
 
                 String condition = "";
-                int parentN = s.parent.part.getOrDefaultInt ("$n", "1");
-                int childN  = s       .part.getOrDefaultInt ("$n", "1");
+                int parentN = s.parent.part.getOrDefault (1, "$n");
+                int childN  = s       .part.getOrDefault (1, "$n");
                 if (parentN > 1)
                 {
                     condition = "A.$index==" + s.parent.index;
@@ -2247,8 +2247,8 @@ public class ImportJob extends XMLutility
             MNode instancesA = network.child (A, "$instance");
             MNode instancesB = network.child (B, "$instance");
 
-            boolean preCellSingleton  = network.getOrDefaultInt (A, "$n", "1") == 1;  // For inputList, A might not be a network node, but the answer (true) will still be correct.
-            boolean postCellSingleton = network.getOrDefaultInt (B, "$n", "1") == 1;
+            boolean preCellSingleton  = network.getOrDefault (1, A, "$n") == 1;  // For inputList, A might not be a network node, but the answer (true) will still be correct.
+            boolean postCellSingleton = network.getOrDefault (1, B, "$n") == 1;
 
             List<Connection> connections = new ArrayList<Connection> ();
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
@@ -2425,7 +2425,7 @@ public class ImportJob extends XMLutility
                     {
                         group = cell.groupIndex.get (c);
                         segment = models.child (modelName, cellID, group);
-                        if (segment != null  &&  segment.getOrDefaultInt ("$n", "1") > 1) index = M.indexInColumn (id, c);
+                        if (segment != null  &&  segment.getOrDefault (1, "$n") > 1) index = M.indexInColumn (id, c);
                         break;
                     }
                 }
@@ -2481,7 +2481,7 @@ public class ImportJob extends XMLutility
             part.set ("B", target);
 
             String p = "";
-            if (targetPart == null  ||  targetPart.getOrDefaultInt ("$n", "1") != 1)  // We only have to set $p explicitly if the target part has more than one instance.
+            if (targetPart == null  ||  targetPart.getOrDefault (1, "$n") != 1)  // We only have to set $p explicitly if the target part has more than one instance.
             {
                 if (finder.segment == null) p = "B.$index=="     + index;
                 else                        p = "B.$up.$index==" + index;
@@ -4164,7 +4164,7 @@ public class ImportJob extends XMLutility
                 if (! condition.isEmpty ())
                 {
                     // Only add index if this population is not a singleton.
-                    if (condition.equals ("$index==0")  &&  (p.part == null  ||  p.part.getOrDefaultInt ("$n", "1") == 1))
+                    if (condition.equals ("$index==0")  &&  (p.part == null  ||  p.part.getOrDefault (1, "$n") == 1))
                     {
                         condition = "";
                     }

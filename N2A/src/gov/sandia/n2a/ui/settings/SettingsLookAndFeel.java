@@ -219,7 +219,7 @@ public class SettingsLookAndFeel implements Settings
 
     public void load ()
     {
-        fontScale = (float) AppData.state.getOrDefaultDouble ("FontScale", "1");
+        fontScale = (float) AppData.state.getOrDefault (1.0, "FontScale");
         fieldFontScale.setText (Float.toString (fontScale));
 
         String name = AppData.state.get ("LookAndFeel");

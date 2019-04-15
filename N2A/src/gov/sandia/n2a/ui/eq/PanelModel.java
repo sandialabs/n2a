@@ -56,7 +56,7 @@ public class PanelModel extends JPanel implements MNodeListener
         // Determine the split positions.
 
         FontMetrics fm = panelSearch.list.getFontMetrics (panelSearch.list.getFont ());
-        splitMRU.setDividerLocation (AppData.state.getOrDefaultInt ("PanelModel", "dividerMRU", String.valueOf (fm.getHeight () * 4)));
+        splitMRU.setDividerLocation (AppData.state.getOrDefault (fm.getHeight () * 4, "PanelModel", "dividerMRU"));
         splitMRU.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
             public void propertyChange (PropertyChangeEvent e)
@@ -66,7 +66,7 @@ public class PanelModel extends JPanel implements MNodeListener
             }
         });
 
-        split.setDividerLocation (AppData.state.getOrDefaultInt ("PanelModel", "divider", String.valueOf (fm.stringWidth ("Example Hodgkin-Huxley Cable"))));
+        split.setDividerLocation (AppData.state.getOrDefault (fm.stringWidth ("Example Hodgkin-Huxley Cable"), "PanelModel", "divider"));
         split.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
             public void propertyChange (PropertyChangeEvent e)

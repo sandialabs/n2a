@@ -40,7 +40,7 @@ public class BackendNeuroML extends Backend
     @Override
     public void kill (MNode job)
     {
-        long pid = job.getOrDefaultLong ("$metadata", "pid", "0");
+        long pid = job.getOrDefault (0l, "$metadata", "pid");
         if (pid != 0)
         {
             try

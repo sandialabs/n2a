@@ -37,6 +37,8 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     /**
         Returns the child indicated by the given index, or null if it doesn't exist.
+        This function is separate from child(String...) for ease of implementation.
+        Should be overridden in a subclass.
     **/
     protected MNode getChild (String index)
     {
@@ -86,6 +88,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     /**
         Removes child with the given index, if it exists.
         Outside this package, use clear(String...) for most purposes.
+        Should be overridden in a subclass.
     **/
     protected void clearChild (String index)
     {
@@ -151,7 +154,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     /**
         Retrieve our own value, or the given default if we are set to "".
-        Note that this is the only get function that needs to be overridden by subclasses,
+        Note that this is the only get*() function that needs to be overridden by subclasses,
         and even this is optional.
     **/
     public String getOrDefault (String defaultValue)
@@ -176,49 +179,6 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
             if (c == null) return defaultValue;
         }
         return c.getOrDefault (defaultValue);
-    }
-
-    public boolean getBoolean ()
-    {
-        String value = get ();
-        if (value.trim ().equals ("1")) return true;
-        return Boolean.parseBoolean (value);
-    }
-
-    public int getInt ()
-    {
-        try
-        {
-            return Integer.parseInt (get ());
-        }
-        catch (NumberFormatException e)
-        {
-            return 0;
-        }
-    }
-
-    public long getLong ()
-    {
-        try
-        {
-            return Long.parseLong (get ());
-        }
-        catch (NumberFormatException e)
-        {
-            return 0;
-        }
-    }
-
-    public double getDouble ()
-    {
-        try
-        {
-            return Double.parseDouble (get ());
-        }
-        catch (NumberFormatException e)
-        {
-            return 0;
-        }
     }
 
     public boolean getBoolean (Object... indices)
@@ -264,18 +224,21 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         }
     }
 
-    public boolean getOrDefaultBoolean (String index0, String... parms)
+    public boolean getOrDefault (boolean defaultValue, Object... indices)
     {
-        String value = getOrDefault (index0, parms);
+        String value = get (indices);
+        if (value.isEmpty ()) return defaultValue;
         if (value.trim ().equals ("1")) return true;
         return Boolean.parseBoolean (value);
     }
 
-    public int getOrDefaultInt (String index0, String... parms)
+    public int getOrDefault (int defaultValue, Object... indices)
     {
+        String value = get (indices);
+        if (value.isEmpty ()) return defaultValue;
         try
         {
-            return Integer.parseInt (getOrDefault (index0, parms));
+            return Integer.parseInt (value);
         }
         catch (NumberFormatException e)
         {
@@ -283,11 +246,13 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         }
     }
 
-    public long getOrDefaultLong (String index0, String... parms)
+    public long getOrDefault (long defaultValue, Object... indices)
     {
+        String value = get (indices);
+        if (value.isEmpty ()) return defaultValue;
         try
         {
-            return Long.parseLong (getOrDefault (index0, parms));
+            return Long.parseLong (value);
         }
         catch (NumberFormatException e)
         {
@@ -295,11 +260,13 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         }
     }
 
-    public double getOrDefaultDouble (String index0, String... parms)
+    public double getOrDefault (double defaultValue, Object... indices)
     {
+        String value = get (indices);
+        if (value.isEmpty ()) return defaultValue;
         try
         {
-            return Double.parseDouble (getOrDefault (index0, parms));
+            return Double.parseDouble (value);
         }
         catch (NumberFormatException e)
         {

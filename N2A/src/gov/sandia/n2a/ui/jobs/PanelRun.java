@@ -400,7 +400,7 @@ public class PanelRun extends JPanel
         );
         setFocusCycleRoot (true);
 
-        split.setDividerLocation (AppData.state.getOrDefaultInt ("PanelRun", "divider", "250"));
+        split.setDividerLocation (AppData.state.getOrDefault (250, "PanelRun", "divider"));
         split.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
             public void propertyChange (PropertyChangeEvent e)

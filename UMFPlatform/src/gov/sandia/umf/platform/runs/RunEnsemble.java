@@ -113,12 +113,12 @@ public class RunEnsemble
 
     public long getTotalRunCount ()
     {
-        return source.getOrDefaultLong ("runCount", "0");
+        return source.getOrDefault (0l, "runCount");
     }
 
     public long getFrameworkRunCount ()
     {
-        return source.getOrDefaultLong ("frameworkRunCount", "0");
+        return source.getOrDefault (0l, "frameworkRunCount");
     }
 
     public List<Run> getRuns() {
