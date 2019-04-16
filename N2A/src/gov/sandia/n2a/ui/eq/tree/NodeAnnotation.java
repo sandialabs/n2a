@@ -181,7 +181,7 @@ public class NodeAnnotation extends NodeContainer
         // There may be a deep tree of annotations under this node.
         // However, if this one is visible (implied by receiving this call),
         // then all the children are visible as well.
-        result.set (source.key (), source);
+        result.set (source, source.key ());
     }
 
     @Override

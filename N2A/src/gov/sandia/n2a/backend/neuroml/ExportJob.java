@@ -399,7 +399,7 @@ public class ExportJob extends XMLutility
                 // Indicate that this eqset is the sim target, so don't build XPath names above it.
                 // It does no harm for multiple objects get this tag, since XPaths on multiple sim
                 // targets will fail for other reasons.
-                e.metadata.set ("backend", "lems", "target", "1");
+                e.metadata.set ("1", "backend", "lems", "target");
                 duration = e.metadata.get ("duration");
             }
         }
@@ -519,7 +519,7 @@ public class ExportJob extends XMLutility
                 cell = addCell (source, false);
 
                 EquationSet part = getEquations (source);
-                part.metadata.set ("backend", "lems", "enumerate", "1");  // This part requires XPath subscript.
+                part.metadata.set ("1", "backend", "lems", "enumerate");  // This part requires XPath subscript.
                 Variable n = part.find (new Variable ("$n", 0));
                 int size = 1;
                 if (n != null) size = (int) Math.floor (((Scalar) n.eval (context)).value);
@@ -813,7 +813,7 @@ public class ExportJob extends XMLutility
                         if (postSegment.isEmpty ()) B = "B.$index==" + j;
                         else                        B = "B.$up.$index==" + j;
 
-                        p.set ("@" + A + "&&" + B, "1");
+                        p.set ("1", "@" + A + "&&" + B);
                     }
                 }
             }
@@ -824,7 +824,7 @@ public class ExportJob extends XMLutility
                 if (! condition.isEmpty ()  &&  ! condition.equals ("0"))
                 {
                     p.set ("");
-                    p.set ("@" + condition, "1");
+                    p.set ("1", "@" + condition);
                 }
             }
 
@@ -1184,7 +1184,7 @@ public class ExportJob extends XMLutility
         {
             // Stash chosen LEMS part, so we can map output variables (if any) correctly.
             EquationSet e = getEquations (source);
-            e.metadata.set ("backend", "lems", "extends", type);
+            e.metadata.set (type, "backend", "lems", "extends");
         }
 
         Element input = addElement (type, parentElements);
@@ -2168,7 +2168,7 @@ public class ExportJob extends XMLutility
 
             // Assemble a part that best recreates the underlying channel before it got incorporated into a property
             base = new MVolatile ();
-            base.set ("$inherit", inherit);  // skip potential, if it existed
+            base.set (inherit, "$inherit");  // skip potential, if it existed
             List<String> forbidden = Arrays.asList ("$inherit", "c", "E", "Gall", "Gdensity", "population", "permeability");
             skipList.add ("Gall");  // "Gall" should not appear in either wrapper or ion channel.
             EquationSet channelEquations = getEquations (source);
@@ -2179,7 +2179,7 @@ public class ExportJob extends XMLutility
                 Variable v = channelEquations.find (Variable.fromLHS (key));
                 if (v != null  &&  v.hasAttribute ("dummy")) continue;
 
-                base.set (key, c);
+                base.set (c, key);
                 skipList.add (key);
             }
 
@@ -3905,7 +3905,7 @@ public class ExportJob extends XMLutility
                 // Store special values in componentType, in case we need to emit it.
                 if (key.equals ("$inherit"))
                 {
-                    componentType.set (key, p);
+                    componentType.set (p, key);
                 }
                 else if (key.equals ("$metadata"))
                 {
@@ -3916,7 +3916,7 @@ public class ExportJob extends XMLutility
                         {
                             String mkey = m.key ();
                             if (mkey.endsWith ("id")) continue;
-                            componentType.set ("$metadata", "backend", "lems", mkey, m);
+                            componentType.set (m, "$metadata", "backend", "lems", mkey);
                         }
                     }
                 }
@@ -3988,7 +3988,7 @@ public class ExportJob extends XMLutility
                     if (p.isFromTopDocument ()  ||  ! (parent instanceof MDoc))
                     {
                         inheritedOnly = false;
-                        componentType.set (key, p);
+                        componentType.set (p, key);
                     }
                 }
             }

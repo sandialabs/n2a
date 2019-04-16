@@ -93,7 +93,7 @@ public class ChangeVariable extends Undoable
             // Update database
             MPart mparent = parent.source;
             mparent.clear (nameBefore);
-            mparent.set (nameAfter, "").merge (savedTree);
+            mparent.set (savedTree, nameAfter);
             MPart newPart = (MPart) mparent.child (nameAfter);
             MPart oldPart = (MPart) mparent.child (nameBefore);
 

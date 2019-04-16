@@ -406,7 +406,7 @@ public class PanelRun extends JPanel
             public void propertyChange (PropertyChangeEvent e)
             {
                 Object o = e.getNewValue ();
-                if (o instanceof Integer) AppData.state.set ("PanelRun", "divider", o);
+                if (o instanceof Integer) AppData.state.set (o, "PanelRun", "divider");
             }
         });
     }
@@ -417,7 +417,7 @@ public class PanelRun extends JPanel
         scripts.clear ();
         for (int i = 0; i < comboScript.getItemCount (); i++)
         {
-            scripts.set (String.valueOf (i), comboScript.getItemAt (i));
+            scripts.set (comboScript.getItemAt (i), String.valueOf (i));
         }
     }
 

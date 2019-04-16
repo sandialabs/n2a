@@ -141,7 +141,7 @@ public class NodeInherit extends NodeBase
     @Override
     public void copy (MNode result)
     {
-        MNode n = result.set (source.key (), "");
+        MNode n = result.set ("", source.key ());
         n.merge (source);
     }
 

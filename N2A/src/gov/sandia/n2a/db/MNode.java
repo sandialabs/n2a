@@ -72,7 +72,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         for (int i = 0; i < indices.length; i++)
         {
             MNode c = result.getChild (indices[i]);
-            if (c == null) c = result.set (indices[i], "");
+            if (c == null) c = result.set ("", indices[i]);
             result = c;
         }
         return result;
@@ -275,89 +275,61 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     /**
         Sets this node's own value.
+        Should be overridden by a subclass.
     **/
     public void set (String value)
     {
     }
 
-    public synchronized void set (MNode value)
-    {
-        clear ();
-        merge (value);
-    }
-
     /**
         Sets value of child node specified by index (effectively with a call to
         child.set(String)). Creates child node if it doesn't already exist.
+        Should be overridden by a subclass.
         @return The node on which the value was set, for use by set(String,String,String...)
     **/
-    public MNode set (String index, String value)
+    public MNode set (String value, String index)
     {
         return new MNode ();  // A completely useless object.
-    }
-
-    public synchronized MNode set (String index, MNode value)
-    {
-        clearChild (index);
-        MNode result = set (index, "");
-        result.merge (value);
-        return result;
     }
 
     /**
         Creates all children necessary to set value
     **/
-    public synchronized void set (String index0, String index1, String... deeperIndices)
+    public synchronized MNode set (String value, String... indices)
     {
-        MNode c = getChild (index0);
-        if (c == null) c = set (index0, "");
-
-        MNode d = c.getChild (index1);
-        if (d == null) d = c.set (index1, "");
-        c = d;
-
-        int last = deeperIndices.length - 1;
-        for (int i = 0; i < last; i++)
+        if (indices.length == 0)
         {
-            d = c.getChild (deeperIndices[i]);
-            if (d == null) d = c.set (deeperIndices[i], "");
-            c = d;
+            set (value);
+            return this;
+        }
+        if (indices.length == 1)
+        {
+            return set (value, indices[0]);
         }
 
-        c.set (deeperIndices[last]);
+        MNode result = this;
+        for (int i = 0; i < indices.length; i++)
+        {
+            MNode c = result.getChild (indices[i]);
+            if (c == null) c = result.set ("", indices[i]);
+            result = c;
+        }
+        result.set (value);
+        return result;
     }
 
-    public synchronized void set (Object parm0, Object... parms)  // set() with no parameters is not allowed, so parm0 must be a specific Object, not an array.
+    public MNode set (Object value, Object... indices)
     {
-        String string0 = parm0.toString ();
-        int length = parms.length;
-        if (length == 0)
+        String[] stringIndices = new String[indices.length];
+        for (int i = 0; i < indices.length; i++) stringIndices[i] = indices[i].toString ();
+        if (value instanceof MNode)
         {
-            set (string0);
-            return;
+            MNode c = childOrCreate (stringIndices);
+            c.clear ();
+            c.merge ((MNode) value);
+            return c;
         }
-
-        int last = length - 1;
-        if (parms[last] instanceof MNode)
-        {
-            String[] names = new String[length];
-            names[0] = string0;
-            for (int i = 0; i < last; i++) names[i+1] = parms[i].toString ();
-            childOrCreate (names).set ((MNode) parms[last]);
-            return;
-        }
-
-        String string1 = parms[0].toString ();
-        if (length == 1)
-        {
-            set (string0, string1);
-        }
-        else  // length > 1
-        {
-            String[] strings = new String[length-1];
-            for (int i = 1; i < length; i++) strings[i-1] = parms[i].toString ();
-            set (string0, string1, strings);
-        }
+        return set (value.toString (), stringIndices);
     }
 
     /**
@@ -372,7 +344,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         {
             String index = thatChild.key ();
             MNode c = getChild (index);
-            if (c == null) c = set (index, "");  // ensure a target child node exists
+            if (c == null) c = set ("", index);  // ensure a target child node exists
             c.merge (thatChild);
         }
     }
@@ -387,7 +359,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         {
             String index = thatChild.key ();
             MNode c = getChild (index);
-            if (c == null) set (index, thatChild);
+            if (c == null) set (thatChild, index);
             else           c.mergeUnder (thatChild);
         }
     }
@@ -439,7 +411,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         MNode source = getChild (fromIndex);
         if (source != null)
         {
-            MNode destination = set (toIndex, "");
+            MNode destination = set ("", toIndex);
             destination.merge (source);
             clearChild (fromIndex);
         }

@@ -172,7 +172,7 @@ public class ImportJob extends XMLutility
         MNode model = models.childOrCreate (modelName);
 
         String description = getAttribute (node, "description");
-        if (! description.isEmpty ()) model.set ("$metadata", "description", description);
+        if (! description.isEmpty ()) model.set (description, "$metadata", "description");
 
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
@@ -219,7 +219,7 @@ public class ImportJob extends XMLutility
                     break;
                 case "fitzHughNagumoCell":
                     MNode FN = genericPart (child, model);
-                    FN.set ("TS", "1s");  // Force time-scale to match the hard-coded value in LEMS definitions.
+                    FN.set ("1s", "TS");  // Force time-scale to match the hard-coded value in LEMS definitions.
                     break;
                 case "poissonFiringSynapse":
                 case "transientPoissonFiringSynapse":
@@ -266,13 +266,13 @@ public class ImportJob extends XMLutility
     public void addDependencyFromConnection (MNode part, String inherit)
     {
         addDependency (part, inherit);
-        models.set (modelName, inherit, "$connected", "1");
+        models.set ("1", modelName, inherit, "$connected");
     }
 
     public void addDependencyFromLEMS (MNode part, String inherit)
     {
         addDependency (part, inherit);
-        models.set (modelName, inherit, "$lemsUses", "1");
+        models.set ("1", modelName, inherit, "$lemsUses");
     }
 
     public void addDependency (MNode part, String inherit)
@@ -283,7 +283,7 @@ public class ImportJob extends XMLutility
         if (component == null)
         {
             component = models.childOrCreate (modelName, inherit);
-            component.set ("$count", "1");
+            component.set ("1", "$count");
 
             // Assume that local part names don't duplicate repo part names.
             // Thus, if there is a match in the repo that is also tagged as a NeuroML/LEMS part,
@@ -292,14 +292,14 @@ public class ImportJob extends XMLutility
             if (AppData.models.child (inherit) != null)
             {
                 // Setting our inherit line supports analysis in genericPart().
-                component.set ("$inherit", inherit);
+                component.set (inherit, "$inherit");
                 // IDs will be filled during postprocessing.
             }
         }
         else
         {
             int count = component.getInt ("$count");
-            component.set ("$count", count + 1);
+            component.set (count + 1, "$count");
         }
     }
 
@@ -312,7 +312,7 @@ public class ImportJob extends XMLutility
         int count = component.getInt ("$count") - 1;
         if (count > 0)
         {
-            component.set ("$count", count);
+            component.set (count, "$count");
         }
         else
         {
@@ -351,10 +351,10 @@ public class ImportJob extends XMLutility
 
             MNode fused = new MVolatile ();
             fused.merge (synapse);  // Leave the original synapse part alone. Just duplicate it.
-            fused.set ("$metadata", "backend", "lems", "id", synapseName);
-            MNode A = fused.set ("A", "");
+            fused.set (synapseName, "$metadata", "backend", "lems", "id");
+            MNode A = fused.set ("", "A");
             A.merge (spikeSource);
-            A.set ("$metadata", "backend", "lems", "id", spikeSource.key ());
+            A.set (spikeSource.key (), "$metadata", "backend", "lems", "id");
 
             removeDependency (spikeSource, spikeSource.get ("$inherit").replace ("\"", ""));
             spikeSource.clear ();
@@ -397,11 +397,7 @@ public class ImportJob extends XMLutility
             if (count == 0  &&  lems  &&  ! key.equals (primaryModel)) count = -3;
             if (count < 0)
             {
-                if (count == -3  &&  ! proxyFound)
-                {
-                    MNode model = models.childOrCreate (modelName + " " + key);
-                    model.merge (part);
-                }
+                if (count == -3  &&  ! proxyFound) models.set (part, modelName + " " + key);
                 if (count > -4) it.remove ();
             }
         }
@@ -417,7 +413,7 @@ public class ImportJob extends XMLutility
                 MNode dest = models.childOrCreate (modelName, p.key ());
                 dest.merge (p);
             }
-            if (! primaryModel.equals (modelName)) models.set (modelName, "$metadata", "backend", "lems", "id", primaryModel);
+            if (! primaryModel.equals (modelName)) models.set (primaryModel, modelName, "$metadata", "backend", "lems", "id");
         }
 
         if (models.child (modelName).size () == 0) models.clear (modelName);
@@ -478,22 +474,22 @@ public class ImportJob extends XMLutility
                 }
                 if (proxy)
                 {
-                    source.set ("$inherit", inherit);  // proxies only have single inheritance
+                    source.set (inherit, "$inherit");  // proxies only have single inheritance
                     MNode parent = AppData.models.child (inherit);
                     if (parent == null)
                     {
-                        source.set ("$proxy", "1");
+                        source.set ("1", "$proxy");
                     }
                     else
                     {
-                        source.set ("$proxy", "found");
+                        source.set ("found", "$proxy");
                         String id = parent.get ("$metadata", "id");
-                        if (! id.isEmpty ()) source.set ("$inherit", "0", id);
+                        if (! id.isEmpty ()) source.set (id, "$inherit", "0");
                     }
                 }
                 else
                 {
-                    source.set ("$proxy", "0");
+                    source.set ("0", "$proxy");
                 }
             }
             else
@@ -551,8 +547,8 @@ public class ImportJob extends XMLutility
                     if (heavy) count = -3;
                     else       count = -2;
                 }
-                source.set ("$count", count);
-                if (count >= -3  &&  lems) source.set ("$metadata", "backend", "lems", "name", source.key ());  // Save original ComponentType name.
+                source.set (count, "$count");
+                if (count >= -3  &&  lems) source.set (source.key (), "$metadata", "backend", "lems", "name");  // Save original ComponentType name.
                 if (count == -3)
                 {
                     MNode id = source.childOrCreate ("$metadata", "id");
@@ -575,8 +571,8 @@ public class ImportJob extends XMLutility
                     }
                     else
                     {
-                        dependent.set ("$inherit", inherit);
-                        dependent.set ("$inherit", sourceIndex, source.get ("$inherit", "0"));  // Assume single-inheritance in sources
+                        dependent.set (inherit, "$inherit");
+                        dependent.set (source.get ("$inherit", "0"), "$inherit", sourceIndex);  // Assume single-inheritance in sources
                     }
 
                     for (MNode n : source)
@@ -590,11 +586,11 @@ public class ImportJob extends XMLutility
                         if (key.equals ("$inherit"  )) continue;  // already handled above
 
                         MNode c = dependent.child (key);
-                        if (c == null) dependent.set (key, n);
+                        if (c == null) dependent.set (n, key);
                         else           c.mergeUnder (n);
                     }
 
-                    if (! proxy  &&  ! lems) dependent.set ("$metadata", "backend", "lems", "id", sourceName);
+                    if (! proxy  &&  ! lems) dependent.set (sourceName, "$metadata", "backend", "lems", "id");
                 }
                 if (count == -1) models.clear (modelName, sourceName);
             }
@@ -617,8 +613,8 @@ public class ImportJob extends XMLutility
                     sourceNames[sourceIndex] = "\"" + inherit + "\"";
                     inherit = "";
                     for (int i = 0; i < sourceNames.length; i++) inherit += "," + sourceNames[i];
-                    dependent.set ("$inherit", inherit.substring (1));
-                    dependent.set ("$inherit", sourceIndex, id);
+                    dependent.set (inherit.substring (1), "$inherit");
+                    dependent.set (id, "$inherit", sourceIndex);
                 }
             }
         }
@@ -645,9 +641,9 @@ public class ImportJob extends XMLutility
         inherit = nameMap.internal;
 
         MNode part = models.childOrCreate (modelName, id);  // Expect to always create this part rather than fetch an existing child.
-        part.set ("$inherit", inherit);
+        part.set (inherit, "$inherit");
         addDependency (part, inherit);
-        if (! species.isEmpty ()) part.set ("$metadata", "species", species);
+        if (! species.isEmpty ()) part.set (species, "$metadata", "species");
 
         addAttributes (node, part, nameMap, "id", "type", "species");
 
@@ -667,10 +663,10 @@ public class ImportJob extends XMLutility
         int suffix = 2;
         while (container.child (id) != null) id = "Q10Parameters" + suffix++;  // This seems pointless, but the NeuroML XSD says the number of elements is unbounded.
 
-        MNode part = container.set (id, "");
+        MNode part = container.set ("", id);
         NameMap nameMap = partMap.importMap ("baseQ10Settings");  // This isn't the correct name for use with ion channel, but it will still work.
         String inherit = nameMap.internal;
-        part.set ("$inherit", inherit);
+        part.set (inherit, "$inherit");
         addDependency (part, inherit);
 
         NamedNodeMap attributes = node.getAttributes ();
@@ -685,7 +681,7 @@ public class ImportJob extends XMLutility
             if (name.equals ("fixedQ10")) value = "*" + value;
 
             name = nameMap.importName (name);
-            part.set (name, value);
+            part.set (value, name);
         }
     }
 
@@ -699,8 +695,8 @@ public class ImportJob extends XMLutility
         else                 inherit = type;
         NameMap nameMap = partMap.importMap (inherit);
         inherit = nameMap.internal;
-        MNode part = container.set (id, "");
-        part.set ("$inherit", inherit);
+        MNode part = container.set ("", id);
+        part.set (inherit, "$inherit");
         addDependency (part, inherit);
 
         addAttributes (node, part, nameMap, "id", "type");
@@ -715,7 +711,7 @@ public class ImportJob extends XMLutility
                     gate (child, part);
                     break;
                 case "notes":
-                    part.set ("$metadata", "notes", getText (child));
+                    part.set (getText (child), "$metadata", "notes");
                     break;
                 case "q10Settings":
                     q10 (child, part);
@@ -723,8 +719,8 @@ public class ImportJob extends XMLutility
                 case "openState":
                 case "closedState":
                     id = getAttribute (child, "id");
-                    part.set (id, "$inherit", "Kinetic State");
-                    part.set (id, "relativeConductance", name.equals ("openState") ? "1" : "0");
+                    part.set ("Kinetic State",                       id, "$inherit");
+                    part.set (name.equals ("openState") ? "1" : "0", id, "relativeConductance");
                     break;
                 case "forwardTransition":
                 case "reverseTransition":
@@ -741,9 +737,9 @@ public class ImportJob extends XMLutility
     public void transition (Node node, MNode container)
     {
         String id = getAttribute (node, "id");
-        MNode part = container.set (id, "");
+        MNode part = container.set ("", id);
         NameMap nameMap = partMap.importMap (node.getNodeName ());
-        part.set ("$inherit", nameMap.internal);
+        part.set (nameMap.internal, "$inherit");
 
         addAttributes (node, part, nameMap, "id");
 
@@ -781,20 +777,20 @@ public class ImportJob extends XMLutility
             String tau = getAttribute (node, "tau");
             if (! tau.isEmpty ())
             {
-                container.set (var, biophysicalUnits (tau));
+                container.set (biophysicalUnits (tau), var);
                 return;
             }
         }
 
         String inherit = getAttribute (node, "type");
-        MNode part = container.set (name, "");
+        MNode part = container.set ("", name);
         NameMap nameMap = partMap.importMap (inherit);
         inherit = nameMap.internal;
-        part.set ("$inherit", inherit);
+        part.set (inherit, "$inherit");
         addDependency (part, inherit);
 
         addAttributes (node, part, nameMap, "type");
-        if (! var.isEmpty ()) container.set (var, ":" + name + ".x");
+        if (! var.isEmpty ()) container.set (":" + name + ".x", var);
     }
 
     public void blockingPlasticSynapse (Node node)
@@ -802,7 +798,7 @@ public class ImportJob extends XMLutility
         String id = getAttribute (node, "id");
         MNode part = models.childOrCreate (modelName, id);
         NameMap nameMap = partMap.importMap (node.getNodeName ());
-        part.set ("$inherit", nameMap.internal);
+        part.set (nameMap.internal, "$inherit");
 
         addAttributes (node, part, nameMap, "id");
 
@@ -815,7 +811,7 @@ public class ImportJob extends XMLutility
             {
                 String species = c.get ("species");
                 c.clear ("species");
-                if (! species.isEmpty ()) c.set ("$metadata", "species", species);
+                if (! species.isEmpty ()) c.set (species, "$metadata", "species");
             }
         }
     }
@@ -831,8 +827,8 @@ public class ImportJob extends XMLutility
             String phi  = part.get ("phi");
             part.clear ("beta");
             part.clear ("phi");
-            part.set ("tau", "1/" + beta);
-            part.set ("rho", phi + "*1e-9");
+            part.set ("1/" + beta,   "tau");
+            part.set (phi + "*1e-9", "rho");
         }
     }
 
@@ -880,7 +876,7 @@ public class ImportJob extends XMLutility
         {
             id   = getAttribute (node, "id");
             cell = models.childOrCreate (modelName, id);
-            cell.set ("$metadata", "backend", "lems", "part", "cell");
+            cell.set ("cell", "$metadata", "backend", "lems", "part");
             // At present, cell is merely a container. It inherits nothing.
             // Every cell must have at least one segment to be useful.
 
@@ -953,17 +949,17 @@ public class ImportJob extends XMLutility
             int c = groups.size ();
             String groupName = getAttribute (node, "id");
             MNode part = groups.childOrCreate (groupName);
-            part.set ("$G", c);
+            part.set (c, "$G");
             groupIndex.put (c, groupName);
 
             String neuroLexID = getAttribute (node, "neuroLexId");
             if (! neuroLexID.isEmpty ())
             {
                 MNode properties = cell.childOrCreate ("$properties");
-                MNode property = properties.set (String.valueOf (properties.size ()), groupName);
-                property.set ("$metadata", "neuroLexID", neuroLexID);
+                MNode property = properties.set (groupName, properties.size ());
+                property.set (neuroLexID, "$metadata", "neuroLexID");
                 MNode count = cell.child ("$group", groupName, "$properties");
-                if (count == null) cell.set ("$group", groupName, "$properties", "1");
+                if (count == null) cell.set ("1", "$group", groupName, "$properties");
                 else               count.set (count.getInt () + 1);
             }
 
@@ -979,7 +975,7 @@ public class ImportJob extends XMLutility
                         String include = part.get ("$include");  // not $inherit
                         if (! include.isEmpty ()) include += ",";
                         include += getAttribute (child, "segmentGroup");
-                        part.set ("$include", include);
+                        part.set (include, "$include");
                         break;
                     case "path":
                     case "subTree":  // TODO: not sure of the semantics of subTree
@@ -1009,8 +1005,8 @@ public class ImportJob extends XMLutility
             {
                 MNode paths = group.childOrCreate ("$paths");
                 int index = paths.size ();
-                if (to >= 0) paths.set (index, from + "," + to);
-                else         paths.set (index, from);
+                if (to >= 0) paths.set (from + "," + to, index);
+                else         paths.set (from,            index);
             }
         }
 
@@ -1083,7 +1079,7 @@ public class ImportJob extends XMLutility
             String v = variable;
             int suffix = 2;
             while (parent.child (v) != null) v = variable + suffix++;
-            if (! v.equals (variable)) group.set ("$inhomo", id, variable, v);  // When processing inhomogeneousParameter with id, remap from variable to v
+            if (! v.equals (variable)) group.set (v, "$inhomo", id, variable);  // When processing inhomogeneousParameter with id, remap from variable to v
 
             // Collect scaling parameters
             String translationStart = "0";
@@ -1097,8 +1093,8 @@ public class ImportJob extends XMLutility
                     case "distal"  : normalizationEnd = getAttribute (child, "normalizationEnd"); break;
                 }
             }
-            group.set (v, "$metadata", "backend", "lems", "a", normalizationEnd);
-            group.set (v, "$metadata", "backend", "lems", "b", translationStart);
+            group.set (normalizationEnd, v, "$metadata", "backend", "lems", "a");
+            group.set (translationStart, v, "$metadata", "backend", "lems", "b");
         }
 
         public void biophysicalProperties (Node node)
@@ -1136,13 +1132,13 @@ public class ImportJob extends XMLutility
                     switch (name)
                     {
                         case "spikeThresh":
-                            property.set ("Vspike", value);
+                            property.set (value, "Vspike");
                             break;
                         case "specificCapacitance":
-                            property.set ("Cspecific", value);
+                            property.set (value, "Cspecific");
                             break;
                         case "initMembPotential":
-                            property.set ("V", value + "@$init");
+                            property.set (value + "@$init", "V");
                             break;
                     }
                 }
@@ -1170,21 +1166,21 @@ public class ImportJob extends XMLutility
                         MNode groups = cell.childOrCreate ("$group");
                         int c = groups.size ();
                         G.set (r, c);
-                        groups.set (group, "$G", c);
+                        groups.set (c, group, "$G");
                         groupIndex.put (c, group);
                     }
                 }
             }
 
-            MNode result = properties.set (String.valueOf (properties.size ()), group);
+            MNode result = properties.set (group, properties.size ());
             MNode count = cell.child ("$group", group, "$properties");
-            if (count == null) cell.set ("$group", group, "$properties", "1");
+            if (count == null) cell.set ("1", "$group", group, "$properties");
             else               count.set (count.getInt () + 1);
 
             if (id.isEmpty ()) return result;
 
             // Create a subpart with the given name
-            MNode subpart = result.set (id, "");
+            MNode subpart = result.set ("", id);
             addAttributes (node, subpart, new NameMap (""), "id", "segment", "segmentGroup", "value", "ion");
             return result;
         }
@@ -1219,7 +1215,7 @@ public class ImportJob extends XMLutility
                         if (clone == null)
                         {
                             MNode properties = cell.child ("$properties");
-                            clone = properties.set (String.valueOf (properties.size ()), segmentGroup);
+                            clone = properties.set (segmentGroup, properties.size ());
                             clone.merge (property);
                             clone.set (segmentGroup);
                             groupProperty.put (segmentGroup, clone);
@@ -1269,7 +1265,7 @@ public class ImportJob extends XMLutility
                         }
                         catch (ParseException e) {}
                     }
-                    subpart.set (parameter, value);
+                    subpart.set (value, parameter);
                 }
             }
         }
@@ -1288,7 +1284,7 @@ public class ImportJob extends XMLutility
                         MNode subpart = property.iterator ().next ();
                         String concentrationModel = subpart.get ("concentrationModel");
                         subpart.clear ("concentrationModel");
-                        subpart.set ("$inherit", concentrationModel);  // Dependency will be tagged when this property is added to segments.
+                        subpart.set (concentrationModel, "$inherit");  // Dependency will be tagged when this property is added to segments.
                         NameMap nameMap = exportMap (concentrationModel);
                         remap (subpart, nameMap);
                         if (subpart.child ("z") == null)
@@ -1306,11 +1302,11 @@ public class ImportJob extends XMLutility
                                     z = -1;
                                     break;
                             }
-                            subpart.set ("z", z);
+                            subpart.set (z, "z");
                         }
                         break;
                     case "resistivity":
-                        property.set ("ρ", biophysicalUnits (getAttribute (p, "value")));
+                        property.set (biophysicalUnits (getAttribute (p, "value")), "ρ");
                         break;
                 }
             }
@@ -1345,7 +1341,7 @@ public class ImportJob extends XMLutility
                 }
                 String name = segments.get (smallestID).name;  // Name the group after the first segment, if it has a name.
                 if (name.isEmpty ()) name = "segments";
-                cell.set ("$group", name, "$G", 0);
+                cell.set (0, "$group", name, "$G");
                 groups = cell.child ("$group");
                 groupIndex.put (0, name);
             }
@@ -1439,7 +1435,7 @@ public class ImportJob extends XMLutility
                     {
                         found = true;
                         String name = groupIndex.get (j);  // maps index to group name
-                        cell.set (name, "");
+                        cell.set ("", name);
                         finalNames.put (i, name);
                         break;
                     }
@@ -1489,7 +1485,7 @@ public class ImportJob extends XMLutility
                     it.remove ();
 
                     String name = groupIndex.get (bestIndex);
-                    cell.set (name, "");
+                    cell.set ("", name);
                     finalNames.put (i, name);
                 }
             }
@@ -1500,7 +1496,7 @@ public class ImportJob extends XMLutility
                 int suffix = i;
                 String name = "Segments";
                 while (finalNames.values ().contains (name)) name = "Segments" + suffix++;
-                cell.set (name, "");
+                cell.set ("", name);
                 finalNames.put (i, name);
             }
 
@@ -1546,10 +1542,10 @@ public class ImportJob extends XMLutility
                     if (! neuroLexID.isEmpty ()  &&  ! neuroLexIDs.contains (neuroLexID))
                     {
                         for (String nlid : neuroLexIDs) neuroLexID += "," + nlid;
-                        part.set ("$metadata", "neuroLexID", neuroLexID);
+                        part.set (neuroLexID, "$metadata", "neuroLexID");
                     }
                 }
-                part.set ("$inherit", inheritSegment);
+                part.set (inheritSegment, "$inherit");
                 addDependency (part, inheritSegment);
                 for (MNode property : part)
                 {
@@ -1593,13 +1589,13 @@ public class ImportJob extends XMLutility
                     String species = models.get (modelName, inherit, "$metadata", "species");
                     if (species.isEmpty ()) continue;
                     if (part.child (species) == null) continue;  // Don't add connection if the user has not provided the concentration model.
-                    v.set ("c", species);  // connection to peer object, generally singleton to singleton
-                    v.set ("c.I", "+I");
+                    v.set (species, "c");  // connection to peer object, generally singleton to singleton
+                    v.set ("+I",    "c.I");
                 }
 
                 // Add segments
                 int n = M.columnNorm0 (c);
-                if (n > 1) part.set ("$n", n);
+                if (n > 1) part.set (n, "$n");
                 List<String> neuroLexIDs = Arrays.asList (part.get ("$metadata", "neuroLexID").split (","));
                 if (neuroLexIDs.size () == 1  &&  neuroLexIDs.get (0).isEmpty ()) neuroLexIDs = new ArrayList<String> ();
                 int index = 0;
@@ -1610,19 +1606,19 @@ public class ImportJob extends XMLutility
 
                     if (! s.neuroLexID.isEmpty ()  &&  ! neuroLexIDs.contains (s.neuroLexID))
                     {
-                        part.set ("$metadata", "neuroLexID" + index, s.neuroLexID);
+                        part.set (s.neuroLexID, "$metadata", "neuroLexID" + index);
                     }
 
                     if (n > 1)
                     {
-                        if (! s.name.isEmpty ()) part.set ("$metadata", "backend", "lems", "id" + index, s.name);
-                        if (! pathLength.isEmpty ()) part.set (pathLength, "@$index==" + index, print (s.pathLength (0.5) * 1e6) + "um");  // mid-point method. TODO: add way to subdivide segments for more precise modeling of varying density
+                        if (! s.name.isEmpty ()) part.set (s.name, "$metadata", "backend", "lems", "id" + index);
+                        if (! pathLength.isEmpty ()) part.set (print (s.pathLength (0.5) * 1e6) + "um", pathLength, "@$index==" + index);  // mid-point method. TODO: add way to subdivide segments for more precise modeling of varying density
                         s.output (part, index++);
                     }
                     else
                     {
-                        if (! s.name.isEmpty ()  &&  ! s.name.equals (currentName)) part.set ("$metadata", "backend", "lems", "id0", s.name);
-                        if (! pathLength.isEmpty ()) part.set (pathLength, print (s.pathLength (0.5) * 1e6) + "um");
+                        if (! s.name.isEmpty ()  &&  ! s.name.equals (currentName)) part.set (s.name, "$metadata", "backend", "lems", "id0");
+                        if (! pathLength.isEmpty ()) part.set (print (s.pathLength (0.5) * 1e6) + "um", pathLength);
                         s.output (part, -1);
                         break;  // Since we've already processed the only segment.
                     }
@@ -1644,10 +1640,10 @@ public class ImportJob extends XMLutility
                 MNode connection = cell.child (connectionName);
                 if (connection == null)
                 {
-                    connection = cell.set (connectionName, "");
-                    connection.set ("$inherit", "Coupling");  // Explicit non-NeuroML part, so no need for mapping
-                    connection.set ("A", s.parent.part.key ());
-                    connection.set ("B", s       .part.key ());
+                    connection = cell.set ("", connectionName);
+                    connection.set ("Coupling", "$inherit");  // Explicit non-NeuroML part, so no need for mapping
+                    connection.set (s.parent.part.key (), "A");
+                    connection.set (s       .part.key (), "B");
                 }
 
                 String condition = "";
@@ -1664,7 +1660,7 @@ public class ImportJob extends XMLutility
                 MNode p = connection.child ("$p");
                 if (p == null)
                 {
-                    connection.set ("$p", condition);
+                    connection.set (condition, "$p");
                 }
                 else
                 {
@@ -1672,10 +1668,10 @@ public class ImportJob extends XMLutility
                     if (! existing.isEmpty ())
                     {
                         p.set ("");
-                        p.set ("@", "0");
-                        p.set ("@" + existing, "1");
+                        p.set ("0", "@");
+                        p.set ("1", "@" + existing);
                     }
-                    p.set ("@" + condition, "1");
+                    p.set ("1", "@" + condition);
                     if (parentN == 1  &&  p.size () == childN + 1)  // Every member of child group connects to the same singleton parent
                     {
                         connection.clear ("$p");
@@ -1794,18 +1790,18 @@ public class ImportJob extends XMLutility
             if (index < 0)  // only one instance, so make values unconditional
             {
                 this.index = 0;
-                if (distal           != null) part.set ("$xyz",      format     (distal));
-                if (proximal         != null) part.set ("xyz0",      format     (proximal));
-                if (distalDiameter   >= 0   ) part.set ("diameter",  formatUnit (distalDiameter));
-                if (proximalDiameter >= 0   ) part.set ("diameter0", formatUnit (proximalDiameter));
+                if (distal           != null) part.set (format     (distal),           "$xyz");
+                if (proximal         != null) part.set (format     (proximal),         "xyz0");
+                if (distalDiameter   >= 0   ) part.set (formatUnit (distalDiameter),   "diameter");
+                if (proximalDiameter >= 0   ) part.set (formatUnit (proximalDiameter), "diameter0");
             }
             else  // multiple instances
             {
                 this.index = index;
-                if (distal           != null) part.set ("$xyz",      "@$index==" + index, format     (distal));
-                if (proximal         != null) part.set ("xyz0",      "@$index==" + index, format     (proximal));
-                if (distalDiameter   >= 0   ) part.set ("diameter",  "@$index==" + index, formatUnit (distalDiameter));
-                if (proximalDiameter >= 0   ) part.set ("diameter0", "@$index==" + index, formatUnit (proximalDiameter));
+                if (distal           != null) part.set (format     (distal),           "$xyz",      "@$index==" + index);
+                if (proximal         != null) part.set (format     (proximal),         "xyz0",      "@$index==" + index);
+                if (distalDiameter   >= 0   ) part.set (formatUnit (distalDiameter),   "diameter",  "@$index==" + index);
+                if (proximalDiameter >= 0   ) part.set (formatUnit (proximalDiameter), "diameter0", "@$index==" + index);
             }
         }
 
@@ -1853,7 +1849,7 @@ public class ImportJob extends XMLutility
         else if (name.contains ("GHK"   )) potential = "Potential GHK";
         if (potential.isEmpty ())
         {
-            part.set ("$inherit", ionChannel);
+            part.set (ionChannel, "$inherit");
         }
         else
         {
@@ -1861,15 +1857,15 @@ public class ImportJob extends XMLutility
             String species = "ca";
             if (name.contains ("Ca2")) species = "ca2";
             species = models.getOrDefault (species, modelName, ionChannel, "$metadata", "species");
-            part.set ("c", species);  // connect to species/concentration model, which the user is responsible to create 
-            part.set ("$inherit", potential + "," + ionChannel);
+            part.set (species,                      "c");  // connect to species/concentration model, which the user is responsible to create 
+            part.set (potential + "," + ionChannel, "$inherit");
             if (doDependency) addDependency (part, potential);
         }
         if (doDependency) addDependency (part, ionChannel);
 
         if (! number.isEmpty ())
         {
-            part.set ("Gall", "G1*population");  // The default is Gdensity*surfaceArea
+            part.set ("G1*population", "Gall");  // The default is Gdensity*surfaceArea
         }
     }
 
@@ -1926,13 +1922,13 @@ public class ImportJob extends XMLutility
         inherit = nameMap.internal;
         if (! inherit.isEmpty ())
         {
-            part.set ("$inherit", inherit);
+            part.set (inherit, "$inherit");
             addDependency (part, inherit);
         }
 
         // Leave a hint that this spike generator should be the source side of the given synapse.
         // "spikeArray" does not have an associated synapse.
-        if (! synapse.isEmpty ()) part.set ("$metadata", "backend", "lems", "synapse", synapse);
+        if (! synapse.isEmpty ()) part.set (synapse, "$metadata", "backend", "lems", "synapse");
 
         addAttributes (node, part, nameMap, "id", "synapse", "spikeTarget");
 
@@ -1951,7 +1947,7 @@ public class ImportJob extends XMLutility
             for (String s : sorted.values ()) times += ";" + s;
             times += ";∞";  // This shuts down spiking after last specified time.
             times = "[" + times.substring (1) + "]";
-            part.set ("times", times);
+            part.set (times, "times");
         }
     }
 
@@ -1961,11 +1957,11 @@ public class ImportJob extends XMLutility
         String inherit = part.get ("$inherit").replace ("\"", "");
         part.clear ("$inherit");
         if (! inherit.isEmpty ()) removeDependency (part, inherit);
-        part.set ("$metadata", "backend", "lems", "part", "compoundInput");
+        part.set ("compoundInput", "$metadata", "backend", "lems", "part");
         for (MNode c : part)
         {
             if (c.child ("$inherit") == null) continue;  // not a sub-part
-            c.set ("B", "$kill");  // force sub-part to get its connection binding from us
+            c.set ("$kill", "B");  // force sub-part to get its connection binding from us
         }
     }
 
@@ -1984,8 +1980,8 @@ public class ImportJob extends XMLutility
             String temperature = getAttribute (node, "temperature");
 
             network = models.childOrCreate (modelName, id);
-            network.set ("$metadata", "backend", "lems", "part", "network");
-            if (! temperature.isEmpty ()) network.set ("temperature", biophysicalUnits (temperature));
+            network.set ("network", "$metadata", "backend", "lems", "part");
+            if (! temperature.isEmpty ()) network.set (biophysicalUnits (temperature), "temperature");
 
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
@@ -1997,7 +1993,7 @@ public class ImportJob extends XMLutility
                         break;
                     case "region":
                         String spaceID = getAttribute (child, "space");
-                        network.set ("$region", child.getNodeValue (), spaceID);  // Region is little more than an alias of a space, as of NeuroML 2 beta 4.
+                        network.set (spaceID, "$region", child.getNodeValue ());  // Region is little more than an alias of a space, as of NeuroML 2 beta 4.
                         break;
                     case "extracellularProperties":
                         extracellularProperties.add (child);
@@ -2037,8 +2033,8 @@ public class ImportJob extends XMLutility
                     double oy = getAttribute (child, "yStart",   0.0);
                     double oz = getAttribute (child, "zStart",   0.0);
                     MNode p = network.childOrCreate ("$space", id);
-                    p.set ("scale",  "[" + print (sx) + ";" + print (sy) + ";" + print (sz) + "]*1um");
-                    p.set ("offset", "[" + print (ox) + ";" + print (oy) + ";" + print (oz) + "]*1um");
+                    p.set ("[" + print (sx) + ";" + print (sy) + ";" + print (sz) + "]*1um", "scale");
+                    p.set ("[" + print (ox) + ";" + print (oy) + ";" + print (oz) + "]*1um", "offset");
                 }
             }
         }
@@ -2049,10 +2045,10 @@ public class ImportJob extends XMLutility
             int    n         = getAttribute (node, "size", 0);
             String component = getAttribute (node, "component");  // Should always be defined.
 
-            MNode part = network.set (id, "");
-            part.set ("$inherit", component);
+            MNode part = network.set ("", id);
+            part.set (component, "$inherit");
             addDependency (part, component);
-            if (n > 1) part.set ("$n", n);
+            if (n > 1) part.set (n, "$n");
 
             // Add intra/extra cellular properties to inherited cell
             Cell cell = cells.get (component);
@@ -2084,7 +2080,7 @@ public class ImportJob extends XMLutility
             if (instances != null)
             {
                 int count = instances.size ();
-                if (count > 1) part.set ("$n", count);
+                if (count > 1) part.set (count, "$n");
                 int index = 0;
                 for (MNode i : instances)
                 {
@@ -2092,15 +2088,15 @@ public class ImportJob extends XMLutility
                     String ijk = i.get ("ijk");
                     if (count == 1)
                     {
-                        if (! xyz.isEmpty ()) part.set ("$xyz", xyz);
-                        if (! ijk.isEmpty ()) part.set ("ijk",  ijk);
+                        if (! xyz.isEmpty ()) part.set (xyz, "$xyz");
+                        if (! ijk.isEmpty ()) part.set (ijk, "ijk");
                     }
                     else
                     {
-                        if (! xyz.isEmpty ()) part.set ("$xyz", "@$index==" + index, xyz);
-                        if (! ijk.isEmpty ()) part.set ("ijk",  "@$index==" + index, ijk);
+                        if (! xyz.isEmpty ()) part.set (xyz, "$xyz", "@$index==" + index);
+                        if (! ijk.isEmpty ()) part.set (ijk, "ijk",  "@$index==" + index);
                     }
-                    i.set ("$index", index++);
+                    i.set (index++, "$index");
                 }
             }
         }
@@ -2121,19 +2117,19 @@ public class ImportJob extends XMLutility
                     switch (child.getNodeName ())
                     {
                         case "random":
-                            part.set ("$n", getAttribute (child, "number", 1));
-                            if (space != null) part.set ("$xyz", "uniform(" + space.get ("scale") + ")+" + space.get ("offset"));
+                            part.set (getAttribute (child, "number", 1), "$n");
+                            if (space != null) part.set ("uniform(" + space.get ("scale") + ")+" + space.get ("offset"), "$xyz");
                             break;
                         case "grid":
                             int x = getAttribute (child, "xSize", 1);
                             int y = getAttribute (child, "ySize", 1);
                             int z = getAttribute (child, "zSize", 1);
-                            part.set ("$n", x * y * z);
-                            if (space == null) part.set ("$xyz", "grid($index," + x + "," + y + "," + z + ")");
-                            else               part.set ("$xyz", "grid($index," + x + "," + y + "," + z + ",\"raw\")&" + space.get ("scale") + "+" + space.get ("offset"));
+                            part.set (x * y * z, "$n");
+                            if (space == null) part.set ("grid($index," + x + "," + y + "," + z + ")",                                                             "$xyz");
+                            else               part.set ("grid($index," + x + "," + y + "," + z + ",\"raw\")&" + space.get ("scale") + "+" + space.get ("offset"), "$xyz");
                             break;
                         case "unstructured":
-                            part.set ("$n", getAttribute (child, "number", 1));
+                            part.set (getAttribute (child, "number", 1), "$n");
                             break;
                     }
                 }
@@ -2163,13 +2159,13 @@ public class ImportJob extends XMLutility
 
             String suffix = "*1um";
             if (x == 0  &&  y == 0  &&  z == 0) suffix = "";
-            part.set ("$instance", id, "$xyz", "[" + print (x) + ";" + print (y) + ";" + print (z) + "]" + suffix);
+            part.set ("[" + print (x) + ";" + print (y) + ";" + print (z) + "]" + suffix, "$instance", id, "$xyz");
             if (i >= 0  ||  j >= 0  ||  k >= 0)
             {
                 if (i < 0) i = 0;
                 if (j < 0) j = 0;
                 if (k < 0) k = 0;
-                part.set ("$instance", id, "ijk",  "[" + i + ";" + j + ";" + k + "]");
+                part.set ("[" + i + ";" + j + ";" + k + "]",                              "$instance", id, "ijk");
             }
         }
 
@@ -2215,11 +2211,11 @@ public class ImportJob extends XMLutility
                     {
                         // Create modified part
                         MNode c = models.childOrCreate (modelName, component);
-                        c.set ("B",   "$kill");
-                        c.set ("B.I", "$kill");
+                        c.set ("$kill", "B");
+                        c.set ("$kill", "B.I");
 
                         // Create connection
-                        base.set ("B.I", "+A.I");
+                        base.set ("+A.I", "B.I");
                         inherit = "";
                         A = component;
                     }
@@ -2230,8 +2226,8 @@ public class ImportJob extends XMLutility
                     A = component;
                 }
             }
-            if (! A.isEmpty()) base.set ("A", A);
-            base.set ("B", B);
+            if (! A.isEmpty()) base.set (A, "A");
+            base.set (B, "B");
 
             NameMap nameMap = partMap.importMap (inherit);
             inherit = nameMap.internal;
@@ -2302,26 +2298,26 @@ public class ImportJob extends XMLutility
                 else  // Create new part, cloning relevant info.
                 {
                     connections.add (connection);
-                    if (network.child (id) == null) connection.part = network.set (id,           base);
-                    else                            connection.part = network.set (id + childID, base);  // Another part has already consumed the base name, so augment it with some index. Any index will do, but childID is convenient.
+                    if (network.child (id) == null) connection.part = network.set (base, id);
+                    else                            connection.part = network.set (base, id + childID);  // Another part has already consumed the base name, so augment it with some index. Any index will do, but childID is convenient.
 
                     if (! inherit.isEmpty ())
                     {
-                        connection.part.set ("$inherit", inherit);
+                        connection.part.set (inherit, "$inherit");
                         addDependency (connection.part, inherit);
                     }
                     if (! component.isEmpty()  &&  ! A.isEmpty()) addDependencyFromConnection (connection.part.child ("A"), A);
 
-                    if (! connection.preGroup .isEmpty ()) connection.part.set ("A", A + "." + connection.preGroup);
-                    if (! connection.postGroup.isEmpty ()) connection.part.set ("B", B + "." + connection.postGroup);
+                    if (! connection.preGroup .isEmpty ()) connection.part.set (A + "." + connection.preGroup,  "A");
+                    if (! connection.postGroup.isEmpty ()) connection.part.set (B + "." + connection.postGroup, "B");
                     if (! connection.preComponent.isEmpty ())
                     {
-                        connection.part.set ("preComponent", "$inherit", connection.preComponent);
+                        connection.part.set (connection.preComponent, "preComponent", "$inherit");
                         addDependency (connection.part.child ("preComponent"), connection.preComponent);
                     }
                     if (! connection.postComponent.isEmpty ())
                     {
-                        connection.part.set ("postComponent", "$inherit", connection.postComponent);
+                        connection.part.set (connection.postComponent, "postComponent", "$inherit");
                         addDependency (connection.part.child ("postComponent"), connection.postComponent);
                     }
                 }
@@ -2355,17 +2351,17 @@ public class ImportJob extends XMLutility
                     MNode p = connection.part.child ("$p");
                     if (p == null)
                     {
-                        connection.part.set ("$p", condition);
+                        connection.part.set (condition, "$p");
                     }
                     else
                     {
                         if (p.size () == 0)  // There is exactly one condition already existing, and we transition to multi-part equation.
                         {
-                            p.set ("@", "0");
-                            p.set ("@" + p.get (), "1");
+                            p.set ("0", "@");
+                            p.set ("1", "@" + p.get ());
                             p.set ("");
                         }
-                        p.set ("@" + condition, "1");
+                        p.set ("1", "@" + condition);
                     }
                 }
 
@@ -2379,21 +2375,21 @@ public class ImportJob extends XMLutility
 
             if (connections.size () == 0)  // No connections were added, so add a minimalist projection part.
             {
-                MNode part = network.set (id, base);
+                MNode part = network.set (base, id);
                 if (! inherit.isEmpty ())
                 {
-                    part.set ("$inherit", inherit);
+                    part.set (inherit, "$inherit");
                     addDependency (part, inherit);
                 }
-                part.set ("$p", "0");  // No connections at all
+                part.set ("0", "$p");  // No connections at all
 
                 SegmentFinder finder = new SegmentFinder ();
                 if (! inputList) finder.find ("0", A);
-                if (! finder.group.isEmpty ()) part.set ("A", A + "." + finder.group);
+                if (! finder.group.isEmpty ()) part.set (A + "." + finder.group, "A");
                 // Because the input file is un-specific, we don't care about filtering by index.
 
                 finder.find ("0", B);
-                if (! finder.group.isEmpty ()) part.set ("B", B + "." + finder.group);
+                if (! finder.group.isEmpty ()) part.set (B + "." + finder.group, "B");
             }
         }
 
@@ -2456,7 +2452,7 @@ public class ImportJob extends XMLutility
             String synapse = sourcePart.get ("$metadata", "backend", "lems", "synapse");
             if (synapse.isEmpty ())
             {
-                part.set ("$inherit", input);
+                part.set (input, "$inherit");
                 addDependency (part, input);
                 // The unresolved question here is whether sourcePart is shared with any other input.
                 // The only way to be certain is to check after all inputs have been created.
@@ -2466,9 +2462,9 @@ public class ImportJob extends XMLutility
             }
             else
             {
-                part.set ("$inherit", synapse);
+                part.set (synapse, "$inherit");
                 addDependency (part, synapse);
-                MNode connection = part.set ("A", input);
+                MNode connection = part.set (input, "A");
                 addDependencyFromConnection (connection, input);
             }
 
@@ -2478,7 +2474,7 @@ public class ImportJob extends XMLutility
             finder.find ("0", target);
             if (finder.segment != null) target += "." + finder.segment.key ();
 
-            part.set ("B", target);
+            part.set (target, "B");
 
             String p = "";
             if (targetPart == null  ||  targetPart.getOrDefault (1, "$n") != 1)  // We only have to set $p explicitly if the target part has more than one instance.
@@ -2491,7 +2487,7 @@ public class ImportJob extends XMLutility
                 if (! p.isEmpty ()) p += "&&";
                 p += "B.$index==" + finder.index;
             }
-            if (! p.isEmpty ()) part.set ("$p", p);
+            if (! p.isEmpty ()) part.set (p, "$p");
         }
 
         public void finish1 ()
@@ -2514,11 +2510,11 @@ public class ImportJob extends XMLutility
 
                 removeDependency (part, inherit);
                 part.clear ("$inherit");
-                MNode connection = part.set ("A", inherit);
+                MNode connection = part.set (inherit, "A");
                 addDependencyFromConnection (connection, inherit);
-                sourcePart.set ("B",   "$kill");
-                sourcePart.set ("B.I", "$kill");
-                part.set ("B.I", "+A.I");
+                sourcePart.set ("$kill", "B");
+                sourcePart.set ("$kill", "B.I");
+                part.set ("+A.I", "B.I");
             }
         }
     }
@@ -2572,19 +2568,19 @@ public class ImportJob extends XMLutility
                 {
                     if (outputSeconds)
                     {
-                        if (value >= 1) part.set (name, value + "s");
-                        else            part.set (name, value * 1000 + "ms");
+                        if (value >= 1) part.set (value + "s",         name);
+                        else            part.set (value * 1000 + "ms", name);
                     }
                     else
                     {
-                        part.set (name, value);
+                        part.set (value, name);
                     }
                     return;
                 }
             }
 
             MNode v = part.childOrCreate (name);
-            v.set ("@", defaultValue);
+            v.set (defaultValue, "@");
             for (Entry<Double,TreeSet<String>> e : collection.entrySet ())
             {
                 String condition = "";
@@ -2596,12 +2592,12 @@ public class ImportJob extends XMLutility
                 double value = e.getKey ();
                 if (outputSeconds)
                 {
-                    if (value >= 1) part.set (name, value + "s");
-                    else            part.set (name, value * 1000 + "ms");
+                    if (value >= 1) part.set (value + "s",         name);
+                    else            part.set (value * 1000 + "ms", name);
                 }
                 else
                 {
-                    v.set ("@" + condition, value);
+                    v.set (value, "@" + condition);
                 }
             }
         }
@@ -2630,8 +2626,8 @@ public class ImportJob extends XMLutility
         if (primaryModel.equals (id)) primaryModel = target;  // redirect, since "Simulation" itself is not a proper object.
 
         MNode part = models.childOrCreate (modelName, target);
-        part.set ("$t'", step);
-        part.set ("$p", "$t<" + length);
+        part.set (step,           "$t'");
+        part.set ("$t<" + length, "$p");
 
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
         {
@@ -2743,7 +2739,7 @@ public class ImportJob extends XMLutility
                 if (! mode.isEmpty ()) output += ",\"" + mode + "\"";
                 output += ")";
                 if (! condition.isEmpty ()) output += "@" + condition;
-                container.set (dummy, output);
+                container.set (output, dummy);
             }
         }
     }
@@ -2758,14 +2754,14 @@ public class ImportJob extends XMLutility
         String nodeName = node.getNodeName ();
         if (nodeName.equals ("notes"))
         {
-            container.set ("$metadata", "notes", getText (node));
+            container.set (getText (node), "$metadata", "notes");
             return container.child ("$metadata", "notes");
         }
         if (nodeName.equals ("property"))
         {
             String tag   = getAttribute (node, "tag");
             String value = getAttribute (node, "value");
-            container.set ("$metadata", tag, value);
+            container.set (value, "$metadata", tag);
             return container.child ("$metadata", tag);
         }
         if (nodeName.equals ("annotation"))
@@ -2795,7 +2791,7 @@ public class ImportJob extends XMLutility
             // It will still map parameter names correctly for import.
             nameMap = partMap.exportMap (inherit);
         }
-        part.set ("$inherit", inherit);
+        part.set (inherit, "$inherit");
         addDependency (part, inherit);
 
         parents = collectParents (part);  // Now we follow our own inheritance chain, not our container's.
@@ -2811,7 +2807,7 @@ public class ImportJob extends XMLutility
             if (name.equals ("type")) continue;
             if (name.equals ("neuroLexId"))
             {
-                part.set ("$metadata", "neuroLexID", value);
+                part.set (value, "$metadata", "neuroLexID");
                 continue;
             }
 
@@ -2819,14 +2815,14 @@ public class ImportJob extends XMLutility
             if (isPart (name, parents))
             {
                 inherit = value;
-                part.set (name, "$inherit", inherit);
+                part.set (inherit, name, "$inherit");
                 addDependency (part.child (name), inherit);
                 addAlias (inherit, name);
             }
             else
             {
                 String defaultUnit = nameMap.defaultUnit (name);
-                part.set (name, biophysicalUnits (value, defaultUnit));
+                part.set (biophysicalUnits (value, defaultUnit), name);
             }
         }
 
@@ -2865,7 +2861,7 @@ public class ImportJob extends XMLutility
         result = result.split ("<annotation>", 2)[1];
         result = result.split ("</annotation>", 2)[0];
 
-        container.set ("$metadata", "annotation", result);
+        container.set (result, "$metadata", "annotation");
         return container.child ("$metadata", "annotation");
     }
 
@@ -2877,7 +2873,7 @@ public class ImportJob extends XMLutility
         for (MNode v : temp)
         {
             String key = nameMap.importName (v.key ());
-            part.set (key, v);
+            part.set (v, key);
         }
     }
 
@@ -2894,13 +2890,13 @@ public class ImportJob extends XMLutility
             if (forbiddenList.contains (name)) continue;
             if (name.equals ("neuroLexId"))
             {
-                part.set ("$metadata", "neuroLexID", value);
+                part.set (value, "$metadata", "neuroLexID");
                 continue;
             }
 
             name = nameMap.importName (name);
             String defaultUnit = nameMap.defaultUnit (name);
-            part.set (name, biophysicalUnits (value, defaultUnit));  // biophysicalUnits() will only modify text if there is a numeric value
+            part.set (biophysicalUnits (value, defaultUnit), name);  // biophysicalUnits() will only modify text if there is a numeric value
         }
     }
 
@@ -3010,8 +3006,8 @@ public class ImportJob extends XMLutility
         primaryModel      = getAttribute (node, "component");
         String reportFile = getAttribute (node, "reportFile");
         String timesFile  = getAttribute (node, "timesFile");
-        if (! reportFile.isEmpty ()) models.set (modelName, "$metadata", "backend", "lems", "reportFile", reportFile);
-        if (! timesFile .isEmpty ()) models.set (modelName, "$metadata", "backend", "lems", "timesFile",  timesFile);
+        if (! reportFile.isEmpty ()) models.set (reportFile, modelName, "$metadata", "backend", "lems", "reportFile");
+        if (! timesFile .isEmpty ()) models.set (timesFile,  modelName, "$metadata", "backend", "lems", "timesFile");
     }
 
     public void dimension (Node node)
@@ -3164,7 +3160,7 @@ public class ImportJob extends XMLutility
             String inherit     = getAttribute (node, "extends");
             String description = getAttribute (node, "description");
             part = models.childOrCreate (modelName, name);
-            part.set ("$lems", "1");
+            part.set ("1", "$lems");
             NameMap nameMap = null;
             if (! inherit.isEmpty ())
             {
@@ -3176,13 +3172,13 @@ public class ImportJob extends XMLutility
                 // Similar comments apply to other name mapping below.
                 if (models.child (modelName, inherit) == null)
                 {
-                    part.set ("$metadata", "backend", "lems", "extends", inherit);  // Remember the original "extends" value, because inherited backend.lems.part usually conflates several base types.
+                    part.set (inherit, "$metadata", "backend", "lems", "extends");  // Remember the original "extends" value, because inherited backend.lems.part usually conflates several base types.
                     inherit = nameMap.internal;
                 }
-                part.set ("$inherit", inherit);
+                part.set (inherit, "$inherit");
                 addDependencyFromLEMS (part, inherit);
             }
-            if (! description.isEmpty ()) part.set ("$metadata", "description", description);
+            if (! description.isEmpty ()) part.set (description, "$metadata", "description");
 
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
@@ -3203,8 +3199,8 @@ public class ImportJob extends XMLutility
                     case "Text":
                         name        = getAttribute (child, "name");
                         description = getAttribute (child, "description");
-                        part.set (name, "\"\"");
-                        if (! description.isEmpty ()) part.set (name, "$metadata", "description", description);
+                        part.set ("\"\"", name);
+                        if (! description.isEmpty ()) part.set (description, name, "$metadata", "description");
                         break;
                     case "Requirement":
                         name             = getAttribute (child, "name");
@@ -3234,23 +3230,23 @@ public class ImportJob extends XMLutility
                         {
                             value += " " + description;
                         }
-                        part.set ("$metadata", "backend", "lems", "requirement", name, value);
+                        part.set (value, "$metadata", "backend", "lems", "requirement", name);
                         break;
                     case "EventPort":
                         name             = getAttribute (child, "name");
                         description      = getAttribute (child, "description");
                         String direction = getAttribute (child, "direction");
-                        if (direction.equals ("in")) part.set (name, "0@" + name);  // This should be overridden by a proper event() expression.
-                        else                         part.set (name, "0");   // This should be replaced by a multi-conditional expression
-                        part.set (name, "$metadata", "backend", "lems", "port", direction);
-                        if (! description.isEmpty ()) part.set (name, "$metadata", "description", description);
+                        if (direction.equals ("in")) part.set ("0@" + name, name);  // This should be overridden by a proper event() expression.
+                        else                         part.set ("0",         name);   // This should be replaced by a multi-conditional expression
+                        part.set (direction, name, "$metadata", "backend", "lems", "port");
+                        if (! description.isEmpty ()) part.set (description, name, "$metadata", "description");
                         break;
                     case "Child":
                         name    = getAttribute (child, "name");
                         inherit = getAttribute (child, "type");
                         MNode childPart = part.childOrCreate (name);
                         if (models.child (modelName, inherit) == null) inherit = partMap.importName (inherit);
-                        childPart.set ("$inherit", inherit);
+                        childPart.set (inherit, "$inherit");
                         addDependencyFromLEMS (childPart, inherit);
                         break;
                     case "Children":
@@ -3271,15 +3267,15 @@ public class ImportJob extends XMLutility
                         nodeName = nodeName.toLowerCase ();  // This shouldn't hurt the switch statement, because we've already selected this case.
                         if (rawInherit.equals (partMap.exportName (inherit)))  // If our default external name matches the original (raw) external name, then only store the internal part name.
                         {
-                            part.set ("$metadata", "backend", "lems", nodeName, name, inherit);
+                            part.set (inherit,                    "$metadata", "backend", "lems", nodeName, name);
                         }
                         else  // Store both the internal name and the original external name, to facilitate more precise re-export.
                         {
-                            part.set ("$metadata", "backend", "lems", nodeName, name, inherit + "," + rawInherit);
+                            part.set (inherit + "," + rawInherit, "$metadata", "backend", "lems", nodeName, name);
                         }
                         addDependencyFromLEMS (part.child ("$metadata", "backend", "lems", nodeName, name), inherit);
-                        if (! min.isEmpty ()) part.set ("$metadata", "backend", "lems", nodeName, name, "min", min);
-                        if (! max.isEmpty ()) part.set ("$metadata", "backend", "lems", nodeName, name, "max", max);
+                        if (! min.isEmpty ()) part.set (min, "$metadata", "backend", "lems", nodeName, name, "min");
+                        if (! max.isEmpty ()) part.set (max, "$metadata", "backend", "lems", nodeName, name, "max");
                         break;
                     case "ComponentReference":    // alias of a referenced part; jLEMS does resolution; "local" means the referenced part is a sibling, otherwise resolution includes the entire hierarchy
                     case "Link":                  // equivalent to "ComponentReference" with local flag set to true
@@ -3289,9 +3285,9 @@ public class ImportJob extends XMLutility
                         inherit     = getAttribute (child, "type");
                         description = getAttribute (child, "description");
                         if (models.child (modelName, inherit) == null) inherit = partMap.importName (inherit);
-                        part.set (name, "connect(" + inherit + ")");
+                        part.set ("connect(" + inherit + ")", name);
                         if (! inherit    .isEmpty ()) addDependencyFromLEMS (part.child (name), inherit);
-                        if (! description.isEmpty ()) part.set (name, "$metadata", "description", description);
+                        if (! description.isEmpty ()) part.set (description, name, "$metadata", "description");
                         break;
                     case "Dynamics":
                         dynamics (child);
@@ -3332,7 +3328,7 @@ public class ImportJob extends XMLutility
                 variablePath.required = required.equals ("true");
                 variablePath.resolve (part);
                 if (variablePath.isDirect) value = variablePath.directName ();
-                else if (! dimension.isEmpty ()) result.set ("$metadata", "backend", "lems", "dimension", dimension);  // Need to stash dimension, since there's no way to compute it.
+                else if (! dimension.isEmpty ()) result.set (dimension, "$metadata", "backend", "lems", "dimension");  // Need to stash dimension, since there's no way to compute it.
 
                 // At this point we don't know enough about the path, because some requisite parts may
                 // not be defined yet. Re-evaluate during postprocessing.
@@ -3354,7 +3350,7 @@ public class ImportJob extends XMLutility
                 result.set (pv.combiner);
                 if (! pv.condition.isEmpty ()  ||  ! pv.expression.startsWith ("0"))  // Only add the equation if not a placeholder
                 {
-                    result.set ("@" + pv.condition, pv.expression);
+                    result.set (pv.expression, "@" + pv.condition);
                     equationCount++;
                 }
             }
@@ -3370,21 +3366,21 @@ public class ImportJob extends XMLutility
                 }
                 else
                 {
-                    result.set ("@" + condition1, value);
+                    result.set (value, "@" + condition1);
                 }
                 equationCount++;
             }
-            if (! description.isEmpty ()) result.set ("$metadata", "description", description);
+            if (! description.isEmpty ()) result.set (description, "$metadata", "description");
             if (! exposure.isEmpty ())
             {
                 if (exposure.equals (name))
                 {
-                    result.set ("$metadata", "backend", "lems", "expose", "");
+                    result.set ("", "$metadata", "backend", "lems", "expose");
                 }
                 else
                 {
-                    result.set ("$metadata", "backend", "lems", "expose", exposure);
-                    part.set (exposure, name);  // Create an alias so that other parts can find the value.
+                    result.set (exposure, "$metadata", "backend", "lems", "expose");
+                    part.set (name, exposure);  // Create an alias so that other parts can find the value.
                 }
             }
 
@@ -3393,7 +3389,7 @@ public class ImportJob extends XMLutility
                 || nodeName.equals ("Path")
                 || nodeName.equals ("Text"))
             {
-                result.set ("$metadata", "param", "");  // Intended as public interface to this component
+                result.set ("", "$metadata", "param");  // Intended as public interface to this component
             }
 
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
@@ -3413,7 +3409,7 @@ public class ImportJob extends XMLutility
                     }
                     if (equationCount > 1)
                     {
-                        result.set ("@" + condition2, value);
+                        result.set (value, "@" + condition2);
                     }
                     else
                     {
@@ -3508,15 +3504,15 @@ public class ImportJob extends XMLutility
                         break;
                     case "EventOut":
                         String portName = getAttribute (child, "port");
-                        part.set (portName, "@" + condition2, "1");
+                        part.set ("1",   portName, "@" + condition2);
                         // The following lines will likely be redundant, if the port variable has already been set up.
-                        part.set (portName, "");  // Clear any placeholder value from "EventPort" declaration.
-                        part.set (portName, "@", "0");
-                        part.set (portName, "$metadata", "backend", "lems", "port", "out");
+                        part.set ("",    portName);  // Clear any placeholder value from "EventPort" declaration.
+                        part.set ("0",   portName, "@");
+                        part.set ("out", portName, "$metadata", "backend", "lems", "port");
                         break;
                     case "Transition":
                         String regimeName = getAttribute (child, "regime");
-                        regime.set ("@" + condition2, regimeName);
+                        regime.set (regimeName, "@" + condition2);
                         break;
                 }
             }
@@ -3527,10 +3523,10 @@ public class ImportJob extends XMLutility
             if (regime == null)
             {
                 regime = part.childOrCreate ("$regime");
-                regime.set ("@$init", "-1");  // No active regime at startup
+                regime.set ("-1", "@$init");  // No active regime at startup
             }
             MNode regimeValue = part.child (name);
-            if (regimeValue == null) part.set (name, nextRegimeIndex++);
+            if (regimeValue == null) part.set (nextRegimeIndex++, name);
         }
 
         public void regime (Node node)
@@ -3539,7 +3535,7 @@ public class ImportJob extends XMLutility
             String initial = getAttribute (node, "initial");
 
             allocateRegime (name);
-            if (initial.equals ("true")) regime.set ("@$init", name);
+            if (initial.equals ("true")) regime.set (name, "@$init");
 
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
@@ -3553,8 +3549,8 @@ public class ImportJob extends XMLutility
                         {
                             Variable.ParsedValue pv = new Variable.ParsedValue (d.get ());
                             d.set (pv.combiner);  // This is unlikely to contain any value.
-                            d.set ("@" + pv.condition, pv.expression);
-                            d.set ("@", 0);
+                            d.set (pv.expression, "@" + pv.condition);
+                            d.set (0,             "@");
                         }
                         break;
                     case "OnEntry":
@@ -3597,7 +3593,7 @@ public class ImportJob extends XMLutility
                         Variable.ParsedValue pv = new Variable.ParsedValue (parent.get (stateVariable));
                         if (pv.expression.isEmpty ()) pv.expression = "0";
                         if (pv.condition .isEmpty ()) pv.condition  = "$init";
-                        parent.set (stateVariable, pv);
+                        parent.set (pv, stateVariable);
                     }
                 }
             }
@@ -3611,8 +3607,8 @@ public class ImportJob extends XMLutility
                     parent = models.childOrCreate (modelName, inherit);
                     if (parent != null)
                     {
-                        parent.set (edgeSource + "." + stateVariable + "'", "+-" + reverseRate);
-                        parent.set (edgeTarget + "." + stateVariable + "'", "+"  + forwardRate);
+                        parent.set ("+-" + reverseRate, edgeSource + "." + stateVariable + "'");
+                        parent.set ("+"  + forwardRate, edgeTarget + "." + stateVariable + "'");
                     }
                 }
             }
@@ -3734,18 +3730,18 @@ public class ImportJob extends XMLutility
             else
             {
                 v.set ("1@" + event);  // Connection port must be a regular variable.
-                v.set ("$metadata", "warning1", "Consider moving this event into the target part, where the port variable can be temporary.");
+                v.set ("Consider moving this event into the target part, where the port variable can be temporary.", "$metadata", "warning1");
             }
-            v.set ("$metadata", "backend", "lems", "event", "");
+            v.set ("", "$metadata", "backend", "lems", "event");
             if (! portsKnown)
             {
-                v.set ("$metadata", "warning2", "The identity of the source or target port could not be fully determined.");
+                v.set ("The identity of the source or target port could not be fully determined.", "$metadata", "warning2");
                 // For events that references ports in their prospective container, check during post-processing
                 // to see if they have been inserted in a container.
                 if (to  .startsWith ("$up")) eventChildren.add (new EventChild (part, v, targetPort));
                 if (from.startsWith ("$up")) eventChildren.add (new EventChild (part, v, sourcePort));
             }
-            if (! property.isEmpty ()) part.set (to + property, value);
+            if (! property.isEmpty ()) part.set (value, to + property);
         }
 
         /**
@@ -3839,7 +3835,7 @@ public class ImportJob extends XMLutility
                     // Search for definition in some parent
                     List<MNode> parents = collectParents (part);
                     sourceNode = definitionFor (component, parents);
-                    if (sourceNode == null) sourceNode = part.set (component, "");
+                    if (sourceNode == null) sourceNode = part.set ("", component);
                 }
                 MNode targetNode = part.childOrCreate (component);
                 String inherit = sourceNode.get ();  // Will either be blank or a connect() line
@@ -3848,7 +3844,7 @@ public class ImportJob extends XMLutility
                     inherit = inherit.replace ("connect(", "");
                     inherit = inherit.replace (")",        "");
                     targetNode.set ("");
-                    targetNode.set ("$inherit", inherit);
+                    targetNode.set (inherit, "$inherit");
                     if (sourceNode != targetNode) addDependencyFromLEMS (targetNode, inherit);
                     // No need to call addDependency() if sourcePart is local, because it was already called when the connect() line was created.
                 }
@@ -3914,7 +3910,7 @@ public class ImportJob extends XMLutility
                         }
                     }
                 }
-                for (String pc : kill) v.set ("@" + pc, "");  // For conditional equations, used "" rather than "$kill".
+                for (String pc : kill) v.set ("", "@" + pc);  // For conditional equations, used "" rather than "$kill".
             }
 
             // Pretty print and name mapping
@@ -3935,7 +3931,7 @@ public class ImportJob extends XMLutility
                 String regimeName = "regime";
                 int suffix = 2;
                 while (part.child (regimeName) != null) regimeName = "regime" + suffix++;
-                if (! regimeName.equals ("regime")) regime.set ("$metadata", "backend", "lems", "regime", "");
+                if (! regimeName.equals ("regime")) regime.set ("", "$metadata", "backend", "lems", "regime");
                 pp.rename.put ("$regime", regimeName);
             }
 
@@ -3988,15 +3984,15 @@ public class ImportJob extends XMLutility
                     String combiner = part.get (name);
                     if (combiner.length () > 1) combiner = combiner.substring (0, 1);
                     if (! Variable.isCombiner (combiner)  ||  combiner.equals (":")) combiner = "";
-                    part.set (name, combiner);
+                    part.set (combiner, name);
 
                     MNode  container = path.container ();
                     String up        = path.up ();
                     String target    = path.target ();
                     String condition = path.condition ();
-                    if (condition.isEmpty ()) container.set (up + name, combiner + target);
-                    else                      container.set (up + name, combiner + target + "@" + condition);
-                    if (path.required) container.set (up + name, "$metadata", "backend", "lems", "required", "");
+                    if (condition.isEmpty ()) container.set (combiner + target,                   up + name);
+                    else                      container.set (combiner + target + "@" + condition, up + name);
+                    if (path.required) container.set ("", up + name, "$metadata", "backend", "lems", "required");
                 }
             }
         }
@@ -4238,7 +4234,7 @@ public class ImportJob extends XMLutility
                 List<MNode> parents = collectParents (source);
                 child = definitionFor (name, parents);
             }
-            if (child != null) root.set (name, "$kill");
+            if (child != null) root.set ("$kill", name);
         }
     }
 

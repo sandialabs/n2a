@@ -89,8 +89,8 @@ public class ParserBibtex
             MNode tags = parseTags (reader);
             if (! ignore.contains (form))
             {
-                tags.set ("form", form);
-                output.set (tags.get (), tags);
+                tags.set (form, "form");
+                output.set (tags, tags.get ());
             }
         }
         return true;  // Whether it's true or not, we will find out in the next parse cycle.
@@ -162,7 +162,7 @@ public class ParserBibtex
             name += (char) c;
         }
 
-        result.set (name.trim ().toLowerCase (), parseContent (reader));
+        result.set (parseContent (reader), name.trim ().toLowerCase ());
         return true;
     }
 

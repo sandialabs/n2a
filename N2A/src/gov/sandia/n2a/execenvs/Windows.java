@@ -78,7 +78,7 @@ public class Windows extends LocalHost
                 if (line.contains (jobDir))
                 {
                     String[] parts = line.split ("\\s+");
-                    job.set ("$metadata", "pid", Long.parseLong (parts[1]));
+                    job.set (Long.parseLong (parts[1]), "$metadata", "pid");
                     return;
                 }
             }

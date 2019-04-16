@@ -112,7 +112,7 @@ public class JobC extends Thread
             model = new EquationSet (job);
             digestModel ();
             String duration = model.metadata.get ("duration");
-            if (! duration.isEmpty ()) job.set ("$metadata", "duration", duration);
+            if (! duration.isEmpty ()) job.set (duration, "$metadata", "duration");
 
             eventMode = Simulator.DURING;
             String e = job.get ("$metadata", "backend", "internal", "event");  // TODO: Need naming convention for parameters shared by more than one backend.

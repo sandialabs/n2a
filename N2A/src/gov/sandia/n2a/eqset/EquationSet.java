@@ -1120,7 +1120,7 @@ public class EquationSet implements Comparable<EquationSet>
             }
 
             //   Metadata
-            if (s.metadata.size () > 0) metadata.set (prefix, s.metadata);
+            if (s.metadata.size () > 0) metadata.set (s.metadata, prefix);
 
             //   Dependent connections (paths that pass through s)
             if (s.dependentConnections != null)
@@ -2214,7 +2214,7 @@ public class EquationSet implements Comparable<EquationSet>
                     }
                 };
                 Type result = value.eval (instance);
-                if (result instanceof Scalar) metadata.set ("duration", ((Scalar) result).value);
+                if (result instanceof Scalar) metadata.set (((Scalar) result).value, "duration");
             }
         }
     }

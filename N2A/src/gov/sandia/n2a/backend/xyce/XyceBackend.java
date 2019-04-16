@@ -157,9 +157,9 @@ class XyceBackend extends Backend
                     Files.createFile (jobDir.resolve ("started"));
 
                     // Ensure essential metadata is set
-                    if (job.child ("$metadata", "duration"                     ) == null) job.set ("$metadata", "duration",                      "1.0");
-                    if (job.child ("$metadata", "seed"                         ) == null) job.set ("$metadata", "seed",                          System.currentTimeMillis ());
-                    if (job.child ("$metadata", "backend", "xyce", "integrator") == null) job.set ("$metadata", "backend", "xyce", "integrator", "trapezoid");
+                    if (job.child ("$metadata", "duration"                     ) == null) job.set ("1.0",                       "$metadata", "duration");
+                    if (job.child ("$metadata", "seed"                         ) == null) job.set (System.currentTimeMillis (), "$metadata", "seed");
+                    if (job.child ("$metadata", "backend", "xyce", "integrator") == null) job.set ("trapezoid",                 "$metadata", "backend", "xyce", "integrator");
 
                     // set up job info
                     HostSystem env = HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host"));

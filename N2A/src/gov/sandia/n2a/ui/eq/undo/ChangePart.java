@@ -65,7 +65,7 @@ public class ChangePart extends Undoable
         // Update the database: move the subtree.
         MPart mparent = parent.source;
         mparent.clear (nameBefore);
-        mparent.set (nameAfter, "").merge (savedTree);;
+        mparent.set (savedTree, nameAfter);
         MPart oldPart = (MPart) mparent.child (nameBefore);
         MPart newPart = (MPart) mparent.child (nameAfter);
 

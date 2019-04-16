@@ -81,8 +81,8 @@ public class SettingsLookAndFeel implements Settings
                 if (theme != null) MetalLookAndFeel.setCurrentTheme (theme);
                 UIManager.setLookAndFeel (instance);
                 currentLaf = this;
-                AppData.state.set ("LookAndFeel", this);
-                AppData.state.set ("FontScale", fontScale);
+                AppData.state.set (this,      "LookAndFeel");
+                AppData.state.set (fontScale, "FontScale");
 
                 // Set scaled fonts.
                 if (fontScale != 1)

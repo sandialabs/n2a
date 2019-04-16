@@ -57,7 +57,7 @@ public class RemoteGateway extends RemoteHost
         {
             line = line.trim ();
             String[] parts = line.split ("\\s+");  // any amount/type of whitespace forms the delimiter
-            job.set ("$metadata", "pid", Long.parseLong (parts[0]));
+            job.set (Long.parseLong (parts[0]), "$metadata", "pid");
             return;
         }
     }

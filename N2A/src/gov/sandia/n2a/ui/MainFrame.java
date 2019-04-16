@@ -75,8 +75,8 @@ public class MainFrame extends JFrame
             {
                 if (getExtendedState () == NORMAL)
                 {
-                    AppData.state.set ("WinLayout", "width",  getWidth ());
-                    AppData.state.set ("WinLayout", "height", getHeight ());
+                    AppData.state.set (getWidth (),  "WinLayout", "width");
+                    AppData.state.set (getHeight (), "WinLayout", "height");
                 }
             }
 
@@ -84,8 +84,8 @@ public class MainFrame extends JFrame
             {
                 if (getExtendedState () == NORMAL)
                 {
-                    AppData.state.set ("WinLayout", "x", getX ());
-                    AppData.state.set ("WinLayout", "y", getY ());
+                    AppData.state.set (getX (), "WinLayout", "x");
+                    AppData.state.set (getY (), "WinLayout", "y");
                 }
             }
         });
@@ -94,7 +94,7 @@ public class MainFrame extends JFrame
         {
             public void windowStateChanged (WindowEvent e)
             {
-                AppData.state.set ("WinLayout", "state", getExtendedState ());
+                AppData.state.set (getExtendedState (), "WinLayout", "state");
             }
         });
 

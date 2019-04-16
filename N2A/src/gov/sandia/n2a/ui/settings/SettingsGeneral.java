@@ -34,14 +34,14 @@ public class SettingsGeneral extends JPanel implements Settings
         {
             public void actionPerformed (ActionEvent arg0)
             {
-                AppData.state.set ("General", key, field.getText ());
+                AppData.state.set (field.getText (), "General", key);
             }
         });
         field.addFocusListener (new FocusAdapter ()
         {
             public void focusLost (FocusEvent e)
             {
-                AppData.state.set ("General", key, field.getText ());
+                AppData.state.set (field.getText (), "General", key);
             }
         });
         return Lay.BL ("W", Lay.FL ("H", label, field));
@@ -59,7 +59,7 @@ public class SettingsGeneral extends JPanel implements Settings
             public void actionPerformed (ActionEvent arg0)
             {
                 String value = field.getText ();
-                AppData.state.set ("General", key, value);
+                AppData.state.set (value, "General", key);
                 if (! value.isEmpty ()) System.setProperty (systemPropertyName, value);
             }
         });
@@ -68,7 +68,7 @@ public class SettingsGeneral extends JPanel implements Settings
             public void focusLost (FocusEvent e)
             {
                 String value = field.getText ();
-                AppData.state.set ("General", key, value);
+                AppData.state.set (value, "General", key);
                 if (! value.isEmpty ()) System.setProperty (systemPropertyName, value);
             }
         });
@@ -85,14 +85,14 @@ public class SettingsGeneral extends JPanel implements Settings
         {
             public void actionPerformed (ActionEvent arg0)
             {
-                AppData.state.set ("General", key, field.getSelectedItem ());
+                AppData.state.set (field.getSelectedItem (), "General", key);
             }
         });
         field.addFocusListener (new FocusAdapter ()
         {
             public void focusLost (FocusEvent e)
             {
-                AppData.state.set ("General", key, field.getSelectedItem ());
+                AppData.state.set (field.getSelectedItem (), "General", key);
             }
         });
         return Lay.BL ("W", Lay.FL ("H", label, field));

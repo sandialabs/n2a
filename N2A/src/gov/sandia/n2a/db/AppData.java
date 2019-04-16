@@ -42,7 +42,7 @@ public class AppData
     {
         Path root = Paths.get (System.getProperty ("user.home"), "n2a").toAbsolutePath ();
         properties = new MVolatile ();
-        properties.set ("resourceDir", root);
+        properties.set (root, "resourceDir");
 
         state = new MDoc (root.resolve ("state"));
         runs  = new MDir (root.resolve ("jobs"), "model");  // "model" is our internal housekeeping data, in MNode serialization form. Backend output generally goes into a simulator-specific file.
@@ -62,7 +62,7 @@ public class AppData
             }
         }
         if (reposOrderString.startsWith (",")) reposOrderString = reposOrderString.substring (1);
-        state.set ("Repos", "order", reposOrderString);
+        state.set (reposOrderString, "Repos", "order");
 
         String primary = state.get ("Repos", "primary");
         if (! primary.isEmpty ()  &&  reposOrder.indexOf (primary) != 0)  // Also covers the case where primary is not in the list at all.
@@ -73,7 +73,7 @@ public class AppData
         if (reposOrder.size () > 0)
         {
             primary = reposOrder.get (0);
-            state.set ("Repos", "primary", primary);
+            state.set (primary, "Repos", "primary");
         }
 
         List<MNode> modelContainers     = new ArrayList<MNode> ();
@@ -118,10 +118,10 @@ public class AppData
     {
         if (repos.size () > 0) return;
 
-        repos.set ("local", "visible", 1);
-        repos.set ("base",  "visible", 1);
-        state.set ("Repos", "order", "local,base");
-        state.set ("Repos", "primary", "local");
+        repos.set (1, "local", "visible");
+        repos.set (1, "base",  "visible");
+        state.set ("local,base", "Repos", "order");
+        state.set ("local",      "Repos", "primary");
 
         Path root = Paths.get (properties.get ("resourceDir")).toAbsolutePath ();
         Path reposDir = root.resolve ("repos");
@@ -162,7 +162,7 @@ public class AppData
                     if (pieces[1].equals ("references")) dir = baseReferences;
                     else                                 dir = baseModels;
                 }
-                MDoc doc = (MDoc) dir.set (pieces[2], "");
+                MDoc doc = (MDoc) dir.set ("", pieces[2]);
                 BufferedReader reader = new BufferedReader (new InputStreamReader (zip, "UTF-8"));
                 Schema.readAll (doc, reader);
             }

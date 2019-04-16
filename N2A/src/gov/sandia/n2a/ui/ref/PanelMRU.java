@@ -67,7 +67,7 @@ public class PanelMRU extends JPanel
         parts.clear ();
         for (int i = 0; i < model.size ()  &&  i < limit; i++)
         {
-            parts.set (i, model.get (i).key ());
+            parts.set (model.get (i).key (), i);
         }
     }
 

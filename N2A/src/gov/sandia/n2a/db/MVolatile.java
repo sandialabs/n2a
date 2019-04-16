@@ -93,7 +93,7 @@ public class MVolatile extends MNode
         else                  this.value = value;
     }
 
-    public synchronized MNode set (String index, String value)
+    public synchronized MNode set (String value, String index)
     {
         if (children == null) children = new TreeMap<String,MNode> (comparator);
         MNode result = children.get (index);

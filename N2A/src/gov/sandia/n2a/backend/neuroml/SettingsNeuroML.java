@@ -40,14 +40,14 @@ public class SettingsNeuroML extends JPanel implements Settings
             {
                 public void actionPerformed (ActionEvent arg0)
                 {
-                    AppData.state.set ("BackendNeuroML", key, field.getText ());
+                    AppData.state.set (field.getText (), "BackendNeuroML", key);
                 }
             });
             field.addFocusListener (new FocusAdapter ()
             {
                 public void focusLost (FocusEvent e)
                 {
-                    AppData.state.set ("BackendNeuroML", key, field.getText ());
+                    AppData.state.set (field.getText (), "BackendNeuroML", key);
                 }
             });
             field.setTransferHandler (new SafeTextTransferHandler ());

@@ -91,7 +91,7 @@ public class AddEntry extends Undoable
         PanelReference mep = PanelReference.instance;
         mep.panelSearch.insertNextAt (index);
 
-        MNode doc = AppData.references.set (id, "");  // Triggers PanelReference.childAdded(name), which updates the select and MRU panels, but not the entry panel.
+        MNode doc = AppData.references.set ("", id);  // Triggers PanelReference.childAdded(name), which updates the select and MRU panels, but not the entry panel.
         doc.merge (saved);
 
         if (wasShowing) mep.panelEntry.model.setRecord (doc);

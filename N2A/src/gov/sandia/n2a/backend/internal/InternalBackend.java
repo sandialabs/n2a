@@ -91,13 +91,13 @@ public class InternalBackend extends Backend
 
                 // Any new metadata generated after MPart is collated must be injected back into job
                 String duration = digestedModel.metadata.get ("duration");
-                if (! duration.isEmpty ()) job.set ("$metadata", "duration", duration);
+                if (! duration.isEmpty ()) job.set (duration, "$metadata", "duration");
 
                 long seed = job.getOrDefault (-1l, "$metadata", "seed");
                 if (seed < 0)
                 {
                     seed = System.currentTimeMillis ();
-                    job.set ("$metadata", "seed", seed);
+                    job.set (seed, "$metadata", "seed");
                 }
 
                 String e = job.get ("$metadata", "backend", "internal", "event");

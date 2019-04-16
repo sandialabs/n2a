@@ -43,7 +43,7 @@ public class Table extends OutputParser
     	{
     	    // By using an MNode to sort, we get the columns in M order (numbers first, in truly numerical order, followed alphabetical order)
     	    MVolatile mapping = new MVolatile ();
-    	    for (int i = 1; i < count; i++) mapping.set (columns.get (i).header, i);
+    	    for (int i = 1; i < count; i++) mapping.set (i, columns.get (i).header);
     	    ArrayList<Column> sortedColumns = new ArrayList<Column> (count);
     	    sortedColumns.add (columns.get (0));
     	    for (MNode m : mapping) sortedColumns.add (columns.get (m.getInt ()));

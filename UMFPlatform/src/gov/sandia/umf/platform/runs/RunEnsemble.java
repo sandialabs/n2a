@@ -48,17 +48,17 @@ public class RunEnsemble
     {
         // Create database record for run ensemble, and give it a reference to the model record.
         source = new MVolatile ();
-        source.set ("model",             modelCopy.getSource ().get ());
-        source.set ("label",             label);
-        source.set ("environment",       environment);
-        source.set ("simulator",         simulator);
-        source.set ("paramSpecs",        XStreamWrapper.writeToString (groups));
-        source.set ("simParamSpecs",     XStreamWrapper.writeToString (simGroups));
-        source.set ("outputExpressions", outputExpressions);
+        source.set (modelCopy.getSource ().get (),            "model");
+        source.set (label,                                    "label");
+        source.set (environment,                              "environment");
+        source.set (simulator,                                "simulator");
+        source.set (XStreamWrapper.writeToString (groups),    "paramSpecs");
+        source.set (XStreamWrapper.writeToString (simGroups), "simParamSpecs");
+        source.set (outputExpressions,                        "outputExpressions");
         // runCount is the total # of runs; frameworkRunCount will be less for
         // xyce simulations that include parameter sweeps 
-        source.set ("runCount",          simGroups.size () == 0 ? groups.getRunCount () : groups.getRunCount ()*simGroups.getRunCount ());
-        source.set ("frameworkRunCount", groups.getRunCount());
+        source.set (simGroups.size () == 0 ? groups.getRunCount () : groups.getRunCount ()*simGroups.getRunCount (), "runCount");
+        source.set (groups.getRunCount(),                      "frameworkRunCount");
 
         runDocs = new ArrayList<MNode> ();
         runs = new ArrayList<Run> ();

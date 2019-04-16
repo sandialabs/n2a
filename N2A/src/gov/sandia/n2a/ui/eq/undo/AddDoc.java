@@ -103,7 +103,7 @@ public class AddDoc extends Undoable
         PanelModel mep = PanelModel.instance;
         mep.panelSearch.insertNextAt (index);
 
-        MDoc doc = (MDoc) AppData.models.set (name, "");  // Triggers PanelModel.childAdded(name), which updates the select and MRU panels, but not the equation tree panel.
+        MDoc doc = (MDoc) AppData.models.set ("", name);  // Triggers PanelModel.childAdded(name), which updates the select and MRU panels, but not the equation tree panel.
         doc.merge (saved);
         new MPart (doc).clearRedundantOverrides ();
         AppData.set (doc.get ("$metadata", "id"), doc);

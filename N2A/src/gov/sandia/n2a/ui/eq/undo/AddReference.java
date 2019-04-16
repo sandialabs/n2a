@@ -170,7 +170,7 @@ public class AddReference extends Undoable
 
         NodeBase createdNode = container.child (name);
         boolean alreadyExists = createdNode != null;
-        MPart createdPart = (MPart) block.set (name, value);
+        MPart createdPart = (MPart) block.set (value, name);
         if (! alreadyExists) createdNode = new NodeReference (createdPart);
 
         FontMetrics fm = createdNode.getFontMetrics (tree);

@@ -143,7 +143,7 @@ public class MPart extends MNode
             }
             else
             {
-                if (id.isEmpty ()  &&  ! parentID.isEmpty ()  &&  maintainable) root.set (i, parentID);
+                if (id.isEmpty ()  &&  ! parentID.isEmpty ()  &&  maintainable) root.set (parentID, i);
             }
 
             if (parentSource != null  &&  ! visited.contains (parentSource))
@@ -397,7 +397,7 @@ public class MPart extends MNode
         if (isFromTopDocument ()) return;
         // The only way to get past the above line is if original==source
         container.override ();
-        source = (MPersistent) container.source.set (key (), get ());  // Most intermediate nodes will have a value of "", unless they are a variable.
+        source = (MPersistent) container.source.set (get (), key ());  // Most intermediate nodes will have a value of "", unless they are a variable.
     }
 
     /**
@@ -438,7 +438,7 @@ public class MPart extends MNode
         }
     }
 
-    public synchronized MNode set (String index, String value)
+    public synchronized MNode set (String value, String index)
     {
         MPart result = null;
         if (children != null) result = (MPart) children.get (index);
@@ -450,7 +450,7 @@ public class MPart extends MNode
 
         // We don't have the child, so by construction it is not in any source document.
         override ();  // ensures that source is a member of the top-level document tree
-        MPersistent s = (MPersistent) source.set (index, value);
+        MPersistent s = (MPersistent) source.set (value, index);
         result = new MPart (this, null, s);
         if (children == null) children = new TreeMap<String,MNode> (comparator);
         children.put (index, result);
@@ -476,7 +476,7 @@ public class MPart extends MNode
             String parentName = parentNames[i];
             parentName = parentName.trim ().replace ("\"", "");
             MPersistent parentSource = (MPersistent) AppData.models.child (parentName);
-            if (parentSource != null) set (i, parentSource.get ("$metadata", "id"));
+            if (parentSource != null) set (parentSource.get ("$metadata", "id"), i);
         }
     }
 
@@ -495,7 +495,7 @@ public class MPart extends MNode
         {
             MPart inherit = (MPart) getChild ("$inherit");
             boolean existing =  inherit != null;
-            if (! existing) inherit = (MPart) set ("$inherit", "");
+            if (! existing) inherit = (MPart) set ("", "$inherit");
             
             // Now do the equivalent of inherit.merge(thatInherit), but pay attention to IDs.
             // If "that" comes from an outside source, it could merge in IDs which disagree
@@ -506,7 +506,7 @@ public class MPart extends MNode
             {
                 String index = thatInheritChild.key ();
                 MNode c = inherit.getChild (index);
-                if (c == null) c = inherit.set (index, "");
+                if (c == null) c = inherit.set ("", index);
                 c.merge (thatInheritChild);
             }
             String thatInheritValue = thatInherit.get ();
@@ -532,7 +532,7 @@ public class MPart extends MNode
             if (thatChild == thatInherit) continue;
             String index = thatChild.key ();
             MNode c = getChild (index);
-            if (c == null) c = set (index, "");  // ensure a target child node exists
+            if (c == null) c = set ("", index);  // ensure a target child node exists
             c.merge (thatChild);
         }
     }
@@ -571,7 +571,7 @@ public class MPart extends MNode
         MNode toPart = getChild (toIndex);
         if (toPart == null)  // No node at the destination, so merge at level of top-document.
         {
-            MPersistent toDoc = (MPersistent) source.set (toIndex, "");
+            MPersistent toDoc = (MPersistent) source.set ("", toIndex);
             toDoc.merge (fromDoc);
             MPart c = new MPart (this, null, toDoc);
             children.put (toIndex, c);

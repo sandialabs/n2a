@@ -97,7 +97,7 @@ public class Schema1 extends Schema
             {
                 reader.getNextLine ();
             }
-            MNode child = node.set (key, value);  // Create a child with the given value
+            MNode child = node.set (value, key);  // Create a child with the given value
             if (reader.whitespaces > whitespaces) read (child, reader, reader.whitespaces);  // Recursively populate child. When this call returns, reader.whitespaces <= whitespaces in this function, because that is what ends the recursion.
             if (reader.whitespaces < whitespaces) return;  // end recursion
         }

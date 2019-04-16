@@ -121,7 +121,7 @@ public class NodeVariable extends NodeContainer
             {
                 // Expand
                 source.set (pieces.combiner);
-                source.set ("@" + pieces.condition, pieces.expression);  // may override an existing equation
+                source.set (pieces.expression, "@" + pieces.condition);  // may override an existing equation
             }
             else if (equationCount == 1)
             {
@@ -257,7 +257,7 @@ public class NodeVariable extends NodeContainer
     @Override
     public void copy (MNode result)
     {
-        MNode n = result.set (source.key (), source.get ());
+        MNode n = result.set (source.get (), source.key ());
         Enumeration<?> cf = childrenFiltered ();
         while (cf.hasMoreElements ())
         {

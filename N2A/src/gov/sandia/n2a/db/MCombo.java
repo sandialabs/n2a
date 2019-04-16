@@ -112,10 +112,10 @@ public class MCombo extends MNode implements MNodeListener
         return children.size ();
 	}
 
-    public synchronized MNode set (String index, String value)
+    public synchronized MNode set (String value, String index)
     {
         load ();
-        return primary.set (index, value);  // Triggers childAdded() call from MDir, which updates our children collection.
+        return primary.set (value, index);  // Triggers childAdded() call from MDir, which updates our children collection.
     }
 
     /**

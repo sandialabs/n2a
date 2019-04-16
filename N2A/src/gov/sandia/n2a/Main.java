@@ -29,9 +29,9 @@ public class Main
         setUncaughtExceptionHandler (null);
 
         // Set global application properties.
-        AppData.properties.set ("name",         "Neurons to Algorithms");
-        AppData.properties.set ("abbreviation", "N2A");
-        AppData.properties.set ("version",      "1.0");
+        AppData.properties.set ("Neurons to Algorithms", "name");
+        AppData.properties.set ("N2A",                   "abbreviation");
+        AppData.properties.set ("1.0",                   "version");
         AppData.checkInitialDB ();
 
         // Load plugins

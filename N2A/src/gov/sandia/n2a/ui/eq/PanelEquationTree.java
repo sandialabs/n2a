@@ -504,7 +504,7 @@ public class PanelEquationTree extends JPanel
                         MNode include = new MVolatile ();  // Note the empty key. This enables AddPart to generate a name.
                         include.merge (child);  // TODO: What if this brings in a $inherit line, and that line does not match the $inherit line in the source part? One possibility is to add the new values to the end of the $inherit line created below.
                         include.clear ("$inherit");  // get rid of IDs from included part, so they won't override the new $inherit line ...
-                        include.set ("$inherit", "\"" + key + "\"");
+                        include.set ("\"" + key + "\"", "$inherit");
                         NodeBase added = target.add ("Part", tree, include);
                         if (added == null)
                         {
@@ -538,7 +538,7 @@ public class PanelEquationTree extends JPanel
                 if (node == null) return null;
                 MVolatile copy = new MVolatile ();
                 node.copy (copy);
-                if (node == root) copy.set (node.source.key (), "");  // Remove file information from root node, if that is what we are sending.
+                if (node == root) copy.set ("", node.source.key ());  // Remove file information from root node, if that is what we are sending.
 
                 Schema schema = Schema.latest ();
                 schema.type = "Clip" + node.getTypeName ();
@@ -825,7 +825,7 @@ public class PanelEquationTree extends JPanel
             model.setRoot (root);  // triggers repaint, but may be too slow
             updateLock ();
             needsFullRepaint = true;  // next call to repaintSouth() will repaint everything
-            AppData.state.set ("PanelModel", "lastUsed", doc.key ());
+            AppData.state.set (doc.key (), "PanelModel", "lastUsed");
 
             StoredPath sp = focusCache.get (record);
             if (sp == null)
@@ -928,9 +928,9 @@ public class PanelEquationTree extends JPanel
             final Backend simulator = Backend.getBackend (simulatorName);
             MNode runs = AppData.runs;
             String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + jobCount++;
-            final MNode job = runs.set (jobKey, "");  // Create the dir and model doc
+            final MNode job = runs.set ("", jobKey);  // Create the dir and model doc
             job.merge (root.source);
-            job.set ("$inherit", "\"" + record.key () + "\"");
+            job.set ("\"" + record.key () + "\"", "$inherit");
             ((MDoc) job).save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
 
             new Thread ()
@@ -1108,7 +1108,7 @@ public class PanelEquationTree extends JPanel
                 model.setFilterLevel (FilteredTreeModel.LOCAL, tree);
                 buttonFilter.setIcon (iconFilterLocal);
             }
-            AppData.state.set ("PanelModel", "filter", model.filterLevel);
+            AppData.state.set (model.filterLevel, "PanelModel", "filter");
         }
     };
 

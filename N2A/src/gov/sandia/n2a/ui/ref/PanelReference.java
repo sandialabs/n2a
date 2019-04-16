@@ -62,7 +62,7 @@ public class PanelReference extends JPanel implements MNodeListener
             public void propertyChange (PropertyChangeEvent e)
             {
                 Object o = e.getNewValue ();
-                if (o instanceof Integer) AppData.state.set ("PanelReference", "dividerMRU", o);
+                if (o instanceof Integer) AppData.state.set (o, "PanelReference", "dividerMRU");
             }
         });
 
@@ -72,7 +72,7 @@ public class PanelReference extends JPanel implements MNodeListener
             public void propertyChange (PropertyChangeEvent e)
             {
                 Object o = e.getNewValue ();
-                if (o instanceof Integer) AppData.state.set ("PanelReference", "divider", o);
+                if (o instanceof Integer) AppData.state.set (o, "PanelReference", "divider");
             }
         });
 

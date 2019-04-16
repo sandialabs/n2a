@@ -743,7 +743,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                     {
                         int oldRow = primaryRow;
                         primaryRow = row;
-                        AppData.state.set ("Repos", "primary", newKey);
+                        AppData.state.set (newKey, "Repos", "primary");
                         needRebuild = true;
                         fireTableCellUpdated (oldRow, 0);  // Primary
                         fireTableCellUpdated (oldRow, 3);  // Name, which may be rendered in a new color
@@ -755,7 +755,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                     int visible = repo.getInt ("visible");
                     if (visible == 0) visible = 1;
                     else              visible = 0;
-                    repo.set ("visible", visible);
+                    repo.set (visible, "visible");
                     needRebuild = true;
                     fireTableCellUpdated (row, 1);
                     return true;
@@ -765,7 +765,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                     Color chosenColor = JColorChooser.showDialog (MainFrame.instance, "", initialColor);
                     if (chosenColor != null)
                     {
-                        repo.set ("color", "#" + Integer.toHexString (chosenColor.getRGB () & 0xFFFFFF));
+                        repo.set ("#" + Integer.toHexString (chosenColor.getRGB () & 0xFFFFFF), "color");
                         fireTableRowsUpdated (row, row);
                     }
                     return true;
@@ -801,7 +801,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                     gitRepos.set (row, new GitWrapper (repoDir.resolve (".git")));
 
                     String primary = AppData.state.get ("Repos", "primary");
-                    if (oldName.equals (primary)) AppData.state.set ("Repos", "primary", newName);
+                    if (oldName.equals (primary)) AppData.state.set (newName, "Repos", "primary");
                     updateOrder ();
 
                     // No need to rebuild, because all object identities are maintained.
@@ -840,7 +840,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             Path baseDir = reposDir.resolve (name);
             GitWrapper gitRepo = new GitWrapper (baseDir.resolve (".git"));
             gitRepo.setURL (URL);
-            AppData.repos.set (name, "visible", 1);  // Implicitly creates the repo node.
+            AppData.repos.set (1, name, "visible");  // Implicitly creates the repo node.
             existingModels    .put (name, new MDir (name, baseDir.resolve ("models")));
             existingReferences.put (name, new MDir (name, baseDir.resolve ("references")));
             needRebuild = true;
@@ -911,8 +911,8 @@ public class SettingsRepo extends JScrollPane implements Settings
                 order += "," + repoName;
             }
             if (! order.isEmpty ()) order = order.substring (1);
-            AppData.state.set ("Repos", "order", order);
-            if (repos.size () > 0) AppData.state.set ("Repos", "primary", repos.get (primaryRow).key ());
+            AppData.state.set (order, "Repos", "order");
+            if (repos.size () > 0) AppData.state.set (repos.get (primaryRow).key (), "Repos", "primary");
         }
     }
 
@@ -1629,8 +1629,8 @@ public class SettingsRepo extends JScrollPane implements Settings
         {
             Delta delta = deltas.get (row);
             delta.ignore = ! delta.ignore;
-            if (delta.ignore) repo.set   ("ignore", delta.name, "");
-            else              repo.clear ("ignore", delta.name);
+            if (delta.ignore) repo.set   ("", "ignore", delta.name);
+            else              repo.clear (    "ignore", delta.name);
             fireTableCellUpdated (row, 0);
         }
 

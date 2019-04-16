@@ -677,7 +677,7 @@ public class PanelEntry extends JPanel
             setRecord (doc);
 
             keys.add (row, name);
-            record.set (name, value);
+            record.set (value, name);
             fireTableRowsInserted (row, row);
             table.changeSelection (row, 1, false, false);
             if (nameIsGenerated)
@@ -737,7 +737,7 @@ public class PanelEntry extends JPanel
             }
             else
             {
-                record.set (key, value);
+                record.set (value, key);
             }
 
             // Update display

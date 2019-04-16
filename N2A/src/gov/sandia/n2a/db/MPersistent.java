@@ -79,16 +79,9 @@ public class MPersistent extends MVolatile
         }
     }
 
-    public synchronized MNode set (String index, String value)
+    public synchronized MNode set (String value, String index)
     {
-        if (children == null)
-        {
-            markChanged ();
-            children = new TreeMap<String,MNode> (comparator);
-            MNode result = new MPersistent (this, index, value);
-            children.put (index, result);
-            return result;
-        }
+        if (children == null) children = new TreeMap<String,MNode> (comparator);
         MNode result = children.get (index);
         if (result == null)
         {

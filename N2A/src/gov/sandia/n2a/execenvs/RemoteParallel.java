@@ -78,7 +78,7 @@ public class RemoteParallel extends RemoteHost
             String[] parts = line.split ("job", 2);
             if (parts.length == 2)
             {
-                job.set ("$metadata", "pid", Long.parseLong (parts[1].trim ()));
+                job.set (Long.parseLong (parts[1].trim ()), "$metadata", "pid");
                 return;
             }
         }

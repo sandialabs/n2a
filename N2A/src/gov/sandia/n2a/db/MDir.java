@@ -183,7 +183,7 @@ public class MDir extends MNode
         Creates a new MDoc in this directory if it does not already exist.
         MDocs that are children of an MDir ignore the value parameter, so it doesn't matter what is passed in that case.
     **/
-    public synchronized MNode set (String index, String value)
+    public synchronized MNode set (String value, String index)
     {
         MDoc result = (MDoc) getChild (index);
         if (result == null)  // new document

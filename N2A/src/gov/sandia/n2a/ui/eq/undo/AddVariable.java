@@ -121,7 +121,7 @@ public class AddVariable extends Undoable
         NodeVariable createdNode = (NodeVariable) n;
 
         // Update database
-        MPart createdPart = (MPart) parent.source.set (name, "");
+        MPart createdPart = (MPart) parent.source.set ("", name);
         createdPart.merge (newPart);
 
         // Update GUI

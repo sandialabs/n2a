@@ -101,7 +101,7 @@ public class PanelMRU extends JPanel
             if (part != null)
             {
                 model.addElement (new PanelSearch.Holder (part));
-                AppData.state.set ("PanelModel", "lastUsed", "Example Hodgkin-Huxley Cable");
+                AppData.state.set ("Example Hodgkin-Huxley Cable", "PanelModel", "lastUsed");
             }
         }
     }
@@ -113,7 +113,7 @@ public class PanelMRU extends JPanel
         parts.clear ();
         for (int i = 0; i < model.size ()  &&  i < limit; i++)
         {
-            parts.set (i, model.get (i).doc.key ());
+            parts.set (model.get (i).doc.key (), i);
         }
     }
 

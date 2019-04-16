@@ -123,7 +123,7 @@ public class MainTabbedPane extends JTabbedPane
 
                         String order = getTitleAt (0);
                         for (int i = 1; i < getTabCount (); i++) order += "," + getTitleAt (i);
-                        AppData.state.set ("MainTabbedPane", "order", order);
+                        AppData.state.set (order, "MainTabbedPane", "order");
                     }
                     setCursor (savedCursor);
                 }

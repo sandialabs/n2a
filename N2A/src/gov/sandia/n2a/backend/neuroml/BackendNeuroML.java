@@ -84,7 +84,7 @@ public class BackendNeuroML extends Backend
                 ExportJob exportJob = PluginNeuroML.exporter.export (doc, modelPath, true);
 
                 // Record metadata
-                if (! exportJob.duration.isEmpty ()) job.set ("$metadata", "duration", exportJob.duration);
+                if (! exportJob.duration.isEmpty ()) job.set (exportJob.duration, "$metadata", "duration");
                 if (exportJob.simulation != null)
                 {
                     List<String> outputFiles = exportJob.simulation.dumpColumns (jobDir);
@@ -93,7 +93,7 @@ public class BackendNeuroML extends Backend
                     {
                         if (defaultOutput.isEmpty ()  ||  f.startsWith ("defaultOutput")) defaultOutput = f;
                     }
-                    if (! defaultOutput.isEmpty ()) job.set ("$metadata", "defaultOutput", defaultOutput);
+                    if (! defaultOutput.isEmpty ()) job.set (defaultOutput, "$metadata", "defaultOutput");
                 }
 
                 // Convert the model to target format using jnml

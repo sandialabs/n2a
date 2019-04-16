@@ -51,7 +51,7 @@ public class Outsource extends Undoable
     {
         super.redo ();
         MNode subtree = new MVolatile ();
-        subtree.set ("$inherit", inherit);
+        subtree.set (inherit, "$inherit");
         apply (subtree);
     }
 

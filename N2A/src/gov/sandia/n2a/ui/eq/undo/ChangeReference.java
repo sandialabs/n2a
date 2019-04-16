@@ -79,7 +79,7 @@ public class ChangeReference extends Undoable
             MPart mparent;
             if (parent instanceof NodeVariable) mparent = (MPart) parent.source.child ("$reference");
             else                                mparent =         parent.source;
-            MPart newPart = (MPart) mparent.set (nameAfter, valueAfter);  // should directly change destinationNode if it exists
+            MPart newPart = (MPart) mparent.set (valueAfter, nameAfter);  // should directly change destinationNode if it exists
             mparent.clear (nameBefore);
             MPart oldPart = (MPart) mparent.child (nameBefore);
 
