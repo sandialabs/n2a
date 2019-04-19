@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -21,7 +21,7 @@ import java.util.List;
     This base implementation only synchronizes those methods that clearly need it in this context.
     For example, if an operation is implemented in terms of several other operations, and the state
     of the tree should not be modified between those operations, then the method is synchronized.
-    If the method is naturally atomic, then it is not. Such choices may not hold for derived implementations.
+    If the method is naturally atomic, then it is not synchronized. Such choices may not hold for derived implementations.
 **/
 public class MNode implements Iterable<MNode>, Comparable<MNode>
 {
@@ -282,10 +282,10 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     }
 
     /**
-        Sets value of child node specified by index (effectively with a call to
-        child.set(String)). Creates child node if it doesn't already exist.
+        Sets value of child node specified by index, effectively with a call to child.set(String).
+        Creates child node if it doesn't already exist.
         Should be overridden by a subclass.
-        @return The node on which the value was set, for use by set(String,String,String...)
+        @return The child node on which the value was set.
     **/
     public MNode set (String value, String index)
     {
@@ -297,16 +297,6 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     **/
     public synchronized MNode set (String value, String... indices)
     {
-        if (indices.length == 0)
-        {
-            set (value);
-            return this;
-        }
-        if (indices.length == 1)
-        {
-            return set (value, indices[0]);
-        }
-
         MNode result = this;
         for (int i = 0; i < indices.length; i++)
         {
@@ -318,7 +308,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         return result;
     }
 
-    public MNode set (Object value, Object... indices)
+    public synchronized MNode set (Object value, Object... indices)
     {
         String[] stringIndices = new String[indices.length];
         for (int i = 0; i < indices.length; i++) stringIndices[i] = indices[i].toString ();
@@ -494,22 +484,12 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         if (A.equals (B)) return 0;  // If strings follow M collation rules, then compare for equals works for numbers.
 
         Double Avalue = null;
-        try
-        {
-            Avalue = Double.valueOf (A);
-        }
-        catch (NumberFormatException e)
-        {
-        }
+        try {Avalue = Double.valueOf (A);}
+        catch (NumberFormatException e) {}
 
         Double Bvalue = null;
-        try
-        {
-            Bvalue = Double.valueOf (B);
-        }
-        catch (NumberFormatException e)
-        {
-        }
+        try {Bvalue = Double.valueOf (B);}
+        catch (NumberFormatException e) {}
 
         if (Avalue == null)  // A is a string
         {
