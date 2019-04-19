@@ -510,20 +510,27 @@ public class PanelSearch extends JPanel
             if (name.isEmpty ()) name = doc.get ();
             setText (name);
 
-            Color color = selected ? colorSelectedOverride : colorOverride;
-            if (! AppData.models.isWriteable (doc))
+            Color color;
+            if (AppData.models.isWriteable (doc))
             {
-                color = selected ? colorSelectedInherit : colorInherit;
-
+                color = selected ? colorSelectedOverride : colorOverride;
+            }
+            else
+            {
+                color = null;
                 String colorName = "";
                 MNode repo = AppData.repos.child (doc.parent ().key ());  // This can return null if multirepo structure changes and this panel is repainted before the change notification arrives.
                 if (repo != null) colorName = repo.get ("color");
                 if (! colorName.isEmpty ())
                 {
-                    try {color = Color.decode (colorName);}
+                    try
+                    {
+                        color = Color.decode (colorName);
+                        if (color.equals (Color.black)) color = null;  // Treat black as always default. Thus, the user can't explicitly set black, but they can set extremely dark (R=G=B=1).
+                    }
                     catch (NumberFormatException e) {}
                 }
-                // TODO: This does not handle the case where color has been explicitly set to default (black). Need a way to clear color selection in SettingsRepo.
+                if (color == null) color = selected ? colorSelectedInherit : colorInherit;
             }
             setForeground (color);
 
