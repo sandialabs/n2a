@@ -37,8 +37,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     /**
         Returns the child indicated by the given index, or null if it doesn't exist.
-        This function is separate from child(String...) for ease of implementation.
-        Should be overridden in a subclass.
+        This function is separate from child(String...) for ease of implementing subclasses.
     **/
     protected MNode getChild (String index)
     {
@@ -88,8 +87,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     /**
         Removes child with the given index, if it exists.
-        Outside this package, use clear(String...) for most purposes.
-        Should be overridden in a subclass.
+        This function is separate from clear(String...) for ease of implementing subclasses.
     **/
     protected void clearChild (String index)
     {
@@ -155,8 +153,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     /**
         Retrieve our own value, or the given default if we are set to "".
-        Note that this is the only get*() function that needs to be overridden by subclasses,
-        and even this is optional.
+        This is the only get*() function that needs to be overridden by subclasses.
     **/
     public String getOrDefault (String defaultValue)
     {
