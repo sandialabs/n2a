@@ -28,9 +28,11 @@ import javax.swing.event.MouseInputAdapter;
 import javax.swing.event.MouseInputListener;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
+import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
 
 @SuppressWarnings("serial")
 public class GraphNode extends JPanel
@@ -42,147 +44,24 @@ public class GraphNode extends JPanel
 
     public GraphNode (NodePart node)
     {
-        this.node = node;
-        MNode source = node.source;
+        this.node  = node;
+        node.graph = this;
 
-        label = new JLabel (source.key ());
+        label = new JLabel (node.source.key ());
 
         Lay.BLtg (this, "C", label);
         setBorder (border);
         setOpaque (false);
 
-        MNode gui = source.child ("$metadata", "gui", "bounds");
-        if (gui != null)
+        MNode bounds = node.source.child ("$metadata", "gui", "bounds");
+        if (bounds != null)
         {
-            int x = gui.getInt ("x");
-            int y = gui.getInt ("y");
+            int x = bounds.getInt ("x");
+            int y = bounds.getInt ("y");
             setLocation (x, y);
         }
 
-        MouseInputListener resizeListener = new MouseInputAdapter ()
-        {
-            int       cursor;
-            Point     start = null;
-            Dimension min;
-            Rectangle old;
-
-            public void mouseMoved (MouseEvent me)
-            {
-                if (start == null) setCursor (Cursor.getPredefinedCursor (border.getCursor (me)));
-            }
-
-            public void mouseExited (MouseEvent mouseEvent)
-            {
-                // It is possible to get this event in the middle of a drag, so ignore that case.
-                if (start == null) setCursor (Cursor.getDefaultCursor ());
-            }
-
-            public void mousePressed (MouseEvent me)
-            {
-                if (PanelModel.instance.panelEquations.locked) return;
-
-                // All mouse event coordinates are relative to the bounds of this component.
-                start  = me.getPoint ();
-                min    = getMinimumSize ();
-                old    = getBounds ();
-                cursor = border.getCursor (me);
-                setCursor (Cursor.getPredefinedCursor (cursor));
-            }
-
-            public void mouseDragged (MouseEvent me)
-            {
-                if (start == null) return;
-
-                int x = getX ();
-                int y = getY ();
-                int w = getWidth ();
-                int h = getHeight ();
-                int dx = me.getX () - start.x;
-                int dy = me.getY () - start.y;
-
-                switch (cursor)
-                {
-                    case Cursor.NW_RESIZE_CURSOR:
-                        int newW = w - dx;
-                        if (newW < min.width)
-                        {
-                            dx -= min.width - newW;
-                            newW = min.width;
-                        }
-                        int newH = h - dy;
-                        if (newH < min.height)
-                        {
-                            dy -= min.height - newH;
-                            newH = min.height;
-                        }
-                        animate (new Rectangle (x + dx, y + dy, newW, newH));
-                        break;
-                    case Cursor.NE_RESIZE_CURSOR:
-                        newW = w + dx;
-                        if (newW < min.width)
-                        {
-                            dx += min.width - newW;
-                            newW = min.width;
-                        }
-                        newH = h - dy;
-                        if (newH < min.height)
-                        {
-                            dy -= min.height - newH;
-                            newH = min.height;
-                        }
-                        animate (new Rectangle (x, y + dy, newW, newH));
-                        start.translate (dx, 0);
-                        break;
-                    case Cursor.SW_RESIZE_CURSOR:
-                        newW = w - dx;
-                        if (newW < min.width)
-                        {
-                            dx -= min.width - newW;
-                            newW = min.width;
-                        }
-                        newH = h + dy;
-                        if (newH < min.height)
-                        {
-                            dy += min.height - newH;
-                            newH = min.height;
-                        }
-                        animate (new Rectangle (x + dx, y, newW, newH));
-                        start.translate (0, dy);
-                        break;
-                    case Cursor.SE_RESIZE_CURSOR:
-                        newW = w + dx;
-                        if (newW < min.width)
-                        {
-                            dx += min.width - newW;
-                            newW = min.width;
-                        }
-                        newH = h + dy;
-                        if (newH < min.height)
-                        {
-                            dy += min.height - newH;
-                            newH = min.height;
-                        }
-                        animate (new Rectangle (x, y, newW, newH));
-                        start.translate (dx, dy);
-                        break;
-                    case Cursor.MOVE_CURSOR:
-                        animate (new Rectangle (x + dx, y + dy, w, h));
-                }
-            }
-
-            public void mouseReleased (MouseEvent mouseEvent)
-            {
-                start = null;
-
-                // Store new bounds in metadata
-                // TODO: make this undoable
-                Rectangle now = getBounds ();
-                if (now.x      != old.x     ) node.source.set (now.x,      "$metadata", "gui", "bounds", "x");
-                if (now.y      != old.y     ) node.source.set (now.y,      "$metadata", "gui", "bounds", "y");
-                if (now.width  != old.width ) node.source.set (now.width,  "$metadata", "gui", "bounds", "width");
-                if (now.height != old.height) node.source.set (now.height, "$metadata", "gui", "bounds", "height");
-            }
-        };
+        MouseInputListener resizeListener = new ResizeListener ();
         addMouseListener (resizeListener);
         addMouseMotionListener (resizeListener);
     }
@@ -191,18 +70,33 @@ public class GraphNode extends JPanel
     {
         int w = 0;
         int h = 0;
-        MNode gui = node.source.child ("$metadata", "gui", "bounds");
-        if (gui != null)
+        MNode bounds = node.source.child ("$metadata", "gui", "bounds");
+        if (bounds != null)
         {
-            w = gui.getInt ("width");
-            h = gui.getInt ("height");
+            w = bounds.getInt ("width");
+            h = bounds.getInt ("height");
         }
         if (w != 0  &&  h != 0) return new Dimension (w, h);
 
         Dimension d = super.getPreferredSize ();  // Gets the layout manager's opinion.
-        if (w != 0) d.width  = w;
-        if (h != 0) d.height = h;
+        d.width  = Math.max (d.width,  w);
+        d.height = Math.max (d.height, h);
         return d;
+    }
+
+    /**
+        Apply any changes from $metadata.
+    **/
+    public void updateGUI ()
+    {
+        MNode bounds = node.source.child ("$metadata", "gui", "bounds");
+        if (bounds != null)
+        {
+            int x = bounds.getInt ("x");
+            int y = bounds.getInt ("y");
+            Dimension d = getPreferredSize ();
+            animate (new Rectangle (x, y, d.width, d.height));
+        }
     }
 
     /**
@@ -216,6 +110,135 @@ public class GraphNode extends JPanel
         validate ();
         PanelEquationGraph p = (PanelEquationGraph) getParent ();
         p.paintImmediately (old.union (next));
+    }
+
+    public class ResizeListener extends MouseInputAdapter
+    {
+        int       cursor;
+        Point     start = null;
+        Dimension min;
+        Rectangle old;
+
+        public void mouseMoved (MouseEvent me)
+        {
+            if (start == null) setCursor (Cursor.getPredefinedCursor (border.getCursor (me)));
+        }
+
+        public void mouseExited (MouseEvent mouseEvent)
+        {
+            // It is possible to get this event in the middle of a drag, so ignore that case.
+            if (start == null) setCursor (Cursor.getDefaultCursor ());
+        }
+
+        public void mousePressed (MouseEvent me)
+        {
+            if (PanelModel.instance.panelEquations.locked) return;
+
+            // All mouse event coordinates are relative to the bounds of this component.
+            start  = me.getPoint ();
+            min    = getMinimumSize ();
+            old    = getBounds ();
+            cursor = border.getCursor (me);
+            setCursor (Cursor.getPredefinedCursor (cursor));
+        }
+
+        public void mouseDragged (MouseEvent me)
+        {
+            if (start == null) return;
+
+            int x = getX ();
+            int y = getY ();
+            int w = getWidth ();
+            int h = getHeight ();
+            int dx = me.getX () - start.x;
+            int dy = me.getY () - start.y;
+
+            switch (cursor)
+            {
+                case Cursor.NW_RESIZE_CURSOR:
+                    int newW = w - dx;
+                    if (newW < min.width)
+                    {
+                        dx -= min.width - newW;
+                        newW = min.width;
+                    }
+                    int newH = h - dy;
+                    if (newH < min.height)
+                    {
+                        dy -= min.height - newH;
+                        newH = min.height;
+                    }
+                    animate (new Rectangle (x + dx, y + dy, newW, newH));
+                    break;
+                case Cursor.NE_RESIZE_CURSOR:
+                    newW = w + dx;
+                    if (newW < min.width)
+                    {
+                        dx += min.width - newW;
+                        newW = min.width;
+                    }
+                    newH = h - dy;
+                    if (newH < min.height)
+                    {
+                        dy -= min.height - newH;
+                        newH = min.height;
+                    }
+                    animate (new Rectangle (x, y + dy, newW, newH));
+                    start.translate (dx, 0);
+                    break;
+                case Cursor.SW_RESIZE_CURSOR:
+                    newW = w - dx;
+                    if (newW < min.width)
+                    {
+                        dx -= min.width - newW;
+                        newW = min.width;
+                    }
+                    newH = h + dy;
+                    if (newH < min.height)
+                    {
+                        dy += min.height - newH;
+                        newH = min.height;
+                    }
+                    animate (new Rectangle (x + dx, y, newW, newH));
+                    start.translate (0, dy);
+                    break;
+                case Cursor.SE_RESIZE_CURSOR:
+                    newW = w + dx;
+                    if (newW < min.width)
+                    {
+                        dx += min.width - newW;
+                        newW = min.width;
+                    }
+                    newH = h + dy;
+                    if (newH < min.height)
+                    {
+                        dy += min.height - newH;
+                        newH = min.height;
+                    }
+                    animate (new Rectangle (x, y, newW, newH));
+                    start.translate (dx, dy);
+                    break;
+                case Cursor.MOVE_CURSOR:
+                    animate (new Rectangle (x + dx, y + dy, w, h));
+            }
+        }
+
+        public void mouseReleased (MouseEvent mouseEvent)
+        {
+            start = null;
+
+            // Store new bounds in metadata
+            MNode guiTree = new MVolatile ();
+            MNode bounds = guiTree.childOrCreate ("bounds");
+            Rectangle now = getBounds ();
+            if (now.x      != old.x     ) bounds.set (now.x,      "x");
+            if (now.y      != old.y     ) bounds.set (now.y,      "y");
+            if (now.width  != old.width ) bounds.set (now.width,  "width");
+            if (now.height != old.height) bounds.set (now.height, "height");
+
+            PanelModel mep = PanelModel.instance;
+            mep.undoManager.add (new ChangeGUI (node, guiTree));
+        }
     }
 
     public static class RoundedBorder extends AbstractBorder

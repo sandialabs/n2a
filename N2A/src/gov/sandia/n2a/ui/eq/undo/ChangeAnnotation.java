@@ -21,20 +21,22 @@ import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
+import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeContainer;
+import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class ChangeAnnotation extends Undoable
 {
-    protected List<String> path;  // to the direct parent, whether a $metadata block or a variable
+    protected List<String> path;         // to the direct parent of the node that was changed
     protected String       nameBefore;
     protected String       nameAfter;
     protected String       prefixBefore; // Base of tree which gets removed during rename. Single path element.
     protected String       prefixAfter;  // Name path of first node that does not already exist at destination. If everything in nameAfter already exists, then this string is empty and tree structure will not be cleared by undo().
     protected String       valueBefore;
     protected String       valueAfter;
-    protected MNode        savedTree;  // The entire subtree from the top document. If not from top document, then at least a single node for the variable itself.
+    protected MNode        savedTree;    // The entire subtree from the top document. If not from top document, then at least a single node for the variable itself.
 
     public ChangeAnnotation (NodeAnnotation node, String nameAfter, String valueAfter)
     {
@@ -100,6 +102,7 @@ public class ChangeAnnotation extends Undoable
         if (parent == null) throw new CannotRedoException ();
         MPart mparent = parent.source;
         if (parent instanceof NodeVariable) mparent = (MPart) mparent.child ("$metadata");
+        else if (parent instanceof NodeAnnotation) mparent = ((NodeAnnotation) parent).folded;
 
         // Update database
         String[] names = nameAfter.split ("\\.");
@@ -107,7 +110,7 @@ public class ChangeAnnotation extends Undoable
         {
             // If name is unchanged, then node should already exist,
             // and we only need to change the direct value, not the subtree.
-            mparent.child (names).set (savedTree.get ());
+            mparent.set (savedTree.get (), names);
         }
         else
         {
@@ -116,8 +119,7 @@ public class ChangeAnnotation extends Undoable
                 String[] prefixes = prefixBefore.split ("\\.");
                 mparent.clear (prefixes);
             }
-            MPart partAfter = (MPart) mparent.childOrCreate (names);
-            partAfter.merge (savedTree);  // saveTree may have children, or it might be a simple value with no children.
+            mparent.set (savedTree, names);  // saveTree may have children, or it might be a simple value with no children.
         }
 
         // Update GUI
@@ -137,6 +139,13 @@ public class ChangeAnnotation extends Undoable
         NodeBase nodeAfter = AddAnnotation.resolve (parent, nameAfter);
         tree.expandPath (new TreePath (nodeAfter.getPath ()));
         pet.updateVisibility (nodeAfter.getPath ());
+
+        while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeContainer) parent.getParent ();
+        if (parent instanceof NodePart)
+        {
+            NodePart p = (NodePart) parent;
+            if (p.graph != null) p.graph.updateGUI ();
+        }
     }
 
     /**

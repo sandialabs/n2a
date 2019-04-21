@@ -305,18 +305,23 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         return result;
     }
 
-    public synchronized MNode set (Object value, Object... indices)
+    public synchronized MNode set (Object value, String... indices)
     {
-        String[] stringIndices = new String[indices.length];
-        for (int i = 0; i < indices.length; i++) stringIndices[i] = indices[i].toString ();
         if (value instanceof MNode)
         {
-            MNode c = childOrCreate (stringIndices);
+            MNode c = childOrCreate (indices);
             c.clear ();
             c.merge ((MNode) value);
             return c;
         }
-        return set (value.toString (), stringIndices);
+        return set (value.toString (), indices);
+    }
+
+    public synchronized MNode set (Object value, Object... indices)
+    {
+        String[] stringIndices = new String[indices.length];
+        for (int i = 0; i < indices.length; i++) stringIndices[i] = indices[i].toString ();
+        return set (value, stringIndices);
     }
 
     /**

@@ -19,7 +19,7 @@ import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
-import gov.sandia.n2a.ui.eq.undo.Move;
+import gov.sandia.n2a.ui.eq.undo.ChangeOrder;
 import gov.sandia.n2a.ui.eq.undo.Outsource;
 import java.awt.FontMetrics;
 import java.awt.Rectangle;
@@ -639,7 +639,7 @@ public class PanelEquationTree extends JScrollPane
                 NodeBase nodeAfter = (NodeBase) model.getChild (parent, indexAfter);
                 indexBefore = parent.getIndex (nodeBefore);
                 indexAfter  = parent.getIndex (nodeAfter);
-                PanelModel.instance.undoManager.add (new Move ((NodePart) parent, indexBefore, indexAfter));
+                PanelModel.instance.undoManager.add (new ChangeOrder ((NodePart) parent, indexBefore, indexAfter));
             }
         }
     }
@@ -659,6 +659,11 @@ public class PanelEquationTree extends JScrollPane
         }
     }
 
+    public void updateVisibility (TreeNode path[], int index)
+    {
+        updateVisibility (path, index, true);
+    }
+
     /**
         Ensure that the tree down to the changed node is displayed with correct visibility and override coloring.
         @param path Every node from root to changed node, including changed node itself.
@@ -668,7 +673,7 @@ public class PanelEquationTree extends JScrollPane
         @param index Position of the last node in its parent node. Only used if the last node has been deleted.
         A value less than 0 causes selection to shift up to the parent.
     **/
-    public void updateVisibility (TreeNode path[], int index)
+    public void updateVisibility (TreeNode path[], int index, boolean setSelection)
     {
         // Prepare list of indices for final selection
         int[] selectionIndices = new int[path.length];
@@ -762,8 +767,11 @@ public class PanelEquationTree extends JScrollPane
             if (childIndex >= 0) c = (NodeBase) model.getChild (c, childIndex);
         }
         TreePath selectedPath = new TreePath (c.getPath ());
-        tree.scrollPathToVisible (selectedPath);
-        tree.setSelectionPath (selectedPath);
+        if (setSelection)
+        {
+            tree.scrollPathToVisible (selectedPath);
+            tree.setSelectionPath (selectedPath);
+        }
         if (lastChange >= path.length)
         {
             boolean expanded = tree.isExpanded (selectedPath);

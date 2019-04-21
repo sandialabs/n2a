@@ -184,6 +184,13 @@ public class AddAnnotation extends Undoable
             }
         }
         pet.updateVisibility (createdPath, index);
+
+        while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeBase) parent.getParent ();
+        if (parent instanceof NodePart)
+        {
+            NodePart p = (NodePart) parent;
+            if (p.graph != null) p.graph.updateGUI ();
+        }
     }
 
     public void redo ()
@@ -259,6 +266,13 @@ public class AddAnnotation extends Undoable
             createdNode = resolve (container, name);
             tree.expandPath (new TreePath (createdNode.getPath ()));
             pet.updateVisibility (createdNode.getPath ());
+
+            while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeBase) parent.getParent ();
+            if (parent instanceof NodePart)
+            {
+                NodePart p = (NodePart) parent;
+                if (p.graph != null) p.graph.updateGUI ();
+            }
         }
         return createdNode;
     }

@@ -20,6 +20,7 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.GraphNode;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddInherit;
@@ -45,8 +46,9 @@ public class NodePart extends NodeContainer
     protected static ImageIcon iconCompartment = ImageUtil.getImage ("comp.gif");
     protected static ImageIcon iconConnection  = ImageUtil.getImage ("connection.png");
 
-    protected boolean isConnection;
-    protected String parentName = "";
+    protected boolean   isConnection;
+    protected String    parentName = "";
+    public    GraphNode graph;
 
     public NodePart ()
     {

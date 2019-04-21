@@ -22,7 +22,7 @@ import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
-public class Move extends Undoable
+public class ChangeOrder extends Undoable
 {
     protected List<String> path;  // to parent of moved node
     protected int          indexBefore;  // all indices are unfiltered
@@ -30,7 +30,7 @@ public class Move extends Undoable
     protected int          indexMetadata;
     protected boolean      orderAbsent;  // before the move
 
-    public Move (NodePart parent, int indexBefore, int indexAfter)
+    public ChangeOrder (NodePart parent, int indexBefore, int indexAfter)
     {
         path        = parent.getKeyPath ();
         orderAbsent = parent.source.child ("$metadata", "gui", "order") == null;
@@ -121,9 +121,9 @@ public class Move extends Undoable
 
     public boolean addEdit (UndoableEdit edit)
     {
-        if (edit instanceof Move)
+        if (edit instanceof ChangeOrder)
         {
-            Move m = (Move) edit;
+            ChangeOrder m = (ChangeOrder) edit;
             if (m.path.equals (path)  &&  indexAfter == m.indexBefore)
             {
                 indexAfter = m.indexAfter;
