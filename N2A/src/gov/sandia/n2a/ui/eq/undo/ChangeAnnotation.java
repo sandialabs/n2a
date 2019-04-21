@@ -122,7 +122,7 @@ public class ChangeAnnotation extends Undoable
 
         // Update GUI
 
-        PanelEquationTree pet = PanelModel.instance.panelEquations;
+        PanelEquationTree pet = PanelModel.instance.panelEquationTree;
         JTree tree = pet.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 

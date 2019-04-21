@@ -1,5 +1,5 @@
 /*
-Copyright 2016,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -47,12 +47,12 @@ public class ChangeDoc extends Undoable
         MNode doc = AppData.models.child (B);
         String id = doc.get ("$metadata", "id");
         if (! id.isEmpty ()) AppData.set (id, doc);
-        mep.panelEquations.loadRootFromDB (doc);  // lazy; only loads if not already loaded
+        mep.panelEquations.load (doc);  // lazy; only loads if not already loaded
         NodePart root = mep.panelEquations.root;
         root.setUserObject ();
-        mep.panelEquations.tree.requestFocusInWindow ();  // likewise, focus only moves if it is not already on equation tree
-        mep.panelEquations.tree.setSelectionRow (0);
-        mep.panelEquations.model.nodeChanged (root);
+        mep.panelEquationTree.tree.requestFocusInWindow ();  // likewise, focus only moves if it is not already on equation tree
+        mep.panelEquationTree.tree.setSelectionRow (0);
+        mep.panelEquationTree.model.nodeChanged (root);
         mep.panelMRU.renamed ();  // Because the change in document name does not directly notify the list model.
         mep.panelSearch.list.repaint ();
     }

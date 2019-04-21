@@ -50,7 +50,7 @@ public class AddAnnotations extends Undoable
         if (parent == null) throw new CannotUndoException ();
 
         PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquations.tree;
+        JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
         NodeContainer node = (NodeContainer) parent.child (blockName);
@@ -68,7 +68,7 @@ public class AddAnnotations extends Undoable
             node.build ();  // Necessary to remove all overridden nodes
             node.filter (model.filterLevel);
         }
-        mep.panelEquations.updateVisibility (nodePath, index);
+        mep.panelEquationTree.updateVisibility (nodePath, index);
     }
 
     public void redo ()
@@ -97,7 +97,7 @@ public class AddAnnotations extends Undoable
         block.merge (saved);
 
         PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquations.tree;
+        JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
         if (node == null)
@@ -107,6 +107,6 @@ public class AddAnnotations extends Undoable
         }
         node.build ();  // Replaces all nodes, so they are set to require tab initialization.
         node.filter (model.filterLevel);
-        mep.panelEquations.updateVisibility (node.getPath ());
+        mep.panelEquationTree.updateVisibility (node.getPath ());
     }
 }

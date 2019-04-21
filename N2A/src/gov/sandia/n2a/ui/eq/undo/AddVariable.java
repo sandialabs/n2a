@@ -78,7 +78,7 @@ public class AddVariable extends Undoable
         NodeVariable createdNode = (NodeVariable) parent.child (name);
 
         PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquations.tree;
+        JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         FontMetrics fm = createdNode.getFontMetrics (tree);
 
@@ -102,8 +102,8 @@ public class AddVariable extends Undoable
         parent.updateTabStops (fm);
         parent.allNodesChanged (model);
 
-        mep.panelEquations.updateOrder (createdPath);
-        mep.panelEquations.updateVisibility (createdPath, index);  // includes nodeStructureChanged(), if necessary
+        mep.panelEquationTree.updateOrder (createdPath);
+        mep.panelEquationTree.updateVisibility (createdPath, index);  // includes nodeStructureChanged(), if necessary
     }
 
     public void redo ()
@@ -127,7 +127,7 @@ public class AddVariable extends Undoable
         // Update GUI
 
         PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquations.tree;
+        JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
         boolean alreadyExists = createdNode != null;
@@ -143,12 +143,12 @@ public class AddVariable extends Undoable
         {
             createdNode.build ();
             createdNode.findConnections ();
-            mep.panelEquations.updateOrder (createdPath);
+            mep.panelEquationTree.updateOrder (createdPath);
 
             parent.updateTabStops (fm);
             parent.allNodesChanged (model);
         }
-        mep.panelEquations.updateVisibility (createdPath);
+        mep.panelEquationTree.updateVisibility (createdPath);
 
         return createdNode;
     }

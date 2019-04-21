@@ -122,7 +122,7 @@ public class PanelSearch extends JPanel
         {
             public void focusGained (FocusEvent e)
             {
-                PanelModel.instance.panelEquations.yieldFocus ();
+                PanelModel.instance.panelEquationTree.yieldFocus ();
                 showSelection ();
             }
 
@@ -150,7 +150,7 @@ public class PanelSearch extends JPanel
                     {
                         @SuppressWarnings("unchecked")
                         List<File> files = (List<File>) xferable.getTransferData (DataFlavor.javaFileListFlavor);
-                        for (File file : files) PanelEquationTree.importFile (file.toPath ());
+                        for (File file : files) PanelModel.importFile (file.toPath ());
                         return true;
                     }
                     catch (IOException | UnsupportedFlavorException e)
@@ -227,7 +227,7 @@ public class PanelSearch extends JPanel
         {
             public void focusGained (FocusEvent e)
             {
-                PanelModel.instance.panelEquations.yieldFocus ();
+                PanelModel.instance.panelEquationTree.yieldFocus ();
             }
 
             public void focusLost (FocusEvent e)
@@ -300,8 +300,8 @@ public class PanelSearch extends JPanel
             public void run ()
             {
                 PanelModel mep = PanelModel.instance;
-                mep.panelEquations.loadRootFromDB (doc);
-                mep.panelEquations.tree.requestFocusInWindow ();
+                mep.panelEquations.load (doc);
+                mep.panelEquationTree.tree.requestFocusInWindow ();
             }
         });
     }

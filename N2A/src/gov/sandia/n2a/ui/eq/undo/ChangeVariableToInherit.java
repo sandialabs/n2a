@@ -54,7 +54,7 @@ public class ChangeVariableToInherit extends Undoable
         // Update the GUI
 
         PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquations.tree;
+        JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
         parent.build ();
@@ -63,8 +63,8 @@ public class ChangeVariableToInherit extends Undoable
         if (parent.visible (model.filterLevel)) model.nodeStructureChanged (parent);
 
         TreeNode[] nodePath = parent.child (nameBefore).getPath ();
-        mep.panelEquations.updateOrder (nodePath);
-        mep.panelEquations.updateVisibility (nodePath);
+        mep.panelEquationTree.updateOrder (nodePath);
+        mep.panelEquationTree.updateVisibility (nodePath);
     }
 
     public void redo ()
@@ -82,7 +82,7 @@ public class ChangeVariableToInherit extends Undoable
         // Update GUI
 
         PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquations.tree;
+        JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
         parent.build ();
@@ -91,7 +91,7 @@ public class ChangeVariableToInherit extends Undoable
         model.nodeStructureChanged (parent);
 
         TreeNode[] nodePath = parent.child ("$inherit").getPath ();
-        mep.panelEquations.updateOrder (nodePath);
-        mep.panelEquations.updateVisibility (nodePath);
+        mep.panelEquationTree.updateOrder (nodePath);
+        mep.panelEquationTree.updateVisibility (nodePath);
     }
 }

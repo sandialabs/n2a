@@ -37,7 +37,7 @@ public class Outsource extends Undoable
         savedSubtree = new MVolatile ();
         savedSubtree.merge (node.source);  // This takes the entire tree, regardless of visibility. TODO: should this match the visibility semantics used by copy/paste operations?
 
-        JTree tree = PanelModel.instance.panelEquations.tree;
+        JTree tree = PanelModel.instance.panelEquationTree.tree;
         wasExpanded = ! tree.isCollapsed (new TreePath (node.getPath ()));
     }
 
@@ -64,7 +64,7 @@ public class Outsource extends Undoable
         if (node == null) throw new CannotRedoException ();
 
         PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquations.tree;
+        JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
         // Update database

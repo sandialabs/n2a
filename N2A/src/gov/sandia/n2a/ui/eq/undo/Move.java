@@ -68,7 +68,7 @@ public class Move extends Undoable
         if (parent == null) throw new CannotUndoException ();
 
         PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquations.tree;
+        JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
         NodeBase moveNode = (NodeBase) parent.getChildAt (indexBefore);
@@ -115,8 +115,8 @@ public class Move extends Undoable
         model.insertNodeIntoUnfiltered (moveNode, parent, indexAfter);
 
         TreeNode[] movePath = moveNode.getPath ();
-        if (! destroyOrder) mep.panelEquations.updateOrder (movePath);
-        mep.panelEquations.updateVisibility (movePath);
+        if (! destroyOrder) mep.panelEquationTree.updateOrder (movePath);
+        mep.panelEquationTree.updateVisibility (movePath);
     }
 
     public boolean addEdit (UndoableEdit edit)

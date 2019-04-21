@@ -112,7 +112,7 @@ public class AddEquation extends Undoable
         NodeBase createdNode = parent.child (name);
 
         PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquations.tree;
+        JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         FontMetrics fm = createdNode.getFontMetrics (tree);
 
@@ -173,8 +173,8 @@ public class AddEquation extends Undoable
         }
         parent.updateTabStops (fm);
         parent.allNodesChanged (model);
-        mep.panelEquations.updateOrder (createdPath);
-        mep.panelEquations.updateVisibility (createdPath, index);
+        mep.panelEquationTree.updateOrder (createdPath);
+        mep.panelEquationTree.updateVisibility (createdPath, index);
     }
 
     public void redo ()
@@ -189,7 +189,7 @@ public class AddEquation extends Undoable
         if (parent == null) throw new CannotRedoException ();
 
         PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquations.tree;
+        JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
         // Update the database
@@ -237,7 +237,7 @@ public class AddEquation extends Undoable
         {
             parent.updateTabStops (fm);
             parent.allNodesChanged (model);
-            mep.panelEquations.updateVisibility (createdNode.getPath ());
+            mep.panelEquationTree.updateVisibility (createdNode.getPath ());
         }
 
         return createdNode;

@@ -62,7 +62,7 @@ public class ChangeReference extends Undoable
         NodeBase nodeBefore = parent.child (nameBefore);
         if (nodeBefore == null) throw new CannotRedoException ();
 
-        PanelEquationTree pet = PanelModel.instance.panelEquations;
+        PanelEquationTree pet = PanelModel.instance.panelEquationTree;
         JTree tree = pet.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         FontMetrics fm = nodeBefore.getFontMetrics (tree);

@@ -151,7 +151,7 @@ public class NodeAnnotation extends NodeContainer
             {
                 offset = tabs.get (1) - offset;
             }
-            int width = PanelModel.instance.panelEquations.tree.getWidth () - offset;  // Available width for displaying value (not including key).
+            int width = PanelModel.instance.panelEquationTree.tree.getWidth () - offset;  // Available width for displaying value (not including key).
 
             boolean addEllipsis = false;
             String[] pieces = value.split ("\n", 2);

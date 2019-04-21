@@ -72,7 +72,7 @@ public class ChangePart extends Undoable
         // Update GUI
 
         PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquations.tree;
+        JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
         NodePart nodeAfter = (NodePart) parent.child (nameAfter);  // It's either a NodePart or it's null. Any other case should be blocked by GUI constraints.
@@ -109,7 +109,7 @@ public class ChangePart extends Undoable
         nodeAfter.filter (model.filterLevel);
 
         TreeNode[] nodePath = nodeAfter.getPath ();
-        mep.panelEquations.updateOrder (nodePath);
-        mep.panelEquations.updateVisibility (nodePath);  // Will include nodeStructureChanged(), if necessary.
+        mep.panelEquationTree.updateOrder (nodePath);
+        mep.panelEquationTree.updateVisibility (nodePath);  // Will include nodeStructureChanged(), if necessary.
     }
 }

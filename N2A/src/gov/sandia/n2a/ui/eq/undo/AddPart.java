@@ -81,7 +81,7 @@ public class AddPart extends Undoable
         NodePart createdNode = (NodePart) parent.child (name);
 
         PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquations.tree;
+        JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
         TreeNode[] createdPath = createdNode.getPath ();
@@ -101,8 +101,8 @@ public class AddPart extends Undoable
             createdNode.filter (model.filterLevel);
         }
 
-        mep.panelEquations.updateOrder (createdPath);
-        mep.panelEquations.updateVisibility (createdPath, index);  // includes nodeStructureChanged(), if necessary
+        mep.panelEquationTree.updateOrder (createdPath);
+        mep.panelEquationTree.updateVisibility (createdPath, index);  // includes nodeStructureChanged(), if necessary
     }
 
     public void redo ()
@@ -126,7 +126,7 @@ public class AddPart extends Undoable
         // Update GUI
 
         PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquations.tree;
+        JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
         if (createdNode == null)
@@ -140,8 +140,8 @@ public class AddPart extends Undoable
 
         TreeNode[] createdPath = createdNode.getPath ();
         if (nameIsGenerated) createdNode.setUserObject ("");  // pure create, so about to go into edit mode. This should only happen on first application of the create action, and should only be possible if visibility is already correct.
-        else mep.panelEquations.updateOrder (createdPath);
-        mep.panelEquations.updateVisibility (createdPath);
+        else mep.panelEquationTree.updateOrder (createdPath);
+        mep.panelEquationTree.updateVisibility (createdPath);
 
         return createdNode;
     }

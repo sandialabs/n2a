@@ -78,7 +78,7 @@ public class ChangeVariable extends Undoable
         if (nodeBefore == null) throw new CannotRedoException ();
 
         PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquations.tree;
+        JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         FontMetrics fm = nodeBefore.getFontMetrics (tree);
 
@@ -134,8 +134,8 @@ public class ChangeVariable extends Undoable
         parent.allNodesChanged (model);
 
         TreeNode[] nodePath = nodeAfter.getPath ();
-        mep.panelEquations.updateOrder (nodePath);
-        mep.panelEquations.updateVisibility (nodePath);
+        mep.panelEquationTree.updateOrder (nodePath);
+        mep.panelEquationTree.updateVisibility (nodePath);
     }
 
     public boolean replaceEdit (UndoableEdit edit)

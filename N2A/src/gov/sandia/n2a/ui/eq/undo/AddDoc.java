@@ -108,16 +108,16 @@ public class AddDoc extends Undoable
         new MPart (doc).clearRedundantOverrides ();
         AppData.set (doc.get ("$metadata", "id"), doc);
 
-        if (wasShowing) mep.panelEquations.loadRootFromDB (doc);  // Also highlights selection, so this must be cleared if focus goes to search list.
+        if (wasShowing) mep.panelEquations.load (doc);  // Also highlights selection, so this must be cleared if focus goes to search list.
         if (willEdit  ||  ! fromSearchPanel)
         {
             mep.panelSearch.hideSelection ();
             mep.panelSearch.lastSelection = index;  // Because hideSelection() stores current selection, which was one row past index.
-            mep.panelEquations.tree.requestFocusInWindow ();
+            mep.panelEquationTree.tree.requestFocusInWindow ();
         }
         else
         {
-            mep.panelEquations.yieldFocus ();
+            mep.panelEquationTree.yieldFocus ();
             mep.panelSearch.list.setSelectedIndex (index);
             mep.panelSearch.list.requestFocusInWindow ();
         }

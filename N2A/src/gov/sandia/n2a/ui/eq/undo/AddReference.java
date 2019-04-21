@@ -91,7 +91,7 @@ public class AddReference extends Undoable
         if (parent instanceof NodePart) container = parent.child ("$reference");
         NodeBase createdNode = container.child (name);
 
-        PanelEquationTree pet = PanelModel.instance.panelEquations;
+        PanelEquationTree pet = PanelModel.instance.panelEquationTree;
         JTree tree = pet.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         FontMetrics fm = createdNode.getFontMetrics (tree);
@@ -150,7 +150,7 @@ public class AddReference extends Undoable
         if (parent == null) throw new CannotRedoException ();
         MPart block = (MPart) parent.source.childOrCreate ("$reference");
 
-        PanelEquationTree pet = PanelModel.instance.panelEquations;
+        PanelEquationTree pet = PanelModel.instance.panelEquationTree;
         JTree tree = pet.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         NodeBase container = parent;  // If this is a variable, then mix metadata with equations and references

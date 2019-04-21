@@ -371,8 +371,8 @@ public class NodeBase extends DefaultMutableTreeNode
     {
         MNode doc = AppData.models.child (path.get (0));
         PanelModel mep = PanelModel.instance;
-        mep.panelEquations.loadRootFromDB (doc);  // lazy; only loads if not already loaded
-        mep.panelEquations.tree.requestFocusInWindow ();  // likewise, focus only moves if it is not already on equation tree
+        mep.panelEquations.load (doc);  // lazy; only loads if not already loaded
+        mep.panelEquationTree.tree.requestFocusInWindow ();  // likewise, focus only moves if it is not already on equation tree
         NodeBase parent = mep.panelEquations.root;
         for (int i = 1; i < path.size (); i++)
         {

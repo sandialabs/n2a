@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -11,6 +11,7 @@ import java.awt.FontMetrics;
 import java.awt.event.ActionEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.nio.file.Path;
 
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
@@ -23,6 +24,9 @@ import javax.swing.undo.CannotUndoException;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MNodeListener;
+import gov.sandia.n2a.plugins.ExtensionPoint;
+import gov.sandia.n2a.plugins.PluginManager;
+import gov.sandia.n2a.plugins.extpoints.Importer;
 import gov.sandia.n2a.ui.UndoManager;
 
 @SuppressWarnings("serial")
@@ -30,20 +34,22 @@ public class PanelModel extends JPanel implements MNodeListener
 {
     public static PanelModel instance;  ///< Technically, this class is a singleton, because only one would normally be created.
 
-    public JSplitPane        split;
-    public JSplitPane        splitMRU;
-    public PanelMRU          panelMRU;
-    public PanelSearch       panelSearch;
-    public PanelEquationTree panelEquations;
-    public UndoManager       undoManager = new UndoManager ();
+    protected JSplitPane         split;
+    protected JSplitPane         splitMRU;
+    public    PanelMRU           panelMRU;
+    public    PanelSearch        panelSearch;
+    public    PanelEquations     panelEquations;
+    public    PanelEquationTree  panelEquationTree;  // To ease code transition, since most undo classes reference this object here.
+    public    UndoManager        undoManager = new UndoManager ();
 
     public PanelModel ()
     {
         instance = this;
 
-        panelMRU       = new PanelMRU ();
-        panelSearch    = new PanelSearch ();
-        panelEquations = new PanelEquationTree ();
+        panelMRU          = new PanelMRU ();
+        panelSearch       = new PanelSearch ();
+        panelEquations    = new PanelEquations ();
+        panelEquationTree = panelEquations.panelEquationTree;
 
         splitMRU = new JSplitPane (JSplitPane.VERTICAL_SPLIT, panelMRU, panelSearch);
         split = new JSplitPane (JSplitPane.HORIZONTAL_SPLIT, splitMRU, panelEquations);
@@ -75,6 +81,8 @@ public class PanelModel extends JPanel implements MNodeListener
                 if (o instanceof Integer) AppData.state.set (o, "PanelModel", "divider");
             }
         });
+
+        // Undo
 
         InputMap inputMap = getInputMap (WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
         inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
@@ -113,7 +121,7 @@ public class PanelModel extends JPanel implements MNodeListener
         if (AppData.models.isVisible (record))
         {
             panelEquations.record = null;
-            panelEquations.loadRootFromDB (record);
+            panelEquations.load (record);
         }
         else
         {
@@ -152,7 +160,7 @@ public class PanelModel extends JPanel implements MNodeListener
             if (contentOnly)
             {
                 panelEquations.record = null;  // Force rebuild of display
-                panelEquations.loadRootFromDB (newDoc);
+                panelEquations.load (newDoc);
             }
             else
             {
@@ -175,8 +183,24 @@ public class PanelModel extends JPanel implements MNodeListener
             if (key.equals (oldKey))
             {
                 panelEquations.record = null;
-                panelEquations.loadRootFromDB (oldDoc);
+                panelEquations.load (oldDoc);
             }
         }
+    }
+
+    public static void importFile (Path path)
+    {
+        Importer bestImporter = null;
+        float    bestP        = 0;
+        for (ExtensionPoint exp : PluginManager.getExtensionsForPoint (Importer.class))
+        {
+            float P = ((Importer) exp).isIn (path);
+            if (P > bestP)
+            {
+                bestP        = P;
+                bestImporter = (Importer) exp;
+            }
+        }
+        if (bestImporter != null) bestImporter.process (path);
     }
 }

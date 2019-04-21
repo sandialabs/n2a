@@ -49,7 +49,7 @@ public class AddInherit extends Undoable
         if (canceled) index--;
 
         PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquations.tree;
+        JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
         MPart mparent = parent.source;
@@ -59,8 +59,8 @@ public class AddInherit extends Undoable
         parent.filter (model.filterLevel);
         if (parent.visible (model.filterLevel)) model.nodeStructureChanged (parent);
 
-        mep.panelEquations.updateOrder (nodePath);
-        mep.panelEquations.updateVisibility (nodePath, index);
+        mep.panelEquationTree.updateOrder (nodePath);
+        mep.panelEquationTree.updateVisibility (nodePath, index);
     }
 
     public void redo ()
@@ -75,7 +75,7 @@ public class AddInherit extends Undoable
         if (parent == null) throw new CannotRedoException ();
 
         PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquations.tree;
+        JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
         parent.source.set (value, "$inherit");
@@ -85,8 +85,8 @@ public class AddInherit extends Undoable
         model.nodeStructureChanged (parent);  // Since $inherit is being added, parent will almost certainly become visible, if it's not already.
 
         TreeNode[] createdPath = parent.child ("$inherit").getPath ();
-        mep.panelEquations.updateOrder (createdPath);
-        mep.panelEquations.updateVisibility (createdPath);
+        mep.panelEquationTree.updateOrder (createdPath);
+        mep.panelEquationTree.updateVisibility (createdPath);
     }
 
     public boolean replaceEdit (UndoableEdit edit)
