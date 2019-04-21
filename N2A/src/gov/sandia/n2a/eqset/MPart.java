@@ -9,6 +9,7 @@ package gov.sandia.n2a.eqset;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 import gov.sandia.n2a.db.AppData;
@@ -36,7 +37,7 @@ public class MPart extends MNode
     protected MPart       inheritedFrom;   // Node in the tree that contains the $include statement that generated this node. Retained even if the node is overridden.
 
     protected MPart container;
-    protected NavigableMap<String,MNode> children;
+    protected NavigableMap<String,MPart> children;
 
     /**
         Collates a full model from the given source document.
@@ -96,7 +97,7 @@ public class MPart extends MNode
     public synchronized void inherit (LinkedList<MPersistent> visited)
     {
         if (children == null) return;
-        MPart root = (MPart) children.get ("$inherit");
+        MPart root = children.get ("$inherit");
         if (root != null) inherit (visited, root, root);
     }
 
@@ -194,13 +195,13 @@ public class MPart extends MNode
     public synchronized void underrideChildren (MPart from, MPersistent newSource)
     {
         if (newSource.size () == 0) return;
-        if (children == null) children = new TreeMap<String,MNode> (comparator);
+        if (children == null) children = new TreeMap<String,MPart> (comparator);
         for (MNode n : newSource)
         {
             String key = n.key ();
             MPersistent p = (MPersistent) n;
 
-            MPart c = (MPart) children.get (key);
+            MPart c = children.get (key);
             if (c == null)
             {
                 c = new MPart (this, from, p);
@@ -220,7 +221,7 @@ public class MPart extends MNode
         If null, this is the top node of the subtree to be purged, so we should not be
         deleted.
     **/
-    public synchronized void purge (MPart from, Iterator<MNode> parentIterator)
+    protected synchronized void purge (MPart from, Iterator<Entry<String,MPart>> parentIterator)
     {
         if (inheritedFrom == from)
         {
@@ -237,11 +238,11 @@ public class MPart extends MNode
         }
 
         if (children == null) return;
-        MPart inherit = (MPart) children.get ("$inherit");
+        MPart inherit = children.get ("$inherit");
         if (inherit != null  &&  inherit.inheritedFrom == from) purge (inherit, null);  // If our local $inherit is contingent on "from", then remove all its effects as well. Note that a $inherit line never comes from itself (inherit.inheritedFrom != inherit).
 
-        Iterator<MNode> childIterator = iterator ();
-        while (childIterator.hasNext ()) ((MPart) childIterator.next ()).purge (from, childIterator);
+        Iterator<Entry<String,MPart>> childIterator = children.entrySet ().iterator ();
+        while (childIterator.hasNext ()) (childIterator.next ().getValue ()).purge (from, childIterator);
     }
 
     /**
@@ -342,11 +343,11 @@ public class MPart extends MNode
         if (children == null) return;
         if (! isFromTopDocument ()) return;  // This node is not overridden, so none of the children will be.
         if (source.child (index) == null) return;  // The child is not overridden, so nothing to do.
-        ((MPart) children.get (index)).releaseOverride ();
+        children.get (index).releaseOverride ();
         source.clear (index);
         clearPath ();
 
-        MPart c = (MPart) children.get (index);  // If child still exists, then it was overridden but exposed by the delete.
+        MPart c = children.get (index);  // If child still exists, then it was overridden but exposed by the delete.
         if (c != null)
         {
             if (index.equals ("$inherit")) expand ();  // We changed our $inherit expression, so rebuild our subtree.
@@ -383,7 +384,7 @@ public class MPart extends MNode
         while (i.hasNext ())
         {
             String key = i.next ().key ();
-            ((MPart) children.get (key)).releaseOverride ();  // The key is guaranteed to be in our children collection.
+            children.get (key).releaseOverride ();  // The key is guaranteed to be in our children collection.
             i.remove ();
         }
     }
@@ -441,7 +442,7 @@ public class MPart extends MNode
     public synchronized MNode set (String value, String index)
     {
         MPart result = null;
-        if (children != null) result = (MPart) children.get (index);
+        if (children != null) result = children.get (index);
         if (result != null)
         {
             result.set (value);
@@ -452,7 +453,7 @@ public class MPart extends MNode
         override ();  // ensures that source is a member of the top-level document tree
         MPersistent s = (MPersistent) source.set (value, index);
         result = new MPart (this, null, s);
-        if (children == null) children = new TreeMap<String,MNode> (comparator);
+        if (children == null) children = new TreeMap<String,MPart> (comparator);
         children.put (index, result);
         if (index.equals ("$inherit"))  // We've created an $inherit line, so load the inherited equations.
         {
