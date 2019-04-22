@@ -17,7 +17,9 @@ import java.awt.LayoutManager2;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.geom.CubicCurve2D;
 import java.util.Enumeration;
+import java.util.Iterator;
 import java.util.Map.Entry;
 
 import javax.swing.JPanel;
@@ -98,6 +100,35 @@ public class PanelEquationGraph extends JPanel
             Vector2 p0 = new Vector2 (b0.getCenterX (), b0.getCenterY ());
             int x0 = (int) p0.x;  // truncating double to int, so inaccurate, but we don't care
             int y0 = (int) p0.y;
+
+            // Specifically for binary connections (by far the most common case), use curve which passe through connection node.
+            Vector2 a2b = null;  // Points in direction A->B, passing through connection node.
+            Vector2 c2c = null;  // Points from average position of endpoints toward connection node.
+            GraphNode A = null;
+            GraphNode B = null;
+            if (gn.links.size () == 2)  // prepare constraints
+            {
+                Iterator<GraphNode> it = gn.links.values ().iterator ();
+                A = it.next ();
+                B = it.next ();
+                if (A != null  &&  B != null)
+                {
+                    Rectangle bounds = A.getBounds ();
+                    Vector2 a = new Vector2 (bounds.getCenterX (), bounds.getCenterY ());
+                    bounds = B.getBounds ();
+                    Vector2 b = new Vector2 (bounds.getCenterX (), bounds.getCenterY ());
+                    Vector2 ab = a.add (b).multiply (0.5);  // average position
+                    c2c = p0.subtract (ab);
+                    double c2cLength = c2c.length ();
+                    double abLength = a.subtract (b).length ();
+                    c2c = c2c.normalize ();
+                    a2b = new Vector2 (-c2c.y, c2c.x);
+                    Vector2 abb = b.subtract (ab);
+                    if (abb.dot (a2b) < 0) a2b = a2b.multiply (-1);  // Ensure that a2b points from A to B, not the other way.
+                    if (c2cLength < abLength) c2c = null;  // Force endpoint drawing to use direct path rather than parallel path.
+                }
+            }
+
             for (Entry<String,GraphNode> e : gn.links.entrySet ())
             {
                 GraphNode endpoint = e.getValue ();
@@ -105,7 +136,7 @@ public class PanelEquationGraph extends JPanel
                 {
                     // TODO: Visualize unconnected endpoints
                 }
-                else
+                else if (a2b == null)
                 {
                     Rectangle b1 = endpoint.getBounds ();
                     Vector2 p1 = new Vector2 (b1.getCenterX (), b1.getCenterY ());
@@ -123,6 +154,23 @@ public class PanelEquationGraph extends JPanel
                     g2.drawLine ((int) end.x, (int) end.y, x1, y1);
                     end = new Vector2 (o1, a - da, 10);
                     g2.drawLine ((int) end.x, (int) end.y, x1, y1);
+                }
+                else  // Part of a binary connection
+                {
+                    Rectangle b1 = endpoint.getBounds ();
+                    Vector2 p1 = new Vector2 (b1.getCenterX (), b1.getCenterY ());
+                    double d = b1.getWidth () + b1.getHeight ();
+                    Vector2 C2;
+                    if (c2c == null) C2 = p0.subtract (p1).normalize ();  // direct path
+                    else             C2 = c2c;  // parallel path
+                    Vector2 o1 = p1.add (C2.multiply (d));  // Segment from center of endpoint to a point outside it periphery in the direction of the connection
+                    Segment2 s = new Segment2 (o1, p1);
+                    o1 = intersection (s, b1);  // Point on the periphery of the endpoint
+                    d = p0.distance (o1) / 3;
+                    Vector2 w1 = o1.add (C2.multiply (d));
+                    Vector2 w2 = p0.add (a2b.multiply (endpoint == A ? -d : d));
+                    CubicCurve2D cc = new CubicCurve2D.Double (o1.x, o1.y, w1.x, w1.y, w2.x, w2.y, p0.x, p0.y);
+                    g2.draw (cc);
                 }
             }
         }
@@ -209,6 +257,29 @@ public class PanelEquationGraph extends JPanel
         public double cross (Vector2 that)
         {
             return x * that.y - y * that.x;
+        }
+
+        public double dot (Vector2 that)
+        {
+            return x * that.x + y * that.y;
+        }
+
+        public double distance (Vector2 that)
+        {
+            double dx = x - that.x;
+            double dy = y - that.y;
+            return Math.sqrt (dx * dx + dy * dy);
+        }
+
+        public double length ()
+        {
+            return Math.sqrt (x * x + y * y);
+        }
+
+        public Vector2 normalize ()
+        {
+            double l = length ();
+            return new Vector2 (x / l, y / l);
         }
 
         public String toString ()
