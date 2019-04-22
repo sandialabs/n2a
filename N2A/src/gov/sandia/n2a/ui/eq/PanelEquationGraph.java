@@ -95,8 +95,9 @@ public class PanelEquationGraph extends JPanel
         {
             GraphNode gn = (GraphNode) c;
             Rectangle b0 = gn.getBounds ();
-            int x0 = (int) b0.getCenterX ();  // truncating double to int, so inaccurate, but we don't care
-            int y0 = (int) b0.getCenterY ();
+            Vector2 p0 = new Vector2 (b0.getCenterX (), b0.getCenterY ());
+            int x0 = (int) p0.x;  // truncating double to int, so inaccurate, but we don't care
+            int y0 = (int) p0.y;
             for (Entry<String,GraphNode> e : gn.links.entrySet ())
             {
                 GraphNode endpoint = e.getValue ();
@@ -107,9 +108,21 @@ public class PanelEquationGraph extends JPanel
                 else
                 {
                     Rectangle b1 = endpoint.getBounds ();
-                    int x1 = (int) b1.getCenterX ();  // truncating double to int, so inaccurate, but we don't care
-                    int y1 = (int) b1.getCenterY ();
+                    Vector2 p1 = new Vector2 (b1.getCenterX (), b1.getCenterY ());
+                    Segment2 s = new Segment2 (p0, p1);
+                    Vector2 o1 = intersection (s, b1);
+                    if (o1 == null) continue;
+                    int x1 = (int) o1.x;
+                    int y1 = (int) o1.y;
                     g2.drawLine (x0, y0, x1, y1);
+
+                    // Arrow head
+                    double a = s.angle () - Math.PI;  // reverse direction
+                    double da = Math.PI / 6;
+                    Vector2 end = new Vector2 (o1, a + da, 10);
+                    g2.drawLine ((int) end.x, (int) end.y, x1, y1);
+                    end = new Vector2 (o1, a - da, 10);
+                    g2.drawLine ((int) end.x, (int) end.y, x1, y1);
                 }
             }
         }
@@ -117,10 +130,143 @@ public class PanelEquationGraph extends JPanel
         g2.dispose ();
     }
 
+    /**
+        Finds the point on the edge of the given rectangle nearest to the given point.
+        Returns null if the given point is inside the rectangle.
+    **/
+    public static Vector2 intersection (Segment2 s0, Rectangle b)
+    {
+        double x0 = b.getMinX ();
+        double y0 = b.getMinY ();
+        double x1 = b.getMaxX ();
+        double y1 = b.getMaxY ();
+
+        // left edge
+        Vector2 p0 = new Vector2 (x0, y0);
+        Vector2 p1 = new Vector2 (x0, y1);
+        double t = s0.intersection (new Segment2 (p0, p1));
+
+        // bottom edge
+        p0.x = p1.x;
+        p0.y = p1.y;
+        p1.x = x1;
+        t = Math.min (t, s0.intersection (new Segment2 (p0, p1)));
+
+        // right edge
+        p0.x = p1.x;
+        p0.y = p1.y;
+        p1.y = y0;
+        t = Math.min (t, s0.intersection (new Segment2 (p0, p1)));
+
+        // top edge
+        p0.x = p1.x;
+        p0.y = p1.y;
+        p1.x = x0;
+        t = Math.min (t, s0.intersection (new Segment2 (p0, p1)));
+
+        if (t > 1) return null;
+        return s0.paramtetricPoint (t);
+    }
+
     public void updateUI ()
     {
         GraphNode.RoundedBorder.updateUI ();
         background = UIManager.getColor ("SplitPane.background");
+    }
+
+    public static class Vector2
+    {
+        double x;
+        double y;
+
+        public Vector2 (double x, double y)
+        {
+            this.x = x;
+            this.y = y;
+        }
+
+        public Vector2 (Vector2 origin, double angle, double length)
+        {
+            x = origin.x + Math.cos (angle) * length;
+            y = origin.y + Math.sin (angle) * length;
+        }
+
+        public Vector2 add (Vector2 that)
+        {
+            return new Vector2 (x + that.x, y + that.y);
+        }
+
+        public Vector2 subtract (Vector2 that)
+        {
+            return new Vector2 (x - that.x, y - that.y);
+        }
+
+        public Vector2 multiply (double a)
+        {
+            return new Vector2 (x * a, y * a);
+        }
+
+        public double cross (Vector2 that)
+        {
+            return x * that.y - y * that.x;
+        }
+
+        public String toString ()
+        {
+            return "(" + x + "," + y + ")";
+        }
+    }
+
+    public static class Segment2
+    {
+        Vector2 a;
+        Vector2 b;
+
+        public Segment2 (Vector2 a, Vector2 b)
+        {
+            this.a = a;
+            this.b = b.subtract (a);
+        }
+
+        /**
+            Finds the point where this segment and that segment intersect.
+            Result is a number in [0,1].
+            If the segments are parallel or do not intersect, then the result is infinity.
+
+            From https://stackoverflow.com/questions/563198/how-do-you-detect-where-two-line-segments-intersect
+            which is in turn based on "Intersection of two lines in three-space" by Ronald Goldman,
+            published in Graphics Gems, page 304.
+
+            This is equivalent to a linear solution which involves matrix inversion
+            (such as https://blogs.sas.com/content/iml/2018/07/09/intersection-line-segments.html).
+            However, this approach offers a clear sequence of early-outs that make it efficient.
+        **/
+        public double intersection (Segment2 that)
+        {
+            double rs = b.cross (that.b);
+            if (rs == 0) return Double.POSITIVE_INFINITY;  // Singular, so no solution
+            Vector2 qp = that.a.subtract (a);
+            double t = qp.cross (that.b) / rs;  // Parameter for point on this segment
+            if (t < 0  ||  t > 1) return Double.POSITIVE_INFINITY;  // Not between start and end points
+            double u = qp.cross (b) / rs;  // Parameter for point on that segment
+            if (u < 0  ||  u > 1) return Double.POSITIVE_INFINITY;
+            return t;
+        }
+
+        public Vector2 paramtetricPoint (double t)
+        {
+            return a.add (b.multiply (t));
+        }
+
+        public double angle ()
+        {
+            return Math.atan2 (b.y, b.x);
+        }
+
+        public String toString ()
+        {
+            return a + "->" + a.add (b);
+        }
     }
 
     public static class GraphLayout implements LayoutManager2
