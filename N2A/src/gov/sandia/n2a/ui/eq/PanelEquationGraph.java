@@ -6,16 +6,20 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq;
 
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.LayoutManager;
+import java.awt.LayoutManager2;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.awt.RenderingHints;
 import java.util.Enumeration;
+import java.util.Map.Entry;
+
 import javax.swing.JPanel;
 import javax.swing.UIManager;
 
@@ -44,9 +48,26 @@ public class PanelEquationGraph extends JPanel
         while (children.hasMoreElements ())
         {
             Object c = children.nextElement ();
-            if (c instanceof NodePart) add ("", new GraphNode ((NodePart) c));  // Necessary to specify string, to force use of LayoutManager.addLayoutComponent().
+            if (c instanceof NodePart) add (new GraphNode ((NodePart) c));
         }
-        revalidate ();
+
+        // Scan children to set up connections
+        for (Component c : getComponents ())
+        {
+            GraphNode gn = (GraphNode) c;
+            if (gn.node.connectionBindings == null) continue;
+            for (Entry<String,NodePart> e : gn.node.connectionBindings.entrySet ())
+            {
+                GraphNode endpoint = null;
+                NodePart np = e.getValue ();
+                if (np != null) endpoint = np.graph;
+                gn.links.put (e.getKey (), endpoint);
+                if (endpoint != null) endpoint.endpoints.add (gn);
+            }
+        }
+
+        validate ();
+        paintImmediately (getBounds ());
     }
 
     public boolean isOptimizedDrawingEnabled ()
@@ -66,7 +87,34 @@ public class PanelEquationGraph extends JPanel
         Rectangle clip = g2.getClipBounds ();
         g2.fillRect (clip.x, clip.y, clip.width, clip.height);
 
-        // TODO: Draw connection edges
+        // Draw connection edges
+        g2.setColor (Color.black);
+        g2.setStroke (new BasicStroke (3, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g2.setRenderingHint (RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        for (Component c : getComponents ())
+        {
+            GraphNode gn = (GraphNode) c;
+            Rectangle b0 = gn.getBounds ();
+            int x0 = (int) b0.getCenterX ();  // truncating double to int, so inaccurate, but we don't care
+            int y0 = (int) b0.getCenterY ();
+            for (Entry<String,GraphNode> e : gn.links.entrySet ())
+            {
+                GraphNode endpoint = e.getValue ();
+                if (endpoint == null)
+                {
+                    // TODO: Visualize unconnected endpoints
+                }
+                else
+                {
+                    Rectangle b1 = endpoint.getBounds ();
+                    int x1 = (int) b1.getCenterX ();  // truncating double to int, so inaccurate, but we don't care
+                    int y1 = (int) b1.getCenterY ();
+                    g2.drawLine (x0, y0, x1, y1);
+                }
+            }
+        }
+
+        g2.dispose ();
     }
 
     public void updateUI ()
@@ -75,12 +123,17 @@ public class PanelEquationGraph extends JPanel
         background = UIManager.getColor ("SplitPane.background");
     }
 
-    public static class GraphLayout implements LayoutManager
+    public static class GraphLayout implements LayoutManager2
     {
         public Rectangle bounds = new Rectangle ();
         public boolean   needSize;
 
         public void addLayoutComponent (String name, Component comp)
+        {
+            addLayoutComponent (comp, name);
+        }
+
+        public void addLayoutComponent (Component comp, Object constraints)
         {
             Dimension d = comp.getPreferredSize ();
             comp.setSize (d);
@@ -97,14 +150,12 @@ public class PanelEquationGraph extends JPanel
             if (r.getMinX () == bounds.getMinX ()  ||  r.getMinY () == bounds.getMinY ()  ||  r.getMaxX () == bounds.getMaxX ()  ||  r.getMaxY () == bounds.getMaxY ()) needSize = true;
         }
 
-        public Dimension preferredLayoutSize (Container parent)
+        public Dimension preferredLayoutSize (Container target)
         {
             if (! needSize) return bounds.getSize ();
             bounds = new Rectangle ();
-            int count = parent.getComponentCount ();
-            for (int i = 0; i < count; i++)
+            for (Component c : target.getComponents ())
             {
-                Component c = parent.getComponent (i);
                 Dimension d = c.getSize ();
                 Point     p = c.getLocation ();
                 bounds.union (new Rectangle (p, d));
@@ -112,12 +163,31 @@ public class PanelEquationGraph extends JPanel
             return bounds.getSize ();
         }
 
-        public Dimension minimumLayoutSize (Container parent)
+        public Dimension minimumLayoutSize (Container target)
         {
-            return preferredLayoutSize (parent);
+            return preferredLayoutSize (target);
         }
 
-        public void layoutContainer (Container parent)
+        public Dimension maximumLayoutSize (Container target)
+        {
+            return preferredLayoutSize (target);
+        }
+
+        public float getLayoutAlignmentX (Container target)
+        {
+            return 0;
+        }
+
+        public float getLayoutAlignmentY (Container target)
+        {
+            return 0;
+        }
+
+        public void invalidateLayout (Container target)
+        {
+        }
+
+        public void layoutContainer (Container target)
         {
         }
 

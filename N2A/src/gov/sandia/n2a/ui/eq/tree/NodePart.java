@@ -11,6 +11,7 @@ import java.awt.Font;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDir;
@@ -46,9 +47,9 @@ public class NodePart extends NodeContainer
     protected static ImageIcon iconCompartment = ImageUtil.getImage ("comp.gif");
     protected static ImageIcon iconConnection  = ImageUtil.getImage ("connection.png");
 
-    protected boolean   isConnection;
-    protected String    parentName = "";
-    public    GraphNode graph;
+    protected String               inheritName = "";
+    public    Map<String,NodePart> connectionBindings;  // non-null if this is a connection
+    public    GraphNode            graph;
 
     public NodePart ()
     {
@@ -63,11 +64,11 @@ public class NodePart extends NodeContainer
     {
         setUserObject (source.key ());  // This won't actually be used in editing, but it does prevent editingCancelled() from getting a null object.
 
-        parentName = "";
+        inheritName = "";
         if (! isRoot ())
         {
             MNode inherit = source.child ("$inherit");
-            if (inherit != null) parentName = inherit.get ().split (",", 2)[0].replace ("\"", "");
+            if (inherit != null) inheritName = inherit.get ().split (",", 2)[0].replace ("\"", "");
         }
     }
 
@@ -149,16 +150,16 @@ public class NodePart extends NodeContainer
     @Override
     public Icon getIcon (boolean expanded)
     {
-        if (isConnection) return iconConnection;
-        else              return iconCompartment;
+        if (connectionBindings == null) return iconCompartment;
+        else                            return iconConnection;
     }
 
     @Override
     public String getText (boolean expanded, boolean editing)
     {
         String key = toString ();  // This allows us to set editing text to "" for new objects, while showing key for old objects.
-        if (expanded  ||  editing  ||  parentName.isEmpty ()) return key;
-        return key + "  (" + parentName + ")";
+        if (expanded  ||  editing  ||  inheritName.isEmpty ()) return key;
+        return key + "  (" + inheritName + ")";
     }
 
     @Override
@@ -179,7 +180,7 @@ public class NodePart extends NodeContainer
     **/
     public void findConnections ()
     {
-        isConnection = false;
+        connectionBindings = null;
         Enumeration<?> i = children ();
         while (i.hasMoreElements ())
         {

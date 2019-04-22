@@ -19,6 +19,10 @@ import java.awt.RenderingHints;
 import java.awt.Shape;
 import java.awt.event.MouseEvent;
 import java.awt.geom.RoundRectangle2D;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -37,8 +41,10 @@ import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
 @SuppressWarnings("serial")
 public class GraphNode extends JPanel
 {
-    public NodePart node;
-    public JLabel   label;
+    public    NodePart              node;
+    public    JLabel                label;
+    protected Map<String,GraphNode> links = new HashMap<String,GraphNode> ();  // Graph nodes which we link to us. (We are the source of a directed edge.)
+    protected List<GraphNode>       endpoints = new ArrayList<GraphNode> ();  // Graph nodes which link to us. (We are the destination of a directed edge.)
 
     protected static RoundedBorder border = new RoundedBorder (5);
 
@@ -108,8 +114,15 @@ public class GraphNode extends JPanel
         Rectangle old = getBounds ();
         setBounds (next);
         validate ();
+
         PanelEquationGraph p = (PanelEquationGraph) getParent ();
-        p.paintImmediately (old.union (next));
+        p.layout.componentMoved (this, old);
+        // TODO: validate p if canvas size has changed
+
+        next = next.union (old);
+        for (GraphNode gn : links.values ()) next = next.union (gn.getBounds ());
+        for (GraphNode gn : endpoints      ) next = next.union (gn.getBounds ());
+        p.paintImmediately (next);
     }
 
     public class ResizeListener extends MouseInputAdapter

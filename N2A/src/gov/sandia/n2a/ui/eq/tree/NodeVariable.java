@@ -10,6 +10,7 @@ package gov.sandia.n2a.ui.eq.tree;
 import java.awt.FontMetrics;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.List;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
@@ -142,7 +143,9 @@ public class NodeVariable extends NodeContainer
         isBinding = false;
 
         NodePart parent = (NodePart) getParent ();
+        String name  = source.key ().trim ();
         String value = source.get ().trim ();
+        NodeBase referent = null;
         if (Operator.containsConnect (value))
         {
             isBinding = true;
@@ -152,19 +155,22 @@ public class NodeVariable extends NodeContainer
             if (value.isEmpty ()  ||  value.startsWith ("$kill")) return;
 
             // Determine if our LHS has the right form.
-            String name = source.key ().trim ();
             if (name.endsWith ("'")) return;
 
             // Determine if our RHS has the right form. If so, scan for the referent.
             if (NodePart.isIdentifierPath (value))
             {
-                NodeBase referent = parent.resolveName (value);
+                referent = parent.resolveName (value);
                 if      (referent == null)             isBinding = ! value.contains (".");
                 else if (referent instanceof NodePart) isBinding = true;
             }
         }
 
-        if (isBinding) parent.isConnection = true;
+        if (isBinding)
+        {
+            if (parent.connectionBindings == null) parent.connectionBindings = new HashMap<String,NodePart> ();
+            parent.connectionBindings.put (name, (NodePart) referent);  // referent may be null, in which case there is unconnected endpoint.
+        }
     }
 
     @Override
