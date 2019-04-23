@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq;
 
+import java.awt.Color;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -160,8 +161,8 @@ public class GraphEdge
             root = intersection (new Segment2 (c, root), Cbounds);  // on boundary of c
             length = c.distance (tip) / 3;
             Vector2 w1 = tip.add (C2.multiply (length));
-            Vector2 w2 = root.add (nodeFrom.a2b.multiply (sign * length));
-            shape = new CubicCurve2D.Double (tip.x, tip.y, w1.x, w1.y, w2.x, w2.y, root.x, root.y);
+            Vector2 w2 = c.add (nodeFrom.a2b.multiply (sign * length));
+            shape = new CubicCurve2D.Double (tip.x, tip.y, w1.x, w1.y, w2.x, w2.y, c.x, c.y);
             tipAngle = s.angle ();
         }
 
@@ -183,8 +184,7 @@ public class GraphEdge
         double absAngle = root.subtract (c).absAngle ();
         if (absAngle > nodeAngle)  // top or bottom
         {
-            if (root.x < c.x) label.x = root.x      + t;
-            else              label.x = root.x - tw - t;
+            label.x = root.x - tw / 2;
             if (root.y < c.y) label.y = root.y - th - t;
             else              label.y = root.y      + t;
         }
@@ -192,8 +192,7 @@ public class GraphEdge
         {
             if (root.x < c.x) label.x = root.x - tw - t;
             else              label.x = root.x      + t;
-            if (root.y < c.y) label.y = root.y      + t;
-            else              label.y = root.y - th - t;
+            label.y = root.y - th / 2;
         }
 
         Rectangle tb = new Rectangle ();
@@ -218,7 +217,16 @@ public class GraphEdge
         // including stroke, color and rendering hints.
         Graphics2D g2 = (Graphics2D) g;
 
+        g2.setColor (Color.black);
         g2.draw (shape);
+
+        FontMetrics fm = nodeFrom.getFontMetrics (nodeFrom.getFont ());
+        Rectangle2D tb = fm.getStringBounds (fromName, g);
+        tb.setRect (label.x + tb.getX () - 2, label.y + tb.getY () - 1, tb.getWidth () + 4, tb.getHeight () + 2);
+        g2.setColor (new Color (0xD0FFFFFF, true));
+        g2.fill (tb);
+        
+        g2.setColor (Color.black);
         g2.drawString (fromName, (float) label.x, (float) label.y);
     }
 

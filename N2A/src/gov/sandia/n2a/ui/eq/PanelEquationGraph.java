@@ -117,7 +117,6 @@ public class PanelEquationGraph extends JPanel
         g2.fillRect (clip.x, clip.y, clip.width, clip.height);
 
         // Draw connection edges
-        g2.setColor (Color.black);
         g2.setStroke (new BasicStroke (GraphEdge.strokeThickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
         g2.setRenderingHint (RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         for (GraphEdge e : edges)
@@ -201,7 +200,6 @@ public class PanelEquationGraph extends JPanel
         public void layoutContainer (Container target)
         {
             PanelEquationGraph peg = (PanelEquationGraph) target;
-            System.out.println ("layoutContainer " + peg.needLayout);
             if (! peg.needLayout) return;
 
             // TODO: use potential-field method, such as "Drawing Graphs Nicely Using Simulated Annealing" by Davidson & Harel (1996).
