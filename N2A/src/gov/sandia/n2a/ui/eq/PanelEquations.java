@@ -107,7 +107,7 @@ public class PanelEquations extends JPanel
                 {
                     if (firstResize)
                     {
-                        splitEquation.setDividerLocation (0.66);
+                        splitEquation.setDividerLocation (0.5);
                         firstResize = false;
                     }
                 }

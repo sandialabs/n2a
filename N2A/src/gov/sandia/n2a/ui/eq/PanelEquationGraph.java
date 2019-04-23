@@ -25,6 +25,7 @@ import java.util.Map.Entry;
 import javax.swing.JPanel;
 import javax.swing.UIManager;
 
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
 @SuppressWarnings("serial")
@@ -32,6 +33,7 @@ public class PanelEquationGraph extends JPanel
 {
     protected PanelEquations  container;
     protected GraphLayout     layout;
+    protected boolean         needLayout;  // Set by load() if all nodes lack location information.
     protected List<GraphEdge> edges = new ArrayList<GraphEdge> (); // Note that GraphNodes are stored directly as Swing components.
 
     protected static Color background = new Color (0xF0F0F0);  // light gray
@@ -50,10 +52,16 @@ public class PanelEquationGraph extends JPanel
         edges.clear ();
 
         Enumeration<?> children = container.root.children ();
+        needLayout = children.hasMoreElements ();
         while (children.hasMoreElements ())
         {
             Object c = children.nextElement ();
-            if (c instanceof NodePart) add (new GraphNode ((NodePart) c));
+            if (c instanceof NodePart)
+            {
+                GraphNode gn = new GraphNode ((NodePart) c);
+                add (gn);
+                if (gn.getX () != 0  ||  gn.getY () != 0) needLayout = false;
+            }
         }
 
         // Scan children to set up connections
@@ -84,7 +92,7 @@ public class PanelEquationGraph extends JPanel
                 B.edgeOther = A;
             }
 
-            for (GraphEdge ge : gn.edgesOut) ge.updateShape (gn);
+            if (! needLayout) for (GraphEdge ge : gn.edgesOut) ge.updateShape (gn);
         }
 
         validate ();
@@ -192,6 +200,43 @@ public class PanelEquationGraph extends JPanel
 
         public void layoutContainer (Container target)
         {
+            PanelEquationGraph peg = (PanelEquationGraph) target;
+            System.out.println ("layoutContainer " + peg.needLayout);
+            if (! peg.needLayout) return;
+
+            // TODO: use potential-field method, such as "Drawing Graphs Nicely Using Simulated Annealing" by Davidson & Harel (1996).
+
+            // For now, a very simple layout. Arrange in a grid with some space between nodes.
+            Component[] components = target.getComponents ();
+            int columns = (int) Math.sqrt (components.length);  // Truncate, so more rows than columns.
+            int gap = 100;
+            int x = 0;
+            int y = 0;
+            for (int i = 0; i < components.length; i++)
+            {
+                Component c = components[i];
+                if (i % columns == 0)
+                {
+                    x = gap;
+                    y += gap;
+                }
+                c.setLocation (x, y);
+                MNode bounds = ((GraphNode) c).node.source.childOrCreate ("$metadata", "bounds");
+                bounds.set (x, "x");
+                bounds.set (y, "y");
+                x += c.getWidth () + gap;
+            }
+
+            // Apply changes to edges
+            for (int i = 0; i < components.length; i++)
+            {
+                GraphNode gn = (GraphNode) components[i];
+                for (GraphEdge ge : gn.edgesOut) ge.updateShape (gn);
+            }
+
+            // TODO: the equation tree should be rebuilt, so that new metadata nodes become visible.
+
+            peg.needLayout = false;
         }
 
         public void componentMoved (Component comp, Rectangle oldBounds)

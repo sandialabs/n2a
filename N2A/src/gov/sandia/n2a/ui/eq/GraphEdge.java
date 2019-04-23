@@ -81,7 +81,10 @@ public class GraphEdge
             else                      nodeFrom.c2c = null; // Force endpoint drawing to use direct path rather than parallel path.
 
             // If needed, update shape parameters of the other edge.
-            if (caller == nodeTo) edgeOther.updateShape (caller);
+            // The two possible sources of a call are nodeFrom and nodeTo.
+            // If nodeTo, then we propagate the update to our peer edge.
+            // However, if this is a self-connection, then we are our peer edge, so don't start an infinite loop.
+            if (caller == nodeTo  &&  edgeOther.nodeTo != nodeTo) edgeOther.updateShape (caller);
         }
 
         Graphics g = nodeFrom.getGraphics ();
