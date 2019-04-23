@@ -23,10 +23,12 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JTree;
 import javax.swing.UIManager;
 import javax.swing.border.AbstractBorder;
 import javax.swing.event.MouseInputAdapter;
 import javax.swing.event.MouseInputListener;
+import javax.swing.tree.TreePath;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
@@ -253,17 +255,34 @@ public class GraphNode extends JPanel
         {
             start = null;
 
-            // Store new bounds in metadata
-            MNode guiTree = new MVolatile ();
-            MNode bounds = guiTree.childOrCreate ("bounds");
-            Rectangle now = getBounds ();
-            if (now.x      != old.x     ) bounds.set (now.x,      "x");
-            if (now.y      != old.y     ) bounds.set (now.y,      "y");
-            if (now.width  != old.width ) bounds.set (now.width,  "width");
-            if (now.height != old.height) bounds.set (now.height, "height");
-
             PanelModel mep = PanelModel.instance;
-            mep.undoManager.add (new ChangeGUI (node, guiTree));
+            if (cursor == Cursor.DEFAULT_CURSOR)  // Normal click
+            {
+                // Select node
+                PanelEquationTree pet = mep.panelEquationTree;
+                JTree tree = pet.tree;
+                TreePath path = new TreePath (node.getPath ());
+                tree.setSelectionPath (path);
+                // The following lines are equivalent to scrollPathToVisible(path),
+                // except that we expand the requested rectangle to force the node to the top of the frame.
+                tree.makeVisible (path);
+                Rectangle r = tree.getPathBounds (path);
+                Rectangle visible = pet.getViewport ().getViewRect ();
+                r.height = visible.height;
+                tree.scrollRectToVisible (r);
+            }
+            else  // Move or resize (click on border)
+            {
+                // Store new bounds in metadata
+                MNode guiTree = new MVolatile ();
+                MNode bounds = guiTree.childOrCreate ("bounds");
+                Rectangle now = getBounds ();
+                if (now.x      != old.x     ) bounds.set (now.x,      "x");
+                if (now.y      != old.y     ) bounds.set (now.y,      "y");
+                if (now.width  != old.width ) bounds.set (now.width,  "width");
+                if (now.height != old.height) bounds.set (now.height, "height");
+                if (bounds.size () > 0) mep.undoManager.add (new ChangeGUI (node, guiTree));
+            }
         }
     }
 
