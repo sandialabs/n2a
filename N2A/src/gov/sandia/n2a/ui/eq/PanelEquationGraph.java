@@ -17,9 +17,9 @@ import java.awt.LayoutManager2;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
-import java.awt.geom.CubicCurve2D;
+import java.util.ArrayList;
 import java.util.Enumeration;
-import java.util.Iterator;
+import java.util.List;
 import java.util.Map.Entry;
 
 import javax.swing.JPanel;
@@ -30,10 +30,12 @@ import gov.sandia.n2a.ui.eq.tree.NodePart;
 @SuppressWarnings("serial")
 public class PanelEquationGraph extends JPanel
 {
-    protected PanelEquations container;
-    protected GraphLayout    layout;
+    protected PanelEquations  container;
+    protected GraphLayout     layout;
+    protected List<GraphEdge> edges = new ArrayList<GraphEdge> (); // Note that GraphNodes are stored directly as Swing components.
 
-    protected static Color background = new Color (0xF0F0F0);  // light gray
+    protected static Color background      = new Color (0xF0F0F0);  // light gray
+    protected static float strokeThickness = 3;
 
     public PanelEquationGraph (PanelEquations container)
     {
@@ -46,6 +48,8 @@ public class PanelEquationGraph extends JPanel
     public void load ()
     {
         removeAll ();
+        edges.clear ();
+
         Enumeration<?> children = container.root.children ();
         while (children.hasMoreElements ())
         {
@@ -58,14 +62,30 @@ public class PanelEquationGraph extends JPanel
         {
             GraphNode gn = (GraphNode) c;
             if (gn.node.connectionBindings == null) continue;
+
+            GraphEdge A = null;
+            GraphEdge B = null;
             for (Entry<String,NodePart> e : gn.node.connectionBindings.entrySet ())
             {
                 GraphNode endpoint = null;
                 NodePart np = e.getValue ();
                 if (np != null) endpoint = np.graph;
-                gn.links.put (e.getKey (), endpoint);
-                if (endpoint != null) endpoint.endpoints.add (gn);
+
+                GraphEdge ge = new GraphEdge (gn, endpoint, e.getKey ());
+                edges.add (ge);
+                gn.edgesOut.add (ge);
+                if (endpoint != null) endpoint.edgesIn.add (ge);
+
+                if (A == null) A = ge;  // Not necessarily same as endpoint variable named "A" in part.
+                else           B = ge;
             }
+            if (gn.edgesOut.size () == 2)
+            {
+                A.edgeOther = B;
+                B.edgeOther = A;
+            }
+
+            for (GraphEdge ge : gn.edgesOut) ge.updateShape (gn);
         }
 
         validate ();
@@ -91,253 +111,20 @@ public class PanelEquationGraph extends JPanel
 
         // Draw connection edges
         g2.setColor (Color.black);
-        g2.setStroke (new BasicStroke (3, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g2.setStroke (new BasicStroke (strokeThickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
         g2.setRenderingHint (RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        for (Component c : getComponents ())
+        for (GraphEdge e : edges)
         {
-            GraphNode gn = (GraphNode) c;
-            Rectangle b0 = gn.getBounds ();
-            Vector2 p0 = new Vector2 (b0.getCenterX (), b0.getCenterY ());
-            int x0 = (int) p0.x;  // truncating double to int, so inaccurate, but we don't care
-            int y0 = (int) p0.y;
-
-            // Specifically for binary connections (by far the most common case), use curve which passe through connection node.
-            Vector2 a2b = null;  // Points in direction A->B, passing through connection node.
-            Vector2 c2c = null;  // Points from average position of endpoints toward connection node.
-            GraphNode A = null;
-            GraphNode B = null;
-            if (gn.links.size () == 2)  // prepare constraints
-            {
-                Iterator<GraphNode> it = gn.links.values ().iterator ();
-                A = it.next ();
-                B = it.next ();
-                if (A != null  &&  B != null)
-                {
-                    Rectangle bounds = A.getBounds ();
-                    Vector2 a = new Vector2 (bounds.getCenterX (), bounds.getCenterY ());
-                    bounds = B.getBounds ();
-                    Vector2 b = new Vector2 (bounds.getCenterX (), bounds.getCenterY ());
-                    Vector2 ab = a.add (b).multiply (0.5);  // average position
-                    c2c = p0.subtract (ab);
-                    double c2cLength = c2c.length ();
-                    double abLength = a.subtract (b).length ();
-                    c2c = c2c.normalize ();
-                    a2b = new Vector2 (-c2c.y, c2c.x);
-                    Vector2 abb = b.subtract (ab);
-                    if (abb.dot (a2b) < 0) a2b = a2b.multiply (-1);  // Ensure that a2b points from A to B, not the other way.
-                    if (c2cLength < abLength) c2c = null;  // Force endpoint drawing to use direct path rather than parallel path.
-                }
-            }
-
-            for (Entry<String,GraphNode> e : gn.links.entrySet ())
-            {
-                GraphNode endpoint = e.getValue ();
-                if (endpoint == null)
-                {
-                    // TODO: Visualize unconnected endpoints
-                }
-                else if (a2b == null)
-                {
-                    Rectangle b1 = endpoint.getBounds ();
-                    Vector2 p1 = new Vector2 (b1.getCenterX (), b1.getCenterY ());
-                    Segment2 s = new Segment2 (p0, p1);
-                    Vector2 o1 = intersection (s, b1);
-                    if (o1 == null) continue;
-                    int x1 = (int) o1.x;
-                    int y1 = (int) o1.y;
-                    g2.drawLine (x0, y0, x1, y1);
-
-                    // Arrow head
-                    double a = s.angle () - Math.PI;  // reverse direction
-                    double da = Math.PI / 6;
-                    Vector2 end = new Vector2 (o1, a + da, 10);
-                    g2.drawLine ((int) end.x, (int) end.y, x1, y1);
-                    end = new Vector2 (o1, a - da, 10);
-                    g2.drawLine ((int) end.x, (int) end.y, x1, y1);
-                }
-                else  // Part of a binary connection
-                {
-                    Rectangle b1 = endpoint.getBounds ();
-                    Vector2 p1 = new Vector2 (b1.getCenterX (), b1.getCenterY ());
-                    double d = b1.getWidth () + b1.getHeight ();
-                    Vector2 C2;
-                    if (c2c == null) C2 = p0.subtract (p1).normalize ();  // direct path
-                    else             C2 = c2c;  // parallel path
-                    Vector2 o1 = p1.add (C2.multiply (d));  // Segment from center of endpoint to a point outside it periphery in the direction of the connection
-                    Segment2 s = new Segment2 (o1, p1);
-                    o1 = intersection (s, b1);  // Point on the periphery of the endpoint
-                    d = p0.distance (o1) / 3;
-                    Vector2 w1 = o1.add (C2.multiply (d));
-                    Vector2 w2 = p0.add (a2b.multiply (endpoint == A ? -d : d));
-                    CubicCurve2D cc = new CubicCurve2D.Double (o1.x, o1.y, w1.x, w1.y, w2.x, w2.y, p0.x, p0.y);
-                    g2.draw (cc);
-                }
-            }
+            if (e.bounds != null  &&  e.bounds.intersects (clip)) e.paintComponent (g2);
         }
 
         g2.dispose ();
-    }
-
-    /**
-        Finds the point on the edge of the given rectangle nearest to the given point.
-        Returns null if the given point is inside the rectangle.
-    **/
-    public static Vector2 intersection (Segment2 s0, Rectangle b)
-    {
-        double x0 = b.getMinX ();
-        double y0 = b.getMinY ();
-        double x1 = b.getMaxX ();
-        double y1 = b.getMaxY ();
-
-        // left edge
-        Vector2 p0 = new Vector2 (x0, y0);
-        Vector2 p1 = new Vector2 (x0, y1);
-        double t = s0.intersection (new Segment2 (p0, p1));
-
-        // bottom edge
-        p0.x = p1.x;
-        p0.y = p1.y;
-        p1.x = x1;
-        t = Math.min (t, s0.intersection (new Segment2 (p0, p1)));
-
-        // right edge
-        p0.x = p1.x;
-        p0.y = p1.y;
-        p1.y = y0;
-        t = Math.min (t, s0.intersection (new Segment2 (p0, p1)));
-
-        // top edge
-        p0.x = p1.x;
-        p0.y = p1.y;
-        p1.x = x0;
-        t = Math.min (t, s0.intersection (new Segment2 (p0, p1)));
-
-        if (t > 1) return null;
-        return s0.paramtetricPoint (t);
     }
 
     public void updateUI ()
     {
         GraphNode.RoundedBorder.updateUI ();
         background = UIManager.getColor ("SplitPane.background");
-    }
-
-    public static class Vector2
-    {
-        double x;
-        double y;
-
-        public Vector2 (double x, double y)
-        {
-            this.x = x;
-            this.y = y;
-        }
-
-        public Vector2 (Vector2 origin, double angle, double length)
-        {
-            x = origin.x + Math.cos (angle) * length;
-            y = origin.y + Math.sin (angle) * length;
-        }
-
-        public Vector2 add (Vector2 that)
-        {
-            return new Vector2 (x + that.x, y + that.y);
-        }
-
-        public Vector2 subtract (Vector2 that)
-        {
-            return new Vector2 (x - that.x, y - that.y);
-        }
-
-        public Vector2 multiply (double a)
-        {
-            return new Vector2 (x * a, y * a);
-        }
-
-        public double cross (Vector2 that)
-        {
-            return x * that.y - y * that.x;
-        }
-
-        public double dot (Vector2 that)
-        {
-            return x * that.x + y * that.y;
-        }
-
-        public double distance (Vector2 that)
-        {
-            double dx = x - that.x;
-            double dy = y - that.y;
-            return Math.sqrt (dx * dx + dy * dy);
-        }
-
-        public double length ()
-        {
-            return Math.sqrt (x * x + y * y);
-        }
-
-        public Vector2 normalize ()
-        {
-            double l = length ();
-            return new Vector2 (x / l, y / l);
-        }
-
-        public String toString ()
-        {
-            return "(" + x + "," + y + ")";
-        }
-    }
-
-    public static class Segment2
-    {
-        Vector2 a;
-        Vector2 b;
-
-        public Segment2 (Vector2 a, Vector2 b)
-        {
-            this.a = a;
-            this.b = b.subtract (a);
-        }
-
-        /**
-            Finds the point where this segment and that segment intersect.
-            Result is a number in [0,1].
-            If the segments are parallel or do not intersect, then the result is infinity.
-
-            From https://stackoverflow.com/questions/563198/how-do-you-detect-where-two-line-segments-intersect
-            which is in turn based on "Intersection of two lines in three-space" by Ronald Goldman,
-            published in Graphics Gems, page 304.
-
-            This is equivalent to a linear solution which involves matrix inversion
-            (such as https://blogs.sas.com/content/iml/2018/07/09/intersection-line-segments.html).
-            However, this approach offers a clear sequence of early-outs that make it efficient.
-        **/
-        public double intersection (Segment2 that)
-        {
-            double rs = b.cross (that.b);
-            if (rs == 0) return Double.POSITIVE_INFINITY;  // Singular, so no solution
-            Vector2 qp = that.a.subtract (a);
-            double t = qp.cross (that.b) / rs;  // Parameter for point on this segment
-            if (t < 0  ||  t > 1) return Double.POSITIVE_INFINITY;  // Not between start and end points
-            double u = qp.cross (b) / rs;  // Parameter for point on that segment
-            if (u < 0  ||  u > 1) return Double.POSITIVE_INFINITY;
-            return t;
-        }
-
-        public Vector2 paramtetricPoint (double t)
-        {
-            return a.add (b.multiply (t));
-        }
-
-        public double angle ()
-        {
-            return Math.atan2 (b.y, b.x);
-        }
-
-        public String toString ()
-        {
-            return a + "->" + a.add (b);
-        }
     }
 
     public static class GraphLayout implements LayoutManager2

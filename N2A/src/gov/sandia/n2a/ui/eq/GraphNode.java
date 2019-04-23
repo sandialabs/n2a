@@ -20,10 +20,7 @@ import java.awt.Shape;
 import java.awt.event.MouseEvent;
 import java.awt.geom.RoundRectangle2D;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.UIManager;
@@ -34,6 +31,7 @@ import javax.swing.event.MouseInputListener;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Lay;
+import gov.sandia.n2a.ui.eq.GraphEdge.Vector2;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
@@ -41,12 +39,16 @@ import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
 @SuppressWarnings("serial")
 public class GraphNode extends JPanel
 {
-    public    NodePart              node;
-    public    JLabel                label;
-    protected Map<String,GraphNode> links = new HashMap<String,GraphNode> ();  // Graph nodes which we link to us. (We are the source of a directed edge.)
-    protected List<GraphNode>       endpoints = new ArrayList<GraphNode> ();  // Graph nodes which link to us. (We are the destination of a directed edge.)
+    public    NodePart        node;
+    public    JLabel          label;
+    protected List<GraphEdge> edgesOut = new ArrayList<GraphEdge> ();
+    protected List<GraphEdge> edgesIn  = new ArrayList<GraphEdge> ();
 
     protected static RoundedBorder border = new RoundedBorder (5);
+
+    // For binary connections only, save drawing parameters used by both edges of curve passing through us.
+    protected Vector2 a2b; // Unit vector pointing in direction A->B
+    protected Vector2 c2c; // Unit vector pointing from average position of endpoints towards center of this connection node.
 
     public GraphNode (NodePart node)
     {
@@ -117,11 +119,22 @@ public class GraphNode extends JPanel
 
         PanelEquationGraph p = (PanelEquationGraph) getParent ();
         p.layout.componentMoved (this, old);
-        // TODO: validate p if canvas size has changed
+        // TODO: if bounds of p have changed, update containing scroll pane
 
         next = next.union (old);
-        for (GraphNode gn : links.values ()) next = next.union (gn.getBounds ());
-        for (GraphNode gn : endpoints      ) next = next.union (gn.getBounds ());
+        for (GraphEdge ge : edgesOut)
+        {
+            next = next.union (ge.bounds);
+            ge.updateShape (this);
+            next = next.union (ge.bounds);
+        }
+        for (GraphEdge ge : edgesIn)
+        {
+            next = next.union (ge.bounds);
+            ge.updateShape (this);
+            next = next.union (ge.bounds);
+        }
+
         p.paintImmediately (next);
     }
 
