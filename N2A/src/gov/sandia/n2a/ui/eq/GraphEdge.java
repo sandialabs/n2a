@@ -14,6 +14,7 @@ import java.awt.Shape;
 import java.awt.geom.CubicCurve2D;
 import java.awt.geom.Line2D;
 import java.awt.geom.Path2D;
+import java.awt.geom.Rectangle2D;
 
 public class GraphEdge
 {
@@ -23,8 +24,12 @@ public class GraphEdge
     protected String    fromName;  // Name of endpoint variable in connection part.
 
     protected Shape     shape;
-    // TODO: describe how to draw fromName, and include it in the bounds
+    protected Vector2   label;
     protected Rectangle bounds;
+
+    protected static double arrowheadAngle  = Math.PI / 5;
+    protected static double arrowheadLength = 10;
+    protected static float  strokeThickness = 3;
 
     public GraphEdge (GraphNode nodeFrom, GraphNode nodeTo, String fromName)
     {
@@ -79,43 +84,47 @@ public class GraphEdge
             if (caller == nodeTo) edgeOther.updateShape (caller);
         }
 
+        Graphics g = nodeFrom.getGraphics ();
         FontMetrics fm = nodeFrom.getFontMetrics (nodeFrom.getFont ());
-        double em = Math.max (fm.getHeight (), fm.getMaxAdvance ());
+        Rectangle2D textBox = fm.getStringBounds (fromName, g);
+        double tw = textBox.getWidth ();
+        double th = textBox.getHeight ();
 
         // parameters for endArrow
         Vector2 tip = null;
-        double angle = 0;
+        double tipAngle = 0;
+
+        // parameter for start of line
+        Vector2 root = null;
+        double nodeAngle = Math.atan (Cbounds.height / Cbounds.width);
 
         if (nodeTo == null)  // Unconnected endpoint
         {
-            if (nodeFrom.edgesOut.size () <= 2)
+            // Distribute rays around node. This method is limited to 8 positions,
+            // but no sane person would have more than an 8-way connection.
+            int count = nodeFrom.edgesOut.size ();
+            int index = nodeFrom.edgesOut.indexOf (this);
+            double angle = index * Math.PI * 2 / count;
+            tip = new Vector2 (angle);
+
+            // Scale direction vector until it ends far enough from border
+            // There are really only two cases: 1) coming out the left or right, 2) coming out the top or bottom
+            // To decide, reduce angle to first quadrant and compare with node's own diagonal.
+            double absAngle = tip.absAngle ();
+            double length;
+            if (absAngle > nodeAngle)  // top or bottom
             {
-                // Use sign to point out left or right side of node.
-                double w = Cbounds.getWidth () + 2 * em;
-                tip = new Vector2 (c.x + w * sign, c.y);
+                length = (Cbounds.height / 2 + th + arrowheadLength + strokeThickness) / tip.y;
             }
-            else
+            else  // left or right
             {
-                // Distribute rays around node. This method is limited to 8 positions,
-                // but no sane person would have more than an 8-way connection.
-                double w = Cbounds.getWidth ()  + 2 * em;
-                double h = Cbounds.getHeight () + 2 * em;
-                int index = nodeFrom.edgesOut.indexOf (this);
-                switch (index)
-                {
-                    case 0: tip = new Vector2 (c.x - w, c.y    ); break;
-                    case 1: tip = new Vector2 (c.x + w, c.y    ); break;
-                    case 2: tip = new Vector2 (c.x    , c.y + h); break;
-                    case 3: tip = new Vector2 (c.x    , c.y - h); break;
-                    case 4: tip = new Vector2 (c.x - w, c.y + h); break;
-                    case 5: tip = new Vector2 (c.x + w, c.y + h); break;
-                    case 6: tip = new Vector2 (c.x - w, c.y - h); break;
-                    case 7: tip = new Vector2 (c.x + w, c.y - h); break;
-                }
+                length = (Cbounds.width / 2 + tw + arrowheadLength + strokeThickness) / tip.x;
             }
+            tip = tip.multiply (length).add (c);
+            root = intersection (new Segment2 (c, tip), Cbounds);
+
             shape = new Line2D.Double (c.x, c.y, tip.x, tip.y);
-            Vector2 ca = tip.subtract (c);
-            angle = Math.atan2 (ca.y, ca.x);
+            tipAngle = new Segment2 (c, tip).angle ();
         }
         else if (nodeFrom.a2b == null)  // Any other connection type besides binary (unary, ternary, ...). Uses straight edges.
         {
@@ -124,13 +133,15 @@ public class GraphEdge
             if (tip == null)  // o can be null if c is inside Abounds, and therefore no edge is visible
             {
                 shape  = null;
+                label  = null;
                 bounds = null;
                 return;
             }
             else
             {
                 shape = new Line2D.Double (c.x, c.y, tip.x, tip.y);
-                angle = s.angle ();
+                root = intersection (new Segment2 (c, tip), Cbounds);
+                tipAngle = s.angle ();
             }
         }
         else  // Part of a binary connection
@@ -142,37 +153,70 @@ public class GraphEdge
             Vector2 o = a.add (C2.multiply (length));  // "outside" point in the direction of the connection
             Segment2 s = new Segment2 (a, o);  // segment from center of endpoint to outside point
             tip = intersection (s, Abounds);  // point on the periphery of the endpoint
+            root = c.add (nodeFrom.a2b.multiply (sign * length));  // guaranteed to be outside of c
+            root = intersection (new Segment2 (c, root), Cbounds);  // on boundary of c
             length = c.distance (tip) / 3;
             Vector2 w1 = tip.add (C2.multiply (length));
-            Vector2 w2 = c.add (nodeFrom.a2b.multiply (sign * length));
-            shape = new CubicCurve2D.Double (tip.x, tip.y, w1.x, w1.y, w2.x, w2.y, c.x, c.y);
-            angle = s.angle ();
+            Vector2 w2 = root.add (nodeFrom.a2b.multiply (sign * length));
+            shape = new CubicCurve2D.Double (tip.x, tip.y, w1.x, w1.y, w2.x, w2.y, root.x, root.y);
+            tipAngle = s.angle ();
         }
 
         // Arrow head
         Path2D path = new Path2D.Double (shape);
-        double da = Math.PI / 6;  // constant describing spread of arrow head
-        Vector2 end = new Vector2 (tip, angle + da, 10);
+        Vector2 end = new Vector2 (tip, tipAngle + arrowheadAngle, arrowheadLength);
         path.append (new Line2D.Double (end.x, end.y, tip.x, tip.y), false);
-        end = new Vector2 (tip, angle - da, 10);
+        end = new Vector2 (tip, tipAngle - arrowheadAngle, arrowheadLength);
         path.append (new Line2D.Double (tip.x, tip.y, end.x, end.y), false);
         shape = path;
 
         bounds = shape.getBounds ();
-        int t = (int) Math.ceil (PanelEquationGraph.strokeThickness / 2);
+        int t = (int) Math.ceil (strokeThickness / 2);
         bounds.grow (t, t);
+
+        // Name
+        label = new Vector2 (0, 0);
+        t++;
+        double absAngle = root.subtract (c).absAngle ();
+        if (absAngle > nodeAngle)  // top or bottom
+        {
+            if (root.x < c.x) label.x = root.x      + t;
+            else              label.x = root.x - tw - t;
+            if (root.y < c.y) label.y = root.y - th - t;
+            else              label.y = root.y      + t;
+        }
+        else  // left or right
+        {
+            if (root.x < c.x) label.x = root.x - tw - t;
+            else              label.x = root.x      + t;
+            if (root.y < c.y) label.y = root.y      + t;
+            else              label.y = root.y - th - t;
+        }
+
+        Rectangle tb = new Rectangle ();
+        tb.x      = (int) label.x;
+        tb.y      = (int) label.y;
+        tb.width  = (int) Math.ceil (tw);
+        tb.height = (int) Math.ceil (th);
+        bounds = bounds.union (tb);
+        // textBox gives position of top-left corner relative to baseline.
+        // We want baseline relative to top-left, so subtract to reverse vector.
+        label.x -= textBox.getX ();
+        label.y -= textBox.getY ();
     }
 
     public void paintComponent (Graphics g)
     {
+        if (shape == null) return;
+
         // If this class gets changed into a proper Swing component (such a JPanel),
         // then handle g in the appropriate manner. For now, we simply assume that
         // the caller is using us as subroutine, and that g is a fully configured Graphics2D,
         // including stroke, color and rendering hints.
         Graphics2D g2 = (Graphics2D) g;
 
-        if (shape != null) g2.draw (shape);
-        // TODO: draw text of fromName
+        g2.draw (shape);
+        g2.drawString (fromName, (float) label.x, (float) label.y);
     }
 
     /**
@@ -217,6 +261,12 @@ public class GraphEdge
     {
         double x;
         double y;
+
+        public Vector2 (double angle)
+        {
+            x = Math.cos (angle);
+            y = Math.sin (angle);
+        }
 
         public Vector2 (double x, double y)
         {
@@ -265,6 +315,21 @@ public class GraphEdge
         public double length ()
         {
             return Math.sqrt (x * x + y * y);
+        }
+
+        public double angle ()
+        {
+            return Math.atan2 (y, x);
+        }
+
+        public double absAngle ()
+        {
+            if (x == 0)
+            {
+                if (y == 0) return 0;
+                return Math.PI / 2;
+            }
+            return Math.atan (Math.abs (y) / Math.abs (x));
         }
 
         public Vector2 normalize ()
@@ -322,7 +387,12 @@ public class GraphEdge
 
         public double angle ()
         {
-            return Math.atan2 (b.y, b.x);
+            return b.angle ();
+        }
+
+        public double absAngle ()
+        {
+            return b.absAngle ();
         }
 
         public String toString ()

@@ -34,8 +34,7 @@ public class PanelEquationGraph extends JPanel
     protected GraphLayout     layout;
     protected List<GraphEdge> edges = new ArrayList<GraphEdge> (); // Note that GraphNodes are stored directly as Swing components.
 
-    protected static Color background      = new Color (0xF0F0F0);  // light gray
-    protected static float strokeThickness = 3;
+    protected static Color background = new Color (0xF0F0F0);  // light gray
 
     public PanelEquationGraph (PanelEquations container)
     {
@@ -111,7 +110,7 @@ public class PanelEquationGraph extends JPanel
 
         // Draw connection edges
         g2.setColor (Color.black);
-        g2.setStroke (new BasicStroke (strokeThickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g2.setStroke (new BasicStroke (GraphEdge.strokeThickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
         g2.setRenderingHint (RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         for (GraphEdge e : edges)
         {
