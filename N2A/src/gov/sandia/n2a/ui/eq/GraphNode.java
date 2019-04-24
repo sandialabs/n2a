@@ -49,7 +49,7 @@ public class GraphNode extends JPanel
 
     protected static RoundedBorder border = new RoundedBorder (5);
 
-    public GraphNode (NodePart node)
+    public GraphNode (GraphPanel parent, NodePart node)
     {
         this.node  = node;
         node.graph = this;
@@ -63,8 +63,8 @@ public class GraphNode extends JPanel
         MNode bounds = node.source.child ("$metadata", "gui", "bounds");
         if (bounds != null)
         {
-            int x = bounds.getInt ("x");
-            int y = bounds.getInt ("y");
+            int x = bounds.getInt ("x") + parent.offset.x;
+            int y = bounds.getInt ("y") + parent.offset.y;
             setLocation (x, y);
         }
 
@@ -99,8 +99,9 @@ public class GraphNode extends JPanel
         MNode bounds = node.source.child ("$metadata", "gui", "bounds");
         if (bounds != null)
         {
-            int x = bounds.getInt ("x");
-            int y = bounds.getInt ("y");
+            GraphPanel p = (GraphPanel) getParent ();
+            int x = bounds.getInt ("x") + p.offset.x;
+            int y = bounds.getInt ("y") + p.offset.y;
             Dimension d = getPreferredSize ();
             animate (new Rectangle (x, y, d.width, d.height));
         }
@@ -266,7 +267,7 @@ public class GraphNode extends JPanel
                 JTree tree = pet.tree;
                 TreePath path = new TreePath (node.getPath ());
                 tree.setSelectionPath (path);
-                // The following lines are equivalent to scrollPathToVisible(path),
+                // The following lines are equivalent to JTree.scrollPathToVisible(path),
                 // except that we expand the requested rectangle to force the node to the top of the frame.
                 tree.makeVisible (path);
                 Rectangle r = tree.getPathBounds (path);
@@ -280,10 +281,11 @@ public class GraphNode extends JPanel
                 MNode guiTree = new MVolatile ();
                 MNode bounds = guiTree.childOrCreate ("bounds");
                 Rectangle now = getBounds ();
-                if (now.x      != old.x     ) bounds.set (now.x,      "x");
-                if (now.y      != old.y     ) bounds.set (now.y,      "y");
-                if (now.width  != old.width ) bounds.set (now.width,  "width");
-                if (now.height != old.height) bounds.set (now.height, "height");
+                GraphPanel p = (GraphPanel) getParent ();
+                if (now.x      != old.x     ) bounds.set (now.x - p.offset.x, "x");
+                if (now.y      != old.y     ) bounds.set (now.y - p.offset.y, "y");
+                if (now.width  != old.width ) bounds.set (now.width,          "width");
+                if (now.height != old.height) bounds.set (now.height,         "height");
                 if (bounds.size () > 0) mep.undoManager.add (new ChangeGUI (node, guiTree));
             }
         }

@@ -79,102 +79,27 @@ public class PanelEquationGraph extends JScrollPane
 
     public void load ()
     {
-        graphPanel.removeAll ();
-        graphPanel.edges.clear ();
-
-        Enumeration<?> children = container.root.children ();
-        boolean needLayout = children.hasMoreElements ();
-        while (children.hasMoreElements ())
-        {
-            Object c = children.nextElement ();
-            if (c instanceof NodePart)
-            {
-                GraphNode gn = new GraphNode ((NodePart) c);
-                graphPanel.add (gn);
-                if (gn.getX () != 0  ||  gn.getY () != 0) needLayout = false;
-            }
-        }
-
-        if (needLayout)
-        {
-            // TODO: use potential-field method, such as "Drawing Graphs Nicely Using Simulated Annealing" by Davidson & Harel (1996).
-
-            // For now, a very simple layout. Arrange in a grid with some space between nodes.
-            Component[] components = graphPanel.getComponents ();
-            int columns = (int) Math.sqrt (components.length);  // Truncate, so more rows than columns.
-            int gap = 100;
-            int x = 0;
-            int y = 0;
-            for (int i = 0; i < components.length; i++)
-            {
-                Component c = components[i];
-                if (i % columns == 0)
-                {
-                    x = gap;
-                    y += gap;
-                }
-                c.setLocation (x, y);
-                MNode bounds = ((GraphNode) c).node.source.childOrCreate ("$metadata", "bounds");
-                bounds.set (x, "x");
-                bounds.set (y, "y");
-                x += c.getWidth () + gap;
-            }
-
-            // TODO: the equation tree should be rebuilt, so that new metadata nodes become visible.
-        }
-
-        // Scan children to set up connections
-        for (Component c : graphPanel.getComponents ())
-        {
-            GraphNode gn = (GraphNode) c;
-            if (gn.node.connectionBindings == null) continue;
-
-            GraphEdge A = null;
-            GraphEdge B = null;
-            for (Entry<String,NodePart> e : gn.node.connectionBindings.entrySet ())
-            {
-                GraphNode endpoint = null;
-                NodePart np = e.getValue ();
-                if (np != null) endpoint = np.graph;
-
-                GraphEdge ge = new GraphEdge (gn, endpoint, e.getKey ());
-                graphPanel.edges.add (ge);
-                gn.edgesOut.add (ge);
-                if (endpoint != null) endpoint.edgesIn.add (ge);
-
-                if (A == null) A = ge;  // Not necessarily same as endpoint variable named "A" in part.
-                else           B = ge;
-            }
-            if (gn.edgesOut.size () == 2)
-            {
-                A.edgeOther = B;
-                B.edgeOther = A;
-            }
-
-            for (GraphEdge ge : gn.edgesOut)
-            {
-                ge.updateShape (gn);
-                if (ge.bounds != null) graphPanel.layout.bounds = graphPanel.layout.bounds.union (ge.bounds);
-            }
-        }
-
-        graphPanel.revalidate ();
-        graphPanel.updateScrollbars ();
+        graphPanel.load ();
         paintImmediately (getBounds ());
     }
 
     public void recordDeleted ()
     {
-        graphPanel.removeAll ();
-        graphPanel.edges.clear ();
-        graphPanel.revalidate ();
+        graphPanel.clear ();
         paintImmediately (getBounds ());
+    }
+
+    public void updateUI ()
+    {
+        GraphNode.RoundedBorder.updateUI ();
+        background = UIManager.getColor ("ScrollPane.background");
     }
 
     public class GraphPanel extends JPanel
     {
         protected GraphLayout     layout;  // For ease of access, to avoid calling getLayout() all the time.
-        protected List<GraphEdge> edges = new ArrayList<GraphEdge> (); // Note that GraphNodes are stored directly as Swing components.
+        protected List<GraphEdge> edges  = new ArrayList<GraphEdge> (); // Note that GraphNodes are stored directly as Swing components.
+        protected Point           offset = new Point ();  // Offset from persistent coordinates to pixels. Add this to a stored (x,y) value to get non-negative coordinates that can be painted.
 
         public GraphPanel ()
         {
@@ -186,6 +111,105 @@ public class PanelEquationGraph extends JScrollPane
         {
             // Because parts can overlap, we must return false.
             return false;
+        }
+
+        public void clear ()
+        {
+            graphPanel.removeAll ();
+            graphPanel.edges.clear ();
+            graphPanel.revalidate ();
+        }
+
+        public void load ()
+        {
+            removeAll ();
+            edges.clear ();
+            layout.bounds = new Rectangle ();
+            offset = new Point ();
+
+            Enumeration<?> children = container.root.children ();
+            boolean newLayout = children.hasMoreElements ();
+            while (children.hasMoreElements ())
+            {
+                Object c = children.nextElement ();
+                if (c instanceof NodePart)
+                {
+                    GraphNode gn = new GraphNode (this, (NodePart) c);
+                    add (gn);
+                    if (gn.getX () != 0  ||  gn.getY () != 0) newLayout = false;
+                }
+            }
+
+            Component[] components = getComponents ();
+            if (newLayout)
+            {
+                // TODO: use potential-field method, such as "Drawing Graphs Nicely Using Simulated Annealing" by Davidson & Harel (1996).
+
+                // For now, a very simple layout. Arrange in a grid with some space between nodes.
+                int columns = (int) Math.sqrt (components.length);  // Truncate, so more rows than columns.
+                int gap = 100;
+                int x = 0;
+                int y = 0;
+                for (int i = 0; i < components.length; i++)
+                {
+                    Component c = components[i];
+                    if (i % columns == 0)
+                    {
+                        x = gap;
+                        y += gap;
+                    }
+                    c.setLocation (x, y);
+                    MNode bounds = ((GraphNode) c).node.source.childOrCreate ("$metadata", "bounds");
+                    bounds.set (x, "x");
+                    bounds.set (y, "y");
+                    x += c.getWidth () + gap;
+                }
+
+                // TODO: the equation tree should be rebuilt, so that new metadata nodes become visible.
+            }
+            else
+            {
+                // Force everything to be in positive coordinates.
+                doLayout ();
+            }
+
+            // Scan children to set up connections
+            for (Component c : components)
+            {
+                GraphNode gn = (GraphNode) c;
+                if (gn.node.connectionBindings == null) continue;
+
+                GraphEdge A = null;
+                GraphEdge B = null;
+                for (Entry<String,NodePart> e : gn.node.connectionBindings.entrySet ())
+                {
+                    GraphNode endpoint = null;
+                    NodePart np = e.getValue ();
+                    if (np != null) endpoint = np.graph;
+
+                    GraphEdge ge = new GraphEdge (gn, endpoint, e.getKey ());
+                    edges.add (ge);
+                    gn.edgesOut.add (ge);
+                    if (endpoint != null) endpoint.edgesIn.add (ge);
+
+                    if (A == null) A = ge;  // Not necessarily same as endpoint variable named "A" in part.
+                    else           B = ge;
+                }
+                if (gn.edgesOut.size () == 2)
+                {
+                    A.edgeOther = B;
+                    B.edgeOther = A;
+                }
+
+                for (GraphEdge ge : gn.edgesOut)
+                {
+                    ge.updateShape (gn);
+                    if (ge.bounds != null) layout.bounds = layout.bounds.union (ge.bounds);
+                }
+            }
+
+            revalidate ();
+            updateScrollbars ();
         }
 
         public void updateScrollbars ()
@@ -229,16 +253,9 @@ public class PanelEquationGraph extends JScrollPane
         }
     }
 
-    public void updateUI ()
-    {
-        GraphNode.RoundedBorder.updateUI ();
-        background = UIManager.getColor ("ScrollPane.background");
-    }
-
     public static class GraphLayout implements LayoutManager2
     {
         public Rectangle bounds = new Rectangle ();
-        public boolean   needSize;
 
         public void addLayoutComponent (String name, Component comp)
         {
@@ -255,24 +272,10 @@ public class PanelEquationGraph extends JScrollPane
 
         public void removeLayoutComponent (Component comp)
         {
-            // If we remove a component that was stretching the bounds, then need to recalculate.
-            Rectangle r = comp.getBounds ();
-            if (r.x == bounds.x  ||  r.y == bounds.y  ||  r.getMaxX () == bounds.getMaxX ()  ||  r.getMaxY () == bounds.getMaxY ()) needSize = true;
         }
 
         public Dimension preferredLayoutSize (Container target)
         {
-            if (! needSize) return bounds.getSize ();
-            bounds = new Rectangle ();
-            for (Component c : target.getComponents ())
-            {
-                bounds = bounds.union (c.getBounds ());
-            }
-            GraphPanel gp = (GraphPanel) target;
-            for (GraphEdge ge : gp.edges)
-            {
-                bounds = bounds.union (ge.bounds);
-            }
             return bounds.getSize ();
         }
 
@@ -302,21 +305,32 @@ public class PanelEquationGraph extends JScrollPane
 
         public void layoutContainer (Container target)
         {
+            // Only change layout if a component has moved into negative space.
+            if (bounds.x >= 0  &&  bounds.y >= 0) return;
+
+            int dx = Math.max (-bounds.x, 0);
+            int dy = Math.max (-bounds.y, 0);
+            bounds.translate (dx, dy);
+            GraphPanel gp = (GraphPanel) target;
+            gp.offset.translate (dx, dy);
+            // None of the following code is allowed to call componentMoved().
+            for (Component c : target.getComponents ())
+            {
+                Point p = c.getLocation ();
+                p.translate (dx, dy);
+                c.setLocation (p);
+            }
+            for (GraphEdge ge : gp.edges)
+            {
+                ge.updateShape (ge.nodeFrom);
+            }
         }
 
         public boolean componentMoved (Rectangle newBounds, Rectangle oldBounds)
         {
-            if (oldBounds.getMinX () == bounds.getMinX ()  ||  oldBounds.getMinY () == bounds.getMinY ()  ||  oldBounds.getMaxX () == bounds.getMaxX ()  ||  oldBounds.getMaxY () == bounds.getMaxY ())
-            {
-                needSize = true;
-                return true;
-            }
-            else
-            {
-                Rectangle myOldBounds = bounds;
-                bounds = bounds.union (newBounds);
-                return ! bounds.equals (myOldBounds);
-            }
+            Rectangle myOldBounds = bounds;
+            bounds = bounds.union (newBounds);
+            return ! bounds.equals (myOldBounds);
         }
     }
 }
