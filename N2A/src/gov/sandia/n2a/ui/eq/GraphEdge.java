@@ -59,30 +59,35 @@ public class GraphEdge
             a       = new Vector2 (Abounds.getCenterX (), Abounds.getCenterY ());
         }
 
-        double sign = nodeFrom.edgesOut.get (0) == this ? -1 : 1;  // Direction along c2c that this edge should follow.
-
-        // If needed, update shared parameters of a binary connection
-        if (edgeOther != null  &&  (caller == nodeTo  ||  caller == nodeFrom  &&  sign < 0))
+        Vector2 ba = null;  // Non-null for binary connections that also need a curve rather than straight line.
+        Vector2 c2c = null;
+        if (edgeOther != null)
         {
             Rectangle Bbounds = edgeOther.nodeTo.getBounds ();
             Vector2 b = new Vector2 (Bbounds.getCenterX (), Bbounds.getCenterY ());
 
-            Vector2 ab = a.add (b).multiply (0.5);  // average position
-            Vector2 c2c = c.subtract (ab);
+            ba = a.subtract (b);  // vector from b -> a
+            Vector2 avg = a.add (b).multiply (0.5);  // average position
+            c2c = c.subtract (avg);
             double c2cLength = c2c.length ();
-            double abLength = a.subtract (b).length ();
-            c2c = c2c.normalize ();
-            nodeFrom.a2b = new Vector2 (-c2c.y, c2c.x);
-            Vector2 ab2b = b.subtract (ab);
-
-            // Ensure that a2b points from A to B (in source part), not the other way.
-            // Two things could flip:
-            // 1) Whether the node claimed to be "A" is actually A. (sign=-1 means A is A; sign=1 means A is really B)
-            // 2) Whether the computed vector actually goes from A to B. (dot product is positive if A->B, and negatives if B->A)
-            if (sign * ab2b.dot (nodeFrom.a2b) > 0) nodeFrom.a2b = nodeFrom.a2b.multiply (-1);
-
-            if (c2cLength > abLength) nodeFrom.c2c = c2c;
-            else                      nodeFrom.c2c = null; // Force endpoint drawing to use direct path rather than parallel path.
+            double baLength = ba.length ();
+            if (c2cLength > baLength)  // Draw curved lines.
+            {
+                c2c = c2c.normalize ();
+                if (baLength > 0)
+                {
+                    ba = ba.normalize ();
+                }
+                else  // Both A and B nodes are at exactly the same place. Create vector perpendicular to c2c.
+                {
+                    ba = new Vector2 (-c2c.y, c2c.x);
+                    if (nodeFrom.edgesOut.get (0) == this) ba = ba.multiply (-1);
+                }
+            }
+            else  // Draw straight lines.
+            {
+                ba = null;
+            }
 
             // If needed, update shape parameters of the other edge.
             // The two possible sources of a call are nodeFrom and nodeTo.
@@ -103,9 +108,9 @@ public class GraphEdge
 
         // parameter for start of line
         Vector2 root = null;
-        double nodeAngle = Math.atan (Cbounds.height / Cbounds.width);
+        double nodeAngle = Math.atan ((double) Cbounds.height / Cbounds.width);
 
-        if (nodeTo == null)  // Unconnected endpoint
+        if (nodeTo == null)  // Unconnected endpoints
         {
             // Distribute rays around node. This method is limited to 8 positions,
             // but no sane person would have more than an 8-way connection.
@@ -133,40 +138,37 @@ public class GraphEdge
             shape = new Line2D.Double (c.x, c.y, tip.x, tip.y);
             tipAngle = new Segment2 (c, tip).angle ();
         }
-        else if (nodeFrom.a2b == null)  // Any other connection type besides binary (unary, ternary, ...). Uses straight edges.
+        else if (ba == null)  // Draw straight line.
         {
             Segment2 s = new Segment2 (a, c);
-            tip = intersection (s, Abounds);
-            if (tip == null)  // o can be null if c is inside Abounds, and therefore no edge is visible
+            tip = intersection (s, Abounds);  // tip can be null if c is inside Abounds
+            root = intersection (s, Cbounds);  // root can be null if a is inside Cbounds
+            if (tip == null  ||  root == null)
             {
                 shape  = null;
                 label  = null;
-                bounds = null;
+                bounds = new Rectangle (0, 0, -1, -1);  // empty, so won't affect union(), and will return false from intersects()
                 return;
             }
-            else
-            {
-                shape = new Line2D.Double (c.x, c.y, tip.x, tip.y);
-                root = intersection (new Segment2 (c, tip), Cbounds);
-                tipAngle = s.angle ();
-            }
+            shape = new Line2D.Double (c.x, c.y, tip.x, tip.y);
+            tipAngle = s.angle ();
         }
-        else  // Part of a binary connection
+        else  // Draw curve.
         {
-            double length = Abounds.getWidth () + Abounds.getHeight ();  // far enough to get from center of endpoint to outside of bounds
-            Vector2 C2;  // unit vector in direction of endpoint -> connection
-            if (nodeFrom.c2c == null) C2 = c.subtract (a).normalize ();  // direct path
-            else                      C2 = nodeFrom.c2c;  // parallel path
-            Vector2 o = a.add (C2.multiply (length));  // "outside" point in the direction of the connection
+            double Alength = Abounds.getWidth () + Abounds.getHeight ();  // far enough to get from center of endpoint to outside of bounds
+            Vector2 o = a.add (c2c.multiply (Alength));  // "outside" point in the direction of the connection
             Segment2 s = new Segment2 (a, o);  // segment from center of endpoint to outside point
             tip = intersection (s, Abounds);  // point on the periphery of the endpoint
-            root = c.add (nodeFrom.a2b.multiply (sign * length));  // guaranteed to be outside of c
-            root = intersection (new Segment2 (c, root), Cbounds);  // on boundary of c
-            length = c.distance (tip) / 3;
-            Vector2 w1 = tip.add (C2.multiply (length));
-            Vector2 w2 = c.add (nodeFrom.a2b.multiply (sign * length));
+
+            double length = c.distance (tip) / 3;
+            Vector2 w1 = tip.add (c2c.multiply (length));
+            Vector2 w2 = c.add (ba.multiply (length));
             shape = new CubicCurve2D.Double (tip.x, tip.y, w1.x, w1.y, w2.x, w2.y, c.x, c.y);
             tipAngle = s.angle ();
+
+            double Clength = Cbounds.getWidth () + Cbounds.getHeight ();
+            root = c.add (ba.multiply (Clength));  // guaranteed to be outside of c
+            root = intersection (new Segment2 (c, root), Cbounds);  // on boundary of c
         }
 
         // Arrow head
@@ -305,6 +307,11 @@ public class GraphEdge
             return new Vector2 (x * a, y * a);
         }
 
+        public Vector2 divide (double a)
+        {
+            return new Vector2 (x / a, y / a);
+        }
+
         public double cross (Vector2 that)
         {
             return x * that.y - y * that.x;
@@ -344,8 +351,7 @@ public class GraphEdge
 
         public Vector2 normalize ()
         {
-            double l = length ();
-            return new Vector2 (x / l, y / l);
+            return divide (length ());  // could produce divide-by-zero
         }
 
         public String toString ()

@@ -34,7 +34,6 @@ import javax.swing.tree.TreePath;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Lay;
-import gov.sandia.n2a.ui.eq.GraphEdge.Vector2;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
@@ -49,10 +48,6 @@ public class GraphNode extends JPanel
     protected List<GraphEdge> edgesIn  = new ArrayList<GraphEdge> ();
 
     protected static RoundedBorder border = new RoundedBorder (5);
-
-    // For binary connections only, save drawing parameters used by both edges of curve passing through us.
-    protected Vector2 a2b; // Unit vector pointing in direction A->B
-    protected Vector2 c2c; // Unit vector pointing from average position of endpoints towards center of this connection node.
 
     public GraphNode (NodePart node)
     {
@@ -112,7 +107,7 @@ public class GraphNode extends JPanel
     }
 
     /**
-        Sets bounds and also repaints portion of container that was exposed by move or resize.
+        Sets bounds and repaints portion of container that was exposed by move or resize.
     **/
     public void animate (Rectangle next)
     {

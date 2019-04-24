@@ -222,7 +222,7 @@ public class PanelEquationGraph extends JScrollPane
             g2.setRenderingHint (RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             for (GraphEdge e : edges)
             {
-                if (e.bounds != null  &&  e.bounds.intersects (clip)) e.paintComponent (g2);
+                if (e.bounds.intersects (clip)) e.paintComponent (g2);
             }
 
             g2.dispose ();
@@ -256,10 +256,8 @@ public class PanelEquationGraph extends JScrollPane
         public void removeLayoutComponent (Component comp)
         {
             // If we remove a component that was stretching the bounds, then need to recalculate.
-            Dimension d = comp.getSize ();
-            Point     p = comp.getLocation ();
-            Rectangle r = new Rectangle (p, d);
-            if (r.getMinX () == bounds.getMinX ()  ||  r.getMinY () == bounds.getMinY ()  ||  r.getMaxX () == bounds.getMaxX ()  ||  r.getMaxY () == bounds.getMaxY ()) needSize = true;
+            Rectangle r = comp.getBounds ();
+            if (r.x == bounds.x  ||  r.y == bounds.y  ||  r.getMaxX () == bounds.getMaxX ()  ||  r.getMaxY () == bounds.getMaxY ()) needSize = true;
         }
 
         public Dimension preferredLayoutSize (Container target)
