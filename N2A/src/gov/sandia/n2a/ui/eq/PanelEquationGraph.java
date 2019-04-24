@@ -36,9 +36,8 @@ import gov.sandia.n2a.ui.eq.tree.NodePart;
 @SuppressWarnings("serial")
 public class PanelEquationGraph extends JScrollPane
 {
-    protected PanelEquations  container;
-    protected GraphPanel      graphPanel;
-    protected List<GraphEdge> edges = new ArrayList<GraphEdge> (); // Note that GraphNodes are stored directly in GraphPanel as Swing components.
+    protected PanelEquations container;
+    protected GraphPanel     graphPanel;
 
     protected static Color background = new Color (0xF0F0F0);  // light gray
 
@@ -47,12 +46,12 @@ public class PanelEquationGraph extends JScrollPane
         this.container = container;
         graphPanel = new GraphPanel ();
         setViewportView (graphPanel);
+        final JViewport vp = getViewport ();
 
         getHorizontalScrollBar ().addAdjustmentListener (new AdjustmentListener ()
         {
             public void adjustmentValueChanged (AdjustmentEvent e)
             {
-                JViewport vp = getViewport ();
                 Point p = vp.getViewPosition ();
                 int i = e.getValue ();
                 if (i != p.x)
@@ -67,7 +66,6 @@ public class PanelEquationGraph extends JScrollPane
         {
             public void adjustmentValueChanged (AdjustmentEvent e)
             {
-                JViewport vp = getViewport ();
                 Point p = vp.getViewPosition ();
                 int i = e.getValue ();
                 if (i != p.y)
@@ -82,7 +80,7 @@ public class PanelEquationGraph extends JScrollPane
     public void load ()
     {
         graphPanel.removeAll ();
-        edges.clear ();
+        graphPanel.edges.clear ();
 
         Enumeration<?> children = container.root.children ();
         boolean needLayout = children.hasMoreElements ();
@@ -140,7 +138,7 @@ public class PanelEquationGraph extends JScrollPane
                 if (np != null) endpoint = np.graph;
 
                 GraphEdge ge = new GraphEdge (gn, endpoint, e.getKey ());
-                edges.add (ge);
+                graphPanel.edges.add (ge);
                 gn.edgesOut.add (ge);
                 if (endpoint != null) endpoint.edgesIn.add (ge);
 
@@ -153,7 +151,11 @@ public class PanelEquationGraph extends JScrollPane
                 B.edgeOther = A;
             }
 
-            for (GraphEdge ge : gn.edgesOut) ge.updateShape (gn);
+            for (GraphEdge ge : gn.edgesOut)
+            {
+                ge.updateShape (gn);
+                if (ge.bounds != null) graphPanel.layout.bounds = graphPanel.layout.bounds.union (ge.bounds);
+            }
         }
 
         graphPanel.revalidate ();
@@ -164,14 +166,15 @@ public class PanelEquationGraph extends JScrollPane
     public void recordDeleted ()
     {
         graphPanel.removeAll ();
-        edges.clear ();
+        graphPanel.edges.clear ();
         graphPanel.revalidate ();
         paintImmediately (getBounds ());
     }
 
     public class GraphPanel extends JPanel
     {
-        protected GraphLayout layout;  // For ease of access, to avoid calling getLayout() all the time.
+        protected GraphLayout     layout;  // For ease of access, to avoid calling getLayout() all the time.
+        protected List<GraphEdge> edges = new ArrayList<GraphEdge> (); // Note that GraphNodes are stored directly as Swing components.
 
         public GraphPanel ()
         {
@@ -265,9 +268,12 @@ public class PanelEquationGraph extends JScrollPane
             bounds = new Rectangle ();
             for (Component c : target.getComponents ())
             {
-                Dimension d = c.getSize ();
-                Point     p = c.getLocation ();
-                bounds = bounds.union (new Rectangle (p, d));
+                bounds = bounds.union (c.getBounds ());
+            }
+            GraphPanel gp = (GraphPanel) target;
+            for (GraphEdge ge : gp.edges)
+            {
+                bounds = bounds.union (ge.bounds);
             }
             return bounds.getSize ();
         }

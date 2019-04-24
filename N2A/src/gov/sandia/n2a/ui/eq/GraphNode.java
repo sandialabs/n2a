@@ -116,26 +116,28 @@ public class GraphNode extends JPanel
     **/
     public void animate (Rectangle next)
     {
-        // Only setBounds() and validate() are strictly necessary, but do paintImmediately() just in case UI lags.
         Rectangle old = getBounds ();
+        Rectangle paintRegion = next.union (old);
         setBounds (next);
         validate ();
-
         GraphPanel p = (GraphPanel) getParent ();
         boolean needRevalidate = p.layout.componentMoved (next, old);
 
-        next = next.union (old);
         for (GraphEdge ge : edgesOut)
         {
-            next = next.union (ge.bounds);
+            old = ge.bounds;
+            paintRegion = paintRegion.union (old);
             ge.updateShape (this);
-            next = next.union (ge.bounds);
+            paintRegion = paintRegion.union (ge.bounds);
+            if (p.layout.componentMoved (ge.bounds, old)) needRevalidate = true;
         }
         for (GraphEdge ge : edgesIn)
         {
-            next = next.union (ge.bounds);
+            old = ge.bounds;
+            paintRegion = paintRegion.union (old);
             ge.updateShape (this);
-            next = next.union (ge.bounds);
+            paintRegion = paintRegion.union (ge.bounds);
+            if (p.layout.componentMoved (ge.bounds, old)) needRevalidate = true;
         }
 
         if (needRevalidate)
@@ -143,7 +145,7 @@ public class GraphNode extends JPanel
             p.revalidate ();
             p.updateScrollbars ();
         }
-        p.paintImmediately (next);
+        p.paintImmediately (paintRegion);
     }
 
     public class ResizeListener extends MouseInputAdapter
