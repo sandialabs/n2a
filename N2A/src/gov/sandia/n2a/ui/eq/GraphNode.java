@@ -21,6 +21,7 @@ import java.awt.event.MouseEvent;
 import java.awt.geom.RoundRectangle2D;
 import java.util.ArrayList;
 import java.util.List;
+
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTree;
@@ -34,6 +35,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.eq.GraphEdge.Vector2;
+import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
@@ -119,9 +121,8 @@ public class GraphNode extends JPanel
         setBounds (next);
         validate ();
 
-        PanelEquationGraph p = (PanelEquationGraph) getParent ();
-        p.layout.componentMoved (this, old);
-        // TODO: if bounds of p have changed, update containing scroll pane
+        GraphPanel p = (GraphPanel) getParent ();
+        boolean needRevalidate = p.layout.componentMoved (this, old);
 
         next = next.union (old);
         for (GraphEdge ge : edgesOut)
@@ -137,6 +138,7 @@ public class GraphNode extends JPanel
             next = next.union (ge.bounds);
         }
 
+        if (needRevalidate) p.revalidate ();
         p.paintImmediately (next);
     }
 

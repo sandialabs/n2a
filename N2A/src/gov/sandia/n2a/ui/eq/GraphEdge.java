@@ -26,11 +26,14 @@ public class GraphEdge
 
     protected Shape     shape;
     protected Vector2   label;
+    protected Rectangle textBox;
     protected Rectangle bounds;
 
     protected static double arrowheadAngle  = Math.PI / 5;
     protected static double arrowheadLength = 10;
     protected static float  strokeThickness = 3;
+    protected static int    nameTopPad      = 1;
+    protected static int    nameSidePad     = 2;
 
     public GraphEdge (GraphNode nodeFrom, GraphNode nodeTo, String fromName)
     {
@@ -90,9 +93,9 @@ public class GraphEdge
 
         Graphics g = nodeFrom.getGraphics ();
         FontMetrics fm = nodeFrom.getFontMetrics (nodeFrom.getFont ());
-        Rectangle2D textBox = fm.getStringBounds (fromName, g);
-        double tw = textBox.getWidth ();
-        double th = textBox.getHeight ();
+        Rectangle2D tb = fm.getStringBounds (fromName, g);
+        double tw = tb.getWidth ();
+        double th = tb.getHeight ();
 
         // parameters for endArrow
         Vector2 tip = null;
@@ -180,31 +183,30 @@ public class GraphEdge
 
         // Name
         label = new Vector2 (0, 0);
-        t++;
         double absAngle = root.subtract (c).absAngle ();
         if (absAngle > nodeAngle)  // top or bottom
         {
             label.x = root.x - tw / 2;
-            if (root.y < c.y) label.y = root.y - th - t;
-            else              label.y = root.y      + t;
+            if (root.y < c.y) label.y = root.y - th - nameTopPad;
+            else              label.y = root.y      + nameTopPad;
         }
         else  // left or right
         {
-            if (root.x < c.x) label.x = root.x - tw - t;
-            else              label.x = root.x      + t;
+            if (root.x < c.x) label.x = root.x - tw - nameSidePad;
+            else              label.x = root.x      + nameSidePad;
             label.y = root.y - th / 2;
         }
 
-        Rectangle tb = new Rectangle ();
-        tb.x      = (int) label.x;
-        tb.y      = (int) label.y;
-        tb.width  = (int) Math.ceil (tw);
-        tb.height = (int) Math.ceil (th);
-        bounds = bounds.union (tb);
-        // textBox gives position of top-left corner relative to baseline.
+        textBox = new Rectangle ();
+        textBox.x      = (int) label.x - nameSidePad;
+        textBox.y      = (int) label.y - nameTopPad;
+        textBox.width  = (int) Math.ceil (tw) + 2 * nameSidePad;
+        textBox.height = (int) Math.ceil (th) + 2 * nameTopPad;
+        bounds = bounds.union (textBox);
+        // tb gives position of top-left corner relative to baseline.
         // We want baseline relative to top-left, so subtract to reverse vector.
-        label.x -= textBox.getX ();
-        label.y -= textBox.getY ();
+        label.x -= tb.getX ();
+        label.y -= tb.getY ();
     }
 
     public void paintComponent (Graphics g)
@@ -220,11 +222,8 @@ public class GraphEdge
         g2.setColor (Color.black);
         g2.draw (shape);
 
-        FontMetrics fm = nodeFrom.getFontMetrics (nodeFrom.getFont ());
-        Rectangle2D tb = fm.getStringBounds (fromName, g);
-        tb.setRect (label.x + tb.getX () - 2, label.y + tb.getY () - 1, tb.getWidth () + 4, tb.getHeight () + 2);
         g2.setColor (new Color (0xD0FFFFFF, true));
-        g2.fill (tb);
+        g2.fill (textBox);
         
         g2.setColor (Color.black);
         g2.drawString (fromName, (float) label.x, (float) label.y);

@@ -379,6 +379,7 @@ public class PanelEquations extends JPanel
         record = null;
         root   = null;
         panelEquationTree.recordDeleted (doc);
+        panelEquationGraph.recordDeleted ();
     }
 
     public void updateLock ()
