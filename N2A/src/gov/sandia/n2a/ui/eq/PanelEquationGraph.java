@@ -17,13 +17,17 @@ import java.awt.LayoutManager2;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.event.AdjustmentEvent;
+import java.awt.event.AdjustmentListener;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map.Entry;
 
 import javax.swing.JPanel;
+import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
+import javax.swing.JViewport;
 import javax.swing.UIManager;
 
 import gov.sandia.n2a.db.MNode;
@@ -42,7 +46,37 @@ public class PanelEquationGraph extends JScrollPane
     {
         this.container = container;
         graphPanel = new GraphPanel ();
-        this.setViewportView (graphPanel);
+        setViewportView (graphPanel);
+
+        getHorizontalScrollBar ().addAdjustmentListener (new AdjustmentListener ()
+        {
+            public void adjustmentValueChanged (AdjustmentEvent e)
+            {
+                JViewport vp = getViewport ();
+                Point p = vp.getViewPosition ();
+                int i = e.getValue ();
+                if (i != p.x)
+                {
+                    p.x = i;
+                    vp.setViewPosition (p);
+                }
+            }
+        });
+
+        getVerticalScrollBar ().addAdjustmentListener (new AdjustmentListener ()
+        {
+            public void adjustmentValueChanged (AdjustmentEvent e)
+            {
+                JViewport vp = getViewport ();
+                Point p = vp.getViewPosition ();
+                int i = e.getValue ();
+                if (i != p.y)
+                {
+                    p.y = i;
+                    vp.setViewPosition (p);
+                }
+            }
+        });
     }
 
     public void load ()
@@ -123,6 +157,7 @@ public class PanelEquationGraph extends JScrollPane
         }
 
         graphPanel.revalidate ();
+        graphPanel.updateScrollbars ();
         paintImmediately (getBounds ());
     }
 
@@ -150,9 +185,26 @@ public class PanelEquationGraph extends JScrollPane
             return false;
         }
 
+        public void updateScrollbars ()
+        {
+            Dimension size = getPreferredSize ();
+            Dimension extent = getViewport ().getExtentSize ();
+            if (size.width > extent.width)
+            {
+                JScrollBar sb = getHorizontalScrollBar ();
+                int value = sb.getValue ();
+                sb.setValues (value, extent.width, 0, size.width);
+            }
+            if (size.height > extent.height)
+            {
+                JScrollBar sb = getVerticalScrollBar ();
+                int value = sb.getValue ();
+                sb.setValues (value, extent.height, 0, size.height);
+            }
+        }
+
         public void paintComponent (Graphics g)
         {
-            System.out.println ("paint " + g.getClipBounds ());
             // This basically does nothing, since ui is (usually) null. Despite being opaque, our background comes from our container.
             super.paintComponent (g);
 
@@ -248,13 +300,7 @@ public class PanelEquationGraph extends JScrollPane
         {
         }
 
-        /**
-            Updates bounds to tightly enclose all components.
-            @param comp The component whose bounds have changed.
-            @param oldBounds The bounds of comp before it was changed.
-            @return true if the overall bounds have changed.
-        **/
-        public boolean componentMoved (Component comp, Rectangle oldBounds)
+        public boolean componentMoved (Rectangle newBounds, Rectangle oldBounds)
         {
             if (oldBounds.getMinX () == bounds.getMinX ()  ||  oldBounds.getMinY () == bounds.getMinY ()  ||  oldBounds.getMaxX () == bounds.getMaxX ()  ||  oldBounds.getMaxY () == bounds.getMaxY ())
             {
@@ -263,10 +309,8 @@ public class PanelEquationGraph extends JScrollPane
             }
             else
             {
-                Dimension d = comp.getSize ();
-                Point     p = comp.getLocation ();
                 Rectangle myOldBounds = bounds;
-                bounds = bounds.union (new Rectangle (p, d));
+                bounds = bounds.union (newBounds);
                 return ! bounds.equals (myOldBounds);
             }
         }

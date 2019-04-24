@@ -122,7 +122,7 @@ public class GraphNode extends JPanel
         validate ();
 
         GraphPanel p = (GraphPanel) getParent ();
-        boolean needRevalidate = p.layout.componentMoved (this, old);
+        boolean needRevalidate = p.layout.componentMoved (next, old);
 
         next = next.union (old);
         for (GraphEdge ge : edgesOut)
@@ -138,7 +138,11 @@ public class GraphNode extends JPanel
             next = next.union (ge.bounds);
         }
 
-        if (needRevalidate) p.revalidate ();
+        if (needRevalidate)
+        {
+            p.revalidate ();
+            p.updateScrollbars ();
+        }
         p.paintImmediately (next);
     }
 
