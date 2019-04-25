@@ -26,7 +26,9 @@ import java.awt.event.MouseWheelEvent;
 import java.awt.event.MouseWheelListener;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 
 import javax.swing.JPanel;
@@ -42,8 +44,14 @@ import gov.sandia.n2a.ui.eq.tree.NodePart;
 @SuppressWarnings("serial")
 public class PanelEquationGraph extends JScrollPane
 {
-    protected PanelEquations container;
-    protected GraphPanel     graphPanel;
+    protected PanelEquations   container;
+    protected GraphPanel       graphPanel;
+    protected Map<MNode,Point> focusCache = new HashMap<MNode,Point> ();
+
+    // Convenience references
+    protected JViewport  vp;
+    protected JScrollBar hsb;
+    protected JScrollBar vsb;
 
     protected static Color background = new Color (0xF0F0F0);  // light gray
 
@@ -52,9 +60,11 @@ public class PanelEquationGraph extends JScrollPane
         this.container = container;
         graphPanel = new GraphPanel ();
         setViewportView (graphPanel);
-        final JViewport vp = getViewport ();
 
-        final JScrollBar hsb = getHorizontalScrollBar ();
+        vp  = getViewport ();
+        hsb = getHorizontalScrollBar ();
+        vsb = getVerticalScrollBar ();
+
         hsb.addAdjustmentListener (new AdjustmentListener ()
         {
             public void adjustmentValueChanged (AdjustmentEvent e)
@@ -69,7 +79,6 @@ public class PanelEquationGraph extends JScrollPane
             }
         });
 
-        final JScrollBar vsb = getVerticalScrollBar ();
         vsb.addAdjustmentListener (new AdjustmentListener ()
         {
             public void adjustmentValueChanged (AdjustmentEvent e)
@@ -114,7 +123,6 @@ public class PanelEquationGraph extends JScrollPane
                 Point now = me.getPoint ();
                 int dx = now.x - start.x;
                 int dy = now.y - start.y;
-                //start = now;
                 if (dx != 0)
                 {
                     int old = hsb.getValue ();
@@ -140,15 +148,25 @@ public class PanelEquationGraph extends JScrollPane
         addMouseMotionListener (mouseListener);
     }
 
+    public void saveFocus (MNode record)
+    {
+        Point focus = vp.getViewPosition ();
+        focus.x -= graphPanel.offset.x;
+        focus.y -= graphPanel.offset.y;
+        focusCache.put (record, focus);
+    }
+
     public void load ()
     {
-        graphPanel.load ();
+        graphPanel.clear ();
+        graphPanel.load ();  // also does revalidate()
         paintImmediately (getBounds ());
     }
 
     public void recordDeleted ()
     {
         graphPanel.clear ();
+        graphPanel.revalidate ();
         paintImmediately (getBounds ());
     }
 
@@ -156,6 +174,12 @@ public class PanelEquationGraph extends JScrollPane
     {
         GraphNode.RoundedBorder.updateUI ();
         background = UIManager.getColor ("ScrollPane.background");
+    }
+
+    public void doLayout ()
+    {
+        super.doLayout ();
+        graphPanel.updateScrollbars ();
     }
 
     public class GraphPanel extends JPanel
@@ -178,18 +202,17 @@ public class PanelEquationGraph extends JScrollPane
 
         public void clear ()
         {
-            graphPanel.removeAll ();
-            graphPanel.edges.clear ();
-            graphPanel.revalidate ();
-        }
-
-        public void load ()
-        {
             removeAll ();
             edges.clear ();
             layout.bounds = new Rectangle ();
             offset = new Point ();
+            vp.setViewPosition (new Point ());
+            hsb.setValue (0);
+            vsb.setValue (0);
+        }
 
+        public void load ()
+        {
             Enumeration<?> children = container.root.children ();
             boolean newLayout = children.hasMoreElements ();
             while (children.hasMoreElements ())
@@ -272,7 +295,13 @@ public class PanelEquationGraph extends JScrollPane
             }
 
             revalidate ();
-            updateScrollbars ();
+            Point focus = focusCache.get (container.record);
+            if (focus != null)
+            {
+                focus.x += graphPanel.offset.x;
+                focus.y += graphPanel.offset.y;
+                vp.setViewPosition (focus);
+            }
         }
 
         public void updateScrollbars ()
@@ -282,13 +311,13 @@ public class PanelEquationGraph extends JScrollPane
             if (size.width > extent.width)
             {
                 JScrollBar sb = getHorizontalScrollBar ();
-                int value = sb.getValue ();
+                int value = vp.getViewPosition ().x;
                 sb.setValues (value, extent.width, 0, size.width);
             }
             if (size.height > extent.height)
             {
                 JScrollBar sb = getVerticalScrollBar ();
-                int value = sb.getValue ();
+                int value = vp.getViewPosition ().y;
                 sb.setValues (value, extent.height, 0, size.height);
             }
         }

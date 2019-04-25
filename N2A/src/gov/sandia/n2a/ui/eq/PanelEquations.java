@@ -347,9 +347,8 @@ public class PanelEquations extends JPanel
         if (record != null)
         {
             panelEquationTree.tree.stopEditing ();
-            // Save tree state for current record, but only if it's better than the previously-saved state.
-            // TODO: generalize focus cache management to include graph panel
-            if (panelEquationTree.focusCache.get (record) == null  ||  panelEquationTree.tree.getSelectionPath () != null) panelEquationTree.focusCache.put (record, new StoredPath (panelEquationTree.tree));
+            panelEquationTree.saveFocus (record);
+            panelEquationGraph.saveFocus (record);
         }
 
         record = doc;

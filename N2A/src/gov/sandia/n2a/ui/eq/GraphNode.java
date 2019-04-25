@@ -136,11 +136,8 @@ public class GraphNode extends JPanel
             if (p.layout.componentMoved (ge.bounds, old)) needRevalidate = true;
         }
 
-        if (needRevalidate)
-        {
-            p.revalidate ();
-            p.updateScrollbars ();
-        }
+        if (needRevalidate) p.revalidate ();
+        p.scrollRectToVisible (next);
         p.paintImmediately (paintRegion);
     }
 

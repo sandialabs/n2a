@@ -549,6 +549,12 @@ public class PanelEquationTree extends JScrollPane
         setViewportView (tree);
     }
 
+    public void saveFocus (MNode record)
+    {
+        // Save tree state for current record, but only if it's better than the previously-saved state.
+        if (focusCache.get (record) == null  ||  tree.getSelectionPath () != null) focusCache.put (record, new StoredPath (tree));
+    }
+
     public void load ()
     {
         model.setRoot (container.root);  // triggers repaint, but may be too slow
