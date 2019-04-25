@@ -156,7 +156,7 @@ public class GraphNode extends JPanel
             if (start == null) setCursor (Cursor.getPredefinedCursor (border.getCursor (me)));
         }
 
-        public void mouseExited (MouseEvent mouseEvent)
+        public void mouseExited (MouseEvent me)
         {
             // It is possible to get this event in the middle of a drag, so ignore that case.
             if (start == null) setCursor (Cursor.getDefaultCursor ());
@@ -165,6 +165,7 @@ public class GraphNode extends JPanel
         public void mousePressed (MouseEvent me)
         {
             if (PanelModel.instance.panelEquations.locked) return;
+            if (me.getButton () != MouseEvent.BUTTON1) return;
 
             // All mouse event coordinates are relative to the bounds of this component.
             start  = me.getPoint ();
@@ -255,9 +256,10 @@ public class GraphNode extends JPanel
             }
         }
 
-        public void mouseReleased (MouseEvent mouseEvent)
+        public void mouseReleased (MouseEvent me)
         {
             start = null;
+            if (me.getButton () != MouseEvent.BUTTON1) return;
 
             PanelModel mep = PanelModel.instance;
             if (cursor == Cursor.DEFAULT_CURSOR)  // Normal click

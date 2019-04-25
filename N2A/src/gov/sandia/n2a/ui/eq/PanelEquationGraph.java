@@ -10,6 +10,7 @@ import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -19,6 +20,10 @@ import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.event.AdjustmentEvent;
 import java.awt.event.AdjustmentListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseWheelEvent;
+import java.awt.event.MouseWheelListener;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
@@ -29,6 +34,7 @@ import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JViewport;
 import javax.swing.UIManager;
+import javax.swing.event.MouseInputAdapter;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
@@ -48,7 +54,8 @@ public class PanelEquationGraph extends JScrollPane
         setViewportView (graphPanel);
         final JViewport vp = getViewport ();
 
-        getHorizontalScrollBar ().addAdjustmentListener (new AdjustmentListener ()
+        final JScrollBar hsb = getHorizontalScrollBar ();
+        hsb.addAdjustmentListener (new AdjustmentListener ()
         {
             public void adjustmentValueChanged (AdjustmentEvent e)
             {
@@ -62,7 +69,8 @@ public class PanelEquationGraph extends JScrollPane
             }
         });
 
-        getVerticalScrollBar ().addAdjustmentListener (new AdjustmentListener ()
+        final JScrollBar vsb = getVerticalScrollBar ();
+        vsb.addAdjustmentListener (new AdjustmentListener ()
         {
             public void adjustmentValueChanged (AdjustmentEvent e)
             {
@@ -75,6 +83,61 @@ public class PanelEquationGraph extends JScrollPane
                 }
             }
         });
+
+        addMouseWheelListener (new MouseWheelListener ()
+        {
+            public void mouseWheelMoved (MouseWheelEvent e)
+            {
+                if (e.getScrollType() == MouseWheelEvent.WHEEL_UNIT_SCROLL)
+                {
+                    // Should really get scaling from scrollbar, but since we configure it to do pixel increments,
+                    // we can hard code the multiplier in terms of how many pixels the scroll wheel should move.
+                    vsb.setValue (vsb.getValue () + e.getUnitsToScroll () * 15);
+                }
+            }
+        });
+
+        MouseAdapter mouseListener = new MouseInputAdapter ()
+        {
+            Point start = null;
+
+            public void mousePressed (MouseEvent me)
+            {
+                if (me.getButton () != MouseEvent.BUTTON2) return;
+                start = me.getPoint ();
+                setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
+            }
+
+            public void mouseDragged (MouseEvent me)
+            {
+                if (start == null) return;
+                Point now = me.getPoint ();
+                int dx = now.x - start.x;
+                int dy = now.y - start.y;
+                //start = now;
+                if (dx != 0)
+                {
+                    int old = hsb.getValue ();
+                    hsb.setValue (old - dx);
+                    start.x += old - hsb.getValue ();
+                }
+                if (dy != 0)
+                {
+                    int old = vsb.getValue ();
+                    vsb.setValue (old - dy);
+                    start.y += old - vsb.getValue ();
+                }
+            }
+
+            public void mouseReleased (MouseEvent me)
+            {
+                start = null;
+                setCursor (Cursor.getPredefinedCursor (Cursor.DEFAULT_CURSOR));
+            }
+        };
+
+        addMouseListener (mouseListener);
+        addMouseMotionListener (mouseListener);
     }
 
     public void load ()
