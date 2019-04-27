@@ -137,7 +137,6 @@ public class GraphNode extends JPanel
         }
 
         if (needRevalidate) p.revalidate ();
-        p.scrollRectToVisible (next);
         p.paintImmediately (paintRegion);
     }
 
