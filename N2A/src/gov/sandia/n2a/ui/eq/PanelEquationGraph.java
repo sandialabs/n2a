@@ -202,21 +202,21 @@ public class PanelEquationGraph extends JScrollPane
         }
     }
 
-    protected JViewport createViewport ()
+    public JViewport createViewport ()
     {
         return new JViewport ()
         {
-            protected LayoutManager createLayoutManager ()
+            public LayoutManager createLayoutManager ()
             {
                 return new ViewportLayout ()
                 {
                     public void layoutContainer(Container parent)
                     {
-                        // The original version of this code (in OpenJDK) justifies the view if it is smaller
-                        // than the viewport extent. We don't want to move the viewport, but we do want to
-                        // cover the entire viewport. The calculations to do that have been moved to
-                        // graphPanel.getPreferredSize(), to support cleaner scroll bar settings in ScrollPaneLayout.
-                        // Thus, we simply apply it here.
+                        // The original version of this code (in OpenJDK) justifies (moves) the view if it is smaller
+                        // than the viewport extent. We don't want to move the viewport, so simply set its preferred size.
+                        // The original code also expands the view to fill the viewport. Presumably this is to
+                        // ensure everything gets painted. However, the display seems to work fine without doing that,
+                        // and the simpler approach seems to produce more reliable behavior.
                         vp.setViewSize (graphPanel.getPreferredSize ());
                     }
                 };
@@ -407,29 +407,7 @@ public class PanelEquationGraph extends JScrollPane
         **/
         public Dimension preferredLayoutSize (Container target)
         {
-            // Predict next viewport location.
-            Point p = vp.getViewPosition ();  // current location
-            p.x += Math.max (-bounds.x, 0);
-            p.y += Math.max (-bounds.y, 0);
-
-            // Predict whether scrollbars will be activated, and shrink estimate viewport size accordingly.
-            // For better or worse, we follow the logic in ScrollPaneLayout from OpenJDK.
-            int rw = bounds.width  - p.x;  // required width -- amount of bounds to the right of the top-left corner
-            int rh = bounds.height - p.y;  // required height -- similarly, amount of bounds below the top-left corner
-            Dimension viewportSize = PanelEquationGraph.this.getSize ();
-            if (rh > viewportSize.height) viewportSize.width -= vsb.getPreferredSize ().width;
-            if (rw > viewportSize.width )
-            {
-                viewportSize.height -= hsb.getPreferredSize ().height;
-                // Re-check vertical, since the horizontal scroll bar has reduced available height.
-                if (rh > viewportSize.height) viewportSize.width -= vsb.getPreferredSize ().width;
-            }
-
-            // Ensure that panel covers entire available viewport (to prevent drawing artifacts).
-            Dimension result = new Dimension ();
-            result.width  = Math.max (bounds.width,  p.x + viewportSize.width);
-            result.height = Math.max (bounds.height, p.y + viewportSize.height);
-            return result;
+            return bounds.getSize ();
         }
 
         public Dimension minimumLayoutSize (Container target)
