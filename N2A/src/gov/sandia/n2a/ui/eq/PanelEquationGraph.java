@@ -413,7 +413,7 @@ public class PanelEquationGraph extends JScrollPane
             p.y += Math.max (-bounds.y, 0);
 
             // Predict whether scrollbars will be activated, and shrink estimate viewport size accordingly.
-            // See code in ScrollPaneLayout from OpenJDK.
+            // For better or worse, we follow the logic in ScrollPaneLayout from OpenJDK.
             int rw = bounds.width  - p.x;  // required width -- amount of bounds to the right of the top-left corner
             int rh = bounds.height - p.y;  // required height -- similarly, amount of bounds below the top-left corner
             Dimension viewportSize = PanelEquationGraph.this.getSize ();

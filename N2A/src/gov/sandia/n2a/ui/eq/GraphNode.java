@@ -17,6 +17,8 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Shape;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.event.MouseEvent;
 import java.awt.geom.RoundRectangle2D;
 import java.util.ArrayList;
@@ -25,6 +27,8 @@ import java.util.List;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTree;
+import javax.swing.JViewport;
+import javax.swing.Timer;
 import javax.swing.UIManager;
 import javax.swing.border.AbstractBorder;
 import javax.swing.event.MouseInputAdapter;
@@ -42,17 +46,20 @@ import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
 @SuppressWarnings("serial")
 public class GraphNode extends JPanel
 {
+    protected GraphPanel      parent;
     public    NodePart        node;
     public    JLabel          label;
     protected List<GraphEdge> edgesOut = new ArrayList<GraphEdge> ();
     protected List<GraphEdge> edgesIn  = new ArrayList<GraphEdge> ();
+    protected boolean         needRevalidate;
 
     protected static RoundedBorder border = new RoundedBorder (5);
 
     public GraphNode (GraphPanel parent, NodePart node)
     {
-        this.node  = node;
-        node.graph = this;
+        this.parent = parent;
+        this.node   = node;
+        node.graph  = this;
 
         label = new JLabel (node.source.key ());
 
@@ -99,9 +106,8 @@ public class GraphNode extends JPanel
         MNode bounds = node.source.child ("$metadata", "gui", "bounds");
         if (bounds != null)
         {
-            GraphPanel p = (GraphPanel) getParent ();
-            int x = bounds.getInt ("x") + p.offset.x;
-            int y = bounds.getInt ("y") + p.offset.y;
+            int x = bounds.getInt ("x") + parent.offset.x;
+            int y = bounds.getInt ("y") + parent.offset.y;
             Dimension d = getPreferredSize ();
             animate (new Rectangle (x, y, d.width, d.height));
         }
@@ -116,8 +122,7 @@ public class GraphNode extends JPanel
         Rectangle paintRegion = next.union (old);
         setBounds (next);
         validate ();
-        GraphPanel p = (GraphPanel) getParent ();
-        boolean needRevalidate = p.layout.componentMoved (next, old);
+        if (parent.layout.componentMoved (next, old)) needRevalidate = true;
 
         for (GraphEdge ge : edgesOut)
         {
@@ -125,7 +130,7 @@ public class GraphNode extends JPanel
             paintRegion = paintRegion.union (old);
             ge.updateShape (this);
             paintRegion = paintRegion.union (ge.bounds);
-            if (p.layout.componentMoved (ge.bounds, old)) needRevalidate = true;
+            if (parent.layout.componentMoved (ge.bounds, old)) needRevalidate = true;
         }
         for (GraphEdge ge : edgesIn)
         {
@@ -133,19 +138,25 @@ public class GraphNode extends JPanel
             paintRegion = paintRegion.union (old);
             ge.updateShape (this);
             paintRegion = paintRegion.union (ge.bounds);
-            if (p.layout.componentMoved (ge.bounds, old)) needRevalidate = true;
+            if (parent.layout.componentMoved (ge.bounds, old)) needRevalidate = true;
         }
 
-        if (needRevalidate) p.revalidate ();
-        p.paintImmediately (paintRegion);
+        if (needRevalidate)
+        {
+            parent.revalidate ();
+            needRevalidate = false;
+        }
+        parent.paintImmediately (paintRegion);
     }
 
-    public class ResizeListener extends MouseInputAdapter
+    public class ResizeListener extends MouseInputAdapter implements ActionListener
     {
-        int       cursor;
-        Point     start = null;
-        Dimension min;
-        Rectangle old;
+        int        cursor;
+        Point      start;
+        Dimension  min;
+        Rectangle  old;
+        MouseEvent lastEvent;
+        Timer      timer = new Timer (100, this);
 
         public void mouseMoved (MouseEvent me)
         {
@@ -181,6 +192,41 @@ public class GraphNode extends JPanel
             int h = getHeight ();
             int dx = me.getX () - start.x;
             int dy = me.getY () - start.y;
+
+            JViewport vp = (JViewport) parent.getParent ();
+            Point pp = vp.getLocationOnScreen ();
+            Point pm = me.getLocationOnScreen ();
+            pm.x -= pp.x;
+            pm.y -= pp.y;
+            Dimension extent = vp.getExtentSize ();
+            boolean oob =  pm.x < 0  ||  pm.x > extent.width  ||  pm.y < 0  ||  pm.y > extent.height;
+            if (! oob) timer.stop ();
+            if (me == lastEvent)
+            {
+                if (! oob) return;
+
+                // Rather than generate an actual mouse event, simply adjust (dx,dy).
+                dx = pm.x < 0 ? pm.x : (pm.x > extent.width  ? pm.x - extent.width  : 0);
+                dy = pm.y < 0 ? pm.y : (pm.y > extent.height ? pm.y - extent.height : 0);
+
+                // Stretch bounds and shift viewport
+                Rectangle old = getBounds ();
+                Rectangle next = new Rectangle (old);
+                next.translate (dx, dy);
+                if (parent.layout.componentMoved (next, old)) needRevalidate = true;
+                Point p = vp.getViewPosition ();
+                p.translate (dx, dy);
+                vp.setViewPosition (p);
+            }
+            else
+            {
+                if (oob)
+                {
+                    lastEvent = me;
+                    if (timer.isRunning ()) timer.restart ();
+                    else                    timer.start ();
+                }
+            }
 
             switch (cursor)
             {
@@ -255,6 +301,7 @@ public class GraphNode extends JPanel
         public void mouseReleased (MouseEvent me)
         {
             start = null;
+            timer.stop ();
             if (me.getButton () != MouseEvent.BUTTON1) return;
 
             PanelModel mep = PanelModel.instance;
@@ -279,13 +326,17 @@ public class GraphNode extends JPanel
                 MNode guiTree = new MVolatile ();
                 MNode bounds = guiTree.childOrCreate ("bounds");
                 Rectangle now = getBounds ();
-                GraphPanel p = (GraphPanel) getParent ();
-                if (now.x      != old.x     ) bounds.set (now.x - p.offset.x, "x");
-                if (now.y      != old.y     ) bounds.set (now.y - p.offset.y, "y");
-                if (now.width  != old.width ) bounds.set (now.width,          "width");
-                if (now.height != old.height) bounds.set (now.height,         "height");
+                if (now.x      != old.x     ) bounds.set (now.x - parent.offset.x, "x");
+                if (now.y      != old.y     ) bounds.set (now.y - parent.offset.y, "y");
+                if (now.width  != old.width ) bounds.set (now.width,               "width");
+                if (now.height != old.height) bounds.set (now.height,              "height");
                 if (bounds.size () > 0) mep.undoManager.add (new ChangeGUI (node, guiTree));
             }
+        }
+
+        public void actionPerformed (ActionEvent e)
+        {
+            mouseDragged (lastEvent);
         }
     }
 
