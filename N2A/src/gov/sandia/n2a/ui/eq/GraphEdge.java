@@ -33,6 +33,7 @@ public class GraphEdge
     protected Rectangle bounds = new Rectangle (0, 0, -1, -1);  // empty. Allows call to animte() on brand-new edges that have not previously called updateShape().
     protected Vector2   tip;
     protected boolean   tipDrag;
+    protected boolean   needRevalidate;
 
     protected static double arrowheadAngle  = Math.PI / 5;
     protected static double arrowheadLength = 10;
@@ -273,7 +274,7 @@ public class GraphEdge
         updateShape (true);
         Rectangle paintRegion = old.union (bounds);
         GraphPanel parent = nodeFrom.parent;
-        boolean needRevalidate = parent.layout.componentMoved (bounds, old);
+        if (parent.layout.componentMoved (bounds, old)) needRevalidate = true;
         if (edgeOther != null)
         {
             paintRegion = paintRegion.union (old2);
@@ -281,7 +282,11 @@ public class GraphEdge
             if (parent.layout.componentMoved (edgeOther.bounds, old2)) needRevalidate = true;
         }
 
-        if (needRevalidate) parent.revalidate ();
+        if (needRevalidate)
+        {
+            parent.revalidate ();
+            needRevalidate = false;
+        }
         parent.paintImmediately (paintRegion);
     }
 
