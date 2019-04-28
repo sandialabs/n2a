@@ -399,16 +399,36 @@ public class PanelEquationTree extends JScrollPane
                     return false;
                 }
 
-                PanelModel mep = PanelModel.instance;
-                mep.undoManager.addEdit (new CompoundEdit ());
-
-                // Determine paste/drop target
+                // Determine paste/drop target.
                 TreePath path;
                 if (xfer.isDrop ()) path = ((JTree.DropLocation) xfer.getDropLocation ()).getPath ();
                 else                path = tree.getSelectionPath ();
+
+                // Handle internal DnD as a node reordering.
+                PanelModel mep = PanelModel.instance;
+                if (xferNode != null  &&  xfer.isDrop ())  // DnD operation is internal to the tree. (Could also be DnD between N2A windows. For now, reject that case.)
+                {
+                    if (path == null) return false;  // Only possible in DnD between N2A instances.
+                    NodeBase target = (NodeBase) path.getLastPathComponent ();
+                    NodeBase targetParent = (NodeBase) target.getParent ();
+                    if (targetParent == null) return false;  // If target is root node
+                    NodeBase source = NodeBase.locateNode (xferNode.path);
+                    if (source == null) return false;  // Maybe this can't happen
+                    NodeBase sourceParent = (NodeBase) source.getParent ();
+                    if (targetParent != sourceParent) return false;  // Don't drag node outside its containing part.
+                    if (! (targetParent instanceof NodePart)) return false;  // Only rearrange children of parts (not of variables or metadata).
+                    NodePart parent = (NodePart) targetParent;
+                    int indexBefore = parent.getIndex (source);
+                    int indexAfter  = parent.getIndex (target);
+                    mep.undoManager.add (new ChangeOrder (parent, indexBefore, indexAfter));
+                    return true;
+                }
+
+                // Create target tree, if needed.
+                mep.undoManager.addEdit (new CompoundEdit ());
                 if (path == null)
                 {
-                    if (container.root == null) PanelModel.instance.undoManager.add (new AddDoc ());
+                    if (container.root == null) mep.undoManager.add (new AddDoc ());
                     tree.setSelectionRow (0);
                     path = tree.getSelectionPath ();
                 }
@@ -825,10 +845,15 @@ public class PanelEquationTree extends JScrollPane
         NodeBase a = AddAnnotation.resolve (metadataNode, "gui.order");
         if (a != metadataNode)
         {
-            ((NodeAnnotation) a).folded.set (order);
-            FontMetrics fm = a.getFontMetrics (tree);
-            metadataNode.updateTabStops (fm);
-            model.nodeChanged (a);
+            MNode m = ((NodeAnnotation) a).folded;
+            if (m.key ().equals ("order")  &&  m.parent ().key ().equals ("gui"))  // This check is necessary to avoid overwriting a pre-existing node folded under "gui" (for example, gui.bounds).
+            {
+                m.set (order);  // Shouldn't require change to tab stops, which should already be set.
+                NodeBase ap = (NodeBase) a.getParent ();
+                FontMetrics fm = a.getFontMetrics (tree);
+                ap.updateTabStops (fm);  // Cause node to update it's text.
+                model.nodeChanged (a);
+            }
         }
     }
 
