@@ -109,7 +109,9 @@ public class GraphNode extends JPanel
             int x = bounds.getInt ("x") + parent.offset.x;
             int y = bounds.getInt ("y") + parent.offset.y;
             Dimension d = getPreferredSize ();
-            animate (new Rectangle (x, y, d.width, d.height));
+            Rectangle r = new Rectangle (x, y, d.width, d.height);
+            animate (r);
+            parent.scrollRectToVisible (r);
         }
     }
 
@@ -190,6 +192,7 @@ public class GraphNode extends JPanel
             parent.revalidate ();
             needRevalidate = false;
         }
+        parent.scrollRectToVisible (edge.bounds);
         parent.paintImmediately (paintRegion);
     }
 
