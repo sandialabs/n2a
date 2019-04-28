@@ -41,7 +41,12 @@ import javax.swing.ViewportLayout;
 import javax.swing.event.MouseInputAdapter;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.ui.eq.GraphEdge.Vector2;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
+import gov.sandia.n2a.ui.eq.tree.NodeVariable;
+import gov.sandia.n2a.ui.eq.undo.ChangeVariable;
 
 @SuppressWarnings("serial")
 public class PanelEquationGraph extends JScrollPane
@@ -109,49 +114,7 @@ public class PanelEquationGraph extends JScrollPane
             }
         });
 
-        MouseAdapter mouseListener = new MouseInputAdapter ()
-        {
-            Point start = null;
-
-            public void mousePressed (MouseEvent me)
-            {
-                if (me.getButton () != MouseEvent.BUTTON2) return;
-                start = me.getPoint ();
-                setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
-            }
-
-            public void mouseDragged (MouseEvent me)
-            {
-                if (me.getButton () == MouseEvent.BUTTON1)
-                {
-                    graphPanel.scrollRectToVisible (new Rectangle (me.getX (), me.getY (), 1, 1));
-                }
-
-                if (start == null) return;
-                Point now = me.getPoint ();
-                int dx = now.x - start.x;
-                int dy = now.y - start.y;
-                if (dx != 0  &&  hsb.isVisible ())
-                {
-                    int old = hsb.getValue ();
-                    hsb.setValue (old - dx);
-                    start.x += old - hsb.getValue ();
-                }
-                if (dy != 0  &&  vsb.isVisible ())
-                {
-                    int old = vsb.getValue ();
-                    vsb.setValue (old - dy);
-                    start.y += old - vsb.getValue ();
-                }
-            }
-
-            public void mouseReleased (MouseEvent me)
-            {
-                start = null;
-                setCursor (Cursor.getPredefinedCursor (Cursor.DEFAULT_CURSOR));
-            }
-        };
-
+        MouseAdapter mouseListener = new GraphMouseListener ();
         addMouseListener (mouseListener);
         addMouseMotionListener (mouseListener);
     }
@@ -222,6 +185,103 @@ public class PanelEquationGraph extends JScrollPane
                 };
             }
         };
+    }
+
+    public class GraphMouseListener extends MouseInputAdapter
+    {
+        Point     startPan = null;
+        GraphEdge edge     = null;
+
+        public void mouseMoved (MouseEvent me)
+        {
+            GraphEdge e = graphPanel.findTipAt (me.getPoint ());
+            if (e == null) setCursor (Cursor.getDefaultCursor ());
+            else           setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
+        }
+
+        public void mousePressed (MouseEvent me)
+        {
+            switch (me.getButton ())
+            {
+                case MouseEvent.BUTTON1:
+                    Point p = me.getPoint ();
+                    edge = graphPanel.findTipAt (p);
+                    if (edge != null)
+                    {
+                        setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
+                        edge.animate (p);
+                    }
+                    break;
+                case MouseEvent.BUTTON2:
+                    startPan = me.getPoint ();
+                    setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
+                    break;
+            }
+        }
+
+        public void mouseDragged (MouseEvent me)
+        {
+            if (edge != null)
+            {
+                edge.animate (me.getPoint ());
+            }
+            else if (startPan != null)
+            {
+                Point now = me.getPoint ();
+                int dx = now.x - startPan.x;
+                int dy = now.y - startPan.y;
+                if (dx != 0  &&  hsb.isVisible ())
+                {
+                    int old = hsb.getValue ();
+                    hsb.setValue (old - dx);
+                    startPan.x += old - hsb.getValue ();
+                }
+                if (dy != 0  &&  vsb.isVisible ())
+                {
+                    int old = vsb.getValue ();
+                    vsb.setValue (old - dy);
+                    startPan.y += old - vsb.getValue ();
+                }
+            }
+        }
+
+        public void mouseReleased (MouseEvent me)
+        {
+            startPan = null;
+            setCursor (Cursor.getPredefinedCursor (Cursor.DEFAULT_CURSOR));
+
+            if (edge != null)  // Finish assigning endpoint
+            {
+                edge.tipDrag = false;
+
+                PanelModel mep = PanelModel.instance;
+                GraphNode nodeFrom = edge.nodeFrom;
+                NodePart part = nodeFrom.node;
+                NodeVariable variable = (NodeVariable) part.child (edge.alias);  // There should always be a variable with the alias as its name.
+
+                GraphNode nodeTo = graphPanel.findNodeAt (me.getPoint ());
+                if (nodeTo == null)  // Disconnect the edge
+                {
+                    String value = "connect()";
+                    MPart mchild = variable.source;
+                    if (mchild.isOverridden ())
+                    {
+                        String original = mchild.getOriginal ().get ();
+                        if (Operator.containsConnect (original)) value = original;
+                    }
+                    mep.undoManager.add (new ChangeVariable (variable, edge.alias, value));
+                }
+                else if (nodeTo == edge.nodeTo)  // No change
+                {
+                    edge.animate (null);
+                }
+                else  // Connect to new endpoint
+                {
+                    mep.undoManager.add (new ChangeVariable (variable, edge.alias, nodeTo.node.source.key ()));
+                }
+                edge = null;
+            }
+        }
     }
 
     public class GraphPanel extends JPanel
@@ -331,7 +391,7 @@ public class PanelEquationGraph extends JScrollPane
 
                 for (GraphEdge ge : gn.edgesOut)
                 {
-                    ge.updateShape (gn);
+                    ge.updateShape (false);
                     if (ge.bounds != null) layout.bounds = layout.bounds.union (ge.bounds);
                 }
             }
@@ -353,6 +413,26 @@ public class PanelEquationGraph extends JScrollPane
                 focus.y = Math.min (focus.y, Math.max (0, layout.bounds.height - extent.height));
             }
             vp.setViewPosition (focus);
+        }
+
+        public GraphEdge findTipAt (Point p)
+        {
+            Vector2 p2 = new Vector2 (p.x, p.y);
+            for (GraphEdge e : edges)
+            {
+                if (e.tip != null  &&  e.tip.distance (p2) < GraphEdge.arrowheadLength) return e;
+            }
+            return null;
+        }
+
+        public GraphNode findNodeAt (Point p)
+        {
+            for (Component c : getComponents ())
+            {
+                // p is relative to the container, whereas Component.contains() is relative to the component itself.
+                if (c.contains (p.x - c.getX (), p.y - c.getY ())) return (GraphNode) c;
+            }
+            return null;
         }
 
         public void paintComponent (Graphics g)
@@ -458,7 +538,7 @@ public class PanelEquationGraph extends JScrollPane
             }
             for (GraphEdge ge : gp.edges)
             {
-                ge.updateShape (ge.nodeFrom);
+                ge.updateShape (false);
             }
         }
 

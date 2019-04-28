@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -73,7 +73,7 @@ public class AddVariable extends Undoable
     public static void destroy (List<String> path, boolean canceled, String name)
     {
         // Retrieve created node
-        NodeBase parent = NodeBase.locateNode (path);
+        NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
         NodeVariable createdNode = (NodeVariable) parent.child (name);
 
@@ -90,14 +90,21 @@ public class AddVariable extends Undoable
         mparent.clear (name);
         if (mparent.child (name) == null)  // Node is fully deleted
         {
+            if (createdNode.isBinding  &&  parent.graph != null) parent.graph.updateGUI (name, "");
             model.removeNodeFromParent (createdNode);
             ((NodePart) parent).findConnections ();
         }
         else  // Just exposed an overridden node
         {
+            boolean wasBinding = createdNode.isBinding;
             createdNode.build ();
             createdNode.findConnections ();
             createdNode.updateColumnWidths (fm);
+            if (parent.graph != null)
+            {
+                if (createdNode.isBinding) parent.graph.updateGUI (name, createdNode.source.get ());
+                else if (wasBinding)       parent.graph.updateGUI (name, "");
+            }
         }
         parent.updateTabStops (fm);
         parent.allNodesChanged (model);
@@ -114,7 +121,7 @@ public class AddVariable extends Undoable
 
     public static NodeBase create (List<String> path, int index, String name, MNode newPart, boolean nameIsGenerated)
     {
-        NodeBase parent = NodeBase.locateNode (path);
+        NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
         NodeBase n = parent.child (name);
         if (n != null  &&  ! (n instanceof NodeVariable)) throw new CannotRedoException ();  // Should be blocked by GUI constraints, but this defends against ill-formed model on clipboard.
@@ -131,6 +138,7 @@ public class AddVariable extends Undoable
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
         boolean alreadyExists = createdNode != null;
+        boolean wasBinding =  alreadyExists  &&  createdNode.isBinding;
         if (! alreadyExists) createdNode = new NodeVariable (createdPart);
         if (nameIsGenerated) createdNode.setUserObject ("");  // pure create, so about to go into edit mode. This should only happen on first application of the create action, and should only be possible if visibility is already correct.
 
@@ -147,6 +155,12 @@ public class AddVariable extends Undoable
 
             parent.updateTabStops (fm);
             parent.allNodesChanged (model);
+
+            if (parent.graph != null)
+            {
+                if (createdNode.isBinding) parent.graph.updateGUI (name, createdNode.source.get ());
+                else if (wasBinding)       parent.graph.updateGUI (name, "");
+            }
         }
         mep.panelEquationTree.updateVisibility (createdPath);
 

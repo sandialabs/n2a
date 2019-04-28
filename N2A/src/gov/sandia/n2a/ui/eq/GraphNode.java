@@ -114,6 +114,86 @@ public class GraphNode extends JPanel
     }
 
     /**
+        Apply changes from a connection binding.
+    **/
+    public void updateGUI (String alias, String partName)
+    {
+        GraphEdge edge = null;
+        for (GraphEdge ge : edgesOut)
+        {
+            if (ge.alias.equals (alias))
+            {
+                edge = ge;
+                break;
+            }
+        }
+
+        Rectangle paintRegion = new Rectangle (0, 0, -1, -1);
+        if (partName == null  ||  partName.isEmpty ())  // Delete connection binding
+        {
+            if (edge == null) return;
+            parent.edges.remove (edge);
+            edgesOut.remove (edge);
+            if (edge.nodeTo != null) edge.nodeTo.edgesIn.remove (edge);
+            paintRegion = edge.bounds;
+        }
+        else
+        {
+            GraphNode nodeTo = null;
+            for (Component c : parent.getComponents ())
+            {
+                GraphNode gn = (GraphNode) c;
+                if (gn.node.source.key ().equals (partName))  // TODO: handle paths with more than one element
+                {
+                    nodeTo = gn;
+                    break;
+                }
+            }
+
+            if (edge == null)  // Create new connection binding
+            {
+                edge = new GraphEdge (this, nodeTo, alias);
+                parent.edges.add (edge);
+                if (nodeTo != null) nodeTo.edgesIn.add (edge);
+                edgesOut.add (edge);
+            }
+            else  // Update existing connection
+            {
+                edge.nodeTo = nodeTo;
+            }
+        }
+
+        // Adjust binary connections
+        if (edgesOut.size () == 2)
+        {
+            GraphEdge A = edgesOut.get (0);
+            GraphEdge B = edgesOut.get (1);
+            A.edgeOther = B;
+            B.edgeOther = A;
+        }
+        else
+        {
+            for (GraphEdge ge : edgesOut) ge.edgeOther = null;
+        }
+
+        // Repaint all remaining edges
+        for (GraphEdge ge : edgesOut)
+        {
+            Rectangle old = ge.bounds;
+            ge.updateShape (false);
+            paintRegion = paintRegion.union (old);
+            paintRegion = paintRegion.union (ge.bounds);
+            if (parent.layout.componentMoved (ge.bounds, old)) needRevalidate = true;
+        }
+        if (needRevalidate)
+        {
+            parent.revalidate ();
+            needRevalidate = false;
+        }
+        parent.paintImmediately (paintRegion);
+    }
+
+    /**
         Sets bounds and repaints portion of container that was exposed by move or resize.
     **/
     public void animate (Rectangle next)
@@ -127,18 +207,26 @@ public class GraphNode extends JPanel
         for (GraphEdge ge : edgesOut)
         {
             old = ge.bounds;
+            ge.updateShape (false);
             paintRegion = paintRegion.union (old);
-            ge.updateShape (this);
             paintRegion = paintRegion.union (ge.bounds);
             if (parent.layout.componentMoved (ge.bounds, old)) needRevalidate = true;
         }
         for (GraphEdge ge : edgesIn)
         {
             old = ge.bounds;
+            Rectangle old2 = null;
+            if (ge.edgeOther != null) old2 = ge.edgeOther.bounds;
+            ge.updateShape (true);
             paintRegion = paintRegion.union (old);
-            ge.updateShape (this);
             paintRegion = paintRegion.union (ge.bounds);
             if (parent.layout.componentMoved (ge.bounds, old)) needRevalidate = true;
+            if (ge.edgeOther != null)
+            {
+                paintRegion = paintRegion.union (old2);
+                paintRegion = paintRegion.union (ge.edgeOther.bounds);
+                if (parent.layout.componentMoved (ge.edgeOther.bounds, old2)) needRevalidate = true;
+            }
         }
 
         if (needRevalidate)
@@ -312,9 +400,11 @@ public class GraphNode extends JPanel
                 JTree tree = pet.tree;
                 TreePath path = new TreePath (node.getPath ());
                 tree.setSelectionPath (path);
-                // The following lines are equivalent to JTree.scrollPathToVisible(path),
-                // except that we expand the requested rectangle to force the node to the top of the frame.
+
+                // The following lines are similar to JTree.scrollPathToVisible(path),
+                // except that we enlarge the requested rectangle to force the node to the top of the frame.
                 tree.makeVisible (path);
+                tree.expandPath (path);
                 Rectangle r = tree.getPathBounds (path);
                 Rectangle visible = pet.getViewport ().getViewRect ();
                 r.height = visible.height;

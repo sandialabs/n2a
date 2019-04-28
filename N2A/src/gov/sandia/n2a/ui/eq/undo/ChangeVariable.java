@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -21,6 +21,7 @@ import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
+import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class ChangeVariable extends Undoable
@@ -72,7 +73,7 @@ public class ChangeVariable extends Undoable
 
     public void apply (String nameBefore, String nameAfter)
     {
-        NodeBase parent = NodeBase.locateNode (path);
+        NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
         NodeVariable nodeBefore = (NodeVariable) parent.child (nameBefore);
         if (nodeBefore == null) throw new CannotRedoException ();
@@ -101,6 +102,8 @@ public class ChangeVariable extends Undoable
             nodeAfter = (NodeVariable) parent.child (nameAfter);
             if (oldPart == null)
             {
+                if (nodeBefore.isBinding  &&  parent.graph != null) parent.graph.updateGUI (nameBefore, "");  // remove old connection edge
+
                 if (nodeAfter == null)
                 {
                     nodeAfter = nodeBefore;
@@ -124,9 +127,11 @@ public class ChangeVariable extends Undoable
                 nodeBefore.findConnections ();
                 if (nodeBefore.visible (model.filterLevel)) model.nodeStructureChanged (nodeBefore);
                 else                                        parent.hide (nodeBefore, model, true);
+                if (nodeBefore.isBinding  &&  parent.graph != null) parent.graph.updateGUI (nameBefore, oldPart.get ());
             }
         }
 
+        boolean wasBinding = nodeAfter.isBinding;
         nodeAfter.build ();
         nodeAfter.findConnections ();
         nodeAfter.updateColumnWidths (fm);
@@ -136,6 +141,12 @@ public class ChangeVariable extends Undoable
         TreeNode[] nodePath = nodeAfter.getPath ();
         mep.panelEquationTree.updateOrder (nodePath);
         mep.panelEquationTree.updateVisibility (nodePath);
+
+        if (parent.graph != null)
+        {
+            if (nodeAfter.isBinding) parent.graph.updateGUI (nameAfter, nodeAfter.source.get ());
+            else if (wasBinding)     parent.graph.updateGUI (nameAfter, "");
+        }
     }
 
     public boolean replaceEdit (UndoableEdit edit)

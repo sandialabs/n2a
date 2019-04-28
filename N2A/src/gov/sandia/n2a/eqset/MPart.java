@@ -297,6 +297,11 @@ public class MPart extends MNode
         return source;
     }
 
+    public MPersistent getOriginal ()
+    {
+        return original;
+    }
+
     protected synchronized MNode getChild (String index)
     {
         if (children == null) return null;

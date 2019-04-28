@@ -10,6 +10,7 @@ import java.awt.Color;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Shape;
 import java.awt.geom.CubicCurve2D;
@@ -17,17 +18,21 @@ import java.awt.geom.Line2D;
 import java.awt.geom.Path2D;
 import java.awt.geom.Rectangle2D;
 
+import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
+
 public class GraphEdge
 {
     protected GraphNode nodeFrom;  // The connection
     protected GraphNode nodeTo;    // The endpoint that this edge goes to
     protected GraphEdge edgeOther; // For binary connections only, the edge to the other endpoint. Used to coordinate a smooth curve through the connection node.
-    protected String    fromName;  // Name of endpoint variable in connection part.
+    protected String    alias;     // Name of endpoint variable in connection part.
 
     protected Shape     shape;
     protected Vector2   label;
     protected Rectangle textBox;
-    protected Rectangle bounds;
+    protected Rectangle bounds = new Rectangle (0, 0, -1, -1);  // empty. Allows call to animte() on brand-new edges that have not previously called updateShape().
+    protected Vector2   tip;
+    protected boolean   tipDrag;
 
     protected static double arrowheadAngle  = Math.PI / 5;
     protected static double arrowheadLength = 10;
@@ -35,25 +40,28 @@ public class GraphEdge
     protected static int    nameTopPad      = 1;
     protected static int    nameSidePad     = 2;
 
-    public GraphEdge (GraphNode nodeFrom, GraphNode nodeTo, String fromName)
+    public GraphEdge (GraphNode nodeFrom, GraphNode nodeTo, String alias)
     {
         this.nodeFrom = nodeFrom;
         this.nodeTo   = nodeTo;
-        this.fromName = fromName;
+        this.alias    = alias;
     }
 
     /**
         Updates our cached shape information based current state of graph nodes.
-        @param from The graph node that called this function. Helps determine whether to update shared parameters.
     **/
-    public void updateShape (GraphNode caller)
+    public void updateShape (boolean updateOther)
     {
         Rectangle Cbounds = nodeFrom.getBounds ();
         Vector2 c = new Vector2 (Cbounds.getCenterX (), Cbounds.getCenterY ());
 
         Rectangle Abounds = null;
         Vector2   a       = null;
-        if (nodeTo != null)
+        if (tipDrag)
+        {
+            a = tip;
+        }
+        else if (nodeTo != null)
         {
             Abounds = nodeTo.getBounds ();
             a       = new Vector2 (Abounds.getCenterX (), Abounds.getCenterY ());
@@ -61,10 +69,18 @@ public class GraphEdge
 
         Vector2 ba = null;  // Non-null for binary connections that also need a curve rather than straight line.
         Vector2 c2c = null;
-        if (edgeOther != null)
+        if (edgeOther != null  &&  nodeTo != null  &&  edgeOther.nodeTo != null)
         {
-            Rectangle Bbounds = edgeOther.nodeTo.getBounds ();
-            Vector2 b = new Vector2 (Bbounds.getCenterX (), Bbounds.getCenterY ());
+            Vector2 b;
+            if (edgeOther.tipDrag)
+            {
+                b = edgeOther.tip;
+            }
+            else
+            {
+                Rectangle Bbounds = edgeOther.nodeTo.getBounds ();
+                b = new Vector2 (Bbounds.getCenterX (), Bbounds.getCenterY ());
+            }
 
             ba = a.subtract (b);  // vector from b -> a
             Vector2 avg = a.add (b).multiply (0.5);  // average position
@@ -93,57 +109,47 @@ public class GraphEdge
             // The two possible sources of a call are nodeFrom and nodeTo.
             // If nodeTo, then we propagate the update to our peer edge.
             // However, if this is a self-connection, then we are our peer edge, so don't start an infinite loop.
-            if (caller == nodeTo  &&  edgeOther.nodeTo != nodeTo) edgeOther.updateShape (caller);
+            if (updateOther) edgeOther.updateShape (false);
         }
 
         Graphics g = nodeFrom.getGraphics ();
         FontMetrics fm = nodeFrom.getFontMetrics (nodeFrom.getFont ());
-        Rectangle2D tb = fm.getStringBounds (fromName, g);
+        Rectangle2D tb = fm.getStringBounds (alias, g);
         double tw = tb.getWidth ();
         double th = tb.getHeight ();
 
-        // parameters for endArrow
-        Vector2 tip = null;
         double tipAngle = 0;
-
-        // parameter for start of line
         Vector2 root = null;
         double nodeAngle = Math.atan ((double) Cbounds.height / Cbounds.width);
 
-        if (nodeTo == null)  // Unconnected endpoints
+        if (nodeTo == null)  // Unconnected endpoint
         {
-            // Distribute rays around node. This method is limited to 8 positions,
-            // but no sane person would have more than an 8-way connection.
-            int count = nodeFrom.edgesOut.size ();
-            int index = nodeFrom.edgesOut.indexOf (this);
-            double angle = index * Math.PI * 2 / count;
-            tip = new Vector2 (angle);
+            if (! tipDrag)
+            {
+                // Distribute rays around node. This method is limited to 8 positions,
+                // but no sane person would have more than an 8-way connection.
+                int count = nodeFrom.edgesOut.size ();
+                int index = nodeFrom.edgesOut.indexOf (this);
+                double angle = index * Math.PI * 2 / count;
+                tip = new Vector2 (angle);
 
-            // Scale direction vector until it ends far enough from border
-            // There are really only two cases: 1) coming out the left or right, 2) coming out the top or bottom
-            // To decide, reduce angle to first quadrant and compare with node's own diagonal.
-            double absAngle = tip.absAngle ();
-            double length;
-            if (absAngle > nodeAngle)  // top or bottom
-            {
-                length = (Cbounds.height / 2 + th + arrowheadLength + strokeThickness) / tip.y;
+                // Scale direction vector until it ends far enough from border
+                // There are really only two cases: 1) coming out the left or right, 2) coming out the top or bottom
+                // To decide, reduce angle to first quadrant and compare with node's own diagonal.
+                double absAngle = tip.absAngle ();
+                double length;
+                if (absAngle > nodeAngle)  // top or bottom
+                {
+                    length = (Cbounds.height / 2 + th + arrowheadLength + strokeThickness) / Math.abs (tip.y);
+                }
+                else  // left or right
+                {
+                    length = (Cbounds.width / 2 + tw + arrowheadLength + strokeThickness) / Math.abs (tip.x);
+                }
+                tip = tip.multiply (length).add (c);
             }
-            else  // left or right
-            {
-                length = (Cbounds.width / 2 + tw + arrowheadLength + strokeThickness) / tip.x;
-            }
-            tip = tip.multiply (length).add (c);
             root = intersection (new Segment2 (c, tip), Cbounds);
-
-            shape = new Line2D.Double (c.x, c.y, tip.x, tip.y);
-            tipAngle = new Segment2 (c, tip).angle ();
-        }
-        else if (ba == null)  // Draw straight line.
-        {
-            Segment2 s = new Segment2 (a, c);
-            tip = intersection (s, Abounds);  // tip can be null if c is inside Abounds
-            root = intersection (s, Cbounds);  // root can be null if a is inside Cbounds
-            if (tip == null  ||  root == null)
+            if (root == null)  // tip is inside Cbounds
             {
                 shape  = null;
                 label  = null;
@@ -151,20 +157,38 @@ public class GraphEdge
                 return;
             }
             shape = new Line2D.Double (c.x, c.y, tip.x, tip.y);
+            tipAngle = new Segment2 (tip, c).angle ();
+        }
+        else if (ba == null)  // Draw straight line.
+        {
+            Segment2 s = new Segment2 (a, c);
+            if (! tipDrag) tip = intersection (s, Abounds);  // tip can be null if c is inside Abounds
+            root = intersection (s, Cbounds);  // root can be null if a is inside Cbounds
+            if (tip == null  ||  root == null)
+            {
+                shape  = null;
+                label  = null;
+                bounds = new Rectangle (0, 0, -1, -1);
+                return;
+            }
+            shape = new Line2D.Double (c.x, c.y, tip.x, tip.y);
             tipAngle = s.angle ();
         }
         else  // Draw curve.
         {
-            double Alength = Abounds.getWidth () + Abounds.getHeight ();  // far enough to get from center of endpoint to outside of bounds
-            Vector2 o = a.add (c2c.multiply (Alength));  // "outside" point in the direction of the connection
-            Segment2 s = new Segment2 (a, o);  // segment from center of endpoint to outside point
-            tip = intersection (s, Abounds);  // point on the periphery of the endpoint
+            if (! tipDrag)
+            {
+                double Alength = Abounds.getWidth () + Abounds.getHeight ();  // far enough to get from center of endpoint to outside of bounds
+                Vector2 o = a.add (c2c.multiply (Alength));  // "outside" point in the direction of the connection
+                Segment2 s = new Segment2 (a, o);  // segment from center of endpoint to outside point
+                tip = intersection (s, Abounds);  // point on the periphery of the endpoint
+                tipAngle = s.angle ();
+            }
 
             double length = c.distance (tip) / 3;
             Vector2 w1 = tip.add (c2c.multiply (length));
             Vector2 w2 = c.add (ba.multiply (length));
             shape = new CubicCurve2D.Double (tip.x, tip.y, w1.x, w1.y, w2.x, w2.y, c.x, c.y);
-            tipAngle = s.angle ();
 
             double Clength = Cbounds.getWidth () + Cbounds.getHeight ();
             root = c.add (ba.multiply (Clength));  // guaranteed to be outside of c
@@ -228,7 +252,37 @@ public class GraphEdge
         g2.fill (textBox);
         
         g2.setColor (Color.black);
-        g2.drawString (fromName, (float) label.x, (float) label.y);
+        g2.drawString (alias, (float) label.x, (float) label.y);
+    }
+
+    public void animate (Point p)
+    {
+        if (p == null)
+        {
+            tipDrag = false;
+        }
+        else
+        {
+            tipDrag = true;
+            tip.x = p.x;
+            tip.y = p.y;
+        }
+        Rectangle old = bounds;
+        Rectangle old2 = null;
+        if (edgeOther != null) old2 = edgeOther.bounds;
+        updateShape (true);
+        Rectangle paintRegion = old.union (bounds);
+        GraphPanel parent = nodeFrom.parent;
+        boolean needRevalidate = parent.layout.componentMoved (bounds, old);
+        if (edgeOther != null)
+        {
+            paintRegion = paintRegion.union (old2);
+            paintRegion = paintRegion.union (edgeOther.bounds);
+            if (parent.layout.componentMoved (edgeOther.bounds, old2)) needRevalidate = true;
+        }
+
+        if (needRevalidate) parent.revalidate ();
+        parent.paintImmediately (paintRegion);
     }
 
     /**

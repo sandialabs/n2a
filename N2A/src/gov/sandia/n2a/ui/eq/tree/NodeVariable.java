@@ -39,7 +39,7 @@ public class NodeVariable extends NodeContainer
     protected static ImageIcon iconVariable = ImageUtil.getImage ("delta.png");
     protected static ImageIcon iconBinding  = ImageUtil.getImage ("connect.gif");
 
-    protected boolean isBinding;
+    public    boolean       isBinding;
     protected List<Integer> columnWidths;
 
     public NodeVariable (MPart source)
