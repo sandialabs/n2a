@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.FontMetrics;
+import java.awt.Point;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -185,7 +186,7 @@ public class NodeAnnotation extends NodeContainer
     }
 
     @Override
-    public NodeBase add (String type, JTree tree, MNode data)
+    public NodeBase add (String type, JTree tree, MNode data, Point location)
     {
         if (type.isEmpty ()) type = "Annotation";  // By context, we assume the user wants to add another annotation.
         if (type.equals ("Annotation"))
@@ -208,7 +209,7 @@ public class NodeAnnotation extends NodeContainer
             }
             // else let the request travel up to our parent
         }
-        return ((NodeBase) getParent ()).add (type, tree, data);
+        return ((NodeBase) getParent ()).add (type, tree, data, location);
     }
 
     @Override

@@ -8,6 +8,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.FontMetrics;
+import java.awt.Point;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -136,10 +137,10 @@ public class NodeReference extends NodeBase
     }
 
     @Override
-    public NodeBase add (String type, JTree tree, MNode data)
+    public NodeBase add (String type, JTree tree, MNode data, Point location)
     {
         if (type.isEmpty ()) type = "Reference";  // By context, we assume the user wants to add another reference.
-        return ((NodeBase) getParent ()).add (type, tree, data);
+        return ((NodeBase) getParent ()).add (type, tree, data, location);
     }
 
     @Override

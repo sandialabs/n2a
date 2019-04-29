@@ -15,6 +15,7 @@ import gov.sandia.n2a.ui.eq.PanelModel;
 
 import java.awt.Font;
 import java.awt.FontMetrics;
+import java.awt.Point;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
@@ -406,9 +407,9 @@ public class NodeBase extends DefaultMutableTreeNode
         return null;
     }
 
-    public NodeBase add (String type, JTree tree, MNode data)
+    public NodeBase add (String type, JTree tree, MNode data, Point location)
     {
-        return ((NodeBase) getParent ()).add (type, tree, data);  // default action is to refer the add request up the tree
+        return ((NodeBase) getParent ()).add (type, tree, data, location);  // default action is to refer the add request up the tree
     }
 
     public boolean allowEdit ()

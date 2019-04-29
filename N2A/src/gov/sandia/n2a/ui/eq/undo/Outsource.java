@@ -84,5 +84,8 @@ public class Outsource extends Undoable
         TreePath nodePath = new TreePath (node.getPath ());
         tree.setSelectionPath (nodePath);
         if (wasExpanded) tree.expandPath (nodePath);
+
+        // Not necessary to update the graph, since exactly the same connections exist.
+        // findConnections() merely re-establishes them.
     }
 }

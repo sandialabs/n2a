@@ -14,7 +14,6 @@ import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.SafeTextTransferHandler;
-import gov.sandia.n2a.ui.eq.PanelEquationTree.TransferableNode;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
 import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
 
@@ -166,7 +165,7 @@ public class PanelSearch extends JPanel
                     {
                         StringReader reader = new StringReader ((String) xferable.getTransferData (DataFlavor.stringFlavor));
                         schema = Schema.readAll (data, reader);
-                        if (xferable.isDataFlavorSupported (PanelEquationTree.nodeFlavor)) xferNode = (TransferableNode) xferable.getTransferData (PanelEquationTree.nodeFlavor);
+                        if (xferable.isDataFlavorSupported (TransferableNode.nodeFlavor)) xferNode = (TransferableNode) xferable.getTransferData (TransferableNode.nodeFlavor);
                     }
                     catch (IOException | UnsupportedFlavorException e)
                     {

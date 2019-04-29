@@ -92,7 +92,7 @@ public class AddVariable extends Undoable
         {
             if (createdNode.isBinding  &&  parent.graph != null) parent.graph.updateGUI (name, "");
             model.removeNodeFromParent (createdNode);
-            ((NodePart) parent).findConnections ();
+            parent.findConnections ();
         }
         else  // Just exposed an overridden node
         {

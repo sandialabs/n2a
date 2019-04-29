@@ -17,6 +17,7 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.PanelEquationGraph;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
@@ -74,18 +75,23 @@ public class ChangePart extends Undoable
         PanelModel mep = PanelModel.instance;
         JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+        PanelEquationGraph peg = mep.panelEquations.panelEquationGraph;
+        boolean graphParent = parent == peg.part;
 
         NodePart nodeAfter = (NodePart) parent.child (nameAfter);  // It's either a NodePart or it's null. Any other case should be blocked by GUI constraints.
+        boolean isNew = false;
         if (oldPart == null)
         {
             if (nodeAfter == null)
             {
                 nodeAfter = nodeBefore;
                 nodeAfter.source = newPart;
+                if (graphParent) peg.updatePart (nodeAfter);
             }
             else
             {
                 model.removeNodeFromParent (nodeBefore);
+                if (graphParent) peg.removePart (nodeAfter);
             }
         }
         else
@@ -95,6 +101,7 @@ public class ChangePart extends Undoable
                 int index = parent.getIndex (nodeBefore);
                 nodeAfter = new NodePart (newPart);
                 model.insertNodeIntoUnfiltered (nodeAfter, parent, index);
+                isNew = true;
             }
 
             nodeBefore.build ();
@@ -105,11 +112,18 @@ public class ChangePart extends Undoable
         }
 
         nodeAfter.build ();
-        nodeBefore.findConnections ();
+        nodeAfter.findConnections ();
         nodeAfter.filter (model.filterLevel);
 
         TreeNode[] nodePath = nodeAfter.getPath ();
         mep.panelEquationTree.updateOrder (nodePath);
         mep.panelEquationTree.updateVisibility (nodePath);  // Will include nodeStructureChanged(), if necessary.
+
+        if (parent == peg.part)
+        {
+            if (isNew) peg.addPart (nodeAfter);
+            else       peg.reconnect ();
+            peg.paintImmediately ();
+        }
     }
 }

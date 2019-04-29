@@ -348,7 +348,7 @@ public class PanelEquations extends JPanel
         {
             panelEquationTree.tree.stopEditing ();
             panelEquationTree.saveFocus (record);
-            panelEquationGraph.saveFocus (record);
+            panelEquationGraph.saveFocus ();
         }
 
         record = doc;
@@ -359,7 +359,7 @@ public class PanelEquations extends JPanel
             root.build ();
             root.findConnections ();
             panelEquationTree.load ();
-            panelEquationGraph.load ();
+            panelEquationGraph.load (root);
         }
         catch (Exception e)
         {

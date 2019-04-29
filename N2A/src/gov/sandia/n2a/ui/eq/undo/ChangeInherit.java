@@ -14,6 +14,7 @@ import javax.swing.undo.CannotRedoException;
 
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.PanelEquationGraph;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeInherit;
@@ -55,12 +56,15 @@ public class ChangeInherit extends Undoable
         PanelModel mep = PanelModel.instance;
         JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+        PanelEquationGraph peg = mep.panelEquations.panelEquationGraph;
 
         node.source.set (value);  // Complex restructuring happens here.
 
         NodePart parent = (NodePart) node.getParent ();
+        NodePart grandparent = (NodePart) parent.getParent ();
         parent.build ();
-        parent.findConnections ();
+        if (grandparent == null) parent     .findConnections ();
+        else                     grandparent.findConnections ();
         parent.filter (model.filterLevel);
 
         if (parent.visible (model.filterLevel)) model.nodeStructureChanged (parent);
@@ -68,5 +72,10 @@ public class ChangeInherit extends Undoable
         TreeNode[] nodePath = parent.child ("$inherit").getPath ();
         mep.panelEquationTree.updateOrder (nodePath);
         mep.panelEquationTree.updateVisibility (nodePath);
+        if (grandparent != null  &&  grandparent == peg.part)
+        {
+            peg.reconnect ();
+            peg.paintImmediately ();
+        }
     }
 }

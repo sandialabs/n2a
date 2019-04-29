@@ -8,6 +8,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.FontMetrics;
+import java.awt.Point;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -161,7 +162,7 @@ public class NodeVariable extends NodeContainer
             if (NodePart.isIdentifierPath (value))
             {
                 referent = parent.resolveName (value);
-                if      (referent == null)             isBinding = ! value.contains (".");
+                if      (referent == null)             isBinding = ! value.contains (".");  // Ambiguous, so we make an arbitrary call that it is an unresolved variable reference rather than unresolved part reference.
                 else if (referent instanceof NodePart) isBinding = true;
             }
         }
@@ -275,15 +276,15 @@ public class NodeVariable extends NodeContainer
     }
 
     @Override
-    public NodeBase add (String type, JTree tree, MNode data)
+    public NodeBase add (String type, JTree tree, MNode data, Point location)
     {
         if (type.isEmpty ())
         {
             FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-            if (model.getChildCount (this) == 0  ||  tree.isCollapsed (new TreePath (getPath ()))) return ((NodeBase) getParent ()).add ("Variable", tree, data);
+            if (model.getChildCount (this) == 0  ||  tree.isCollapsed (new TreePath (getPath ()))) return ((NodeBase) getParent ()).add ("Variable", tree, data, location);
             type = "Equation";
         }
-        if (isBinding) return ((NodeBase) getParent ()).add (type, tree, data);
+        if (isBinding) return ((NodeBase) getParent ()).add (type, tree, data, location);
 
         if (type.equals ("Equation"))
         {
@@ -331,7 +332,7 @@ public class NodeVariable extends NodeContainer
             return ar.createdNode;
         }
 
-        return ((NodeBase) getParent ()).add (type, tree, data);  // refer all other requests up the tree
+        return ((NodeBase) getParent ()).add (type, tree, data, location);  // refer all other requests up the tree
     }
 
     public static boolean isValidIdentifier (String name)

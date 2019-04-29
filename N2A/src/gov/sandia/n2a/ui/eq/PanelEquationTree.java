@@ -22,9 +22,8 @@ import gov.sandia.n2a.ui.eq.undo.AddDoc;
 import gov.sandia.n2a.ui.eq.undo.ChangeOrder;
 import gov.sandia.n2a.ui.eq.undo.Outsource;
 import java.awt.FontMetrics;
+import java.awt.Point;
 import java.awt.Rectangle;
-import java.awt.datatransfer.Clipboard;
-import java.awt.datatransfer.ClipboardOwner;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
@@ -39,7 +38,6 @@ import java.io.StringReader;
 import java.io.StringWriter;
 import java.util.Enumeration;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import javax.swing.AbstractAction;
@@ -71,78 +69,10 @@ public class PanelEquationTree extends JScrollPane
     public    JTree                    tree;
     public    EquationTreeCellRenderer renderer;
     public    FilteredTreeModel        model;
+    public    TransferHandler          transferHandler;
     protected PanelEquations           container;
     protected Map<MNode,StoredPath>    focusCache = new HashMap<MNode,StoredPath> ();
     protected boolean                  needsFullRepaint;
-
-    /**
-        A data flavor that lets PanelSearch extract a TransferableNode instance for the purpose of adding info to it for our local exportDone().
-        This is necessary because Swing packs the Transferable into a proxy object which is sewn shut.
-    **/
-    public static final DataFlavor nodeFlavor = new DataFlavor (TransferableNode.class, null);
-
-    @SuppressWarnings("deprecation")
-    public class TransferableNode implements Transferable, ClipboardOwner
-    {
-        public String       data;
-        public List<String> path;
-        public boolean      drag;
-        public String       newPartName;  // If set non-null by the receiver (nasty hack), then this transfer resulted the creation of a new part.
-
-        public TransferableNode (String data, NodeBase source, boolean drag)
-        {
-            this.data = data;
-            path      = source.getKeyPath ();
-            this.drag = drag;
-        }
-
-        public NodeBase getSource ()
-        {
-            MNode doc = AppData.models.child (path.get (0));
-            if (doc != container.record) return null;
-
-            NodeBase result = container.root;
-            for (int i = 1; i < path.size (); i++)
-            {
-                result = (NodeBase) result.child (path.get (i));
-                if (result == null) break;
-            }
-            return result;
-        }
-
-        @Override
-        public void lostOwnership (Clipboard clipboard, Transferable contents)
-        {
-        }
-
-        @Override
-        public DataFlavor[] getTransferDataFlavors ()
-        {
-            DataFlavor[] result = new DataFlavor[3];
-            result[0] = DataFlavor.stringFlavor;
-            result[1] = DataFlavor.plainTextFlavor;
-            result[2] = nodeFlavor;
-            return result;
-        }
-
-        @Override
-        public boolean isDataFlavorSupported (DataFlavor flavor)
-        {
-            if (flavor.equals (DataFlavor.stringFlavor   )) return true;
-            if (flavor.equals (DataFlavor.plainTextFlavor)) return true;
-            if (flavor.equals (nodeFlavor                )) return true;
-            return false;
-        }
-
-        @Override
-        public Object getTransferData (DataFlavor flavor) throws UnsupportedFlavorException, IOException
-        {
-            if (flavor.equals (DataFlavor.stringFlavor   )) return data;
-            if (flavor.equals (DataFlavor.plainTextFlavor)) return new StringReader (data);
-            if (flavor.equals (nodeFlavor                )) return this;
-            throw new UnsupportedFlavorException (flavor);
-        }
-    }
 
     public PanelEquationTree (PanelEquations container)
     {
@@ -373,7 +303,7 @@ public class PanelEquationTree extends JScrollPane
             }
         });
 
-        tree.setTransferHandler (new TransferHandler ()
+        transferHandler = new TransferHandler ()
         {
             public boolean canImport (TransferSupport xfer)
             {
@@ -392,7 +322,7 @@ public class PanelEquationTree extends JScrollPane
                     Transferable xferable = xfer.getTransferable ();
                     StringReader reader = new StringReader ((String) xferable.getTransferData (DataFlavor.stringFlavor));
                     schema = Schema.readAll (data, reader);
-                    if (xferable.isDataFlavorSupported (PanelEquationTree.nodeFlavor)) xferNode = (TransferableNode) xferable.getTransferData (PanelEquationTree.nodeFlavor);
+                    if (xferable.isDataFlavorSupported (TransferableNode.nodeFlavor)) xferNode = (TransferableNode) xferable.getTransferData (TransferableNode.nodeFlavor);
                 }
                 catch (IOException | UnsupportedFlavorException e)
                 {
@@ -400,40 +330,46 @@ public class PanelEquationTree extends JScrollPane
                 }
 
                 // Determine paste/drop target.
-                TreePath path;
-                if (xfer.isDrop ()) path = ((JTree.DropLocation) xfer.getDropLocation ()).getPath ();
-                else                path = tree.getSelectionPath ();
+                TreePath path = tree.getSelectionPath ();  // default
+                DropLocation dl = xfer.getDropLocation ();
+                if (dl instanceof JTree.DropLocation  &&  xfer.isDrop ()) path = ((JTree.DropLocation) dl).getPath ();
 
                 // Handle internal DnD as a node reordering.
-                PanelModel mep = PanelModel.instance;
-                if (xferNode != null  &&  xfer.isDrop ())  // DnD operation is internal to the tree. (Could also be DnD between N2A windows. For now, reject that case.)
+                PanelModel pm = PanelModel.instance;
+                if (xferNode != null  &&  xfer.isDrop ()  &&  path != null)  // DnD operation is internal to the tree. (Could also be DnD between N2A windows. For now, reject that case.)
                 {
-                    if (path == null) return false;  // Only possible in DnD between N2A instances.
                     NodeBase target = (NodeBase) path.getLastPathComponent ();
                     NodeBase targetParent = (NodeBase) target.getParent ();
                     if (targetParent == null) return false;  // If target is root node
-                    NodeBase source = NodeBase.locateNode (xferNode.path);
-                    if (source == null) return false;  // Maybe this can't happen
+
+                    NodeBase source = xferNode.getSource ();
+                    if (source == null) return false;  // Probably can only happen in a DnD between N2A instances.
                     NodeBase sourceParent = (NodeBase) source.getParent ();
+
                     if (targetParent != sourceParent) return false;  // Don't drag node outside its containing part.
                     if (! (targetParent instanceof NodePart)) return false;  // Only rearrange children of parts (not of variables or metadata).
+
                     NodePart parent = (NodePart) targetParent;
                     int indexBefore = parent.getIndex (source);
                     int indexAfter  = parent.getIndex (target);
-                    mep.undoManager.add (new ChangeOrder (parent, indexBefore, indexAfter));
+                    pm.undoManager.add (new ChangeOrder (parent, indexBefore, indexAfter));
                     return true;
                 }
 
                 // Create target tree, if needed.
-                mep.undoManager.addEdit (new CompoundEdit ());
+                pm.undoManager.addEdit (new CompoundEdit ());
                 if (path == null)
                 {
-                    if (container.root == null) mep.undoManager.add (new AddDoc ());
+                    if (container.root == null) pm.undoManager.add (new AddDoc ());
                     tree.setSelectionRow (0);
                     path = tree.getSelectionPath ();
                 }
                 if (xfer.isDrop ()) tree.setSelectionPath (path);
                 NodeBase target = (NodeBase) path.getLastPathComponent ();
+
+                Point location = null;
+                PanelEquations pe = pm.panelEquations;
+                if (xfer.getComponent () == pe.panelEquationGraph.graphPanel) location = dl.getDropPoint ();
 
                 // An import can either be a new node in the tree, or a link (via inheritance) to an existing part.
                 // In the case of a link, the part may need to be fully imported if it does not already exist in the db.
@@ -443,7 +379,7 @@ public class PanelEquationTree extends JScrollPane
                     result = true;
                     for (MNode child : data)
                     {
-                        NodeBase added = target.add (schema.type.substring (4), tree, child);
+                        NodeBase added = target.add (schema.type.substring (4), tree, child, location);
                         if (added == null)
                         {
                             result = false;
@@ -458,14 +394,14 @@ public class PanelEquationTree extends JScrollPane
                     {
                         // Ensure the part is in our db
                         String key = child.key ();
-                        if (AppData.models.child (key) == null) mep.undoManager.add (new AddDoc (key, child));
+                        if (AppData.models.child (key) == null) pm.undoManager.add (new AddDoc (key, child));
 
                         // Create an include-style part
                         MNode include = new MVolatile ();  // Note the empty key. This enables AddPart to generate a name.
                         include.merge (child);  // TODO: What if this brings in a $inherit line, and that line does not match the $inherit line in the source part? One possibility is to add the new values to the end of the $inherit line created below.
                         include.clear ("$inherit");  // get rid of IDs from included part, so they won't override the new $inherit line ...
                         include.set ("\"" + key + "\"", "$inherit");
-                        NodeBase added = target.add ("Part", tree, include);
+                        NodeBase added = target.add ("Part", tree, include, location);
                         if (added == null)
                         {
                             result = false;
@@ -473,7 +409,7 @@ public class PanelEquationTree extends JScrollPane
                         }
                     }
                 }
-                if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE  ||  xferNode == null) mep.undoManager.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
+                if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE  ||  xferNode == null) pm.undoManager.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
                 return result;
             }
 
@@ -544,7 +480,9 @@ public class PanelEquationTree extends JScrollPane
                 }
                 PanelModel.instance.undoManager.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
             }
-        });
+        };
+        tree.setTransferHandler (transferHandler);
+
 
         tree.addFocusListener (new FocusListener ()
         {
@@ -629,7 +567,7 @@ public class PanelEquationTree extends JScrollPane
             selected = container.root;
         }
 
-        NodeBase editMe = selected.add (type, tree, null);
+        NodeBase editMe = selected.add (type, tree, null, null);
         if (editMe != null)
         {
             TreePath path = new TreePath (editMe.getPath ());

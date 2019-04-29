@@ -18,6 +18,7 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.PanelEquationGraph;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
@@ -44,6 +45,7 @@ public class ChangeVariableToInherit extends Undoable
 
         NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
+        NodePart grandparent = (NodePart) parent.getParent ();
 
         // Update the database
         MPart mparent = parent.source;
@@ -56,15 +58,22 @@ public class ChangeVariableToInherit extends Undoable
         PanelModel mep = PanelModel.instance;
         JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+        PanelEquationGraph peg = mep.panelEquations.panelEquationGraph;
 
         parent.build ();
-        parent.findConnections ();
+        if (grandparent == null) parent     .findConnections ();
+        else                     grandparent.findConnections ();
         parent.filter (model.filterLevel);
         if (parent.visible (model.filterLevel)) model.nodeStructureChanged (parent);
 
         TreeNode[] nodePath = parent.child (nameBefore).getPath ();
         mep.panelEquationTree.updateOrder (nodePath);
         mep.panelEquationTree.updateVisibility (nodePath);
+        if (grandparent != null  &&  grandparent == peg.part)
+        {
+            peg.reconnect ();
+            peg.paintImmediately ();
+        }
     }
 
     public void redo ()
@@ -73,6 +82,7 @@ public class ChangeVariableToInherit extends Undoable
 
         NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
+        NodePart grandparent = (NodePart) parent.getParent ();
 
         // Update database
         MPart mparent = parent.source;
@@ -84,14 +94,21 @@ public class ChangeVariableToInherit extends Undoable
         PanelModel mep = PanelModel.instance;
         JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+        PanelEquationGraph peg = mep.panelEquations.panelEquationGraph;
 
         parent.build ();
-        parent.findConnections ();
+        if (grandparent == null) parent     .findConnections ();
+        else                     grandparent.findConnections ();
         parent.filter (model.filterLevel);
         model.nodeStructureChanged (parent);
 
         TreeNode[] nodePath = parent.child ("$inherit").getPath ();
         mep.panelEquationTree.updateOrder (nodePath);
         mep.panelEquationTree.updateVisibility (nodePath);
+        if (grandparent != null  &&  grandparent == peg.part)
+        {
+            peg.reconnect ();
+            peg.paintImmediately ();
+        }
     }
 }

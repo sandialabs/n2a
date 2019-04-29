@@ -193,9 +193,17 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         {
             return Integer.parseInt (value);
         }
-        catch (NumberFormatException e)
+        catch (NumberFormatException e) {}
+
+        // A number formatted as a float (containing a decimal point) will fail to parse as an integer.
+        // Attempt to parse as float and round. If that fails, then it is truly hopeless.
+        try
         {
-            return 0;
+            return (int) Math.round (Double.parseDouble (value));
+        }
+        catch (NumberFormatException e) {}
+        {
+            return defaultValue;
         }
     }
 
@@ -207,9 +215,15 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         {
             return Long.parseLong (value);
         }
-        catch (NumberFormatException e)
+        catch (NumberFormatException e) {}
+
+        try
         {
-            return 0;
+            return (long) Math.round (Double.parseDouble (value));
+        }
+        catch (NumberFormatException e) {}
+        {
+            return defaultValue;
         }
     }
 
@@ -223,51 +237,28 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         }
         catch (NumberFormatException e)
         {
-            return 0;
+            return defaultValue;
         }
     }
 
     public boolean getBoolean (Object... indices)
     {
-        String value = get (indices);
-        if (value.trim ().equals ("1")) return true;
-        return Boolean.parseBoolean (value);
+        return getOrDefault (false, indices);
     }
 
     public int getInt (Object... indices)
     {
-        try
-        {
-            return Integer.parseInt (get (indices));
-        }
-        catch (NumberFormatException e)
-        {
-            return 0;
-        }
+        return getOrDefault (0, indices);
     }
 
     public long getLong (Object... indices)
     {
-        try
-        {
-            return Long.parseLong (get (indices));
-        }
-        catch (NumberFormatException e)
-        {
-            return 0;
-        }
+        return getOrDefault (0l, indices);
     }
 
     public double getDouble (Object... indices)
     {
-        try
-        {
-            return Double.parseDouble (get (indices));
-        }
-        catch (NumberFormatException e)
-        {
-            return 0;
-        }
+        return getOrDefault (0.0, indices);
     }
 
     /**

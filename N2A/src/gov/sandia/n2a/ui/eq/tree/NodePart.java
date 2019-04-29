@@ -8,6 +8,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.Font;
+import java.awt.Point;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashSet;
@@ -226,14 +227,14 @@ public class NodePart extends NodeContainer
         return parent.resolveName (name);
     }
 
-    public NodeBase add (String type, JTree tree, MNode data)
+    public NodeBase add (String type, JTree tree, MNode data, Point location)
     {
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         if (tree.isCollapsed (new TreePath (getPath ()))  &&  model.getChildCount (this) > 0  &&  ! isRoot ())  // The node is deliberately closed to indicate user intent.
         {
             // The only thing that can contain a NodePart is another NodePart. (If that ever changes, the following code will break.)
-            if (type.isEmpty ()) return ((NodePart) getParent ()).add ("Part", tree, data);
-            return ((NodePart) getParent ()).add (type, tree, data);
+            if (type.isEmpty ()) return ((NodePart) getParent ()).add ("Part", tree, data, location);
+            return ((NodePart) getParent ()).add (type, tree, data, location);
         }
 
         int variableIndex = -1;
@@ -283,7 +284,7 @@ public class NodePart extends NodeContainer
         }
         else if (type.equals ("Part"))
         {
-            AddPart ap = new AddPart (this, subpartIndex, data);
+            AddPart ap = new AddPart (this, subpartIndex, data, location);
             PanelModel.instance.undoManager.add (ap);
             return ap.createdNode;
         }

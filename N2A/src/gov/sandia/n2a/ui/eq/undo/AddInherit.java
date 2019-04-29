@@ -17,6 +17,7 @@ import javax.swing.undo.UndoableEdit;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.PanelEquationGraph;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
@@ -42,6 +43,7 @@ public class AddInherit extends Undoable
     {
         NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
+        NodePart grandparent = (NodePart) parent.getParent ();
 
         NodeBase node = parent.child ("$inherit");
         TreeNode[] nodePath = node.getPath ();
@@ -51,16 +53,23 @@ public class AddInherit extends Undoable
         PanelModel mep = PanelModel.instance;
         JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+        PanelEquationGraph peg = mep.panelEquations.panelEquationGraph;
 
         MPart mparent = parent.source;
         mparent.clear ("$inherit");  // Complex restructuring happens here.
         parent.build ();  // Handles all cases (complete deletion or exposed hidden node)
-        parent.findConnections ();
+        if (grandparent == null) parent     .findConnections ();
+        else                     grandparent.findConnections ();
         parent.filter (model.filterLevel);
         if (parent.visible (model.filterLevel)) model.nodeStructureChanged (parent);
 
         mep.panelEquationTree.updateOrder (nodePath);
         mep.panelEquationTree.updateVisibility (nodePath, index);
+        if (grandparent != null  &&  grandparent == peg.part)
+        {
+            peg.reconnect ();
+            peg.paintImmediately ();
+        }
     }
 
     public void redo ()
@@ -73,20 +82,28 @@ public class AddInherit extends Undoable
     {
         NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
+        NodePart grandparent = (NodePart) parent.getParent ();
 
         PanelModel mep = PanelModel.instance;
         JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+        PanelEquationGraph peg = mep.panelEquations.panelEquationGraph;
 
         parent.source.set (value, "$inherit");
         parent.build ();
-        parent.findConnections ();
+        if (grandparent == null) parent     .findConnections ();
+        else                     grandparent.findConnections ();
         parent.filter (model.filterLevel);
         model.nodeStructureChanged (parent);  // Since $inherit is being added, parent will almost certainly become visible, if it's not already.
 
         TreeNode[] createdPath = parent.child ("$inherit").getPath ();
         mep.panelEquationTree.updateOrder (createdPath);
         mep.panelEquationTree.updateVisibility (createdPath);
+        if (grandparent != null  &&  grandparent == peg.part)
+        {
+            peg.reconnect ();
+            peg.paintImmediately ();
+        }
     }
 
     public boolean replaceEdit (UndoableEdit edit)

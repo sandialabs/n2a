@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.undo;
 
+import java.awt.Point;
 import java.util.List;
 
 import javax.swing.JTree;
@@ -19,6 +20,7 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.PanelEquationGraph;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
@@ -35,7 +37,7 @@ public class AddPart extends Undoable
     /**
         @param index Position in the unfiltered tree where the node should be inserted.
     **/
-    public AddPart (NodeBase parent, int index, MNode data)
+    public AddPart (NodeBase parent, int index, MNode data, Point location)
     {
         path = parent.getKeyPath ();
         this.index = index;
@@ -53,6 +55,13 @@ public class AddPart extends Undoable
             if (name.isEmpty ()) name = uniqueName (parent, "p", 0, false);  // Even though this is actually generated, we don't plan to go directly into edit mode, so treat as if not generated.
             else                 name = uniqueName (parent, name, 2, true);
             nameIsGenerated = false;  // Because we don't go into edit mode on a drop or paste. If that changes, then always set nameIsGenerated to true.
+        }
+
+        if (location != null)
+        {
+            MNode bounds = createSubtree.childOrCreate ("$metadata", "gui", "bounds");
+            bounds.set (location.x, "x");
+            bounds.set (location.y, "y");
         }
     }
 
@@ -76,13 +85,15 @@ public class AddPart extends Undoable
     public static void destroy (List<String> path, boolean canceled, String name)
     {
         // Retrieve created node
-        NodeBase parent = NodeBase.locateNode (path);
+        NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
         NodePart createdNode = (NodePart) parent.child (name);
 
         PanelModel mep = PanelModel.instance;
         JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+        PanelEquationGraph peg = mep.panelEquations.panelEquationGraph;
+        boolean graphParent = parent == peg.part;
 
         TreeNode[] createdPath = createdNode.getPath ();
         int index = parent.getIndexFiltered (createdNode);
@@ -93,16 +104,19 @@ public class AddPart extends Undoable
         if (mparent.child (name) == null)  // Node is fully deleted
         {
             model.removeNodeFromParent (createdNode);
+            if (graphParent) peg.removePart (createdNode);
         }
         else  // Just exposed an overridden node
         {
             createdNode.build ();
-            createdNode.findConnections ();
+            parent.findConnections ();
             createdNode.filter (model.filterLevel);
+            if (graphParent) peg.reconnect ();
         }
 
         mep.panelEquationTree.updateOrder (createdPath);
         mep.panelEquationTree.updateVisibility (createdPath, index);  // includes nodeStructureChanged(), if necessary
+        if (graphParent) peg.paintImmediately ();
     }
 
     public void redo ()
@@ -113,7 +127,7 @@ public class AddPart extends Undoable
 
     public static NodeBase create (List<String> path, int index, String name, MNode newPart, boolean nameIsGenerated)
     {
-        NodeBase parent = NodeBase.locateNode (path);
+        NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
         NodeBase n = parent.child (name);
         if (n != null  &&  ! (n instanceof NodePart)) throw new CannotUndoException ();  // Should be blocked by GUI constraints, but this defends against ill-formed model on clipboard.
@@ -128,20 +142,30 @@ public class AddPart extends Undoable
         PanelModel mep = PanelModel.instance;
         JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+        PanelEquationGraph peg = mep.panelEquations.panelEquationGraph;
 
+        boolean isNew = false;
         if (createdNode == null)
         {
             createdNode = new NodePart (createdPart);
             model.insertNodeIntoUnfiltered (createdNode, parent, index);
+            isNew = true;
         }
         createdNode.build ();
-        createdNode.findConnections ();
+        parent.findConnections ();  // Other nodes besides immediate siblings can also refer to us, so to be strictly correct, should run findConnectins() on root of tree.
         createdNode.filter (model.filterLevel);
 
         TreeNode[] createdPath = createdNode.getPath ();
         if (nameIsGenerated) createdNode.setUserObject ("");  // pure create, so about to go into edit mode. This should only happen on first application of the create action, and should only be possible if visibility is already correct.
         else mep.panelEquationTree.updateOrder (createdPath);
         mep.panelEquationTree.updateVisibility (createdPath);
+
+        if (parent == peg.part)
+        {
+            if (isNew) peg.addPart (createdNode);
+            else       peg.reconnect ();
+            peg.paintImmediately ();
+        }
 
         return createdNode;
     }

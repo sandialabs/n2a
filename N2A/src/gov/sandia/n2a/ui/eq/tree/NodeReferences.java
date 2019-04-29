@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.Font;
+import java.awt.Point;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
@@ -62,7 +63,7 @@ public class NodeReferences extends NodeContainer
     }
 
     @Override
-    public NodeBase add (String type, JTree tree, MNode data)
+    public NodeBase add (String type, JTree tree, MNode data, Point location)
     {
         if (type.isEmpty ()  ||  type.equals ("Reference"))
         {
@@ -79,7 +80,7 @@ public class NodeReferences extends NodeContainer
             PanelModel.instance.undoManager.add (ar);
             return ar.createdNode;
         }
-        return ((NodeBase) getParent ()).add (type, tree, data);
+        return ((NodeBase) getParent ()).add (type, tree, data, location);
     }
 
     @Override
