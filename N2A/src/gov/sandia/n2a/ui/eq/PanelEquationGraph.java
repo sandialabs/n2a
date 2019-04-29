@@ -163,7 +163,7 @@ public class PanelEquationGraph extends JScrollPane
         Rectangle old = gn.getBounds ();
         gn.setSize (gn.getPreferredSize ());  // GraphLayout won't do this, so we have to do it manually.
         Rectangle next = gn.getBounds ();
-        if (graphPanel.layout.componentMoved (next, old)) graphPanel.invalidate ();  // invalidate() is redundant, since JLabel.setText() also calls it.
+        graphPanel.layout.componentMoved (gn);
         graphPanel.paintImmediately (old.union (next));
     }
 
@@ -301,7 +301,7 @@ public class PanelEquationGraph extends JScrollPane
                     }
                     c.setLocation (x, y);
                     layout.bounds = layout.bounds.union (c.getBounds ());
-                    MNode bounds = ((GraphNode) c).node.source.childOrCreate ("$metadata", "bounds");
+                    MNode bounds = ((GraphNode) c).node.source.childOrCreate ("$metadata", "gui", "bounds");
                     bounds.set (x, "x");  // offset should be zero for new load, so don't worry about adding it
                     bounds.set (y, "y");
                     x += c.getWidth () + gap;
@@ -312,7 +312,7 @@ public class PanelEquationGraph extends JScrollPane
 
             buildEdges ();
 
-            revalidate ();
+            validate ();  // Runs layout, so negative focus locations can work, or so that origin (0,0) is meaningful.
             Point focus = focusCache.get (part.source);
             if (focus == null)
             {
@@ -366,6 +366,7 @@ public class PanelEquationGraph extends JScrollPane
                     if (ge.bounds != null) layout.bounds = layout.bounds.union (ge.bounds);
                 }
             }
+            revalidate ();
         }
 
         public void rebuildEdges ()
@@ -382,7 +383,8 @@ public class PanelEquationGraph extends JScrollPane
 
         /**
             Add a node to an existing graph.
-            Does job similar to load().
+            Must always be followed by a call to rebuildEdges() to update connections.
+            These functions are separated to simplify code in undo objects.
         **/
         public void addPart (NodePart node)
         {
@@ -400,21 +402,23 @@ public class PanelEquationGraph extends JScrollPane
                 location.y = Math.max (0, location.y);
                 gn.setLocation (location);
 
-                MNode bounds = gn.node.source.childOrCreate ("$metadata", "bounds");
+                MNode bounds = gn.node.source.childOrCreate ("$metadata", "gui", "bounds");
                 bounds.set (location.x - offset.x, "x");
                 bounds.set (location.y - offset.y, "y");
             }
             layout.bounds = layout.bounds.union (gn.getBounds ());
-
-            rebuildEdges ();
             revalidate ();
         }
 
+        /**
+            Remove node from an existing graph.
+            Must always be followed by a call to rebuildEdges() to update connections.
+            These functions are separated to simplify code in undo objects.
+        **/
         public void removePart (NodePart node)
         {
             remove (node.graph);
             node.graph = null;
-            rebuildEdges ();
             revalidate ();
         }
 
@@ -539,11 +543,16 @@ public class PanelEquationGraph extends JScrollPane
             }
         }
 
-        public boolean componentMoved (Rectangle newBounds, Rectangle oldBounds)
+        public void componentMoved (Component comp)
         {
-            Rectangle myOldBounds = bounds;
-            bounds = bounds.union (newBounds);
-            return ! bounds.equals (myOldBounds);
+            componentMoved (comp.getBounds ());
+        }
+
+        public void componentMoved (Rectangle next)
+        {
+            Rectangle old = bounds;
+            bounds = bounds.union (next);
+            if (! bounds.equals (old)) graphPanel.revalidate ();
         }
     }
 

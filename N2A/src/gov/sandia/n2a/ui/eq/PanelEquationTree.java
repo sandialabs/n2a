@@ -12,6 +12,7 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.CompoundEdit;
+import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -368,8 +369,13 @@ public class PanelEquationTree extends JScrollPane
                 NodeBase target = (NodeBase) path.getLastPathComponent ();
 
                 Point location = null;
-                PanelEquations pe = pm.panelEquations;
-                if (xfer.getComponent () == pe.panelEquationGraph.graphPanel) location = dl.getDropPoint ();
+                GraphPanel gp = pm.panelEquations.panelEquationGraph.graphPanel;
+                if (xfer.getComponent () == gp)
+                {
+                    location = dl.getDropPoint ();
+                    location.x -= gp.offset.x;
+                    location.y -= gp.offset.y;
+                }
 
                 // An import can either be a new node in the tree, or a link (via inheritance) to an existing part.
                 // In the case of a link, the part may need to be fully imported if it does not already exist in the db.

@@ -111,12 +111,15 @@ public class AddPart extends Undoable
             createdNode.build ();
             parent.findConnections ();
             createdNode.filter (model.filterLevel);
-            if (graphParent) peg.reconnect ();
         }
 
         mep.panelEquationTree.updateOrder (createdPath);
         mep.panelEquationTree.updateVisibility (createdPath, index);  // includes nodeStructureChanged(), if necessary
-        if (graphParent) peg.paintImmediately ();
+        if (graphParent)
+        {
+            peg.reconnect ();
+            peg.paintImmediately ();
+        }
     }
 
     public void redo ()
@@ -143,13 +146,13 @@ public class AddPart extends Undoable
         JTree tree = mep.panelEquationTree.tree;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         PanelEquationGraph peg = mep.panelEquations.panelEquationGraph;
+        boolean graphParent = parent == peg.part;
 
-        boolean isNew = false;
         if (createdNode == null)
         {
             createdNode = new NodePart (createdPart);
             model.insertNodeIntoUnfiltered (createdNode, parent, index);
-            isNew = true;
+            if (graphParent) peg.addPart (createdNode);
         }
         createdNode.build ();
         parent.findConnections ();  // Other nodes besides immediate siblings can also refer to us, so to be strictly correct, should run findConnectins() on root of tree.
@@ -160,10 +163,9 @@ public class AddPart extends Undoable
         else mep.panelEquationTree.updateOrder (createdPath);
         mep.panelEquationTree.updateVisibility (createdPath);
 
-        if (parent == peg.part)
+        if (graphParent)
         {
-            if (isNew) peg.addPart (createdNode);
-            else       peg.reconnect ();
+            peg.reconnect ();
             peg.paintImmediately ();
         }
 

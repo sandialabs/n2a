@@ -79,7 +79,6 @@ public class ChangePart extends Undoable
         boolean graphParent = parent == peg.part;
 
         NodePart nodeAfter = (NodePart) parent.child (nameAfter);  // It's either a NodePart or it's null. Any other case should be blocked by GUI constraints.
-        boolean isNew = false;
         if (oldPart == null)
         {
             if (nodeAfter == null)
@@ -101,7 +100,7 @@ public class ChangePart extends Undoable
                 int index = parent.getIndex (nodeBefore);
                 nodeAfter = new NodePart (newPart);
                 model.insertNodeIntoUnfiltered (nodeAfter, parent, index);
-                isNew = true;
+                if (graphParent) peg.addPart (nodeAfter);
             }
 
             nodeBefore.build ();
@@ -119,10 +118,9 @@ public class ChangePart extends Undoable
         mep.panelEquationTree.updateOrder (nodePath);
         mep.panelEquationTree.updateVisibility (nodePath);  // Will include nodeStructureChanged(), if necessary.
 
-        if (parent == peg.part)
+        if (graphParent)
         {
-            if (isNew) peg.addPart (nodeAfter);
-            else       peg.reconnect ();
+            peg.reconnect ();
             peg.paintImmediately ();
         }
     }

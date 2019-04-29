@@ -51,7 +51,6 @@ public class GraphNode extends JPanel
     public    JLabel          label;
     protected List<GraphEdge> edgesOut = new ArrayList<GraphEdge> ();
     protected List<GraphEdge> edgesIn  = new ArrayList<GraphEdge> ();
-    protected boolean         needRevalidate;
 
     protected static RoundedBorder border = new RoundedBorder (5);
 
@@ -103,16 +102,18 @@ public class GraphNode extends JPanel
     **/
     public void updateGUI ()
     {
+        int x = parent.offset.x;
+        int y = parent.offset.y;
         MNode bounds = node.source.child ("$metadata", "gui", "bounds");
         if (bounds != null)
         {
-            int x = bounds.getInt ("x") + parent.offset.x;
-            int y = bounds.getInt ("y") + parent.offset.y;
-            Dimension d = getPreferredSize ();
-            Rectangle r = new Rectangle (x, y, d.width, d.height);
-            animate (r);
-            parent.scrollRectToVisible (r);
+            x += bounds.getInt ("x");
+            y += bounds.getInt ("y");
         }
+        Dimension d = getPreferredSize ();
+        Rectangle r = new Rectangle (x, y, d.width, d.height);
+        animate (r);
+        parent.scrollRectToVisible (r);
     }
 
     /**
@@ -181,16 +182,10 @@ public class GraphNode extends JPanel
         // Repaint all remaining edges
         for (GraphEdge ge : edgesOut)
         {
-            Rectangle old = ge.bounds;
-            ge.updateShape (false);
-            paintRegion = paintRegion.union (old);
             paintRegion = paintRegion.union (ge.bounds);
-            if (parent.layout.componentMoved (ge.bounds, old)) needRevalidate = true;
-        }
-        if (needRevalidate)
-        {
-            parent.revalidate ();
-            needRevalidate = false;
+            ge.updateShape (false);
+            paintRegion = paintRegion.union (ge.bounds);
+            parent.layout.componentMoved (ge.bounds);
         }
         parent.scrollRectToVisible (edge.bounds);
         parent.paintImmediately (paintRegion);
@@ -201,42 +196,31 @@ public class GraphNode extends JPanel
     **/
     public void animate (Rectangle next)
     {
-        Rectangle old = getBounds ();
-        Rectangle paintRegion = next.union (old);
+        Rectangle paintRegion = next.union (getBounds ());
         setBounds (next);
-        validate ();
-        if (parent.layout.componentMoved (next, old)) needRevalidate = true;
+        parent.layout.componentMoved (next);
 
         for (GraphEdge ge : edgesOut)
         {
-            old = ge.bounds;
-            ge.updateShape (false);
-            paintRegion = paintRegion.union (old);
             paintRegion = paintRegion.union (ge.bounds);
-            if (parent.layout.componentMoved (ge.bounds, old)) needRevalidate = true;
+            ge.updateShape (false);
+            paintRegion = paintRegion.union (ge.bounds);
+            parent.layout.componentMoved (ge.bounds);
         }
         for (GraphEdge ge : edgesIn)
         {
-            old = ge.bounds;
-            Rectangle old2 = null;
-            if (ge.edgeOther != null) old2 = ge.edgeOther.bounds;
-            ge.updateShape (true);
-            paintRegion = paintRegion.union (old);
             paintRegion = paintRegion.union (ge.bounds);
-            if (parent.layout.componentMoved (ge.bounds, old)) needRevalidate = true;
+            if (ge.edgeOther != null) paintRegion.union (ge.edgeOther.bounds);
+            ge.updateShape (true);
+            paintRegion = paintRegion.union (ge.bounds);
+            parent.layout.componentMoved (ge.bounds);
             if (ge.edgeOther != null)
             {
-                paintRegion = paintRegion.union (old2);
                 paintRegion = paintRegion.union (ge.edgeOther.bounds);
-                if (parent.layout.componentMoved (ge.edgeOther.bounds, old2)) needRevalidate = true;
+                parent.layout.componentMoved (ge.edgeOther.bounds);
             }
         }
-
-        if (needRevalidate)
-        {
-            parent.revalidate ();
-            needRevalidate = false;
-        }
+        validate ();  // Preemptively redo internal layout, so this component will paint correctly in the paintImmediately() call below.
         parent.paintImmediately (paintRegion);
     }
 
@@ -301,10 +285,9 @@ public class GraphNode extends JPanel
                 dy = pm.y < 0 ? pm.y : (pm.y > extent.height ? pm.y - extent.height : 0);
 
                 // Stretch bounds and shift viewport
-                Rectangle old = getBounds ();
-                Rectangle next = new Rectangle (old);
+                Rectangle next = getBounds ();
                 next.translate (dx, dy);
-                if (parent.layout.componentMoved (next, old)) needRevalidate = true;
+                parent.layout.componentMoved (next);
                 Point p = vp.getViewPosition ();
                 p.translate (dx, dy);
                 vp.setViewPosition (p);
