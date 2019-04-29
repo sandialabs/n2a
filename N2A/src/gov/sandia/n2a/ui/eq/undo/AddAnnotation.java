@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -34,7 +34,7 @@ import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class AddAnnotation extends Undoable
 {
-    protected List<String> path;    // to the container of the new node. Can be a part, variable, $metadata, or annotation.
+    protected List<String> path;    // to the container of the new node. Can be a variable, $metadata (under a part), or annotation.
     protected int          index;   // Where to insert among siblings. Unfiltered.
     protected String       name;
     protected String       prefix;  // Name path to first node that does not already exist at add location. If all nodes already exist (and this is merely a value set), then string is empty and undo() will not clear anything.
@@ -44,6 +44,8 @@ public class AddAnnotation extends Undoable
 
     /**
         @param parent Direct container of the new node, even if not a $metadata node.
+        Sometimes this can be a part which doesn't yet contain a $metadata node. In that case, the part node is
+        treated as if it contained a metadata node, and the non-existent metadata node becomes the parent.
         @param index Position in the unfiltered tree where the node should be inserted.
         @param data The key, value, and perhaps subtree to be installed. Could be null, in which
         case we create generic name with no value.
@@ -52,6 +54,8 @@ public class AddAnnotation extends Undoable
     {
         path = parent.getKeyPath ();
         this.index = index;
+
+        if (parent instanceof NodePart) path.add ("$metadata");  // Fake the metadata block.
 
         MNode mparent = parent.source;
         if (parent instanceof NodePart  ||  parent instanceof NodeVariable) mparent = mparent.child ("$metadata");
@@ -130,17 +134,15 @@ public class AddAnnotation extends Undoable
     public static void destroy (List<String> path, boolean canceled, String name, String prefix)
     {
         // Retrieve created node
-        NodeBase parent = NodeBase.locateNode (path);
+        NodeContainer parent = (NodeContainer) NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
-        NodeContainer container = (NodeContainer) parent;
-        if (parent instanceof NodePart) container = (NodeContainer) parent.child ("$metadata");
-        NodeBase createdNode = resolve (container, name);
-        if (createdNode == container) throw new CannotUndoException ();
+        NodeBase createdNode = resolve (parent, name);
+        if (createdNode == parent) throw new CannotUndoException ();
 
         // Update database
 
         MPart mparent = parent.source;
-        if (parent instanceof NodePart  ||  parent instanceof NodeVariable) mparent = (MPart) mparent.child ("$metadata");
+        if (parent instanceof NodeVariable) mparent = (MPart) mparent.child ("$metadata");
         else if (parent instanceof NodeAnnotation) mparent = ((NodeAnnotation) parent).folded;
         // else parent is a NodeAnnotations, so mparent is $metadata, which should be used directly.
 
@@ -163,29 +165,29 @@ public class AddAnnotation extends Undoable
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
 
         TreeNode[] createdPath = createdNode.getPath ();
-        int index = container.getIndexFiltered (createdNode);
+        int index = parent.getIndexFiltered (createdNode);
         if (canceled) index--;
 
-        if (killBlock  &&  parent instanceof NodePart)  // We just emptied $metadata, so remove the node.
+        if (killBlock  &&  parent instanceof NodeAnnotations)  // We just emptied $metadata, so remove the node.
         {
-            model.removeNodeFromParent (container);
+            model.removeNodeFromParent (parent);
             // No need to update order, because we just destroyed $metadata, where order is stored.
             // No need to update tab stops in grandparent, because block nodes don't offer any tab stops.
         }
         else  // Rebuild container (variable, metadata block, or annotation)
         {
-            List<String> expanded = saveExpandedNodes (tree, container);
-            container.build ();
-            container.filter (model.filterLevel);
-            if (container.visible (model.filterLevel))
+            List<String> expanded = saveExpandedNodes (tree, parent);
+            parent.build ();
+            parent.filter (model.filterLevel);
+            if (parent.visible (model.filterLevel))
             {
-                model.nodeStructureChanged (container);
-                restoreExpandedNodes (tree, container, expanded);
+                model.nodeStructureChanged (parent);
+                restoreExpandedNodes (tree, parent, expanded);
             }
         }
         pet.updateVisibility (createdPath, index);
 
-        while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeBase) parent.getParent ();
+        while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeContainer) parent.getParent ();
         if (parent instanceof NodePart)
         {
             NodePart p = (NodePart) parent;
@@ -202,6 +204,11 @@ public class AddAnnotation extends Undoable
     public static NodeBase create (List<String> path, int index, String name, MNode createSubtree, boolean nameIsGenerated)
     {
         NodeBase parent = NodeBase.locateNode (path);
+        if (parent == null)
+        {
+            int last = path.size () - 1;
+            if (path.get (last).equals ("$metadata")) parent = NodeBase.locateNode (path.subList (0, last));
+        }
         if (parent == null) throw new CannotRedoException ();
 
         // Update database

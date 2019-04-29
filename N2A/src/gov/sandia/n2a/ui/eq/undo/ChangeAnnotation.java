@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -119,7 +119,8 @@ public class ChangeAnnotation extends Undoable
                 String[] prefixes = prefixBefore.split ("\\.");
                 mparent.clear (prefixes);
             }
-            mparent.set (savedTree, names);  // saveTree may have children, or it might be a simple value with no children.
+            MPart partAfter = (MPart) mparent.childOrCreate (names);
+            partAfter.merge (savedTree);  // saveTree may have children, or it might be a simple value with no children.
         }
 
         // Update GUI
