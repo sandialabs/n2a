@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq;
 
+import java.awt.Color;
 import java.awt.EventQueue;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
@@ -414,30 +415,38 @@ public class PanelEquations extends JPanel
             return;
         }
 
-        listBreadcrumb.clear ();
-        NodePart p = part;
-        while (p != null)
+        int index = listBreadcrumb.indexOf (part);
+        if (index < 0)
         {
-            listBreadcrumb.add (0, p);
-            p = (NodePart) p.getParent ();
+            listBreadcrumb.clear ();
+            NodePart p = part;
+            while (p != null)
+            {
+                listBreadcrumb.add (0, p);
+                p = (NodePart) p.getParent ();
+            }
+            index = listBreadcrumb.size () - 1;
         }
 
+        final Color inactive = new Color (0x80FF80);
         int last = listBreadcrumb.size () - 1;
         for (int i = 0; i <= last; i++)
         {
             final NodePart b = listBreadcrumb.get (i);
             String key = b.source.key ();
             String text;
-            if (i < last) text = key + ".";
-            else          text = key;
+            if (i > 0) text = "." + key;
+            else       text = key;
 
             JLabel label = new JLabel (text);
             label.setToolTipText ("Select part");
+            label.setForeground (i <= index ? Color.black : inactive);
             label.addMouseListener (new MouseAdapter ()
             {
                 public void mouseClicked (MouseEvent me)
                 {
                     panelEquationGraph.load (b);
+                    panelEquationTree.scrollToVisible (b);
                 }
             });
 
