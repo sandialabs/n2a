@@ -275,32 +275,35 @@ public class GraphNode extends JPanel
             pm.x -= pp.x;
             pm.y -= pp.y;
             Dimension extent = vp.getExtentSize ();
-            boolean oob =  pm.x < 0  ||  pm.x > extent.width  ||  pm.y < 0  ||  pm.y > extent.height;
-            if (! oob) timer.stop ();
-            if (me == lastEvent)
+            boolean auto =  me == lastEvent;
+            if (pm.x < 0  ||  pm.x > extent.width  ||  pm.y < 0  ||  pm.y > extent.height)
             {
-                if (! oob) return;
+                if (auto)
+                {
+                    // Rather than generate an actual mouse event, simply adjust (dx,dy).
+                    dx = pm.x < 0 ? pm.x : (pm.x > extent.width  ? pm.x - extent.width  : 0);
+                    dy = pm.y < 0 ? pm.y : (pm.y > extent.height ? pm.y - extent.height : 0);
 
-                // Rather than generate an actual mouse event, simply adjust (dx,dy).
-                dx = pm.x < 0 ? pm.x : (pm.x > extent.width  ? pm.x - extent.width  : 0);
-                dy = pm.y < 0 ? pm.y : (pm.y > extent.height ? pm.y - extent.height : 0);
-
-                // Stretch bounds and shift viewport
-                Rectangle next = getBounds ();
-                next.translate (dx, dy);
-                parent.layout.componentMoved (next);
-                Point p = vp.getViewPosition ();
-                p.translate (dx, dy);
-                vp.setViewPosition (p);
+                    // Stretch bounds and shift viewport
+                    Rectangle next = getBounds ();
+                    next.translate (dx, dy);
+                    parent.layout.componentMoved (next);
+                    Point p = vp.getViewPosition ();
+                    p.translate (dx, dy);
+                    vp.setViewPosition (p);
+                }
+                else  // A regular drag
+                {
+                    lastEvent = me;  // Let the user adjust speed.
+                    timer.start ();
+                    return;  // Don't otherwise process it.
+                }
             }
             else
             {
-                if (oob)
-                {
-                    lastEvent = me;
-                    if (timer.isRunning ()) timer.restart ();
-                    else                    timer.start ();
-                }
+                timer.stop ();
+                lastEvent = null;
+                if (auto) return;
             }
 
             switch (cursor)

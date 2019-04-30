@@ -72,6 +72,8 @@ public class PanelEquationGraph extends JScrollPane
         graphPanel = new GraphPanel ();
         setViewportView (graphPanel);
 
+        setTransferHandler (new GraphTransferHandler ());
+
         vp  = getViewport ();
         hsb = getHorizontalScrollBar ();
         vsb = getVerticalScrollBar ();
@@ -132,7 +134,7 @@ public class PanelEquationGraph extends JScrollPane
         saveFocus ();
         this.part = part;
         graphPanel.clear ();
-        graphPanel.load ();  // also does revalidate()
+        graphPanel.load ();
         paintImmediately ();
     }
 
@@ -140,7 +142,6 @@ public class PanelEquationGraph extends JScrollPane
     {
         part = null;
         graphPanel.clear ();
-        graphPanel.revalidate ();
         paintImmediately ();
     }
 
@@ -233,8 +234,6 @@ public class PanelEquationGraph extends JScrollPane
         {
             super (new GraphLayout ());
             layout = (GraphLayout) getLayout ();
-
-            setTransferHandler (new GraphTransferHandler ());
 
             MouseAdapter mouseListener = new GraphMouseListener ();
             addMouseListener (mouseListener);
@@ -612,29 +611,32 @@ public class PanelEquationGraph extends JScrollPane
             pm.x -= pp.x;
             pm.y -= pp.y;
             Dimension extent = vp.getExtentSize ();
-            boolean oob =  pm.x < 0  ||  pm.x > extent.width  ||  pm.y < 0  ||  pm.y > extent.height;
-            if (! oob) timer.stop ();
-            if (me == lastEvent)
+            boolean auto =  me == lastEvent;
+            if (pm.x < 0  ||  pm.x > extent.width  ||  pm.y < 0  ||  pm.y > extent.height)  // out of bounds
             {
-                if (! oob) return;
                 if (edge == null) return;
-
-                int dx = pm.x < 0 ? pm.x : (pm.x > extent.width  ? pm.x - extent.width  : 0);
-                int dy = pm.y < 0 ? pm.y : (pm.y > extent.height ? pm.y - extent.height : 0);
-
-                me.translatePoint (dx, dy);  // Makes permanent change to lastEvent
-                Point p = vp.getViewPosition ();
-                p.translate (dx, dy);
-                vp.setViewPosition (p);
-            }
-            else
-            {
-                if (oob)
+                if (auto)
                 {
-                    lastEvent = me;
-                    if (timer.isRunning ()) timer.restart ();
-                    else                    timer.start ();
+                    int dx = pm.x < 0 ? pm.x : (pm.x > extent.width  ? pm.x - extent.width  : 0);
+                    int dy = pm.y < 0 ? pm.y : (pm.y > extent.height ? pm.y - extent.height : 0);
+
+                    me.translatePoint (dx, dy);  // Makes permanent change to lastEvent
+                    Point p = vp.getViewPosition ();
+                    p.translate (dx, dy);
+                    vp.setViewPosition (p);
                 }
+                else  // A regular drag
+                {
+                    lastEvent = me;  // Let the user adjust speed.
+                    timer.start ();
+                    return;  // Don't otherwise process it.
+                }
+            }
+            else  // in bounds
+            {
+                timer.stop ();
+                lastEvent = null;
+                if (auto) return;
             }
 
             Point here = me.getPoint ();
@@ -662,6 +664,7 @@ public class PanelEquationGraph extends JScrollPane
         public void mouseReleased (MouseEvent me)
         {
             startPan = null;
+            lastEvent = null;
             timer.stop ();
             setCursor (Cursor.getPredefinedCursor (Cursor.DEFAULT_CURSOR));
 

@@ -90,6 +90,7 @@ public class ChangeOrder extends Undoable
         {
             MNode mparent = metadataNode.source;
             mparent.clear ("gui", "order");
+            if (mparent.child ("gui").size () == 0) mparent.clear ("gui");
             if (mparent.size () == 0)
             {
                 parent.source.clear ("$metadata");
