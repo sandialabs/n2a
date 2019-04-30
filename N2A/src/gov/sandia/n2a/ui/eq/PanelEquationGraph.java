@@ -118,6 +118,23 @@ public class PanelEquationGraph extends JScrollPane
                 }
             }
         });
+
+        addMouseListener (new MouseAdapter ()
+        {
+            public void mouseClicked (MouseEvent me)
+            {
+                if (me.getButton () == MouseEvent.BUTTON1  &&  me.getClickCount () == 2)
+                {
+                    // Drill up
+                    // This code is duplicated in GraphMouseListener. We need to listen both at
+                    // the panel and at the scroll pane, since the panel can sometimes not cover the whole area.
+                    NodePart parent = (NodePart) part.getParent ();
+                    if (parent == null) return;
+                    load (parent);
+                    container.panelEquationTree.scrollToVisible (parent);
+                }
+            }
+        });
     }
 
     public void saveFocus ()
@@ -135,6 +152,7 @@ public class PanelEquationGraph extends JScrollPane
         this.part = part;
         graphPanel.clear ();
         graphPanel.load ();
+        container.updateBreadcrumbs (part);
         paintImmediately ();
     }
 
@@ -300,9 +318,12 @@ public class PanelEquationGraph extends JScrollPane
                     }
                     c.setLocation (x, y);
                     layout.bounds = layout.bounds.union (c.getBounds ());
-                    MNode bounds = ((GraphNode) c).node.source.childOrCreate ("$metadata", "gui", "bounds");
-                    bounds.set (x, "x");  // offset should be zero for new load, so don't worry about adding it
-                    bounds.set (y, "y");
+                    if (! container.locked)
+                    {
+                        MNode bounds = ((GraphNode) c).node.source.childOrCreate ("$metadata", "gui", "bounds");
+                        bounds.set (x, "x");  // offset should be zero for new load, so don't worry about adding it
+                        bounds.set (y, "y");
+                    }
                     x += c.getWidth () + gap;
                 }
 
@@ -574,6 +595,18 @@ public class PanelEquationGraph extends JScrollPane
         GraphEdge  edge     = null;
         MouseEvent lastEvent;
         Timer      timer    = new Timer (100, this);
+
+        public void mouseClicked (MouseEvent me)
+        {
+            if (me.getButton () == MouseEvent.BUTTON1  &&  me.getClickCount () == 2)
+            {
+                // Drill up
+                NodePart parent = (NodePart) part.getParent ();
+                if (parent == null) return;
+                load (parent);
+                container.panelEquationTree.scrollToVisible (parent);
+            }
+        }
 
         public void mouseMoved (MouseEvent me)
         {

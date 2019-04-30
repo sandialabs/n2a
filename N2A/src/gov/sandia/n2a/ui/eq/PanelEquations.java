@@ -12,11 +12,14 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -26,6 +29,7 @@ import javax.swing.ButtonGroup;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
+import javax.swing.JLabel;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
@@ -64,6 +68,9 @@ public class PanelEquations extends JPanel
     public    PanelEquationGraph panelEquationGraph;
     protected JSplitPane         splitEquation;
     protected boolean            firstResize;
+
+    protected JPanel         panelBreadcrumb;
+    protected List<NodePart> listBreadcrumb = new ArrayList<NodePart> ();
 
     // Controls
     protected JButton buttonAddModel;
@@ -225,7 +232,10 @@ public class PanelEquations extends JPanel
                 buttonImport,
                 "hgap=5,vgap=1"
             ),
-            "C", splitEquation
+            "C", Lay.BL (
+                "N", panelBreadcrumb = Lay.WL ("L", new JButton ("<none>"), "hgap=0"),
+                "C", splitEquation
+            )
         );
 
         // Context Menu
@@ -360,6 +370,7 @@ public class PanelEquations extends JPanel
             root.findConnections ();
             panelEquationTree.load ();
             panelEquationGraph.load (root);
+            updateBreadcrumbs (root);
         }
         catch (Exception e)
         {
@@ -391,6 +402,49 @@ public class PanelEquations extends JPanel
     {
         if (AppData.models.isVisible (record)) updateLock ();
         else                                   recordDeleted (record);
+    }
+
+    public void updateBreadcrumbs (NodePart part)
+    {
+        panelBreadcrumb.removeAll ();
+        panelBreadcrumb.add (Box.createHorizontalStrut (5));
+        if (part == null)
+        {
+            panelBreadcrumb.add (new JLabel ("<none>"));
+            return;
+        }
+
+        listBreadcrumb.clear ();
+        NodePart p = part;
+        while (p != null)
+        {
+            listBreadcrumb.add (0, p);
+            p = (NodePart) p.getParent ();
+        }
+
+        int last = listBreadcrumb.size () - 1;
+        for (int i = 0; i <= last; i++)
+        {
+            final NodePart b = listBreadcrumb.get (i);
+            String key = b.source.key ();
+            String text;
+            if (i < last) text = key + ".";
+            else          text = key;
+
+            JLabel label = new JLabel (text);
+            label.setToolTipText ("Select part");
+            label.addMouseListener (new MouseAdapter ()
+            {
+                public void mouseClicked (MouseEvent me)
+                {
+                    panelEquationGraph.load (b);
+                }
+            });
+
+            panelBreadcrumb.add (label);
+        }
+        validate ();
+        panelBreadcrumb.paintImmediately (panelBreadcrumb.getBounds ());
     }
 
     ActionListener listenerAdd = new ActionListener ()

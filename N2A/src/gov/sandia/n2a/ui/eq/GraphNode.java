@@ -26,15 +26,12 @@ import java.util.List;
 
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.JTree;
 import javax.swing.JViewport;
 import javax.swing.Timer;
 import javax.swing.UIManager;
 import javax.swing.border.AbstractBorder;
 import javax.swing.event.MouseInputAdapter;
 import javax.swing.event.MouseInputListener;
-import javax.swing.tree.TreePath;
-
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Lay;
@@ -49,6 +46,7 @@ public class GraphNode extends JPanel
     protected GraphPanel      parent;
     public    NodePart        node;
     public    JLabel          label;
+    protected Color           color;
     protected List<GraphEdge> edgesOut = new ArrayList<GraphEdge> ();
     protected List<GraphEdge> edgesIn  = new ArrayList<GraphEdge> ();
 
@@ -60,7 +58,20 @@ public class GraphNode extends JPanel
         this.node   = node;
         node.graph  = this;
 
+        switch (node.getForegroundColor ())
+        {
+            case NodeBase.OVERRIDE:
+                color = EquationTreeCellRenderer.colorOverride;
+                break;
+            case NodeBase.KILL:
+                color = EquationTreeCellRenderer.colorKill;
+                break;
+            default:  // INHERIT
+                color = EquationTreeCellRenderer.colorInherit;
+        }
+
         label = new JLabel (node.source.key ());
+        label.setForeground (color);
 
         Lay.BLtg (this, "C", label);
         setBorder (border);
@@ -233,6 +244,27 @@ public class GraphNode extends JPanel
         MouseEvent lastEvent;
         Timer      timer = new Timer (100, this);
 
+        public void mouseClicked(MouseEvent me)
+        {
+            if (me.getButton () == MouseEvent.BUTTON1)
+            {
+                PanelModel mep = PanelModel.instance;
+                if (me.getClickCount () == 1)
+                {
+                    if (cursor == Cursor.DEFAULT_CURSOR)  // Normal click
+                    {
+                        mep.panelEquationTree.scrollToVisible (node);
+                    }
+                }
+                else  // 2 or more clicks
+                {
+                    // Drill down
+                    mep.panelEquations.panelEquationGraph.load (node);
+                    mep.panelEquationTree.scrollToVisible (node);
+                }
+            }
+        }
+
         public void mouseMoved (MouseEvent me)
         {
             if (PanelModel.instance.panelEquations.locked) return;
@@ -383,24 +415,7 @@ public class GraphNode extends JPanel
             if (me.getButton () != MouseEvent.BUTTON1) return;
 
             PanelModel mep = PanelModel.instance;
-            if (cursor == Cursor.DEFAULT_CURSOR)  // Normal click
-            {
-                // Select node
-                PanelEquationTree pet = mep.panelEquationTree;
-                JTree tree = pet.tree;
-                TreePath path = new TreePath (node.getPath ());
-                tree.setSelectionPath (path);
-
-                // The following lines are similar to JTree.scrollPathToVisible(path),
-                // except that we enlarge the requested rectangle to force the node to the top of the frame.
-                tree.makeVisible (path);
-                tree.expandPath (path);
-                Rectangle r = tree.getPathBounds (path);
-                Rectangle visible = pet.getViewport ().getViewRect ();
-                r.height = visible.height;
-                tree.scrollRectToVisible (r);
-            }
-            else  // Move or resize (click on border)
+            if (cursor != Cursor.DEFAULT_CURSOR)  // Click on border
             {
                 // Store new bounds in metadata
                 MNode guiTree = new MVolatile ();
@@ -441,20 +456,8 @@ public class GraphNode extends JPanel
             g2.setPaint (background);
             g2.fill (border);
 
-            Color color;
             GraphNode gn = (GraphNode) c;
-            switch (gn.node.getForegroundColor ())
-            {
-                case NodeBase.OVERRIDE:
-                    color = EquationTreeCellRenderer.colorOverride;
-                    break;
-                case NodeBase.KILL:
-                    color = EquationTreeCellRenderer.colorKill;
-                    break;
-                default:  // INHERIT
-                    color = EquationTreeCellRenderer.colorInherit;
-            }
-            g2.setPaint (color);
+            g2.setPaint (gn.color);
             g2.draw (border);
 
             g2.dispose ();

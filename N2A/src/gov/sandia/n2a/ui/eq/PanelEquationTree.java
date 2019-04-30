@@ -554,6 +554,22 @@ public class PanelEquationTree extends JScrollPane
         }
     }
 
+    public void scrollToVisible (NodePart node)
+    {
+        // Select node
+        TreePath path = new TreePath (node.getPath ());
+        tree.setSelectionPath (path);
+
+        // The following lines are similar to JTree.scrollPathToVisible(path),
+        // except that we enlarge the requested rectangle to force the node to the top of the frame.
+        tree.makeVisible (path);
+        tree.expandPath (path);
+        Rectangle r = tree.getPathBounds (path);
+        Rectangle visible = getViewport ().getViewRect ();
+        r.height = visible.height;
+        tree.scrollRectToVisible (r);
+    }
+
     public NodeBase getSelected ()
     {
         NodeBase result = null;
