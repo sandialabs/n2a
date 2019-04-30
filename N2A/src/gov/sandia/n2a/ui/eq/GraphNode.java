@@ -235,6 +235,7 @@ public class GraphNode extends JPanel
 
         public void mouseMoved (MouseEvent me)
         {
+            if (PanelModel.instance.panelEquations.locked) return;
             if (start == null) setCursor (Cursor.getPredefinedCursor (border.getCursor (me)));
         }
 

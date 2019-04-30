@@ -176,7 +176,11 @@ public class GraphEdge
         }
         else  // Draw curve.
         {
-            if (! tipDrag)
+            if (tipDrag)
+            {
+                tipAngle = c2c.angle ();
+            }
+            else
             {
                 double Alength = Abounds.getWidth () + Abounds.getHeight ();  // far enough to get from center of endpoint to outside of bounds
                 Vector2 o = a.add (c2c.multiply (Alength));  // "outside" point in the direction of the connection

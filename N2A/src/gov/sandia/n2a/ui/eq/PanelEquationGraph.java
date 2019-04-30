@@ -578,6 +578,7 @@ public class PanelEquationGraph extends JScrollPane
 
         public void mouseMoved (MouseEvent me)
         {
+            if (container.locked) return;
             GraphEdge e = graphPanel.findTipAt (me.getPoint ());
             if (e == null) setCursor (Cursor.getDefaultCursor ());
             else           setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
@@ -588,6 +589,7 @@ public class PanelEquationGraph extends JScrollPane
             switch (me.getButton ())
             {
                 case MouseEvent.BUTTON1:
+                    if (container.locked) return;
                     Point p = me.getPoint ();
                     edge = graphPanel.findTipAt (p);
                     if (edge != null)
