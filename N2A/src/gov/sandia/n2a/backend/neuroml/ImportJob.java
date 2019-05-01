@@ -610,7 +610,7 @@ public class ImportJob extends XMLutility
                 }
                 else
                 {
-                    sourceNames[sourceIndex] = "\"" + inherit + "\"";
+                    sourceNames[sourceIndex] = inherit;
                     inherit = "";
                     for (int i = 0; i < sourceNames.length; i++) inherit += "," + sourceNames[i];
                     dependent.set (inherit.substring (1), "$inherit");
