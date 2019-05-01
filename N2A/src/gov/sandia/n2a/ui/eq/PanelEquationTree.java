@@ -36,8 +36,10 @@ import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.io.StringReader;
 import java.io.StringWriter;
+import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import javax.swing.AbstractAction;
@@ -397,6 +399,17 @@ public class PanelEquationTree extends JScrollPane
                 else if (schema.type.equals ("Part"))
                 {
                     result = true;
+
+                    // Prepare lists for suggesting connections.
+                    List<NodePart> newParts = new ArrayList<NodePart> ();
+                    List<NodePart> oldParts = new ArrayList<NodePart> ();
+                    Enumeration<?> children = target.children ();
+                    while (children.hasMoreElements ())
+                    {
+                        Object c = children.nextElement ();
+                        if (c instanceof NodePart) oldParts.add ((NodePart) c);
+                    }
+
                     for (MNode child : data)  // There could be multiple parts.
                     {
                         // Ensure the part is in our db
@@ -407,14 +420,18 @@ public class PanelEquationTree extends JScrollPane
                         MNode include = new MVolatile ();  // Note the empty key. This enables AddPart to generate a name.
                         include.merge (child);  // TODO: What if this brings in a $inherit line, and that line does not match the $inherit line in the source part? One possibility is to add the new values to the end of the $inherit line created below.
                         include.clear ("$inherit");  // get rid of IDs from included part, so they won't override the new $inherit line ...
-                        include.set ("\"" + key + "\"", "$inherit");
-                        NodeBase added = target.add ("Part", tree, include, location);
+                        include.set (key, "$inherit");
+                        NodePart added = (NodePart) target.add ("Part", tree, include, location);
                         if (added == null)
                         {
                             result = false;
                             break;
                         }
+                        newParts.add (added);
                     }
+
+                    NodePart.suggestConnections (newParts, oldParts);
+                    NodePart.suggestConnections (oldParts, newParts);
                 }
                 if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE  ||  xferNode == null) pm.undoManager.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
                 return result;

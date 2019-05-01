@@ -12,14 +12,19 @@ import java.awt.Point;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
+import java.util.TreeMap;
+
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.GraphNode;
@@ -34,6 +39,7 @@ import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
 import gov.sandia.n2a.ui.eq.undo.DeletePart;
 import gov.sandia.n2a.ui.eq.undo.ChangeDoc;
 import gov.sandia.n2a.ui.eq.undo.ChangePart;
+import gov.sandia.n2a.ui.eq.undo.ChangeVariable;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;
@@ -48,9 +54,12 @@ public class NodePart extends NodeContainer
     protected static ImageIcon iconCompartment = ImageUtil.getImage ("comp.gif");
     protected static ImageIcon iconConnection  = ImageUtil.getImage ("connection.png");
 
-    protected String               inheritName = "";
-    public    Map<String,NodePart> connectionBindings;  // non-null if this is a connection
-    public    GraphNode            graph;
+    protected String                      inheritName = "";
+    protected Set<String>                 ancestors;           // All parts we inherit from, whether directly or indirectly. Used to propose connections.
+    public    Map<String,NodePart>        connectionBindings;  // non-null if this is a connection
+    protected List<UnsatisfiedConnection> unsatisfiedConnections;
+    protected boolean                     connectionTarget;    // Some other part connects to us.
+    public    GraphNode                   graph;
 
     public NodePart ()
     {
@@ -78,6 +87,7 @@ public class NodePart extends NodeContainer
     {
         setUserObject ();
         removeAllChildren ();
+        ancestors = null;
 
         String order = source.get ("$metadata", "gui", "order");
         Set<String> sorted = new HashSet<String> ();
@@ -182,6 +192,7 @@ public class NodePart extends NodeContainer
     public void findConnections ()
     {
         connectionBindings = null;
+        unsatisfiedConnections = null;
         Enumeration<?> i = children ();
         while (i.hasMoreElements ())
         {
@@ -225,6 +236,214 @@ public class NodePart extends NodeContainer
 
         if (parent == null) return null;
         return parent.resolveName (name);
+    }
+
+    public Set<String> getAncestors ()
+    {
+        if (ancestors != null) return ancestors;
+        ancestors = new HashSet<String> ();
+        findAncestors (source);
+        return ancestors;
+    }
+
+    public void findAncestors (MNode child)
+    {
+        String inherit = child.get ("$inherit");
+        if (inherit.isEmpty ()) return;
+        String[] inherits = inherit.split (",");
+        for (String i : inherits)
+        {
+            i = i.replace ("\"", "").trim ();
+            if (ancestors.add (i))
+            {
+                MNode parent = AppData.models.child (i);
+                if (parent != null) findAncestors (parent);
+            }
+        }
+    }
+
+    public List<UnsatisfiedConnection> getUnsatisfiedConnections ()
+    {
+        if (unsatisfiedConnections != null) return unsatisfiedConnections;
+        unsatisfiedConnections = new ArrayList<UnsatisfiedConnection> ();
+        if (connectionBindings == null) return unsatisfiedConnections;
+        for (Entry<String,NodePart> e : connectionBindings.entrySet ())
+        {
+            if (e.getValue () != null) continue;
+            String key = e.getKey ();
+            String line = source.get (key);
+            if (! Operator.containsConnect (line)) continue;
+            UnsatisfiedConnection u = new UnsatisfiedConnection (key);
+            line = line.trim ().split ("connect", 2)[1];
+            line = line.replace ("(", "");
+            line = line.replace (")", "");
+            for (String p : line.split (","))
+            {
+                p = p.replace ("\"", "").trim ();
+                u.classes.add (p);
+            }
+            if (u.classes.size () > 0) unsatisfiedConnections.add (u);
+        }
+        return unsatisfiedConnections;
+    }
+ 
+    /**
+        Locates likely endpoints for unsatisfied connections.
+        Subroutine of equation tree transfer handler. Should be called while a compound edit is open.
+    **/
+    public static void suggestConnections (List<NodePart> fromParts, List<NodePart> toParts)
+    {
+        // Set connectionTarget flags
+        for (NodePart fromPart : toParts  ) fromPart.connectionTarget = false;
+        for (NodePart toPart   : fromParts) toPart  .connectionTarget = false;
+        for (NodePart toPart : toParts)
+        {
+            if (toPart.connectionBindings == null) continue;
+            for (Entry<String,NodePart> e : toPart.connectionBindings.entrySet ())
+            {
+                NodePart p = e.getValue ();
+                if (p != null) p.connectionTarget = true;
+            }
+        }
+        for (NodePart fromPart : fromParts)
+        {
+            if (fromPart.connectionBindings == null) continue;
+            for (Entry<String,NodePart> e : fromPart.connectionBindings.entrySet ())
+            {
+                NodePart p = e.getValue ();
+                if (p != null) p.connectionTarget = true;
+            }
+        }
+
+        // Scan for matches
+        PanelModel pm = PanelModel.instance;
+        for (NodePart fromPart : fromParts)
+        {
+            // Collect candidates for each unsatisfied connection.
+            List<UnsatisfiedConnection> unsatisfied = fromPart.getUnsatisfiedConnections ();
+            for (UnsatisfiedConnection u : unsatisfied)
+            {
+                u.candidates = new ArrayList<NodePart> ();
+                for (NodePart toPart : toParts)
+                {
+                    // Is toPart a descendant of any of the classes acceptable to the connection?
+                    boolean match = false;
+                    Set<String> ancestors = toPart.getAncestors ();
+                    for (String c : u.classes)
+                    {
+                        if (ancestors.contains (c))
+                        {
+                            match = true;
+                            break;
+                        }
+                    }
+                    if (match) u.candidates.add (toPart);
+                }
+            }
+
+            // If distance is known, sort candidates in descending order.
+            // That way, more distant candidates will be eliminated first.
+            if (fromPart.graph != null)
+            {
+                Point fromPoint = fromPart.graph.getLocation ();
+                Map<Double,NodePart> sorted = new TreeMap<Double,NodePart> ();
+                for (UnsatisfiedConnection u : unsatisfied)
+                {
+                    for (NodePart toPart : u.candidates)
+                    {
+                        double distance = Double.MAX_VALUE;
+                        if (toPart.graph != null)
+                        {
+                            Point toPoint = toPart.graph.getLocation ();
+                            int dx = fromPoint.x - toPoint.x;
+                            int dy = fromPoint.y - toPoint.y;
+                            distance = Math.sqrt (dx * dx + dy * dy);
+                        }
+                        sorted.put (distance, toPart);
+                    }
+                    u.candidates.clear ();
+                    for (NodePart p : sorted.values ()) u.candidates.add (0, p);
+                }
+            }
+
+            // Narrow down lists of candidates to one best choice for each endpoint.
+            // The complicated tests below are merely heuristics for better connection choices,
+            // not absolute rules.
+            for (UnsatisfiedConnection u : unsatisfied)
+            {
+                // Minimize connections to the same target.
+                while (u.candidates.size () > 1)
+                {
+                    NodePart duplicate = null;
+                    for (NodePart c : u.candidates)
+                    {
+                        // Check candidates for peer endpoints.
+                        for (UnsatisfiedConnection v : unsatisfied)
+                        {
+                            if (v == u) continue;  // Don't check ourselves.
+                            if (v.candidates.contains (c))
+                            {
+                                duplicate = c;
+                                break;
+                            }
+                        }
+                        if (duplicate != null) break;
+
+                        // Also scan satisfied endpoints, if any.
+                        for (Entry<String,NodePart> e : fromPart.connectionBindings.entrySet ())
+                        {
+                            if (e.getValue () == c)
+                            {
+                                duplicate = c;
+                                break;
+                            }
+                        }
+                        if (duplicate != null) break;
+                    }
+                    if (duplicate == null) break;
+                    u.candidates.remove (duplicate);
+                }
+
+                // Minimize connections to a target that already receives connections.
+                while (u.candidates.size () > 1)
+                {
+                    NodePart taken = null;
+                    for (NodePart c : u.candidates)
+                    {
+                        if (c.connectionTarget)
+                        {
+                            taken = c;
+                            break;
+                        }
+                    }
+                    if (taken == null) break;
+                    u.candidates.remove (taken);
+                }
+            }
+
+            // If all endpoints go to nodes that area already connected, then don't connect at all.
+            // (Instead, assume that user is started a new constellation, and simply inserted the connection object first.)
+            boolean targetsFull = true;
+            for (UnsatisfiedConnection u : unsatisfied)
+            {
+                if (u.candidates.size () != 1  ||  ! u.candidates.get (0).connectionTarget)
+                {
+                    targetsFull = false;
+                    break;
+                }
+            }
+            if (targetsFull) continue;
+
+            // Assign the last candidate, as it should be sorted closest to fromNode.
+            for (UnsatisfiedConnection u : unsatisfied)
+            {
+                if (u.candidates.size () == 0) continue;
+                NodePart toPart = u.candidates.get (u.candidates.size () - 1);
+                NodeVariable v = (NodeVariable) fromPart.child (u.alias);  // This must exist.
+                pm.undoManager.add (new ChangeVariable (v, u.alias, toPart.source.key ()));
+                toPart.connectionTarget = true;
+            }
+        }
     }
 
     public NodeBase add (String type, JTree tree, MNode data, Point location)
@@ -422,5 +641,17 @@ public class NodePart extends NodeContainer
         PanelModel mep = PanelModel.instance;
         if (isRoot ()) mep.undoManager.add (new DeleteDoc ((MDoc) source.getSource ()));
         else           mep.undoManager.add (new DeletePart (this, canceled));
+    }
+
+    public class UnsatisfiedConnection
+    {
+        String         alias;
+        List<String>   classes = new ArrayList<String> ();  // Parts (or their children) that could satisfy this endpoint.
+        List<NodePart> candidates;
+
+        public UnsatisfiedConnection (String alias)
+        {
+            this.alias = alias;
+        }
     }
 }

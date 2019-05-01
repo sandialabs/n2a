@@ -19,6 +19,7 @@ import java.awt.LayoutManager2;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.AdjustmentEvent;
@@ -34,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
@@ -586,6 +588,11 @@ public class PanelEquationGraph extends JScrollPane
         public boolean importData (TransferSupport xfer)
         {
             return container.panelEquationTree.transferHandler.importData (xfer);
+        }
+
+        public void exportDone (JComponent source, Transferable data, int action)
+        {
+            PanelModel.instance.undoManager.endCompoundEdit ();
         }
     }
 
