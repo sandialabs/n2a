@@ -46,7 +46,6 @@ import javax.swing.UIManager;
 import javax.swing.ViewportLayout;
 import javax.swing.event.MouseInputAdapter;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.eq.GraphEdge.Vector2;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
@@ -721,12 +720,8 @@ public class PanelEquationGraph extends JScrollPane
                 if (nodeTo == null  ||  nodeTo == nodeFrom)  // Disconnect the edge
                 {
                     String value = "connect()";
-                    MPart mchild = variable.source;
-                    if (mchild.isOverridden ())
-                    {
-                        String original = mchild.getOriginal ().get ();
-                        if (Operator.containsConnect (original)) value = original;
-                    }
+                    String original = variable.source.getOriginal ().get ();
+                    if (Operator.containsConnect (original)) value = original;
                     mep.undoManager.add (new ChangeVariable (variable, edge.alias, value));
                 }
                 else if (nodeTo == edge.nodeTo)  // No change

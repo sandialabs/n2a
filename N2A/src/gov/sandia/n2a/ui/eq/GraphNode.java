@@ -174,6 +174,13 @@ public class GraphNode extends JPanel
             else  // Update existing connection
             {
                 edge.nodeTo = nodeTo;
+                if (nodeTo == null)  // Disconnect edge
+                {
+                    // Move edge to end of list.
+                    // This will make it paint on top of everything else, so we don't lose track of it visually.
+                    parent.edges.remove (edge);
+                    parent.edges.add (edge);
+                }
             }
         }
 
