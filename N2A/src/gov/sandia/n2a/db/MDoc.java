@@ -66,7 +66,7 @@ public class MDoc extends MPersistent
     {
         if (parent instanceof MDir) return ((MDir) parent).pathForChild (name).toAbsolutePath ().toString ();
         if (value == null) return defaultValue;
-        return value;
+        return value.toString ();
     }
 
     public synchronized void markChanged ()
@@ -93,7 +93,7 @@ public class MDoc extends MPersistent
         {
             try
             {
-                Files.delete (Paths.get (value));
+                Files.delete (Paths.get (value.toString ()));
             }
             catch (IOException e)
             {
@@ -132,7 +132,7 @@ public class MDoc extends MPersistent
         if (value.equals (this.value)) return;  // Don't call file move if location on disk has not changed.
         try
         {
-            Files.move (Paths.get (this.value), Paths.get (value), StandardCopyOption.REPLACE_EXISTING);
+            Files.move (Paths.get (this.value.toString ()), Paths.get (value), StandardCopyOption.REPLACE_EXISTING);
             this.value = value;
         }
         catch (IOException e)
@@ -163,7 +163,7 @@ public class MDoc extends MPersistent
     public synchronized Path path ()
     {
         if (parent instanceof MDir) return ((MDir) parent).pathForChild (name);
-        return Paths.get (value);
+        return Paths.get (value.toString ());
     }
 
 	/**

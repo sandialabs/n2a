@@ -14,7 +14,7 @@ import java.util.TreeMap;
 public class MVolatile extends MNode
 {
     protected String                     name;
-	protected String                     value;
+	protected Object                     value;
     protected MNode                      parent;
 	protected NavigableMap<String,MNode> children;
 
@@ -84,7 +84,21 @@ public class MVolatile extends MNode
 	public synchronized String getOrDefault (String defaultValue)
     {
         if (value == null) return defaultValue;
-        return value;
+        return value.toString ();
+    }
+
+    public synchronized Object getOrDefaultObject (Object defaultValue, Object... indices)
+    {
+        String[] stringIndices = new String[indices.length];
+        for (int i = 0; i < indices.length; i++) stringIndices[i] = indices[i].toString ();
+        MVolatile c = (MVolatile) child (stringIndices);
+        if (c == null  ||  c.value == null) return defaultValue;
+        return c.value;
+    }
+
+    public synchronized Object getObject (Object... indices)
+    {
+        return getOrDefaultObject (null, indices);
     }
 
     public synchronized void set (String value)
@@ -104,6 +118,18 @@ public class MVolatile extends MNode
             return result;
         }
         result.set (value);
+        return result;
+    }
+
+    /**
+        Store the value as an Object, rather than converting to String.
+    **/
+    public synchronized MNode setObject (Object value, Object... indices)
+    {
+        String[] stringIndices = new String[indices.length];
+        for (int i = 0; i < indices.length; i++) stringIndices[i] = indices[i].toString ();
+        MVolatile result = (MVolatile) childOrCreate (stringIndices);
+        result.value = value;
         return result;
     }
 
