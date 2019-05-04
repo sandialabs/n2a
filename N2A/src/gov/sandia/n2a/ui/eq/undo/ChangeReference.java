@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -9,7 +9,6 @@ package gov.sandia.n2a.ui.eq.undo;
 import java.awt.FontMetrics;
 import java.util.List;
 
-import javax.swing.JTree;
 import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotRedoException;
 
@@ -17,7 +16,6 @@ import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
-import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeReference;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
@@ -62,10 +60,9 @@ public class ChangeReference extends Undoable
         NodeBase nodeBefore = parent.child (nameBefore);
         if (nodeBefore == null) throw new CannotRedoException ();
 
-        PanelEquationTree pet = PanelModel.instance.panelEquationTree;
-        JTree tree = pet.tree;
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        FontMetrics fm = nodeBefore.getFontMetrics (tree);
+        PanelEquationTree pet = parent.getTree ();
+        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
+        FontMetrics fm = nodeBefore.getFontMetrics (pet.tree);
 
         NodeBase nodeAfter;
         if (nameBefore.equals (nameAfter))

@@ -40,6 +40,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JViewport;
+import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.TransferHandler;
 import javax.swing.UIManager;
@@ -58,7 +59,6 @@ public class PanelEquationGraph extends JScrollPane
     protected PanelEquations   container;
     protected GraphPanel       graphPanel;
     protected Map<MNode,Point> focusCache = new HashMap<MNode,Point> ();
-    public    NodePart         part;  // The node that contains the current graph. Can be container.root or a deeper node (via drill-down).
 
     // Convenience references
     protected JViewport  vp;
@@ -124,12 +124,12 @@ public class PanelEquationGraph extends JScrollPane
         {
             public void mouseClicked (MouseEvent me)
             {
-                if (me.getButton () == MouseEvent.BUTTON1  &&  me.getClickCount () == 2)
+                if (SwingUtilities.isLeftMouseButton (me)  &&  me.getClickCount () == 2)
                 {
                     // Drill up
                     // This code is duplicated in GraphMouseListener. We need to listen both at
                     // the panel and at the scroll pane, since the panel can sometimes not cover the whole area.
-                    NodePart parent = (NodePart) part.getParent ();
+                    NodePart parent = (NodePart) container.part.getParent ();
                     if (parent == null) return;
                     load (parent);
                     container.panelEquationTree.scrollToVisible (parent);
@@ -140,17 +140,17 @@ public class PanelEquationGraph extends JScrollPane
 
     public void saveFocus ()
     {
-        if (part == null) return;
+        if (container.part == null) return;
         Point focus = vp.getViewPosition ();
         focus.x -= graphPanel.offset.x;
         focus.y -= graphPanel.offset.y;
-        focusCache.put (part.source, focus);
+        focusCache.put (container.part.source, focus);
     }
 
     public void load (NodePart part)
     {
         saveFocus ();
-        this.part = part;
+        container.part = part;
         graphPanel.clear ();
         graphPanel.load ();
         container.updateBreadcrumbs (part);
@@ -159,14 +159,14 @@ public class PanelEquationGraph extends JScrollPane
 
     public void recordDeleted ()
     {
-        part = null;
+        container.part = null;
         graphPanel.clear ();
         paintImmediately ();
     }
 
     public void addPart (NodePart node)
     {
-        if (node.getParent () == part) graphPanel.addPart (node);
+        if (node.getParent () == container.part) graphPanel.addPart (node);
     }
 
     public void removePart (NodePart node)
@@ -179,7 +179,6 @@ public class PanelEquationGraph extends JScrollPane
         if (node.graph == null) return;
 
         GraphNode gn = node.graph;
-        gn.label.setText (node.source.key ()); // JLabel invalidates everything up to scroll pane. However, JTextField would not, because it is an invalidate root.
         Rectangle old = gn.getBounds ();
         gn.setSize (gn.getPreferredSize ());  // GraphLayout won't do this, so we have to do it manually.
         Rectangle next = gn.getBounds ();
@@ -272,6 +271,7 @@ public class PanelEquationGraph extends JScrollPane
             {
                 GraphNode gn = (GraphNode) c;
                 gn.node.graph = null;
+                gn.node.fakeRoot (false);
             }
 
             // Flush all data
@@ -286,7 +286,7 @@ public class PanelEquationGraph extends JScrollPane
 
         public void load ()
         {
-            Enumeration<?> children = part.children ();
+            Enumeration<?> children = container.part.children ();
             boolean newLayout = children.hasMoreElements ();
             while (children.hasMoreElements ())
             {
@@ -319,12 +319,7 @@ public class PanelEquationGraph extends JScrollPane
                     }
                     c.setLocation (x, y);
                     layout.bounds = layout.bounds.union (c.getBounds ());
-                    if (! container.locked)
-                    {
-                        MNode bounds = ((GraphNode) c).node.source.childOrCreate ("$metadata", "gui", "bounds");
-                        bounds.set (x, "x");  // offset should be zero for new load, so don't worry about adding it
-                        bounds.set (y, "y");
-                    }
+                    // Don't save bounds in metadata. Only touch part if user manually adjusts layout.
                     x += c.getWidth () + gap;
                 }
 
@@ -334,7 +329,7 @@ public class PanelEquationGraph extends JScrollPane
             buildEdges ();
 
             validate ();  // Runs layout, so negative focus locations can work, or so that origin (0,0) is meaningful.
-            Point focus = focusCache.get (part.source);
+            Point focus = focusCache.get (container.part.source);
             if (focus == null)
             {
                 focus = new Point ();  // (0,0)
@@ -423,6 +418,9 @@ public class PanelEquationGraph extends JScrollPane
                 location.y = Math.max (0, location.y);
                 gn.setLocation (location);
 
+                // TODO: Instead of saving location, do a fresh auto-layout of all parts that don't have fixed bounds.
+                // This will allow a user to build a graph entirely with auto-layout, without ever setting any bounds.
+                // That will allow parts that don't otherwise need to be overridden to remain untouched.
                 MNode bounds = gn.node.source.childOrCreate ("$metadata", "gui", "bounds");
                 bounds.set (location.x - offset.x, "x");
                 bounds.set (location.y - offset.y, "y");
@@ -581,12 +579,12 @@ public class PanelEquationGraph extends JScrollPane
     {
         public boolean canImport (TransferSupport xfer)
         {
-            return container.panelEquationTree.transferHandler.canImport (xfer);
+            return container.transferHandler.canImport (xfer);
         }
 
         public boolean importData (TransferSupport xfer)
         {
-            return container.panelEquationTree.transferHandler.importData (xfer);
+            return container.transferHandler.importData (xfer);
         }
 
         public void exportDone (JComponent source, Transferable data, int action)
@@ -604,10 +602,10 @@ public class PanelEquationGraph extends JScrollPane
 
         public void mouseClicked (MouseEvent me)
         {
-            if (me.getButton () == MouseEvent.BUTTON1  &&  me.getClickCount () == 2)
+            if (SwingUtilities.isLeftMouseButton (me)  &&  me.getClickCount () == 2)
             {
                 // Drill up
-                NodePart parent = (NodePart) part.getParent ();
+                NodePart parent = (NodePart) container.part.getParent ();
                 if (parent == null) return;
                 load (parent);
                 container.panelEquationTree.scrollToVisible (parent);
@@ -624,22 +622,21 @@ public class PanelEquationGraph extends JScrollPane
 
         public void mousePressed (MouseEvent me)
         {
-            switch (me.getButton ())
+            if (SwingUtilities.isLeftMouseButton (me))
             {
-                case MouseEvent.BUTTON1:
-                    if (container.locked) return;
-                    Point p = me.getPoint ();
-                    edge = graphPanel.findTipAt (p);
-                    if (edge != null)
-                    {
-                        setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
-                        edge.animate (p);
-                    }
-                    break;
-                case MouseEvent.BUTTON2:
-                    startPan = me.getPoint ();
+                if (container.locked) return;
+                Point p = me.getPoint ();
+                edge = graphPanel.findTipAt (p);
+                if (edge != null)
+                {
                     setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
-                    break;
+                    edge.animate (p);
+                }
+            }
+            else if (SwingUtilities.isMiddleMouseButton (me))
+            {
+                startPan = me.getPoint ();
+                setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
             }
         }
 

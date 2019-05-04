@@ -8,14 +8,13 @@ package gov.sandia.n2a.ui.eq.undo;
 
 import java.util.List;
 
-import javax.swing.JTree;
 import javax.swing.undo.CannotUndoException;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.StoredPath;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -73,10 +72,9 @@ public class ChangeGUI extends Undoable
         NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
 
-        PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquationTree.tree;
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        StoredPath sp = new StoredPath (tree);
+        PanelEquationTree pet = parent.getTree ();
+        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
+        StoredPath sp = new StoredPath (pet.tree);
 
         boolean needBuild = true;
         NodeAnnotations metadataNode = (NodeAnnotations) parent.child ("$metadata");
@@ -105,20 +103,20 @@ public class ChangeGUI extends Undoable
         NodeBase updateNode = metadataNode;
         if (needBuild)
         {
-            List<String> expanded = AddAnnotation.saveExpandedNodes (tree, metadataNode);
+            List<String> expanded = AddAnnotation.saveExpandedNodes (pet.tree, metadataNode);
             metadataNode.build ();
-            metadataNode.filter (model.filterLevel);
-            if (metadataNode.visible (model.filterLevel))
+            metadataNode.filter (FilteredTreeModel.filterLevel);
+            if (metadataNode.visible (FilteredTreeModel.filterLevel))
             {
                 model.nodeStructureChanged (metadataNode);
-                AddAnnotation.restoreExpandedNodes (tree, metadataNode, expanded);
+                AddAnnotation.restoreExpandedNodes (pet.tree, metadataNode, expanded);
             }
 
             updateNode = metadataNode.child ("gui");
             if (updateNode == null) updateNode = metadataNode;
         }
-        mep.panelEquationTree.updateVisibility (updateNode.getPath (), -1, false);
-        sp.restore (tree);  // This forces focus back to original location.
+        pet.updateVisibility (updateNode.getPath (), -1, false);
+        sp.restore (pet.tree);  // This forces focus back to original location.
 
         // Update graph
         if (parent.graph != null) parent.graph.updateGUI ();

@@ -9,7 +9,6 @@ package gov.sandia.n2a.ui.eq.undo;
 import java.awt.FontMetrics;
 import java.util.List;
 
-import javax.swing.JTree;
 import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.UndoableEdit;
@@ -19,7 +18,7 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
@@ -78,10 +77,9 @@ public class ChangeVariable extends Undoable
         NodeVariable nodeBefore = (NodeVariable) parent.child (nameBefore);
         if (nodeBefore == null) throw new CannotRedoException ();
 
-        PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquationTree.tree;
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        FontMetrics fm = nodeBefore.getFontMetrics (tree);
+        PanelEquationTree pet = parent.getTree ();
+        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
+        FontMetrics fm = nodeBefore.getFontMetrics (pet.tree);
 
         NodeVariable nodeAfter;
         if (nameBefore.equals (nameAfter))
@@ -125,8 +123,8 @@ public class ChangeVariable extends Undoable
 
                 nodeBefore.build ();
                 nodeBefore.findConnections ();
-                if (nodeBefore.visible (model.filterLevel)) model.nodeStructureChanged (nodeBefore);
-                else                                        parent.hide (nodeBefore, model, true);
+                if (nodeBefore.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (nodeBefore);
+                else                                                    parent.hide (nodeBefore, model, true);
                 if (nodeBefore.isBinding  &&  parent.graph != null) parent.graph.updateGUI (nameBefore, oldPart.get ());
             }
         }
@@ -139,8 +137,8 @@ public class ChangeVariable extends Undoable
         parent.allNodesChanged (model);
 
         TreeNode[] nodePath = nodeAfter.getPath ();
-        mep.panelEquationTree.updateOrder (nodePath);
-        mep.panelEquationTree.updateVisibility (nodePath);
+        pet.updateOrder (nodePath);
+        pet.updateVisibility (nodePath);
 
         if (parent.graph != null)
         {

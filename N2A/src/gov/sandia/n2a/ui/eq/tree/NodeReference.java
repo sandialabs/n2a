@@ -112,7 +112,7 @@ public class NodeReference extends NodeBase
             {
                 offset = tabs.get (2) - tabs.get (1) - offset;
             }
-            int width = PanelModel.instance.panelEquationTree.tree.getWidth () - offset;  // Available width for displaying value (not including key).
+            int width = getTree ().tree.getWidth () - offset;  // Available width for displaying value (not including key).
 
             boolean addEllipsis = false;
             String[] pieces = value.split ("\n", 2);

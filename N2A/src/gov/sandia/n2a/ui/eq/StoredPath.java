@@ -59,7 +59,7 @@ public class StoredPath
                 c = c.child (key);
                 if (c == null) break;
             }
-            if (c != null  &&  c.visible (model.filterLevel)) tree.expandPath (new TreePath (c.getPath ()));
+            if (c != null  &&  c.visible (FilteredTreeModel.filterLevel)) tree.expandPath (new TreePath (c.getPath ()));
         }
 
         // Second, locate the focused node and pay special attention to its visibility
@@ -82,7 +82,7 @@ public class StoredPath
                 break;
             }
 
-            if (! n.visible (model.filterLevel))  // The node we actually found is currently filtered out, so find nearest sibling
+            if (! n.visible (FilteredTreeModel.filterLevel))  // The node we actually found is currently filtered out, so find nearest sibling
             {
                 n = (NodeBase) n.getParent ();  // If nothing is found, n will remain at the parent.
 
@@ -91,7 +91,7 @@ public class StoredPath
                 for (int j = i + 1; j < childCount; j++)
                 {
                     NodeBase c = (NodeBase) n.getChildAt (j);
-                    if (c.visible (model.filterLevel))
+                    if (c.visible (FilteredTreeModel.filterLevel))
                     {
                         n = c;
                         found = true;
@@ -104,7 +104,7 @@ public class StoredPath
                 for (int j = i - 1; j >= 0; j--)
                 {
                     NodeBase c = (NodeBase) n.getChildAt (j);
-                    if (c.visible (model.filterLevel))
+                    if (c.visible (FilteredTreeModel.filterLevel))
                     {
                         n = c;
                         found = true;

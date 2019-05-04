@@ -121,7 +121,7 @@ public class PanelSearch extends JPanel
         {
             public void focusGained (FocusEvent e)
             {
-                PanelModel.instance.panelEquationTree.yieldFocus ();
+                PanelModel.instance.panelEquations.yieldFocus ();
                 showSelection ();
             }
 
@@ -226,7 +226,7 @@ public class PanelSearch extends JPanel
         {
             public void focusGained (FocusEvent e)
             {
-                PanelModel.instance.panelEquationTree.yieldFocus ();
+                PanelModel.instance.panelEquations.yieldFocus ();
             }
 
             public void focusLost (FocusEvent e)
@@ -300,7 +300,7 @@ public class PanelSearch extends JPanel
             {
                 PanelModel mep = PanelModel.instance;
                 mep.panelEquations.load (doc);
-                mep.panelEquationTree.tree.requestFocusInWindow ();
+                mep.panelEquations.takeFocus ();
             }
         });
     }

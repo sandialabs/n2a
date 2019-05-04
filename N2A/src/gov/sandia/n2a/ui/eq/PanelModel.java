@@ -34,22 +34,20 @@ public class PanelModel extends JPanel implements MNodeListener
 {
     public static PanelModel instance;  ///< Technically, this class is a singleton, because only one would normally be created.
 
-    protected JSplitPane         split;
-    protected JSplitPane         splitMRU;
-    public    PanelMRU           panelMRU;
-    public    PanelSearch        panelSearch;
-    public    PanelEquations     panelEquations;
-    public    PanelEquationTree  panelEquationTree;  // To ease code transition, since most undo classes reference this object here.
-    public    UndoManager        undoManager = new UndoManager ();
+    protected JSplitPane     split;
+    protected JSplitPane     splitMRU;
+    public    PanelMRU       panelMRU;
+    public    PanelSearch    panelSearch;
+    public    PanelEquations panelEquations;
+    public    UndoManager    undoManager = new UndoManager ();
 
     public PanelModel ()
     {
         instance = this;
 
-        panelMRU          = new PanelMRU ();
-        panelSearch       = new PanelSearch ();
-        panelEquations    = new PanelEquations ();
-        panelEquationTree = panelEquations.panelEquationTree;
+        panelMRU       = new PanelMRU ();
+        panelSearch    = new PanelSearch ();
+        panelEquations = new PanelEquations ();
 
         splitMRU = new JSplitPane (JSplitPane.VERTICAL_SPLIT, panelMRU, panelSearch);
         split = new JSplitPane (JSplitPane.HORIZONTAL_SPLIT, splitMRU, panelEquations);

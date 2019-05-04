@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -8,7 +8,6 @@ package gov.sandia.n2a.ui.eq.undo;
 
 import java.util.List;
 
-import javax.swing.JTree;
 import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotRedoException;
 
@@ -18,6 +17,8 @@ import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph;
+import gov.sandia.n2a.ui.eq.PanelEquationTree;
+import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
@@ -72,11 +73,11 @@ public class ChangePart extends Undoable
 
         // Update GUI
 
-        PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquationTree.tree;
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        PanelEquationGraph peg = mep.panelEquations.panelEquationGraph;
-        boolean graphParent = parent == peg.part;
+        PanelEquations pe = PanelModel.instance.panelEquations;
+        PanelEquationTree pet = parent.getTree ();
+        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
+        PanelEquationGraph peg = pe.panelEquationGraph;
+        boolean graphParent = parent == pe.part;
 
         NodePart nodeAfter = (NodePart) parent.child (nameAfter);  // It's either a NodePart or it's null. Any other case should be blocked by GUI constraints.
         if (oldPart == null)
@@ -105,18 +106,18 @@ public class ChangePart extends Undoable
 
             nodeBefore.build ();
             nodeBefore.findConnections ();
-            nodeBefore.filter (model.filterLevel);
-            if (nodeBefore.visible (model.filterLevel)) model.nodeStructureChanged (nodeBefore);
-            else                                        parent.hide (nodeBefore, model, true);
+            nodeBefore.filter (FilteredTreeModel.filterLevel);
+            if (nodeBefore.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (nodeBefore);
+            else                                                    parent.hide (nodeBefore, model, true);
         }
 
         nodeAfter.build ();
         nodeAfter.findConnections ();
-        nodeAfter.filter (model.filterLevel);
+        nodeAfter.filter (FilteredTreeModel.filterLevel);
 
         TreeNode[] nodePath = nodeAfter.getPath ();
-        mep.panelEquationTree.updateOrder (nodePath);
-        mep.panelEquationTree.updateVisibility (nodePath);  // Will include nodeStructureChanged(), if necessary.
+        pet.updateOrder (nodePath);
+        pet.updateVisibility (nodePath);  // Will include nodeStructureChanged(), if necessary.
 
         if (graphParent)
         {

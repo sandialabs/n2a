@@ -15,7 +15,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
@@ -37,7 +37,7 @@ public class Outsource extends Undoable
         savedSubtree = new MVolatile ();
         savedSubtree.merge (node.source);  // This takes the entire tree, regardless of visibility. TODO: should this match the visibility semantics used by copy/paste operations?
 
-        JTree tree = PanelModel.instance.panelEquationTree.tree;
+        JTree tree = parent.getTree ().tree;
         wasExpanded = ! tree.isCollapsed (new TreePath (node.getPath ()));
     }
 
@@ -63,9 +63,8 @@ public class Outsource extends Undoable
         NodePart node = (NodePart) parent.child (name);
         if (node == null) throw new CannotRedoException ();
 
-        PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquationTree.tree;
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+        PanelEquationTree pet = parent.getTree ();
+        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
 
         // Update database
         node.source.clear ();  // remove all children
@@ -74,7 +73,7 @@ public class Outsource extends Undoable
         // Update GUI
         node.build ();
         node.findConnections ();
-        node.filter (model.filterLevel);
+        node.filter (FilteredTreeModel.filterLevel);
         // The caller of this Undoable promises to only use it on top-level nodes.
         // Thus, node retains exactly the same visibility as before, so no need for full update.
         // There are some obscure cases in which this doesn't hold (node was inherited, and the
@@ -82,8 +81,8 @@ public class Outsource extends Undoable
         // but we won't worry about that.
         model.nodeStructureChanged (node);
         TreePath nodePath = new TreePath (node.getPath ());
-        tree.setSelectionPath (nodePath);
-        if (wasExpanded) tree.expandPath (nodePath);
+        pet.tree.setSelectionPath (nodePath);
+        if (wasExpanded) pet.tree.expandPath (nodePath);
 
         // Not necessary to update the graph, since exactly the same connections exist.
         // findConnections() merely re-establishes them.

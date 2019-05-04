@@ -9,6 +9,7 @@ package gov.sandia.n2a.ui.eq.undo;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.ui.Undoable;
+import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
@@ -42,17 +43,28 @@ public class ChangeDoc extends Undoable
 
     public static void rename (String A, String B)
     {
+        // Update database
         AppData.models.move (A, B);
-        PanelModel mep = PanelModel.instance;
         MNode doc = AppData.models.child (B);
         String id = doc.get ("$metadata", "id");
         if (! id.isEmpty ()) AppData.set (id, doc);
-        mep.panelEquations.load (doc);  // lazy; only loads if not already loaded
-        NodePart root = mep.panelEquations.root;
+
+        // Update GUI
+        PanelModel mep = PanelModel.instance;
+        PanelEquations container = mep.panelEquations;
+        container.load (doc);  // lazy; only loads if not already loaded
+        NodePart root = container.root;
         root.setUserObject ();
-        mep.panelEquationTree.tree.requestFocusInWindow ();  // likewise, focus only moves if it is not already on equation tree
-        mep.panelEquationTree.tree.setSelectionRow (0);
-        mep.panelEquationTree.model.nodeChanged (root);
+        container.takeFocus ();  // likewise, focus only moves if it is not already on equation tree
+        if (container.open)
+        {
+            container.panelEquationTree.model.nodeChanged (root);
+            container.panelEquationTree.tree.setSelectionRow (0);
+        }
+        else
+        {
+            container.updateBreadcrumbs (root);
+        }
         mep.panelMRU.renamed ();  // Because the change in document name does not directly notify the list model.
         mep.panelSearch.list.repaint ();
     }

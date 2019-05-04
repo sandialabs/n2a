@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -9,7 +9,6 @@ package gov.sandia.n2a.ui.eq.undo;
 import java.awt.FontMetrics;
 import java.util.List;
 
-import javax.swing.JTree;
 import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
@@ -20,7 +19,6 @@ import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
-import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeReference;
@@ -91,10 +89,9 @@ public class AddReference extends Undoable
         if (parent instanceof NodePart) container = parent.child ("$reference");
         NodeBase createdNode = container.child (name);
 
-        PanelEquationTree pet = PanelModel.instance.panelEquationTree;
-        JTree tree = pet.tree;
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        FontMetrics fm = createdNode.getFontMetrics (tree);
+        PanelEquationTree pet = parent.getTree ();
+        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
+        FontMetrics fm = createdNode.getFontMetrics (pet.tree);
 
         boolean containerIsVisible = true;
         TreeNode[] createdPath = createdNode.getPath ();
@@ -120,7 +117,7 @@ public class AddReference extends Undoable
         }
         else  // Just exposed an overridden value, so update display.
         {
-            if (container.visible (model.filterLevel))  // We are always visible, but our parent could disappear.
+            if (container.visible (FilteredTreeModel.filterLevel))  // We are always visible, but our parent could disappear.
             {
                 createdNode.updateColumnWidths (fm);
             }
@@ -150,9 +147,8 @@ public class AddReference extends Undoable
         if (parent == null) throw new CannotRedoException ();
         MPart block = (MPart) parent.source.childOrCreate ("$reference");
 
-        PanelEquationTree pet = PanelModel.instance.panelEquationTree;
-        JTree tree = pet.tree;
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+        PanelEquationTree pet = parent.getTree ();
+        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
         NodeBase container = parent;  // If this is a variable, then mix metadata with equations and references
         if (parent instanceof NodePart)  // If this is a part, then display special block
         {
@@ -173,7 +169,7 @@ public class AddReference extends Undoable
         MPart createdPart = (MPart) block.set (value, name);
         if (! alreadyExists) createdNode = new NodeReference (createdPart);
 
-        FontMetrics fm = createdNode.getFontMetrics (tree);
+        FontMetrics fm = createdNode.getFontMetrics (pet.tree);
         if (container.getChildCount () > 0)
         {
             NodeBase firstChild = (NodeBase) container.getChildAt (0);

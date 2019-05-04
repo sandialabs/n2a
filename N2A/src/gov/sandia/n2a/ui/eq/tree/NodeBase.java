@@ -11,6 +11,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.EquationTreeCellRenderer;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelModel;
 
 import java.awt.Font;
@@ -88,7 +89,7 @@ public class NodeBase extends DefaultMutableTreeNode
         }
 
         insertFiltered (filteredIndex, childIndex, false);
-        child.filter (model.filterLevel);
+        child.filter (FilteredTreeModel.filterLevel);
         for (Object c : children) ((NodeBase) c).invalidateTabs ();
 
         if (notifyListeners)
@@ -336,7 +337,7 @@ public class NodeBase extends DefaultMutableTreeNode
     public FontMetrics getFontMetrics (JTree tree)
     {
         EquationTreeCellRenderer renderer = (EquationTreeCellRenderer) tree.getCellRenderer ();
-        Font f = renderer.getFontFor (this);
+        Font f = renderer.getFontFor (tree, this);
         return renderer.getFontMetrics (f);
     }
 
@@ -360,6 +361,11 @@ public class NodeBase extends DefaultMutableTreeNode
 
     // Structure maintenance -------------------------------------------------
 
+    public PanelEquationTree getTree ()
+    {
+        return ((NodeBase) parent).getTree ();  // Should always lead to a NodePart
+    }
+
     public List<String> getKeyPath ()
     {
         TreeNode[] path = getPath ();
@@ -373,7 +379,7 @@ public class NodeBase extends DefaultMutableTreeNode
         MNode doc = AppData.models.child (path.get (0));
         PanelModel mep = PanelModel.instance;
         mep.panelEquations.load (doc);  // lazy; only loads if not already loaded
-        mep.panelEquationTree.tree.requestFocusInWindow ();  // likewise, focus only moves if it is not already on equation tree
+        mep.panelEquations.takeFocus ();  // likewise, focus only moves if it is not already on equation tree
         NodeBase parent = mep.panelEquations.root;
         for (int i = 1; i < path.size (); i++)
         {
@@ -409,7 +415,7 @@ public class NodeBase extends DefaultMutableTreeNode
 
     public NodeBase add (String type, JTree tree, MNode data, Point location)
     {
-        return ((NodeBase) getParent ()).add (type, tree, data, location);  // default action is to refer the add request up the tree
+        return ((NodeBase) parent).add (type, tree, data, location);  // default action is to refer the add request up the tree
     }
 
     public boolean allowEdit ()

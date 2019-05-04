@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -8,7 +8,6 @@ package gov.sandia.n2a.ui.eq.undo;
 
 import java.util.List;
 
-import javax.swing.JTree;
 import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoableEdit;
@@ -17,7 +16,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
@@ -67,9 +66,8 @@ public class ChangeOrder extends Undoable
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
 
-        PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquationTree.tree;
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+        PanelEquationTree pet = parent.getTree ();
+        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
 
         NodeBase moveNode = (NodeBase) parent.getChildAt (indexBefore);
         model.removeNodeFromParent (moveNode);
@@ -103,21 +101,21 @@ public class ChangeOrder extends Undoable
         }
         if (needBuild)
         {
-            List<String> expanded = AddAnnotation.saveExpandedNodes (tree, metadataNode);
+            List<String> expanded = AddAnnotation.saveExpandedNodes (pet.tree, metadataNode);
             metadataNode.build ();
-            metadataNode.filter (model.filterLevel);
-            if (metadataNode.visible (model.filterLevel))
+            metadataNode.filter (FilteredTreeModel.filterLevel);
+            if (metadataNode.visible (FilteredTreeModel.filterLevel))
             {
                 model.nodeStructureChanged (metadataNode);
-                AddAnnotation.restoreExpandedNodes (tree, metadataNode, expanded);
+                AddAnnotation.restoreExpandedNodes (pet.tree, metadataNode, expanded);
             }
         }
 
         model.insertNodeIntoUnfiltered (moveNode, parent, indexAfter);
 
         TreeNode[] movePath = moveNode.getPath ();
-        if (! destroyOrder) mep.panelEquationTree.updateOrder (movePath);
-        mep.panelEquationTree.updateVisibility (movePath);
+        if (! destroyOrder) pet.updateOrder (movePath);
+        pet.updateVisibility (movePath);
     }
 
     public boolean addEdit (UndoableEdit edit)

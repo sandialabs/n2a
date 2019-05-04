@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -11,7 +11,6 @@ import java.util.Enumeration;
 import java.util.List;
 import java.util.TreeSet;
 
-import javax.swing.JTree;
 import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
@@ -22,7 +21,7 @@ import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeEquation;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
@@ -111,10 +110,9 @@ public class AddEquation extends Undoable
         if (parent == null) throw new CannotUndoException ();
         NodeBase createdNode = parent.child (name);
 
-        PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquationTree.tree;
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        FontMetrics fm = createdNode.getFontMetrics (tree);
+        PanelEquationTree pet = parent.getTree ();
+        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
+        FontMetrics fm = createdNode.getFontMetrics (pet.tree);
 
         TreeNode[] createdPath = createdNode.getPath ();
         int index = parent.getIndexFiltered (createdNode);
@@ -173,8 +171,8 @@ public class AddEquation extends Undoable
         }
         parent.updateTabStops (fm);
         parent.allNodesChanged (model);
-        mep.panelEquationTree.updateOrder (createdPath);
-        mep.panelEquationTree.updateVisibility (createdPath, index);
+        pet.updateOrder (createdPath);
+        pet.updateVisibility (createdPath, index);
     }
 
     public void redo ()
@@ -188,9 +186,8 @@ public class AddEquation extends Undoable
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
 
-        PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquationTree.tree;
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+        PanelEquationTree pet = parent.getTree ();
+        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
 
         // Update the database
 
@@ -216,7 +213,7 @@ public class AddEquation extends Undoable
         boolean alreadyExists = createdNode != null;
         if (! alreadyExists) createdNode = new NodeEquation (createdPart);
 
-        FontMetrics fm = createdNode.getFontMetrics (tree);
+        FontMetrics fm = createdNode.getFontMetrics (pet.tree);
         if (parent.getChildCount () > 0)
         {
             NodeBase firstChild = (NodeBase) parent.getChildAt (0);
@@ -237,7 +234,7 @@ public class AddEquation extends Undoable
         {
             parent.updateTabStops (fm);
             parent.allNodesChanged (model);
-            mep.panelEquationTree.updateVisibility (createdNode.getPath ());
+            pet.updateVisibility (createdNode.getPath ());
         }
 
         return createdNode;

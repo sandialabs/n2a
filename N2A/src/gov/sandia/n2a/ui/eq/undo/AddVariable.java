@@ -10,7 +10,6 @@ import java.awt.FontMetrics;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.swing.JTree;
 import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
@@ -21,7 +20,7 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
@@ -77,10 +76,9 @@ public class AddVariable extends Undoable
         if (parent == null) throw new CannotUndoException ();
         NodeVariable createdNode = (NodeVariable) parent.child (name);
 
-        PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquationTree.tree;
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        FontMetrics fm = createdNode.getFontMetrics (tree);
+        PanelEquationTree pet = parent.getTree ();
+        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
+        FontMetrics fm = createdNode.getFontMetrics (pet.tree);
 
         TreeNode[] createdPath = createdNode.getPath ();
         int index = parent.getIndexFiltered (createdNode);
@@ -109,8 +107,8 @@ public class AddVariable extends Undoable
         parent.updateTabStops (fm);
         parent.allNodesChanged (model);
 
-        mep.panelEquationTree.updateOrder (createdPath);
-        mep.panelEquationTree.updateVisibility (createdPath, index);  // includes nodeStructureChanged(), if necessary
+        pet.updateOrder (createdPath);
+        pet.updateVisibility (createdPath, index);  // includes nodeStructureChanged(), if necessary
     }
 
     public void redo ()
@@ -133,16 +131,15 @@ public class AddVariable extends Undoable
 
         // Update GUI
 
-        PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquationTree.tree;
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+        PanelEquationTree pet = parent.getTree ();
+        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
 
         boolean alreadyExists = createdNode != null;
         boolean wasBinding =  alreadyExists  &&  createdNode.isBinding;
         if (! alreadyExists) createdNode = new NodeVariable (createdPart);
         if (nameIsGenerated) createdNode.setUserObject ("");  // pure create, so about to go into edit mode. This should only happen on first application of the create action, and should only be possible if visibility is already correct.
 
-        FontMetrics fm = createdNode.getFontMetrics (tree);
+        FontMetrics fm = createdNode.getFontMetrics (pet.tree);
         createdNode.updateColumnWidths (fm);  // preempt initialization
         if (! alreadyExists) model.insertNodeIntoUnfiltered (createdNode, parent, index);
 
@@ -151,7 +148,7 @@ public class AddVariable extends Undoable
         {
             createdNode.build ();
             createdNode.findConnections ();
-            mep.panelEquationTree.updateOrder (createdPath);
+            pet.updateOrder (createdPath);
 
             parent.updateTabStops (fm);
             parent.allNodesChanged (model);
@@ -162,7 +159,7 @@ public class AddVariable extends Undoable
                 else if (wasBinding)       parent.graph.updateGUI (name, "");
             }
         }
-        mep.panelEquationTree.updateVisibility (createdPath);
+        pet.updateVisibility (createdPath);
 
         return createdNode;
     }

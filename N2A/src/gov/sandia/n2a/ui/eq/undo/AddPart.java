@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -9,7 +9,6 @@ package gov.sandia.n2a.ui.eq.undo;
 import java.awt.Point;
 import java.util.List;
 
-import javax.swing.JTree;
 import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
@@ -21,6 +20,8 @@ import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph;
+import gov.sandia.n2a.ui.eq.PanelEquationTree;
+import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
@@ -89,11 +90,11 @@ public class AddPart extends Undoable
         if (parent == null) throw new CannotUndoException ();
         NodePart createdNode = (NodePart) parent.child (name);
 
-        PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquationTree.tree;
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        PanelEquationGraph peg = mep.panelEquations.panelEquationGraph;
-        boolean graphParent = parent == peg.part;
+        PanelEquations pe = PanelModel.instance.panelEquations;
+        PanelEquationTree pet = parent.getTree ();
+        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
+        PanelEquationGraph peg = pe.panelEquationGraph;
+        boolean graphParent = parent == pe.part;
 
         TreeNode[] createdPath = createdNode.getPath ();
         int index = parent.getIndexFiltered (createdNode);
@@ -110,11 +111,11 @@ public class AddPart extends Undoable
         {
             createdNode.build ();
             parent.findConnections ();
-            createdNode.filter (model.filterLevel);
+            createdNode.filter (FilteredTreeModel.filterLevel);
         }
 
-        mep.panelEquationTree.updateOrder (createdPath);
-        mep.panelEquationTree.updateVisibility (createdPath, index);  // includes nodeStructureChanged(), if necessary
+        pet.updateOrder (createdPath);
+        pet.updateVisibility (createdPath, index);  // includes nodeStructureChanged(), if necessary
         if (graphParent)
         {
             peg.reconnect ();
@@ -142,11 +143,11 @@ public class AddPart extends Undoable
 
         // Update GUI
 
-        PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquationTree.tree;
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        PanelEquationGraph peg = mep.panelEquations.panelEquationGraph;
-        boolean graphParent = parent == peg.part;
+        PanelEquations pe = PanelModel.instance.panelEquations;
+        PanelEquationTree pet = parent.getTree ();
+        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
+        PanelEquationGraph peg = pe.panelEquationGraph;
+        boolean graphParent = parent == pe.part;
 
         if (createdNode == null)
         {
@@ -156,12 +157,12 @@ public class AddPart extends Undoable
         }
         createdNode.build ();
         parent.findConnections ();  // Other nodes besides immediate siblings can also refer to us, so to be strictly correct, should run findConnectins() on root of tree.
-        createdNode.filter (model.filterLevel);
+        createdNode.filter (FilteredTreeModel.filterLevel);
 
         TreeNode[] createdPath = createdNode.getPath ();
         if (nameIsGenerated) createdNode.setUserObject ("");  // pure create, so about to go into edit mode. This should only happen on first application of the create action, and should only be possible if visibility is already correct.
-        else mep.panelEquationTree.updateOrder (createdPath);
-        mep.panelEquationTree.updateVisibility (createdPath);
+        else pet.updateOrder (createdPath);
+        pet.updateVisibility (createdPath);
 
         if (graphParent)
         {

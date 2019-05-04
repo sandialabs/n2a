@@ -1,5 +1,5 @@
 /*
-Copyright 2016,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -8,13 +8,14 @@ package gov.sandia.n2a.ui.eq.undo;
 
 import java.util.List;
 
-import javax.swing.JTree;
 import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotRedoException;
 
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph;
+import gov.sandia.n2a.ui.eq.PanelEquationTree;
+import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeInherit;
@@ -53,10 +54,10 @@ public class ChangeInherit extends Undoable
         NodeBase node = NodeBase.locateNode (path);
         if (node == null) throw new CannotRedoException ();
 
-        PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquationTree.tree;
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        PanelEquationGraph peg = mep.panelEquations.panelEquationGraph;
+        PanelEquations pe = PanelModel.instance.panelEquations;
+        PanelEquationTree pet = node.getTree ();
+        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
+        PanelEquationGraph peg = pe.panelEquationGraph;
 
         node.source.set (value);  // Complex restructuring happens here.
 
@@ -65,14 +66,14 @@ public class ChangeInherit extends Undoable
         parent.build ();
         if (grandparent == null) parent     .findConnections ();
         else                     grandparent.findConnections ();
-        parent.filter (model.filterLevel);
+        parent.filter (FilteredTreeModel.filterLevel);
 
-        if (parent.visible (model.filterLevel)) model.nodeStructureChanged (parent);
+        if (parent.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (parent);
 
         TreeNode[] nodePath = parent.child ("$inherit").getPath ();
-        mep.panelEquationTree.updateOrder (nodePath);
-        mep.panelEquationTree.updateVisibility (nodePath);
-        if (grandparent != null  &&  grandparent == peg.part)
+        pet.updateOrder (nodePath);
+        pet.updateVisibility (nodePath);
+        if (grandparent != null  &&  grandparent == pe.part)
         {
             peg.reconnect ();
             peg.paintImmediately ();

@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -28,6 +28,8 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.GraphNode;
+import gov.sandia.n2a.ui.eq.PanelEquationTree;
+import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddInherit;
@@ -60,10 +62,8 @@ public class NodePart extends NodeContainer
     protected List<UnsatisfiedConnection> unsatisfiedConnections;
     protected boolean                     connectionTarget;    // Some other part connects to us.
     public    GraphNode                   graph;
-
-    public NodePart ()
-    {
-    }
+    public    PanelEquationTree           pet;                 // If this part is not bound to a graph node, it may be bound to a full-view tree. If not bound to either, then no tree operations are necessary.
+    protected NodePart                    trueParent;
 
     public NodePart (MPart source)
     {
@@ -151,6 +151,23 @@ public class NodePart extends NodeContainer
         // This allows us to take advantage of the work done to identify sub-parts.
     }
 
+    /**
+        Makes this node a temporary root, for displaying sub-trees.
+    **/
+    public void fakeRoot (boolean activate)
+    {
+        if (activate)
+        {
+            trueParent = (NodePart) parent;
+            parent = null;
+        }
+        else  // deactivate
+        {
+            parent = trueParent;
+            trueParent = null;
+        }
+    }
+
     @Override
     public boolean visible (int filterLevel)
     {
@@ -170,13 +187,23 @@ public class NodePart extends NodeContainer
     {
         String key = toString ();  // This allows us to set editing text to "" for new objects, while showing key for old objects.
         if (expanded  ||  editing  ||  inheritName.isEmpty ()) return key;
-        return key + "  (" + inheritName + ")";
+        if (pet == null) return key + "  (" + inheritName + ")";
+
+        // For root node of full-view tree, return a breadcrumb list
+        String result = "";
+        PanelEquations pe = PanelModel.instance.panelEquations;
+        for (NodePart b : pe.listBreadcrumb)  // includes this node
+        {
+            result += "." + b.source.key ();
+            if (b == this) break;
+        }
+        return result.substring (1);
     }
 
     @Override
     public float getFontScale ()
     {
-        if (isRoot ()) return 2f;
+        if (parent == null  &&  trueParent == null) return 2f;
         return 1;
     }
 
@@ -641,6 +668,15 @@ public class NodePart extends NodeContainer
         PanelModel mep = PanelModel.instance;
         if (isRoot ()) mep.undoManager.add (new DeleteDoc ((MDoc) source.getSource ()));
         else           mep.undoManager.add (new DeletePart (this, canceled));
+    }
+
+    @Override
+    public PanelEquationTree getTree ()
+    {
+        if (pet   != null) return pet;
+        if (graph != null) return graph.panel;
+        if (parent == null) return null;  // If this were actually a fake root, then at least one of {pet, graph} would be non-null.
+        return ((NodeBase) parent).getTree ();
     }
 
     public class UnsatisfiedConnection

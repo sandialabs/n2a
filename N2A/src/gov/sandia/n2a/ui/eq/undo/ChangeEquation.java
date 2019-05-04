@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -9,14 +9,13 @@ package gov.sandia.n2a.ui.eq.undo;
 import java.awt.FontMetrics;
 import java.util.List;
 
-import javax.swing.JTree;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.UndoableEdit;
 
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeEquation;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
@@ -72,10 +71,9 @@ public class ChangeEquation extends Undoable
         NodeBase nodeBefore = parent.child (nameBefore);
         if (nodeBefore == null) throw new CannotRedoException ();
 
-        PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquationTree.tree;
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        FontMetrics fm = nodeBefore.getFontMetrics (tree);
+        PanelEquationTree pet = parent.getTree ();
+        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
+        FontMetrics fm = nodeBefore.getFontMetrics (pet.tree);
 
         NodeBase nodeAfter;
         if (nameBefore.equals (nameAfter))
@@ -113,8 +111,8 @@ public class ChangeEquation extends Undoable
                     nodeAfter = new NodeEquation (newPart);
                     model.insertNodeIntoUnfiltered (nodeAfter, parent, index);
                 }
-                if (nodeBefore.visible (model.filterLevel)) model.nodeChanged (nodeBefore);
-                else                                        parent.hide (nodeBefore, model, true);
+                if (nodeBefore.visible (FilteredTreeModel.filterLevel)) model.nodeChanged (nodeBefore);
+                else                                                    parent.hide (nodeBefore, model, true);
             }
         }
 
@@ -136,7 +134,7 @@ public class ChangeEquation extends Undoable
         nodeAfter.updateColumnWidths (fm);
         parent.updateTabStops (fm);
         parent.allNodesChanged (model);
-        mep.panelEquationTree.updateVisibility (nodeAfter.getPath ());
+        pet.updateVisibility (nodeAfter.getPath ());
     }
 
     public boolean replaceEdit (UndoableEdit edit)

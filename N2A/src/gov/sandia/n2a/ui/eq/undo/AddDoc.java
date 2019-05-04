@@ -113,11 +113,11 @@ public class AddDoc extends Undoable
         {
             mep.panelSearch.hideSelection ();
             mep.panelSearch.lastSelection = index;  // Because hideSelection() stores current selection, which was one row past index.
-            mep.panelEquationTree.tree.requestFocusInWindow ();
+            mep.panelEquations.takeFocus ();
         }
         else
         {
-            mep.panelEquationTree.yieldFocus ();
+            mep.panelEquations.yieldFocus ();
             mep.panelSearch.list.setSelectedIndex (index);
             mep.panelSearch.list.requestFocusInWindow ();
         }

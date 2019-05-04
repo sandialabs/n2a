@@ -244,7 +244,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
     {
         editingIcon = renderer.getIconFor ((NodeBase) value, expanded, leaf);
         offset      = renderer.getIconTextGap () + editingIcon.getIconWidth ();
-        Font font   = renderer.getFontFor (editingNode);
+        Font font   = renderer.getFontFor (tree, editingNode);
         String text = editingNode.getText (expanded, true);
 
         FontMetrics fm = tree.getFontMetrics (font);

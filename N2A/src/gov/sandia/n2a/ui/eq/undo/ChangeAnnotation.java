@@ -8,7 +8,6 @@ package gov.sandia.n2a.ui.eq.undo;
 
 import java.util.List;
 
-import javax.swing.JTree;
 import javax.swing.tree.TreePath;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.UndoableEdit;
@@ -19,7 +18,6 @@ import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
-import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -125,20 +123,19 @@ public class ChangeAnnotation extends Undoable
 
         // Update GUI
 
-        PanelEquationTree pet = PanelModel.instance.panelEquationTree;
-        JTree tree = pet.tree;
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+        PanelEquationTree pet = parent.getTree ();
+        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
 
-        List<String> expanded = AddAnnotation.saveExpandedNodes (tree, parent);
+        List<String> expanded = AddAnnotation.saveExpandedNodes (pet.tree, parent);
         parent.build ();
-        parent.filter (model.filterLevel);
-        if (parent.visible (model.filterLevel))
+        parent.filter (FilteredTreeModel.filterLevel);
+        if (parent.visible (FilteredTreeModel.filterLevel))
         {
             model.nodeStructureChanged (parent);
-            AddAnnotation.restoreExpandedNodes (tree, parent, expanded);
+            AddAnnotation.restoreExpandedNodes (pet.tree, parent, expanded);
         }
         NodeBase nodeAfter = AddAnnotation.resolve (parent, nameAfter);
-        tree.expandPath (new TreePath (nodeAfter.getPath ()));
+        pet.tree.expandPath (new TreePath (nodeAfter.getPath ()));
         pet.updateVisibility (nodeAfter.getPath ());
 
         while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeContainer) parent.getParent ();

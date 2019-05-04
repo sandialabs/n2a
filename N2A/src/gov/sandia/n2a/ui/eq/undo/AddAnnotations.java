@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -8,7 +8,6 @@ package gov.sandia.n2a.ui.eq.undo;
 
 import java.util.List;
 
-import javax.swing.JTree;
 import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
@@ -18,7 +17,7 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeContainer;
@@ -49,9 +48,8 @@ public class AddAnnotations extends Undoable
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
 
-        PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquationTree.tree;
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+        PanelEquationTree pet = parent.getTree ();
+        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
 
         NodeContainer node = (NodeContainer) parent.child (blockName);
         TreeNode[] nodePath = node.getPath ();
@@ -66,9 +64,9 @@ public class AddAnnotations extends Undoable
         else  // Just exposed an overridden node
         {
             node.build ();  // Necessary to remove all overridden nodes
-            node.filter (model.filterLevel);
+            node.filter (FilteredTreeModel.filterLevel);
         }
-        mep.panelEquationTree.updateVisibility (nodePath, index);
+        pet.updateVisibility (nodePath, index);
     }
 
     public void redo ()
@@ -96,9 +94,8 @@ public class AddAnnotations extends Undoable
         MPart block = (MPart) parent.source.childOrCreate (blockName);
         block.merge (saved);
 
-        PanelModel mep = PanelModel.instance;
-        JTree tree = mep.panelEquationTree.tree;
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+        PanelEquationTree pet = parent.getTree ();
+        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
 
         if (node == null)
         {
@@ -106,7 +103,7 @@ public class AddAnnotations extends Undoable
             model.insertNodeIntoUnfiltered (node, parent, index);
         }
         node.build ();  // Replaces all nodes, so they are set to require tab initialization.
-        node.filter (model.filterLevel);
-        mep.panelEquationTree.updateVisibility (node.getPath ());
+        node.filter (FilteredTreeModel.filterLevel);
+        pet.updateVisibility (node.getPath ());
     }
 }

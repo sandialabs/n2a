@@ -24,7 +24,6 @@ import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
-import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -160,9 +159,8 @@ public class AddAnnotation extends Undoable
 
         // Update GUI
 
-        PanelEquationTree pet = PanelModel.instance.panelEquationTree;
-        JTree tree = pet.tree;
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+        PanelEquationTree pet = parent.getTree ();
+        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
 
         TreeNode[] createdPath = createdNode.getPath ();
         int index = parent.getIndexFiltered (createdNode);
@@ -176,13 +174,13 @@ public class AddAnnotation extends Undoable
         }
         else  // Rebuild container (variable, metadata block, or annotation)
         {
-            List<String> expanded = saveExpandedNodes (tree, parent);
+            List<String> expanded = saveExpandedNodes (pet.tree, parent);
             parent.build ();
-            parent.filter (model.filterLevel);
-            if (parent.visible (model.filterLevel))
+            parent.filter (FilteredTreeModel.filterLevel);
+            if (parent.visible (FilteredTreeModel.filterLevel))
             {
                 model.nodeStructureChanged (parent);
-                restoreExpandedNodes (tree, parent, expanded);
+                restoreExpandedNodes (pet.tree, parent, expanded);
             }
         }
         pet.updateVisibility (createdPath, index);
@@ -226,9 +224,8 @@ public class AddAnnotation extends Undoable
 
         // Update GUI
 
-        PanelEquationTree pet = PanelModel.instance.panelEquationTree;
-        JTree tree = pet.tree;
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+        PanelEquationTree pet = parent.getTree ();
+        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
 
         NodeContainer container = (NodeContainer) parent;
         if (parent instanceof NodePart)  // If this is a part, then display special block.
@@ -249,7 +246,7 @@ public class AddAnnotation extends Undoable
             // The given name should be unique, so don't bother checking for an existing node.
             createdNode = new NodeAnnotation (createdPart);
 
-            FontMetrics fm = createdNode.getFontMetrics (tree);
+            FontMetrics fm = createdNode.getFontMetrics (pet.tree);
             if (container.getChildCount () > 0)
             {
                 NodeBase firstChild = (NodeBase) container.getChildAt (0);
@@ -262,16 +259,16 @@ public class AddAnnotation extends Undoable
         }
         else  // create was merged with change name/value
         {
-            List<String> expanded = saveExpandedNodes (tree, container);
+            List<String> expanded = saveExpandedNodes (pet.tree, container);
             container.build ();
-            container.filter (model.filterLevel);
-            if (container.visible (model.filterLevel))
+            container.filter (FilteredTreeModel.filterLevel);
+            if (container.visible (FilteredTreeModel.filterLevel))
             {
                 model.nodeStructureChanged (container);
-                restoreExpandedNodes (tree, container, expanded);
+                restoreExpandedNodes (pet.tree, container, expanded);
             }
             createdNode = resolve (container, name);
-            tree.expandPath (new TreePath (createdNode.getPath ()));
+            pet.tree.expandPath (new TreePath (createdNode.getPath ()));
             pet.updateVisibility (createdNode.getPath ());
 
             while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeBase) parent.getParent ();

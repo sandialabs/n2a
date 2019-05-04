@@ -24,12 +24,12 @@ public class FilteredTreeModel extends DefaultTreeModel
     public static final int ALL     = 0;
     public static final int PARAM   = 1;
     public static final int LOCAL   = 2;
-    public int filterLevel = ALL;
+    public static int filterLevel = ALL;  // Only one filter level shared across entire app.
 
     public FilteredTreeModel (NodeBase root)
     {
-        super (root);
         // initial state is unfiltered
+        super (root);
     }
 
     public void setRoot (NodeBase root)

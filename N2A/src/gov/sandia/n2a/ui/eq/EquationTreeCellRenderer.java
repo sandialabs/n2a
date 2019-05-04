@@ -23,9 +23,6 @@ import gov.sandia.n2a.ui.eq.tree.NodeBase;
 @SuppressWarnings("serial")
 public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
 {
-    protected Font  baseFont;
-    protected float baseFontSize;
-
     // These colors may get changed when look & feel is changed.
     public static Color colorInherit          = Color.blue;
     public static Color colorOverride         = Color.black;
@@ -34,10 +31,8 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
     public static Color colorSelectedOverride = Color.black;
     public static Color colorSelectedKill     = Color.red;
 
-    public void earlyUpdateUI ()
+    public static void earlyUpdateUI ()
     {
-        baseFont = null;
-
         // Check colors to see if text is dark or light.
         Color fg = UIManager.getColor ("Tree.textForeground");
         float[] hsb = Color.RGBtoHSB (fg.getRed (), fg.getGreen (), fg.getBlue (), null);
@@ -74,12 +69,6 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
     {
         super.getTreeCellRendererComponent (tree, value, selected, expanded, leaf, row, hasFocus);
 
-        if (baseFont == null)
-        {
-            baseFont = tree.getFont ().deriveFont (Font.PLAIN);
-            baseFontSize = baseFont.getSize2D ();
-        }
-
         NodeBase n = (NodeBase) value;
 
         Color fg;
@@ -98,7 +87,7 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
         setForeground (fg);
 
         setIcon (getIconFor (n, expanded, leaf));
-        Font f = getFontFor (n);
+        Font f = getFontFor (tree, n);
         setFont (f);
         if (n.needsInitTabs ())
         {
@@ -120,8 +109,11 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
         return               getDefaultClosedIcon ();
     }
 
-    public Font getFontFor (NodeBase node)
+    public Font getFontFor (JTree tree, NodeBase node)
     {
+        Font  baseFont     = tree.getFont ().deriveFont (Font.PLAIN);
+        float baseFontSize = baseFont.getSize2D ();
+
         int   style = node.getFontStyle ();
         float scale = node.getFontScale ();
         if (style != Font.PLAIN  ||  scale != 1) return baseFont.deriveFont (style, baseFontSize * scale);

@@ -24,9 +24,9 @@ import java.awt.geom.RoundRectangle2D;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JViewport;
+import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.UIManager;
 import javax.swing.border.AbstractBorder;
@@ -43,12 +43,12 @@ import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
 @SuppressWarnings("serial")
 public class GraphNode extends JPanel
 {
-    protected GraphPanel      parent;
-    public    NodePart        node;
-    public    JLabel          label;
-    protected Color           color;
-    protected List<GraphEdge> edgesOut = new ArrayList<GraphEdge> ();
-    protected List<GraphEdge> edgesIn  = new ArrayList<GraphEdge> ();
+    protected GraphPanel        parent;
+    public    NodePart          node;
+    public    PanelEquationTree panel;
+    protected Color             color;
+    protected List<GraphEdge>   edgesOut = new ArrayList<GraphEdge> ();
+    protected List<GraphEdge>   edgesIn  = new ArrayList<GraphEdge> ();
 
     protected static RoundedBorder border = new RoundedBorder (5);
 
@@ -70,10 +70,10 @@ public class GraphNode extends JPanel
                 color = EquationTreeCellRenderer.colorInherit;
         }
 
-        label = new JLabel (node.source.key ());
-        label.setForeground (color);
+        node.fakeRoot (true);
+        panel = new PanelEquationTree (PanelModel.instance.panelEquations, node);
 
-        Lay.BLtg (this, "C", label);
+        Lay.BLtg (this, "C", panel);
         setBorder (border);
         setOpaque (false);
 
@@ -253,21 +253,13 @@ public class GraphNode extends JPanel
 
         public void mouseClicked(MouseEvent me)
         {
-            if (me.getButton () == MouseEvent.BUTTON1)
+            if (SwingUtilities.isLeftMouseButton (me))
             {
                 PanelModel mep = PanelModel.instance;
-                if (me.getClickCount () == 1)
-                {
-                    if (cursor == Cursor.DEFAULT_CURSOR)  // Normal click
-                    {
-                        mep.panelEquationTree.scrollToVisible (node);
-                    }
-                }
-                else  // 2 or more clicks
+                if (me.getClickCount () == 2)
                 {
                     // Drill down
                     mep.panelEquations.panelEquationGraph.load (node);
-                    mep.panelEquationTree.scrollToVisible (node);
                 }
             }
         }
@@ -287,7 +279,7 @@ public class GraphNode extends JPanel
         public void mousePressed (MouseEvent me)
         {
             if (PanelModel.instance.panelEquations.locked) return;
-            if (me.getButton () != MouseEvent.BUTTON1) return;
+            if (! SwingUtilities.isLeftMouseButton (me)) return;
 
             // All mouse event coordinates are relative to the bounds of this component.
             start  = me.getPoint ();
@@ -419,9 +411,8 @@ public class GraphNode extends JPanel
         {
             start = null;
             timer.stop ();
-            if (me.getButton () != MouseEvent.BUTTON1) return;
+            if (! SwingUtilities.isLeftMouseButton (me)) return;
 
-            PanelModel mep = PanelModel.instance;
             if (cursor != Cursor.DEFAULT_CURSOR)  // Click on border
             {
                 // Store new bounds in metadata
@@ -432,7 +423,7 @@ public class GraphNode extends JPanel
                 if (now.y      != old.y     ) bounds.set (now.y - parent.offset.y, "y");
                 if (now.width  != old.width ) bounds.set (now.width,               "width");
                 if (now.height != old.height) bounds.set (now.height,              "height");
-                if (bounds.size () > 0) mep.undoManager.add (new ChangeGUI (node, guiTree));
+                if (bounds.size () > 0) PanelModel.instance.undoManager.add (new ChangeGUI (node, guiTree));
             }
         }
 
