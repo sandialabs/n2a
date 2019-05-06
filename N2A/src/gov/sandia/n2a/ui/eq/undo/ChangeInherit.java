@@ -17,12 +17,14 @@ import gov.sandia.n2a.ui.eq.PanelEquationGraph;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeInherit;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
 public class ChangeInherit extends Undoable
 {
+    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;
     protected String valueBefore;
     protected String valueAfter;
@@ -51,6 +53,7 @@ public class ChangeInherit extends Undoable
 
     public void apply (String value)
     {
+        view.restore ();
         NodeBase node = NodeBase.locateNode (path);
         if (node == null) throw new CannotRedoException ();
 

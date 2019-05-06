@@ -20,11 +20,13 @@ import gov.sandia.n2a.ui.eq.PanelEquationGraph;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
 public class AddInherit extends Undoable
 {
+    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;  // to parent part
     protected String       value;
 
@@ -37,6 +39,7 @@ public class AddInherit extends Undoable
     public void undo ()
     {
         super.undo ();
+        view.restore ();
         destroy (path, false);
     }
 
@@ -76,6 +79,7 @@ public class AddInherit extends Undoable
     public void redo ()
     {
         super.redo ();
+        view.restore ();
         create (path, value);
     }
 

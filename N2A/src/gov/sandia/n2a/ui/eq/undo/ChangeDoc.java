@@ -61,10 +61,6 @@ public class ChangeDoc extends Undoable
             container.panelEquationTree.model.nodeChanged (root);
             container.panelEquationTree.tree.setSelectionRow (0);
         }
-        else
-        {
-            container.updateBreadcrumbs (root);
-        }
         mep.panelMRU.renamed ();  // Because the change in document name does not directly notify the list model.
         mep.panelSearch.list.repaint ();
     }

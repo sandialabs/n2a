@@ -15,7 +15,9 @@ import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
+import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.StoredPath;
+import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
@@ -26,6 +28,7 @@ import gov.sandia.n2a.ui.eq.tree.NodePart;
 **/
 public class ChangeGUI extends Undoable
 {
+    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;          // to part that contains the gui metadata
     protected int          indexMetadata; // If we create metadata node, this is where it goes.
     protected MNode        treeBefore;    // Saved version of original tree, starting at $metadata.gui. If "gui" key is absent, then this is null.
@@ -58,17 +61,18 @@ public class ChangeGUI extends Undoable
     public void undo ()
     {
         super.undo ();
-        apply (path, treeBefore, indexMetadata);
+        apply (treeBefore, indexMetadata);
     }
 
     public void redo ()
     {
         super.redo ();
-        apply (path, treeAfter, indexMetadata);
+        apply (treeAfter, indexMetadata);
     }
 
-    public static void apply (List<String> path, MNode treeAfter, int indexMetadata)
+    public void apply (MNode treeAfter, int indexMetadata)
     {
+        view.restore ();
         NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
 

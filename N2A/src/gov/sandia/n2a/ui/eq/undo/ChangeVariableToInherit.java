@@ -21,12 +21,14 @@ import gov.sandia.n2a.ui.eq.PanelEquationGraph;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class ChangeVariableToInherit extends Undoable
 {
+    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;
     protected MNode  treeBefore;
     protected String valueAfter;
@@ -44,6 +46,7 @@ public class ChangeVariableToInherit extends Undoable
     {
         super.undo ();
 
+        view.restore ();
         NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
         NodePart grandparent = (NodePart) parent.getParent ();
@@ -81,6 +84,7 @@ public class ChangeVariableToInherit extends Undoable
     {
         super.redo ();
 
+        view.restore ();
         NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
         NodePart grandparent = (NodePart) parent.getParent ();

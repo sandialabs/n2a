@@ -6,9 +6,9 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq;
 
-import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -17,6 +17,7 @@ import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.ChangeOrder;
 
+import java.awt.Dimension;
 import java.awt.FontMetrics;
 import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
@@ -25,11 +26,9 @@ import java.awt.event.FocusListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.Map;
-
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
+import javax.swing.BorderFactory;
 import javax.swing.InputMap;
 import javax.swing.JScrollPane;
 import javax.swing.JTree;
@@ -52,15 +51,16 @@ import javax.swing.tree.TreeSelectionModel;
 public class PanelEquationTree extends JScrollPane
 {
     // Tree
-    public    JTree                 tree;
-    public    FilteredTreeModel     model;
-    protected PanelEquations        container;
-    protected Map<MNode,StoredPath> focusCache = new HashMap<MNode,StoredPath> ();
-    protected boolean               needsFullRepaint;
+    public    JTree             tree;
+    public    FilteredTreeModel model;
+    protected PanelEquations    container;
+    protected boolean           needsFullRepaint;
 
     public PanelEquationTree (PanelEquations container, NodeBase root)
     {
         this.container = container;
+
+        if (root != container.root) setBorder (BorderFactory.createEmptyBorder ());
 
         model = new FilteredTreeModel (root);  // Can be null
         tree  = new JTree (model)
@@ -112,6 +112,9 @@ public class PanelEquationTree extends JScrollPane
         ToolTipManager.sharedInstance ().registerComponent (tree);
         tree.setTransferHandler (container.transferHandler);
         tree.setCellRenderer (container.renderer);
+
+        // Root node should be closed for graph nodes.
+        if (root != null  &&  root != container.part) tree.collapseRow (0);
 
         // TODO: make the cell editor shared among all trees
         final EquationTreeCellEditor editor = new EquationTreeCellEditor (tree, container.renderer);
@@ -210,28 +213,48 @@ public class PanelEquationTree extends JScrollPane
         {
             public void mouseClicked (MouseEvent e)
             {
-                if (! container.locked  &&  SwingUtilities.isLeftMouseButton (e)  &&  e.getClickCount () == 2)
+                int x = e.getX ();
+                int y = e.getY ();
+                int clicks = e.getClickCount ();
+
+                if (SwingUtilities.isLeftMouseButton (e))
                 {
-                    int x = e.getX ();
-                    int y = e.getY ();
-                    TreePath path = tree.getClosestPathForLocation (x, y);
-                    if (path != null)
+                    if (clicks == 1)  // Open/close root for graph nodes
                     {
-                        Rectangle r = tree.getPathBounds (path);
-                        if (r.contains (x, y))
+                        TreePath path = tree.getPathForLocation (x, y);
+                        if (path != null)
                         {
-                            tree.setSelectionPath (path);
-                            tree.startEditingAtPath (path);
+                            NodeBase node = (NodeBase) path.getLastPathComponent ();
+                            NodePart root = (NodePart) model.getRoot ();
+                            if (node == root)
+                            {
+                                boolean expanded = tree.isExpanded (path);
+                                int iconWidth = root.getIcon (expanded).getIconWidth ();  // expanded isn't actually important for root node, as NodePart doesn't currently change appearance.
+                                if (x < iconWidth)
+                                {
+                                    System.out.println ("click on icon");
+                                    if (expanded) tree.collapsePath (path);
+                                    else          tree.expandPath (path);
+                                }
+                            }
                         }
                     }
-                }
-                else if (SwingUtilities.isRightMouseButton (e)  &&   e.getClickCount () == 1)
-                {
-                    TreePath path = tree.getPathForLocation (e.getX (), e.getY ());
-                    if (path != null)
+                    else if (clicks == 2)  // Drill down
                     {
-                        tree.setSelectionPath (path);
-                        container.menuPopup.show (tree, e.getX (), e.getY ());
+                        NodePart part = (NodePart) model.getRoot ();
+                        container.loadPart (part);
+                    }
+                }
+                else if (SwingUtilities.isRightMouseButton (e))
+                {
+                    if (clicks == 1)  // Show popup menu
+                    {
+                        TreePath path = tree.getPathForLocation (x, y);
+                        if (path != null)
+                        {
+                            tree.setSelectionPath (path);
+                            container.menuPopup.show (tree, x, y);
+                        }
                     }
                 }
             }
@@ -269,11 +292,8 @@ public class PanelEquationTree extends JScrollPane
             public void treeWillCollapse (TreeExpansionEvent event) throws ExpandVetoException
             {
                 TreePath path = event.getPath ();
-                if (((NodeBase) path.getLastPathComponent ()).isRoot ())
-                {
-                    if (PanelEquationTree.this == container.panelEquationTree) container.setOpen (false);
-                    throw new ExpandVetoException (event);
-                }
+                NodeBase node = (NodeBase) path.getLastPathComponent ();
+                if (node == container.part) throw new ExpandVetoException (event);
             }
         });
 
@@ -296,9 +316,10 @@ public class PanelEquationTree extends JScrollPane
             {
                 if (tree.getSelectionCount () < 1)
                 {
-                    StoredPath sp = focusCache.get (container.record);
-                    if (sp == null) tree.setSelectionRow (0);
-                    else            sp.restore (tree);
+                    NodePart part = (NodePart) model.getRoot ();
+                    FocusCacheEntry fce = container.getFocus (part);
+                    if (fce == null  ||  fce.sp == null) tree.setSelectionRow (0);
+                    else                                 fce.sp.restore (tree);
                 }
             }
 
@@ -313,61 +334,59 @@ public class PanelEquationTree extends JScrollPane
         setViewportView (tree);
     }
 
-    public void saveFocus (MNode record)
+    public Dimension getMinimumSize ()
     {
-        // Save tree state for current record, but only if it's better than the previously-saved state.
-        if (focusCache.get (record) == null  ||  tree.getSelectionPath () != null) focusCache.put (record, new StoredPath (tree));
+        TreePath path = tree.getPathForRow (0);
+        if (path == null) return tree.getMinimumSize ();
+        return tree.getPathBounds (path).getSize ();
     }
 
-    public void load ()
+    public void loadPart (NodePart part)
     {
-        model.setRoot (container.root);  // triggers repaint, but may be too slow
+        model.setRoot (part);  // triggers repaint, but may be too slow
+        part.pet = this;
         needsFullRepaint = true;  // next call to repaintSouth() will repaint everything
-        AppData.state.set (container.record.key (), "PanelModel", "lastUsed");
 
-        StoredPath sp = focusCache.get (container.record);
-        if (sp == null)
+        FocusCacheEntry fce = container.getFocus (part);
+        if (fce == null  ||  fce.sp == null)
         {
             tree.expandRow (0);
             tree.setSelectionRow (0);
         }
         else
         {
-            sp.restore (tree);
+            fce.sp.restore (tree);
         }
     }
 
-    public void recordDeleted (MNode oldRecord)
+    public void clear ()
     {
-        focusCache.remove (oldRecord);
+        NodePart root = (NodePart) model.getRoot ();
         model.setRoot (null);
-        tree.paintImmediately (getViewport ().getViewRect ());
+        root.pet = null;
+    }
+
+    public void updateLock ()
+    {
+        tree.setEditable (! container.locked);
+    }
+
+    public StoredPath saveFocus (StoredPath previous)
+    {
+        // Save tree state for current record, but only if it's better than the previously-saved state.
+        if (previous == null  ||  tree.getSelectionPath () != null) return new StoredPath (tree);
+        return previous;
     }
 
     public void yieldFocus ()
     {
-        if (tree.getSelectionCount () > 0)
-        {
-            MNode part = ((NodePart) model.getRoot ()).source;
-            focusCache.put (part, new StoredPath (tree));
-            tree.clearSelection ();
-        }
+        tree.stopEditing ();
+        tree.clearSelection ();
     }
 
-    public void scrollToVisible (NodePart node)
+    public void takeFocus ()
     {
-        // Select node
-        TreePath path = new TreePath (node.getPath ());
-        tree.setSelectionPath (path);
-
-        // The following lines are similar to JTree.scrollPathToVisible(path),
-        // except that we enlarge the requested rectangle to force the node to the top of the frame.
-        tree.makeVisible (path);
-        tree.expandPath (path);
-        Rectangle r = tree.getPathBounds (path);
-        Rectangle visible = getViewport ().getViewRect ();
-        r.height = visible.height;
-        tree.scrollRectToVisible (r);
+        tree.requestFocusInWindow ();
     }
 
     public NodeBase getSelected ()

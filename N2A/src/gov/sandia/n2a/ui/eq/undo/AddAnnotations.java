@@ -18,12 +18,15 @@ import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
+import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeContainer;
 
 public class AddAnnotations extends Undoable
 {
+    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;  ///< to parent of $metadata node
     protected int          index; ///< Position within parent node
     protected MVolatile    saved; ///< subtree under $metadata
@@ -40,6 +43,7 @@ public class AddAnnotations extends Undoable
     public void undo ()
     {
         super.undo ();
+        view.restore ();
         destroy (path, saved.key ());
     }
 
@@ -72,6 +76,7 @@ public class AddAnnotations extends Undoable
     public void redo ()
     {
         super.redo ();
+        view.restore ();
         NodeFactory factory = new NodeFactory ()
         {
             public NodeBase create (MPart part)

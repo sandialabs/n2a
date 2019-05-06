@@ -30,11 +30,10 @@ import java.awt.event.MouseWheelEvent;
 import java.awt.event.MouseWheelListener;
 import java.util.ArrayList;
 import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Map.Entry;
 
+import javax.swing.BorderFactory;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JScrollBar;
@@ -49,6 +48,7 @@ import javax.swing.event.MouseInputAdapter;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.eq.GraphEdge.Vector2;
+import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 import gov.sandia.n2a.ui.eq.undo.ChangeVariable;
@@ -56,9 +56,8 @@ import gov.sandia.n2a.ui.eq.undo.ChangeVariable;
 @SuppressWarnings("serial")
 public class PanelEquationGraph extends JScrollPane
 {
-    protected PanelEquations   container;
-    protected GraphPanel       graphPanel;
-    protected Map<MNode,Point> focusCache = new HashMap<MNode,Point> ();
+    protected PanelEquations container;
+    protected GraphPanel     graphPanel;
 
     // Convenience references
     protected JViewport  vp;
@@ -72,6 +71,7 @@ public class PanelEquationGraph extends JScrollPane
         this.container = container;
         graphPanel = new GraphPanel ();
         setViewportView (graphPanel);
+        setBorder (BorderFactory.createLineBorder (Color.black));
 
         setTransferHandler (new GraphTransferHandler ());
 
@@ -131,37 +131,39 @@ public class PanelEquationGraph extends JScrollPane
                     // the panel and at the scroll pane, since the panel can sometimes not cover the whole area.
                     NodePart parent = (NodePart) container.part.getParent ();
                     if (parent == null) return;
-                    load (parent);
-                    container.panelEquationTree.scrollToVisible (parent);
+                    container.loadPart (parent);
                 }
             }
         });
     }
 
-    public void saveFocus ()
+    public void loadPart ()
     {
-        if (container.part == null) return;
+        graphPanel.clear ();
+        graphPanel.load ();
+    }
+
+    public void clear ()
+    {
+        graphPanel.clear ();
+    }
+
+    public void updateLock ()
+    {
+        graphPanel.updateLock ();
+    }
+
+    public Point saveFocus ()
+    {
         Point focus = vp.getViewPosition ();
         focus.x -= graphPanel.offset.x;
         focus.y -= graphPanel.offset.y;
-        focusCache.put (container.part.source, focus);
+        return focus;
     }
 
-    public void load (NodePart part)
+    public GraphNode findNode (String name)
     {
-        saveFocus ();
-        container.part = part;
-        graphPanel.clear ();
-        graphPanel.load ();
-        container.updateBreadcrumbs (part);
-        paintImmediately ();
-    }
-
-    public void recordDeleted ()
-    {
-        container.part = null;
-        graphPanel.clear ();
-        paintImmediately ();
+        return graphPanel.findNode (name);
     }
 
     public void addPart (NodePart node)
@@ -172,6 +174,11 @@ public class PanelEquationGraph extends JScrollPane
     public void removePart (NodePart node)
     {
         if (node.graph != null) graphPanel.removePart (node);
+    }
+
+    public void deleteSelected ()
+    {
+        // TODO
     }
 
     public void updatePart (NodePart node)
@@ -245,8 +252,9 @@ public class PanelEquationGraph extends JScrollPane
     public class GraphPanel extends JPanel
     {
         protected GraphLayout     layout;  // For ease of access, to avoid calling getLayout() all the time.
-        protected List<GraphEdge> edges  = new ArrayList<GraphEdge> (); // Note that GraphNodes are stored directly as Swing components.
-        protected Point           offset = new Point ();  // Offset from persistent coordinates to pixels. Add this to a stored (x,y) value to get non-negative coordinates that can be painted.
+        protected List<GraphEdge> edges    = new ArrayList<GraphEdge> (); // Note that GraphNodes are stored directly as Swing components.
+        protected Point           offset   = new Point ();  // Offset from persistent coordinates to pixels. Add this to a stored (x,y) value to get non-negative coordinates that can be painted.
+        protected List<GraphNode> selected = new ArrayList<GraphNode> ();  // TODO: implement selection, with operations: move, resize, delete
 
         public GraphPanel ()
         {
@@ -329,13 +337,15 @@ public class PanelEquationGraph extends JScrollPane
             buildEdges ();
 
             validate ();  // Runs layout, so negative focus locations can work, or so that origin (0,0) is meaningful.
-            Point focus = focusCache.get (container.part.source);
-            if (focus == null)
+            Point focus;
+            FocusCacheEntry fce = container.getFocus (container.part);
+            if (fce == null  ||  fce.position == null)
             {
                 focus = new Point ();  // (0,0)
             }
             else
             {
+                focus = new Point (fce.position);
                 focus.x += graphPanel.offset.x;
                 focus.y += graphPanel.offset.y;
                 focus.x = Math.max (0, focus.x);
@@ -441,6 +451,14 @@ public class PanelEquationGraph extends JScrollPane
             revalidate ();
         }
 
+        public void updateLock ()
+        {
+            for (Component c : getComponents ())
+            {
+                ((GraphNode) c).panel.updateLock ();
+            }
+        }
+
         public GraphEdge findTipAt (Point p)
         {
             Vector2 p2 = new Vector2 (p.x, p.y);
@@ -457,6 +475,16 @@ public class PanelEquationGraph extends JScrollPane
             {
                 // p is relative to the container, whereas Component.contains() is relative to the component itself.
                 if (c.contains (p.x - c.getX (), p.y - c.getY ())) return (GraphNode) c;
+            }
+            return null;
+        }
+
+        public GraphNode findNode (String name)
+        {
+            for (Component c : getComponents ())
+            {
+                GraphNode gn = (GraphNode) c;
+                if (gn.node.source.key ().equals (name)) return gn;
             }
             return null;
         }
@@ -607,8 +635,7 @@ public class PanelEquationGraph extends JScrollPane
                 // Drill up
                 NodePart parent = (NodePart) container.part.getParent ();
                 if (parent == null) return;
-                load (parent);
-                container.panelEquationTree.scrollToVisible (parent);
+                container.loadPart (parent);
             }
         }
 

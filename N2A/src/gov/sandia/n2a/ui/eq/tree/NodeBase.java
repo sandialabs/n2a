@@ -6,7 +6,6 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.tree;
 
-import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.EquationTreeCellRenderer;
@@ -366,27 +365,36 @@ public class NodeBase extends DefaultMutableTreeNode
         return ((NodeBase) parent).getTree ();  // Should always lead to a NodePart
     }
 
+    public NodeBase getTrueParent ()
+    {
+        return (NodeBase) parent;
+    }
+
     public List<String> getKeyPath ()
     {
-        TreeNode[] path = getPath ();
-        List<String> result = new ArrayList<String> (path.length);
-        for (TreeNode n : path) result.add (((NodeBase) n).source.key ());
+        List<String> result = new ArrayList<String> ();
+        NodeBase p = this;
+        while (p != null)
+        {
+            result.add (0, p.source.key ());
+            p = p.getTrueParent ();
+        }
         return result;
     }
 
+    /**
+        Locates original node using given absolute path.
+        Assumes that correct document has been loaded (and focused) via PanelEquations.StoredView.
+    **/
     public static NodeBase locateNode (List<String> path)
     {
-        MNode doc = AppData.models.child (path.get (0));
-        PanelModel mep = PanelModel.instance;
-        mep.panelEquations.load (doc);  // lazy; only loads if not already loaded
-        mep.panelEquations.takeFocus ();  // likewise, focus only moves if it is not already on equation tree
-        NodeBase parent = mep.panelEquations.root;
-        for (int i = 1; i < path.size (); i++)
+        NodeBase result = PanelModel.instance.panelEquations.root;
+        for (int i = 1; i < path.size (); i++)  // The first entry in the path is the document name (name of root node itself). We no longer use this value, since StoredView handles document loading now.
         {
-            parent = (NodeBase) parent.child (path.get (i));  // not filtered, because we are concerned with maintaining the model, not the view
-            if (parent == null) break;
+            result = (NodeBase) result.child (path.get (i));  // not filtered, because we are concerned with maintaining the model, not the view
+            if (result == null) break;
         }
-        return parent;
+        return result;  // Can return null, if the leaf node is not found.
     }
 
     public NodeBase child (String key)

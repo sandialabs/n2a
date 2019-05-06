@@ -255,11 +255,10 @@ public class GraphNode extends JPanel
         {
             if (SwingUtilities.isLeftMouseButton (me))
             {
-                PanelModel mep = PanelModel.instance;
                 if (me.getClickCount () == 2)
                 {
                     // Drill down
-                    mep.panelEquations.panelEquationGraph.load (node);
+                    PanelModel.instance.panelEquations.loadPart (node);
                 }
             }
         }

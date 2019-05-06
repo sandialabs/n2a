@@ -194,6 +194,10 @@ public class GraphEdge
             Vector2 w2 = c.add (ba.multiply (length));
             shape = new CubicCurve2D.Double (tip.x, tip.y, w1.x, w1.y, w2.x, w2.y, c.x, c.y);
 
+            // TODO: find intersection between cubic curve and edges of box
+            // See code at https://www.particleincell.com/2013/cubic-line-intersection
+            // The code here just intersects a straight segment to the first control point,
+            // which can be a very bad approximation.
             double Clength = Cbounds.getWidth () + Cbounds.getHeight ();
             root = c.add (ba.multiply (Clength));  // guaranteed to be outside of c
             root = intersection (new Segment2 (c, root), Cbounds);  // on boundary of c

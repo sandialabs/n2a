@@ -305,7 +305,10 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
             c.merge ((MNode) value);
             return c;
         }
-        return set (value.toString (), indices);
+        String stringValue;
+        if (value instanceof Boolean) stringValue = (Boolean) value ? "1" : "0";
+        else                          stringValue = value.toString ();
+        return set (stringValue, indices);
     }
 
     public synchronized MNode set (Object value, Object... indices)

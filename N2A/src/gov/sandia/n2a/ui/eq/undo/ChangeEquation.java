@@ -16,12 +16,15 @@ import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
+import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeEquation;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class ChangeEquation extends Undoable
 {
+    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;
     protected String       nameBefore;
     protected String       combinerBefore;
@@ -55,17 +58,18 @@ public class ChangeEquation extends Undoable
     public void undo ()
     {
         super.undo ();
-        apply (path, nameAfter, nameBefore, combinerBefore, valueBefore);
+        apply (nameAfter, nameBefore, combinerBefore, valueBefore);
     }
 
     public void redo ()
     {
         super.redo ();
-        apply (path, nameBefore, nameAfter, combinerAfter, valueAfter);
+        apply (nameBefore, nameAfter, combinerAfter, valueAfter);
     }
 
-    public static void apply (List<String> path, String nameBefore, String nameAfter, String combinerAfter, String valueAfter)
+    public void apply (String nameBefore, String nameAfter, String combinerAfter, String valueAfter)
     {
+        view.restore ();
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
         NodeBase nodeBefore = parent.child (nameBefore);

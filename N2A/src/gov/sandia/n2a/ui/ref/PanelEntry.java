@@ -358,7 +358,7 @@ public class PanelEntry extends JPanel
             }
         });
 
-        buttonAddEntry = new JButton (ImageUtil.getImage ("book.gif"));
+        buttonAddEntry = new JButton (ImageUtil.getImage ("document.png"));
         buttonAddEntry.setMargin (new Insets (2, 2, 2, 2));
         buttonAddEntry.setFocusable (false);
         buttonAddEntry.setToolTipText ("New Reference");

@@ -13,11 +13,14 @@ import javax.swing.undo.UndoableEdit;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Undoable;
+import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
 public class DeletePart extends Undoable
 {
+    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;  // to containing part
     protected int          index; // where to insert among siblings
     protected boolean      canceled;
@@ -40,12 +43,14 @@ public class DeletePart extends Undoable
     public void undo ()
     {
         super.undo ();
+        view.restore ();
         AddPart.create (path, index, name, savedSubtree, false);
     }
 
     public void redo ()
     {
         super.redo ();
+        view.restore ();
         AddPart.destroy (path, canceled, name);
     }
 

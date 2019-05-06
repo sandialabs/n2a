@@ -22,12 +22,15 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
+import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeEquation;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class AddEquation extends Undoable
 {
+    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;  // to variable node
     protected int          equationCount;  // before adding this equation
     protected int          index; // where to insert among siblings
@@ -100,6 +103,7 @@ public class AddEquation extends Undoable
     public void undo ()
     {
         super.undo ();
+        view.restore ();
         destroy (path, equationCount, false, name, combinerBefore);
     }
 
@@ -178,6 +182,7 @@ public class AddEquation extends Undoable
     public void redo ()
     {
         super.redo ();
+        view.restore ();
         createdNode = create (path, equationCount, index, name, combinerAfter, value);
     }
 

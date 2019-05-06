@@ -13,12 +13,15 @@ import javax.swing.undo.UndoableEdit;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Undoable;
+import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 
 public class DeleteAnnotation extends Undoable
 {
+    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;
     protected int          index; // where to insert among siblings
     protected boolean      canceled;
@@ -62,12 +65,14 @@ public class DeleteAnnotation extends Undoable
     public void undo ()
     {
         super.undo ();
+        view.restore ();
         AddAnnotation.create (path, index, name, savedSubtree, false);
     }
 
     public void redo ()
     {
         super.redo ();
+        view.restore ();
         AddAnnotation.destroy (path, canceled, name, prefix);
     }
 

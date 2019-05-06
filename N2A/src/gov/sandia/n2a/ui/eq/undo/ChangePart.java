@@ -20,11 +20,13 @@ import gov.sandia.n2a.ui.eq.PanelEquationGraph;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
 public class ChangePart extends Undoable
 {
+    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;   // to the container of the part being renamed
     protected String       nameBefore;
     protected String       nameAfter;
@@ -58,6 +60,7 @@ public class ChangePart extends Undoable
 
     public void apply (String nameBefore, String nameAfter)
     {
+        view.restore ();
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
         NodeBase temp = parent.child (nameBefore);

@@ -29,7 +29,6 @@ import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.GraphNode;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
-import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddInherit;
@@ -169,6 +168,13 @@ public class NodePart extends NodeContainer
     }
 
     @Override
+    public NodePart getTrueParent ()
+    {
+        if (parent == null) return trueParent;
+        return (NodePart) parent;
+    }
+
+    @Override
     public boolean visible (int filterLevel)
     {
         if (filterLevel >= FilteredTreeModel.LOCAL) return source.isFromTopDocument ();
@@ -186,18 +192,8 @@ public class NodePart extends NodeContainer
     public String getText (boolean expanded, boolean editing)
     {
         String key = toString ();  // This allows us to set editing text to "" for new objects, while showing key for old objects.
-        if (expanded  ||  editing  ||  inheritName.isEmpty ()) return key;
-        if (pet == null) return key + "  (" + inheritName + ")";
-
-        // For root node of full-view tree, return a breadcrumb list
-        String result = "";
-        PanelEquations pe = PanelModel.instance.panelEquations;
-        for (NodePart b : pe.listBreadcrumb)  // includes this node
-        {
-            result += "." + b.source.key ();
-            if (b == this) break;
-        }
-        return result.substring (1);
+        if (expanded  ||  editing  ||  inheritName.isEmpty ()  ||  pet != null) return key;
+        return key + "  (" + inheritName + ")";
     }
 
     @Override

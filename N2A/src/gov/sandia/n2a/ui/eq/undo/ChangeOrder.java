@@ -17,12 +17,15 @@ import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
+import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
 public class ChangeOrder extends Undoable
 {
+    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;  // to parent of moved node
     protected int          indexBefore;  // all indices are unfiltered
     protected int          indexAfter;
@@ -52,17 +55,18 @@ public class ChangeOrder extends Undoable
     public void undo ()
     {
         super.undo ();
-        apply (path, indexAfter, indexBefore, indexMetadata, false, orderAbsent);
+        apply (indexAfter, indexBefore, indexMetadata, false, orderAbsent);
     }
 
     public void redo ()
     {
         super.redo ();
-        apply (path, indexBefore, indexAfter, indexMetadata, orderAbsent, false);
+        apply (indexBefore, indexAfter, indexMetadata, orderAbsent, false);
     }
 
-    public static void apply (List<String> path, int indexBefore, int indexAfter, int indexMetadata, boolean createOrder, boolean destroyOrder)
+    public void apply (int indexBefore, int indexAfter, int indexMetadata, boolean createOrder, boolean destroyOrder)
     {
+        view.restore ();
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
 

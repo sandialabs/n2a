@@ -11,10 +11,13 @@ import java.util.List;
 import javax.swing.undo.UndoableEdit;
 
 import gov.sandia.n2a.ui.Undoable;
+import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 
 public class DeleteReference extends Undoable
 {
+    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;  // to parent of $reference node
     protected int          index; // where to insert among siblings
     protected boolean      canceled;
@@ -37,12 +40,14 @@ public class DeleteReference extends Undoable
     public void undo ()
     {
         super.undo ();
+        view.restore ();
         AddReference.create (path, index, name, value);
     }
 
     public void redo ()
     {
         super.redo ();
+        view.restore ();
         AddReference.destroy (path, canceled, name);
     }
 

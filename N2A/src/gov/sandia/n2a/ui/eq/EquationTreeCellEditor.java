@@ -49,6 +49,7 @@ import gov.sandia.n2a.ui.MainTabbedPane;
 import gov.sandia.n2a.ui.SafeTextTransferHandler;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeEquation;
+import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 /**
@@ -291,8 +292,19 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
     @Override
     public boolean isCellEditable (EventObject event)
     {
-        if (event != null)
+        if (event == null)  // Just verify that editing is permitted.
         {
+            if (lastPath == null) return false;
+            Object o = lastPath.getLastPathComponent ();
+            if (! (o instanceof NodeBase)) return false;
+            editingNode = (NodeBase) o;
+            if (! editingNode.allowEdit ()) return false;
+            return true;
+        }
+        else  // Most likely, a moust event
+        {
+            // Always return false from this method. Instead, initiate editing indirectly.
+
             Object source = event.getSource ();
             if (! (source instanceof JTree)) return false;
             if (source != tree)
@@ -303,30 +315,41 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             if (event instanceof MouseEvent)
             {
                 MouseEvent me = (MouseEvent) event;
-                final TreePath path = tree.getPathForLocation (me.getX (), me.getY ());
-                if (path != null)
+                int x = me.getX ();
+                int y = me.getY ();
+                int clicks = me.getClickCount ();
+                if (SwingUtilities.isLeftMouseButton (me))
                 {
-                    if (me.getClickCount () == 1  &&  SwingUtilities.isLeftMouseButton (me)  &&  path.equals (lastPath))
+                    if (clicks == 1)
                     {
-                        EventQueue.invokeLater (new Runnable ()
+                        final TreePath path = tree.getPathForLocation (x, y);
+                        if (path != null  &&  path.equals (lastPath))  // Second click on node, but not double-click.
                         {
-                            public void run ()
+                            // Prevent second click from initiating edit if this is the icon of the root node.
+                            // Similar to the logic in PanelEquatonTree tree mouse listener
+                            NodeBase node = (NodeBase) path.getLastPathComponent ();
+                            NodePart root = (NodePart) tree.getModel ().getRoot ();
+                            if (node == root)
                             {
-                                tree.startEditingAtPath (path);
+                                boolean expanded = tree.isExpanded (path);
+                                int iconWidth = root.getIcon (expanded).getIconWidth ();  // expanded doesn't really matter to icon width, as NodePart uses only one icon.
+                                if (x < iconWidth) return false;
                             }
-                        });
+
+                            // Initiate edit
+                            EventQueue.invokeLater (new Runnable ()
+                            {
+                                public void run ()
+                                {
+                                    tree.startEditingAtPath (path);
+                                }
+                            });
+                        }
                     }
                 }
             }
             return false;
         }
-
-        if (lastPath == null) return false;
-        Object o = lastPath.getLastPathComponent ();
-        if (! (o instanceof NodeBase)) return false;
-        editingNode = (NodeBase) o;
-        if (! editingNode.allowEdit ()) return false;
-        return true;
     }
 
     @Override
