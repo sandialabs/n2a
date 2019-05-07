@@ -37,7 +37,7 @@ public class ChangePart extends Undoable
     **/
     public ChangePart (NodePart node, String nameBefore, String nameAfter)
     {
-        NodeBase parent = (NodeBase) node.getParent ();
+        NodeBase parent = (NodeBase) node.getTrueParent ();
         path = parent.getKeyPath ();
         this.nameBefore = nameBefore;
         this.nameAfter  = nameAfter;
@@ -77,7 +77,7 @@ public class ChangePart extends Undoable
         // Update GUI
 
         PanelEquations pe = PanelModel.instance.panelEquations;
-        PanelEquationTree pet = parent.getTree ();
+        PanelEquationTree pet = nodeBefore.getTree ();
         FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
         PanelEquationGraph peg = pe.panelEquationGraph;
         boolean graphParent = parent == pe.part;

@@ -243,10 +243,11 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
     @Override
     public Component getTreeCellEditorComponent (JTree tree, Object value, boolean isSelected, boolean expanded, boolean leaf, int row)
     {
-        editingIcon = renderer.getIconFor ((NodeBase) value, expanded, leaf);
-        offset      = renderer.getIconTextGap () + editingIcon.getIconWidth ();
-        Font font   = renderer.getFontFor (tree, editingNode);
-        String text = editingNode.getText (expanded, true);
+        editingIcon     = renderer.getIconFor ((NodeBase) value, expanded, leaf);
+        offset          = renderer.getIconTextGap () + editingIcon.getIconWidth ();
+        Font   baseFont = tree.getFont ();
+        Font   font     = editingNode.getStyledFont (baseFont);
+        String text     = editingNode.getText (expanded, true);
 
         FontMetrics fm = tree.getFontMetrics (font);
         int textWidth = fm.stringWidth (text);

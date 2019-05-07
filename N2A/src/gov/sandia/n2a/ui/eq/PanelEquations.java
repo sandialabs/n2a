@@ -440,6 +440,7 @@ public class PanelEquations extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
+                saveFocus ();
                 setOpen (! open);
             }
         });
@@ -595,7 +596,12 @@ public class PanelEquations extends JPanel
             root = new NodePart (new MPart ((MPersistent) record));
             root.build ();
             root.findConnections ();
+
+            FocusCacheEntry fce = getFocus (root);
+            if (fce != null) setOpenPanel (fce.open);
+            part = null;  // Force loadPart() to run.
             loadPart (root);
+
             AppData.state.set (record.key (), "PanelModel", "lastUsed");
         }
         catch (Exception e)
@@ -607,14 +613,53 @@ public class PanelEquations extends JPanel
 
     public void loadPart (NodePart part)
     {
+        if (this.part == part) return;
         this.part = part;
         if (open) panelEquationTree.loadPart (part);
         else      panelEquationGraph.loadPart ();
         updateBreadcrumbs ();
-        validate ();
-        panelCenter.paintImmediately (panelCenter.getBounds ());
+        panelCenter.validate ();
+        panelCenter.repaint ();
     }
- 
+
+    public void setOpen (boolean open)
+    {
+        if (this.open == open) return;
+        setOpenPanel (open);
+        if (open) panelEquationTree.loadPart (part);
+        else      panelEquationGraph.loadPart ();
+        updateBreadcrumbs ();
+        panelCenter.validate ();
+        panelCenter.repaint ();
+    }
+
+    /**
+        Subroutine of setOpen() that is also used by load().
+    **/
+    public void setOpenPanel (boolean open)
+    {
+        if (this.open == open) return;
+        this.open = open;
+        if (open)
+        {
+            panelCenter.remove (panelEquationGraph);
+            panelEquationGraph.clear ();  // releases fake roots on subparts
+            panelCenter.add (panelEquationTree, BorderLayout.CENTER);
+
+            buttonView.setIcon (iconViewGraph);
+            buttonView.setToolTipText ("View Graph");
+        }
+        else
+        {
+            panelCenter.remove (panelEquationTree);
+            panelEquationTree.clear ();
+            panelCenter.add (panelEquationGraph, BorderLayout.CENTER);
+
+            buttonView.setIcon (iconViewTree);
+            buttonView.setToolTipText ("View Tree");
+        }
+    }
+
     /**
         Informs us that some other code deleted a document from the DB.
         We only respond if it happens to be on display.
@@ -642,37 +687,6 @@ public class PanelEquations extends JPanel
         else                                   recordDeleted (record);
     }
 
-    public void setOpen (boolean open)
-    {
-        if (this.open == open) return;
-        saveFocus ();
-        this.open = open;
-        if (open)
-        {
-            panelCenter.remove (panelEquationGraph);
-            panelEquationGraph.clear ();  // releases fake roots on subparts
-            panelCenter.add (panelEquationTree, BorderLayout.CENTER);
-            panelEquationTree.loadPart (part);
-            panelEquationTree.takeFocus ();
-
-            buttonView.setIcon (iconViewGraph);
-            buttonView.setToolTipText ("View Graph");
-        }
-        else
-        {
-            panelCenter.remove (panelEquationTree);
-            panelEquationTree.clear ();
-            panelCenter.add (panelEquationGraph, BorderLayout.CENTER);
-            panelEquationGraph.loadPart ();
-
-            buttonView.setIcon (iconViewTree);
-            buttonView.setToolTipText ("View Tree");
-        }
-        updateBreadcrumbs ();
-        panelCenter.validate ();
-        panelCenter.repaint ();
-    }
-
     public PanelEquationTree getActiveTree ()
     {
         if (open) return panelEquationTree;
@@ -685,16 +699,24 @@ public class PanelEquations extends JPanel
 
     public void saveFocus ()
     {
-        if (part == null) return;
+        if (root == null) return;
 
-        FocusCacheEntry fce = getFocus (part);
+        // Save open state for document root
+        FocusCacheEntry fce = getFocus (root);
+        if (fce == null)
+        {
+            fce = new FocusCacheEntry ();
+            focusCache.setObject (fce, root.source.key ());
+        }
+        fce.open = open;
+
+        // Save part focus information
+        fce = getFocus (part);
         if (fce == null)
         {
             fce = new FocusCacheEntry ();
             focusCache.setObject (fce, part.getKeyPath ().toArray ());
         }
-
-        fce.open = open;
         if (open)
         {
             fce.sp = panelEquationTree.saveFocus (fce.sp);
@@ -708,6 +730,7 @@ public class PanelEquations extends JPanel
                 NodePart p = (NodePart) pet.model.getRoot ();
                 fce.subpart = p.source.key ();
 
+                // TODO: save state of all node trees?
                 fce = getFocus (p);
                 if (fce == null)
                 {
@@ -749,7 +772,6 @@ public class PanelEquations extends JPanel
         }
         else
         {
-            setOpen (fce.open);
             if (! open  &&  fce.subpart != null)
             {
                 GraphNode gn = panelEquationGraph.findNode (fce.subpart);
@@ -1069,7 +1091,7 @@ public class PanelEquations extends JPanel
 
     public static class FocusCacheEntry
     {
-        boolean    open;      // state of PanelEquations.open when this part is the full-view part
+        boolean    open;      // state of PanelEquations.open when this is the document root (only used for top-level part)
         StoredPath sp;        // of tree when this part is the root
         Point      position;  // of viewport for graph
         String     subpart;   // Name of graph node (sub-part) whose tree has keyboard focus
@@ -1093,24 +1115,29 @@ public class PanelEquations extends JPanel
 
         public void restore ()
         {
-            if (path != null)
-            {
-                MNode doc = AppData.models.child (path.get (0));
-                load (doc);
+            if (path == null) return;  // If there's no stored path, then this is a document-level operation, so view doesn't matter. Document-level operations shouldn't even use this class.
 
-                NodeBase p = root;
-                for (int i = 1; i < path.size (); i++)
-                {
-                    NodeBase n = p.child (path.get (i));
-                    if (n == null) break;
-                    p = n;
-                }
-                loadPart ((NodePart) p);
+            // Hack the focus cache to switch to the right view.
+            String key0 = path.get (0);
+            FocusCacheEntry fce = (FocusCacheEntry) focusCache.getObject (key0);
+            if (fce == null)
+            {
+                fce = new FocusCacheEntry ();
+                focusCache.setObject (fce, key0);
             }
-            setOpen (open);
-            FocusCacheEntry fce = (FocusCacheEntry) focusCache.getObject (path.toArray ());
-            if (fce != null) fce.open = open;  // Override this so that takeFocus() does not change the open state from what we require.
-            takeFocus ();  // focus only moves if it is not already on equation tree
+            fce.open = open;
+
+            MNode doc = AppData.models.child (key0);
+            load (doc);
+
+            NodeBase p = root;
+            for (int i = 1; i < path.size (); i++)
+            {
+                NodeBase n = p.child (path.get (i));
+                if (n == null) break;
+                p = n;
+            }
+            loadPart ((NodePart) p);  // takes focus
         }
     }
 }

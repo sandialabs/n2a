@@ -56,11 +56,9 @@ public class PanelEquationTree extends JScrollPane
     protected PanelEquations    container;
     protected boolean           needsFullRepaint;
 
-    public PanelEquationTree (PanelEquations container, NodeBase root)
+    public PanelEquationTree (PanelEquations container, NodePart root)
     {
         this.container = container;
-
-        if (root != container.root) setBorder (BorderFactory.createEmptyBorder ());
 
         model = new FilteredTreeModel (root);  // Can be null
         tree  = new JTree (model)
@@ -113,8 +111,13 @@ public class PanelEquationTree extends JScrollPane
         tree.setTransferHandler (container.transferHandler);
         tree.setCellRenderer (container.renderer);
 
-        // Root node should be closed for graph nodes.
-        if (root != null  &&  root != container.part) tree.collapseRow (0);
+        // Special cases for nodes in graph
+        if (root != null  &&  root.graph != null)
+        {
+            setBorder (BorderFactory.createEmptyBorder ());
+            boolean open = root.source.getBoolean ("$metadata", "gui", "bounds", "open");
+            if (! open) tree.collapseRow (0);
+        }
 
         // TODO: make the cell editor shared among all trees
         final EquationTreeCellEditor editor = new EquationTreeCellEditor (tree, container.renderer);
@@ -232,7 +235,6 @@ public class PanelEquationTree extends JScrollPane
                                 int iconWidth = root.getIcon (expanded).getIconWidth ();  // expanded isn't actually important for root node, as NodePart doesn't currently change appearance.
                                 if (x < iconWidth)
                                 {
-                                    System.out.println ("click on icon");
                                     if (expanded) tree.collapsePath (path);
                                     else          tree.expandPath (path);
                                 }
@@ -301,11 +303,25 @@ public class PanelEquationTree extends JScrollPane
         {
             public void treeExpanded (TreeExpansionEvent event)
             {
-                repaintSouth (event.getPath ());
+                TreePath path = event.getPath ();
+                Object o = path.getLastPathComponent ();
+                if (o instanceof NodePart)
+                {
+                    NodePart part = (NodePart) o;
+                    if (part.graph != null) part.graph.revalidate ();
+                }
+                repaintSouth (path);
             }
 
             public void treeCollapsed (TreeExpansionEvent event)
             {
+                TreePath path = event.getPath ();
+                Object o = path.getLastPathComponent ();
+                if (o instanceof NodePart)
+                {
+                    NodePart part = (NodePart) o;
+                    if (part.graph != null) part.graph.revalidate ();
+                }
                 repaintSouth (event.getPath ());
             }
         });
@@ -337,8 +353,15 @@ public class PanelEquationTree extends JScrollPane
     public Dimension getMinimumSize ()
     {
         TreePath path = tree.getPathForRow (0);
-        if (path == null) return tree.getMinimumSize ();
-        return tree.getPathBounds (path).getSize ();
+        if (path != null) return tree.getPathBounds (path).getSize ();
+        return super.getMinimumSize ();
+    }
+
+    public Dimension getPreferredSize ()
+    {
+        TreePath path = tree.getPathForRow (0);
+        if (path != null  &&  tree.isCollapsed (0)) return tree.getPathBounds (path).getSize ();
+        return super.getPreferredSize ();
     }
 
     public void loadPart (NodePart part)
@@ -386,7 +409,7 @@ public class PanelEquationTree extends JScrollPane
 
     public void takeFocus ()
     {
-        tree.requestFocusInWindow ();
+        tree.requestFocusInWindow ();  // Triggers FocusListener defined above, which restores focus from cache.
     }
 
     public NodeBase getSelected ()

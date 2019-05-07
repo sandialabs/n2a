@@ -353,6 +353,12 @@ public class PanelEquationGraph extends JScrollPane
                 Dimension extent = vp.getExtentSize ();
                 focus.x = Math.min (focus.x, Math.max (0, layout.bounds.width  - extent.width));
                 focus.y = Math.min (focus.y, Math.max (0, layout.bounds.height - extent.height));
+
+                if (fce.subpart != null)
+                {
+                    GraphNode gn = findNode (fce.subpart);
+                    if (gn != null) gn.panel.takeFocus ();
+                }
             }
             vp.setViewPosition (focus);
         }

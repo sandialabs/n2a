@@ -74,7 +74,7 @@ public class NodePart extends NodeContainer
         setUserObject (source.key ());  // This won't actually be used in editing, but it does prevent editingCancelled() from getting a null object.
 
         inheritName = "";
-        if (! isRoot ())
+        if (! isTrueRoot ())
         {
             MNode inherit = source.child ("$inherit");
             if (inherit != null) inheritName = inherit.get ().split (",", 2)[0].replace ("\"", "");
@@ -174,6 +174,11 @@ public class NodePart extends NodeContainer
         return (NodePart) parent;
     }
 
+    public boolean isTrueRoot ()
+    {
+        return parent == null  &&  trueParent == null;
+    }
+
     @Override
     public boolean visible (int filterLevel)
     {
@@ -192,21 +197,26 @@ public class NodePart extends NodeContainer
     public String getText (boolean expanded, boolean editing)
     {
         String key = toString ();  // This allows us to set editing text to "" for new objects, while showing key for old objects.
-        if (expanded  ||  editing  ||  inheritName.isEmpty ()  ||  pet != null) return key;
-        return key + "  (" + inheritName + ")";
+        if (editing) return key;
+        if (expanded  ||  inheritName.isEmpty ()) return "<html><b>" + key + "</b></html>";
+        if (graph == null) return "<html><b>" + key + "</b>  <i>(" + inheritName + ")</i></html>";
+        return "<html><b>" + key + "</b><br/><i>" + inheritName + "</i></html>";
     }
 
     @Override
-    public float getFontScale ()
+    public Font getPlainFont (Font base)
     {
-        if (parent == null  &&  trueParent == null) return 2f;
-        return 1;
+        float size = base.getSize2D ();
+        if (parent == null  &&  trueParent == null) size *= 2;
+        return base.deriveFont (Font.PLAIN, size);
     }
 
     @Override
-    public int getFontStyle ()
+    public Font getStyledFont (Font base)
     {
-        return Font.BOLD;
+        float size = base.getSize2D ();
+        if (parent == null  &&  trueParent == null) size *= 2;
+        return base.deriveFont (Font.BOLD, size);
     }
 
     /**
@@ -609,7 +619,7 @@ public class NodePart extends NodeContainer
         }
 
         PanelModel mep = PanelModel.instance;
-        if (isRoot ())  // Edits to root cause a rename of the document on disk
+        if (isTrueRoot ())  // Edits to root cause a rename of the document on disk
         {
             if (name.isEmpty ())
             {
@@ -645,7 +655,7 @@ public class NodePart extends NodeContainer
 
         name = validIdentifierFrom (name);
 
-        NodeBase parent = (NodeBase) getParent ();
+        NodeBase parent = getTrueParent ();
         NodeBase sibling = parent.child (name);
         if (sibling != null  &&  (sibling.source.isFromTopDocument ()  ||  ! (sibling instanceof NodePart)))  // the name already exists in top document, so reject rename
         {
@@ -662,8 +672,8 @@ public class NodePart extends NodeContainer
     {
         if (! source.isFromTopDocument ()) return;  // This should be true of root, as well as any other node we might try to delete.
         PanelModel mep = PanelModel.instance;
-        if (isRoot ()) mep.undoManager.add (new DeleteDoc ((MDoc) source.getSource ()));
-        else           mep.undoManager.add (new DeletePart (this, canceled));
+        if (isTrueRoot ()) mep.undoManager.add (new DeleteDoc ((MDoc) source.getSource ()));
+        else               mep.undoManager.add (new DeletePart (this, canceled));
     }
 
     @Override

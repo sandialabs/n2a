@@ -62,11 +62,11 @@ public class NodeAnnotations extends NodeContainer
     }
 
     @Override
-    public int getFontStyle ()
+    public String getText (boolean expanded, boolean editing)
     {
-        return Font.ITALIC;
+        return "<html><i>" + toString () + "</i></html>";
     }
-    
+
     @Override
     public NodeBase add (String type, JTree tree, MNode data, Point location)
     {

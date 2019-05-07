@@ -1,12 +1,11 @@
 /*
-Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.ui.eq.tree;
 
-import java.awt.Font;
 import java.awt.Point;
 
 import gov.sandia.n2a.db.MNode;
@@ -57,9 +56,9 @@ public class NodeReferences extends NodeContainer
     }
 
     @Override
-    public int getFontStyle ()
+    public String getText (boolean expanded, boolean editing)
     {
-        return Font.ITALIC;
+        return "<html><i>" + toString () + "</i></html>";
     }
 
     @Override

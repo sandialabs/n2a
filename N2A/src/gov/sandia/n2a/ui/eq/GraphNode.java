@@ -32,6 +32,8 @@ import javax.swing.UIManager;
 import javax.swing.border.AbstractBorder;
 import javax.swing.event.MouseInputAdapter;
 import javax.swing.event.MouseInputListener;
+import javax.swing.tree.TreePath;
+
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Lay;
@@ -97,8 +99,21 @@ public class GraphNode extends JPanel
         MNode bounds = node.source.child ("$metadata", "gui", "bounds");
         if (bounds != null)
         {
-            w = bounds.getInt ("width");
-            h = bounds.getInt ("height");
+            TreePath path = panel.tree.getPathForRow (0);
+            if (path != null  &&  panel.tree.isExpanded (path))  // open
+            {
+                MNode open = bounds.child ("open");
+                if (open != null)
+                {
+                    w = open.getInt ("width");
+                    h = open.getInt ("height");
+                }
+            }
+            else  // closed
+            {
+                w = bounds.getInt ("width");
+                h = bounds.getInt ("height");
+            }
         }
         if (w != 0  &&  h != 0) return new Dimension (w, h);
 

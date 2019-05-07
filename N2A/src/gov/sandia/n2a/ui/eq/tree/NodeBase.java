@@ -8,7 +8,6 @@ package gov.sandia.n2a.ui.eq.tree;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.eq.EquationTreeCellRenderer;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelModel;
@@ -185,16 +184,20 @@ public class NodeBase extends DefaultMutableTreeNode
     }
 
     /**
-        Returns relative scaling of font w.r.t. size used in most of the tree.
+        Returns a font suitable for HTML styling.
     **/
-    public float getFontScale ()
+    public Font getPlainFont (Font base)
     {
-        return 1;
+        return base;
     }
 
-    public int getFontStyle ()
+    /**
+        Returns a font suitable for editing node value in plain (non-HTML) text.
+        Takes into account the HTML styling that would otherwise be applied.
+    **/
+    public Font getStyledFont (Font base)
     {
-        return Font.PLAIN;
+        return base;
     }
 
     // Column alignment ------------------------------------------------------
@@ -335,9 +338,9 @@ public class NodeBase extends DefaultMutableTreeNode
 
     public FontMetrics getFontMetrics (JTree tree)
     {
-        EquationTreeCellRenderer renderer = (EquationTreeCellRenderer) tree.getCellRenderer ();
-        Font f = renderer.getFontFor (tree, this);
-        return renderer.getFontMetrics (f);
+        Font baseFont = tree.getFont ();
+        Font f = getStyledFont (baseFont);
+        return tree.getFontMetrics (f);
     }
 
     // Copy/Drag -------------------------------------------------------------

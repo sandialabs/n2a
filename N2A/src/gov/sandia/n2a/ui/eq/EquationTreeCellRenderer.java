@@ -87,11 +87,11 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
         setForeground (fg);
 
         setIcon (getIconFor (n, expanded, leaf));
-        Font f = getFontFor (tree, n);
-        setFont (f);
+        Font baseFont = tree.getFont ();
+        setFont (n.getPlainFont (baseFont));
         if (n.needsInitTabs ())
         {
-            n.initTabs (getFontMetrics (f));
+            n.initTabs (getFontMetrics (n.getStyledFont (baseFont)));
             // convertValueToText() is called first thing in super.getTreeCellRendererComponent(),
             // but text very likely has changed, so we need to call it again here.
             setText (tree.convertValueToText (value, selected, expanded, leaf, row, hasFocus));
@@ -107,16 +107,5 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
         if (leaf)     return getDefaultLeafIcon ();
         if (expanded) return getDefaultOpenIcon ();
         return               getDefaultClosedIcon ();
-    }
-
-    public Font getFontFor (JTree tree, NodeBase node)
-    {
-        Font  baseFont     = tree.getFont ().deriveFont (Font.PLAIN);
-        float baseFontSize = baseFont.getSize2D ();
-
-        int   style = node.getFontStyle ();
-        float scale = node.getFontScale ();
-        if (style != Font.PLAIN  ||  scale != 1) return baseFont.deriveFont (style, baseFontSize * scale);
-        return baseFont;
     }
 }
