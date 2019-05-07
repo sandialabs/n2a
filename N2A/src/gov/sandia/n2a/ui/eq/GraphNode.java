@@ -135,8 +135,12 @@ public class GraphNode extends JPanel
         {
             x += bounds.getInt ("x");
             y += bounds.getInt ("y");
+
+            boolean open = bounds.getBoolean ("open");
+            if (open) panel.tree.expandRow (0);
+            else      panel.tree.collapseRow (0);
         }
-        Dimension d = getPreferredSize ();
+        Dimension d = getPreferredSize ();  // Fetches updated width and height.
         Rectangle r = new Rectangle (x, y, d.width, d.height);
         animate (r);
         parent.scrollRectToVisible (r);
@@ -433,10 +437,21 @@ public class GraphNode extends JPanel
                 MNode guiTree = new MVolatile ();
                 MNode bounds = guiTree.childOrCreate ("bounds");
                 Rectangle now = getBounds ();
-                if (now.x      != old.x     ) bounds.set (now.x - parent.offset.x, "x");
-                if (now.y      != old.y     ) bounds.set (now.y - parent.offset.y, "y");
-                if (now.width  != old.width ) bounds.set (now.width,               "width");
-                if (now.height != old.height) bounds.set (now.height,              "height");
+                if (now.x != old.x) bounds.set (now.x - parent.offset.x, "x");
+                if (now.y != old.y) bounds.set (now.y - parent.offset.y, "y");
+                if (panel.tree.isExpanded (0))
+                {
+                    MNode open = bounds.childOrCreate ("open");
+                    open.set (true);  // So we don't overwrite current value when applying gui tree.
+                    if (now.width  != old.width ) open.set (now.width,  "width");
+                    if (now.height != old.height) open.set (now.height, "height");
+                    if (open.size () == 0) bounds.clear ("open");
+                }
+                else
+                {
+                    if (now.width  != old.width ) bounds.set (now.width,  "width");
+                    if (now.height != old.height) bounds.set (now.height, "height");
+                }
                 if (bounds.size () > 0) PanelModel.instance.undoManager.add (new ChangeGUI (node, guiTree));
             }
         }

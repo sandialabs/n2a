@@ -9,6 +9,8 @@ package gov.sandia.n2a.ui.eq.undo;
 import java.util.List;
 
 import javax.swing.undo.CannotUndoException;
+import javax.swing.undo.UndoableEdit;
+
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
@@ -25,6 +27,9 @@ import gov.sandia.n2a.ui.eq.tree.NodePart;
 /**
     Applies multiple changes to $metadata.gui.
     Coordinates graphic editing with tree editing.
+    While this class may seem redundant with ChangeAnnotaton, it serves a slightly different purpose.
+    That class supports direct user interaction with the metadata tree, including merging and splitting
+    of deep node paths. This class deals with behind-the-scenes modification of GUI data.
 **/
 public class ChangeGUI extends Undoable
 {
@@ -33,10 +38,13 @@ public class ChangeGUI extends Undoable
     protected int          indexMetadata; // If we create metadata node, this is where it goes.
     protected MNode        treeBefore;    // Saved version of original tree, starting at $metadata.gui. If "gui" key is absent, then this is null.
     protected MNode        treeAfter;     // New tree, starting at $metadata.gui. It is merged over the existing tree, if any.
+    protected MNode        guiTree;       // Only the nodes being changed, for analysis by replaceEdit().
+    protected boolean      neutralized;   // Indicates that this edit combined with the previous one amount to no change, so completely remove both.
 
     public ChangeGUI (NodePart parent, MNode guiTree)
     {
         path = parent.getKeyPath ();
+        this.guiTree = guiTree;
 
         treeAfter = new MVolatile ();
         MNode currentTree = parent.source.child ("$metadata", "gui");
@@ -124,5 +132,24 @@ public class ChangeGUI extends Undoable
 
         // Update graph
         if (parent.graph != null) parent.graph.updateGUI ();
+    }
+
+    public boolean replaceEdit (UndoableEdit edit)
+    {
+        if (edit instanceof ChangeGUI)
+        {
+            ChangeGUI cg = (ChangeGUI) edit;
+            if (path.equals (cg.path)  &&  guiTree.structureEquals (cg.guiTree))
+            {
+                neutralized = cg.treeBefore.equals (treeAfter);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean anihilate ()
+    {
+        return neutralized;
     }
 }

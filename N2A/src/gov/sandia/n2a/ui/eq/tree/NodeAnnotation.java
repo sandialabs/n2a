@@ -164,7 +164,7 @@ public class NodeAnnotation extends NodeContainer
             int valueWidth = fm.stringWidth (value);
             if (valueWidth > width)
             {
-                width -= fm.getMaxAdvance () * 2;  // allow 2em for ellipsis
+                width = Math.max (0, width - fm.getMaxAdvance () * 2);  // allow 2em for ellipsis
                 int characters = (int) Math.floor ((double) value.length () * width / valueWidth);  // A crude estimate. Just take a ratio of the number of characters, rather then measuring them exactly.
                 value = value.substring (0, characters);
                 addEllipsis = true;

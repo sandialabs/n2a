@@ -540,6 +540,21 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         return true;
     }
 
+    /**
+        Compares only key structure, not values.
+    **/
+    public boolean structureEquals (MNode that)
+    {
+        if (size () != that.size ()) return false;
+        for (MNode a : this)
+        {
+            MNode b = that.getChild (a.key ());
+            if (b == null) return false;
+            if (! a.structureEquals (b)) return false;
+        }
+        return true;
+    }
+
     public String toString ()
     {
         StringWriter writer = new StringWriter ();

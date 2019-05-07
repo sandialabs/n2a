@@ -67,7 +67,6 @@ import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.MainTabbedPane;
-import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
@@ -620,6 +619,7 @@ public class PanelEquations extends JPanel
         updateBreadcrumbs ();
         panelCenter.validate ();
         panelCenter.repaint ();
+        takeFocus ();
     }
 
     public void setOpen (boolean open)
@@ -631,6 +631,7 @@ public class PanelEquations extends JPanel
         updateBreadcrumbs ();
         panelCenter.validate ();
         panelCenter.repaint ();
+        takeFocus ();
     }
 
     /**
@@ -756,30 +757,8 @@ public class PanelEquations extends JPanel
 
     public void takeFocus ()
     {
-        PanelEquationTree pet = null;
-        FocusCacheEntry fce = getFocus (part);
-        if (fce == null)
-        {
-            if (! open)
-            {
-                GraphPanel gp = panelEquationGraph.graphPanel;
-                if (gp.getComponentCount () > 0)
-                {
-                    GraphNode gn = (GraphNode) gp.getComponent (0);
-                    pet = gn.panel;
-                }
-            }
-        }
-        else
-        {
-            if (! open  &&  fce.subpart != null)
-            {
-                GraphNode gn = panelEquationGraph.findNode (fce.subpart);
-                if (gn != null) pet = gn.panel;
-            }
-        }
-        if (open) pet = panelEquationTree;
-        if (pet != null) pet.takeFocus ();
+        if (open) panelEquationTree .takeFocus ();
+        else      panelEquationGraph.takeFocus ();
     }
 
     public void updateBreadcrumbs ()

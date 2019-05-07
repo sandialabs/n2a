@@ -38,6 +38,7 @@ import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
+import javax.swing.JTree;
 import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
@@ -161,9 +162,44 @@ public class PanelEquationGraph extends JScrollPane
         return focus;
     }
 
-    public GraphNode findNode (String name)
+    public void takeFocus ()
     {
-        return graphPanel.findNode (name);
+        Point focus;
+        GraphNode gn = null;
+        FocusCacheEntry fce = container.getFocus (container.part);
+        if (fce == null  ||  fce.position == null)
+        {
+            focus = new Point ();  // (0,0)
+        }
+        else
+        {
+            focus = new Point (fce.position);
+            focus.x += graphPanel.offset.x;
+            focus.y += graphPanel.offset.y;
+            focus.x = Math.max (0, focus.x);
+            focus.y = Math.max (0, focus.y);
+            Dimension extent = vp.getExtentSize ();
+            focus.x = Math.min (focus.x, Math.max (0, graphPanel.layout.bounds.width  - extent.width));
+            focus.y = Math.min (focus.y, Math.max (0, graphPanel.layout.bounds.height - extent.height));
+
+            if (fce.subpart != null)
+            {
+                gn = graphPanel.findNode (fce.subpart);
+            }
+        }
+        vp.setViewPosition (focus);
+
+        if (gn == null  &&  graphPanel.getComponentCount () > 0)
+        {
+            JTree tree = (JTree) PanelModel.instance.getFocusTraversalPolicy ().getFirstComponent (graphPanel);
+            NodePart part = (NodePart) tree.getModel ().getRoot ();
+            gn = part.graph;
+        }
+        if (gn != null)
+        {
+            graphPanel.scrollRectToVisible (gn.getBounds ());
+            gn.panel.takeFocus ();
+        }
     }
 
     public void addPart (NodePart node)
@@ -335,32 +371,7 @@ public class PanelEquationGraph extends JScrollPane
             }
 
             buildEdges ();
-
             validate ();  // Runs layout, so negative focus locations can work, or so that origin (0,0) is meaningful.
-            Point focus;
-            FocusCacheEntry fce = container.getFocus (container.part);
-            if (fce == null  ||  fce.position == null)
-            {
-                focus = new Point ();  // (0,0)
-            }
-            else
-            {
-                focus = new Point (fce.position);
-                focus.x += graphPanel.offset.x;
-                focus.y += graphPanel.offset.y;
-                focus.x = Math.max (0, focus.x);
-                focus.y = Math.max (0, focus.y);
-                Dimension extent = vp.getExtentSize ();
-                focus.x = Math.min (focus.x, Math.max (0, layout.bounds.width  - extent.width));
-                focus.y = Math.min (focus.y, Math.max (0, layout.bounds.height - extent.height));
-
-                if (fce.subpart != null)
-                {
-                    GraphNode gn = findNode (fce.subpart);
-                    if (gn != null) gn.panel.takeFocus ();
-                }
-            }
-            vp.setViewPosition (focus);
         }
 
         /**

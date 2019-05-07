@@ -19,6 +19,7 @@ import gov.sandia.n2a.ui.eq.undo.ChangeOrder;
 
 import java.awt.Dimension;
 import java.awt.FontMetrics;
+import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
 import java.awt.event.FocusEvent;
@@ -303,26 +304,33 @@ public class PanelEquationTree extends JScrollPane
         {
             public void treeExpanded (TreeExpansionEvent event)
             {
-                TreePath path = event.getPath ();
-                Object o = path.getLastPathComponent ();
-                if (o instanceof NodePart)
-                {
-                    NodePart part = (NodePart) o;
-                    if (part.graph != null) part.graph.revalidate ();
-                }
-                repaintSouth (path);
+                if (! expandGraphNode (event, true)) repaintSouth (event.getPath ());
             }
 
             public void treeCollapsed (TreeExpansionEvent event)
+            {
+                if (! expandGraphNode (event, false)) repaintSouth (event.getPath ());
+            }
+
+            public boolean expandGraphNode (TreeExpansionEvent event, boolean open)
             {
                 TreePath path = event.getPath ();
                 Object o = path.getLastPathComponent ();
                 if (o instanceof NodePart)
                 {
                     NodePart part = (NodePart) o;
-                    if (part.graph != null) part.graph.revalidate ();
+                    if (part.graph != null)
+                    {
+                        // open/close does not use the undo mechanism, even though it leaves a persistent record in metadata.
+                        // This is unusual, but seems to fit better with user expectations.
+                        part.source.set (open, "$metadata", "gui", "bounds", "open");
+                        Point     p = part.graph.getLocation ();
+                        Dimension d = part.graph.getPreferredSize ();
+                        part.graph.animate (new Rectangle (p, d));
+                        return true;
+                    }
                 }
-                repaintSouth (event.getPath ());
+                return false;
             }
         });
 
@@ -334,8 +342,15 @@ public class PanelEquationTree extends JScrollPane
                 {
                     NodePart part = (NodePart) model.getRoot ();
                     FocusCacheEntry fce = container.getFocus (part);
-                    if (fce == null  ||  fce.sp == null) tree.setSelectionRow (0);
-                    else                                 fce.sp.restore (tree);
+                    if (fce == null  ||  fce.sp == null)
+                    {
+                        if (part == container.root) tree.expandRow (0);
+                        tree.setSelectionRow (0);
+                    }
+                    else
+                    {
+                        fce.sp.restore (tree);
+                    }
                 }
             }
 
@@ -366,20 +381,13 @@ public class PanelEquationTree extends JScrollPane
 
     public void loadPart (NodePart part)
     {
-        model.setRoot (part);  // triggers repaint, but may be too slow
-        part.pet = this;
-        needsFullRepaint = true;  // next call to repaintSouth() will repaint everything
+        NodePart oldPart = (NodePart) model.getRoot ();
+        if (part == oldPart) return;
 
-        FocusCacheEntry fce = container.getFocus (part);
-        if (fce == null  ||  fce.sp == null)
-        {
-            tree.expandRow (0);
-            tree.setSelectionRow (0);
-        }
-        else
-        {
-            fce.sp.restore (tree);
-        }
+        if (oldPart != null) oldPart.pet = null;
+        part.pet = this;
+        model.setRoot (part);  // triggers repaint, but may be too slow
+        needsFullRepaint = true;  // next call to repaintSouth() will repaint everything
     }
 
     public void clear ()
