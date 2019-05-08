@@ -442,7 +442,6 @@ public class GraphNode extends JPanel
                 if (panel.tree.isExpanded (0))
                 {
                     MNode open = bounds.childOrCreate ("open");
-                    open.set (true);  // So we don't overwrite current value when applying gui tree.
                     if (now.width  != old.width ) open.set (now.width,  "width");
                     if (now.height != old.height) open.set (now.height, "height");
                     if (open.size () == 0) bounds.clear ("open");

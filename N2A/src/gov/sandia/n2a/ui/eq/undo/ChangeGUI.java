@@ -35,18 +35,17 @@ public class ChangeGUI extends Undoable
 {
     protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;          // to part that contains the gui metadata
-    protected int          indexMetadata; // If we create metadata node, this is where it goes.
-    protected MNode        treeBefore;    // Saved version of original tree, starting at $metadata.gui. If "gui" key is absent, then this is null.
-    protected MNode        treeAfter;     // New tree, starting at $metadata.gui. It is merged over the existing tree, if any.
-    protected MNode        guiTree;       // Only the nodes being changed, for analysis by replaceEdit().
-    protected boolean      neutralized;   // Indicates that this edit combined with the previous one amount to no change, so completely remove both.
+    protected int          index;         // If we create metadata node, this is where it goes.
+    protected MNode        undoAdd;       // Nodes to apply during undo, starting at $metadata.gui. If "gui" key is absent, then this is null.
+    protected MNode        undoRemove;    // Nodes that should be removed during undo, via MNode.uniqueNodes(). Like undoAdd, this is null if "gui" key is absent.
+    protected MNode        doAdd;         // The nodes being changed. There is no corresponding doKill.
+    protected boolean      neutralized;   // Indicates that this edit exactly reverses the previous one, so completely remove both.
 
     public ChangeGUI (NodePart parent, MNode guiTree)
     {
         path = parent.getKeyPath ();
-        this.guiTree = guiTree;
+        doAdd = guiTree;
 
-        treeAfter = new MVolatile ();
         MNode currentTree = parent.source.child ("$metadata", "gui");
         if (currentTree == null)
         {
@@ -54,31 +53,33 @@ public class ChangeGUI extends Undoable
             if (metadataNode == null)  // We will create a new $metadata node (to hold the gui.order node). This changes meaning of the given indices.
             {
                 // Test whether the first child is $inherit, and whether it will remain so after the move. In that case, don't put $metadata in front of it.
-                if (((NodeBase) parent.getChildAt (0)).source.key ().equals ("$inherit")) indexMetadata = 1;  // otherwise it is 0
+                if (((NodeBase) parent.getChildAt (0)).source.key ().equals ("$inherit")) index = 1;  // otherwise it is 0
             }
         }
         else
         {
-            treeBefore = new MVolatile ();
-            treeBefore.merge (currentTree);
-            treeAfter .merge (currentTree);
+            undoAdd    = new MVolatile ();
+            undoRemove = new MVolatile ();
+            undoAdd   .merge (guiTree);
+            undoRemove.merge (guiTree);
+            undoAdd   .changes     (currentTree);
+            undoRemove.uniqueNodes (currentTree);
         }
-        treeAfter.merge (guiTree);
     }
 
     public void undo ()
     {
         super.undo ();
-        apply (treeBefore, indexMetadata);
+        apply (undoAdd, undoRemove, index);
     }
 
     public void redo ()
     {
         super.redo ();
-        apply (treeAfter, indexMetadata);
+        apply (doAdd, null, index);
     }
 
-    public void apply (MNode treeAfter, int indexMetadata)
+    public void apply (MNode add, MNode remove, int indexMetadata)
     {
         view.restore ();
         NodePart parent = (NodePart) NodeBase.locateNode (path);
@@ -90,7 +91,7 @@ public class ChangeGUI extends Undoable
 
         boolean needBuild = true;
         NodeAnnotations metadataNode = (NodeAnnotations) parent.child ("$metadata");
-        if (treeAfter == null)  // Remove the gui node if it exists. Possibly remove $metadata itself.
+        if (add == null)  // Remove the gui node if it exists. Possibly remove $metadata itself.
         {
             // We can safely assume that metadataNode is non-null, since we only get here during an undo.
             MNode mparent = metadataNode.source;
@@ -109,7 +110,9 @@ public class ChangeGUI extends Undoable
                 metadataNode = new NodeAnnotations ((MPart) parent.source.childOrCreate ("$metadata"));
                 model.insertNodeIntoUnfiltered (metadataNode, parent, indexMetadata);
             }
-            metadataNode.source.set (treeAfter, "gui");
+            MNode gui = metadataNode.source.childOrCreate ("gui");
+            if (remove != null) gui.uniqueNodes (remove);
+            gui.mergeSoft (add);
         }
 
         NodeBase updateNode = metadataNode;
@@ -139,9 +142,9 @@ public class ChangeGUI extends Undoable
         if (edit instanceof ChangeGUI)
         {
             ChangeGUI cg = (ChangeGUI) edit;
-            if (path.equals (cg.path)  &&  guiTree.structureEquals (cg.guiTree))
+            if (path.equals (cg.path)  &&  doAdd.structureEquals (cg.doAdd))
             {
-                neutralized = cg.treeBefore.equals (treeAfter);
+                neutralized = cg.undoAdd.equals (doAdd);
                 return true;
             }
         }

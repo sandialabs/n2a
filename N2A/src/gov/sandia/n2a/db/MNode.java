@@ -336,6 +336,27 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     }
 
     /**
+        Deep copies the source node into this node, while leaving any non-overlapping values in
+        this node unchanged. If the source value is empty, then this value is not changed.
+        Children of the source node are then merged with this node's children.
+        This is the closest of the three merge methods to the original MUMPS definition, given
+        that we don't distinguish between undefined and empty string. This method is useful for
+        collating two trees when you only want to inject explicit values.
+    **/
+    public synchronized void mergeSoft (MNode that)
+    {
+        String value = that.get ();
+        if (! value.isEmpty ()) set (value);
+        for (MNode thatChild : that)
+        {
+            String index = thatChild.key ();
+            MNode c = getChild (index);
+            if (c == null) c = set ("", index);  // ensure a target child node exists
+            c.mergeSoft (thatChild);
+        }
+    }
+
+    /**
         Deep copies the source node into this node, while leaving all values in this node unchanged.
         This method could be called "underride", but that already has a special meaning in MPart.
     **/
@@ -351,7 +372,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     }
 
     /**
-        Removes empty children from this node which have the same key as children in that node.
+        Removes empty children (leaf nodes) from this node which have the same key as children in that node.
         The process works bottom-up, so children of this node may get emptied before they are tested,
         and thus get deleted.
     **/
@@ -368,7 +389,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     }
 
     /**
-        Removes empty children from this node which match both key and value of children in that node.
+        Removes empty children (leaf nodes) from this node which match both key and value of children in that node.
         The process works bottom-up, so children of this node may get emptied before they are tested.
     **/
     public synchronized void uniqueValues (MNode that)
@@ -380,6 +401,31 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
             if (d == null) continue;
             c.uniqueValues (d);
             if (c.size () == 0  &&  c.get ().equals (d.get ())) clearChild (key);
+        }
+    }
+
+    /**
+        Assuming "that" will be the target of a soft merge, saves any values this node would change.
+        The resulting tree can be used to partially revert a soft merge.
+        Specifically, let:
+        A -- this tree before any operations
+        B -- that tree before any operations
+        C -- clone of A, then run C.uniqueNodes(B)
+        D -- clone of A, then run D.changes(B)
+        Suppose you run B.mergeSoft(A). To revert B to its original state, run
+        B.uniqueNodes(C) to remove nodes not originally in B, followed by
+        B.mergeSoft(D) to restore original values.
+    **/
+    public synchronized void changes (MNode that)
+    {
+        String value = get ();
+        if (! value.isEmpty ()) set (that.get ());
+        for (MNode c : this)
+        {
+            String key = c.key ();
+            MNode d = that.child (key);
+            if (d == null) clearChild (key);
+            else           c.changes (d);
         }
     }
 

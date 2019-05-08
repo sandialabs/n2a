@@ -1096,18 +1096,24 @@ public class PanelEquations extends JPanel
         {
             if (path == null) return;  // If there's no stored path, then this is a document-level operation, so view doesn't matter. Document-level operations shouldn't even use this class.
 
-            // Hack the focus cache to switch to the right view.
             String key0 = path.get (0);
-            FocusCacheEntry fce = (FocusCacheEntry) focusCache.getObject (key0);
-            if (fce == null)
-            {
-                fce = new FocusCacheEntry ();
-                focusCache.setObject (fce, key0);
-            }
-            fce.open = open;
-
             MNode doc = AppData.models.child (key0);
-            load (doc);
+            if (record == doc)  // load() won't run in this case
+            {
+                setOpen (open);
+            }
+            else
+            {
+                // Hack the focus cache to switch to the right view.
+                FocusCacheEntry fce = (FocusCacheEntry) focusCache.getObject (key0);
+                if (fce == null)
+                {
+                    fce = new FocusCacheEntry ();
+                    focusCache.setObject (fce, key0);
+                }
+                fce.open = open;
+                load (doc);
+            }
 
             NodeBase p = root;
             for (int i = 1; i < path.size (); i++)
