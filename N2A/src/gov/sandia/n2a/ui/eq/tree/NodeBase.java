@@ -52,7 +52,7 @@ public class NodeBase extends DefaultMutableTreeNode
     {
     }
 
-    public void hide (NodeBase child, FilteredTreeModel model, boolean notifyListeners)
+    public void hide (NodeBase child, FilteredTreeModel model)
     {
         int[] removedIndices = new int[1];
         removedIndices[0] = getIndexFiltered (child);
@@ -61,7 +61,7 @@ public class NodeBase extends DefaultMutableTreeNode
         removeFiltered (removedIndices[0], false);
         for (Object c : children) ((NodeBase) c).invalidateTabs ();
 
-        if (notifyListeners)
+        if (model != null)
         {
             Object[] removedNodes = new Object[1];
             removedNodes[0] = child;
@@ -69,7 +69,7 @@ public class NodeBase extends DefaultMutableTreeNode
         }
     }
 
-    public void unhide (NodeBase child, FilteredTreeModel model, boolean notifyListeners)
+    public void unhide (NodeBase child, FilteredTreeModel model)
     {
         int childIndex = getIndex (child);
         if (childIndex == -1) return;
@@ -90,7 +90,7 @@ public class NodeBase extends DefaultMutableTreeNode
         child.filter (FilteredTreeModel.filterLevel);
         for (Object c : children) ((NodeBase) c).invalidateTabs ();
 
-        if (notifyListeners)
+        if (model != null)
         {
             int[] filteredIndices = new int[1];
             filteredIndices[0] = filteredIndex;
@@ -124,6 +124,15 @@ public class NodeBase extends DefaultMutableTreeNode
     **/
     public void removeFiltered (int filteredIndex, boolean shift)
     {
+    }
+
+    /**
+        Must override this, because the base class does an isNodeChild() test which is fooled by fake roots.
+        The answer is still correct, in that we return -1 if it is not really our child.
+    **/
+    public int getIndex (TreeNode child)
+    {
+        return children.indexOf (child);
     }
 
     public int getIndexFiltered (TreeNode child)

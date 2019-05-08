@@ -481,12 +481,15 @@ public class NodePart extends NodeContainer
 
     public NodeBase add (String type, JTree tree, MNode data, Point location)
     {
-        FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        if (tree.isCollapsed (new TreePath (getPath ()))  &&  model.getChildCount (this) > 0  &&  ! isRoot ())  // The node is deliberately closed to indicate user intent.
+        if (tree != null)
         {
-            // The only thing that can contain a NodePart is another NodePart. (If that ever changes, the following code will break.)
-            if (type.isEmpty ()) return ((NodePart) getParent ()).add ("Part", tree, data, location);
-            return ((NodePart) getParent ()).add (type, tree, data, location);
+            FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
+            if (tree.isCollapsed (new TreePath (getPath ()))  &&  model.getChildCount (this) > 0  &&  ! isRoot ())  // The node is deliberately closed to indicate user intent.
+            {
+                // The only thing that can contain a NodePart is another NodePart. (If that ever changes, the following code will break.)
+                if (type.isEmpty ()) type = "Part";
+                return ((NodePart) getParent ()).add (type, tree, data, location);
+            }
         }
 
         int variableIndex = -1;
@@ -509,7 +512,8 @@ public class NodePart extends NodeContainer
         if (variableIndex < 0) variableIndex = count;
         if (subpartIndex  < 0) subpartIndex  = count;
 
-        TreePath path = tree.getSelectionPath ();
+        TreePath path = null;
+        if (tree != null) path = tree.getSelectionPath ();
         if (path != null)
         {
             NodeBase selected = (NodeBase) path.getLastPathComponent ();

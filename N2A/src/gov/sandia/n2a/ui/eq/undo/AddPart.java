@@ -95,9 +95,10 @@ public class AddPart extends Undoable
 
         PanelEquations pe = PanelModel.instance.panelEquations;
         PanelEquationTree pet = parent.getTree ();
-        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
+        FilteredTreeModel model = null;
+        if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
         PanelEquationGraph peg = pe.panelEquationGraph;
-        boolean graphParent = parent == pe.part;
+        boolean graphParent = parent == pe.part  &&  ! pe.open;
 
         TreeNode[] createdPath = createdNode.getPath ();
         int index = parent.getIndexFiltered (createdNode);
@@ -107,7 +108,8 @@ public class AddPart extends Undoable
         mparent.clear (name);
         if (mparent.child (name) == null)  // Node is fully deleted
         {
-            model.removeNodeFromParent (createdNode);
+            if (model == null) FilteredTreeModel.removeNodeFromParentStatic (createdNode);
+            else               model.removeNodeFromParent (createdNode);
             if (graphParent) peg.removePart (createdNode);
         }
         else  // Just exposed an overridden node
@@ -117,8 +119,16 @@ public class AddPart extends Undoable
             createdNode.filter (FilteredTreeModel.filterLevel);
         }
 
-        pet.updateOrder (createdPath);
-        pet.updateVisibility (createdPath, index);  // includes nodeStructureChanged(), if necessary
+        if (pet == null)
+        {
+            PanelEquationTree.updateOrder (null, createdPath);
+            PanelEquationTree.updateVisibility (null, createdPath, index, true);
+        }
+        else
+        {
+            pet.updateOrder (createdPath);
+            pet.updateVisibility (createdPath, index);  // includes nodeStructureChanged(), if necessary
+        }
         if (graphParent)
         {
             peg.reconnect ();
@@ -149,24 +159,34 @@ public class AddPart extends Undoable
 
         PanelEquations pe = PanelModel.instance.panelEquations;
         PanelEquationTree pet = parent.getTree ();
-        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
+        FilteredTreeModel model = null;
+        if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
         PanelEquationGraph peg = pe.panelEquationGraph;
-        boolean graphParent = parent == pe.part;
+        boolean graphParent = parent == pe.part  &&  ! pe.open;
 
         if (createdNode == null)
         {
             createdNode = new NodePart (createdPart);
-            model.insertNodeIntoUnfiltered (createdNode, parent, index);
+            if (model == null) FilteredTreeModel.insertNodeIntoUnfilteredStatic (createdNode, parent, index);
+            else               model.insertNodeIntoUnfiltered (createdNode, parent, index);
             if (graphParent) peg.addPart (createdNode);
         }
         createdNode.build ();
         parent.findConnections ();  // Other nodes besides immediate siblings can also refer to us, so to be strictly correct, should run findConnectins() on root of tree.
         createdNode.filter (FilteredTreeModel.filterLevel);
 
-        TreeNode[] createdPath = createdNode.getPath ();
         if (nameIsGenerated) createdNode.setUserObject ("");  // pure create, so about to go into edit mode. This should only happen on first application of the create action, and should only be possible if visibility is already correct.
-        else pet.updateOrder (createdPath);
-        pet.updateVisibility (createdPath);
+        TreeNode[] createdPath = createdNode.getPath ();
+        if (pet == null)
+        {
+            if (! nameIsGenerated) PanelEquationTree.updateOrder (null, createdPath);
+            PanelEquationTree.updateVisibility (null, createdPath);
+        }
+        else
+        {
+            if (! nameIsGenerated) pet.updateOrder (createdPath);
+            pet.updateVisibility (createdPath);
+        }
 
         if (graphParent)
         {

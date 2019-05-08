@@ -128,7 +128,7 @@ public class ChangeVariable extends Undoable
                 nodeBefore.build ();
                 nodeBefore.findConnections ();
                 if (nodeBefore.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (nodeBefore);
-                else                                                    parent.hide (nodeBefore, model, true);
+                else                                                    parent.hide (nodeBefore, model);
                 if (nodeBefore.isBinding  &&  parent.graph != null) parent.graph.updateGUI (nameBefore, oldPart.get ());
             }
         }

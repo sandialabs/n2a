@@ -78,9 +78,10 @@ public class ChangePart extends Undoable
 
         PanelEquations pe = PanelModel.instance.panelEquations;
         PanelEquationTree pet = nodeBefore.getTree ();
-        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
+        FilteredTreeModel model = null;
+        if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
         PanelEquationGraph peg = pe.panelEquationGraph;
-        boolean graphParent = parent == pe.part;
+        boolean graphParent = parent == pe.part  &&  ! pe.open;
 
         NodePart nodeAfter = (NodePart) parent.child (nameAfter);  // It's either a NodePart or it's null. Any other case should be blocked by GUI constraints.
         if (oldPart == null)
@@ -93,7 +94,8 @@ public class ChangePart extends Undoable
             }
             else
             {
-                model.removeNodeFromParent (nodeBefore);
+                if (model == null) FilteredTreeModel.removeNodeFromParentStatic (nodeBefore);
+                else               model.removeNodeFromParent (nodeBefore);
                 if (graphParent) peg.removePart (nodeAfter);
             }
         }
@@ -103,15 +105,22 @@ public class ChangePart extends Undoable
             {
                 int index = parent.getIndex (nodeBefore);
                 nodeAfter = new NodePart (newPart);
-                model.insertNodeIntoUnfiltered (nodeAfter, parent, index);
+                if (model == null) FilteredTreeModel.insertNodeIntoUnfilteredStatic (nodeAfter, parent, index);
+                else               model.insertNodeIntoUnfiltered (nodeAfter, parent, index);
                 if (graphParent) peg.addPart (nodeAfter);
             }
 
             nodeBefore.build ();
             nodeBefore.findConnections ();
             nodeBefore.filter (FilteredTreeModel.filterLevel);
-            if (nodeBefore.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (nodeBefore);
-            else                                                    parent.hide (nodeBefore, model, true);
+            if (nodeBefore.visible (FilteredTreeModel.filterLevel))
+            {
+                if (model != null) model.nodeStructureChanged (nodeBefore);
+            }
+            else
+            {
+                parent.hide (nodeBefore, model);
+            }
         }
 
         nodeAfter.build ();
@@ -119,9 +128,16 @@ public class ChangePart extends Undoable
         nodeAfter.filter (FilteredTreeModel.filterLevel);
 
         TreeNode[] nodePath = nodeAfter.getPath ();
-        pet.updateOrder (nodePath);
-        pet.updateVisibility (nodePath);  // Will include nodeStructureChanged(), if necessary.
-
+        if (pet == null)
+        {
+            PanelEquationTree.updateOrder (null, nodePath);
+            PanelEquationTree.updateVisibility (null, nodePath);
+        }
+        else
+        {
+            pet.updateOrder (nodePath);
+            pet.updateVisibility (nodePath);  // Will include nodeStructureChanged(), if necessary.
+        }
         if (graphParent)
         {
             peg.reconnect ();

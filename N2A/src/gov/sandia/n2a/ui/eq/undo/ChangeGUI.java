@@ -130,7 +130,7 @@ public class ChangeGUI extends Undoable
             updateNode = metadataNode.child ("gui");
             if (updateNode == null) updateNode = metadataNode;
         }
-        pet.updateVisibility (updateNode.getPath (), -1, false);
+        PanelEquationTree.updateVisibility (pet, updateNode.getPath (), -1, false);
         sp.restore (pet.tree);  // This forces focus back to original location.
 
         // Update graph

@@ -338,7 +338,8 @@ public class PanelEquationGraph extends JScrollPane
                 if (c instanceof NodePart)
                 {
                     GraphNode gn = new GraphNode (this, (NodePart) c);
-                    add (gn);
+                    if (gn.panel.tree.isExpanded (0)) add (gn, 0);  // Put expanded trees at top of z order
+                    else                              add (gn);
                     if (gn.getX () != 0  ||  gn.getY () != 0) newLayout = false;
                 }
             }

@@ -30,7 +30,7 @@ public class DeletePart extends Undoable
 
     public DeletePart (NodePart node, boolean canceled)
     {
-        NodeBase container = (NodeBase) node.getParent ();
+        NodeBase container = (NodeBase) node.getTrueParent ();
         path          = container.getKeyPath ();
         index         = container.getIndex (node);
         this.canceled = canceled;

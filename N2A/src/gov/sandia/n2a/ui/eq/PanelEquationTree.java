@@ -323,7 +323,8 @@ public class PanelEquationTree extends JScrollPane
                     {
                         // open/close does not use the undo mechanism, even though it leaves a persistent record in metadata.
                         // This is unusual, but seems to fit better with user expectations.
-                        part.source.set (open, "$metadata", "gui", "bounds", "open");
+                        if (! container.locked) part.source.set (open, "$metadata", "gui", "bounds", "open");
+                        if (open) part.graph.parent.setComponentZOrder (part.graph, 0);
                         Point     p = part.graph.getLocation ();
                         Dimension d = part.graph.getPreferredSize ();
                         part.graph.animate (new Rectangle (p, d));
@@ -368,8 +369,15 @@ public class PanelEquationTree extends JScrollPane
     public Dimension getMinimumSize ()
     {
         TreePath path = tree.getPathForRow (0);
-        if (path != null) return tree.getPathBounds (path).getSize ();
-        return super.getMinimumSize ();
+        if (path == null) return super.getMinimumSize ();
+        Dimension result = tree.getPathBounds (path).getSize ();
+        if (tree.isExpanded (0))
+        {
+            // Add some compensation, so scroll bars don't overwrite part name.
+            result.height += getHorizontalScrollBar ().getPreferredSize ().height;
+            result.width  += getVerticalScrollBar   ().getPreferredSize ().width;
+        }
+        return result;
     }
 
     public Dimension getPreferredSize ()
@@ -476,22 +484,27 @@ public class PanelEquationTree extends JScrollPane
 
     public void updateVisibility (TreeNode path[])
     {
+        updateVisibility (this, path);
+    }
+
+    public static void updateVisibility (PanelEquationTree pet, TreeNode path[])
+    {
         if (path.length < 2)
         {
-            updateVisibility (path, -1);
+            updateVisibility (pet, path, -1, true);
         }
         else
         {
             NodeBase c = (NodeBase) path[path.length - 1];
             NodeBase p = (NodeBase) path[path.length - 2];
             int index = p.getIndexFiltered (c);
-            updateVisibility (path, index);
+            updateVisibility (pet, path, index, true);
         }
     }
 
     public void updateVisibility (TreeNode path[], int index)
     {
-        updateVisibility (path, index, true);
+        updateVisibility (this, path, index, true);
     }
 
     /**
@@ -503,7 +516,7 @@ public class PanelEquationTree extends JScrollPane
         @param index Position of the last node in its parent node. Only used if the last node has been deleted.
         A value less than 0 causes selection to shift up to the parent.
     **/
-    public void updateVisibility (TreeNode path[], int index, boolean setSelection)
+    public static void updateVisibility (PanelEquationTree pet, TreeNode path[], int index, boolean setSelection)
     {
         // Prepare list of indices for final selection
         int[] selectionIndices = new int[path.length];
@@ -511,7 +524,7 @@ public class PanelEquationTree extends JScrollPane
         {
             NodeBase p = (NodeBase) path[i-1];
             NodeBase c = (NodeBase) path[i];
-            selectionIndices[i] = model.getIndexOfChild (p, c);  // Could be -1, if c has already been deleted.
+            selectionIndices[i] = FilteredTreeModel.getIndexOfChildStatic (p, c);  // Could be -1, if c has already been deleted.
         }
 
         // Adjust visibility
@@ -523,13 +536,13 @@ public class PanelEquationTree extends JScrollPane
             NodeBase p = (NodeBase) path[i-1];
             NodeBase c = (NodeBase) path[i];
             if (c.getParent () == null) continue;  // skip deleted nodes
-            int filteredIndex = model.getIndexOfChild (p, c);
+            int filteredIndex = FilteredTreeModel.getIndexOfChildStatic (p, c);
             boolean filteredOut = filteredIndex < 0;
             if (c.visible (FilteredTreeModel.filterLevel))
             {
                 if (filteredOut)
                 {
-                    p.unhide (c, model, false);  // silently adjust the filtering
+                    p.unhide (c, null);  // silently adjust the filtering
                     inserted = i; // promise to notify model
                 }
             }
@@ -537,12 +550,15 @@ public class PanelEquationTree extends JScrollPane
             {
                 if (! filteredOut)
                 {
-                    p.hide (c, model, false);
+                    p.hide (c, null);
                     removed = i;
                     removedIndex = filteredIndex;
                 }
             }
         }
+
+        if (pet == null) return;  // Everything below this line has to do with updating tree view.
+        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
 
         // update color to indicate override state
         int lastChange = Math.min (inserted, removed);
@@ -552,8 +568,8 @@ public class PanelEquationTree extends JScrollPane
             NodeBase c = (NodeBase) path[i];
             if (c.getParent () == null) continue;
             model.nodeChanged (c);
-            Rectangle bounds = tree.getPathBounds (new TreePath (c.getPath ()));
-            if (bounds != null) tree.paintImmediately (bounds);
+            Rectangle bounds = pet.tree.getPathBounds (new TreePath (c.getPath ()));
+            if (bounds != null) pet.tree.paintImmediately (bounds);
         }
 
         if (lastChange < path.length)
@@ -573,7 +589,7 @@ public class PanelEquationTree extends JScrollPane
                 childObjects[0] = c;
                 model.nodesWereRemoved (p, childIndices, childObjects);
             }
-            repaintSouth (new TreePath (p.getPath ()));
+            pet.repaintSouth (new TreePath (p.getPath ()));
         }
 
         // select last visible node
@@ -599,16 +615,21 @@ public class PanelEquationTree extends JScrollPane
         TreePath selectedPath = new TreePath (c.getPath ());
         if (setSelection)
         {
-            tree.scrollPathToVisible (selectedPath);
-            tree.setSelectionPath (selectedPath);
+            pet.tree.scrollPathToVisible (selectedPath);
+            pet.tree.setSelectionPath (selectedPath);
         }
         if (lastChange >= path.length)
         {
-            boolean expanded = tree.isExpanded (selectedPath);
+            boolean expanded = pet.tree.isExpanded (selectedPath);
             model.nodeStructureChanged (c);  // Should this be more targeted?
-            if (expanded) tree.expandPath (selectedPath);
-            repaintSouth (selectedPath);
+            if (expanded) pet.tree.expandPath (selectedPath);
+            pet.repaintSouth (selectedPath);
         }
+    }
+
+    public void updateOrder (TreeNode path[])
+    {
+        updateOrder (tree, path);
     }
 
     /**
@@ -617,7 +638,7 @@ public class PanelEquationTree extends JScrollPane
         @param path To the node that changed (added, deleted, moved). In general, this node's
         parent will be the part that is tracking the order of its children.
     **/
-    public void updateOrder (TreeNode path[])
+    public static void updateOrder (JTree tree, TreeNode path[])
     {
         NodePart parent = null;
         for (int i = path.length - 2; i >= 0; i--)
@@ -653,10 +674,13 @@ public class PanelEquationTree extends JScrollPane
             if (m.key ().equals ("order")  &&  m.parent ().key ().equals ("gui"))  // This check is necessary to avoid overwriting a pre-existing node folded under "gui" (for example, gui.bounds).
             {
                 m.set (order);  // Shouldn't require change to tab stops, which should already be set.
-                NodeBase ap = (NodeBase) a.getParent ();
-                FontMetrics fm = a.getFontMetrics (tree);
-                ap.updateTabStops (fm);  // Cause node to update it's text.
-                model.nodeChanged (a);
+                if (tree != null)
+                {
+                    NodeBase ap = (NodeBase) a.getParent ();
+                    FontMetrics fm = a.getFontMetrics (tree);
+                    ap.updateTabStops (fm);  // Cause node to update it's text.
+                    ((FilteredTreeModel) tree.getModel ()).nodeChanged (a);
+                }
             }
         }
     }

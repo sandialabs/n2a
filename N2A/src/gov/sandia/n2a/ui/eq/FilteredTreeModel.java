@@ -50,7 +50,16 @@ public class FilteredTreeModel extends DefaultTreeModel
         path.restore (tree);
     }
 
+    /**
+        Nothing about this method requires it to be instance-specific,
+        other than the fact that the interface is written that way.
+    **/
     public int getIndexOfChild (Object parent, Object child)
+    {
+        return getIndexOfChildStatic (parent, child);
+    }
+
+    public static int getIndexOfChildStatic (Object parent, Object child)
     {
         if (parent == null  ||  child == null) return -1;
         return ((NodeBase) parent).getIndexFiltered ((TreeNode) child);
@@ -80,6 +89,16 @@ public class FilteredTreeModel extends DefaultTreeModel
 
     public void insertNodeIntoUnfiltered (MutableTreeNode newChild, MutableTreeNode parent, int childrenIndex)
     {
+        int filteredIndex = insertNodeIntoUnfilteredStatic (newChild, parent, childrenIndex);
+        if (filteredIndex < 0) return;
+
+        int[] filteredIndices = new int[1];
+        filteredIndices[0] = filteredIndex;
+        nodesWereInserted (parent, filteredIndices);
+    }
+
+    public static int insertNodeIntoUnfilteredStatic (MutableTreeNode newChild, MutableTreeNode parent, int childrenIndex)
+    {
         NodeBase p = (NodeBase) parent;
         NodeBase c = (NodeBase) newChild;
 
@@ -88,7 +107,7 @@ public class FilteredTreeModel extends DefaultTreeModel
         if (! c.visible (filterLevel))  // Don't send any event
         {
             p.insertFiltered (-1, childrenIndex, true);
-            return;
+            return -1;  // Indicate early-out
         }
 
         // Determine filtered index
@@ -108,9 +127,7 @@ public class FilteredTreeModel extends DefaultTreeModel
             p.insertFiltered (filteredIndex, childrenIndex, true);
         }
 
-        int[] filteredIndices = new int[1];
-        filteredIndices[0] = filteredIndex;
-        nodesWereInserted (parent, filteredIndices);
+        return filteredIndex;
     }
 
     public void insertNodeInto (MutableTreeNode newChild, MutableTreeNode parent, int filteredIndex)
@@ -140,19 +157,26 @@ public class FilteredTreeModel extends DefaultTreeModel
 
     public void removeNodeFromParent (MutableTreeNode child)
     {
-        NodeBase parent = (NodeBase) child.getParent ();
-        if (parent == null) throw new IllegalArgumentException ("node does not have a parent.");
-
-        int filteredIndex = parent.getIndexFiltered ((NodeBase) child);
-        parent.remove (child);
+        int filteredIndex = removeNodeFromParentStatic (child);
         if (filteredIndex < 0) return;  // No need to send event, because this node was not visible.
-        parent.removeFiltered (filteredIndex, true);
 
         int[]    removedIndices = new int   [1];
         Object[] removedObjects = new Object[1];
         removedIndices[0] = filteredIndex;
         removedObjects[0] = child;
-        nodesWereRemoved (parent, removedIndices, removedObjects);
+        nodesWereRemoved ((NodeBase) child.getParent (), removedIndices, removedObjects);
+    }
+
+    public static int removeNodeFromParentStatic (MutableTreeNode child)
+    {
+        NodeBase parent = ((NodeBase) child).getTrueParent ();
+        if (parent == null) throw new IllegalArgumentException ("node does not have a parent.");
+
+        int filteredIndex = parent.getIndexFiltered ((NodeBase) child);
+        int index         = parent.getIndex (child);
+        parent.remove (index);  // Can't call parent.remove(child), because that function does an isNodeChild() test, which fails for fake roots.
+        if (filteredIndex >= 0) parent.removeFiltered (filteredIndex, true);
+        return filteredIndex;
     }
 
     public void nodeChanged (TreeNode node)
