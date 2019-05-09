@@ -817,6 +817,8 @@ public class PanelEquations extends JPanel
                 public void mouseClicked (MouseEvent me)
                 {
                     saveFocus ();
+                    FocusCacheEntry fce = getFocus (part);  // Should return non-null, since we just did saveFocus().
+                    fce.subpart = b.source.key ();
                     loadPart (b);
                 }
             });

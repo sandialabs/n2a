@@ -130,7 +130,8 @@ public class PanelEquationTree extends JScrollPane
         {
             setBorder (BorderFactory.createEmptyBorder ());
             boolean open = root.source.getBoolean ("$metadata", "gui", "bounds", "open");
-            if (! open) tree.collapseRow (0);
+            if (open) tree.expandRow (0);
+            else      tree.collapseRow (0);
         }
 
         // It would be nice to have a single editor object shared across all equation trees.
@@ -253,6 +254,7 @@ public class PanelEquationTree extends JScrollPane
                                 {
                                     if (expanded) tree.collapsePath (path);
                                     else          tree.expandPath (path);
+                                    if (! container.locked) root.source.set (! expanded, "$metadata", "gui", "bounds", "open");
                                 }
                             }
                         }
@@ -260,6 +262,9 @@ public class PanelEquationTree extends JScrollPane
                     else if (clicks == 2)  // Drill down
                     {
                         NodePart part = (NodePart) model.getRoot ();
+                        container.saveFocus ();
+                        FocusCacheEntry fce = container.getFocus (container.part);  // Should return non-null, since we just did saveFocus().
+                        fce.subpart = part.source.key ();
                         container.loadPart (part);
                     }
                 }
@@ -334,15 +339,15 @@ public class PanelEquationTree extends JScrollPane
                 if (o instanceof NodePart)
                 {
                     NodePart part = (NodePart) o;
-                    if (part.graph != null)
+                    GraphNode gn = part.graph;
+                    if (gn != null)
                     {
-                        // open/close does not use the undo mechanism, even though it leaves a persistent record in metadata.
-                        // This is unusual, but seems to fit better with user expectations.
-                        if (! container.locked) part.source.set (open, "$metadata", "gui", "bounds", "open");
-                        if (open) part.graph.parent.setComponentZOrder (part.graph, 0);
-                        Point     p = part.graph.getLocation ();
-                        Dimension d = part.graph.getPreferredSize ();
-                        part.graph.animate (new Rectangle (p, d));
+                        if (open) gn.parent.setComponentZOrder (gn, 0);
+                        Point     p = gn.getLocation ();
+                        Dimension d = gn.getPreferredSize ();
+                        Rectangle bounds = new Rectangle (p, d);
+                        gn.animate (bounds);
+                        gn.parent.scrollRectToVisible (bounds);
                         return true;
                     }
                 }
@@ -367,6 +372,9 @@ public class PanelEquationTree extends JScrollPane
                     {
                         fce.sp.restore (tree);
                     }
+
+                    GraphNode gn = part.graph;
+                    if (gn != null) gn.parent.scrollRectToVisible (gn.getBounds ());
                 }
             }
 
@@ -383,6 +391,7 @@ public class PanelEquationTree extends JScrollPane
 
     public void updateUI ()
     {
+        super.updateUI ();
         // updateUI can be called before our constructor runs, so it is possible for editor to be null.
         if (editor != null) editor.updateUI ();
     }
@@ -408,6 +417,9 @@ public class PanelEquationTree extends JScrollPane
         return super.getPreferredSize ();
     }
 
+    /**
+        @param part Should always be non-null. To clear the tree, call clear() rather than setting null here.
+    **/
     public void loadPart (NodePart part)
     {
         NodePart oldPart = (NodePart) model.getRoot ();

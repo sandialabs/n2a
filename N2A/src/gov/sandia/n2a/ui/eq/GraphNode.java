@@ -38,6 +38,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
+import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
@@ -120,6 +121,13 @@ public class GraphNode extends JPanel
         Dimension d = super.getPreferredSize ();  // Gets the layout manager's opinion.
         d.width  = Math.max (d.width,  w);
         d.height = Math.max (d.height, h);
+
+        // Don't exceed current size of viewport.
+        // Should this limit be imposed on user settings as well?
+        Dimension extent = ((JViewport) parent.getParent ()).getExtentSize ();
+        d.width  = Math.min (d.width,  extent.width);
+        d.height = Math.min (d.height, extent.height);
+
         return d;
     }
 
@@ -277,7 +285,11 @@ public class GraphNode extends JPanel
                 if (me.getClickCount () == 2)
                 {
                     // Drill down
-                    PanelModel.instance.panelEquations.loadPart (node);
+                    PanelEquations pe = PanelModel.instance.panelEquations;
+                    pe.saveFocus ();
+                    FocusCacheEntry fce = pe.getFocus (pe.part);  // Should return non-null, since we just did saveFocus().
+                    fce.subpart = node.source.key ();
+                    pe.loadPart (node);
                 }
             }
         }
