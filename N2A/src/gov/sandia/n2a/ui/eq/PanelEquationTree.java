@@ -444,6 +444,17 @@ public class PanelEquationTree extends JScrollPane
         NodeBase editMe = selected.add (type, tree, null, null);
         if (editMe != null)
         {
+            // Guard against editing the name of a new graph node.
+            if (editMe instanceof NodePart)
+            {
+                GraphNode gn = ((NodePart) editMe).graph;
+                if (gn != null)
+                {
+                    JTree gtree = gn.panel.tree;
+                    if (gtree != tree) return;
+                }
+            }
+
             TreePath path = new TreePath (editMe.getPath ());
             tree.scrollPathToVisible (path);
             tree.setSelectionPath (path);

@@ -162,14 +162,14 @@ public class AddPart extends Undoable
         FilteredTreeModel model = null;
         if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
         PanelEquationGraph peg = pe.panelEquationGraph;
-        boolean graphParent = parent == pe.part  &&  ! pe.open;
 
+        boolean addGraphNode = false;
         if (createdNode == null)
         {
+            addGraphNode = true;
             createdNode = new NodePart (createdPart);
             if (model == null) FilteredTreeModel.insertNodeIntoUnfilteredStatic (createdNode, parent, index);
             else               model.insertNodeIntoUnfiltered (createdNode, parent, index);
-            if (graphParent) peg.addPart (createdNode);
         }
         createdNode.build ();
         parent.findConnections ();  // Other nodes besides immediate siblings can also refer to us, so to be strictly correct, should run findConnectins() on root of tree.
@@ -188,8 +188,9 @@ public class AddPart extends Undoable
             pet.updateVisibility (createdPath);
         }
 
-        if (graphParent)
+        if (parent == pe.part  &&  ! pe.open)
         {
+            if (addGraphNode) peg.addPart (createdNode);
             peg.reconnect ();
             peg.paintImmediately ();
         }

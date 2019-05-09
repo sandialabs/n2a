@@ -244,7 +244,7 @@ public class NodePart extends NodeContainer
         if (pieces.length > 1) nextName = pieces[1];
         else                   nextName = "";
 
-        NodePart parent = (NodePart) getParent ();
+        NodePart parent = (NodePart) getTrueParent ();
         if (ns.equals ("$up"))  // Don't bother with local checks if we know we are going up
         {
             if (parent == null) return null;
@@ -481,14 +481,25 @@ public class NodePart extends NodeContainer
 
     public NodeBase add (String type, JTree tree, MNode data, Point location)
     {
-        if (tree != null)
+        if (tree == null)
+        {
+            // The only thing we can add is a part in the current graph view.
+            if (type.isEmpty ()) type = "Part";
+            if (! type.equals ("Part")) return null;
+        }
+        else
         {
             FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-            if (tree.isCollapsed (new TreePath (getPath ()))  &&  model.getChildCount (this) > 0  &&  ! isRoot ())  // The node is deliberately closed to indicate user intent.
+            if (tree.isCollapsed (new TreePath (getPath ()))  &&  model.getChildCount (this) > 0)  // The node is deliberately closed to indicate user intent.
             {
-                // The only thing that can contain a NodePart is another NodePart. (If that ever changes, the following code will break.)
                 if (type.isEmpty ()) type = "Part";
-                return ((NodePart) getParent ()).add (type, tree, data, location);
+                if (isRoot ())  // Since the document root can't be collapsed (due PanelEquationTree expand listener), this must be the root of a graph node.
+                {
+                    // Set up to create a peer graph node.
+                    tree = null;
+                    if (data == null) data = new MVolatile ();
+                }
+                return ((NodePart) getTrueParent ()).add (type, tree, data, location);
             }
         }
 
