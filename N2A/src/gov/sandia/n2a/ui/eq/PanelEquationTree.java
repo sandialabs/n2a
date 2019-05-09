@@ -52,10 +52,11 @@ import javax.swing.tree.TreeSelectionModel;
 public class PanelEquationTree extends JScrollPane
 {
     // Tree
-    public    JTree             tree;
-    public    FilteredTreeModel model;
-    protected PanelEquations    container;
-    protected boolean           needsFullRepaint;
+    public    JTree                  tree;
+    public    FilteredTreeModel      model;
+    protected PanelEquations         container;
+    protected boolean                needsFullRepaint;
+    protected EquationTreeCellEditor editor;
 
     public PanelEquationTree (PanelEquations container, NodePart root)
     {
@@ -68,6 +69,18 @@ public class PanelEquationTree extends JScrollPane
             {
                 if (value == null) return "";
                 return ((NodeBase) value).getText (expanded, false);
+            }
+
+            public void startEditingAtPath (TreePath path)
+            {
+                super.startEditingAtPath (path);
+
+                // Ensure that graph node is big enough to edit name without activating scroll bars.
+                NodePart  part = (NodePart) model.getRoot ();
+                GraphNode gn   = part.graph;
+                Point     p    = gn.getLocation ();
+                Dimension d    = gn.getPreferredSize ();
+                part.graph.animate (new Rectangle (p, d));
             }
 
             public String getToolTipText (MouseEvent e)
@@ -120,8 +133,10 @@ public class PanelEquationTree extends JScrollPane
             if (! open) tree.collapseRow (0);
         }
 
-        // TODO: make the cell editor shared among all trees
-        final EquationTreeCellEditor editor = new EquationTreeCellEditor (tree, container.renderer);
+        // It would be nice to have a single editor object shared across all equation trees.
+        // However, the editor needs to carry some internal state relevant to the current tree.
+        // This makes switching between trees rather delicate.
+        editor = new EquationTreeCellEditor (tree, container.renderer);
         editor.addCellEditorListener (new CellEditorListener ()
         {
             @Override
@@ -366,6 +381,12 @@ public class PanelEquationTree extends JScrollPane
         setViewportView (tree);
     }
 
+    public void updateUI ()
+    {
+        // updateUI can be called before our constructor runs, so it is possible for editor to be null.
+        if (editor != null) editor.updateUI ();
+    }
+
     public Dimension getMinimumSize ()
     {
         TreePath path = tree.getPathForRow (0);
@@ -450,8 +471,11 @@ public class PanelEquationTree extends JScrollPane
                 GraphNode gn = ((NodePart) editMe).graph;
                 if (gn != null)
                 {
-                    JTree gtree = gn.panel.tree;
-                    if (gtree != tree) return;
+                    if (gn.panel.tree != tree)
+                    {
+                        gn.panel.takeFocus ();  // but do not start editing
+                        return;
+                    }
                 }
             }
 
@@ -495,27 +519,17 @@ public class PanelEquationTree extends JScrollPane
 
     public void updateVisibility (TreeNode path[])
     {
-        updateVisibility (this, path);
-    }
-
-    public static void updateVisibility (PanelEquationTree pet, TreeNode path[])
-    {
-        if (path.length < 2)
-        {
-            updateVisibility (pet, path, -1, true);
-        }
-        else
-        {
-            NodeBase c = (NodeBase) path[path.length - 1];
-            NodeBase p = (NodeBase) path[path.length - 2];
-            int index = p.getIndexFiltered (c);
-            updateVisibility (pet, path, index, true);
-        }
+        updateVisibility (this, path, -2, true);
     }
 
     public void updateVisibility (TreeNode path[], int index)
     {
         updateVisibility (this, path, index, true);
+    }
+
+    public void updateVisibility (TreeNode path[], boolean setSelection)
+    {
+        updateVisibility (this, path, -2, setSelection);
     }
 
     /**
@@ -525,10 +539,26 @@ public class PanelEquationTree extends JScrollPane
         and they are allowed to be deleted nodes. Note: deleted nodes will have null parents.
         Deleted nodes should already be removed from tree by the caller, with proper notification.
         @param index Position of the last node in its parent node. Only used if the last node has been deleted.
-        A value less than 0 causes selection to shift up to the parent.
+        A value of -1 causes selection to shift up to the parent.
+        A value of -2 cause index to be derived from given path.
     **/
     public static void updateVisibility (PanelEquationTree pet, TreeNode path[], int index, boolean setSelection)
     {
+        // Calculate index, if requested
+        if (index == -2)
+        {
+            if (path.length < 2)
+            {
+                index = -1;
+            }
+            else
+            {
+                NodeBase c = (NodeBase) path[path.length - 1];
+                NodeBase p = (NodeBase) path[path.length - 2];
+                index = p.getIndexFiltered (c);
+            }
+        }
+
         // Prepare list of indices for final selection
         int[] selectionIndices = new int[path.length];
         for (int i = 1; i < path.length; i++)

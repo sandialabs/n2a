@@ -13,6 +13,7 @@ import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
+import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.FocusEvent;
@@ -35,6 +36,7 @@ import javax.swing.JViewport;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
+import javax.swing.UIManager;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.TreeSelectionEvent;
 import javax.swing.event.TreeSelectionListener;
@@ -78,6 +80,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
     protected Component                editingComponent;
     protected Icon                     editingIcon;
     protected int                      offset;
+    protected int                      offsetPerLevel;  // How much to indent per tree level to accommodate for expansion handles.
 
     public EquationTreeCellEditor (final JTree tree, EquationTreeCellRenderer renderer)
     {
@@ -85,6 +88,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         this.renderer = renderer;
         undoManager = new UndoManager ();
         editingContainer = new EditorContainer ();
+        updateUI ();
 
 
         oneLineEditor = new JTextField ();
@@ -250,11 +254,11 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         String text     = editingNode.getText (expanded, true);
 
         FontMetrics fm = tree.getFontMetrics (font);
-        int textWidth = fm.stringWidth (text);
-        int width     = tree.getWidth ();
+        int textWidth  = fm.stringWidth (text);
+        int treeWidth  = tree.getWidth ();
 
         if (editingComponent != null) editingContainer.remove (editingComponent);
-        if (text.contains ("\n")  ||  textWidth > width  ||  multiLineRequested)
+        if (text.contains ("\n")  ||  textWidth > treeWidth  ||  multiLineRequested)
         {
             editingComponent = multiLinePane;
             multiLineEditor.setText (text);
@@ -368,6 +372,13 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         if (tree != null) tree.addTreeSelectionListener (this);
     }
 
+    public void updateUI ()
+    {
+        int left  = (Integer) UIManager.get ("Tree.leftChildIndent");
+        int right = (Integer) UIManager.get ("Tree.rightChildIndent");
+        offsetPerLevel = left + right;
+    }
+
     /**
         Draws the node icon.
     **/
@@ -405,11 +416,14 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         public Dimension getPreferredSize ()
         {
             Dimension pSize = editingComponent.getPreferredSize ();
-            pSize.width = ((JViewport) tree.getParent ()).getViewRect ().width - editingNode.getLevel () * offset;  // getLevel() will return 1 less than needed value, which exactly compensates for the icon space.
+            Dimension extent = ((JViewport) tree.getParent ()).getExtentSize ();
+            Insets insets = tree.getInsets ();
+            pSize.width = extent.width - editingNode.getLevel () * offsetPerLevel - insets.left - insets.right;
             pSize.width = Math.max (100, pSize.width);
 
             Dimension rSize = renderer.getPreferredSize ();
             pSize.height = Math.max (pSize.height, rSize.height);
+            // Renderer is using exactly the same icon, so no need to do separate check for icon size.
 
             return pSize;
         }

@@ -180,7 +180,7 @@ public class AddPart extends Undoable
         if (pet == null)
         {
             if (! nameIsGenerated) PanelEquationTree.updateOrder (null, createdPath);
-            PanelEquationTree.updateVisibility (null, createdPath);
+            PanelEquationTree.updateVisibility (null, createdPath, -2, true);
         }
         else
         {

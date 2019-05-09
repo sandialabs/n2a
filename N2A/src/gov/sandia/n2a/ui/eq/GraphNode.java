@@ -247,7 +247,7 @@ public class GraphNode extends JPanel
         for (GraphEdge ge : edgesIn)
         {
             paintRegion = paintRegion.union (ge.bounds);
-            if (ge.edgeOther != null) paintRegion.union (ge.edgeOther.bounds);
+            if (ge.edgeOther != null) paintRegion = paintRegion.union (ge.edgeOther.bounds);
             ge.updateShape (true);
             paintRegion = paintRegion.union (ge.bounds);
             parent.layout.componentMoved (ge.bounds);

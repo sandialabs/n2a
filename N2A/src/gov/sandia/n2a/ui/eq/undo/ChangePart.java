@@ -131,7 +131,7 @@ public class ChangePart extends Undoable
         if (pet == null)
         {
             PanelEquationTree.updateOrder (null, nodePath);
-            PanelEquationTree.updateVisibility (null, nodePath);
+            PanelEquationTree.updateVisibility (null, nodePath, -2, true);
         }
         else
         {

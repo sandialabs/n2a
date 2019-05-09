@@ -840,15 +840,9 @@ public class PanelEquations extends JPanel
             if (pet == null)
             {
                 // With no active tree, the only thing we can add is a part. NodePart.add() does this check for us.
-                NodePart editMe = (NodePart) part.add (type, null, null, null);
+                NodePart editMe = (NodePart) part.add (type, null, new MVolatile (), null);
                 if (editMe == null) return;
-
-                GraphNode gn = editMe.graph;
-                JTree tree = gn.panel.tree;
-                TreePath path = new TreePath (editMe.getPath ());
-                tree.requestFocusInWindow ();
-                tree.setSelectionPath (path);
-                tree.startEditingAtPath (path);
+                editMe.graph.panel.takeFocus ();
             }
             else
             {

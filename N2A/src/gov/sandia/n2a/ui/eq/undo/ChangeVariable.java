@@ -142,7 +142,7 @@ public class ChangeVariable extends Undoable
 
         TreeNode[] nodePath = nodeAfter.getPath ();
         pet.updateOrder (nodePath);
-        pet.updateVisibility (nodePath);
+        pet.updateVisibility (nodePath, ! nodeAfter.isBinding);
 
         if (parent.graph != null)
         {
