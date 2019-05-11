@@ -164,7 +164,8 @@ public class PanelEquations extends JPanel
                 else if (comp instanceof PanelEquationGraph) peg  = (PanelEquationGraph) comp;
 
                 TreePath path = null;
-                DropLocation dl = xfer.getDropLocation ();
+                DropLocation dl = null;
+                if (xfer.isDrop ()) dl = xfer.getDropLocation ();
                 if (tree != null)
                 {
                     if (xfer.isDrop ()) path = ((JTree.DropLocation) dl).getPath ();
@@ -211,10 +212,13 @@ public class PanelEquations extends JPanel
                 if (peg != null)
                 {
                     target = part;
-                    location = dl.getDropPoint ();
-                    Point vp = peg.vp.getViewPosition ();
-                    location.x += vp.x - peg.graphPanel.offset.x;
-                    location.y += vp.y - peg.graphPanel.offset.y;
+                    if (dl != null)
+                    {
+                        location = dl.getDropPoint ();
+                        Point vp = peg.vp.getViewPosition ();
+                        location.x += vp.x - peg.graphPanel.offset.x;
+                        location.y += vp.y - peg.graphPanel.offset.y;
+                    }
                 }
 
                 // An import can either be a new node in the tree, or a link (via inheritance) to an existing part.
