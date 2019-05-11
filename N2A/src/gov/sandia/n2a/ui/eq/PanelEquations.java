@@ -359,7 +359,8 @@ public class PanelEquations extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                panelEquationTree.tree.stopEditing ();
+                PanelEquationTree pet = getActiveTree ();
+                if (pet != null) pet.tree.stopEditing ();
                 PanelModel.instance.undoManager.add (new AddDoc ());
             }
         });
@@ -854,10 +855,11 @@ public class PanelEquations extends JPanel
         {
             if (record == null) return;
             MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
-            if (panelEquationTree.tree.isEditing ())
+            PanelEquationTree pet = getActiveTree ();
+            if (pet != null  &&  pet.tree.isEditing ())
             {
-                panelEquationTree.tree.stopEditing ();
-                mtp.setPreferredFocus (PanelModel.instance, panelEquationTree.tree);  // Because tree does not reclaim the focus before focus shifts to the run tab.
+                pet.tree.stopEditing ();
+                mtp.setPreferredFocus (PanelModel.instance, pet.tree);  // Because tree does not reclaim the focus before focus shifts to the run tab.
             }
 
             String simulatorName = root.source.get ("$metadata", "backend");  // Note that "record" is the raw model, while "root.source" is the collated model.
@@ -920,7 +922,8 @@ public class PanelEquations extends JPanel
         public void actionPerformed (ActionEvent e)
         {
             if (record == null) return;
-            panelEquationTree.tree.stopEditing ();
+            PanelEquationTree pet = getActiveTree ();
+            if (pet != null) pet.tree.stopEditing ();
 
             // Construct and customize a file chooser
             final JFileChooser fc = new JFileChooser (AppData.properties.get ("resourceDir"));
@@ -1048,7 +1051,7 @@ public class PanelEquations extends JPanel
     public class StoredView
     {
         List<String> path;  // to the full-view part
-        boolean      open;  // whether it was showing as a tree or a graph
+        boolean      open;  // Whether it was showing as a tree or a graph. Necessary because focus cache entry may change due to subsequent ui actions.
 
         public StoredView ()
         {

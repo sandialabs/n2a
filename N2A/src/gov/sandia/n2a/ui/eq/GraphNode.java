@@ -319,6 +319,7 @@ public class GraphNode extends JPanel
             if (! SwingUtilities.isLeftMouseButton (me)) return;
 
             // All mouse event coordinates are relative to the bounds of this component.
+            parent.setComponentZOrder (GraphNode.this, 0);
             start  = me.getPoint ();
             min    = getMinimumSize ();
             old    = getBounds ();

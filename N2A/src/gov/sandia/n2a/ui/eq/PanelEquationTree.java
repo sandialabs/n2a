@@ -503,6 +503,13 @@ public class PanelEquationTree extends JScrollPane
     {
         tree.stopEditing ();
         tree.clearSelection ();
+
+        NodePart root = (NodePart) model.getRoot ();
+        if (root != null  &&  root.graph != null)
+        {
+            boolean open = root.source.getBoolean ("$metadata", "gui", "bounds", "open");
+            if (! open) tree.collapseRow (0);
+        }
     }
 
     public void takeFocus ()

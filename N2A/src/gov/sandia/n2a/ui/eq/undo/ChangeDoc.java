@@ -55,7 +55,7 @@ public class ChangeDoc extends Undoable
         container.load (doc);  // lazy; only loads if not already loaded
         NodePart root = container.root;
         root.setUserObject ();
-        container.takeFocus ();  // TODO: this may be redundant
+        container.takeFocus ();
         if (container.open)
         {
             container.panelEquationTree.model.nodeChanged (root);

@@ -17,14 +17,19 @@ import gov.sandia.n2a.ui.eq.tree.NodeBase;
 
 public class StoredPath
 {
-    List<String> keys = new ArrayList<String> ();
-    boolean expanded;  ///< Indicates that the selected node was open, so we need to open it again on restore.
-    List<String[]> others = new ArrayList<String[]> ();  // All the tree nodes that were expanded before. May include the current selection. These nodes get less detailed processing.
+    boolean        open;     // Was root node expanded?
+    boolean        selected; // Was anything selected?
+    boolean        expanded; // Was the selected node also expanded?
+    List<String>   keys   = new ArrayList<String> ();   // of the selected node
+    List<String[]> others = new ArrayList<String[]> (); // All the tree nodes that were expanded before. May include the current selection. These nodes get less detailed processing.
 
     public StoredPath (JTree tree)
     {
+        open = tree.isExpanded (0);
+
         TreePath path = tree.getSelectionPath ();
-        if (path != null)
+        selected = path != null;
+        if (selected)
         {
             for (Object o : path.getPath ()) keys.add (((NodeBase) o).source.key ());
             keys.remove (0);  // don't need to store root
@@ -62,7 +67,15 @@ public class StoredPath
             if (c != null  &&  c.visible (FilteredTreeModel.filterLevel)) tree.expandPath (new TreePath (c.getPath ()));
         }
 
+        if (expanded) tree.expandRow (0);
+        else          tree.collapseRow (0);
+
         // Second, locate the focused node and pay special attention to its visibility
+        if (! selected)
+        {
+            tree.clearSelection ();
+            return;
+        }
         for (String key : keys)
         {
             int childCount = n.getChildCount ();

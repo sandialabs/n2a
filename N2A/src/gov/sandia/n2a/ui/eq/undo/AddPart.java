@@ -122,7 +122,7 @@ public class AddPart extends Undoable
         if (pet == null)
         {
             PanelEquationTree.updateOrder (null, createdPath);
-            PanelEquationTree.updateVisibility (null, createdPath, index, true);
+            PanelEquationTree.updateVisibility (null, createdPath, index, false);
         }
         else
         {
@@ -180,7 +180,7 @@ public class AddPart extends Undoable
         if (pet == null)
         {
             if (! nameIsGenerated) PanelEquationTree.updateOrder (null, createdPath);
-            PanelEquationTree.updateVisibility (null, createdPath, -2, true);
+            PanelEquationTree.updateVisibility (null, createdPath, -2, false);
         }
         else
         {
