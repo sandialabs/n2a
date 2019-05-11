@@ -82,14 +82,13 @@ public class PanelEquations extends JPanel
     public NodePart root;
     public NodePart part;   // The node that contains the current graph. Can be root or a deeper node (via drill-down).
     public boolean  locked;
-    public boolean  open;   // Indicates that top-level GUI is in "open" state (showing panelEquationTree). When in closed state, the GUI shows panelClosed instead.
+    public boolean  open;   // Indicates that root appears as a tree rather than a graph. (All other levels always appear as graph.)
 
-    public    PanelEquationTree        panelEquationTree;  // For the part that fills the whole view. Subpart equation trees are held in their individual graph nodes.
-    public    PanelEquationGraph       panelEquationGraph;
+    protected JPanel                   panelCenter;
     protected JPanel                   panelBreadcrumb;
-    public    JPanel                   panelCenter;        // Holds panelBreadcrumb (if active) and whichever of {panelEquationTree, panelEquationGraph} is currently active.
-    public    List<NodePart>           listBreadcrumb = new ArrayList<NodePart> ();
-    protected boolean                  breadcrumbVisible;
+    public    PanelEquationGraph       panelEquationGraph;
+    public    PanelEquationTree        panelEquationTree;  // To display root as a tree.
+    protected List<NodePart>           listBreadcrumb = new ArrayList<NodePart> ();
     protected TransferHandler          transferHandler;
     protected EquationTreeCellRenderer renderer       = new EquationTreeCellRenderer ();
     protected MVolatile                focusCache     = new MVolatile ();
@@ -102,7 +101,6 @@ public class PanelEquations extends JPanel
     protected JButton buttonAddAnnotation;
     protected JButton buttonAddReference;
     protected JButton buttonFilter;
-    protected JButton buttonView;
     protected JButton buttonRun;
     protected JButton buttonExport;
     protected JButton buttonImport;
@@ -126,7 +124,10 @@ public class PanelEquations extends JPanel
         panelEquationGraph = new PanelEquationGraph (this);
         panelEquationTree  = new PanelEquationTree (this, null);
         panelBreadcrumb    = Lay.WL ("L", "hgap=0");
-        panelCenter        = Lay.BL ("C", panelEquationGraph);  // Initial state is open==false and graph showing.
+        panelCenter        = Lay.BL (
+            "N", panelBreadcrumb,
+            "C", panelEquationGraph  // Initial state is open==false and graph showing.
+        );
 
         transferHandler = new TransferHandler ()
         {
@@ -431,19 +432,6 @@ public class PanelEquations extends JPanel
             }
         });
 
-        buttonView = new JButton (iconViewTree);  // We start off in graph view, so we offer an affordance to switch to tree view.
-        buttonView.setMargin (new Insets (2, 2, 2, 2));
-        buttonView.setFocusable (false);
-        buttonView.setToolTipText ("View Tree");
-        buttonView.addActionListener (new ActionListener ()
-        {
-            public void actionPerformed (ActionEvent e)
-            {
-                saveFocus ();
-                setOpen (! open);
-            }
-        });
-
         Lay.BLtg (this,
             "N", Lay.WL ("L",
                 buttonAddModel,
@@ -455,7 +443,6 @@ public class PanelEquations extends JPanel
                 buttonAddReference,
                 Box.createHorizontalStrut (15),
                 buttonFilter,
-                buttonView,
                 Box.createHorizontalStrut (15),
                 buttonRun,
                 Box.createHorizontalStrut (15),
@@ -513,9 +500,8 @@ public class PanelEquations extends JPanel
         JRadioButtonMenuItem itemFilterLocal   = new JRadioButtonMenuItem ("Local");
         itemFilterLocal  .addActionListener (listenerFilter);
 
-        int filterLevel = AppData.state.getOrDefault (FilteredTreeModel.PARAM, "PanelModel", "filter");
-        panelEquationTree.model.setFilterLevel (filterLevel, panelEquationTree.tree);  // root is still null, so this has no immediate effect
-        switch (filterLevel)
+        FilteredTreeModel.filterLevel = AppData.state.getOrDefault (FilteredTreeModel.PARAM, "PanelModel", "filter");
+        switch (FilteredTreeModel.filterLevel)
         {
             case FilteredTreeModel.REVOKED:
                 buttonFilter.setIcon (iconFilterRevoked);
@@ -569,11 +555,7 @@ public class PanelEquations extends JPanel
                 MNode lastUsedNode = null;
                 String lastUsedKey = AppData.state.get ("PanelModel", "lastUsed");
                 if (! lastUsedKey.isEmpty ()) lastUsedNode = AppData.models.child (lastUsedKey);
-                if (lastUsedNode != null)
-                {
-                    load (lastUsedNode);
-                    panelEquationTree.tree.requestFocusInWindow ();
-                }
+                if (lastUsedNode != null) load (lastUsedNode);
             }
         });
     }
@@ -595,12 +577,7 @@ public class PanelEquations extends JPanel
             root = new NodePart (new MPart ((MPersistent) record));
             root.build ();
             root.findConnections ();
-
-            FocusCacheEntry fce = getFocus (root);
-            if (fce != null) setOpenPanel (fce.open);
-            part = null;  // Force loadPart() to run.
             loadPart (root);
-
             AppData.state.set (record.key (), "PanelModel", "lastUsed");
         }
         catch (Exception e)
@@ -612,6 +589,31 @@ public class PanelEquations extends JPanel
 
     public void loadPart (NodePart part)
     {
+        boolean open = false;
+        if (part == root)
+        {
+            FocusCacheEntry fce = getFocus (root);
+            if (fce != null) open = fce.open;
+        }
+
+        if (this.open != open)
+        {
+            this.open = open;
+            this.part = null;  // Force part update to run.
+            if (open)
+            {
+                panelCenter.remove (panelEquationGraph);
+                panelEquationGraph.clear ();  // releases fake roots on subparts
+                panelCenter.add (panelEquationTree, BorderLayout.CENTER);
+            }
+            else
+            {
+                panelCenter.remove (panelEquationTree);
+                panelEquationTree.clear ();
+                panelCenter.add (panelEquationGraph, BorderLayout.CENTER);
+            }
+        }
+
         if (this.part == part) return;
         this.part = part;
         if (open) panelEquationTree.loadPart (part);
@@ -620,45 +622,6 @@ public class PanelEquations extends JPanel
         panelCenter.validate ();
         panelCenter.repaint ();
         takeFocus ();
-    }
-
-    public void setOpen (boolean open)
-    {
-        if (this.open == open) return;
-        setOpenPanel (open);
-        if (open) panelEquationTree.loadPart (part);
-        else      panelEquationGraph.loadPart ();
-        updateBreadcrumbs ();
-        panelCenter.validate ();
-        panelCenter.repaint ();
-        takeFocus ();
-    }
-
-    /**
-        Subroutine of setOpen() that is also used by load().
-    **/
-    public void setOpenPanel (boolean open)
-    {
-        if (this.open == open) return;
-        this.open = open;
-        if (open)
-        {
-            panelCenter.remove (panelEquationGraph);
-            panelEquationGraph.clear ();  // releases fake roots on subparts
-            panelCenter.add (panelEquationTree, BorderLayout.CENTER);
-
-            buttonView.setIcon (iconViewGraph);
-            buttonView.setToolTipText ("View Graph");
-        }
-        else
-        {
-            panelCenter.remove (panelEquationTree);
-            panelEquationTree.clear ();
-            panelCenter.add (panelEquationGraph, BorderLayout.CENTER);
-
-            buttonView.setIcon (iconViewTree);
-            buttonView.setToolTipText ("View Tree");
-        }
     }
 
     /**
@@ -673,6 +636,9 @@ public class PanelEquations extends JPanel
         root   = null;
         if (open) panelEquationTree.clear ();
         else      panelEquationGraph.clear ();
+        updateBreadcrumbs ();
+        panelCenter.validate ();
+        panelCenter.repaint ();
     }
 
     public void updateLock ()
@@ -703,49 +669,56 @@ public class PanelEquations extends JPanel
         if (root == null) return;
 
         // Save open state for document root
-        FocusCacheEntry fce = getFocus (root);
-        if (fce == null)
+        FocusCacheEntry fce;
+        if (part == root)
         {
-            fce = new FocusCacheEntry ();
-            focusCache.setObject (fce, root.source.key ());
+            fce = getFocus (root);
+            if (fce == null)
+            {
+                fce = new FocusCacheEntry ();
+                focusCache.setObject (fce, root.source.key ());
+            }
+            fce.open = open;
+            if (open)
+            {
+                fce.sp = panelEquationTree.saveFocus (fce.sp);
+                return;  // No graph information to save, so skip rest of this function.
+            }
         }
-        fce.open = open;
 
         // Save part focus information
-        fce = getFocus (part);
-        if (fce == null)
+        fce = createFocus (part);
+        fce.position = panelEquationGraph.saveFocus ();
+        PanelEquationTree pet = getActiveTree ();
+        if (pet != null)
         {
-            fce = new FocusCacheEntry ();
-            focusCache.setObject (fce, part.getKeyPath ().toArray ());
-        }
-        if (open)
-        {
-            fce.sp = panelEquationTree.saveFocus (fce.sp);
-        }
-        else
-        {
-            fce.position = panelEquationGraph.saveFocus ();
-            PanelEquationTree pet = getActiveTree ();
-            if (pet != null)
-            {
-                NodePart p = (NodePart) pet.model.getRoot ();
-                fce.subpart = p.source.key ();
+            NodePart p = (NodePart) pet.model.getRoot ();
+            fce.subpart = p.source.key ();
 
-                // TODO: save state of all node trees?
-                fce = getFocus (p);
-                if (fce == null)
-                {
-                    fce = new FocusCacheEntry ();
-                    focusCache.setObject (fce, p.getKeyPath ().toArray ());
-                }
-                fce.sp = pet.saveFocus (fce.sp);
-            }
+            // TODO: save state of all node trees?
+            fce = createFocus (p);
+            fce.sp = pet.saveFocus (fce.sp);
         }
     }
 
     public FocusCacheEntry getFocus (NodePart p)
     {
         return (FocusCacheEntry) focusCache.getObject (p.getKeyPath ().toArray ());
+    }
+
+    /**
+        Same as getFocus(), but creates an entry if it doesn't already exist.
+    **/
+    public FocusCacheEntry createFocus (NodePart p)
+    {
+        Object[] keyArray = p.getKeyPath ().toArray ();
+        FocusCacheEntry result = (FocusCacheEntry) focusCache.getObject (keyArray);
+        if (result == null)
+        {
+            result = new FocusCacheEntry ();
+            focusCache.setObject (result, keyArray);
+        }
+        return result;
     }
 
     public void yieldFocus ()
@@ -764,26 +737,6 @@ public class PanelEquations extends JPanel
     public void updateBreadcrumbs ()
     {
         panelBreadcrumb.removeAll ();
-        if (part == null  ||  part == root  &&  open)
-        {
-            listBreadcrumb.clear ();
-            if (breadcrumbVisible)
-            {
-                breadcrumbVisible = false;
-                panelCenter.remove (panelBreadcrumb);
-                panelCenter.validate ();
-                panelCenter.repaint ();
-            }
-            return;
-        }
-        else
-        {
-            if (! breadcrumbVisible)
-            {
-                breadcrumbVisible = true;
-                panelCenter.add (panelBreadcrumb, BorderLayout.NORTH);
-            }
-        }
         panelBreadcrumb.add (Box.createHorizontalStrut (5));
 
         int index = listBreadcrumb.indexOf (part);
@@ -798,6 +751,7 @@ public class PanelEquations extends JPanel
             }
             index = listBreadcrumb.size () - 1;
         }
+        if (part == root  &&  open) index = -1;
 
         final Color inactive = new Color (0x80FF80);
         int last = listBreadcrumb.size () - 1;
@@ -816,15 +770,22 @@ public class PanelEquations extends JPanel
             {
                 public void mouseClicked (MouseEvent me)
                 {
-                    saveFocus ();
-                    FocusCacheEntry fce = getFocus (part);  // Should return non-null, since we just did saveFocus().
-                    fce.subpart = b.source.key ();
-                    loadPart (b);
+                    drill (b);
                 }
             });
 
             panelBreadcrumb.add (label);
         }
+    }
+
+    public void drill (NodePart nextPart)
+    {
+        saveFocus ();
+        FocusCacheEntry fce = getFocus (part);
+        //if (part == root) fce.open = false;  // Could be a deep drill-down, in which case we want to return to graph view, not tree.
+        if (nextPart == root) fce.open = ! open;  // Not really a drill down. Toggle between graph and tree views.
+        else                  fce.subpart = nextPart.source.key ();
+        loadPart (nextPart);
     }
 
     ActionListener listenerAdd = new ActionListener ()
@@ -1046,28 +1007,28 @@ public class PanelEquations extends JPanel
         {
             panelEquationTree.tree.stopEditing ();
 
-            String action = e.getActionCommand ();
-            if (action.equals ("Revoked"))
+            switch (e.getActionCommand ())
             {
-                panelEquationTree.model.setFilterLevel (FilteredTreeModel.REVOKED, panelEquationTree.tree);
-                buttonFilter.setIcon (iconFilterRevoked);
-            }
-            else if (action.equals ("All"))
-            {
-                panelEquationTree.model.setFilterLevel (FilteredTreeModel.ALL, panelEquationTree.tree);
-                buttonFilter.setIcon (iconFilterAll);
-            }
-            else if (action.equals ("Parameters"))
-            {
-                panelEquationTree.model.setFilterLevel (FilteredTreeModel.PARAM, panelEquationTree.tree);
-                buttonFilter.setIcon (iconFilterParam);
-            }
-            else if (action.equals ("Local"))
-            {
-                panelEquationTree.model.setFilterLevel (FilteredTreeModel.LOCAL, panelEquationTree.tree);
-                buttonFilter.setIcon (iconFilterLocal);
+                case "Revoked":
+                    FilteredTreeModel.filterLevel = FilteredTreeModel.REVOKED;
+                    buttonFilter.setIcon (iconFilterRevoked);
+                    break;
+                case "All":
+                    FilteredTreeModel.filterLevel = FilteredTreeModel.ALL;
+                    buttonFilter.setIcon (iconFilterAll);
+                    break;
+                case "Parameters":
+                    FilteredTreeModel.filterLevel = FilteredTreeModel.PARAM;
+                    buttonFilter.setIcon (iconFilterParam);
+                    break;
+                case "Local":
+                    FilteredTreeModel.filterLevel = FilteredTreeModel.LOCAL;
+                    buttonFilter.setIcon (iconFilterLocal);
+                    break;
             }
             AppData.state.set (FilteredTreeModel.filterLevel, "PanelModel", "filter");
+            if (open) panelEquationTree.updateFilterLevel ();
+            else      panelEquationGraph.updateFilterLevel ();
         }
     };
 
@@ -1097,17 +1058,11 @@ public class PanelEquations extends JPanel
 
         public void restore ()
         {
-            if (path == null) return;  // If there's no stored path, then this is a document-level operation, so view doesn't matter. Document-level operations shouldn't even use this class.
-
+            // Hack the focus cache to switch to the right view.
+            int depth = path.size ();
             String key0 = path.get (0);
-            MNode doc = AppData.models.child (key0);
-            if (record == doc)  // load() won't run in this case
+            if (depth == 1)  // Will display the root, which could be either tree or graph.
             {
-                setOpen (open);
-            }
-            else
-            {
-                // Hack the focus cache to switch to the right view.
                 FocusCacheEntry fce = (FocusCacheEntry) focusCache.getObject (key0);
                 if (fce == null)
                 {
@@ -1115,17 +1070,27 @@ public class PanelEquations extends JPanel
                     focusCache.setObject (fce, key0);
                 }
                 fce.open = open;
-                load (doc);
             }
 
-            NodeBase p = root;
-            for (int i = 1; i < path.size (); i++)
+            boolean needPart = true;
+            MNode doc = AppData.models.child (key0);
+            if (doc != record)
             {
-                NodeBase n = p.child (path.get (i));
-                if (n == null) break;
-                p = n;
+                load (doc);
+                needPart = depth > 1;
             }
-            loadPart ((NodePart) p);  // takes focus
+
+            if (needPart)
+            {
+                NodeBase p = root;
+                for (int i = 1; i < depth; i++)
+                {
+                    NodeBase n = p.child (path.get (i));
+                    if (n == null) break;
+                    p = n;
+                }
+                loadPart ((NodePart) p);  // takes focus
+            }
         }
     }
 }

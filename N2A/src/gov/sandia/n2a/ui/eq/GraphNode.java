@@ -269,6 +269,13 @@ public class GraphNode extends JPanel
         parent.paintImmediately (paintRegion);
     }
 
+    public void takeFocus ()
+    {
+        parent.setComponentZOrder (this, 0);
+        parent.scrollRectToVisible (getBounds ());
+        repaint ();
+    }
+
     public class ResizeListener extends MouseInputAdapter implements ActionListener
     {
         int        cursor;
@@ -287,7 +294,7 @@ public class GraphNode extends JPanel
                     // Drill down
                     PanelEquations pe = PanelModel.instance.panelEquations;
                     pe.saveFocus ();
-                    FocusCacheEntry fce = pe.getFocus (pe.part);  // Should return non-null, since we just did saveFocus().
+                    FocusCacheEntry fce = pe.getFocus (pe.part);
                     fce.subpart = node.source.key ();
                     pe.loadPart (node);
                 }

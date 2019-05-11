@@ -8,11 +8,8 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq;
 
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
-import gov.sandia.n2a.ui.eq.tree.NodePart;
-
 import java.util.List;
 
-import javax.swing.JTree;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.MutableTreeNode;
 import javax.swing.tree.TreeNode;
@@ -36,18 +33,6 @@ public class FilteredTreeModel extends DefaultTreeModel
     {
         if (root != null) root.filter (filterLevel);
         super.setRoot (root);
-    }
-
-    public void setFilterLevel (int value, JTree tree)
-    {
-        filterLevel = value;
-
-        if (root == null) return;
-        NodePart r = (NodePart) root;
-        r.filter (filterLevel);
-        StoredPath path = new StoredPath (tree);
-        reload (root);
-        path.restore (tree);
     }
 
     /**

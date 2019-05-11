@@ -20,6 +20,7 @@ import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.EventObject;
 
@@ -82,9 +83,9 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
     protected int                      offset;
     protected int                      offsetPerLevel;  // How much to indent per tree level to accommodate for expansion handles.
 
-    public EquationTreeCellEditor (final JTree tree, EquationTreeCellRenderer renderer)
+    public EquationTreeCellEditor (JTree initialTree, EquationTreeCellRenderer renderer)
     {
-        setTree (tree);
+        setTree (initialTree);
         this.renderer = renderer;
         undoManager = new UndoManager ();
         editingContainer = new EditorContainer ();
@@ -171,6 +172,21 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             }
         });
 
+        MouseAdapter mouseListener = new MouseAdapter ()
+        {
+            public void mouseClicked (MouseEvent me)
+            {
+                if (me.getClickCount () == 2  &&  editingNode instanceof NodePart)
+                {
+                    // Drill down
+                    NodePart part = (NodePart) editingNode;  // Save node, because stopCellEditing() will set it to null.
+                    stopCellEditing ();
+                    PanelModel.instance.panelEquations.drill (part);
+                }
+            }
+        };
+        oneLineEditor.addMouseListener (mouseListener);
+
         TransferHandler xfer = new SafeTextTransferHandler ()
         {
             public boolean importData (TransferSupport support)
@@ -242,6 +258,8 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
                 if (e.getKeyCode () == KeyEvent.VK_ENTER  &&  e.isControlDown ()) stopCellEditing ();
             }
         });
+
+        multiLineEditor.addMouseListener (mouseListener);
     }
 
     @Override
@@ -306,7 +324,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             if (! editingNode.allowEdit ()) return false;
             return true;
         }
-        else  // Most likely, a moust event
+        else  // Most likely, a mouse event
         {
             // Always return false from this method. Instead, initiate editing indirectly.
 
@@ -314,6 +332,9 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             if (! (source instanceof JTree)) return false;
             if (source != tree)
             {
+                // TODO: Make single editor object work for multiple equation trees.
+                // Requires proper coordination of lastPath. May also require coordination on ending edit.
+                // It may be sufficient that PanelEquationTree call setTree() when it gains focus (via focus listener).
                 setTree ((JTree) source);  // Allow us to change trees,
                 return false;              // but still avoid immediate edit.
             }

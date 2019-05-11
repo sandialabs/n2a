@@ -28,6 +28,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.Enumeration;
 import javax.swing.AbstractAction;
+import javax.swing.Action;
 import javax.swing.ActionMap;
 import javax.swing.BorderFactory;
 import javax.swing.InputMap;
@@ -78,8 +79,9 @@ public class PanelEquationTree extends JScrollPane
                 // Ensure that graph node is big enough to edit name without activating scroll bars.
                 NodePart  part = (NodePart) model.getRoot ();
                 GraphNode gn   = part.graph;
-                Point     p    = gn.getLocation ();
-                Dimension d    = gn.getPreferredSize ();
+                if (gn == null) return;
+                Point     p = gn.getLocation ();
+                Dimension d = gn.getPreferredSize ();
                 part.graph.animate (new Rectangle (p, d));
             }
 
@@ -187,6 +189,32 @@ public class PanelEquationTree extends JScrollPane
         inputMap.put (KeyStroke.getKeyStroke ("ctrl ENTER"), "startEditing");
 
         ActionMap actionMap = tree.getActionMap ();
+        Action selectChild = actionMap.get ("selectChild");
+        Action selectParent = actionMap.get ("selectParent");
+        actionMap.put ("selectChild", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                if (! container.locked  &&  tree.getLeadSelectionRow () == 0)
+                {
+                    NodePart part = (NodePart) model.getRoot ();
+                    if (part.graph != null) part.source.set (true, "$metadata", "gui", "bounds", "open");
+                }
+                selectChild.actionPerformed (e);
+            }
+        });
+        actionMap.put ("selectParent", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                if (! container.locked  &&  tree.getLeadSelectionRow () == 0)
+                {
+                    NodePart part = (NodePart) model.getRoot ();
+                    if (part.graph != null) part.source.set (false, "$metadata", "gui", "bounds", "open");
+                }
+                selectParent.actionPerformed (e);
+            }
+        });
         actionMap.put ("moveUp", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
@@ -237,11 +265,20 @@ public class PanelEquationTree extends JScrollPane
                 int y = e.getY ();
                 int clicks = e.getClickCount ();
 
+                TreePath path = tree.getClosestPathForLocation (x, y);
+                if (path != null)
+                {
+                    // Constrain click to be close to node content, but allow some slack.
+                    Rectangle r = tree.getPathBounds (path);
+                    r.width += 20;
+                    r.width = Math.max (100, r.width);
+                    if (! r.contains (x, y)) path = null;
+                }
+
                 if (SwingUtilities.isLeftMouseButton (e))
                 {
                     if (clicks == 1)  // Open/close root for graph nodes
                     {
-                        TreePath path = tree.getPathForLocation (x, y);
                         if (path != null)
                         {
                             NodeBase node = (NodeBase) path.getLastPathComponent ();
@@ -259,20 +296,32 @@ public class PanelEquationTree extends JScrollPane
                             }
                         }
                     }
-                    else if (clicks == 2)  // Drill down
+                    else if (clicks == 2)  // Drill down on parts, or edit any other node type.
                     {
-                        NodePart part = (NodePart) model.getRoot ();
-                        container.saveFocus ();
-                        FocusCacheEntry fce = container.getFocus (container.part);  // Should return non-null, since we just did saveFocus().
-                        fce.subpart = part.source.key ();
-                        container.loadPart (part);
+                        NodePart part = null;
+                        if (path != null)
+                        {
+                            Object temp = path.getLastPathComponent ();
+                            if (temp instanceof NodePart)
+                            {
+                                part = (NodePart) temp;
+                                // and drill down
+                            }
+                            else  // any other node type
+                            {
+                                tree.setSelectionPath (path);
+                                tree.startEditingAtPath (path);
+                                return;
+                            }
+                        }
+                        if (part == null) part = (NodePart) model.getRoot ();  // Drill down without selecting a specific node.
+                        container.drill (part);
                     }
                 }
                 else if (SwingUtilities.isRightMouseButton (e))
                 {
                     if (clicks == 1)  // Show popup menu
                     {
-                        TreePath path = tree.getPathForLocation (x, y);
                         if (path != null)
                         {
                             tree.setSelectionPath (path);
@@ -374,7 +423,7 @@ public class PanelEquationTree extends JScrollPane
                     }
 
                     GraphNode gn = part.graph;
-                    if (gn != null) gn.parent.scrollRectToVisible (gn.getBounds ());
+                    if (gn != null) gn.takeFocus ();
                 }
             }
 
@@ -459,6 +508,16 @@ public class PanelEquationTree extends JScrollPane
     public void takeFocus ()
     {
         tree.requestFocusInWindow ();  // Triggers FocusListener defined above, which restores focus from cache.
+    }
+
+    public void updateFilterLevel ()
+    {
+        NodePart root = (NodePart) model.getRoot ();
+        if (root == null) return;
+        root.filter (FilteredTreeModel.filterLevel);
+        StoredPath path = new StoredPath (tree);
+        model.reload (root);
+        path.restore (tree);
     }
 
     public NodeBase getSelected ()

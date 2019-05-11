@@ -127,15 +127,23 @@ public class PanelEquationGraph extends JScrollPane
             {
                 if (SwingUtilities.isLeftMouseButton (me)  &&  me.getClickCount () == 2)
                 {
-                    // Drill up
-                    // This code is duplicated in GraphMouseListener. We need to listen both at
-                    // the panel and at the scroll pane, since the panel can sometimes not cover the whole area.
-                    NodePart parent = (NodePart) container.part.getParent ();
-                    if (parent == null) return;
-                    container.loadPart (parent);
+                    drillUp ();
                 }
             }
         });
+    }
+
+    public void drillUp ()
+    {
+        container.saveFocus ();
+        NodePart parent = (NodePart) container.part.getParent ();
+        if (parent == null)  // Toggle root view. Implicitly, we are in graph view, so switch to tree view.
+        {
+            parent = container.root;
+            FocusCacheEntry fce = container.createFocus (parent);
+            fce.open = true;
+        }
+        container.loadPart (parent);
     }
 
     public void loadPart ()
@@ -200,6 +208,11 @@ public class PanelEquationGraph extends JScrollPane
             graphPanel.scrollRectToVisible (gn.getBounds ());
             gn.panel.takeFocus ();
         }
+    }
+
+    public void updateFilterLevel ()
+    {
+        graphPanel.updateFilterLevel ();
     }
 
     public void addPart (NodePart node)
@@ -477,6 +490,14 @@ public class PanelEquationGraph extends JScrollPane
             }
         }
 
+        public void updateFilterLevel ()
+        {
+            for (Component c : getComponents ())
+            {
+                ((GraphNode) c).panel.updateFilterLevel ();
+            }
+        }
+
         public GraphEdge findTipAt (Point p)
         {
             Vector2 p2 = new Vector2 (p.x, p.y);
@@ -650,10 +671,7 @@ public class PanelEquationGraph extends JScrollPane
         {
             if (SwingUtilities.isLeftMouseButton (me)  &&  me.getClickCount () == 2)
             {
-                // Drill up
-                NodePart parent = (NodePart) container.part.getParent ();
-                if (parent == null) return;
-                container.loadPart (parent);
+                drillUp ();
             }
         }
 
