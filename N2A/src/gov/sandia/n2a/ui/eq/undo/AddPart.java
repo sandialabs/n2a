@@ -119,6 +119,7 @@ public class AddPart extends Undoable
             createdNode.filter (FilteredTreeModel.filterLevel);
         }
 
+        pe.resetBreadcrumbs ();
         if (pet == null)
         {
             PanelEquationTree.updateOrder (null, createdPath);

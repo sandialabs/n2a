@@ -154,6 +154,7 @@ public class PanelEquationGraph extends JScrollPane
 
     public void clear ()
     {
+        container.activeTree = null;  // on the presumption that container.panelEquationGraph was most recently on display. This function is only called in that case.
         graphPanel.clear ();
     }
 

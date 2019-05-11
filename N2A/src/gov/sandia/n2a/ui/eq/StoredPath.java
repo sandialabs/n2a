@@ -67,8 +67,8 @@ public class StoredPath
             if (c != null  &&  c.visible (FilteredTreeModel.filterLevel)) tree.expandPath (new TreePath (c.getPath ()));
         }
 
-        if (expanded) tree.expandRow (0);
-        else          tree.collapseRow (0);
+        if (open) tree.expandRow (0);
+        else      tree.collapseRow (0);
 
         // Second, locate the focused node and pay special attention to its visibility
         if (! selected)

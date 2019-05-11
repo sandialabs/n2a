@@ -127,6 +127,7 @@ public class ChangePart extends Undoable
         nodeAfter.findConnections ();
         nodeAfter.filter (FilteredTreeModel.filterLevel);
 
+        pe.resetBreadcrumbs ();
         TreeNode[] nodePath = nodeAfter.getPath ();
         if (pet == null)
         {

@@ -55,15 +55,17 @@ public class PanelEquationTree extends JScrollPane
     // Tree
     public    JTree                  tree;
     public    FilteredTreeModel      model;
+    protected NodePart               root;
     protected PanelEquations         container;
     protected boolean                needsFullRepaint;
     protected EquationTreeCellEditor editor;
 
-    public PanelEquationTree (PanelEquations container, NodePart root)
+    public PanelEquationTree (PanelEquations container, NodePart initialRoot)
     {
         this.container = container;
 
-        model = new FilteredTreeModel (root);  // Can be null
+        root  = initialRoot;
+        model = new FilteredTreeModel (initialRoot);  // Can be null
         tree  = new JTree (model)
         {
             public String convertValueToText (Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
@@ -77,12 +79,11 @@ public class PanelEquationTree extends JScrollPane
                 super.startEditingAtPath (path);
 
                 // Ensure that graph node is big enough to edit name without activating scroll bars.
-                NodePart  part = (NodePart) model.getRoot ();
-                GraphNode gn   = part.graph;
+                GraphNode gn = root.graph;
                 if (gn == null) return;
                 Point     p = gn.getLocation ();
                 Dimension d = gn.getPreferredSize ();
-                part.graph.animate (new Rectangle (p, d));
+                root.graph.animate (new Rectangle (p, d));
             }
 
             public String getToolTipText (MouseEvent e)
@@ -110,7 +111,6 @@ public class PanelEquationTree extends JScrollPane
             public void updateUI ()
             {
                 // We need to reset the renderer font first, before polling for cell sizes.
-                NodeBase root = (NodeBase) model.getRoot ();
                 if (root != null) root.filter (FilteredTreeModel.filterLevel);  // Force update to tab stops, in case font has changed.
                 super.updateUI ();
             }
@@ -119,7 +119,7 @@ public class PanelEquationTree extends JScrollPane
         tree.setExpandsSelectedPaths (true);
         tree.setScrollsOnExpand (true);
         tree.getSelectionModel ().setSelectionMode (TreeSelectionModel.SINGLE_TREE_SELECTION);  // No multiple selection. It only makes deletes and moves more complicated.
-        tree.setEditable (true);
+        tree.setEditable (! container.locked);
         tree.setInvokesStopCellEditing (true);  // auto-save current edits, as much as possible
         tree.setDragEnabled (true);
         tree.setToggleClickCount (0);  // Disable expand/collapse on double-click
@@ -128,10 +128,10 @@ public class PanelEquationTree extends JScrollPane
         tree.setCellRenderer (container.renderer);
 
         // Special cases for nodes in graph
-        if (root != null  &&  root.graph != null)
+        if (initialRoot != null  &&  initialRoot.graph != null)
         {
             setBorder (BorderFactory.createEmptyBorder ());
-            boolean open = root.source.getBoolean ("$metadata", "gui", "bounds", "open");
+            boolean open = initialRoot.source.getBoolean ("$metadata", "gui", "bounds", "open");
             if (open) tree.expandRow (0);
             else      tree.collapseRow (0);
         }
@@ -197,8 +197,7 @@ public class PanelEquationTree extends JScrollPane
             {
                 if (! container.locked  &&  tree.getLeadSelectionRow () == 0)
                 {
-                    NodePart part = (NodePart) model.getRoot ();
-                    if (part.graph != null) part.source.set (true, "$metadata", "gui", "bounds", "open");
+                    if (root.graph != null) root.source.set (true, "$metadata", "gui", "bounds", "open");
                 }
                 selectChild.actionPerformed (e);
             }
@@ -209,8 +208,7 @@ public class PanelEquationTree extends JScrollPane
             {
                 if (! container.locked  &&  tree.getLeadSelectionRow () == 0)
                 {
-                    NodePart part = (NodePart) model.getRoot ();
-                    if (part.graph != null) part.source.set (false, "$metadata", "gui", "bounds", "open");
+                    if (root.graph != null) root.source.set (false, "$metadata", "gui", "bounds", "open");
                 }
                 selectParent.actionPerformed (e);
             }
@@ -282,7 +280,6 @@ public class PanelEquationTree extends JScrollPane
                         if (path != null)
                         {
                             NodeBase node = (NodeBase) path.getLastPathComponent ();
-                            NodePart root = (NodePart) model.getRoot ();
                             if (node == root)
                             {
                                 boolean expanded = tree.isExpanded (path);
@@ -314,7 +311,7 @@ public class PanelEquationTree extends JScrollPane
                                 return;
                             }
                         }
-                        if (part == null) part = (NodePart) model.getRoot ();  // Drill down without selecting a specific node.
+                        if (part == null) part = root;  // Drill down without selecting a specific node.
                         container.drill (part);
                     }
                 }
@@ -408,22 +405,16 @@ public class PanelEquationTree extends JScrollPane
         {
             public void focusGained (FocusEvent e)
             {
+                container.activeTree = PanelEquationTree.this;
                 if (tree.getSelectionCount () < 1)
                 {
-                    NodePart part = (NodePart) model.getRoot ();
-                    FocusCacheEntry fce = container.getFocus (part);
-                    if (fce == null  ||  fce.sp == null)
+                    FocusCacheEntry fce = container.getFocus (root);
+                    if (fce != null  &&  fce.sp != null) fce.sp.restore (tree);
+                    if (tree.getSelectionCount () == 0)  // First-time display
                     {
-                        if (part == container.root) tree.expandRow (0);
                         tree.setSelectionRow (0);
                     }
-                    else
-                    {
-                        fce.sp.restore (tree);
-                    }
-
-                    GraphNode gn = part.graph;
-                    if (gn != null) gn.takeFocus ();
+                    if (root.graph != null) root.graph.takeFocus ();
                 }
             }
 
@@ -471,20 +462,20 @@ public class PanelEquationTree extends JScrollPane
     **/
     public void loadPart (NodePart part)
     {
-        NodePart oldPart = (NodePart) model.getRoot ();
-        if (part == oldPart) return;
-
-        if (oldPart != null) oldPart.pet = null;
-        part.pet = this;
-        model.setRoot (part);  // triggers repaint, but may be too slow
+        if (part == root) return;
+        if (root != null) root.pet = null;
+        root = part;
+        root.pet = this;
+        model.setRoot (root);  // triggers repaint, but may be too slow
         needsFullRepaint = true;  // next call to repaintSouth() will repaint everything
     }
 
     public void clear ()
     {
-        NodePart root = (NodePart) model.getRoot ();
-        model.setRoot (null);
         root.pet = null;
+        root = null;
+        model.setRoot (null);
+        container.activeTree = null;  // On the presumption that we are container.panelEquationTree. This function is only be called in that case, because PanelEquationGraph simply disposes of its trees, rather than clearing them.
     }
 
     public void updateLock ()
@@ -502,24 +493,29 @@ public class PanelEquationTree extends JScrollPane
     public void yieldFocus ()
     {
         tree.stopEditing ();
+        if (root == null) return;
+        FocusCacheEntry fce = container.createFocus (root);
+        fce.sp = saveFocus (fce.sp);
         tree.clearSelection ();
 
-        NodePart root = (NodePart) model.getRoot ();
-        if (root != null  &&  root.graph != null)
+        if (root.graph != null)
         {
             boolean open = root.source.getBoolean ("$metadata", "gui", "bounds", "open");
-            if (! open) tree.collapseRow (0);
+            if (! open)
+            {
+                tree.collapseRow (0);
+                fce.sp.open = false;
+            }
         }
     }
 
     public void takeFocus ()
     {
-        tree.requestFocusInWindow ();  // Triggers FocusListener defined above, which restores focus from cache.
+        tree.requestFocusInWindow ();  // Triggers focus listener, which restores focus from cache.
     }
 
     public void updateFilterLevel ()
     {
-        NodePart root = (NodePart) model.getRoot ();
         if (root == null) return;
         root.filter (FilteredTreeModel.filterLevel);
         StoredPath path = new StoredPath (tree);
@@ -533,7 +529,7 @@ public class PanelEquationTree extends JScrollPane
         TreePath path = tree.getSelectionPath ();
         if (path != null) result = (NodeBase) path.getLastPathComponent ();
         if (result != null) return result;
-        return (NodeBase) model.getRoot ();
+        return root;
     }
 
     public void addAtSelected (String type)
