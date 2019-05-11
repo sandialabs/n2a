@@ -196,7 +196,13 @@ public class GraphEdge
 
             Spline spline = new Spline ((CubicCurve2D) shape);
             root = intersection (spline, Cbounds);  // on boundary of c
-            if (root == null) root = new Vector2 (100, 100);
+            if (root == null)
+            {
+                shape  = null;
+                label  = null;
+                bounds = new Rectangle (0, 0, -1, -1);
+                return;
+            }
         }
 
         // Arrow head
@@ -333,11 +339,6 @@ public class GraphEdge
         double y0 = b.getMinY ();
         double x1 = b.getMaxX ();
         double y1 = b.getMaxY ();
-        System.out.println ("Intersect: " + x0 + " " + y0 + " " + x1 + " " + y1);
-        System.out.println ("  " + s.p0);
-        System.out.println ("  " + s.p1);
-        System.out.println ("  " + s.p2);
-        System.out.println ("  " + s.p3);
 
         // left edge
         Vector2 p0 = new Vector2 (x0, y0);
@@ -362,7 +363,6 @@ public class GraphEdge
         p1.x = x0;
         t = Math.min (t, s.intersection (new Segment2 (p0, p1)));
 
-        System.out.println ("  t = " + t);
         if (t > 1) return null;
         return s.paramtetricPoint (t);
     }
