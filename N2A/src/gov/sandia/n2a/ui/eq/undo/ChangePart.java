@@ -60,7 +60,13 @@ public class ChangePart extends Undoable
 
     public void apply (String nameBefore, String nameAfter)
     {
+        int viewSize = view.path.size ();
+        if (viewSize > path.size ())  // The name change applies to a graph node, which should be the focus.
+        {
+            view.path.set (viewSize - 1, nameBefore);
+        }
         view.restore ();
+
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
         NodeBase temp = parent.child (nameBefore);

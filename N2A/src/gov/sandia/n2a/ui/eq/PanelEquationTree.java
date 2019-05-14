@@ -405,7 +405,7 @@ public class PanelEquationTree extends JScrollPane
         {
             public void focusGained (FocusEvent e)
             {
-                container.activeTree = PanelEquationTree.this;
+                container.active = PanelEquationTree.this;
                 if (tree.getSelectionCount () < 1)
                 {
                     FocusCacheEntry fce = container.getFocus (root);
@@ -472,10 +472,11 @@ public class PanelEquationTree extends JScrollPane
 
     public void clear ()
     {
+        container.active = null;  // On the presumption that we are container.panelEquationTree. This function is only be called in that case, because PanelEquationGraph simply disposes of its trees, rather than clearing them.
+        if (root == null) return;
         root.pet = null;
         root = null;
         model.setRoot (null);
-        container.activeTree = null;  // On the presumption that we are container.panelEquationTree. This function is only be called in that case, because PanelEquationGraph simply disposes of its trees, rather than clearing them.
     }
 
     public void updateLock ()
@@ -615,6 +616,7 @@ public class PanelEquationTree extends JScrollPane
         @param index Position of the last node in its parent node. Only used if the last node has been deleted.
         A value of -1 causes selection to shift up to the parent.
         A value of -2 cause index to be derived from given path.
+        @param setSelection Highlights the closest tree node to the given path. Only does something if tree is non-null. 
     **/
     public static void updateVisibility (PanelEquationTree pet, TreeNode path[], int index, boolean setSelection)
     {

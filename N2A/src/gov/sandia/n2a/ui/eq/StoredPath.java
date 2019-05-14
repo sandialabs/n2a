@@ -44,6 +44,7 @@ public class StoredPath
         {
             path = expandedNodes.nextElement ();
             Object[] objectPath = path.getPath ();
+            if (objectPath.length == 1) continue;  // Don't store root node, because we handle its state via "open".
             String[] stringPath = new String[objectPath.length - 1];
             for (int i = 1; i < objectPath.length; i++) stringPath[i-1] = ((NodeBase) objectPath[i]).source.key ();
             others.add (stringPath);

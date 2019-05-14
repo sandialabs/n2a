@@ -86,7 +86,7 @@ public class PanelEquations extends JPanel
     protected JPanel                   panelBreadcrumb;
     public    PanelEquationGraph       panelEquationGraph;
     public    PanelEquationTree        panelEquationTree;  // To display root as a tree.
-    protected PanelEquationTree        activeTree;  // Which tree most recently received focus. Could be panelEquationTree or a GraphNode.panel.
+    protected PanelEquationTree        active;             // Tree which most recently received focus. Could be panelEquationTree or a GraphNode.panel.
     protected List<NodePart>           listBreadcrumb = new ArrayList<NodePart> ();
     protected TransferHandler          transferHandler;
     protected EquationTreeCellRenderer renderer       = new EquationTreeCellRenderer ();
@@ -122,14 +122,6 @@ public class PanelEquations extends JPanel
 
     public PanelEquations ()
     {
-        panelEquationGraph = new PanelEquationGraph (this);
-        panelEquationTree  = new PanelEquationTree (this, null);
-        panelBreadcrumb    = Lay.WL ("L", Box.createHorizontalStrut (5), noModel, "hgap=0");
-        panelCenter        = Lay.BL (
-            "N", panelBreadcrumb,
-            "C", panelEquationGraph  // Initial state is open==false and graph showing.
-        );
-
         transferHandler = new TransferHandler ()
         {
             public boolean canImport (TransferSupport xfer)
@@ -356,6 +348,14 @@ public class PanelEquations extends JPanel
             }
         };
 
+        panelEquationGraph = new PanelEquationGraph (this);
+        panelEquationTree  = new PanelEquationTree (this, null);
+        panelBreadcrumb    = Lay.WL ("L", Box.createHorizontalStrut (5), noModel, "hgap=0");
+        panelCenter        = Lay.BL (
+            "N", panelBreadcrumb,
+            "C", panelEquationGraph  // Initial state is open==false and graph showing.
+        );
+
         buttonAddModel = new JButton (ImageUtil.getImage ("document.png"));
         buttonAddModel.setMargin (new Insets (2, 2, 2, 2));
         buttonAddModel.setFocusable (false);
@@ -364,7 +364,7 @@ public class PanelEquations extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                if (activeTree != null) activeTree.tree.stopEditing ();
+                if (active != null) active.tree.stopEditing ();
                 PanelModel.instance.undoManager.add (new AddDoc ());
             }
         });
@@ -621,6 +621,7 @@ public class PanelEquations extends JPanel
 
         if (this.part == part) return;
         this.part = part;
+        active = null;
         if (open) panelEquationTree.loadPart (part);
         else      panelEquationGraph.loadPart ();
         updateBreadcrumbs ();
@@ -640,6 +641,7 @@ public class PanelEquations extends JPanel
         record = null;
         root   = null;
         part   = null;
+        active = null;
         if (open) panelEquationTree.clear ();
         else      panelEquationGraph.clear ();
         updateBreadcrumbs ();
@@ -686,13 +688,13 @@ public class PanelEquations extends JPanel
         // Save part focus information
         fce = createFocus (part);
         fce.position = panelEquationGraph.saveFocus ();
-        if (activeTree != null)
+        if (active != null)
         {
-            fce.subpart = activeTree.root.source.key ();
+            fce.subpart = active.root.source.key ();
 
             // TODO: save state of all node trees?
-            fce = createFocus (activeTree.root);
-            fce.sp = activeTree.saveFocus (fce.sp);
+            fce = createFocus (active.root);
+            fce.sp = active.saveFocus (fce.sp);
         }
     }
 
@@ -719,7 +721,7 @@ public class PanelEquations extends JPanel
     public void yieldFocus ()
     {
         saveFocus ();
-        if (activeTree != null) activeTree.yieldFocus ();
+        if (active != null) active.yieldFocus ();
     }
 
     public void takeFocus ()
@@ -785,7 +787,6 @@ public class PanelEquations extends JPanel
     {
         saveFocus ();
         FocusCacheEntry fce = getFocus (part);
-        //if (part == root) fce.open = false;  // Could be a deep drill-down, in which case we want to return to graph view, not tree.
         if (nextPart == root) fce.open = ! open;  // Not really a drill down. Toggle between graph and tree views.
         else                  fce.subpart = nextPart.source.key ();
         loadPart (nextPart);
@@ -798,11 +799,17 @@ public class PanelEquations extends JPanel
             String type = e.getActionCommand ();
             if (record == null)
             {
-                PanelModel.instance.undoManager.add (new AddDoc ());
-                if (type.equals ("Part")) return;  // Since root is itself a Part, don't create another one. For anything else, fall through and add it to the newly-created model.
+                PanelModel.instance.undoManager.add (new AddDoc ());  // New doc should always display in graph view.
+                if (! type.equals ("Part"))
+                {
+                    FocusCacheEntry fce = createFocus (root);
+                    fce.open = true;
+                    loadPart (root);
+                    active = panelEquationTree;  // Force code below to add non-part type
+                }
             }
 
-            if (activeTree == null)
+            if (active == null)
             {
                 // With no active tree, the only thing we can add is a part. NodePart.add() does this check for us.
                 NodePart editMe = (NodePart) part.add (type, null, new MVolatile (), null);
@@ -811,8 +818,8 @@ public class PanelEquations extends JPanel
             }
             else
             {
-                activeTree.tree.stopEditing ();
-                activeTree.addAtSelected (type);
+                active.tree.stopEditing ();
+                active.addAtSelected (type);
             }
         }
     };
@@ -821,14 +828,14 @@ public class PanelEquations extends JPanel
     {
         public void actionPerformed (ActionEvent e)
         {
-            if (activeTree == null)  // Either nothing is selected or a graph node is selected.
+            if (active == null)  // Either nothing is selected or a graph node is selected.
             {
                 panelEquationGraph.deleteSelected ();
             }
             else
             {
-                activeTree.tree.stopEditing ();  // It may seem odd to save a cell just before destroying it, but this gives cleaner UI painting.
-                activeTree.deleteSelected ();
+                active.tree.stopEditing ();  // It may seem odd to save a cell just before destroying it, but this gives cleaner UI painting.
+                active.deleteSelected ();
             }
         }
     };
@@ -837,9 +844,9 @@ public class PanelEquations extends JPanel
     {
         public void actionPerformed (ActionEvent e)
         {
-            if (activeTree == null) return;
-            activeTree.tree.stopEditing ();
-            activeTree.moveSelected (Integer.valueOf (e.getActionCommand ()));
+            if (active == null) return;
+            active.tree.stopEditing ();
+            active.moveSelected (Integer.valueOf (e.getActionCommand ()));
         }
     };
 
@@ -854,10 +861,10 @@ public class PanelEquations extends JPanel
         {
             if (record == null) return;
             MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
-            if (activeTree != null  &&  activeTree.tree.isEditing ())
+            if (active != null  &&  active.tree.isEditing ())
             {
-                activeTree.tree.stopEditing ();
-                mtp.setPreferredFocus (PanelModel.instance, activeTree.tree);  // Because tree does not reclaim the focus before focus shifts to the run tab.
+                active.tree.stopEditing ();
+                mtp.setPreferredFocus (PanelModel.instance, active.tree);  // Because tree does not reclaim the focus before focus shifts to the run tab.
             }
 
             String simulatorName = root.source.get ("$metadata", "backend");  // Note that "record" is the raw model, while "root.source" is the collated model.
@@ -920,7 +927,7 @@ public class PanelEquations extends JPanel
         public void actionPerformed (ActionEvent e)
         {
             if (record == null) return;
-            if (activeTree != null) activeTree.tree.stopEditing ();
+            if (active != null) active.tree.stopEditing ();
 
             // Construct and customize a file chooser
             final JFileChooser fc = new JFileChooser (AppData.properties.get ("resourceDir"));
@@ -1047,12 +1054,15 @@ public class PanelEquations extends JPanel
     **/
     public class StoredView
     {
-        List<String> path;  // to the active tree, which exists for all edit actions except add/change/delete document
-        boolean      first = true;
+        public List<String> path;  // to the active tree, which exists for all edit actions except add/change/delete document
+        public boolean      open;  // For model root only, indicates whether tree or graph view was active.
+        public boolean      first = true;
 
         public StoredView ()
         {
-            path = activeTree.root.getKeyPath ();
+            if (active == null) path = root.getKeyPath ();  // Which should just be the model name itself.
+            else                path = active.root.getKeyPath ();
+            open = PanelEquations.this.open;
         }
 
         public void restore ()
@@ -1060,7 +1070,7 @@ public class PanelEquations extends JPanel
             // Hack focus cache to switch to the right view.
             int depth = path.size ();
             String key0 = path.get (0);
-            if (depth == 1)  // Will display the root as a tree.
+            if (depth == 1)
             {
                 FocusCacheEntry fce = (FocusCacheEntry) focusCache.getObject (key0);
                 if (fce == null)
@@ -1068,7 +1078,7 @@ public class PanelEquations extends JPanel
                     fce = new FocusCacheEntry ();
                     focusCache.setObject (fce, key0);
                 }
-                fce.open = true;
+                fce.open = open;
             }
 
             MNode doc = AppData.models.child (key0);
