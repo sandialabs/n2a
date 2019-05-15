@@ -735,11 +735,12 @@ public class PanelEquationTree extends JScrollPane
             pet.tree.scrollPathToVisible (selectedPath);
             pet.tree.setSelectionPath (selectedPath);
         }
-        if (lastChange >= path.length)
+        if (lastChange == path.length)
         {
             boolean expanded = pet.tree.isExpanded (selectedPath);
             model.nodeStructureChanged (c);  // Should this be more targeted?
             if (expanded) pet.tree.expandPath (selectedPath);
+            else          pet.tree.collapsePath (selectedPath);
             pet.repaintSouth (selectedPath);
         }
     }
