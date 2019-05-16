@@ -145,8 +145,7 @@ public class GraphNode extends JPanel
             y += bounds.getInt ("y");
 
             boolean open = bounds.getBoolean ("open");
-            if (open) panel.tree.expandRow (0);
-            else      panel.tree.collapseRow (0);
+            panel.setOpen (open);
         }
         Dimension d = getPreferredSize ();  // Fetches updated width and height.
         Rectangle r = new Rectangle (x, y, d.width, d.height);

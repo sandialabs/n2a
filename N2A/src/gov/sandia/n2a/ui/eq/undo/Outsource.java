@@ -86,7 +86,8 @@ public class Outsource extends Undoable
         model.nodeStructureChanged (node);
         TreePath nodePath = new TreePath (node.getPath ());
         pet.tree.setSelectionPath (nodePath);
-        if (wasExpanded) pet.tree.expandPath (nodePath);
+        if (node == pet.root) pet.setOpen (wasExpanded);
+        else if (wasExpanded) pet.tree.expandPath (nodePath);
 
         // Not necessary to update the graph, since exactly the same connections exist.
         // findConnections() merely re-establishes them.

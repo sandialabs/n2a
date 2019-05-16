@@ -57,7 +57,7 @@ public class PanelEquationTree extends JScrollPane
     // Tree
     public    JTree                  tree;
     public    FilteredTreeModel      model;
-    protected NodePart               root;
+    public    NodePart               root;
     protected PanelEquations         container;
     protected boolean                needsFullRepaint;
     protected EquationTreeCellEditor editor;
@@ -134,8 +134,7 @@ public class PanelEquationTree extends JScrollPane
         {
             setBorder (BorderFactory.createEmptyBorder ());
             boolean open = initialRoot.source.getBoolean ("$metadata", "gui", "bounds", "open");
-            if (open) tree.expandRow (0);
-            else      tree.collapseRow (0);
+            setOpen (open);
         }
 
         // It would be nice to have a single editor object shared across all equation trees.
@@ -310,8 +309,7 @@ public class PanelEquationTree extends JScrollPane
                                 int iconWidth = root.getIcon (expanded).getIconWidth ();  // expanded isn't actually important for root node, as NodePart doesn't currently change appearance.
                                 if (x < iconWidth)
                                 {
-                                    if (expanded) tree.collapsePath (path);
-                                    else          tree.expandPath (path);
+                                    setOpen (! expanded);
                                     if (! container.locked) root.source.set (! expanded, "$metadata", "gui", "bounds", "open");
                                 }
                             }
@@ -506,6 +504,12 @@ public class PanelEquationTree extends JScrollPane
     public void updateLock ()
     {
         tree.setEditable (! container.locked);
+    }
+
+    public void setOpen (boolean open)
+    {
+        if (open) tree.expandRow (0);
+        else      tree.collapseRow (0);
     }
 
     public StoredPath saveFocus (StoredPath previous)
@@ -778,8 +782,9 @@ public class PanelEquationTree extends JScrollPane
         {
             boolean expanded = pet.tree.isExpanded (selectedPath);
             model.nodeStructureChanged (c);  // Should this be more targeted?
-            if (expanded)           pet.tree.expandPath (selectedPath);
-            else if (c == pet.root) pet.tree.collapsePath (selectedPath);  // nodeStructureChanged(root) always expands, so need to collapse again. However, collapse on a deeper node expands the parents, which we don't want.
+            // nodeStructureChanged(root) always expands, so need to collapse again. However, collapse on a deeper node expands the parents, which we don't want.
+            if (c == pet.root) pet.setOpen (expanded);
+            else if (expanded) pet.tree.expandPath (selectedPath);
             pet.repaintSouth (selectedPath);
         }
         if (setSelection) pet.tree.setSelectionPath (selectedPath);
