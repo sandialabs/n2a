@@ -627,7 +627,7 @@ public class PanelEquations extends JPanel
         updateBreadcrumbs ();
         panelCenter.validate ();
         panelCenter.repaint ();
-        takeFocus ();
+        takeFocus ();  // sets active
     }
 
     /**
@@ -708,7 +708,11 @@ public class PanelEquations extends JPanel
     **/
     public FocusCacheEntry createFocus (NodePart p)
     {
-        Object[] keyArray = p.getKeyPath ().toArray ();
+        return createFocus (p.getKeyPath ().toArray ());
+    }
+
+    public FocusCacheEntry createFocus (Object... keyArray)
+    {
         FocusCacheEntry result = (FocusCacheEntry) focusCache.getObject (keyArray);
         if (result == null)
         {
@@ -787,8 +791,9 @@ public class PanelEquations extends JPanel
     {
         saveFocus ();
         FocusCacheEntry fce = getFocus (part);
+        if (part == root) fce.open = false;  // On drill-up, return to graph view, not tree view.
         if (nextPart == root) fce.open = ! open;  // Not really a drill down. Toggle between graph and tree views.
-        else                  fce.subpart = nextPart.source.key ();
+        else if (nextPart.getParent () == part) fce.subpart = nextPart.source.key ();
         loadPart (nextPart);
     }
 
@@ -802,19 +807,30 @@ public class PanelEquations extends JPanel
                 PanelModel.instance.undoManager.add (new AddDoc ());  // New doc should always display in graph view.
                 if (! type.equals ("Part"))
                 {
+                    // Switch to tree view.
                     FocusCacheEntry fce = createFocus (root);
                     fce.open = true;
                     loadPart (root);
-                    active = panelEquationTree;  // Force code below to add non-part type
                 }
+            }
+            else
+            {
+                if (locked) return;
             }
 
             if (active == null)
             {
-                // With no active tree, the only thing we can add is a part. NodePart.add() does this check for us.
-                NodePart editMe = (NodePart) part.add (type, null, new MVolatile (), null);
+                // With no active tree, the only thing we can add is a part. NodePart.add() does this check for us, and returns null if we try to add something other than a part.
+                NodePart editMe = (NodePart) part.add (type, null, null, null);
                 if (editMe == null) return;
-                editMe.graph.panel.takeFocus ();
+                TreePath path = new TreePath (editMe.getPath ());
+                EventQueue.invokeLater (new Runnable ()
+                {
+                    public void run ()
+                    {
+                        editMe.graph.panel.tree.startEditingAtPath (path);
+                    }
+                });
             }
             else
             {
@@ -828,6 +844,7 @@ public class PanelEquations extends JPanel
     {
         public void actionPerformed (ActionEvent e)
         {
+            if (locked) return;
             if (active == null)  // Either nothing is selected or a graph node is selected.
             {
                 panelEquationGraph.deleteSelected ();
@@ -844,6 +861,7 @@ public class PanelEquations extends JPanel
     {
         public void actionPerformed (ActionEvent e)
         {
+            if (locked) return;
             if (active == null) return;
             active.tree.stopEditing ();
             active.moveSelected (Integer.valueOf (e.getActionCommand ()));
@@ -1070,16 +1088,8 @@ public class PanelEquations extends JPanel
             // Hack focus cache to switch to the right view.
             int depth = path.size ();
             String key0 = path.get (0);
-            if (depth == 1)
-            {
-                FocusCacheEntry fce = (FocusCacheEntry) focusCache.getObject (key0);
-                if (fce == null)
-                {
-                    fce = new FocusCacheEntry ();
-                    focusCache.setObject (fce, key0);
-                }
-                fce.open = open;
-            }
+            FocusCacheEntry fce = createFocus (key0);
+            fce.open = open;
 
             MNode doc = AppData.models.child (key0);
             if (doc != record)
@@ -1090,29 +1100,22 @@ public class PanelEquations extends JPanel
 
             // Hack focus cache to focus correct subpart
             int last = depth - 1;
-            Object[] keyPath = path.subList (0, last).toArray ();
-            FocusCacheEntry fce = (FocusCacheEntry) focusCache.getObject (keyPath);
-            if (fce == null)
+            if (last > 0)
             {
-                fce = new FocusCacheEntry ();
-                focusCache.setObject (fce, keyPath);
+                fce = createFocus (path.subList (0, last).toArray ());
+                fce.subpart = path.get (last);
             }
-            fce.subpart = path.get (last);
 
-            NodePart p = root;
-            for (int i = 1; i < last; i++) p = (NodePart) p.child (path.get (i));
-            if (p == part)
+            // Avoid clawing back focus on first call, since that is the initial
+            // "do" of an edit operation, which may have been completed by a loss of focus.
+            if (! first)
             {
-                // loadPart() won't do anything, so call takeFocus() directly.
-                // However, avoid clawing back focus on first call, since that is the initial
-                // "do" of an edit operation, which may have been completed by a loss of focus.
-                if (! first) takeFocus ();
-                first = false;
+                NodePart p = root;
+                for (int i = 1; i < last; i++) p = (NodePart) p.child (path.get (i));
+                if (p == part  &&  PanelEquations.this.open == open) takeFocus ();  // loadPart() won't run in this case, but we should still take focus.
+                else                                                 loadPart (p);
             }
-            else
-            {
-                loadPart (p);
-            }
+            first = false;
         }
     }
 }

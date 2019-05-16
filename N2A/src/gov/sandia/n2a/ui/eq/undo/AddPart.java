@@ -192,6 +192,7 @@ public class AddPart extends Undoable
         if (parent == pe.part  &&  ! pe.open)
         {
             if (addGraphNode) peg.addPart (createdNode);
+            createdNode.graph.panel.takeFocus ();
             peg.reconnect ();
             peg.paintImmediately ();
         }

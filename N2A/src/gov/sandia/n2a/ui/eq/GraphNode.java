@@ -449,30 +449,34 @@ public class GraphNode extends JPanel
         {
             start = null;
             timer.stop ();
-            if (! SwingUtilities.isLeftMouseButton (me)) return;
 
-            if (cursor != Cursor.DEFAULT_CURSOR)  // Click on border
+            if (SwingUtilities.isLeftMouseButton (me))
             {
-                // Store new bounds in metadata
-                MNode guiTree = new MVolatile ();
-                MNode bounds = guiTree.childOrCreate ("bounds");
-                Rectangle now = getBounds ();
-                if (now.x != old.x) bounds.set (now.x - parent.offset.x, "x");
-                if (now.y != old.y) bounds.set (now.y - parent.offset.y, "y");
-                if (panel.tree.isExpanded (0))
+                if (cursor != Cursor.DEFAULT_CURSOR)  // Click on border
                 {
-                    MNode open = bounds.childOrCreate ("open");
-                    if (now.width  != old.width ) open.set (now.width,  "width");
-                    if (now.height != old.height) open.set (now.height, "height");
-                    if (open.size () == 0) bounds.clear ("open");
+                    // Store new bounds in metadata
+                    MNode guiTree = new MVolatile ();
+                    MNode bounds = guiTree.childOrCreate ("bounds");
+                    Rectangle now = getBounds ();
+                    if (now.x != old.x) bounds.set (now.x - parent.offset.x, "x");
+                    if (now.y != old.y) bounds.set (now.y - parent.offset.y, "y");
+                    if (panel.tree.isExpanded (0))
+                    {
+                        MNode open = bounds.childOrCreate ("open");
+                        if (now.width  != old.width ) open.set (now.width,  "width");
+                        if (now.height != old.height) open.set (now.height, "height");
+                        if (open.size () == 0) bounds.clear ("open");
+                    }
+                    else
+                    {
+                        if (now.width  != old.width ) bounds.set (now.width,  "width");
+                        if (now.height != old.height) bounds.set (now.height, "height");
+                    }
+                    if (bounds.size () > 0) PanelModel.instance.undoManager.add (new ChangeGUI (node, guiTree));
                 }
-                else
-                {
-                    if (now.width  != old.width ) bounds.set (now.width,  "width");
-                    if (now.height != old.height) bounds.set (now.height, "height");
-                }
-                if (bounds.size () > 0) PanelModel.instance.undoManager.add (new ChangeGUI (node, guiTree));
             }
+
+            panel.takeFocus ();
         }
 
         public void actionPerformed (ActionEvent e)

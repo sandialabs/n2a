@@ -137,14 +137,15 @@ public class ChangeGUI extends Undoable
         if (parent.graph != null) parent.graph.updateGUI ();
     }
 
-    public boolean replaceEdit (UndoableEdit edit)
+    public boolean addEdit (UndoableEdit edit)
     {
         if (edit instanceof ChangeGUI)
         {
             ChangeGUI cg = (ChangeGUI) edit;
             if (path.equals (cg.path)  &&  doAdd.structureEquals (cg.doAdd))
             {
-                neutralized = cg.undoAdd.equals (doAdd);
+                doAdd = cg.doAdd;  // Replace our values with the new values.
+                neutralized = undoAdd.equals (doAdd);
                 return true;
             }
         }

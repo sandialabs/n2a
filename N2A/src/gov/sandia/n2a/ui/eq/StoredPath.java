@@ -132,6 +132,7 @@ public class StoredPath
         TreePath path = new TreePath (n.getPath ());
         tree.setSelectionPath (path);
         if (expanded) tree.expandPath (path);
+        tree.scrollPathToVisible (path);
     }
 
     public String toString ()

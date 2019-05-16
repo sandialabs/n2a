@@ -493,12 +493,7 @@ public class NodePart extends NodeContainer
             if (tree.isCollapsed (new TreePath (getPath ()))  &&  model.getChildCount (this) > 0)  // The node is deliberately closed to indicate user intent.
             {
                 if (type.isEmpty ()) type = "Part";
-                if (isRoot ())  // Since the document root can't be collapsed (due PanelEquationTree expand listener), this must be the root of a graph node.
-                {
-                    // Set up to create a peer graph node.
-                    tree = null;
-                    if (data == null) data = new MVolatile ();
-                }
+                if (isRoot ()) tree = null;  // Create a peer graph node. Document root can't be collapsed (due PanelEquationTree expand listener), so a collapsed root must be a graph node.
                 return ((NodePart) getTrueParent ()).add (type, tree, data, location);
             }
         }
