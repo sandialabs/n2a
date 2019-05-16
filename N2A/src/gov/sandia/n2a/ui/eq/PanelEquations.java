@@ -616,7 +616,25 @@ public class PanelEquations extends JPanel
         if (part == root)
         {
             FocusCacheEntry fce = getFocus (root);
-            if (fce != null) open = fce.open;
+            if (fce == null)
+            {
+                // Determine if root has any subparts. If yes, show graph view. If no, show tree view.
+                open = true;
+                Enumeration<?> e = root.children ();
+                while (e.hasMoreElements ())
+                {
+                    Object o = e.nextElement ();
+                    if (o instanceof NodePart)
+                    {
+                        open = false;
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                open = fce.open;
+            }
         }
 
         if (this.open != open)
