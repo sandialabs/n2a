@@ -14,8 +14,10 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
+import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.IOException;
 import javax.swing.DefaultListModel;
 import javax.swing.JComponent;
 import javax.swing.JList;
@@ -56,7 +58,36 @@ public class PanelMRU extends JPanel
             public boolean importData (TransferSupport xfer)
             {
                 list.clearSelection ();
-                return PanelModel.instance.panelSearch.transferHandler.importData (xfer);
+
+                TransferHandler th = PanelModel.instance.panelSearch.transferHandler;
+                if (! xfer.isDrop ()) return th.importData (xfer);
+                Transferable xferable = xfer.getTransferable ();
+                if (! xferable.isDataFlavorSupported (TransferableNode.nodeFlavor)) return th.importData (xfer);
+
+                try
+                {
+                    TransferableNode xferNode = (TransferableNode) xferable.getTransferData (TransferableNode.nodeFlavor);
+                    if (xferNode.newPartName == null) return th.importData (xfer);
+
+                    MNode doc = AppData.models.child (xferNode.newPartName);
+                    if (doc == null) return th.importData (xfer);
+
+                    JList.DropLocation dl = (JList.DropLocation) xfer.getDropLocation ();
+                    int newIndex = dl.getIndex ();
+                    if (newIndex < 0) newIndex = 0;
+
+                    PanelSearch.Holder h = new PanelSearch.Holder (doc);
+                    int oldIndex = model.indexOf (h);
+                    if (newIndex != oldIndex)
+                    {
+                        if (oldIndex >= 0) model.remove (oldIndex);
+                        model.add (newIndex, h);
+                        saveMRU ();
+                    }
+                }
+                catch (IOException | UnsupportedFlavorException e) {}
+
+                return th.importData (xfer);
             }
 
             public int getSourceActions (JComponent comp)
@@ -66,7 +97,9 @@ public class PanelMRU extends JPanel
 
             protected Transferable createTransferable (JComponent comp)
             {
-                return list.getSelectedValue ().createTransferable ();
+                TransferableNode result = list.getSelectedValue ().createTransferable ();
+                result.panel = PanelMRU.this;
+                return result;
             }
 
             protected void exportDone (JComponent source, Transferable data, int action)

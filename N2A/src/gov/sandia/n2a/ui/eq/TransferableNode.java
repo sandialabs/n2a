@@ -9,6 +9,8 @@ package gov.sandia.n2a.ui.eq;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
+
+import java.awt.Component;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.ClipboardOwner;
 import java.awt.datatransfer.DataFlavor;
@@ -16,15 +18,17 @@ import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
 import java.io.IOException;
 import java.io.StringReader;
+import java.util.ArrayList;
 import java.util.List;
 
 @SuppressWarnings("deprecation")
 public class TransferableNode implements Transferable, ClipboardOwner
 {
-    public String       data;
-    public List<String> path;
-    public boolean      drag;
-    public String       newPartName;  // If set non-null by the receiver (nasty hack), then this transfer resulted the creation of a new part.
+    public    String       data;
+    protected List<String> path;
+    public    boolean      drag;
+    public    String       newPartName;  // If set non-null by the receiver (nasty hack), then this transfer resulted in the creation of a new part.
+    public    Component    panel;  // The panel instance that originated the drag. Used to defend against self-drop.
 
     /**
         A data flavor that lets PanelSearch extract a TransferableNode instance for the purpose of adding info to it for our local exportDone().
@@ -32,15 +36,19 @@ public class TransferableNode implements Transferable, ClipboardOwner
     **/
     public static final DataFlavor nodeFlavor = new DataFlavor (TransferableNode.class, null);
 
-    public TransferableNode (String data, NodeBase source, boolean drag)
+    public TransferableNode (String data, NodeBase source, boolean drag, String newPartName)
     {
-        this.data = data;
-        path      = source.getKeyPath ();
-        this.drag = drag;
+        this.data        = data;
+        this.drag        = drag;
+        this.newPartName = newPartName;
+        if (source == null) path = new ArrayList<String> ();
+        else                path = source.getKeyPath ();
     }
 
     public NodeBase getSource ()
     {
+        if (path == null) return null;
+
         PanelEquations container = PanelModel.instance.panelEquations;
         MNode doc = AppData.models.child (path.get (0));
         if (doc != container.record) return null;

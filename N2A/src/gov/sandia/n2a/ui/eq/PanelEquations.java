@@ -68,6 +68,7 @@ import gov.sandia.n2a.ui.MainTabbedPane;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
+import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
 import gov.sandia.n2a.ui.eq.undo.ChangeOrder;
 import gov.sandia.n2a.ui.eq.undo.Outsource;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -135,7 +136,7 @@ public class PanelEquations extends JPanel
 
                 MNode data = new MVolatile ();
                 Schema schema;
-                TransferableNode xferNode = null;  // used only to detect if the source is ourselves (equation tree)
+                TransferableNode xferNode = null;  // used only to detect if the source is an equation tree
                 try
                 {
                     Transferable xferable = xfer.getTransferable ();
@@ -164,42 +165,7 @@ public class PanelEquations extends JPanel
                     else                path = tree.getSelectionPath ();
                 }
 
-                // Handle internal DnD as a node reordering.
-                PanelModel pm = PanelModel.instance;
-                if (xferNode != null  &&  xfer.isDrop ()  &&  path != null)  // DnD operation is internal to the tree. (Could also be DnD between N2A windows. For now, reject that case.)
-                {
-                    NodeBase target = (NodeBase) path.getLastPathComponent ();
-                    NodeBase targetParent = (NodeBase) target.getParent ();
-                    if (targetParent == null) return false;  // If target is root node
-
-                    NodeBase source = xferNode.getSource ();
-                    if (source == null) return false;  // Probably can only happen in a DnD between N2A instances.
-                    NodeBase sourceParent = (NodeBase) source.getParent ();
-
-                    if (targetParent != sourceParent) return false;  // Don't drag node outside its containing part.
-                    if (! (targetParent instanceof NodePart)) return false;  // Only rearrange children of parts (not of variables or metadata).
-
-                    NodePart parent = (NodePart) targetParent;
-                    int indexBefore = parent.getIndex (source);
-                    int indexAfter  = parent.getIndex (target);
-                    pm.undoManager.add (new ChangeOrder (parent, indexBefore, indexAfter));
-                    return true;
-                }
-
-                // Determine target node. Create new model if needed.
                 NodeBase target = null;
-                pm.undoManager.addEdit (new CompoundEdit ());
-                if (root == null)
-                {
-                    pm.undoManager.add (new AddDoc ());
-                    target = root;
-                }
-                if (tree != null)
-                {
-                    if (xfer.isDrop ()) tree.setSelectionPath (path);
-                    target = (NodeBase) path.getLastPathComponent ();
-                }
-
                 Point location = null;
                 if (peg != null)
                 {
@@ -211,6 +177,56 @@ public class PanelEquations extends JPanel
                         location.x += vp.x - peg.graphPanel.offset.x;
                         location.y += vp.y - peg.graphPanel.offset.y;
                     }
+                }
+
+                // Handle internal DnD as a node reordering.
+                PanelModel pm = PanelModel.instance;
+                if (xferNode != null  &&  xferNode.panel == PanelEquations.this  &&  xfer.isDrop ())
+                {
+                    NodeBase source = xferNode.getSource ();
+                    if (source == null) return false;  // Probably can only happen in a DnD between N2A instances.
+
+                    if (path == null)
+                    {
+                        if (! (source instanceof NodePart)) return false;
+                        NodePart sourcePart = (NodePart) source;
+                        if (sourcePart.graph == null) return false;
+
+                        MNode gui = new MVolatile ();
+                        gui.set (location.x, "bounds", "x");
+                        gui.set (location.y, "bounds", "y");
+                        pm.undoManager.add (new ChangeGUI (sourcePart, gui));
+                    }
+                    else  // DnD operation is internal to the tree. (Could also be DnD between N2A windows. For now, reject that case.)
+                    {
+                        target = (NodeBase) path.getLastPathComponent ();
+                        NodeBase targetParent = (NodeBase) target.getParent ();
+                        if (targetParent == null) return false;  // If target is root node
+
+                        NodeBase sourceParent = (NodeBase) source.getParent ();
+                        if (targetParent != sourceParent) return false;  // Don't drag node outside its containing part.
+                        if (! (targetParent instanceof NodePart)) return false;  // Only rearrange children of parts (not of variables or metadata).
+
+                        NodePart parent = (NodePart) targetParent;
+                        int indexBefore = parent.getIndex (source);
+                        int indexAfter  = parent.getIndex (target);
+                        pm.undoManager.add (new ChangeOrder (parent, indexBefore, indexAfter));
+                    }
+
+                    return true;
+                }
+
+                // Determine target node. Create new model if needed.
+                pm.undoManager.addEdit (new CompoundEdit ());
+                if (root == null)
+                {
+                    pm.undoManager.add (new AddDoc ());
+                    target = root;
+                }
+                if (tree != null)
+                {
+                    if (xfer.isDrop ()) tree.setSelectionPath (path);
+                    target = (NodeBase) path.getLastPathComponent ();
                 }
 
                 // An import can either be a new node in the tree, or a link (via inheritance) to an existing part.
@@ -311,7 +327,9 @@ public class PanelEquations extends JPanel
                     for (MNode c : copy) schema.write (c, writer);
                     writer.close ();
 
-                    return new TransferableNode (writer.toString (), node, drag);
+                    TransferableNode result = new TransferableNode (writer.toString (), node, drag, null);
+                    result.panel = PanelEquations.this;
+                    return result;
                 }
                 catch (IOException e)
                 {

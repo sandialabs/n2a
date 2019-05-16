@@ -21,7 +21,6 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.datatransfer.DataFlavor;
-import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.ActionEvent;
@@ -173,7 +172,9 @@ public class PanelSearch extends JPanel
                     }
 
                     if (! schema.type.contains ("Part")) return false;
-                    PanelModel.instance.undoManager.addEdit (new CompoundEdit ());
+                    PanelModel pm = PanelModel.instance;
+                    if (xfer.isDrop ()  &&  xferNode != null  &&  xferNode.panel != pm.panelEquations) return false;  // Reject DnD from search or MRU
+                    pm.undoManager.addEdit (new CompoundEdit ());
                     for (MNode n : data)  // data can contain several parts
                     {
                         AddDoc add = new AddDoc (n.key (), n);
@@ -182,7 +183,7 @@ public class PanelSearch extends JPanel
                             add.wasShowing = false;  // on the presumption that the sending side will create an Outsource operation, and thus wants to keep the old model in the equation tree
                             xferNode.newPartName = add.name;
                         }
-                        PanelModel.instance.undoManager.add (add);
+                        pm.undoManager.add (add);
                         break;  // For now, we only support transferring a single part. To do more, we need to add collections in TransferableNode for both the node paths and the created part names.
                     }
                     if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE  ||  xferNode == null) PanelModel.instance.undoManager.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
@@ -200,7 +201,9 @@ public class PanelSearch extends JPanel
 
             protected Transferable createTransferable (JComponent comp)
             {
-                return list.getSelectedValue ().createTransferable ();
+                TransferableNode result = list.getSelectedValue ().createTransferable ();
+                result.panel = PanelSearch.this;
+                return result;
             }
 
             protected void exportDone (JComponent source, Transferable data, int action)
@@ -410,7 +413,7 @@ public class PanelSearch extends JPanel
             this.doc = doc;
         }
 
-        public Transferable createTransferable ()
+        public TransferableNode createTransferable ()
         {
             Schema schema = Schema.latest ();
             schema.type = "Part";
@@ -421,7 +424,7 @@ public class PanelSearch extends JPanel
                 writer.write (doc.key () + String.format ("%n"));
                 for (MNode c : doc) schema.write (c, writer, " ");
                 writer.close ();
-                return new StringSelection (writer.toString ());
+                return new TransferableNode (writer.toString (), null, false, doc.key ());
             }
             catch (IOException e)
             {
