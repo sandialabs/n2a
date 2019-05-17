@@ -14,6 +14,7 @@ import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.KeyboardFocusManager;
 import java.awt.LayoutManager;
 import java.awt.LayoutManager2;
 import java.awt.Point;
@@ -173,30 +174,34 @@ public class PanelEquationGraph extends JScrollPane
 
     public void takeFocus ()
     {
-        Point focus;
+        Point focus = new Point ();  // (0,0)
         GraphNode gn = null;
         FocusCacheEntry fce = container.getFocus (container.part);
-        if (fce == null  ||  fce.position == null)
+        if (fce != null)
         {
-            focus = new Point ();  // (0,0)
-        }
-        else
-        {
-            focus = new Point (fce.position);
-            focus.x += graphPanel.offset.x;
-            focus.y += graphPanel.offset.y;
-            focus.x = Math.max (0, focus.x);
-            focus.y = Math.max (0, focus.y);
-            Dimension extent = vp.getExtentSize ();
-            focus.x = Math.min (focus.x, Math.max (0, graphPanel.layout.bounds.width  - extent.width));
-            focus.y = Math.min (focus.y, Math.max (0, graphPanel.layout.bounds.height - extent.height));
-
+            if (fce.position != null)
+            {
+                focus = new Point (fce.position);
+                focus.x += graphPanel.offset.x;
+                focus.y += graphPanel.offset.y;
+                focus.x = Math.max (0, focus.x);
+                focus.y = Math.max (0, focus.y);
+                Dimension extent = vp.getExtentSize ();
+                focus.x = Math.min (focus.x, Math.max (0, graphPanel.layout.bounds.width  - extent.width));
+                focus.y = Math.min (focus.y, Math.max (0, graphPanel.layout.bounds.height - extent.height));
+            }
             if (fce.subpart != null)
             {
                 gn = graphPanel.findNode (fce.subpart);
             }
         }
-        vp.setViewPosition (focus);
+
+        // Restore the viewport position, but only if the viewport has changed content.
+        // As a heuristic to detect whether content has changed, we assume that focus has not yet
+        // shifted to any tree in the graph. But if focus is already on one of our trees, then
+        // the previous view was the same as this one.
+        Component focusOwner = KeyboardFocusManager.getCurrentKeyboardFocusManager ().getFocusOwner ();
+        if (! isAncestorOf (focusOwner)) vp.setViewPosition (focus);
 
         if (gn == null  &&  graphPanel.getComponentCount () > 0)
         {
@@ -206,7 +211,7 @@ public class PanelEquationGraph extends JScrollPane
         }
         if (gn != null)
         {
-            graphPanel.scrollRectToVisible (gn.getBounds ());
+            graphPanel.scrollRectToVisible (gn.getBounds ());  // possibly change the viewport position set above
             gn.panel.takeFocus ();
         }
     }
@@ -303,7 +308,7 @@ public class PanelEquationGraph extends JScrollPane
     {
         protected GraphLayout     layout;  // For ease of access, to avoid calling getLayout() all the time.
         protected List<GraphEdge> edges    = new ArrayList<GraphEdge> (); // Note that GraphNodes are stored directly as Swing components.
-        protected Point           offset   = new Point ();  // Offset from persistent coordinates to pixels. Add this to a stored (x,y) value to get non-negative coordinates that can be painted.
+        protected Point           offset   = new Point ();  // Offset from persistent coordinates to viewport coordinates. Add this to a stored (x,y) value to get non-negative coordinates that can be painted.
         protected List<GraphNode> selected = new ArrayList<GraphNode> ();  // TODO: implement selection, with operations: move, resize, delete
 
         public GraphPanel ()

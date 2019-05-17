@@ -278,8 +278,19 @@ public class PanelEquationTree extends JScrollPane
             }
         });
 
-        tree.addMouseListener (new MouseAdapter ()
+        MouseAdapter mouseAdapter = new MouseAdapter ()
         {
+            @Override
+            public void mouseDragged (MouseEvent e)
+            {
+                // For some reason, a DnD gesture does not cause JTree to take focus.
+                // This is a hack to grab focus in that case. At the start of a drag,
+                // we receive a small handful of mouseDragged() messages. Perhaps
+                // they stop because DnD takes over. In any case, this is sufficient to detect
+                // the start of DnD and grab focus.
+                if (! tree.isFocusOwner ()) tree.requestFocusInWindow ();
+            }
+
             public void mouseClicked (MouseEvent e)
             {
                 int x = e.getX ();
@@ -349,7 +360,9 @@ public class PanelEquationTree extends JScrollPane
                     }
                 }
             }
-        });
+        };
+        tree.addMouseListener (mouseAdapter);
+        tree.addMouseMotionListener (mouseAdapter);
 
         // Hack for slow Swing repaint when clicking to select new node
         tree.addTreeSelectionListener (new TreeSelectionListener ()

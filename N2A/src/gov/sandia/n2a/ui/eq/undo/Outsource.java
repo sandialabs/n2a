@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -24,24 +24,21 @@ import gov.sandia.n2a.ui.eq.tree.NodePart;
 public class Outsource extends Undoable
 {
     protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
-    protected List<String> path;  // to containing part
-    protected String       name;  // of the part itself
+    protected List<String> path;
     protected String       inherit;
     protected MNode        savedSubtree;
     protected boolean      wasExpanded;
 
     public Outsource (NodePart node, String inherit)
     {
-        NodeBase parent = (NodeBase) node.getParent ();
-        path         = parent.getKeyPath ();
-        name         = node.source.key ();
+        path         = node.getKeyPath ();
         this.inherit = inherit;
 
         savedSubtree = new MVolatile ();
         savedSubtree.merge (node.source);  // This takes the entire tree, regardless of visibility. TODO: should this match the visibility semantics used by copy/paste operations?
 
-        JTree tree = parent.getTree ().tree;
-        wasExpanded = ! tree.isCollapsed (new TreePath (node.getPath ()));
+        JTree tree = node.getTree ().tree;
+        wasExpanded = tree.isExpanded (new TreePath (node.getPath ()));
     }
 
     public void undo ()
@@ -62,12 +59,10 @@ public class Outsource extends Undoable
     {
         // Retrieve created node
         view.restore ();
-        NodeBase parent = NodeBase.locateNode (path);
-        if (parent == null) throw new CannotRedoException ();
-        NodePart node = (NodePart) parent.child (name);
+        NodePart node = (NodePart) NodeBase.locateNode (path);
         if (node == null) throw new CannotRedoException ();
 
-        PanelEquationTree pet = parent.getTree ();
+        PanelEquationTree pet = node.getTree ();
         FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
 
         // Update database

@@ -117,7 +117,7 @@ public class PanelEquations extends JPanel
     protected static ImageIcon iconViewGraph = ImageUtil.getImage ("viewGraph.png");
     protected static ImageIcon iconViewTree  = ImageUtil.getImage ("explore.gif");
 
-    protected static JLabel noModel = new JLabel ("Select from left or click New Model above.");
+    protected static JLabel noModel = new JLabel ("<Select model from left or click New Model above.>");
 
     protected int jobCount = 0;  // for launching jobs
 
@@ -220,7 +220,10 @@ public class PanelEquations extends JPanel
                 pm.undoManager.addEdit (new CompoundEdit ());
                 if (root == null)
                 {
-                    pm.undoManager.add (new AddDoc ());
+                    AddDoc ad = new AddDoc ();
+                    FocusCacheEntry fce = createFocus (ad.name);
+                    fce.open = false;
+                    pm.undoManager.add (ad);
                     target = root;
                 }
                 if (tree != null)
@@ -618,13 +621,13 @@ public class PanelEquations extends JPanel
             FocusCacheEntry fce = getFocus (root);
             if (fce == null)
             {
-                // Determine if root has any subparts. If yes, show graph view. If no, show tree view.
+                // Determine if root has any connections. If yes, show graph view. If no, show tree view.
                 open = true;
                 Enumeration<?> e = root.children ();
                 while (e.hasMoreElements ())
                 {
                     Object o = e.nextElement ();
-                    if (o instanceof NodePart)
+                    if (o instanceof NodePart  &&  ((NodePart) o).connectionBindings != null)
                     {
                         open = false;
                         break;
@@ -678,8 +681,17 @@ public class PanelEquations extends JPanel
         root   = null;
         part   = null;
         active = null;
-        if (open) panelEquationTree.clear ();
-        else      panelEquationGraph.clear ();
+        if (open)
+        {
+            panelCenter.remove (panelEquationTree);
+            panelEquationTree.clear ();
+            panelCenter.add (panelEquationGraph, BorderLayout.CENTER);
+            open = false;
+        }
+        else
+        {
+            panelEquationGraph.clear ();
+        }
         updateBreadcrumbs ();
         panelCenter.validate ();
         panelCenter.repaint ();
@@ -707,12 +719,7 @@ public class PanelEquations extends JPanel
         FocusCacheEntry fce;
         if (part == root)
         {
-            fce = getFocus (root);
-            if (fce == null)
-            {
-                fce = new FocusCacheEntry ();
-                focusCache.setObject (fce, root.source.key ());
-            }
+            fce = createFocus (root.source.key ());
             fce.open = open;
             if (open)
             {
@@ -727,8 +734,7 @@ public class PanelEquations extends JPanel
         if (active != null)
         {
             fce.subpart = active.root.source.key ();
-
-            // TODO: save state of all node trees?
+            // Only save state of the active node, rather than all nodes. This seems sufficient for good user experience.
             fce = createFocus (active.root);
             fce.sp = active.saveFocus (fce.sp);
         }
@@ -840,13 +846,21 @@ public class PanelEquations extends JPanel
             String type = e.getActionCommand ();
             if (record == null)
             {
-                PanelModel.instance.undoManager.add (new AddDoc ());  // New doc should always display in graph view.
-                if (! type.equals ("Part"))
+                AddDoc ad = new AddDoc ();
+                // New doc displays in tree view, because it has no parts.
+                // If adding a sub-part, we prefer to show in graph view, so hack focus cache.
+                boolean isPart = type.equals ("Part");
+                if (isPart)
                 {
-                    // Switch to tree view.
-                    FocusCacheEntry fce = createFocus (root);
-                    fce.open = true;
-                    loadPart (root);
+                    FocusCacheEntry fce = createFocus (ad.name);
+                    fce.open = false;
+                }
+                PanelModel.instance.undoManager.add (ad);
+                if (! isPart)
+                {
+                    // After load(doc), active is null.
+                    // PanelEquationTree focusGained() will set active, but won't be called before the test below.
+                    active = panelEquationTree;
                 }
             }
             else
@@ -859,11 +873,11 @@ public class PanelEquations extends JPanel
                 // With no active tree, the only thing we can add is a part. NodePart.add() does this check for us, and returns null if we try to add something other than a part.
                 NodePart editMe = (NodePart) part.add (type, null, null, null);
                 if (editMe == null) return;
-                TreePath path = new TreePath (editMe.getPath ());
                 EventQueue.invokeLater (new Runnable ()
                 {
                     public void run ()
                     {
+                        TreePath path = new TreePath (editMe.getPath ());
                         editMe.graph.panel.tree.startEditingAtPath (path);
                     }
                 });
@@ -1114,7 +1128,8 @@ public class PanelEquations extends JPanel
 
         public StoredView ()
         {
-            if (active == null) path = root.getKeyPath ();  // Which should just be the model name itself.
+            saveFocus ();
+            if (active == null) path = root.getKeyPath ();  // Which should be only the model name itself.
             else                path = active.root.getKeyPath ();
             open = PanelEquations.this.open;
         }
