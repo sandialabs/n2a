@@ -19,8 +19,10 @@ import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
 import gov.sandia.n2a.ui.eq.undo.ChangeOrder;
 
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FontMetrics;
+import java.awt.KeyboardFocusManager;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
@@ -440,17 +442,7 @@ public class PanelEquationTree extends JScrollPane
         {
             public void focusGained (FocusEvent e)
             {
-                container.active = PanelEquationTree.this;
-                if (tree.getSelectionCount () < 1)
-                {
-                    FocusCacheEntry fce = container.getFocus (root);
-                    if (fce != null  &&  fce.sp != null) fce.sp.restore (tree);
-                    if (tree.getSelectionCount () == 0)  // First-time display
-                    {
-                        tree.setSelectionRow (0);
-                    }
-                }
-                if (root.graph != null) root.graph.takeFocus ();
+                restoreFocus ();
             }
 
             public void focusLost (FocusEvent e)
@@ -553,7 +545,24 @@ public class PanelEquationTree extends JScrollPane
 
     public void takeFocus ()
     {
-        tree.requestFocusInWindow ();  // Triggers focus listener, which restores focus from cache.
+        Component focusOwner = KeyboardFocusManager.getCurrentKeyboardFocusManager ().getFocusOwner ();
+        if (focusOwner == tree) restoreFocus ();
+        else                    tree.requestFocusInWindow ();  // Triggers focus listener, which calls restoreFocus()
+    }
+
+    public void restoreFocus ()
+    {
+        container.active = PanelEquationTree.this;
+        if (tree.getSelectionCount () < 1)
+        {
+            FocusCacheEntry fce = container.getFocus (root);
+            if (fce != null  &&  fce.sp != null) fce.sp.restore (tree);
+            if (tree.getSelectionCount () == 0)  // First-time display
+            {
+                tree.setSelectionRow (0);
+            }
+        }
+        if (root.graph != null) root.graph.takeFocus ();
     }
 
     public void updateFilterLevel ()

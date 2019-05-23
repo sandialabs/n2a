@@ -303,7 +303,6 @@ public class PanelSearch extends JPanel
             {
                 PanelModel mep = PanelModel.instance;
                 mep.panelEquations.load (doc);
-                mep.panelEquations.takeFocus ();  // TODO: this may be redundant
             }
         });
     }
