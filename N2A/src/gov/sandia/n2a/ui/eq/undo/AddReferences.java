@@ -29,7 +29,7 @@ public class AddReferences extends Undoable
         path = parent.getKeyPath ();
         this.index = index;
 
-        saved = new MVolatile ("$references", "");
+        saved = new MVolatile (null, "$references");
         saved.merge (data);
     }
 

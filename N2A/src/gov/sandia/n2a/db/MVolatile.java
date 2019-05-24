@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -24,19 +24,19 @@ public class MVolatile extends MNode
 
 	public MVolatile (String value)
 	{
-	    if (value != null  &&  ! value.isEmpty ()) this.value = value;
+	    this.value = value;
 	}
 
-    public MVolatile (String name, String value)
+    public MVolatile (String value, String name)
     {
-        if (name  != null  &&  ! name .isEmpty ()) this.name  = name;
-        if (value != null  &&  ! value.isEmpty ()) this.value = value;
+        this.name  = name;
+        this.value = value;
     }
 
-    public MVolatile (String name, String value, MNode parent)
+    public MVolatile (String value, String name, MNode parent)
     {
-        if (name  != null  &&  ! name .isEmpty ()) this.name  = name;
-        if (value != null  &&  ! value.isEmpty ()) this.value = value;
+        this.name   = name;
+        this.value  = value;
         this.parent = parent;
     }
 
@@ -51,6 +51,9 @@ public class MVolatile extends MNode
         return parent;
     }
 
+    /**
+        @return The most distant ancestor that is still an MVolatile.
+    **/
     public MNode getRoot ()
     {
         MVolatile result = this;
@@ -81,6 +84,11 @@ public class MVolatile extends MNode
 	    return children.size ();
 	}
 
+	public boolean data ()
+	{
+	    return value != null;
+	}
+
 	public synchronized String getOrDefault (String defaultValue)
     {
         if (value == null) return defaultValue;
@@ -103,8 +111,7 @@ public class MVolatile extends MNode
 
     public synchronized void set (String value)
     {
-        if (value.isEmpty ()) this.value = null;
-        else                  this.value = value;
+        this.value = value;
     }
 
     public synchronized MNode set (String value, String index)
@@ -113,7 +120,7 @@ public class MVolatile extends MNode
         MNode result = children.get (index);
         if (result == null)
         {
-            result = new MVolatile (index, value, this);
+            result = new MVolatile (value, index, this);
             children.put (index, result);
             return result;
         }

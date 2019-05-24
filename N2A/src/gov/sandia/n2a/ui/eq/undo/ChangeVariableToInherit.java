@@ -38,7 +38,7 @@ public class ChangeVariableToInherit extends Undoable
         NodeBase parent = (NodeBase) variable.getParent ();
         path = parent.getKeyPath ();
         this.valueAfter = valueAfter;
-        treeBefore = new MVolatile (variable.source.key (), "");
+        treeBefore = new MVolatile (null, variable.source.key ());
         treeBefore.merge (variable.source.getSource ());  // Built from the top-level doc, not the collated tree.
     }
 

@@ -23,7 +23,7 @@ public class DeleteEntry extends Undoable
 
     public DeleteEntry (MDoc doc)
     {
-        saved = new MVolatile (doc.key (), "");
+        saved = new MVolatile (null, doc.key ());
         saved.merge (doc);  // in-memory copy of the entire document
 
         PanelReference mep = PanelReference.instance;

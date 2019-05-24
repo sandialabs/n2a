@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -25,7 +25,7 @@ public class MPersistent extends MVolatile
 
     public MPersistent (MNode parent, String name, String value)
     {
-        super (name, value);
+        super (value, name);
         this.parent = parent;
     }
 
@@ -61,7 +61,7 @@ public class MPersistent extends MVolatile
 
 	public synchronized void set (String value)
     {
-        if (value == null  ||  value.isEmpty ())
+        if (value == null)
         {
             if (this.value != null)
             {

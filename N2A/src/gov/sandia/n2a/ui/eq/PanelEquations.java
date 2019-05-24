@@ -319,7 +319,7 @@ public class PanelEquations extends JPanel
 
                 MVolatile copy = new MVolatile ();
                 node.copy (copy);
-                if (node == root) copy.set ("", node.source.key ());  // Remove file information from root node, if that is what we are sending.
+                if (node == root) copy.set (null, node.source.key ());  // Remove file information from root node, if that is what we are sending.
 
                 Schema schema = Schema.latest ();
                 schema.type = "Clip" + node.getTypeName ();
@@ -939,7 +939,7 @@ public class PanelEquations extends JPanel
             final Backend simulator = Backend.getBackend (simulatorName);
             MNode runs = AppData.runs;
             String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + jobCount++;
-            final MNode job = runs.set ("", jobKey);  // Create the dir and model doc
+            final MNode job = runs.childOrCreate (jobKey);  // Create the dir and model doc
             job.merge (root.source);
             job.set ("\"" + record.key () + "\"", "$inherit");
             ((MDoc) job).save ();  // Force directory (and job file) to exist, so Backends can work with the dir.

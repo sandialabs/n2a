@@ -27,6 +27,7 @@ public class Schema2 extends Schema1
             // Parse the line into key=value.
             String line = reader.line.trim ();
             StringBuilder prefix = new StringBuilder ();
+            String value = null;
             boolean escape = line.charAt (0) == '"';
             int i = escape ? 1 : 0;
             int last = line.length () - 1;
@@ -53,16 +54,15 @@ public class Schema2 extends Schema1
                 {
                     if (c == ':')
                     {
-                        i++;
+                        value = line.substring (i+1).trim ();
                         break;
                     }
                 }
                 prefix.append (c);
             }
-            String key   = prefix.toString ().trim ();
-            String value = line.substring (i).trim ();
+            String key = prefix.toString ().trim ();
 
-            if (value.startsWith ("|"))  // go into string reading mode
+            if (value != null  &&  value.startsWith ("|"))  // go into string reading mode
             {
                 StringBuilder block = new StringBuilder ();
                 reader.getNextLine ();
@@ -91,20 +91,19 @@ public class Schema2 extends Schema1
 
     public void write (MNode node, Writer writer, String indent) throws IOException
     {
-        String key   = node.key ();
-        String value = node.get ();
-
+        String key = node.key ();
         if (key.startsWith ("\"")  ||  key.contains (":"))
         {
             key = "\"" + key.replace ("\"", "\"\"") + "\"";  // Using quote as its own escape, we avoid the need to escape a second code (such as both quote and backslash). This follows YAMLs example.
         }
 
-        if (value.isEmpty ())
+        if (! node.data ())
         {
             writer.write (String.format ("%s%s%n", indent, key));
         }
         else
         {
+            String value = node.get ();
             String newLine = String.format ("%n");
             if (value.contains (newLine))  // go into extended text write mode
             {

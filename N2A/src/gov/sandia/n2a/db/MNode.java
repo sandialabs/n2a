@@ -71,7 +71,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         for (int i = 0; i < indices.length; i++)
         {
             MNode c = result.getChild (indices[i]);
-            if (c == null) c = result.set ("", indices[i]);
+            if (c == null) c = result.set (null, indices[i]);
             result = c;
         }
         return result;
@@ -124,6 +124,17 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     }
 
     /**
+        Indicates whether this node is defined.
+        Works in conjunction with size() to provide information similar to the MUMPS function "DATA".
+        Since get() returns "" for undefined nodes, this is the only way to determine whether a node
+        is actually defined to "" or is undefined.
+    **/
+    public boolean data ()
+    {
+        return false;
+    }
+
+    /**
         @return This node's value, with "" as default
     **/
     public String get ()
@@ -152,7 +163,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     }
 
     /**
-        Retrieve our own value, or the given default if we are set to "".
+        Returns this node's value, or the given default if node is undefined or set to "".
         This is the only get*() function that needs to be overridden by subclasses.
     **/
     public String getOrDefault (String defaultValue)
@@ -263,6 +274,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     /**
         Sets this node's own value.
+        Passing null makes future calls to data() returns false, that is, makes the value of this node undefined.
         Should be overridden by a subclass.
     **/
     public void set (String value)
@@ -285,30 +297,27 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     **/
     public synchronized MNode set (String value, String... indices)
     {
-        MNode result = this;
-        for (int i = 0; i < indices.length; i++)
-        {
-            MNode c = result.getChild (indices[i]);
-            if (c == null) c = result.set ("", indices[i]);
-            result = c;
-        }
+        MNode result = childOrCreate (indices);
         result.set (value);
         return result;
     }
 
     public synchronized MNode set (Object value, String... indices)
     {
+        MNode result = childOrCreate (indices);
         if (value instanceof MNode)
         {
-            MNode c = childOrCreate (indices);
-            c.clear ();
-            c.merge ((MNode) value);
-            return c;
+            result.clear ();
+            result.merge ((MNode) value);
         }
-        String stringValue;
-        if (value instanceof Boolean) stringValue = (Boolean) value ? "1" : "0";
-        else                          stringValue = value.toString ();
-        return set (stringValue, indices);
+        else
+        {
+            String stringValue;
+            if (value instanceof Boolean) stringValue = (Boolean) value ? "1" : "0";
+            else                          stringValue = value.toString ();
+            result.set (stringValue);
+        }
+        return result;
     }
 
     public synchronized MNode set (Object value, Object... indices)
@@ -320,39 +329,18 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     /**
         Deep copies the source node into this node, while leaving any non-overlapping values in
-        this node unchanged. The value of this node is replaced, even if the source node is the
-        empty string. Children of the source node are then merged with this node's children.
+        this node unchanged. The value of this node is only replaced if the source value is defined.
+        Children of the source node are then merged with this node's children.
     **/
     public synchronized void merge (MNode that)
     {
-        set (that.get ());
+        if (that.data ()) set (that.get ());
         for (MNode thatChild : that)
         {
             String index = thatChild.key ();
             MNode c = getChild (index);
-            if (c == null) c = set ("", index);  // ensure a target child node exists
+            if (c == null) c = set (null, index);  // ensure a target child node exists
             c.merge (thatChild);
-        }
-    }
-
-    /**
-        Deep copies the source node into this node, while leaving any non-overlapping values in
-        this node unchanged. If the source value is empty, then this value is not changed.
-        Children of the source node are then merged with this node's children.
-        This is the closest of the three merge methods to the original MUMPS definition, given
-        that we don't distinguish between undefined and empty string. This method is useful for
-        collating two trees when you only want to inject explicit values.
-    **/
-    public synchronized void mergeSoft (MNode that)
-    {
-        String value = that.get ();
-        if (! value.isEmpty ()) set (value);
-        for (MNode thatChild : that)
-        {
-            String index = thatChild.key ();
-            MNode c = getChild (index);
-            if (c == null) c = set ("", index);  // ensure a target child node exists
-            c.mergeSoft (thatChild);
         }
     }
 
@@ -362,6 +350,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     **/
     public synchronized void mergeUnder (MNode that)
     {
+        if (! data ()  &&  that.data ()) set (that.get ());
         for (MNode thatChild : that)
         {
             String index = thatChild.key ();
@@ -400,26 +389,26 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
             MNode d = that.getChild (key);
             if (d == null) continue;
             c.uniqueValues (d);
-            if (c.size () == 0  &&  c.get ().equals (d.get ())) clearChild (key);
+            if (c.size () == 0  &&  c.data () == d.data ()  &&  c.get ().equals (d.get ())) clearChild (key);
         }
     }
 
     /**
-        Assuming "that" will be the target of a soft merge, saves any values this node would change.
+        Assuming "that" will be the target of a merge, saves any values this node would change.
         The resulting tree can be used to partially revert a soft merge.
         Specifically, let:
         A -- this tree before any operations
         B -- that tree before any operations
         C -- clone of A, then run C.uniqueNodes(B)
         D -- clone of A, then run D.changes(B)
-        Suppose you run B.mergeSoft(A). To revert B to its original state, run
+        Suppose you run B.merge(A). To revert B to its original state, run
         B.uniqueNodes(C) to remove nodes not originally in B, followed by
-        B.mergeSoft(D) to restore original values.
+        B.merge(D) to restore original values.
+        TODO: Currently can't restore a node to the undefined state. Best we can do is set it to "".
     **/
     public synchronized void changes (MNode that)
     {
-        String value = get ();
-        if (! value.isEmpty ()) set (that.get ());
+        if (data ()) set (that.get ());
         for (MNode c : this)
         {
             String key = c.key ();
@@ -443,7 +432,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         MNode source = getChild (fromIndex);
         if (source != null)
         {
-            MNode destination = set ("", toIndex);
+            MNode destination = set (null, toIndex);
             destination.merge (source);
             clearChild (fromIndex);
         }
@@ -512,7 +501,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     **/
     public synchronized void visit (Visitor v)
     {
-        v.visit (this);
+        if (! v.visit (this)) return;
         for (MNode c : this) c.visit (v);  // We are an Iterable. In particular, we iterate over the children nodes.
     }
 
@@ -575,6 +564,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     public boolean equalsRecursive (MNode that)
     {
+        if (data () != that.data ()) return false;
         if (! get ().equals (that.get ())) return false;
         if (size () != that.size ()) return false;
         for (MNode a : this)

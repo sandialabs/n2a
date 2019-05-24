@@ -162,7 +162,7 @@ public class AppData
                     if (pieces[1].equals ("references")) dir = baseReferences;
                     else                                 dir = baseModels;
                 }
-                MDoc doc = (MDoc) dir.set ("", pieces[2]);
+                MDoc doc = (MDoc) dir.childOrCreate (pieces[2]);
                 BufferedReader reader = new BufferedReader (new InputStreamReader (zip, "UTF-8"));
                 Schema.readAll (doc, reader);
             }

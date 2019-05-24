@@ -29,7 +29,7 @@ public class DeleteReferences extends Undoable
         path  = container.getKeyPath ();
         index = container.getIndex (node);
 
-        saved = new MVolatile ("$references", "");
+        saved = new MVolatile (null, "$references");
         saved.merge (node.source.getSource ());  // We only save top-document data. $metadata node is guaranteed to be from top doc, due to guard in NodeAnnotations.delete().
     }
 

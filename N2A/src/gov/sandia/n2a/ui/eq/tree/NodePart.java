@@ -571,7 +571,7 @@ public class NodePart extends NodeContainer
         {
             if (data != null  &&  type.equals ("Equation"))
             {
-                data = new MVolatile ("", data.get () + data.key ());  // convert equation into nameless variable
+                data = new MVolatile (data.get () + data.key (), "");  // convert equation into nameless variable
             }
             AddVariable av = new AddVariable (this, variableIndex, data);
             PanelModel.instance.undoManager.add (av);

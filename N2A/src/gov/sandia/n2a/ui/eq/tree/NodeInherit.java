@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -141,8 +141,7 @@ public class NodeInherit extends NodeBase
     @Override
     public void copy (MNode result)
     {
-        MNode n = result.set ("", source.key ());
-        n.merge (source);
+        result.set (source, source.key ());
     }
 
     @Override

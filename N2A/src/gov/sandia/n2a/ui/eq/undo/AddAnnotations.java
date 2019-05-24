@@ -36,7 +36,7 @@ public class AddAnnotations extends Undoable
         path = parent.getKeyPath ();
         this.index = index;
 
-        saved = new MVolatile ("$metadata", "");
+        saved = new MVolatile (null, "$metadata");
         saved.merge (data);
     }
 

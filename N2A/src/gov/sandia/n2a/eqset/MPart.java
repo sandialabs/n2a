@@ -319,6 +319,11 @@ public class MPart extends MNode
         return children.size ();
     }
 
+    public boolean data ()
+    {
+        return source.data ();
+    }
+
     public synchronized String getOrDefault (String defaultValue)
     {
         return source.getOrDefault (defaultValue);
@@ -493,7 +498,7 @@ public class MPart extends MNode
     **/
     public synchronized void merge (MNode that)
     {
-        set (that.get ());
+        if (that.data ()) set (that.get ());
 
         // Process $inherit first
         MNode thatInherit = that.child ("$inherit");
@@ -501,7 +506,7 @@ public class MPart extends MNode
         {
             MPart inherit = (MPart) getChild ("$inherit");
             boolean existing =  inherit != null;
-            if (! existing) inherit = (MPart) set ("", "$inherit");
+            if (! existing) inherit = (MPart) childOrCreate ("$inherit");
             
             // Now do the equivalent of inherit.merge(thatInherit), but pay attention to IDs.
             // If "that" comes from an outside source, it could merge in IDs which disagree
@@ -511,8 +516,7 @@ public class MPart extends MNode
             for (MNode thatInheritChild : thatInherit)
             {
                 String index = thatInheritChild.key ();
-                MNode c = inherit.getChild (index);
-                if (c == null) c = inherit.set ("", index);
+                MNode c = inherit.childOrCreate (index);
                 c.merge (thatInheritChild);
             }
             String thatInheritValue = thatInherit.get ();
@@ -537,8 +541,7 @@ public class MPart extends MNode
         {
             if (thatChild == thatInherit) continue;
             String index = thatChild.key ();
-            MNode c = getChild (index);
-            if (c == null) c = set ("", index);  // ensure a target child node exists
+            MNode c = childOrCreate (index);
             c.merge (thatChild);
         }
     }
@@ -577,7 +580,7 @@ public class MPart extends MNode
         MNode toPart = getChild (toIndex);
         if (toPart == null)  // No node at the destination, so merge at level of top-document.
         {
-            MPersistent toDoc = (MPersistent) source.set ("", toIndex);
+            MPersistent toDoc = (MPersistent) source.childOrCreate (toIndex);
             toDoc.merge (fromDoc);
             MPart c = new MPart (this, null, toDoc);
             children.put (toIndex, c);

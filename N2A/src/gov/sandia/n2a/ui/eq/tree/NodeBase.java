@@ -365,7 +365,8 @@ public class NodeBase extends DefaultMutableTreeNode
     **/
     public void copy (MNode result)
     {
-        MNode n = result.set (source.get (), source.key ());
+        MNode n = result.childOrCreate (source.key ());
+        if (source.data ()) n.set (source.get ());
         Enumeration<?> cf = childrenFiltered ();
         while (cf.hasMoreElements ()) ((NodeBase) cf.nextElement ()).copy (n);
     }

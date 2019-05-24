@@ -23,7 +23,7 @@ public class DeleteDoc extends Undoable
 
     public DeleteDoc (MDoc doc)
     {
-        saved = new MVolatile (doc.key (), "");
+        saved = new MVolatile (null, doc.key ());
         saved.merge (doc);  // in-memory copy of the entire document
 
         PanelModel mep = PanelModel.instance;

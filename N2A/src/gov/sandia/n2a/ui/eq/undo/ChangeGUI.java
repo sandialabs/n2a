@@ -112,7 +112,7 @@ public class ChangeGUI extends Undoable
             }
             MNode gui = metadataNode.source.childOrCreate ("gui");
             if (remove != null) gui.uniqueNodes (remove);
-            gui.mergeSoft (add);
+            gui.merge (add);
         }
 
         NodeBase updateNode = metadataNode;

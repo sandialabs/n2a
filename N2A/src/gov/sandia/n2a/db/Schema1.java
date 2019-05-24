@@ -67,16 +67,17 @@ public class Schema1 extends Schema
                 }
                 break;
             }
-            String value = "";
+            key = key.trim ();
+
+            String value = null;
             if (i < pieces.length)
             {
                 value = pieces[i++];
                 while (i < pieces.length) value = value + "=" + pieces[i++];
+                value = value.trim ();
             }
-            key   = key  .trim ();
-            value = value.trim ();
 
-            if (value.startsWith ("|"))  // go into string reading mode
+            if (value != null  &&  value.startsWith ("|"))  // go into string reading mode
             {
                 StringBuilder block = new StringBuilder ();
                 reader.getNextLine ();
@@ -112,14 +113,14 @@ public class Schema1 extends Schema
     **/
     public void write (MNode node, Writer writer, String indent) throws IOException
     {
-        String key   = node.key ();
-        String value = node.get ();
-        if (value.isEmpty ())
+        String key = node.key ();
+        if (! node.data ())
         {
             writer.write (String.format ("%s%s%n", indent, key));
         }
         else
         {
+            String value = node.get ();
             String newLine = String.format ("%n");
             if (value.contains (newLine))  // go into extended text write mode
             {

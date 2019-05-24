@@ -169,6 +169,11 @@ public class MDir extends MNode
         return children.size ();
 	}
 
+    public boolean data ()
+    {
+        return root != null;  // Should always be true.
+    }
+
     /**
         Point to a new location on disk.
         Must be called before actually moving the dir, since we need to flush the write queue.

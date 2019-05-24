@@ -352,7 +352,7 @@ public class ImportJob extends XMLutility
             MNode fused = new MVolatile ();
             fused.merge (synapse);  // Leave the original synapse part alone. Just duplicate it.
             fused.set (synapseName, "$metadata", "backend", "lems", "id");
-            MNode A = fused.set ("", "A");
+            MNode A = fused.childOrCreate ("A");
             A.merge (spikeSource);
             A.set (spikeSource.key (), "$metadata", "backend", "lems", "id");
 
@@ -663,7 +663,7 @@ public class ImportJob extends XMLutility
         int suffix = 2;
         while (container.child (id) != null) id = "Q10Parameters" + suffix++;  // This seems pointless, but the NeuroML XSD says the number of elements is unbounded.
 
-        MNode part = container.set ("", id);
+        MNode part = container.childOrCreate (id);
         NameMap nameMap = partMap.importMap ("baseQ10Settings");  // This isn't the correct name for use with ion channel, but it will still work.
         String inherit = nameMap.internal;
         part.set (inherit, "$inherit");
@@ -695,7 +695,7 @@ public class ImportJob extends XMLutility
         else                 inherit = type;
         NameMap nameMap = partMap.importMap (inherit);
         inherit = nameMap.internal;
-        MNode part = container.set ("", id);
+        MNode part = container.childOrCreate (id);
         part.set (inherit, "$inherit");
         addDependency (part, inherit);
 
@@ -737,7 +737,7 @@ public class ImportJob extends XMLutility
     public void transition (Node node, MNode container)
     {
         String id = getAttribute (node, "id");
-        MNode part = container.set ("", id);
+        MNode part = container.childOrCreate (id);
         NameMap nameMap = partMap.importMap (node.getNodeName ());
         part.set (nameMap.internal, "$inherit");
 
@@ -783,7 +783,7 @@ public class ImportJob extends XMLutility
         }
 
         String inherit = getAttribute (node, "type");
-        MNode part = container.set ("", name);
+        MNode part = container.childOrCreate (name);
         NameMap nameMap = partMap.importMap (inherit);
         inherit = nameMap.internal;
         part.set (inherit, "$inherit");
@@ -1180,7 +1180,7 @@ public class ImportJob extends XMLutility
             if (id.isEmpty ()) return result;
 
             // Create a subpart with the given name
-            MNode subpart = result.set ("", id);
+            MNode subpart = result.childOrCreate (id);
             addAttributes (node, subpart, new NameMap (""), "id", "segment", "segmentGroup", "value", "ion");
             return result;
         }
@@ -1435,7 +1435,7 @@ public class ImportJob extends XMLutility
                     {
                         found = true;
                         String name = groupIndex.get (j);  // maps index to group name
-                        cell.set ("", name);
+                        cell.childOrCreate (name);
                         finalNames.put (i, name);
                         break;
                     }
@@ -1485,7 +1485,7 @@ public class ImportJob extends XMLutility
                     it.remove ();
 
                     String name = groupIndex.get (bestIndex);
-                    cell.set ("", name);
+                    cell.childOrCreate (name);
                     finalNames.put (i, name);
                 }
             }
@@ -1496,7 +1496,7 @@ public class ImportJob extends XMLutility
                 int suffix = i;
                 String name = "Segments";
                 while (finalNames.values ().contains (name)) name = "Segments" + suffix++;
-                cell.set ("", name);
+                cell.childOrCreate (name);
                 finalNames.put (i, name);
             }
 
@@ -1640,7 +1640,7 @@ public class ImportJob extends XMLutility
                 MNode connection = cell.child (connectionName);
                 if (connection == null)
                 {
-                    connection = cell.set ("", connectionName);
+                    connection = cell.childOrCreate (connectionName);
                     connection.set ("Coupling", "$inherit");  // Explicit non-NeuroML part, so no need for mapping
                     connection.set (s.parent.part.key (), "A");
                     connection.set (s       .part.key (), "B");
@@ -2045,7 +2045,7 @@ public class ImportJob extends XMLutility
             int    n         = getAttribute (node, "size", 0);
             String component = getAttribute (node, "component");  // Should always be defined.
 
-            MNode part = network.set ("", id);
+            MNode part = network.childOrCreate (id);
             part.set (component, "$inherit");
             addDependency (part, component);
             if (n > 1) part.set (n, "$n");
@@ -3375,7 +3375,7 @@ public class ImportJob extends XMLutility
             {
                 if (exposure.equals (name))
                 {
-                    result.set ("", "$metadata", "backend", "lems", "expose");
+                    result.childOrCreate ("$metadata", "backend", "lems", "expose");
                 }
                 else
                 {
@@ -3389,7 +3389,7 @@ public class ImportJob extends XMLutility
                 || nodeName.equals ("Path")
                 || nodeName.equals ("Text"))
             {
-                result.set ("", "$metadata", "param");  // Intended as public interface to this component
+                result.childOrCreate ("$metadata", "param");  // Intended as public interface to this component
             }
 
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
@@ -3732,7 +3732,7 @@ public class ImportJob extends XMLutility
                 v.set ("1@" + event);  // Connection port must be a regular variable.
                 v.set ("Consider moving this event into the target part, where the port variable can be temporary.", "$metadata", "warning1");
             }
-            v.set ("", "$metadata", "backend", "lems", "event");
+            v.childOrCreate ("$metadata", "backend", "lems", "event");
             if (! portsKnown)
             {
                 v.set ("The identity of the source or target port could not be fully determined.", "$metadata", "warning2");
@@ -3835,7 +3835,7 @@ public class ImportJob extends XMLutility
                     // Search for definition in some parent
                     List<MNode> parents = collectParents (part);
                     sourceNode = definitionFor (component, parents);
-                    if (sourceNode == null) sourceNode = part.set ("", component);
+                    if (sourceNode == null) sourceNode = part.childOrCreate (component);
                 }
                 MNode targetNode = part.childOrCreate (component);
                 String inherit = sourceNode.get ();  // Will either be blank or a connect() line
@@ -3843,7 +3843,7 @@ public class ImportJob extends XMLutility
                 {
                     inherit = inherit.replace ("connect(", "");
                     inherit = inherit.replace (")",        "");
-                    targetNode.set ("");
+                    targetNode.set (null);
                     targetNode.set (inherit, "$inherit");
                     if (sourceNode != targetNode) addDependencyFromLEMS (targetNode, inherit);
                     // No need to call addDependency() if sourcePart is local, because it was already called when the connect() line was created.
@@ -3931,7 +3931,7 @@ public class ImportJob extends XMLutility
                 String regimeName = "regime";
                 int suffix = 2;
                 while (part.child (regimeName) != null) regimeName = "regime" + suffix++;
-                if (! regimeName.equals ("regime")) regime.set ("", "$metadata", "backend", "lems", "regime");
+                if (! regimeName.equals ("regime")) regime.childOrCreate ("$metadata", "backend", "lems", "regime");
                 pp.rename.put ("$regime", regimeName);
             }
 
@@ -3992,7 +3992,7 @@ public class ImportJob extends XMLutility
                     String condition = path.condition ();
                     if (condition.isEmpty ()) container.set (combiner + target,                   up + name);
                     else                      container.set (combiner + target + "@" + condition, up + name);
-                    if (path.required) container.set ("", up + name, "$metadata", "backend", "lems", "required");
+                    if (path.required) container.childOrCreate (up + name, "$metadata", "backend", "lems", "required");
                 }
             }
         }

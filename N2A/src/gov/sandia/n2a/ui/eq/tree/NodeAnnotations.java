@@ -6,7 +6,6 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.tree;
 
-import java.awt.Font;
 import java.awt.Point;
 
 import gov.sandia.n2a.db.MNode;
