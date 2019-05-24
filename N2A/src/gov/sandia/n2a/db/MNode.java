@@ -15,6 +15,7 @@ import java.util.List;
 /**
     A hierarchical key-value storage system, with subclasses that provide persistence.
     The "M" in MNode refers to the MUMPS language, in which variables have this hierarchical structure.
+    MUMPS is one of the earliest hierarchical key-value system, designed in 1966.
 
     This class and all its descendants are thread-safe.
     Note: Each class that extends this one must make its own choices about which methods to synchronize.
@@ -361,54 +362,82 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     }
 
     /**
-        Removes empty children (leaf nodes) from this node which have the same key as children in that node.
-        The process works bottom-up, so children of this node may get emptied before they are tested,
-        and thus get deleted.
+        Modifies this tree so it contains only nodes which are not defined in the given tree ("that").
+        Implicitly, it also contains parents of such nodes, but a parent will be undefined if it was
+        defined in the given tree. This function is used for tree differencing,
+        where it is necessary to represent nodes that will be subtracted as a separate tree from nodes
+        that will be added. This function computes the subtraction tree. To apply the subtraction,
+        this function can be called again, passing the result of the previous call. Specifically, let:
+        <pre>
+        A = one tree
+        B = another tree
+        C = clone of A, then run C.uniqueNodes(B)
+        D = clone of B, then run D.uniqueValues(A)
+        To transform A into B, run
+        A.uniqueNodes(C) to remove/undefine nodes that are only in A
+        A.merge(D) to add/change values which are different in B
+        </pre>
     **/
     public synchronized void uniqueNodes (MNode that)
     {
+        if (that.data ()) set (null);
         for (MNode c : this)
         {
             String key = c.key ();
             MNode d = that.getChild (key);
             if (d == null) continue;
             c.uniqueNodes (d);
-            if (c.size () == 0) clearChild (key);
+            if (c.size () == 0  &&  ! c.data ()) clearChild (key);
         }
     }
 
     /**
-        Removes empty children (leaf nodes) from this node which match both key and value of children in that node.
-        The process works bottom-up, so children of this node may get emptied before they are tested.
+        Modifies this tree so it contains only nodes which differ from the given tree ("that")
+        in either key or value. Any parent nodes which are not also differences will be undefined.
+        See uniqueNodes(MNode) for an explanation of tree differencing.
     **/
     public synchronized void uniqueValues (MNode that)
     {
+        if (data ()  &&  that.data ()  &&  get ().equals (that.get ())) set (null);
         for (MNode c : this)
         {
             String key = c.key ();
             MNode d = that.getChild (key);
             if (d == null) continue;
             c.uniqueValues (d);
-            if (c.size () == 0  &&  c.data () == d.data ()  &&  c.get ().equals (d.get ())) clearChild (key);
+            if (c.size () == 0  &&  ! c.data ()) clearChild (key);
         }
     }
 
     /**
         Assuming "that" will be the target of a merge, saves any values this node would change.
-        The resulting tree can be used to partially revert a soft merge.
-        Specifically, let:
-        A -- this tree before any operations
-        B -- that tree before any operations
-        C -- clone of A, then run C.uniqueNodes(B)
-        D -- clone of A, then run D.changes(B)
+        The resulting tree can be used to revert a merge. Specifically, let:
+        <pre>
+        A = this tree (merge source) before any operations
+        B = that tree (merge target) before any operations
+        C = clone of A, then run C.uniqueNodes(B)
+        D = clone of A, then run D.changes(B)
         Suppose you run B.merge(A). To revert B to its original state, run
-        B.uniqueNodes(C) to remove nodes not originally in B, followed by
-        B.merge(D) to restore original values.
-        TODO: Currently can't restore a node to the undefined state. Best we can do is set it to "".
+        B.uniqueNodes(C) to remove/undefine nodes not originally in B
+        B.merge(D) to restore original values
+        </pre>
+        See uniqueNodes(MNode) for more explanation of tree differencing.
     **/
     public synchronized void changes (MNode that)
     {
-        if (data ()) set (that.get ());
+        if (data ())
+        {
+            if (that.data ())
+            {
+                String value = that.get ();
+                if (get ().equals (value)) set (null);
+                else                       set (value);
+            }
+            else
+            {
+                set (null);
+            }
+        }
         for (MNode c : this)
         {
             String key = c.key ();
