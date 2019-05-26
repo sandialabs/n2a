@@ -7,6 +7,8 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq;
 
 import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.Container;
 import java.awt.FontMetrics;
 import java.awt.event.ActionEvent;
 import java.beans.PropertyChangeEvent;
@@ -19,6 +21,7 @@ import javax.swing.InputMap;
 import javax.swing.JPanel;
 import javax.swing.JSplitPane;
 import javax.swing.KeyStroke;
+import javax.swing.LayoutFocusTraversalPolicy;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 import gov.sandia.n2a.db.AppData;
@@ -55,7 +58,19 @@ public class PanelModel extends JPanel implements MNodeListener
 
         setLayout (new BorderLayout ());
         add (split, BorderLayout.CENTER);
+
         setFocusCycleRoot (true);
+        setFocusTraversalPolicy (new LayoutFocusTraversalPolicy ()
+        {
+            public Component getComponentAfter (Container aContainer, Component aComponent)
+            {
+                if (aComponent == panelEquations.editor.editingContainer  &&  panelEquations.editor.editingNode == null)
+                {
+                    return panelEquations.editor.editingTree;
+                }
+                return super.getComponentAfter (aContainer, aComponent); 
+            }
+        });
 
         // Determine the split positions.
 

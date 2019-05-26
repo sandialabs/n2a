@@ -91,6 +91,7 @@ public class PanelEquations extends JPanel
     protected List<NodePart>           listBreadcrumb = new ArrayList<NodePart> ();
     protected TransferHandler          transferHandler;
     protected EquationTreeCellRenderer renderer       = new EquationTreeCellRenderer ();
+    protected EquationTreeCellEditor   editor         = new EquationTreeCellEditor (renderer);
     protected MVolatile                focusCache     = new MVolatile ();
 
     // Controls
@@ -589,6 +590,7 @@ public class PanelEquations extends JPanel
     public void updateUI ()
     {
         EquationTreeCellRenderer.earlyUpdateUI ();
+        EquationTreeCellEditor.updateUI ();
         super.updateUI ();
     }
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -67,29 +67,28 @@ import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 @SuppressWarnings("serial")
 public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCellEditor, TreeSelectionListener
 {
-    protected JTree                    tree;
     protected EquationTreeCellRenderer renderer;
     protected UndoManager              undoManager;
     protected JTextField               oneLineEditor;
     protected JTextArea                multiLineEditor;
-    protected JScrollPane              multiLinePane;  // provides scrolling for multiLineEditor, and acts as the editingComponent
+    protected JScrollPane              multiLinePane;      // provides scrolling for multiLineEditor, and acts as the editingComponent
 
+    protected JTree                    focusTree;
     protected TreePath                 lastPath;
-    public    boolean                  multiLineRequested;  ///< Indicates that the next getTreeCellEditorComponent() call should return multi-line, even if the node is normally single line.
+    protected boolean                  multiLineRequested; // Indicates that the next getTreeCellEditorComponent() call should return multi-line, even if the node is normally single line.
+    protected JTree                    editingTree;        // Could be different than focusTree
     protected NodeBase                 editingNode;
     protected Container                editingContainer;
     protected Component                editingComponent;
     protected Icon                     editingIcon;
     protected int                      offset;
-    protected int                      offsetPerLevel;  // How much to indent per tree level to accommodate for expansion handles.
+    protected static int               offsetPerLevel;     // How much to indent per tree level to accommodate for expansion handles.
 
-    public EquationTreeCellEditor (JTree initialTree, EquationTreeCellRenderer renderer)
+    public EquationTreeCellEditor (EquationTreeCellRenderer renderer)
     {
-        setTree (initialTree);
         this.renderer = renderer;
         undoManager = new UndoManager ();
         editingContainer = new EditorContainer ();
-        updateUI ();
 
 
         oneLineEditor = new JTextField ();
@@ -159,7 +158,8 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
                 if (editingNode != null)
                 {
                     stopCellEditing ();
-                    ((MainTabbedPane) MainFrame.instance.tabs).setPreferredFocus (PanelModel.instance, tree);
+                    if (! editingTree.hasFocus ()) editingTree.clearSelection ();
+                    ((MainTabbedPane) MainFrame.instance.tabs).setPreferredFocus (PanelModel.instance, editingTree);
                 }
             }
         });
@@ -195,7 +195,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
                 else if (editingNode instanceof NodeEquation) setSafeTypes ("Equation");
                 else                                          setSafeTypes ();
                 boolean result = super.importData (support);
-                if (! result) result = tree.getTransferHandler ().importData (support);
+                if (! result) result = editingTree.getTransferHandler ().importData (support);
                 return result;
             }
         };
@@ -246,7 +246,8 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
                 if (editingNode != null)
                 {
                     stopCellEditing ();
-                    ((MainTabbedPane) MainFrame.instance.tabs).setPreferredFocus (PanelModel.instance, tree);
+                    if (! editingTree.hasFocus ()) editingTree.clearSelection ();
+                    ((MainTabbedPane) MainFrame.instance.tabs).setPreferredFocus (PanelModel.instance, editingTree);
                 }
             }
         });
@@ -263,17 +264,19 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
     }
 
     @Override
-    public Component getTreeCellEditorComponent (JTree tree, Object value, boolean isSelected, boolean expanded, boolean leaf, int row)
+    public Component getTreeCellEditorComponent (JTree editTree, Object value, boolean isSelected, boolean expanded, boolean leaf, int row)
     {
-        editingIcon     = renderer.getIconFor ((NodeBase) value, expanded, leaf);
+        editingTree     = editTree;
+        editingNode     = (NodeBase) value;
+        editingIcon     = renderer.getIconFor (editingNode, expanded, leaf);
         offset          = renderer.getIconTextGap () + editingIcon.getIconWidth ();
-        Font   baseFont = tree.getFont ();
+        Font   baseFont = editTree.getFont ();
         Font   font     = editingNode.getStyledFont (baseFont);
         String text     = editingNode.getText (expanded, true);
 
-        FontMetrics fm = tree.getFontMetrics (font);
+        FontMetrics fm = editTree.getFontMetrics (font);
         int textWidth  = fm.stringWidth (text);
-        int treeWidth  = tree.getWidth ();
+        int treeWidth  = editTree.getWidth ();
 
         if (editingComponent != null) editingContainer.remove (editingComponent);
         if (text.contains ("\n")  ||  textWidth > treeWidth  ||  multiLineRequested)
@@ -320,80 +323,97 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             if (lastPath == null) return false;
             Object o = lastPath.getLastPathComponent ();
             if (! (o instanceof NodeBase)) return false;
-            editingNode = (NodeBase) o;
-            if (! editingNode.allowEdit ()) return false;
+            NodeBase node = (NodeBase) o;
+            if (! node.allowEdit ()) return false;
             return true;
         }
-        else  // Most likely, a mouse event
+        else if (event instanceof MouseEvent)
         {
-            // Always return false from this method. Instead, initiate editing indirectly.
-
-            Object source = event.getSource ();
-            if (! (source instanceof JTree)) return false;
-            if (source != tree)
+            MouseEvent me = (MouseEvent) event;
+            int x = me.getX ();
+            int y = me.getY ();
+            int clicks = me.getClickCount ();
+            if (SwingUtilities.isLeftMouseButton (me))
             {
-                // TODO: Make single editor object work for multiple equation trees.
-                // Requires proper coordination of lastPath. May also require coordination on ending edit.
-                // It may be sufficient that PanelEquationTree call setTree() when it gains focus (via focus listener).
-                setTree ((JTree) source);  // Allow us to change trees,
-                return false;              // but still avoid immediate edit.
-            }
-            if (event instanceof MouseEvent)
-            {
-                MouseEvent me = (MouseEvent) event;
-                int x = me.getX ();
-                int y = me.getY ();
-                int clicks = me.getClickCount ();
-                if (SwingUtilities.isLeftMouseButton (me))
+                if (clicks == 1)
                 {
-                    if (clicks == 1)
+                    final TreePath path = focusTree.getPathForLocation (x, y);
+                    if (path != null  &&  path.equals (lastPath))  // Second click on node, but not double-click.
                     {
-                        final TreePath path = tree.getPathForLocation (x, y);
-                        if (path != null  &&  path.equals (lastPath))  // Second click on node, but not double-click.
+                        // Prevent second click from initiating edit if this is the icon of the root node.
+                        // Similar to the logic in PanelEquatonTree tree mouse listener
+                        NodeBase node = (NodeBase) path.getLastPathComponent ();
+                        NodePart root = (NodePart) focusTree.getModel ().getRoot ();
+                        if (node == root)
                         {
-                            // Prevent second click from initiating edit if this is the icon of the root node.
-                            // Similar to the logic in PanelEquatonTree tree mouse listener
-                            NodeBase node = (NodeBase) path.getLastPathComponent ();
-                            NodePart root = (NodePart) tree.getModel ().getRoot ();
-                            if (node == root)
-                            {
-                                boolean expanded = tree.isExpanded (path);
-                                int iconWidth = root.getIcon (expanded).getIconWidth ();  // expanded doesn't really matter to icon width, as NodePart uses only one icon.
-                                if (x < iconWidth) return false;
-                            }
-
-                            // Initiate edit
-                            EventQueue.invokeLater (new Runnable ()
-                            {
-                                public void run ()
-                                {
-                                    tree.startEditingAtPath (path);
-                                }
-                            });
+                            boolean expanded = focusTree.isExpanded (path);
+                            int iconWidth = root.getIcon (expanded).getIconWidth ();  // expanded doesn't really matter to icon width, as NodePart uses only one icon.
+                            if (x < iconWidth) return false;
                         }
+
+                        // Initiate edit
+                        EventQueue.invokeLater (new Runnable ()
+                        {
+                            public void run ()
+                            {
+                                focusTree.startEditingAtPath (path);
+                            }
+                        });
                     }
                 }
             }
-            return false;
+        }
+        // Always return false from this method. Instead, initiate editing indirectly.
+        return false;
+    }
+
+    public boolean stopCellEditing ()
+    {
+        NodeBase node = editingNode;
+        editingNode = null;
+
+        fireEditingStopped ();
+        node.applyEdit (editingTree);
+
+        return true;
+    }
+
+    public void cancelCellEditing ()
+    {
+        NodeBase node = editingNode;
+        editingNode = null;
+
+        fireEditingCanceled ();
+
+        // We only get back an empty string if we explicitly set it before editing starts.
+        // Certain types of nodes do this when inserting a new instance into the tree, via NodeBase.add()
+        // We desire in this case that escape cause the new node to evaporate.
+        Object o = node.getUserObject ();
+        if (! (o instanceof String)) return;
+
+        NodeBase parent = (NodeBase) node.getParent ();
+        if (((String) o).isEmpty ())
+        {
+            node.delete (editingTree, true);
+        }
+        else  // The text has been restored to the original value set in node's user object just before edit. However, that has column alignment removed, so re-establish it.
+        {
+            if (parent != null)
+            {
+                parent.updateTabStops (node.getFontMetrics (editingTree));
+                parent.allNodesChanged ((FilteredTreeModel) editingTree.getModel ());
+            }
         }
     }
 
-    @Override
     public void valueChanged (TreeSelectionEvent e)
     {
-        lastPath = tree.getSelectionPath ();
+        if (! e.isAddedPath ()) return;
+        focusTree = (JTree) e.getSource ();
+        lastPath = focusTree.getSelectionPath ();
     }
 
-    protected void setTree (JTree newTree)
-    {
-        if (tree == newTree) return;
-
-        if (tree != null) tree.removeTreeSelectionListener (this);
-        tree = newTree;
-        if (tree != null) tree.addTreeSelectionListener (this);
-    }
-
-    public void updateUI ()
+    public static void updateUI ()
     {
         int left  = (Integer) UIManager.get ("Tree.leftChildIndent");
         int right = (Integer) UIManager.get ("Tree.rightChildIndent");
@@ -437,8 +457,8 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         public Dimension getPreferredSize ()
         {
             Dimension pSize = editingComponent.getPreferredSize ();
-            Dimension extent = ((JViewport) tree.getParent ()).getExtentSize ();
-            Insets insets = tree.getInsets ();
+            Dimension extent = ((JViewport) editingTree.getParent ()).getExtentSize ();
+            Insets insets = editingTree.getInsets ();
             pSize.width = extent.width - editingNode.getLevel () * offsetPerLevel - insets.left - insets.right;
             pSize.width = Math.max (100, pSize.width);
 

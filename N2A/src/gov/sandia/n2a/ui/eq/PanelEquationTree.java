@@ -41,8 +41,6 @@ import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.ToolTipManager;
-import javax.swing.event.CellEditorListener;
-import javax.swing.event.ChangeEvent;
 import javax.swing.event.TreeExpansionEvent;
 import javax.swing.event.TreeExpansionListener;
 import javax.swing.event.TreeSelectionEvent;
@@ -62,7 +60,6 @@ public class PanelEquationTree extends JScrollPane
     public    NodePart               root;
     protected PanelEquations         container;
     protected boolean                needsFullRepaint;
-    protected EquationTreeCellEditor editor;
 
     public PanelEquationTree (PanelEquations container, NodePart initialRoot)
     {
@@ -142,45 +139,8 @@ public class PanelEquationTree extends JScrollPane
         // It would be nice to have a single editor object shared across all equation trees.
         // However, the editor needs to carry some internal state relevant to the current tree.
         // This makes switching between trees rather delicate.
-        editor = new EquationTreeCellEditor (tree, container.renderer);
-        editor.addCellEditorListener (new CellEditorListener ()
-        {
-            @Override
-            public void editingStopped (ChangeEvent e)
-            {
-                NodeBase node = editor.editingNode;
-                editor.editingNode = null;
-                node.applyEdit (tree);
-            }
-
-            @Override
-            public void editingCanceled (ChangeEvent e)
-            {
-                NodeBase node = editor.editingNode;
-                editor.editingNode = null;
-
-                // We only get back an empty string if we explicitly set it before editing starts.
-                // Certain types of nodes do this when inserting a new instance into the tree, via NodeBase.add()
-                // We desire in this case that escape cause the new node to evaporate.
-                Object o = node.getUserObject ();
-                if (! (o instanceof String)) return;
-
-                NodeBase parent = (NodeBase) node.getParent ();
-                if (((String) o).isEmpty ())
-                {
-                    node.delete (tree, true);
-                }
-                else  // The text has been restored to the original value set in node's user object just before edit. However, that has column alignment removed, so re-establish it.
-                {
-                    if (parent != null)
-                    {
-                        parent.updateTabStops (node.getFontMetrics (tree));
-                        parent.allNodesChanged (model);
-                    }
-                }
-            }
-        });
-        tree.setCellEditor (editor);
+        tree.setCellEditor (container.editor);
+        tree.addTreeSelectionListener (container.editor);
 
         InputMap inputMap = tree.getInputMap ();
         inputMap.put (KeyStroke.getKeyStroke ("shift UP"),         "moveUp");
@@ -274,7 +234,7 @@ public class PanelEquationTree extends JScrollPane
                 if (path != null  &&  ! container.locked)
                 {
                     boolean isControlDown = (e.getModifiers () & ActionEvent.CTRL_MASK) != 0;
-                    if (isControlDown  &&  ! (path.getLastPathComponent () instanceof NodePart)) editor.multiLineRequested = true;
+                    if (isControlDown  &&  ! (path.getLastPathComponent () instanceof NodePart)) container.editor.multiLineRequested = true;
                     tree.startEditingAtPath (path);
                 }
             }
@@ -454,13 +414,6 @@ public class PanelEquationTree extends JScrollPane
         });
 
         setViewportView (tree);
-    }
-
-    public void updateUI ()
-    {
-        super.updateUI ();
-        // updateUI can be called before our constructor runs, so it is possible for editor to be null.
-        if (editor != null) editor.updateUI ();
     }
 
     public Dimension getMinimumSize ()
