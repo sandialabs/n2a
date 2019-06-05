@@ -162,8 +162,15 @@ public class PanelEquations extends JPanel
                 if (xfer.isDrop ()) dl = xfer.getDropLocation ();
                 if (tree != null)
                 {
-                    if (xfer.isDrop ()) path = ((JTree.DropLocation) dl).getPath ();
-                    else                path = tree.getSelectionPath ();
+                    if (xfer.isDrop ())
+                    {
+                        path = ((JTree.DropLocation) dl).getPath ();
+                        if (path == null) path = tree.getPathForRow (tree.getRowCount () - 1);
+                    }
+                    else
+                    {
+                        path = tree.getSelectionPath ();
+                    }
                 }
 
                 NodeBase target = null;
