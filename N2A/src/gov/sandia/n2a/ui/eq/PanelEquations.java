@@ -7,7 +7,6 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.Insets;
@@ -18,8 +17,6 @@ import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.InputEvent;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
@@ -34,6 +31,7 @@ import java.util.Locale;
 
 import javax.swing.Box;
 import javax.swing.ButtonGroup;
+import javax.swing.ButtonModel;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JComponent;
@@ -812,29 +810,23 @@ public class PanelEquations extends JPanel
         }
         if (part == root  &&  open) index = -1;
 
-        final Color inactive = new Color (0x80FF80);
         int last = listBreadcrumb.size () - 1;
         if (last < 0) panelBreadcrumb.add (noModel);
         for (int i = 0; i <= last; i++)
         {
             final NodePart b = listBreadcrumb.get (i);
-            String key = b.source.key ();
-            String text;
-            if (i > 0) text = "." + key;
-            else       text = key;
-
-            JLabel label = new JLabel (text);
-            label.setToolTipText ("Select part");
-            label.setForeground (i <= index ? Color.black : inactive);
-            label.addMouseListener (new MouseAdapter ()
+            JButton button = new JButton (b.source.key ());
+            button.setToolTipText ("Select part");
+            button.addActionListener (new ActionListener ()
             {
-                public void mouseClicked (MouseEvent me)
+                public void actionPerformed (ActionEvent e)
                 {
                     drill (b);
                 }
             });
-
-            panelBreadcrumb.add (label);
+            ButtonModel m = button.getModel ();
+            m.setPressed (i == index);
+            panelBreadcrumb.add (button);
         }
     }
 
