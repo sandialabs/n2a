@@ -199,6 +199,7 @@ public class GraphNode extends JPanel
             }
             else  // Update existing connection
             {
+                if (edge.nodeTo != null) edge.nodeTo.edgesIn.remove (edge);
                 edge.nodeTo = nodeTo;
                 if (nodeTo == null)  // Disconnect edge
                 {
@@ -206,6 +207,10 @@ public class GraphNode extends JPanel
                     // This will make it paint on top of everything else, so we don't lose track of it visually.
                     parent.edges.remove (edge);
                     parent.edges.add (edge);
+                }
+                else
+                {
+                    nodeTo.edgesIn.add (edge);
                 }
             }
         }
