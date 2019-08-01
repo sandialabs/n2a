@@ -489,11 +489,13 @@ public class NodePart extends NodeContainer
         }
         else
         {
-            FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-            if (tree.isCollapsed (new TreePath (getPath ()))  &&  model.getChildCount (this) > 0)  // The node is deliberately closed to indicate user intent.
+            boolean graphClosed =  graph != null  &&  ! graph.open;
+            boolean collapsed   = tree.isCollapsed (new TreePath (getPath ()));
+            boolean hasChildren = ((FilteredTreeModel) tree.getModel ()).getChildCount (this) > 0;
+            if (graphClosed  ||  (collapsed  &&  hasChildren))  // The node is deliberately closed to indicate user intent.
             {
                 if (type.isEmpty ()) type = "Part";
-                if (isRoot ()) tree = null;  // Create a peer graph node. Document root can't be collapsed (due PanelEquationTree expand listener), so a collapsed root must be a graph node.
+                if (graphClosed) tree = null;  // Create a peer graph node.
                 return ((NodePart) getTrueParent ()).add (type, tree, data, location);
             }
         }
@@ -690,7 +692,7 @@ public class NodePart extends NodeContainer
     public PanelEquationTree getTree ()
     {
         if (pet   != null) return pet;
-        if (graph != null) return graph.panel;
+        if (graph != null) return graph.panelEquations;
         if (parent == null) return null;  // If this were actually a fake root, then at least one of {pet, graph} would be non-null.
         return ((NodeBase) parent).getTree ();
     }

@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq;
 
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
@@ -19,21 +20,29 @@ import java.awt.RenderingHints;
 import java.awt.Shape;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.FocusEvent;
+import java.awt.event.FocusListener;
 import java.awt.event.MouseEvent;
+import java.awt.geom.Line2D;
 import java.awt.geom.RoundRectangle2D;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.swing.AbstractAction;
+import javax.swing.ActionMap;
+import javax.swing.Box;
+import javax.swing.InputMap;
 import javax.swing.JPanel;
 import javax.swing.JViewport;
+import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.UIManager;
 import javax.swing.border.AbstractBorder;
+import javax.swing.event.CellEditorListener;
+import javax.swing.event.ChangeEvent;
 import javax.swing.event.MouseInputAdapter;
 import javax.swing.event.MouseInputListener;
-import javax.swing.tree.TreePath;
-
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Lay;
@@ -42,21 +51,32 @@ import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
+import sun.awt.AWTAccessor;
+import sun.swing.SwingUtilities2;
 
 @SuppressWarnings("serial")
 public class GraphNode extends JPanel
 {
-    protected GraphPanel        parent;
-    public    NodePart          node;
-    public    PanelEquationTree panel;
-    protected Color             color;
-    protected List<GraphEdge>   edgesOut = new ArrayList<GraphEdge> ();
-    protected List<GraphEdge>   edgesIn  = new ArrayList<GraphEdge> ();
+    protected PanelEquations      container;
+    protected GraphPanel          parent;
+    public    NodePart            node;
+    protected TitleRenderer       title               = new TitleRenderer ();
+    protected TitleEditorListener titleEditorListener = new TitleEditorListener ();
+    public    boolean             open;
+    protected boolean             titleFocused;
+    protected JPanel              panelTitle;
+    protected Component           hr                  = Box.createVerticalStrut (border.t + 1);
+    public    PanelEquationTree   panelEquations;
+    protected Component           editingComponent;
+    protected Color               color;
+    protected List<GraphEdge>     edgesOut            = new ArrayList<GraphEdge> ();
+    protected List<GraphEdge>     edgesIn             = new ArrayList<GraphEdge> ();
 
     protected static RoundedBorder border = new RoundedBorder (5);
 
     public GraphNode (GraphPanel parent, NodePart node)
     {
+        container   = PanelModel.instance.panelEquations;  // "container" is merely a convenient shortcut
         this.parent = parent;
         this.node   = node;
         node.graph  = this;
@@ -74,9 +94,20 @@ public class GraphNode extends JPanel
         }
 
         node.fakeRoot (true);
-        panel = new PanelEquationTree (PanelModel.instance.panelEquations, node);
+        panelEquations = new PanelEquationTree (container, node);
 
-        Lay.BLtg (this, "C", panel);
+        open         = node.source.getBoolean ("$metadata", "gui", "bounds", "open");
+        titleFocused = true;  // sans any other knowledge, title should be selected first
+
+        title.getTreeCellRendererComponent (panelEquations.tree, node, false, open, false, -1, false);  // Configure JLabel with info from node.
+        title.setFocusable (true);
+        title.setRequestFocusEnabled (true);
+
+        panelTitle = Lay.BL ("N", title);
+        panelTitle.setOpaque (false);
+        if (open) panelTitle.add (hr, BorderLayout.CENTER);
+        Lay.BLtg (this, "N", panelTitle);
+        if (open) add (panelEquations, BorderLayout.CENTER);
         setBorder (border);
         setOpaque (false);
 
@@ -91,6 +122,86 @@ public class GraphNode extends JPanel
         MouseInputListener resizeListener = new ResizeListener ();
         addMouseListener (resizeListener);
         addMouseMotionListener (resizeListener);
+
+        InputMap inputMap = getInputMap (WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
+        inputMap.put (KeyStroke.getKeyStroke ("ESCAPE"), "cancel");
+
+        ActionMap actionMap = getActionMap ();
+        actionMap.put ("cancel", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                if (editingComponent != null) container.editor.cancelCellEditing ();
+            }
+        });
+    }
+
+    public void takeFocus ()
+    {
+        if (titleFocused)
+        {
+            if (title.isFocusOwner ()) restoreFocus ();
+            else                       title.requestFocusInWindow ();
+        }
+        else
+        {
+            restoreFocus ();
+            panelEquations.takeFocus ();
+        }
+    }
+
+    /**
+        Subroutine of takeFocus(). Called either directly by takeFocus() or indirectly by title focus listener.
+     */
+    public void restoreFocus ()
+    {
+        container.active = panelEquations;
+        parent.setComponentZOrder (this, 0);
+        parent.scrollRectToVisible (getBounds ());
+    }
+
+    public void switchFocus (boolean ontoTitle)
+    {
+        titleFocused = ontoTitle;
+        if (ontoTitle)
+        {
+            title.requestFocusInWindow ();
+        }
+        else
+        {
+            if (! open) toggleOpen ();
+            panelEquations.tree.scrollRowToVisible (0);
+            panelEquations.tree.setSelectionRow (0);
+            panelEquations.tree.requestFocusInWindow ();
+        }
+    }
+
+    public void toggleOpen ()
+    {
+        boolean nextOpen = ! open;
+        setOpen (nextOpen);
+        if (! container.locked) node.source.set (nextOpen, "$metadata", "gui", "bounds", "open");
+    }
+
+    public void setOpen (boolean value)
+    {
+        if (open == value) return;
+        open = value;
+        title.getTreeCellRendererComponent (panelEquations.tree, node, titleFocused, open, false, -1, titleFocused);
+        if (open)
+        {
+            panelTitle.add (hr, BorderLayout.CENTER);
+            add (panelEquations, BorderLayout.CENTER);
+        }
+        else
+        {
+            titleFocused = true;
+            title.requestFocusInWindow ();
+
+            panelTitle.remove (hr);
+            remove (panelEquations);  // assume that equation tree does not have focus
+        }
+        animate (new Rectangle (getLocation (), getPreferredSize ()));
     }
 
     public Dimension getPreferredSize ()
@@ -100,14 +211,13 @@ public class GraphNode extends JPanel
         MNode bounds = node.source.child ("$metadata", "gui", "bounds");
         if (bounds != null)
         {
-            TreePath path = panel.tree.getPathForRow (0);
-            if (path != null  &&  panel.tree.isExpanded (path))  // open
+            if (open)
             {
-                MNode open = bounds.child ("open");
-                if (open != null)
+                MNode boundsOpen = bounds.child ("open");
+                if (boundsOpen != null)
                 {
-                    w = open.getInt ("width");
-                    h = open.getInt ("height");
+                    w = boundsOpen.getInt ("width");
+                    h = boundsOpen.getInt ("height");
                 }
             }
             else  // closed
@@ -131,6 +241,25 @@ public class GraphNode extends JPanel
         return d;
     }
 
+    public void nudge (ActionEvent e, int dx, int dy)
+    {
+        int step = 1;
+        if ((e.getModifiers () & ActionEvent.CTRL_MASK) != 0) step = 10;
+
+        MNode gui = new MVolatile ();
+        if (dx != 0)
+        {
+            int x = getBounds ().x - parent.offset.x + dx * step;
+            gui.set (x, "bounds", "x");
+        }
+        if (dy != 0)
+        {
+            int y = getBounds ().y - parent.offset.y + dy * step;
+            gui.set (y, "bounds", "y");
+        }
+        PanelModel.instance.undoManager.add (new ChangeGUI (node, gui));
+    }
+
     /**
         Apply any changes from $metadata.
     **/
@@ -143,9 +272,7 @@ public class GraphNode extends JPanel
         {
             x += bounds.getInt ("x");
             y += bounds.getInt ("y");
-
-            boolean open = bounds.getBoolean ("open");
-            panel.setOpen (open);
+            setOpen (bounds.getBoolean ("open"));
         }
         Dimension d = getPreferredSize ();  // Fetches updated width and height.
         Rectangle r = new Rectangle (x, y, d.width, d.height);
@@ -273,11 +400,202 @@ public class GraphNode extends JPanel
         parent.paintImmediately (paintRegion);
     }
 
-    public void takeFocus ()
+    public class TitleRenderer extends EquationTreeCellRenderer
     {
-        parent.setComponentZOrder (this, 0);
-        parent.scrollRectToVisible (getBounds ());
-        repaint ();
+        public TitleRenderer ()
+        {
+            InputMap inputMap = getInputMap ();
+            inputMap.put (KeyStroke.getKeyStroke ("UP"),               "close");
+            inputMap.put (KeyStroke.getKeyStroke ("DOWN"),             "selectNext");
+            inputMap.put (KeyStroke.getKeyStroke ("LEFT"),             "close");
+            inputMap.put (KeyStroke.getKeyStroke ("RIGHT"),            "selectChild");
+            inputMap.put (KeyStroke.getKeyStroke ("shift UP"),         "moveUp");
+            inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"),       "moveDown");
+            inputMap.put (KeyStroke.getKeyStroke ("shift LEFT"),       "moveLeft");
+            inputMap.put (KeyStroke.getKeyStroke ("shift RIGHT"),      "moveRight");
+            inputMap.put (KeyStroke.getKeyStroke ("shift ctrl UP"),    "moveUp");
+            inputMap.put (KeyStroke.getKeyStroke ("shift ctrl DOWN"),  "moveDown");
+            inputMap.put (KeyStroke.getKeyStroke ("shift ctrl LEFT"),  "moveLeft");
+            inputMap.put (KeyStroke.getKeyStroke ("shift ctrl RIGHT"), "moveRight");
+            inputMap.put (KeyStroke.getKeyStroke ("INSERT"),           "add");
+            inputMap.put (KeyStroke.getKeyStroke ("DELETE"),           "delete");
+            inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),       "delete");
+            inputMap.put (KeyStroke.getKeyStroke ("ENTER"),            "startEditing");
+            inputMap.put (KeyStroke.getKeyStroke ("F2"),               "startEditing");
+
+            ActionMap actionMap = getActionMap ();
+            actionMap.put ("close", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    if (open) toggleOpen ();
+                }
+            });
+            actionMap.put ("selectNext", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    switchFocus (false);
+                }
+            });
+            actionMap.put ("selectChild", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    if (open) switchFocus (false);
+                    else      toggleOpen ();
+                }
+            });
+            actionMap.put ("moveUp", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    nudge (e, 0, -1);
+                }
+            });
+            actionMap.put ("moveDown", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    nudge (e, 0, 1);
+                }
+            });
+            actionMap.put ("moveLeft", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    nudge (e, -1, 0);
+                }
+            });
+            actionMap.put ("moveRight", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    nudge (e, 1, 0);
+                }
+            });
+            actionMap.put ("add", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    panelEquations.addAtSelected ("");  // No selection should be active, so this should default to root (same as our "node").
+                }
+            });
+            actionMap.put ("delete", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    node.delete (panelEquations.tree, false);
+                }
+            });
+            actionMap.put ("startEditing", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    if (! container.locked) startEditing ();
+                }
+            });
+
+            addMouseListener (new MouseInputAdapter ()
+            {
+                public void mouseClicked (MouseEvent e)
+                {
+                    int x = e.getX ();
+                    int y = e.getY ();
+                    int clicks = e.getClickCount ();
+
+                    if (SwingUtilities.isLeftMouseButton (e))
+                    {
+                        if (clicks == 1)  // Open/close
+                        {
+                            int iconWidth = node.getIcon (open).getIconWidth ();  // "open" isn't actually important for root node, as NodePart doesn't currently change appearance.
+                            if (x < iconWidth)
+                            {
+                                toggleOpen ();
+                            }
+                            else if (isFocusOwner ())
+                            {
+                                startEditing ();
+                                return;
+                            }
+                            titleFocused = true;
+                            takeFocus ();
+                        }
+                        else if (clicks == 2)  // Drill down
+                        {
+                            container.drill (node);
+                        }
+                    }
+                    else if (SwingUtilities.isRightMouseButton (e))
+                    {
+                        if (clicks == 1)  // Show popup menu
+                        {
+                            container.menuPopup.show (title, x, y);
+                        }
+                    }
+                }
+                // TODO: implement drag
+                // Should it move the node, or do DnD to make connections?
+            });
+
+            addFocusListener (new FocusListener ()
+            {
+                public void focusGained (FocusEvent e)
+                {
+                    hasFocus = true;
+                    selected = true;
+                    restoreFocus ();
+                    GraphNode.this.repaint ();
+                }
+
+                public void focusLost (FocusEvent e)
+                {
+                    hasFocus = false;
+                    selected = false;
+                    GraphNode.this.repaint ();
+                }
+            });
+        }
+
+        public void startEditing ()
+        {
+            // This code is based on the example of openjdk javax.swing.plaf.basic.BasicTreeUI.startEditing(TreePath,MouseEvent)
+
+            if (container.editor.editingNode != null) container.editor.stopCellEditing ();  // Edit could be in progress on another node title or on any tree, including our own.
+            container.editor.addCellEditorListener (titleEditorListener);
+            editingComponent = container.editor.getTitleEditorComponent (panelEquations.tree, node, open);
+            Rectangle bounds = getBounds ();
+            panelTitle.add (editingComponent, BorderLayout.NORTH, 0);  // displaces this title renderer from the layout manager's north slot
+            setVisible (false);  // hide this title renderer
+            editingComponent.setBounds (bounds);
+            AWTAccessor.getComponentAccessor ().revalidateSynchronously (editingComponent);
+            editingComponent.repaint ();
+            SwingUtilities2.compositeRequestFocus (editingComponent);  // editingComponent is really a container, so we shift focus to the first focusable child of editingComponent
+        }
+
+        public void completeEditing (boolean canceled)
+        {
+            container.editor.removeCellEditorListener (titleEditorListener);
+            if (! canceled) node.setUserObject (container.editor.getCellEditorValue ());
+
+            panelTitle.remove (editingComponent);  // triggers shift of focus back to this title renderer
+            editingComponent = null;
+            setVisible (true);
+            panelTitle.getLayout ().addLayoutComponent (BorderLayout.NORTH, this);  // restore this title renderer to the layout manger's north slot
+        }
+    };
+
+    public class TitleEditorListener implements CellEditorListener
+    {
+        public void editingStopped (ChangeEvent e)
+        {
+            title.completeEditing (false);
+        }
+
+        public void editingCanceled (ChangeEvent e)
+        {
+            title.completeEditing (true);
+        }
     }
 
     public class ResizeListener extends MouseInputAdapter implements ActionListener
@@ -289,7 +607,7 @@ public class GraphNode extends JPanel
         MouseEvent lastEvent;
         Timer      timer = new Timer (100, this);
 
-        public void mouseClicked(MouseEvent me)
+        public void mouseClicked (MouseEvent me)
         {
             if (SwingUtilities.isLeftMouseButton (me))
             {
@@ -464,12 +782,12 @@ public class GraphNode extends JPanel
                     Rectangle now = getBounds ();
                     if (now.x != old.x) bounds.set (now.x - parent.offset.x, "x");
                     if (now.y != old.y) bounds.set (now.y - parent.offset.y, "y");
-                    if (panel.tree.isExpanded (0))
+                    if (open)
                     {
-                        MNode open = bounds.childOrCreate ("open");
-                        if (now.width  != old.width ) open.set (now.width,  "width");
-                        if (now.height != old.height) open.set (now.height, "height");
-                        if (open.size () == 0) bounds.clear ("open");
+                        MNode boundsOpen = bounds.childOrCreate ("open");
+                        if (now.width  != old.width ) boundsOpen.set (now.width,  "width");
+                        if (now.height != old.height) boundsOpen.set (now.height, "height");
+                        if (boundsOpen.size () == 0) bounds.clear ("open");
                     }
                     else
                     {
@@ -480,7 +798,7 @@ public class GraphNode extends JPanel
                 }
             }
 
-            panel.takeFocus ();
+            takeFocus ();
         }
 
         public void actionPerformed (ActionEvent e)
@@ -513,6 +831,13 @@ public class GraphNode extends JPanel
             GraphNode gn = (GraphNode) c;
             g2.setPaint (gn.color);
             g2.draw (border);
+
+            if (gn.open)
+            {
+                y += gn.hr.getLocation ().y + t * 2 - 1;
+                Shape line = new Line2D.Double (x, y, width-1, y);
+                g2.draw (line);
+            }
 
             g2.dispose ();
         }

@@ -37,8 +37,15 @@ public class Outsource extends Undoable
         savedSubtree = new MVolatile ();
         savedSubtree.merge (node.source);  // This takes the entire tree, regardless of visibility. TODO: should this match the visibility semantics used by copy/paste operations?
 
-        JTree tree = node.getTree ().tree;
-        wasExpanded = tree.isExpanded (new TreePath (node.getPath ()));
+        if (node.graph == null)
+        {
+            JTree tree = node.getTree ().tree;
+            wasExpanded = tree.isExpanded (new TreePath (node.getPath ()));
+        }
+        else
+        {
+            wasExpanded = node.graph.open;
+        }
     }
 
     public void undo ()
@@ -79,10 +86,17 @@ public class Outsource extends Undoable
         // new value of $inherit matches the inherited value of node.$inherit, so node ceases to be top-level),
         // but we won't worry about that.
         model.nodeStructureChanged (node);
-        TreePath nodePath = new TreePath (node.getPath ());
-        pet.tree.setSelectionPath (nodePath);
-        if (node == pet.root) pet.setOpen (wasExpanded);
-        else if (wasExpanded) pet.tree.expandPath (nodePath);
+        if (node.graph == null)
+        {
+            TreePath nodePath = new TreePath (node.getPath ());
+            pet.tree.setSelectionPath (nodePath);
+            if (wasExpanded) pet.tree.expandPath (nodePath);
+        }
+        else
+        {
+            node.graph.setOpen (wasExpanded);
+            node.graph.takeFocus ();
+        }
 
         // Not necessary to update the graph, since exactly the same connections exist.
         // findConnections() merely re-establishes them.

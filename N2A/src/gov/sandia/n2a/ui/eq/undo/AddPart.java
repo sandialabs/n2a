@@ -163,6 +163,7 @@ public class AddPart extends Undoable
         FilteredTreeModel model = null;
         if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
         PanelEquationGraph peg = pe.panelEquationGraph;
+        boolean graphParent = parent == pe.part  &&  ! pe.open;
 
         boolean addGraphNode = false;
         if (createdNode == null)
@@ -189,10 +190,10 @@ public class AddPart extends Undoable
             pet.updateVisibility (createdPath);
         }
 
-        if (parent == pe.part  &&  ! pe.open)
+        if (graphParent)
         {
             if (addGraphNode) peg.addPart (createdNode);
-            createdNode.graph.panel.takeFocus ();
+            createdNode.graph.takeFocus ();
             peg.reconnect ();
             peg.paintImmediately ();
         }

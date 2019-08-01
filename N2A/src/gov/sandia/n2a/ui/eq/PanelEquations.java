@@ -85,7 +85,7 @@ public class PanelEquations extends JPanel
     protected JPanel                   panelBreadcrumb;
     public    PanelEquationGraph       panelEquationGraph;
     public    PanelEquationTree        panelEquationTree;  // To display root as a tree.
-    protected PanelEquationTree        active;             // Tree which most recently received focus. Could be panelEquationTree or a GraphNode.panel.
+    protected PanelEquationTree        active;             // Tree which most recently received focus. Could be panelEquationTree or a GraphNode.panelEquations.
     protected List<NodePart>           listBreadcrumb = new ArrayList<NodePart> ();
     protected TransferHandler          transferHandler;
     protected EquationTreeCellRenderer renderer       = new EquationTreeCellRenderer ();
@@ -319,7 +319,6 @@ public class PanelEquations extends JPanel
                     TreePath path = tree.getSelectionPath ();
                     if (path != null) node = (NodeBase) path.getLastPathComponent ();
                     if (node == null) node = (NodeBase) tree.getModel ().getRoot ();
-
                 }
                 if (node == null) return null;
 
@@ -816,6 +815,8 @@ public class PanelEquations extends JPanel
         {
             final NodePart b = listBreadcrumb.get (i);
             JButton button = new JButton (b.source.key ());
+            button.setMargin (new Insets (0, 2, 0, 2));
+            button.setFocusable (false);
             button.setToolTipText ("Select part");
             button.addActionListener (new ActionListener ()
             {
@@ -878,8 +879,7 @@ public class PanelEquations extends JPanel
                 {
                     public void run ()
                     {
-                        TreePath path = new TreePath (editMe.getPath ());
-                        editMe.graph.panel.tree.startEditingAtPath (path);
+                        editMe.graph.title.startEditing ();
                     }
                 });
             }

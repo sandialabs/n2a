@@ -14,7 +14,6 @@ import java.awt.event.ActionEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.nio.file.Path;
-
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
 import javax.swing.InputMap;
@@ -44,6 +43,72 @@ public class PanelModel extends JPanel implements MNodeListener
     public    PanelEquations panelEquations;
     public    UndoManager    undoManager = new UndoManager ();
 
+    public class GraphFocusTraversalPolicy extends LayoutFocusTraversalPolicy
+    {
+        public Component getComponentAfter (Container aContainer, Component aComponent)
+        {
+            if (aComponent == panelEquations.editor.editingContainer)
+            {
+                if (panelEquations.editor.editingNode == null  &&  ! panelEquations.editor.editingTitle)
+                {
+                    return panelEquations.editor.editingTree;  // Return focus to tree when done editing.
+                }
+                return super.getComponentAfter (aContainer, aComponent);  // Otherwise, do normal focus cycle without considering GraphNode. This is necessary to enter editor to begin with.
+            }
+
+            Component result = super.getComponentAfter (aContainer, aComponent);
+
+            Component g0 = aComponent.getParent ();
+            Component g1 = result.getParent ();
+            while (g0 != null  &&  ! (g0 instanceof GraphNode)) g0 = g0.getParent ();
+            while (g1 != null  &&  ! (g1 instanceof GraphNode)) g1 = g1.getParent ();
+            if (g1 != null)  // result is inside a GraphNode
+            {
+                if (g1 == g0)  // Need to escape from the current GraphNode
+                {
+                    result = super.getComponentAfter (aContainer, result);
+                    g1 = result.getParent ();
+                    while (g1 != null  &&  ! (g1 instanceof GraphNode)) g1 = g1.getParent ();
+                }
+                if (g1 != null)
+                {
+                    GraphNode g = (GraphNode) g1;
+                    if (g.titleFocused) result = g.title;
+                    else                result = g.panelEquations.tree;
+                }
+            }
+
+            return result;
+        }
+
+        public Component getComponentBefore (Container aContainer, Component aComponent)
+        {
+            Component result = super.getComponentBefore (aContainer, aComponent);
+
+            Component g0 = aComponent.getParent ();
+            Component g1 = result.getParent ();
+            while (g0 != null  &&  ! (g0 instanceof GraphNode)) g0 = g0.getParent ();
+            while (g1 != null  &&  ! (g1 instanceof GraphNode)) g1 = g1.getParent ();
+            if (g1 != null)
+            {
+                if (g1 == g0)
+                {
+                    result = super.getComponentBefore (aContainer, result);
+                    g1 = result.getParent ();
+                    while (g1 != null  &&  ! (g1 instanceof GraphNode)) g1 = g1.getParent ();
+                }
+                if (g1 != null)
+                {
+                    GraphNode g = (GraphNode) g1;
+                    if (g.titleFocused) result = g.title;
+                    else                result = g.panelEquations.tree;
+                }
+            }
+
+            return result;
+        }
+    }
+
     public PanelModel ()
     {
         instance = this;
@@ -60,17 +125,7 @@ public class PanelModel extends JPanel implements MNodeListener
         add (split, BorderLayout.CENTER);
 
         setFocusCycleRoot (true);
-        setFocusTraversalPolicy (new LayoutFocusTraversalPolicy ()
-        {
-            public Component getComponentAfter (Container aContainer, Component aComponent)
-            {
-                if (aComponent == panelEquations.editor.editingContainer  &&  panelEquations.editor.editingNode == null)
-                {
-                    return panelEquations.editor.editingTree;
-                }
-                return super.getComponentAfter (aContainer, aComponent); 
-            }
-        });
+        setFocusTraversalPolicy (new GraphFocusTraversalPolicy ());
 
         // Determine the split positions.
 

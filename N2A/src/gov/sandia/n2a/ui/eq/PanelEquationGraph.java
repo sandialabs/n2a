@@ -39,7 +39,6 @@ import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
-import javax.swing.JTree;
 import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
@@ -205,14 +204,15 @@ public class PanelEquationGraph extends JScrollPane
 
         if (gn == null  &&  graphPanel.getComponentCount () > 0)
         {
-            JTree tree = (JTree) PanelModel.instance.getFocusTraversalPolicy ().getFirstComponent (graphPanel);
-            NodePart part = (NodePart) tree.getModel ().getRoot ();
-            gn = part.graph;
+            Component c = PanelModel.instance.getFocusTraversalPolicy ().getFirstComponent (graphPanel);
+            c = c.getParent ();
+            if (! (c instanceof GraphNode)) c = c.getParent ();
+            if (   c instanceof GraphNode ) gn = (GraphNode) c;
         }
         if (gn != null)
         {
             graphPanel.scrollRectToVisible (gn.getBounds ());  // possibly change the viewport position set above
-            gn.panel.takeFocus ();
+            gn.takeFocus ();
         }
     }
 
@@ -236,11 +236,19 @@ public class PanelEquationGraph extends JScrollPane
         // TODO
     }
 
+    /**
+        Called by ChangePart to apply name change to an existing graph node.
+        Note that underride implies several other cases besides simple name change.
+        Those cases are handled by addPart() and removePart().
+    **/
     public void updatePart (NodePart node)
     {
         if (node.graph == null) return;
 
         GraphNode gn = node.graph;
+        node.setUserObject ();
+        gn.title.setText (node.getText (gn.open, false));
+        // Name change can cause a change in size.
         Rectangle old = gn.getBounds ();
         gn.setSize (gn.getPreferredSize ());  // GraphLayout won't do this, so we have to do it manually.
         Rectangle next = gn.getBounds ();
@@ -260,6 +268,7 @@ public class PanelEquationGraph extends JScrollPane
 
     public void updateUI ()
     {
+        super.updateUI ();
         GraphNode.RoundedBorder.updateUI ();
         background = UIManager.getColor ("ScrollPane.background");
     }
@@ -357,8 +366,8 @@ public class PanelEquationGraph extends JScrollPane
                 if (c instanceof NodePart)
                 {
                     GraphNode gn = new GraphNode (this, (NodePart) c);
-                    if (gn.panel.tree.isExpanded (0)) add (gn, 0);  // Put expanded trees at top of z order
-                    else                              add (gn);
+                    if (gn.open) add (gn, 0);  // Put open nodes at top of z order
+                    else         add (gn);
                     if (gn.getX () != 0  ||  gn.getY () != 0) newLayout = false;
                 }
             }
@@ -492,7 +501,7 @@ public class PanelEquationGraph extends JScrollPane
         {
             for (Component c : getComponents ())
             {
-                ((GraphNode) c).panel.updateLock ();
+                ((GraphNode) c).panelEquations.updateLock ();
             }
         }
 
@@ -500,7 +509,7 @@ public class PanelEquationGraph extends JScrollPane
         {
             for (Component c : getComponents ())
             {
-                ((GraphNode) c).panel.updateFilterLevel ();
+                ((GraphNode) c).panelEquations.updateFilterLevel ();
             }
         }
 

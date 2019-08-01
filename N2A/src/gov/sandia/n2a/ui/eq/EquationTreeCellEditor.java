@@ -78,6 +78,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
     protected boolean                  multiLineRequested; // Indicates that the next getTreeCellEditorComponent() call should return multi-line, even if the node is normally single line.
     protected JTree                    editingTree;        // Could be different than focusTree
     protected NodeBase                 editingNode;
+    protected boolean                  editingTitle;       // Indicates that we are in a graph node title rather than a proper tree.
     protected Container                editingContainer;
     protected Component                editingComponent;
     protected Icon                     editingIcon;
@@ -263,23 +264,34 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         multiLineEditor.addMouseListener (mouseListener);
     }
 
-    @Override
-    public Component getTreeCellEditorComponent (JTree editTree, Object value, boolean isSelected, boolean expanded, boolean leaf, int row)
+    public Component getTitleEditorComponent (JTree tree, NodePart value, boolean open)
     {
-        editingTree     = editTree;
+        return getTreeCellEditorComponent (tree, value, open, false, true);
+    }
+
+    @Override
+    public Component getTreeCellEditorComponent (JTree tree, Object value, boolean isSelected, boolean expanded, boolean leaf, int row)
+    {
+        return getTreeCellEditorComponent (tree, value, expanded, leaf, false);
+    }
+
+    public Component getTreeCellEditorComponent (JTree tree, Object value, boolean expanded, boolean leaf, boolean isTitle)
+    {
+        editingTree     = tree;
         editingNode     = (NodeBase) value;
+        editingTitle    = isTitle;
         editingIcon     = renderer.getIconFor (editingNode, expanded, leaf);
         offset          = renderer.getIconTextGap () + editingIcon.getIconWidth ();
-        Font   baseFont = editTree.getFont ();
+        Font   baseFont = tree.getFont ();
         Font   font     = editingNode.getStyledFont (baseFont);
         String text     = editingNode.getText (expanded, true);
 
-        FontMetrics fm = editTree.getFontMetrics (font);
+        FontMetrics fm = tree.getFontMetrics (font);
         int textWidth  = fm.stringWidth (text);
-        int treeWidth  = editTree.getWidth ();
+        int treeWidth  = tree.getWidth ();
 
         if (editingComponent != null) editingContainer.remove (editingComponent);
-        if (text.contains ("\n")  ||  textWidth > treeWidth  ||  multiLineRequested)
+        if (! isTitle  &&  (text.contains ("\n")  ||  textWidth > treeWidth  ||  multiLineRequested))
         {
             editingComponent = multiLinePane;
             multiLineEditor.setText (text);

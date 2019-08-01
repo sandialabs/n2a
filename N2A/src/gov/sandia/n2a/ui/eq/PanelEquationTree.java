@@ -7,7 +7,6 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq;
 
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
@@ -16,13 +15,10 @@ import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
-import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
 import gov.sandia.n2a.ui.eq.undo.ChangeOrder;
 
-import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FontMetrics;
-import java.awt.KeyboardFocusManager;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
@@ -127,57 +123,53 @@ public class PanelEquationTree extends JScrollPane
         ToolTipManager.sharedInstance ().registerComponent (tree);
         tree.setTransferHandler (container.transferHandler);
         tree.setCellRenderer (container.renderer);
+        tree.setCellEditor (container.editor);
+        tree.addTreeSelectionListener (container.editor);
 
         // Special cases for nodes in graph
         if (initialRoot != null  &&  initialRoot.graph != null)
         {
+            tree.setRootVisible (false);
+            tree.setShowsRootHandles (true);
             setBorder (BorderFactory.createEmptyBorder ());
-            boolean open = initialRoot.source.getBoolean ("$metadata", "gui", "bounds", "open");
-            setOpen (open);
         }
 
-        // It would be nice to have a single editor object shared across all equation trees.
-        // However, the editor needs to carry some internal state relevant to the current tree.
-        // This makes switching between trees rather delicate.
-        tree.setCellEditor (container.editor);
-        tree.addTreeSelectionListener (container.editor);
-
         InputMap inputMap = tree.getInputMap ();
-        inputMap.put (KeyStroke.getKeyStroke ("shift UP"),         "moveUp");
-        inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"),       "moveDown");
-        inputMap.put (KeyStroke.getKeyStroke ("shift LEFT"),       "moveLeft");
-        inputMap.put (KeyStroke.getKeyStroke ("shift RIGHT"),      "moveRight");
-        inputMap.put (KeyStroke.getKeyStroke ("shift ctrl UP"),    "moveUp");
-        inputMap.put (KeyStroke.getKeyStroke ("shift ctrl DOWN"),  "moveDown");
-        inputMap.put (KeyStroke.getKeyStroke ("shift ctrl LEFT"),  "moveLeft");
-        inputMap.put (KeyStroke.getKeyStroke ("shift ctrl RIGHT"), "moveRight");
-        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),           "add");
-        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),           "delete");
-        inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),       "delete");
-        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),            "startEditing"); 
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl ENTER"),       "startEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("shift UP"),   "moveUp");
+        inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"), "moveDown");
+        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),     "add");
+        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),     "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"), "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),      "startEditing"); 
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl ENTER"), "startEditing");
 
         ActionMap actionMap = tree.getActionMap ();
-        Action selectChild = actionMap.get ("selectChild");
-        Action selectParent = actionMap.get ("selectParent");
-        actionMap.put ("selectChild", new AbstractAction ()
+        Action selectPrevious = actionMap.get ("selectPrevious");
+        Action selectParent   = actionMap.get ("selectParent");
+        actionMap.put ("selectPrevious", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                if (! container.locked  &&  tree.getLeadSelectionRow () == 0)
+                if (root.graph != null  &&  tree.getLeadSelectionRow () == 0)
                 {
-                    if (root.graph != null) root.source.set (true, "$metadata", "gui", "bounds", "open");
+                    root.graph.switchFocus (true);
+                    return;
                 }
-                selectChild.actionPerformed (e);
+                selectPrevious.actionPerformed (e);
             }
         });
         actionMap.put ("selectParent", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                if (! container.locked  &&  tree.getLeadSelectionRow () == 0)
+                if (root.graph != null)
                 {
-                    if (root.graph != null) root.source.set (false, "$metadata", "gui", "bounds", "open");
+                    TreePath path = tree.getLeadSelectionPath ();
+                    if (path != null  &&  path.getPathCount () == 2  &&  tree.isCollapsed (path))  // This is a direct child of the root (which is not visible).
+                    {
+                        root.graph.switchFocus (true);
+                        return;
+                    }
                 }
                 selectParent.actionPerformed (e);
             }
@@ -186,30 +178,14 @@ public class PanelEquationTree extends JScrollPane
         {
             public void actionPerformed (ActionEvent e)
             {
-                if (tree.getLeadSelectionRow () == 0) nudge (e, 0, -1);
-                else                                  moveSelected (-1);
+                moveSelected (-1);
             }
         });
         actionMap.put ("moveDown", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                if (tree.getLeadSelectionRow () == 0) nudge (e, 0, 1);
-                else                                  moveSelected (1);
-            }
-        });
-        actionMap.put ("moveLeft", new AbstractAction ()
-        {
-            public void actionPerformed (ActionEvent e)
-            {
-                if (tree.getLeadSelectionRow () == 0) nudge (e, -1, 0);
-            }
-        });
-        actionMap.put ("moveRight", new AbstractAction ()
-        {
-            public void actionPerformed (ActionEvent e)
-            {
-                if (tree.getLeadSelectionRow () == 0) nudge (e, 1, 0);
+                moveSelected (1);
             }
         });
         actionMap.put ("add", new AbstractAction ()
@@ -271,22 +247,9 @@ public class PanelEquationTree extends JScrollPane
 
                 if (SwingUtilities.isLeftMouseButton (e))
                 {
-                    if (clicks == 1)  // Open/close root for graph nodes
+                    if (clicks == 1)
                     {
-                        if (path != null)
-                        {
-                            NodeBase node = (NodeBase) path.getLastPathComponent ();
-                            if (node == root)
-                            {
-                                boolean expanded = tree.isExpanded (path);
-                                int iconWidth = root.getIcon (expanded).getIconWidth ();  // expanded isn't actually important for root node, as NodePart doesn't currently change appearance.
-                                if (x < iconWidth)
-                                {
-                                    setOpen (! expanded);
-                                    if (! container.locked) root.source.set (! expanded, "$metadata", "gui", "bounds", "open");
-                                }
-                            }
-                        }
+                        if (root.graph != null) root.graph.titleFocused = false;
                     }
                     else if (clicks == 2)  // Drill down on parts, or edit any other node type.
                     {
@@ -430,13 +393,6 @@ public class PanelEquationTree extends JScrollPane
         return result;
     }
 
-    public Dimension getPreferredSize ()
-    {
-        TreePath path = tree.getPathForRow (0);
-        if (path != null  &&  tree.isCollapsed (0)) return tree.getPathBounds (path).getSize ();
-        return super.getPreferredSize ();
-    }
-
     /**
         @param part Should always be non-null. To clear the tree, call clear() rather than setting null here.
     **/
@@ -462,12 +418,6 @@ public class PanelEquationTree extends JScrollPane
     public void updateLock ()
     {
         tree.setEditable (! container.locked);
-    }
-
-    public void setOpen (boolean open)
-    {
-        if (open) tree.expandRow (0);
-        else      tree.collapseRow (0);
     }
 
     public StoredPath saveFocus (StoredPath previous)
@@ -498,15 +448,17 @@ public class PanelEquationTree extends JScrollPane
 
     public void takeFocus ()
     {
-        Component focusOwner = KeyboardFocusManager.getCurrentKeyboardFocusManager ().getFocusOwner ();
-        if (focusOwner == tree) restoreFocus ();
-        else                    tree.requestFocusInWindow ();  // Triggers focus listener, which calls restoreFocus()
+        if (tree.isFocusOwner ()) restoreFocus ();
+        else                      tree.requestFocusInWindow ();  // Triggers focus listener, which calls restoreFocus()
     }
 
+    /**
+        Subroutine of takeFocus(). Called either directly by takeFocus(), or indirectly via focus listener on tree.
+    **/
     public void restoreFocus ()
     {
-        container.active = PanelEquationTree.this;
-        if (tree.getSelectionCount () < 1)
+        container.active = this;
+        if (tree.getSelectionCount () == 0)
         {
             FocusCacheEntry fce = container.getFocus (root);
             if (fce != null  &&  fce.sp != null) fce.sp.restore (tree);
@@ -515,7 +467,6 @@ public class PanelEquationTree extends JScrollPane
                 tree.setSelectionRow (0);
             }
         }
-        if (root.graph != null) root.graph.takeFocus ();
     }
 
     public void updateFilterLevel ()
@@ -548,10 +499,10 @@ public class PanelEquationTree extends JScrollPane
             if (editMe instanceof NodePart)
             {
                 GraphNode gn = ((NodePart) editMe).graph;
-                if (gn != null  &&  gn.panel.tree != tree)  // Newly-created part is root of a tree in a new graph node.
+                if (gn != null  &&  gn.panelEquations.tree != tree)  // Newly-created part is root of a tree in a new graph node.
                 {
-                    gn.panel.tree.setSelectionPath (path);
-                    gn.panel.tree.startEditingAtPath (path);
+                    gn.panelEquations.tree.setSelectionPath (path);
+                    gn.panelEquations.tree.startEditingAtPath (path);
                     return;
                 }
             }
@@ -591,27 +542,6 @@ public class PanelEquationTree extends JScrollPane
                 PanelModel.instance.undoManager.add (new ChangeOrder ((NodePart) parent, indexBefore, indexAfter));
             }
         }
-    }
-
-    public void nudge (ActionEvent e, int dx, int dy)
-    {
-        if (root.graph == null) return;
-
-        int step = 1;
-        if ((e.getModifiers () & ActionEvent.CTRL_MASK) != 0) step = 10;
-
-        MNode gui = new MVolatile ();
-        if (dx != 0)
-        {
-            int x = root.graph.getBounds ().x - root.graph.parent.offset.x + dx * step;
-            gui.set (x, "bounds", "x");
-        }
-        if (dy != 0)
-        {
-            int y = root.graph.getBounds ().y - root.graph.parent.offset.y + dy * step;
-            gui.set (y, "bounds", "y");
-        }
-        PanelModel.instance.undoManager.add (new ChangeGUI (root, gui));
     }
 
     public void updateVisibility (TreeNode path[])
@@ -751,18 +681,27 @@ public class PanelEquationTree extends JScrollPane
             int childIndex = Math.min (selectionIndices[i+1], model.getChildCount (c) - 1);
             if (childIndex >= 0) c = (NodeBase) model.getChild (c, childIndex);
         }
+
         TreePath selectedPath = new TreePath (c.getPath ());
-        if (setSelection) pet.tree.scrollPathToVisible (selectedPath);
+        GraphNode gn = pet.root.graph;
+        boolean selectTitle =  c == pet.root  &&  gn != null;
+        if (setSelection  &&  ! selectTitle)
+        {
+            if (gn != null) gn.switchFocus (false);  // make tree visible
+            pet.tree.scrollPathToVisible (selectedPath);
+        }
         if (lastChange == path.length)
         {
             boolean expanded = pet.tree.isExpanded (selectedPath);
             model.nodeStructureChanged (c);  // Should this be more targeted?
-            // nodeStructureChanged(root) always expands, so need to collapse again. However, collapse on a deeper node expands the parents, which we don't want.
-            if (c == pet.root) pet.setOpen (expanded);
-            else if (expanded) pet.tree.expandPath (selectedPath);
+            if (c != pet.root  &&  expanded) pet.tree.expandPath (selectedPath);
             pet.repaintSouth (selectedPath);
         }
-        if (setSelection) pet.tree.setSelectionPath (selectedPath);
+        if (setSelection)
+        {
+            if (selectTitle) gn.switchFocus (true);
+            else             pet.tree.setSelectionPath (selectedPath);
+        }
     }
 
     public void updateOrder (TreeNode path[])
