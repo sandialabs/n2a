@@ -492,9 +492,11 @@ public class PanelEquationGraph extends JScrollPane
         **/
         public void removePart (NodePart node)
         {
+            Rectangle bounds = node.graph.getBounds ();
             remove (node.graph);
             node.graph = null;
             revalidate ();
+            repaint (bounds);
         }
 
         public void updateLock ()
