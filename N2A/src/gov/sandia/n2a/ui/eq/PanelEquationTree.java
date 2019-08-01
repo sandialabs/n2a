@@ -501,8 +501,7 @@ public class PanelEquationTree extends JScrollPane
                 GraphNode gn = ((NodePart) editMe).graph;
                 if (gn != null  &&  gn.panelEquations.tree != tree)  // Newly-created part is root of a tree in a new graph node.
                 {
-                    gn.panelEquations.tree.setSelectionPath (path);
-                    gn.panelEquations.tree.startEditingAtPath (path);
+                    gn.title.startEditing ();
                     return;
                 }
             }

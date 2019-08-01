@@ -51,7 +51,6 @@ import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
-import sun.awt.AWTAccessor;
 import sun.swing.SwingUtilities2;
 
 @SuppressWarnings("serial")
@@ -557,19 +556,19 @@ public class GraphNode extends JPanel
             });
         }
 
+        /**
+            Follows example of openjdk javax.swing.plaf.basic.BasicTreeUI.startEditing()
+        **/
         public void startEditing ()
         {
-            // This code is based on the example of openjdk javax.swing.plaf.basic.BasicTreeUI.startEditing(TreePath,MouseEvent)
-
             if (container.editor.editingNode != null) container.editor.stopCellEditing ();  // Edit could be in progress on another node title or on any tree, including our own.
             container.editor.addCellEditorListener (titleEditorListener);
             editingComponent = container.editor.getTitleEditorComponent (panelEquations.tree, node, open);
-            Rectangle bounds = getBounds ();
             panelTitle.add (editingComponent, BorderLayout.NORTH, 0);  // displaces this title renderer from the layout manager's north slot
             setVisible (false);  // hide this title renderer
-            editingComponent.setBounds (bounds);
-            AWTAccessor.getComponentAccessor ().revalidateSynchronously (editingComponent);
-            editingComponent.repaint ();
+            GraphNode.this.setSize (GraphNode.this.getPreferredSize ());
+            GraphNode.this.validate ();
+            GraphNode.this.repaint ();
             SwingUtilities2.compositeRequestFocus (editingComponent);  // editingComponent is really a container, so we shift focus to the first focusable child of editingComponent
         }
 
