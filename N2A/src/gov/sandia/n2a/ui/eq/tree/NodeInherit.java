@@ -150,7 +150,8 @@ public class NodeInherit extends NodeBase
         String input = (String) getUserObject ();
         if (input.isEmpty ())
         {
-            delete (tree, true);
+            boolean canceled = PanelModel.instance.undoManager.getPresentationName ().equals ("AddInherit");
+            delete (tree, canceled);
             return;
         }
 

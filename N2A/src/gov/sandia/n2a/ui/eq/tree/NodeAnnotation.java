@@ -218,7 +218,8 @@ public class NodeAnnotation extends NodeContainer
         String input = (String) getUserObject ();
         if (input.isEmpty ())
         {
-            delete (tree, true);
+            boolean canceled = PanelModel.instance.undoManager.getPresentationName ().equals ("AddAnnotation");
+            delete (tree, canceled);
             return;
         }
 

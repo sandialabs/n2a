@@ -661,7 +661,8 @@ public class NodePart extends NodeContainer
 
         if (input.isEmpty ())
         {
-            delete (tree, true);
+            boolean canceled = mep.undoManager.getPresentationName ().equals ("AddPart");
+            delete (tree, canceled);
             return;
         }
 

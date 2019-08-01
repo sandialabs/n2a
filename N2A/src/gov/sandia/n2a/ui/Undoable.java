@@ -68,7 +68,7 @@ public class Undoable implements UndoableEdit
 
     public String getPresentationName ()
     {
-        return "";
+        return getClass ().getSimpleName ();
     }
 
     public String getUndoPresentationName ()

@@ -379,7 +379,8 @@ public class NodeVariable extends NodeContainer
         String input = (String) getUserObject ();
         if (input.isEmpty ())
         {
-            delete (tree, true);
+            boolean canceled = PanelModel.instance.undoManager.getPresentationName ().equals ("AddVariable");
+            delete (tree, canceled);
             return;
         }
 

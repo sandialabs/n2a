@@ -149,7 +149,8 @@ public class NodeReference extends NodeBase
         String input = (String) getUserObject ();
         if (input.isEmpty ())
         {
-            delete (tree, true);
+            boolean canceled = PanelModel.instance.undoManager.getPresentationName ().equals ("AddReference");
+            delete (tree, canceled);
             return;
         }
 
