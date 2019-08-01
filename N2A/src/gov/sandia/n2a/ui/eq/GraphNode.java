@@ -578,10 +578,10 @@ public class GraphNode extends JPanel
             container.editor.removeCellEditorListener (titleEditorListener);
             if (! canceled) node.setUserObject (container.editor.getCellEditorValue ());
 
-            panelTitle.remove (editingComponent);  // triggers shift of focus back to this title renderer
-            editingComponent = null;
             setVisible (true);
             panelTitle.getLayout ().addLayoutComponent (BorderLayout.NORTH, this);  // restore this title renderer to the layout manger's north slot
+            panelTitle.remove (editingComponent);  // triggers shift of focus back to this title renderer
+            editingComponent = null;
         }
     };
 

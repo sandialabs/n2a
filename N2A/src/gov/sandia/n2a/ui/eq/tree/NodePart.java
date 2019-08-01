@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.tree;
 
+import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.Point;
 import java.util.ArrayList;
@@ -661,8 +662,17 @@ public class NodePart extends NodeContainer
 
         if (input.isEmpty ())
         {
-            boolean canceled = mep.undoManager.getPresentationName ().equals ("AddPart");
-            delete (tree, canceled);
+            // A part may appear in the form of a graph node, rather than an entry in an equation tree.
+            // In that case, delete during the current event can mess up focus control (due to sequence of other code).
+            // Therefore, put the delete action onto the event queue. This is OK to do, even for tree editing.
+            EventQueue.invokeLater (new Runnable ()
+            {
+                public void run ()
+                {
+                    boolean canceled = mep.undoManager.getPresentationName ().equals ("AddPart");
+                    delete (tree, canceled);
+                }
+            });
             return;
         }
 
