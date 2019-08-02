@@ -581,6 +581,10 @@ public class GraphNode extends JPanel
             panelTitle.getLayout ().addLayoutComponent (BorderLayout.NORTH, this);  // restore this title renderer to the layout manger's north slot
             panelTitle.remove (editingComponent);  // triggers shift of focus back to this title renderer
             editingComponent = null;
+
+            GraphNode.this.setSize (GraphNode.this.getPreferredSize ());
+            GraphNode.this.validate ();
+            GraphNode.this.repaint ();
         }
     };
 

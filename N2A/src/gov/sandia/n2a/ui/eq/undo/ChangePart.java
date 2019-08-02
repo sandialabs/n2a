@@ -86,8 +86,8 @@ public class ChangePart extends Undoable
         PanelEquationTree pet = nodeBefore.getTree ();
         FilteredTreeModel model = null;
         if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
-        PanelEquationGraph peg = pe.panelEquationGraph;
-        boolean graphParent = parent == pe.part  &&  ! pe.open;
+        boolean graphParent =  parent == pe.part  &&  ! pe.open;
+        PanelEquationGraph peg = pe.panelEquationGraph;  // Only used if graphParent is true.
 
         NodePart nodeAfter = (NodePart) parent.child (nameAfter);  // It's either a NodePart or it's null. Any other case should be blocked by GUI constraints.
         if (oldPart == null)

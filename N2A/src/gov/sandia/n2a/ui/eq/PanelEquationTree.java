@@ -408,7 +408,7 @@ public class PanelEquationTree extends JScrollPane
 
     public void clear ()
     {
-        container.active = null;  // On the presumption that we are container.panelEquationTree. This function is only be called in that case, because PanelEquationGraph simply disposes of its trees, rather than clearing them.
+        container.active = null;  // On the presumption that we are container.panelEquationTree. This function is only called in that case, because PanelEquationGraph simply disposes of its trees, rather than clearing them.
         if (root == null) return;
         root.pet = null;
         root = null;

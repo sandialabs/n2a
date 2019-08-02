@@ -390,7 +390,7 @@ public class PanelEquations extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                if (active != null) active.tree.stopEditing ();
+                stopEditing ();
                 PanelModel.instance.undoManager.add (new AddDoc ());
             }
         });
@@ -782,6 +782,17 @@ public class PanelEquations extends JPanel
         else      panelEquationGraph.takeFocus ();
     }
 
+    public boolean isEditing ()
+    {
+        return editor.editingNode != null;
+    }
+
+    public void stopEditing ()
+    {
+        // editor is shared between graph node titles and equation trees
+        if (editor.editingNode != null) editor.stopCellEditing ();
+    }
+
     public void resetBreadcrumbs ()
     {
         listBreadcrumb.clear ();
@@ -885,8 +896,15 @@ public class PanelEquations extends JPanel
             }
             else
             {
-                active.tree.stopEditing ();
-                active.addAtSelected (type);
+                stopEditing ();
+                // Because stopEditing() can trigger shifts in focus, we wait until current even queue clears before doing the add ...
+                EventQueue.invokeLater (new Runnable ()
+                {
+                    public void run ()
+                    {
+                        active.addAtSelected (type);
+                    }
+                });
             }
         }
     };
@@ -902,7 +920,7 @@ public class PanelEquations extends JPanel
             }
             else
             {
-                active.tree.stopEditing ();  // It may seem odd to save a cell just before destroying it, but this gives cleaner UI painting.
+                stopEditing ();  // It may seem odd to save a cell just before destroying it, but this gives cleaner UI painting.
                 active.deleteSelected ();
             }
         }
@@ -914,7 +932,7 @@ public class PanelEquations extends JPanel
         {
             if (locked) return;
             if (active == null) return;
-            active.tree.stopEditing ();
+            stopEditing ();
             active.moveSelected (Integer.valueOf (e.getActionCommand ()));
         }
     };
@@ -930,10 +948,14 @@ public class PanelEquations extends JPanel
         {
             if (record == null) return;
             MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
-            if (active != null  &&  active.tree.isEditing ())
+            if (isEditing ())
             {
-                active.tree.stopEditing ();
-                mtp.setPreferredFocus (PanelModel.instance, active.tree);  // Because tree does not reclaim the focus before focus shifts to the run tab.
+                stopEditing ();
+                // The following is needed because graph node components (title or tree) do not reclaim the focus before it shifts to the run tab.
+                GraphNode gn = active.root.graph;
+                if (gn != null  &&  gn.titleFocused) mtp.setPreferredFocus (PanelModel.instance, gn.title);
+                else                                 mtp.setPreferredFocus (PanelModel.instance, active.tree);
+                
             }
 
             String simulatorName = root.source.get ("$metadata", "backend");  // Note that "record" is the raw model, while "root.source" is the collated model.
@@ -996,7 +1018,7 @@ public class PanelEquations extends JPanel
         public void actionPerformed (ActionEvent e)
         {
             if (record == null) return;
-            if (active != null) active.tree.stopEditing ();
+            stopEditing ();
 
             // Construct and customize a file chooser
             final JFileChooser fc = new JFileChooser (AppData.properties.get ("resourceDir"));

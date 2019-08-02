@@ -97,8 +97,8 @@ public class AddPart extends Undoable
         PanelEquationTree pet = parent.getTree ();
         FilteredTreeModel model = null;
         if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
-        PanelEquationGraph peg = pe.panelEquationGraph;
-        boolean graphParent = parent == pe.part  &&  ! pe.open;
+        boolean graphParent =  parent == pe.part  &&  ! pe.open;
+        PanelEquationGraph peg = pe.panelEquationGraph;  // only used if graphParent is true
 
         TreeNode[] createdPath = createdNode.getPath ();
         int index = parent.getIndexFiltered (createdNode);
@@ -162,8 +162,8 @@ public class AddPart extends Undoable
         PanelEquationTree pet = parent.getTree ();
         FilteredTreeModel model = null;
         if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
+        boolean graphParent =  parent == pe.part  &&  ! pe.open;
         PanelEquationGraph peg = pe.panelEquationGraph;
-        boolean graphParent = parent == pe.part  &&  ! pe.open;
 
         boolean addGraphNode = false;
         if (createdNode == null)
