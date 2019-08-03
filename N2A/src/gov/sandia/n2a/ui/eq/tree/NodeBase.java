@@ -210,6 +210,9 @@ public class NodeBase extends DefaultMutableTreeNode
     }
 
     // Column alignment ------------------------------------------------------
+    //   TODO: The system for retrieving fonts and setting tab stops is broken.
+    //   Better approach is to retrieve the font for each individual node.
+    //   Also, better to render using JLabel configured to each column, rather than creating filler with spaces.
 
     /**
         Combines column width information from children to generate a set of tab stops that all children should use when displaying text.
@@ -348,7 +351,7 @@ public class NodeBase extends DefaultMutableTreeNode
     public FontMetrics getFontMetrics (JTree tree)
     {
         Font baseFont = tree.getFont ();
-        Font f = getStyledFont (baseFont);
+        Font f = getPlainFont (baseFont);
         return tree.getFontMetrics (f);
     }
 

@@ -263,17 +263,7 @@ public class PanelEquationGraph extends JScrollPane
     **/
     public void updatePart (NodePart node)
     {
-        if (node.graph == null) return;
-
-        GraphNode gn = node.graph;
-        node.setUserObject ();
-        gn.title.setText (node.getText (gn.open, false));
-        // Name change can cause a change in size.
-        Rectangle old = gn.getBounds ();
-        gn.setSize (gn.getPreferredSize ());  // GraphLayout won't do this, so we have to do it manually.
-        Rectangle next = gn.getBounds ();
-        graphPanel.layout.componentMoved (gn);
-        graphPanel.paintImmediately (old.union (next));
+        if (node.graph != null) node.graph.updateTitle ();
     }
 
     public void reconnect ()
@@ -319,14 +309,18 @@ public class PanelEquationGraph extends JScrollPane
             {
                 return new ViewportLayout ()
                 {
-                    public void layoutContainer(Container parent)
+                    public void layoutContainer (Container parent)
                     {
                         // The original version of this code (in OpenJDK) justifies (moves) the view if it is smaller
                         // than the viewport extent. We don't want to move the viewport, so simply set its preferred size.
-                        // The original code also expands the view to fill the viewport. Presumably this is to
-                        // ensure everything gets painted. However, the display seems to work fine without doing that,
-                        // and the simpler approach seems to produce more reliable behavior.
-                        vp.setViewSize (graphPanel.getPreferredSize ());
+                        // The original code also expands the view to fill the viewport.
+                        // TODO: vp position jumps to zero when scrollbar is activated.
+
+                        Dimension size   = graphPanel.getPreferredSize ();
+                        Dimension extent = vp.getExtentSize ();
+                        size.width  = Math.max (extent.width,  size.width);
+                        size.height = Math.max (extent.height, size.height);
+                        vp.setViewSize (size);
                     }
                 };
             }

@@ -496,7 +496,16 @@ public class NodePart extends NodeContainer
             if (graphClosed  ||  (collapsed  &&  hasChildren))  // The node is deliberately closed to indicate user intent.
             {
                 if (type.isEmpty ()) type = "Part";
-                if (graphClosed) tree = null;  // Create a peer graph node.
+                if (graphClosed)
+                {
+                    tree = null;  // Create a peer graph node.
+                    if (location == null)
+                    {
+                        location = graph.getLocation ();
+                        location.x += 100;
+                        location.y += 100;
+                    }
+                }
                 return ((NodePart) getTrueParent ()).add (type, tree, data, location);
             }
         }
@@ -626,8 +635,7 @@ public class NodePart extends NodeContainer
         String oldKey = source.key ();
         if (name.equals (oldKey))
         {
-            setUserObject ();
-            model.nodeChanged (this);
+            revert (model);
             return;
         }
 
@@ -636,8 +644,7 @@ public class NodePart extends NodeContainer
         {
             if (name.isEmpty ())
             {
-                setUserObject ();
-                model.nodeChanged (this);
+                revert (model);
                 return;
             }
 
@@ -682,12 +689,18 @@ public class NodePart extends NodeContainer
         NodeBase sibling = parent.child (name);
         if (sibling != null  &&  (sibling.source.isFromTopDocument ()  ||  ! (sibling instanceof NodePart)))  // the name already exists in top document, so reject rename
         {
-            setUserObject ();
-            model.nodeChanged (this);
+            revert (model);
             return;
         }
 
         mep.undoManager.add (new ChangePart (this, oldKey, name));
+    }
+
+    public void revert (FilteredTreeModel model)
+    {
+        setUserObject ();
+        model.nodeChanged (this);
+        if (graph != null) graph.updateTitle ();
     }
 
     @Override

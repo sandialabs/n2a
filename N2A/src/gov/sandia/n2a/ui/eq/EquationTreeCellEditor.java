@@ -403,17 +403,28 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         Object o = node.getUserObject ();
         if (! (o instanceof String)) return;
 
-        NodeBase parent = (NodeBase) node.getParent ();
         if (((String) o).isEmpty ())
         {
             node.delete (editingTree, true);
         }
-        else  // The text has been restored to the original value set in node's user object just before edit. However, that has column alignment removed, so re-establish it.
+        else  // The text has been restored to the original value set in node's user object just before edit.
         {
-            if (parent != null)
+            // Visual representation has formatting that is removed for editing. Need to restore.
+            GraphNode gn = null;
+            if (node instanceof NodePart) gn = ((NodePart) node).graph;
+            if (gn != null)
             {
-                parent.updateTabStops (node.getFontMetrics (editingTree));
-                parent.allNodesChanged ((FilteredTreeModel) editingTree.getModel ());
+                gn.updateTitle ();
+            }
+            else
+            {
+                NodeBase parent = (NodeBase) node.getParent ();
+                if (parent != null)
+                {
+                    // Restore column alignment
+                    parent.updateTabStops (node.getFontMetrics (editingTree));
+                    parent.allNodesChanged ((FilteredTreeModel) editingTree.getModel ());
+                }
             }
         }
     }

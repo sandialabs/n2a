@@ -259,6 +259,18 @@ public class GraphNode extends JPanel
         PanelModel.instance.undoManager.add (new ChangeGUI (node, gui));
     }
 
+    public void updateTitle ()
+    {
+        Rectangle old = getBounds ();
+        node.setUserObject ();
+        title.setText (node.getText (open, false));  // Name change can cause a change in size.
+        panelTitle.invalidate ();  // DefaultTreeCellRenderer stops the invalidate() call caused by setText(), so we must impose it manually. It is sufficient to invalidate the container.
+        setSize (getPreferredSize ());  // GraphLayout won't do this, so we must do it manually.
+        Rectangle next = getBounds ();
+        parent.layout.componentMoved (this);
+        parent.paintImmediately (old.union (next));
+    }
+
     /**
         Apply any changes from $metadata.
     **/
@@ -566,8 +578,10 @@ public class GraphNode extends JPanel
             editingComponent = container.editor.getTitleEditorComponent (panelEquations.tree, node, open);
             panelTitle.add (editingComponent, BorderLayout.NORTH, 0);  // displaces this title renderer from the layout manager's north slot
             setVisible (false);  // hide this title renderer
+
             GraphNode.this.setSize (GraphNode.this.getPreferredSize ());
             GraphNode.this.validate ();
+            parent.scrollRectToVisible (GraphNode.this.getBounds ());
             GraphNode.this.repaint ();
             SwingUtilities2.compositeRequestFocus (editingComponent);  // editingComponent is really a container, so we shift focus to the first focusable child of editingComponent
         }
@@ -581,10 +595,6 @@ public class GraphNode extends JPanel
             panelTitle.getLayout ().addLayoutComponent (BorderLayout.NORTH, this);  // restore this title renderer to the layout manger's north slot
             panelTitle.remove (editingComponent);  // triggers shift of focus back to this title renderer
             editingComponent = null;
-
-            GraphNode.this.setSize (GraphNode.this.getPreferredSize ());
-            GraphNode.this.validate ();
-            GraphNode.this.repaint ();
         }
     };
 
