@@ -29,6 +29,7 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.GraphNode;
+import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
@@ -501,9 +502,10 @@ public class NodePart extends NodeContainer
                     tree = null;  // Create a peer graph node.
                     if (location == null)
                     {
+                        GraphPanel gp = (GraphPanel) graph.getParent ();
                         location = graph.getLocation ();
-                        location.x += 100;
-                        location.y += 100;
+                        location.x += 100 - gp.offset.x;
+                        location.y += 100 - gp.offset.y;
                     }
                 }
                 return ((NodePart) getTrueParent ()).add (type, tree, data, location);
