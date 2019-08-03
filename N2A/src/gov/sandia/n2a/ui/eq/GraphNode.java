@@ -42,7 +42,6 @@ import javax.swing.border.AbstractBorder;
 import javax.swing.event.CellEditorListener;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.MouseInputAdapter;
-import javax.swing.event.MouseInputListener;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Lay;
@@ -67,6 +66,7 @@ public class GraphNode extends JPanel
     protected Component           hr                  = Box.createVerticalStrut (border.t + 1);
     public    PanelEquationTree   panelEquations;
     protected Component           editingComponent;
+    protected ResizeListener      resizeListener      = new ResizeListener ();
     protected Color               color;
     protected List<GraphEdge>     edgesOut            = new ArrayList<GraphEdge> ();
     protected List<GraphEdge>     edgesIn             = new ArrayList<GraphEdge> ();
@@ -118,7 +118,6 @@ public class GraphNode extends JPanel
             setLocation (x, y);
         }
 
-        MouseInputListener resizeListener = new ResizeListener ();
         addMouseListener (resizeListener);
         addMouseMotionListener (resizeListener);
 
@@ -507,15 +506,22 @@ public class GraphNode extends JPanel
                 }
             });
 
-            addMouseListener (new MouseInputAdapter ()
+            MouseInputAdapter mouseListener = new MouseInputAdapter ()
             {
-                public void mouseClicked (MouseEvent e)
+                public void translate (MouseEvent me)
                 {
-                    int x = e.getX ();
-                    int y = e.getY ();
-                    int clicks = e.getClickCount ();
+                    Insets i = GraphNode.this.getInsets ();  // Due to layout, this should be the only adjustment we need.
+                    me.translatePoint (i.left, i.top);
+                    me.setSource (GraphNode.this);
+                }
 
-                    if (SwingUtilities.isLeftMouseButton (e))
+                public void mouseClicked (MouseEvent me)
+                {
+                    int x = me.getX ();
+                    int y = me.getY ();
+                    int clicks = me.getClickCount ();
+
+                    if (SwingUtilities.isLeftMouseButton (me))
                     {
                         if (clicks == 1)  // Open/close
                         {
@@ -531,23 +537,67 @@ public class GraphNode extends JPanel
                             }
                             titleFocused = true;
                             takeFocus ();
+                            return;
                         }
                         else if (clicks == 2)  // Drill down
                         {
                             container.drill (node);
+                            return;
                         }
                     }
-                    else if (SwingUtilities.isRightMouseButton (e))
+                    else if (SwingUtilities.isRightMouseButton (me))
                     {
                         if (clicks == 1)  // Show popup menu
                         {
                             container.menuPopup.show (title, x, y);
+                            return;
                         }
                     }
+
+                    translate (me);
+                    resizeListener.mouseMoved (me);
                 }
-                // TODO: implement drag
-                // Should it move the node, or do DnD to make connections?
-            });
+
+                public void mouseMoved (MouseEvent me)
+                {
+                    int x = me.getX ();
+                    int iconWidth = node.getIcon (open).getIconWidth ();
+                    if (x < iconWidth)
+                    {
+                        setCursor (Cursor.getPredefinedCursor (Cursor.DEFAULT_CURSOR));
+                    }
+                    else if (! PanelModel.instance.panelEquations.locked  &&  resizeListener.start == null)
+                    {
+                        setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
+                    }
+                }
+
+                public void mouseExited (MouseEvent me)
+                {
+                    translate (me);
+                    resizeListener.mouseExited (me);
+                }
+
+                public void mousePressed (MouseEvent me)
+                {
+                    translate (me);
+                    resizeListener.mousePressed (me);
+                }
+
+                public void mouseDragged (MouseEvent me)
+                {
+                    translate (me);
+                    resizeListener.mouseDragged (me);
+                }
+
+                public void mouseReleased (MouseEvent me)
+                {
+                    translate (me);
+                    resizeListener.mouseReleased (me);
+                }
+            };
+            addMouseListener (mouseListener);
+            addMouseMotionListener (mouseListener);
 
             addFocusListener (new FocusListener ()
             {
@@ -727,6 +777,15 @@ public class GraphNode extends JPanel
                     }
                     animate (new Rectangle (x + dx, y + dy, newW, newH));
                     break;
+                case Cursor.N_RESIZE_CURSOR:
+                    newH = h - dy;
+                    if (newH < min.height)
+                    {
+                        dy -= min.height - newH;
+                        newH = min.height;
+                    }
+                    animate (new Rectangle (x, y + dy, w, newH));
+                    break;
                 case Cursor.NE_RESIZE_CURSOR:
                     newW = w + dx;
                     if (newW < min.width)
@@ -742,6 +801,42 @@ public class GraphNode extends JPanel
                     }
                     animate (new Rectangle (x, y + dy, newW, newH));
                     start.translate (dx, 0);
+                    break;
+                case Cursor.E_RESIZE_CURSOR:
+                    newW = w + dx;
+                    if (newW < min.width)
+                    {
+                        dx += min.width - newW;
+                        newW = min.width;
+                    }
+                    animate (new Rectangle (x, y, newW, h));
+                    start.translate (dx, 0);
+                    break;
+                case Cursor.SE_RESIZE_CURSOR:
+                    newW = w + dx;
+                    if (newW < min.width)
+                    {
+                        dx += min.width - newW;
+                        newW = min.width;
+                    }
+                    newH = h + dy;
+                    if (newH < min.height)
+                    {
+                        dy += min.height - newH;
+                        newH = min.height;
+                    }
+                    animate (new Rectangle (x, y, newW, newH));
+                    start.translate (dx, dy);
+                    break;
+                case Cursor.S_RESIZE_CURSOR:
+                    newH = h + dy;
+                    if (newH < min.height)
+                    {
+                        dy += min.height - newH;
+                        newH = min.height;
+                    }
+                    animate (new Rectangle (x, y, w, newH));
+                    start.translate (0, dy);
                     break;
                 case Cursor.SW_RESIZE_CURSOR:
                     newW = w - dx;
@@ -759,21 +854,14 @@ public class GraphNode extends JPanel
                     animate (new Rectangle (x + dx, y, newW, newH));
                     start.translate (0, dy);
                     break;
-                case Cursor.SE_RESIZE_CURSOR:
-                    newW = w + dx;
+                case Cursor.W_RESIZE_CURSOR:
+                    newW = w - dx;
                     if (newW < min.width)
                     {
-                        dx += min.width - newW;
+                        dx -= min.width - newW;
                         newW = min.width;
                     }
-                    newH = h + dy;
-                    if (newH < min.height)
-                    {
-                        dy += min.height - newH;
-                        newH = min.height;
-                    }
-                    animate (new Rectangle (x, y, newW, newH));
-                    start.translate (dx, dy);
+                    animate (new Rectangle (x + dx, y, newW, h));
                     break;
                 case Cursor.MOVE_CURSOR:
                     animate (new Rectangle (x + dx, y + dy, w, h));
@@ -878,17 +966,18 @@ public class GraphNode extends JPanel
             {
                 if (y <  t    ) return Cursor.NW_RESIZE_CURSOR;
                 if (y >= h - t) return Cursor.SW_RESIZE_CURSOR;
+                return                 Cursor.W_RESIZE_CURSOR;
             }
             else if (x >= w - t)
             {
                 if (y <  t    ) return Cursor.NE_RESIZE_CURSOR;
                 if (y >= h - t) return Cursor.SE_RESIZE_CURSOR;
+                return                 Cursor.E_RESIZE_CURSOR;
             }
-            else
-            {
-                if (y >= t  &&  y < h - t) return Cursor.DEFAULT_CURSOR;
-            }
-            return Cursor.MOVE_CURSOR;
+            // x is in middle
+            if (y <  t    ) return Cursor.N_RESIZE_CURSOR;
+            if (y >= h - t) return Cursor.S_RESIZE_CURSOR;
+            return                 Cursor.MOVE_CURSOR;
         }
     }
 }
