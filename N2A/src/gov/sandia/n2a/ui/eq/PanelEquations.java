@@ -7,16 +7,25 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.EventQueue;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.Insets;
 import java.awt.Point;
+import java.awt.RenderingHints;
+import java.awt.Shape;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.InputEvent;
+import java.awt.event.MouseEvent;
+import java.awt.geom.RoundRectangle2D;
 import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
@@ -31,18 +40,20 @@ import java.util.Locale;
 
 import javax.swing.Box;
 import javax.swing.ButtonGroup;
-import javax.swing.ButtonModel;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
-import javax.swing.JLabel;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JRadioButtonMenuItem;
 import javax.swing.JTree;
+import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
+import javax.swing.UIManager;
+import javax.swing.border.AbstractBorder;
+import javax.swing.event.MouseInputAdapter;
 import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 import javax.swing.filechooser.FileFilter;
@@ -83,14 +94,14 @@ public class PanelEquations extends JPanel
 
     protected JPanel                   panelCenter;
     protected JPanel                   panelBreadcrumb;
+    protected BreadcrumbRenderer       breadcrumbRenderer     = new BreadcrumbRenderer ();
     public    PanelEquationGraph       panelEquationGraph;
     public    PanelEquationTree        panelEquationTree;  // To display root as a tree.
     protected PanelEquationTree        active;             // Tree which most recently received focus. Could be panelEquationTree or a GraphNode.panelEquations.
-    protected List<NodePart>           listBreadcrumb = new ArrayList<NodePart> ();
     protected TransferHandler          transferHandler;
-    protected EquationTreeCellRenderer renderer       = new EquationTreeCellRenderer ();
-    protected EquationTreeCellEditor   editor         = new EquationTreeCellEditor (renderer);
-    protected MVolatile                focusCache     = new MVolatile ();
+    protected EquationTreeCellRenderer renderer               = new EquationTreeCellRenderer ();
+    protected EquationTreeCellEditor   editor                 = new EquationTreeCellEditor (renderer);
+    protected MVolatile                focusCache             = new MVolatile ();
 
     // Controls
     protected JButton buttonAddModel;
@@ -116,7 +127,7 @@ public class PanelEquations extends JPanel
     protected static ImageIcon iconViewGraph = ImageUtil.getImage ("viewGraph.png");
     protected static ImageIcon iconViewTree  = ImageUtil.getImage ("explore.gif");
 
-    protected static JLabel noModel = new JLabel ("<Select model from left or click New Model above.>");
+    protected static String noModel = "<Select model from left or click New Model above.>";
 
     protected int jobCount = 0;  // for launching jobs
 
@@ -374,14 +385,6 @@ public class PanelEquations extends JPanel
             }
         };
 
-        panelEquationGraph = new PanelEquationGraph (this);
-        panelEquationTree  = new PanelEquationTree (this, null);
-        panelBreadcrumb    = Lay.WL ("L", Box.createHorizontalStrut (5), noModel, "hgap=0");
-        panelCenter        = Lay.BL (
-            "N", panelBreadcrumb,
-            "C", panelEquationGraph  // Initial state is open==false and graph showing.
-        );
-
         buttonAddModel = new JButton (ImageUtil.getImage ("document.png"));
         buttonAddModel.setMargin (new Insets (2, 2, 2, 2));
         buttonAddModel.setFocusable (false);
@@ -462,6 +465,17 @@ public class PanelEquations extends JPanel
                 }
             }
         });
+
+        panelBreadcrumb = Lay.BL ("C", breadcrumbRenderer);
+        panelBreadcrumb.setBorder (new RoundedTopBorder (5));
+        panelBreadcrumb.setOpaque (false);
+
+        panelEquationGraph = new PanelEquationGraph (this);
+        panelEquationTree  = new PanelEquationTree (this, null);
+        panelCenter        = Lay.BL (
+            "N", panelBreadcrumb,
+            "C", panelEquationGraph  // Initial state is open==false and graph showing.
+        );
 
         Lay.BLtg (this,
             "N", Lay.WL ("L",
@@ -669,7 +683,7 @@ public class PanelEquations extends JPanel
         active = null;
         if (open) panelEquationTree.loadPart (part);
         else      panelEquationGraph.loadPart ();
-        updateBreadcrumbs ();
+        breadcrumbRenderer.update ();
         panelCenter.validate ();
         panelCenter.repaint ();
         takeFocus ();  // sets active
@@ -698,7 +712,7 @@ public class PanelEquations extends JPanel
         {
             panelEquationGraph.clear ();
         }
-        updateBreadcrumbs ();
+        breadcrumbRenderer.update ();
         panelCenter.validate ();
         panelCenter.repaint ();
     }
@@ -795,51 +809,10 @@ public class PanelEquations extends JPanel
 
     public void resetBreadcrumbs ()
     {
-        listBreadcrumb.clear ();
-        updateBreadcrumbs ();
+        breadcrumbRenderer.parts.clear ();
+        breadcrumbRenderer.update ();
         panelBreadcrumb.validate ();
         panelBreadcrumb.repaint ();
-    }
-
-    public void updateBreadcrumbs ()
-    {
-        panelBreadcrumb.removeAll ();
-        panelBreadcrumb.add (Box.createHorizontalStrut (5));
-
-        int index = listBreadcrumb.indexOf (part);
-        if (index < 0)
-        {
-            listBreadcrumb.clear ();
-            NodePart p = part;
-            while (p != null)
-            {
-                listBreadcrumb.add (0, p);
-                p = (NodePart) p.getTrueParent ();
-            }
-            index = listBreadcrumb.size () - 1;
-        }
-        if (part == root  &&  open) index = -1;
-
-        int last = listBreadcrumb.size () - 1;
-        if (last < 0) panelBreadcrumb.add (noModel);
-        for (int i = 0; i <= last; i++)
-        {
-            final NodePart b = listBreadcrumb.get (i);
-            JButton button = new JButton (b.source.key ());
-            button.setMargin (new Insets (0, 2, 0, 2));
-            button.setFocusable (false);
-            button.setToolTipText ("Select part");
-            button.addActionListener (new ActionListener ()
-            {
-                public void actionPerformed (ActionEvent e)
-                {
-                    drill (b);
-                }
-            });
-            ButtonModel m = button.getModel ();
-            m.setPressed (i == index);
-            panelBreadcrumb.add (button);
-        }
     }
 
     public void drill (NodePart nextPart)
@@ -1127,6 +1100,166 @@ public class PanelEquations extends JPanel
             AppData.state.set (FilteredTreeModel.filterLevel, "PanelModel", "filter");
             if (open) panelEquationTree.updateFilterLevel ();
             else      panelEquationGraph.updateFilterLevel ();
+        }
+    };
+
+    public class RoundedTopBorder extends AbstractBorder
+    {
+        public int t;
+
+        RoundedTopBorder (int thickness)
+        {
+            t = thickness;
+        }
+
+        public void paintBorder (Component c, Graphics g, int x, int y, int width, int height)
+        {
+            Graphics2D g2 = (Graphics2D) g.create ();
+            g2.setRenderingHint (RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            // To produce a curved border only on top, we simply set the bottom of the shape
+            // so far down that it is clipped off.
+            int t2 = t * 2;
+            Shape border = new RoundRectangle2D.Double (x, y, width-1, height + 10 + t2, t2, t2);
+
+            g2.setPaint (GraphNode.RoundedBorder.background);
+            g2.fill (border);
+
+            g2.setPaint (EquationTreeCellRenderer.getForegroundFor (part, false));
+            g2.draw (border);
+
+            g2.dispose ();
+        }
+
+        public Insets getBorderInsets (Component c, Insets insets)
+        {
+            insets.left = insets.top = insets.right = insets.bottom = t;
+            return insets;
+        }
+    }
+
+    public class BreadcrumbRenderer extends EquationTreeCellRenderer
+    {
+        protected List<NodePart> parts   = new ArrayList<NodePart> ();
+        protected List<Integer>  offsets = new ArrayList<Integer> ();
+        protected int            index   = -1;
+
+        public BreadcrumbRenderer ()
+        {
+            setOpaque (false);
+
+            addMouseListener (new MouseInputAdapter ()
+            {
+                public void mouseClicked (MouseEvent me)
+                {
+                    int x = me.getX ();
+                    int clicks = me.getClickCount ();
+
+                    if (SwingUtilities.isLeftMouseButton (me))
+                    {
+                        if (clicks == 1)  // Open/close
+                        {
+                            if (x < getIconWidth ())
+                            {
+                                System.out.println ("toggle the part tree");
+                            }
+                            else
+                            {
+                                x -= getTextOffset ();
+                                int last = offsets.size () - 1;
+                                for (int i = 0; i < last; i++)
+                                {
+                                    if (x >= offsets.get (i)) continue;
+                                    drill (parts.get (i));
+                                    return;
+                                }
+                                drill (parts.get (last));
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        public void updateUI ()
+        {
+            super.updateUI ();
+
+            setForeground (EquationTreeCellRenderer.colorOverride);
+
+            Font baseFont = UIManager.getFont ("Tree.font");
+            setFont (baseFont.deriveFont (Font.BOLD));
+        }
+
+        public void update ()
+        {
+            index = parts.indexOf (part);
+            if (index < 0)
+            {
+                parts.clear ();
+                NodePart p = part;
+                while (p != null)
+                {
+                    parts.add (0, p);
+                    p = (NodePart) p.getTrueParent ();
+                }
+                index = parts.size () - 1;
+            }
+            if (part == root  &&  open) index = -1;
+
+            int last = parts.size () - 1;
+            if (last < 0)
+            {
+                setText (noModel);
+                setIcon (null);
+                return;
+            }
+
+            String text = "";
+            offsets.clear ();
+            FontMetrics fm = getFontMetrics (getFont ());
+            for (int i = 0; i <= last; i++)
+            {
+                NodePart b = parts.get (i);
+                if (i > 0) text += ".";
+                text += b.source.key ();
+                offsets.add (fm.stringWidth (text));
+                if (i == index) setIcon (b.getIcon (true));
+            }
+            setText (text);
+        }
+
+        public void paint (Graphics g)
+        {
+            // paint highlight
+            int last = parts.size () - 1;
+            if (last > 0  &&  index >= 0)
+            {
+                int x0 = 0;
+                if (index > 0) x0 = offsets.get (index - 1) + getFontMetrics (getFont ()).stringWidth (".");
+                int x1 = offsets.get (index);
+                int x = x0 + getTextOffset () - 1;
+                int w = x1 - x0 + 2;
+                int h = getHeight ();
+                g.setColor (getBackgroundSelectionColor ());
+                g.fillRect (x, 0, w, h);
+            }
+
+            // paint text and icon
+            super.paint (g);
+        }
+
+        // Force superclass not to paint background, so highlight will show through.
+        // Both getBackgroundNonSelectionColor() and getBackground() must return null for this to work properly.
+
+        public Color getBackgroundNonSelectionColor ()
+        {
+            return null;
+        }
+
+        public Color getBackground ()
+        {
+            return null;
         }
     };
 

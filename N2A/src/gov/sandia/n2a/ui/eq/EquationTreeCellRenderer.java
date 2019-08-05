@@ -71,19 +71,7 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
 
         NodeBase n = (NodeBase) value;
 
-        Color fg;
-        int color = n.getForegroundColor ();
-        switch (color)
-        {
-            case NodeBase.OVERRIDE:
-                fg = selected ? colorSelectedOverride : colorOverride;
-                break;
-            case NodeBase.KILL:
-                fg = selected ? colorSelectedKill : colorKill;
-                break;
-            default:  // INHERIT
-                fg = selected ? colorSelectedInherit : colorInherit;
-        }
+        Color fg = getForegroundFor (n, selected);
         setForeground (fg);
 
         setIcon (getIconFor (n, expanded, leaf));
@@ -107,5 +95,35 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
         if (leaf)     return getDefaultLeafIcon ();
         if (expanded) return getDefaultOpenIcon ();
         return               getDefaultClosedIcon ();
+    }
+
+    public static Color getForegroundFor (NodeBase node, boolean selected)
+    {
+        switch (node.getForegroundColor ())
+        {
+            case NodeBase.OVERRIDE: return selected ? colorSelectedOverride : colorOverride;
+            case NodeBase.KILL:     return selected ? colorSelectedKill     : colorKill;
+            default:    /*INHERIT*/ return selected ? colorSelectedInherit  : colorInherit;
+        }
+    }
+
+    public int getIconWidth ()
+    {
+        Icon icon = getIcon ();
+        if (icon == null) return 0;
+        return icon.getIconWidth ();
+    }
+
+    /**
+        Does the same job as DefaultCellTreeRenderer.getLabelStart(), except that the Java library
+        designer, in their infinite wisdom, made that method private. Go figure.
+        There is one small difference: the number returned by this function is the
+        actual start pixel, rather than 1 less.
+    **/
+    public int getTextOffset ()
+    {
+        Icon icon = getIcon ();
+        if (icon == null) return 0;
+        return icon.getIconWidth () + getIconTextGap ();
     }
 }

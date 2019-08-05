@@ -47,7 +47,6 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
-import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
 import sun.swing.SwingUtilities2;
@@ -67,7 +66,6 @@ public class GraphNode extends JPanel
     public    PanelEquationTree   panelEquations;
     protected Component           editingComponent;
     protected ResizeListener      resizeListener      = new ResizeListener ();
-    protected Color               color;
     protected List<GraphEdge>     edgesOut            = new ArrayList<GraphEdge> ();
     protected List<GraphEdge>     edgesIn             = new ArrayList<GraphEdge> ();
 
@@ -79,18 +77,6 @@ public class GraphNode extends JPanel
         this.parent = parent;
         this.node   = node;
         node.graph  = this;
-
-        switch (node.getForegroundColor ())
-        {
-            case NodeBase.OVERRIDE:
-                color = EquationTreeCellRenderer.colorOverride;
-                break;
-            case NodeBase.KILL:
-                color = EquationTreeCellRenderer.colorKill;
-                break;
-            default:  // INHERIT
-                color = EquationTreeCellRenderer.colorInherit;
-        }
 
         node.fakeRoot (true);
         panelEquations = new PanelEquationTree (container, node);
@@ -930,7 +916,7 @@ public class GraphNode extends JPanel
             g2.fill (border);
 
             GraphNode gn = (GraphNode) c;
-            g2.setPaint (gn.color);
+            g2.setPaint (EquationTreeCellRenderer.getForegroundFor (gn.node, false));
             g2.draw (border);
 
             if (gn.open)
