@@ -67,7 +67,7 @@ public class ChangePart extends Undoable
         }
         view.restore ();
 
-        NodeBase parent = NodeBase.locateNode (path);
+        NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
         NodeBase temp = parent.child (nameBefore);
         if (! (temp instanceof NodePart)) throw new CannotRedoException ();
@@ -86,7 +86,7 @@ public class ChangePart extends Undoable
         PanelEquationTree pet = nodeBefore.getTree ();
         FilteredTreeModel model = null;
         if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
-        boolean graphParent =  parent == pe.part  &&  ! pe.open;
+        boolean graphParent =  parent == pe.part  &&  ! pe.viewTree;
         PanelEquationGraph peg = pe.panelEquationGraph;  // Only used if graphParent is true.
 
         NodePart nodeAfter = (NodePart) parent.child (nameAfter);  // It's either a NodePart or it's null. Any other case should be blocked by GUI constraints.
@@ -130,7 +130,8 @@ public class ChangePart extends Undoable
         }
 
         nodeAfter.build ();
-        nodeAfter.findConnections ();
+        if (graphParent) parent   .findConnections ();
+        else             nodeAfter.findConnections ();
         nodeAfter.filter (FilteredTreeModel.filterLevel);
 
         pe.resetBreadcrumbs ();

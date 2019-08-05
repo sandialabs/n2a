@@ -56,7 +56,7 @@ public class ChangeDoc extends Undoable
         NodePart root = container.root;
         root.setUserObject ();
         container.takeFocus ();
-        if (container.open)
+        if (container.viewTree)
         {
             container.panelEquationTree.model.nodeChanged (root);
             container.panelEquationTree.tree.setSelectionRow (0);
