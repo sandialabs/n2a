@@ -418,6 +418,8 @@ public class GraphNode extends JPanel
             inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),       "delete");
             inputMap.put (KeyStroke.getKeyStroke ("ENTER"),            "startEditing");
             inputMap.put (KeyStroke.getKeyStroke ("F2"),               "startEditing");
+            inputMap.put (KeyStroke.getKeyStroke ("shift SPACE"),      "drillUp");
+            inputMap.put (KeyStroke.getKeyStroke ("SPACE"),            "drillDown");
 
             ActionMap actionMap = getActionMap ();
             actionMap.put ("close", new AbstractAction ()
@@ -489,6 +491,20 @@ public class GraphNode extends JPanel
                 public void actionPerformed (ActionEvent e)
                 {
                     if (! container.locked) startEditing ();
+                }
+            });
+            actionMap.put ("drillUp", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    container.drillUp ();
+                }
+            });
+            actionMap.put ("drillDown", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    container.drill (node);
                 }
             });
 

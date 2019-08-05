@@ -26,8 +26,6 @@ import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.ActionEvent;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
@@ -38,6 +36,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 import javax.swing.AbstractAction;
+import javax.swing.Action;
 import javax.swing.ActionMap;
 import javax.swing.DefaultListModel;
 import javax.swing.InputMap;
@@ -80,9 +79,31 @@ public class PanelSearch extends JPanel
         inputMap.put (KeyStroke.getKeyStroke ("INSERT"),     "add");
         inputMap.put (KeyStroke.getKeyStroke ("DELETE"),     "delete");
         inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"), "delete");
-        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),      "select");
+        inputMap.put (KeyStroke.getKeyStroke ("SPACE"),      "select");
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),      "edit");
+        inputMap.put (KeyStroke.getKeyStroke ("F2"),         "edit");
 
         ActionMap actionMap = list.getActionMap ();
+        Action selectPreviousRow = actionMap.get ("selectPreviousRow");
+        actionMap.put ("selectPreviousRow", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                if (list.getSelectedIndex () == 0)
+                {
+                    textQuery.requestFocusInWindow ();
+                    return;
+                }
+                selectPreviousRow.actionPerformed (e);
+            }
+        });
+        actionMap.put ("selectPreviousColumn", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                textQuery.requestFocusInWindow ();
+            }
+        });
         actionMap.put ("add", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
@@ -217,11 +238,26 @@ public class PanelSearch extends JPanel
 
         textQuery = new JTextField ();
 
-        textQuery.addKeyListener (new KeyAdapter ()
+        inputMap = textQuery.getInputMap ();
+        inputMap.put (KeyStroke.getKeyStroke ("ESCAPE"), "cancel");
+        inputMap.put (KeyStroke.getKeyStroke ("DOWN"),   "selectNext");
+        inputMap.put (KeyStroke.getKeyStroke ("RIGHT"),  "selectNext");
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),  "selectNext");
+
+        actionMap = textQuery.getActionMap ();
+        actionMap.put ("cancel", new AbstractAction ()
         {
-            public void keyReleased (KeyEvent e)
+            public void actionPerformed (ActionEvent e)
             {
-                if (e.getKeyCode () == KeyEvent.VK_ESCAPE) textQuery.setText ("");
+                textQuery.setText ("");
+            }
+        });
+        actionMap.put ("selectNext", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                lastSelection = 0;
+                list.requestFocusInWindow ();
             }
         });
 
@@ -301,8 +337,9 @@ public class PanelSearch extends JPanel
         {
             public void run ()
             {
-                PanelModel mep = PanelModel.instance;
-                mep.panelEquations.load (doc);
+                PanelEquations pe = PanelModel.instance.panelEquations;
+                if (pe.record == doc) pe.takeFocus ();
+                else                  pe.load (doc);
             }
         });
     }

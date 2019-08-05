@@ -50,12 +50,11 @@ import javax.swing.tree.TreeSelectionModel;
 @SuppressWarnings("serial")
 public class PanelEquationTree extends JScrollPane
 {
-    // Tree
-    public    JTree                  tree;
-    public    FilteredTreeModel      model;
-    public    NodePart               root;
-    protected PanelEquations         container;
-    protected boolean                needsFullRepaint;
+    public    JTree             tree;
+    public    FilteredTreeModel model;
+    public    NodePart          root;
+    protected PanelEquations    container;
+    protected boolean           needsFullRepaint;
 
     public PanelEquationTree (PanelEquations container, NodePart initialRoot)
     {
@@ -135,13 +134,15 @@ public class PanelEquationTree extends JScrollPane
         }
 
         InputMap inputMap = tree.getInputMap ();
-        inputMap.put (KeyStroke.getKeyStroke ("shift UP"),   "moveUp");
-        inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"), "moveDown");
-        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),     "add");
-        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),     "delete");
-        inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"), "delete");
-        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),      "startEditing"); 
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl ENTER"), "startEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("shift UP"),    "moveUp");
+        inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"),  "moveDown");
+        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),      "add");
+        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),      "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),  "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),       "startEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl ENTER"),  "startEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("shift SPACE"), "drillUp");
+        inputMap.put (KeyStroke.getKeyStroke ("SPACE"),       "drillDown");
 
         ActionMap actionMap = tree.getActionMap ();
         Action selectPrevious = actionMap.get ("selectPrevious");
@@ -212,6 +213,31 @@ public class PanelEquationTree extends JScrollPane
                     boolean isControlDown = (e.getModifiers () & ActionEvent.CTRL_MASK) != 0;
                     if (isControlDown  &&  ! (path.getLastPathComponent () instanceof NodePart)) container.editor.multiLineRequested = true;
                     tree.startEditingAtPath (path);
+                }
+            }
+        });
+        actionMap.put ("drillUp", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                container.drillUp ();
+            }
+        });
+        actionMap.put ("drillDown", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                // Find the nearest enclosing NodePart and drill into it.
+                TreePath path = tree.getSelectionPath ();
+                if (path == null) return;
+                for (int i = path.getPathCount () - 1; i >= 0; i--)
+                {
+                    Object o = path.getPathComponent (i);
+                    if (o instanceof NodePart)
+                    {
+                        container.drill ((NodePart) o);
+                        break;
+                    }
                 }
             }
         });

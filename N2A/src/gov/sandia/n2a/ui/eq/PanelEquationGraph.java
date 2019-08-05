@@ -128,23 +128,10 @@ public class PanelEquationGraph extends JScrollPane
             {
                 if (SwingUtilities.isLeftMouseButton (me)  &&  me.getClickCount () == 2)
                 {
-                    drillUp ();
+                    container.drillUp ();
                 }
             }
         });
-    }
-
-    public void drillUp ()
-    {
-        container.saveFocus ();
-        NodePart parent = (NodePart) container.part.getParent ();
-        if (parent == null)  // Toggle root view. Implicitly, we are in graph view, so switch to tree view.
-        {
-            parent = container.root;
-            FocusCacheEntry fce = container.createFocus (parent);
-            fce.open = true;
-        }
-        container.loadPart (parent);
     }
 
     public void loadPart ()
@@ -702,7 +689,7 @@ public class PanelEquationGraph extends JScrollPane
         {
             if (SwingUtilities.isLeftMouseButton (me)  &&  me.getClickCount () == 2)
             {
-                drillUp ();
+                container.drillUp ();
             }
         }
 

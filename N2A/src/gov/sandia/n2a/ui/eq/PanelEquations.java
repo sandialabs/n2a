@@ -865,6 +865,13 @@ public class PanelEquations extends JPanel
         loadPart (nextPart);
     }
 
+    public void drillUp ()
+    {
+        if (viewTree) return;
+        NodePart parent = (NodePart) part.getParent ();
+        if (parent != null) drill (parent);
+    }
+
     ActionListener listenerAdd = new ActionListener ()
     {
         public void actionPerformed (ActionEvent e)
