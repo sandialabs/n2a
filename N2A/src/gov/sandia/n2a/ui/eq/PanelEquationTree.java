@@ -257,7 +257,7 @@ public class PanelEquationTree extends JScrollPane
                         if (path != null)
                         {
                             Object temp = path.getLastPathComponent ();
-                            if (temp instanceof NodePart)
+                            if (temp instanceof NodePart  &&  ! container.viewTree)
                             {
                                 part = (NodePart) temp;
                                 // and drill down
@@ -322,7 +322,7 @@ public class PanelEquationTree extends JScrollPane
             {
                 TreePath path = event.getPath ();
                 NodeBase node = (NodeBase) path.getLastPathComponent ();
-                if (node == container.part) throw new ExpandVetoException (event);
+                if (node == root) throw new ExpandVetoException (event);
             }
         });
 
@@ -759,6 +759,15 @@ public class PanelEquationTree extends JScrollPane
                 }
             }
         }
+    }
+
+    public void scrollToVisible (NodePart part)
+    {
+        TreePath path = new TreePath (part.getPath ());
+        tree.setSelectionPath (path);
+        Rectangle rect = tree.getPathBounds (path);
+        rect.height = tree.getHeight ();
+        tree.scrollRectToVisible (rect);
     }
 
     public void repaintSouth (TreePath path)

@@ -703,7 +703,8 @@ public class PanelEquations extends JPanel
         active = null;
         if (viewTree)
         {
-            panelEquationTree.loadPart (part);
+            panelEquationTree.loadPart (root);
+            panelEquationTree.scrollToVisible (part);
         }
         else
         {
@@ -857,9 +858,9 @@ public class PanelEquations extends JPanel
 
     public void drill (NodePart nextPart)
     {
+        if (viewTree) return;
         saveFocus ();
         FocusCacheEntry fce = getFocus (part);
-        if (part == root) fce.open = false;  // On drill-up, return to graph view, not tree view.
         if (nextPart.getParent () == part) fce.subpart = nextPart.source.key ();
         loadPart (nextPart);
     }
@@ -1372,8 +1373,8 @@ public class PanelEquations extends JPanel
             {
                 NodePart p = root;
                 for (int i = 1; i < last; i++) p = (NodePart) p.child (path.get (i));
-                if (p == part) takeFocus ();  // loadPart() won't run in this case, but we should still take focus.
-                else           loadPart (p);
+                if (p == part  ||  viewTree) takeFocus ();  // loadPart() won't run in this case, but we should still take focus.
+                else                         loadPart (p);
             }
             first = false;
         }
