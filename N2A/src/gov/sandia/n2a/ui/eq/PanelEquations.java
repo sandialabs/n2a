@@ -129,7 +129,7 @@ public class PanelEquations extends JPanel
     protected static ImageIcon iconViewGraph = ImageUtil.getImage ("viewGraph.png");
     protected static ImageIcon iconViewTree  = ImageUtil.getImage ("explore.gif");
 
-    protected static String noModel = "<Select model from left or click New Model above.>";
+    protected static String noModel = "Select model from left or click New Model above.";
 
     protected int jobCount = 0;  // for launching jobs
 
@@ -1172,7 +1172,8 @@ public class PanelEquations extends JPanel
             g2.setPaint (GraphNode.RoundedBorder.background);
             g2.fill (border);
 
-            g2.setPaint (EquationTreeCellRenderer.getForegroundFor (part, false));
+            if (part == null) g2.setPaint (Color.black);  // part can be null if no model is currently loaded
+            else              g2.setPaint (EquationTreeCellRenderer.getForegroundFor (part, false));
             g2.draw (border);
 
             g2.dispose ();
@@ -1194,6 +1195,8 @@ public class PanelEquations extends JPanel
         public BreadcrumbRenderer ()
         {
             setOpaque (false);
+            setText (noModel);
+            setIcon (null);
 
             addMouseListener (new MouseInputAdapter ()
             {
