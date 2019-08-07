@@ -42,6 +42,13 @@ public class AddDoc extends Undoable
         if (idString.isEmpty ()  ||  AppData.getModel (idString) != null) id.set (generateID ());
     }
 
+    public void setSilent ()
+    {
+        wasShowing      = false;
+        fromSearchPanel = false;
+        keyAfter        = "";
+    }
+
     /**
         Determine unique name in database
     **/
@@ -95,10 +102,10 @@ public class AddDoc extends Undoable
             index = PanelModel.instance.panelSearch.indexOf (keyAfter);
             if (index < 0) index = 0;
         }
-        create (name, saved, index, fromSearchPanel, wasShowing, wasShowing);
+        create (name, saved, index, fromSearchPanel, wasShowing);
     }
 
-    public static void create (String name, MNode saved, int index, boolean fromSearchPanel, boolean wasShowing, boolean willEdit)
+    public static void create (String name, MNode saved, int index, boolean fromSearchPanel, boolean wasShowing)
     {
         PanelModel pm = PanelModel.instance;
         pm.panelSearch.insertNextAt (index);
@@ -109,11 +116,11 @@ public class AddDoc extends Undoable
         AppData.set (doc.get ("$metadata", "id"), doc);
 
         if (wasShowing) pm.panelEquations.load (doc);  // Takes focus
-        pm.panelSearch.lastSelection = index;
+        pm.panelSearch.lastSelection = index;  // So that next time focus shifts to search list, this model will be selected.
         if (fromSearchPanel)
         {
-            pm.panelSearch.list.setSelectedIndex (index);
-            pm.panelSearch.list.requestFocusInWindow ();
+            pm.panelSearch.list.setSelectedIndex (index);  // In case focus is already on search list.
+            pm.panelSearch.list.requestFocusInWindow ();   // In case it's not.
         }
     }
 

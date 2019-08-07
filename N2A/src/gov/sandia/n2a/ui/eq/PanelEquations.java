@@ -240,8 +240,6 @@ public class PanelEquations extends JPanel
                 if (root == null)
                 {
                     AddDoc ad = new AddDoc ();
-                    FocusCacheEntry fce = createFocus (ad.name);
-                    fce.open = false;
                     pm.undoManager.add (ad);
                     target = root;
                 }
@@ -398,7 +396,9 @@ public class PanelEquations extends JPanel
             public void actionPerformed (ActionEvent e)
             {
                 stopEditing ();
-                PanelModel.instance.undoManager.add (new AddDoc ());
+                AddDoc add = new AddDoc ();
+                if (viewTree) add.fromSearchPanel = false;
+                PanelModel.instance.undoManager.add (add);
             }
         });
 
@@ -455,12 +455,12 @@ public class PanelEquations extends JPanel
         if (viewTree)
         {
             buttonView = new JButton (iconViewGraph);
-            buttonView.setToolTipText ("View Graph");
+            buttonView.setToolTipText ("Edit Graph");
         }
         else
         {
             buttonView = new JButton (iconViewTree);
-            buttonView.setToolTipText ("View Tree");
+            buttonView.setToolTipText ("Edit Tree");
         }
         buttonView.setMargin (new Insets (2, 2, 2, 2));
         buttonView.setFocusable (false);
@@ -670,7 +670,7 @@ public class PanelEquations extends JPanel
             AppData.state.set ("tree", "PanelModel", "view");
 
             buttonView.setIcon (iconViewGraph);
-            buttonView.setToolTipText ("View Graph");
+            buttonView.setToolTipText ("Edit Graph");
 
             remove (panelGraph);
             panelEquationGraph.clear ();  // releases fake roots on subparts
@@ -681,13 +681,14 @@ public class PanelEquations extends JPanel
             AppData.state.set ("graph", "PanelModel", "view");
 
             buttonView.setIcon (iconViewTree);
-            buttonView.setToolTipText ("View Tree");
+            buttonView.setToolTipText ("Edit Tree");
 
             remove (panelEquationTree);
             panelEquationTree.clear ();
             add (panelGraph, BorderLayout.CENTER);
         }
         validate ();
+        repaint ();
 
         // Update part, in order to populate appropriate panel.
         NodePart p = part;
@@ -758,9 +759,9 @@ public class PanelEquations extends JPanel
         {
             panelEquationGraph.clear ();
             breadcrumbRenderer.update ();
+            panelGraph.validate ();
         }
-        panelGraph.validate ();
-        panelGraph.repaint ();
+        repaint ();
     }
 
     public void updateLock ()
@@ -776,7 +777,7 @@ public class PanelEquations extends JPanel
         if (record == null) return;
         if (AppData.models.isVisible (record))
         {
-            resetBreadcrumbs ();
+            if (! viewTree) resetBreadcrumbs ();
             updateLock ();
         }
         else
@@ -887,22 +888,12 @@ public class PanelEquations extends JPanel
             String type = e.getActionCommand ();
             if (record == null)
             {
-                AddDoc ad = new AddDoc ();
-                // New doc displays in tree view, because it has no parts.
-                // If adding a sub-part, we prefer to show in graph view, so hack focus cache.
-                boolean isPart = type.equals ("Part");
-                if (isPart)
-                {
-                    FocusCacheEntry fce = createFocus (ad.name);
-                    fce.open = false;
-                }
-                PanelModel.instance.undoManager.add (ad);
-                if (! isPart)
-                {
-                    // After load(doc), active is null.
-                    // PanelEquationTree focusGained() will set active, but won't be called before the test below.
-                    active = panelEquationTree;
-                }
+                AddDoc add = new AddDoc ();
+                if (viewTree) add.fromSearchPanel = false;
+                PanelModel.instance.undoManager.add (add);
+                // After load(doc), active is null.
+                // PanelEquationTree focusGained() will set active, but won't be called before the test below.
+                if (viewTree) active = panelEquationTree;
             }
             else
             {
@@ -1343,25 +1334,25 @@ public class PanelEquations extends JPanel
             saveFocus ();
             if (viewTree)
             {
+                if (panelEquationTree.root != null) path = panelEquationTree.root.getKeyPath ();
+                asParent = true;
+            }
+            else if (active == null)
+            {
+                path = part.getKeyPath ();
                 asParent = true;
             }
             else
             {
-                if (active == null)
-                {
-                    path = part.getKeyPath ();
-                    asParent = true;
-                }
-                else
-                {
-                    path = active.root.getKeyPath ();
-                    asParent =  active.root == part;  // Implies that PanelEquations.open is true.
-                }
+                path = active.root.getKeyPath ();
+                asParent =  active.root == part;  // Implies that PanelEquations.open is true.
             }
         }
 
         public void restore ()
         {
+            if (path == null) return;
+
             // Hack focus cache to restore open state of parent tree. Only meaningful when viewTree is false.
             int depth = path.size ();
             FocusCacheEntry fce = createFocus (path.toArray ());

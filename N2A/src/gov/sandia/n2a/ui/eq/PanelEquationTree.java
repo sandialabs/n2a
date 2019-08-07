@@ -275,7 +275,7 @@ public class PanelEquationTree extends JScrollPane
                 {
                     if (clicks == 1)
                     {
-                        if (root.graph != null) root.graph.titleFocused = false;
+                        if (root != null  &&  root.graph != null) root.graph.titleFocused = false;
                     }
                     else if (clicks == 2)  // Drill down on parts, or edit any other node type.
                     {
@@ -484,7 +484,7 @@ public class PanelEquationTree extends JScrollPane
     public void restoreFocus ()
     {
         container.active = this;
-        if (tree.getSelectionCount () == 0)
+        if (tree.getSelectionCount () == 0  &&  root != null)
         {
             FocusCacheEntry fce = container.getFocus (root);
             if (fce != null  &&  fce.sp != null) fce.sp.restore (tree);
@@ -517,6 +517,7 @@ public class PanelEquationTree extends JScrollPane
     {
         if (container.locked) return;
         NodeBase selected = getSelected ();
+        if (selected == null) return;  // empty tree; could create new model here, but better to do that from search list
         NodeBase editMe = selected.add (type, tree, null, null);
         if (editMe != null)
         {

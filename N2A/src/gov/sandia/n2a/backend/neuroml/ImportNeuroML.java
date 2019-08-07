@@ -72,7 +72,7 @@ public class ImportNeuroML implements Importer
         }
 
         AddDoc add = new AddDoc (key, m);
-        add.wasShowing = false;
+        add.setSilent ();
         um.add (add);
     }
 

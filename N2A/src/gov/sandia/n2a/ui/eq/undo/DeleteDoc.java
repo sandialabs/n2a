@@ -39,7 +39,7 @@ public class DeleteDoc extends Undoable
         mep.panelMRU.dontInsert = true;
         int index = mep.panelSearch.indexOf (keyAfter);
         if (index < 0) index = 0;
-        AddDoc.create (saved.key (), saved, index, fromSearchPanel, wasShowing, false);
+        AddDoc.create (saved.key (), saved, index, fromSearchPanel, wasShowing);
     }
 
     public void redo ()
