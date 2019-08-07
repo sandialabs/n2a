@@ -773,8 +773,16 @@ public class PanelEquations extends JPanel
 
     public void checkVisible ()
     {
-        if (AppData.models.isVisible (record)) updateLock ();
-        else                                   recordDeleted (record);
+        if (record == null) return;
+        if (AppData.models.isVisible (record))
+        {
+            resetBreadcrumbs ();
+            updateLock ();
+        }
+        else
+        {
+            recordDeleted (record);
+        }
     }
 
     public void saveFocus ()

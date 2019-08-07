@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq;
 
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
@@ -15,6 +16,7 @@ import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.SafeTextTransferHandler;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
+import gov.sandia.n2a.ui.eq.undo.ChangeDoc;
 import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
 
 import java.awt.Color;
@@ -67,6 +69,7 @@ public class PanelSearch extends JPanel
     public int                      insertAt;
     public MNodeRenderer            renderer = new MNodeRenderer ();
     public TransferHandler          transferHandler;
+    public NameEditor               nameEditor;
 
     public PanelSearch ()
     {
@@ -126,6 +129,15 @@ public class PanelSearch extends JPanel
             public void actionPerformed (ActionEvent e)
             {
                 selectCurrent ();
+            }
+        });
+        actionMap.put ("edit", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                nameEditor = new NameEditor (); 
+                list.add (nameEditor);
+                nameEditor.requestFocusInWindow ();
             }
         });
 
@@ -620,6 +632,106 @@ public class PanelSearch extends JPanel
                 colorSelectedInherit  = Color.blue;
                 colorSelectedOverride = Color.black;
             }
+        }
+    }
+
+    /**
+        Conceptually similar to CellEditor, but this class is highly specialized to the task of editing a part name in our list.
+        It does not implement any CellEditor-related interfaces, because it does not need to be general-purpose.
+    **/
+    public class NameEditor extends JTextField
+    {
+        boolean editing;
+        String  oldName;
+        String  newName;
+
+        public NameEditor ()
+        {
+            editing = true;
+            oldName = list.getSelectedValue ().toString ();
+            int index = list.getSelectedIndex ();
+            setText (oldName);
+            setBounds (list.getCellBounds (index, index));
+
+            InputMap inputMap = getInputMap ();
+            inputMap.put (KeyStroke.getKeyStroke ("ESCAPE"), "cancel");
+            inputMap.put (KeyStroke.getKeyStroke ("ENTER"),  "stop");
+
+            ActionMap actionMap = getActionMap ();
+            actionMap.put ("cancel", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    cancelEditing ();
+                }
+            });
+            actionMap.put ("stop", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    stopEditing ();
+                }
+            });
+
+            addFocusListener (new FocusListener ()
+            {
+                public void focusGained (FocusEvent e)
+                {
+                }
+
+                public void focusLost (FocusEvent e)
+                {
+                    if (editing) stopEditing ();
+                }
+            });
+        }
+
+        public void stopEditing ()
+        {
+            editing = false;
+            list.remove (this);  // triggers shift of focus
+            nameEditor = null;
+
+            // Similar to NodePart.applyEdit()
+
+            newName = getText ();
+            if (newName.isEmpty ()  ||  newName.equals (oldName))
+            {
+                list.repaint ();
+                return;
+            }
+
+            //   Make name valid
+            newName = MDir.validFilenameFrom (newName);
+            newName = newName.replace (",", "-");
+
+            //   Make name unique
+            String stem = newName;
+            int suffix = 0;
+            MNode models = AppData.models;
+            MNode existingDocument = models.child (newName);
+            while (existingDocument != null)
+            {
+                suffix++;
+                newName = stem + " " + suffix;
+                existingDocument = models.child (newName);
+            }
+
+            EventQueue.invokeLater (new Runnable ()
+            {
+                public void run ()
+                {
+                    PanelModel.instance.undoManager.add (new ChangeDoc (oldName, newName));
+                }
+            });
+        }
+
+        public void cancelEditing ()
+        {
+            editing = false;
+            list.remove (this);
+            nameEditor = null;
+            list.repaint ();
         }
     }
 }

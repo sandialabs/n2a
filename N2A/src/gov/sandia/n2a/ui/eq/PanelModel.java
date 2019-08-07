@@ -56,6 +56,11 @@ public class PanelModel extends JPanel implements MNodeListener
                 return super.getComponentAfter (aContainer, aComponent);  // Otherwise, do normal focus cycle without considering GraphNode. This is necessary to enter editor to begin with.
             }
 
+            if (aComponent == panelSearch.nameEditor)  // nameEditor will be null when no active name edit
+            {
+                return panelSearch.list;
+            }
+
             Component result = super.getComponentAfter (aContainer, aComponent);
 
             Component g0 = aComponent.getParent ();

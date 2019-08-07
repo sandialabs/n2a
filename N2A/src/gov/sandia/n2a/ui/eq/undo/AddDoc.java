@@ -109,14 +109,9 @@ public class AddDoc extends Undoable
         AppData.set (doc.get ("$metadata", "id"), doc);
 
         if (wasShowing) pm.panelEquations.load (doc);  // Takes focus
-        if (willEdit  ||  ! fromSearchPanel)  // Ensure that search list does not show selection.
+        pm.panelSearch.lastSelection = index;
+        if (fromSearchPanel)
         {
-            pm.panelSearch.hideSelection ();
-            pm.panelSearch.lastSelection = index;
-        }
-        else  // Transfer focus back to search list, where it belongs.
-        {
-            pm.panelEquations.yieldFocus ();
             pm.panelSearch.list.setSelectedIndex (index);
             pm.panelSearch.list.requestFocusInWindow ();
         }
