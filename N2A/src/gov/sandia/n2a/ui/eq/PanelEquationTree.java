@@ -56,7 +56,7 @@ public class PanelEquationTree extends JScrollPane
     protected PanelEquations    container;
     protected boolean           needsFullRepaint;
 
-    public PanelEquationTree (PanelEquations container, NodePart initialRoot)
+    public PanelEquationTree (PanelEquations container, NodePart initialRoot, boolean headless)
     {
         this.container = container;
 
@@ -125,8 +125,8 @@ public class PanelEquationTree extends JScrollPane
         tree.setCellEditor (container.editor);
         tree.addTreeSelectionListener (container.editor);
 
-        // Special cases for nodes in graph
-        if (initialRoot != null  &&  initialRoot.graph != null)
+        // Special cases for nodes in graph. Also includes "parent" which lacks an associated graph node.
+        if (headless)
         {
             tree.setRootVisible (false);
             tree.setShowsRootHandles (true);
@@ -151,10 +151,18 @@ public class PanelEquationTree extends JScrollPane
         {
             public void actionPerformed (ActionEvent e)
             {
-                if (root.graph != null  &&  tree.getLeadSelectionRow () == 0)
+                if (tree.getLeadSelectionRow () == 0)
                 {
-                    root.graph.switchFocus (true);
-                    return;
+                    if (root.graph != null)
+                    {
+                        root.graph.switchFocus (true);
+                        return;
+                    }
+                    if (container.panelParent.panelEquations == PanelEquationTree.this)
+                    {
+                        container.panelParent.toggleOpen ();
+                        return;
+                    }
                 }
                 selectPrevious.actionPerformed (e);
             }
@@ -163,12 +171,17 @@ public class PanelEquationTree extends JScrollPane
         {
             public void actionPerformed (ActionEvent e)
             {
-                if (root.graph != null)
+                TreePath path = tree.getLeadSelectionPath ();
+                if (path != null  &&  path.getPathCount () == 2  &&  tree.isCollapsed (path))  // This is a direct child of the root (which is not visible).
                 {
-                    TreePath path = tree.getLeadSelectionPath ();
-                    if (path != null  &&  path.getPathCount () == 2  &&  tree.isCollapsed (path))  // This is a direct child of the root (which is not visible).
+                    if (root.graph != null)
                     {
                         root.graph.switchFocus (true);
+                        return;
+                    }
+                    if (container.panelParent.panelEquations == PanelEquationTree.this)
+                    {
+                        container.panelParent.toggleOpen ();
                         return;
                     }
                 }
@@ -426,6 +439,7 @@ public class PanelEquationTree extends JScrollPane
     {
         if (part == root) return;
         if (root != null) root.pet = null;
+
         root = part;
         root.pet = this;
         model.setRoot (root);  // triggers repaint, but may be too slow
@@ -434,7 +448,7 @@ public class PanelEquationTree extends JScrollPane
 
     public void clear ()
     {
-        container.active = null;  // On the presumption that we are container.panelEquationTree. This function is only called in that case, because PanelEquationGraph simply disposes of its trees, rather than clearing them.
+        if (container.active == this) container.active = null;
         if (root == null) return;
         root.pet = null;
         root = null;
@@ -464,11 +478,7 @@ public class PanelEquationTree extends JScrollPane
         if (root.graph != null)
         {
             boolean open = root.source.getBoolean ("$metadata", "gui", "bounds", "open");
-            if (! open)
-            {
-                tree.collapseRow (0);
-                fce.sp.open = false;
-            }
+            if (! open) root.graph.setOpen (false);
         }
     }
 

@@ -79,7 +79,7 @@ public class GraphNode extends JPanel
         node.graph  = this;
 
         node.fakeRoot (true);
-        panelEquations = new PanelEquationTree (container, node);
+        panelEquations = new PanelEquationTree (container, node, true);
 
         open         = node.source.getBoolean ("$metadata", "gui", "bounds", "open");
         titleFocused = true;  // sans any other knowledge, title should be selected first
@@ -938,7 +938,7 @@ public class GraphNode extends JPanel
             if (gn.open)
             {
                 y += gn.hr.getLocation ().y + t * 2 - 1;
-                Shape line = new Line2D.Double (x, y, width-1, y);
+                Shape line = new Line2D.Double (x, y, x+width-1, y);
                 g2.draw (line);
             }
 

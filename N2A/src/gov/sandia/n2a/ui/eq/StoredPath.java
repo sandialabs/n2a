@@ -17,7 +17,6 @@ import gov.sandia.n2a.ui.eq.tree.NodeBase;
 
 public class StoredPath
 {
-    boolean        open;     // Was root node expanded?
     boolean        selected; // Was anything selected?
     boolean        expanded; // Was the selected node also expanded?
     List<String>   keys   = new ArrayList<String> ();   // of the selected node
@@ -25,8 +24,6 @@ public class StoredPath
 
     public StoredPath (JTree tree)
     {
-        open = tree.isExpanded (0);
-
         TreePath path = tree.getSelectionPath ();
         selected = path != null;
         if (selected)
@@ -67,9 +64,6 @@ public class StoredPath
             }
             if (c != null  &&  c.visible (FilteredTreeModel.filterLevel)) tree.expandPath (new TreePath (c.getPath ()));
         }
-
-        if (open) tree.expandRow (0);
-        else      tree.collapseRow (0);
 
         // Second, locate the focused node and pay special attention to its visibility
         if (! selected)

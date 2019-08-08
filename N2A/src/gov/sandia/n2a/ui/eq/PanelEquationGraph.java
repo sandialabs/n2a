@@ -159,11 +159,10 @@ public class PanelEquationGraph extends JScrollPane
         return focus;
     }
 
-    public void takeFocus ()
+    public void takeFocus (FocusCacheEntry fce)
     {
         Point focus = new Point ();  // (0,0)
         GraphNode gn = null;
-        FocusCacheEntry fce = container.getFocus (container.part);
         if (fce != null)
         {
             if (fce.position != null)

@@ -154,6 +154,9 @@ public class NodePart extends NodeContainer
 
     /**
         Makes this node a temporary root, for displaying sub-trees.
+        This is also safe to call on the true root node. In that case, this has no effect.
+        Subsequent calls should always alternate between activate and deactivate, or information will be lost.
+        Only the true root can receive multiple calls with the same value of activate, since in that case this has no effect.
     **/
     public void fakeRoot (boolean activate)
     {
@@ -184,6 +187,9 @@ public class NodePart extends NodeContainer
     @Override
     public boolean visible (int filterLevel)
     {
+        // Under "parent" graph node, don't display child parts, as these will have separate graph nodes.
+        if (parent == null) return false;
+
         if (filterLevel >= FilteredTreeModel.LOCAL) return source.isFromTopDocument ();
         return true;  // Almost always visible, except for most stringent filter mode.
     }
@@ -718,7 +724,7 @@ public class NodePart extends NodeContainer
     public PanelEquationTree getTree ()
     {
         if (pet   != null) return pet;
-        if (graph != null) return graph.panelEquations;
+        if (graph != null) return graph.panelEquations;  // Yes, this case actually happens. Graph nodes don't set "pet", because their tree is single-use only, so no need to call loadPart().
         if (parent == null) return null;  // If this were actually a fake root, then at least one of {pet, graph} would be non-null.
         return ((NodeBase) parent).getTree ();
     }

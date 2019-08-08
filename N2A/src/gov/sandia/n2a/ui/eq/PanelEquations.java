@@ -9,6 +9,7 @@ package gov.sandia.n2a.ui.eq;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Container;
 import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.FontMetrics;
@@ -91,12 +92,12 @@ public class PanelEquations extends JPanel
     public NodePart part;     // The node that contains the current graph. Can be root or a deeper node (via drill-down).
     public boolean  locked;
     public boolean  viewTree; // Show original tree view, rather than graph view.
-    public boolean  open;     // Indicates that a tree appears in upper-left corner for editing part directly.
 
-    protected JPanel                   panelGraph;
+    protected PanelGraph               panelGraph;
     protected JPanel                   panelBreadcrumb;
     protected BreadcrumbRenderer       breadcrumbRenderer     = new BreadcrumbRenderer ();
     public    PanelEquationGraph       panelEquationGraph;
+    protected GraphParent              panelParent;
     public    PanelEquationTree        panelEquationTree;  // To display root as a tree.
     protected PanelEquationTree        active;             // Tree which most recently received focus. Could be panelEquationTree or a GraphNode.panelEquations.
     protected TransferHandler          transferHandler;
@@ -493,13 +494,14 @@ public class PanelEquations extends JPanel
         panelBreadcrumb = Lay.BL ("C", breadcrumbRenderer);
         panelBreadcrumb.setBorder (new RoundedTopBorder (5));
         panelBreadcrumb.setOpaque (false);
+        panelParent        = new GraphParent (this);
         panelEquationGraph = new PanelEquationGraph (this);
-        panelGraph = Lay.BL (
-            "N", panelBreadcrumb,
-            "C", panelEquationGraph  // Initial state is open==false and graph showing.
-        );
+        panelGraph = new PanelGraph ();
+        panelGraph.add (panelParent);
+        panelGraph.add (panelBreadcrumb,    BorderLayout.NORTH);
+        panelGraph.add (panelEquationGraph, BorderLayout.CENTER);
 
-        panelEquationTree = new PanelEquationTree (this, null);
+        panelEquationTree = new PanelEquationTree (this, null, false);
 
         Lay.BLtg (this,
             "N", Lay.WL ("L",
@@ -673,7 +675,7 @@ public class PanelEquations extends JPanel
             buttonView.setToolTipText ("Edit Graph");
 
             remove (panelGraph);
-            panelEquationGraph.clear ();  // releases fake roots on subparts
+            panelGraph.clear ();
             add (panelEquationTree, BorderLayout.CENTER);
         }
         else
@@ -709,31 +711,7 @@ public class PanelEquations extends JPanel
         }
         else
         {
-            panelEquationGraph.loadPart ();
-            breadcrumbRenderer.update ();
-            validate ();  // In case breadcrumbRenderer changes shape.
-
-            // Decide whether to open the part tree
-            FocusCacheEntry fce = getFocus (part);
-            if (fce == null)
-            {
-                // Determine if part has any sub-parts
-                open = false;
-                Enumeration<?> e = part.children ();  // Unfiltered, so sub-parts will be included.
-                while (e.hasMoreElements ())
-                {
-                    Object o = e.nextElement ();
-                    if (o instanceof NodePart)
-                    {
-                        open = true;
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                open = fce.open;
-            }
+            panelGraph.loadPart ();
         }
         repaint ();
         takeFocus ();  // sets active
@@ -757,9 +735,7 @@ public class PanelEquations extends JPanel
         }
         else
         {
-            panelEquationGraph.clear ();
-            breadcrumbRenderer.update ();
-            panelGraph.validate ();
+            panelGraph.clear ();
         }
         repaint ();
     }
@@ -798,10 +774,18 @@ public class PanelEquations extends JPanel
         else
         {
             fce.position = panelEquationGraph.saveFocus ();
-            fce.open = open;
             if (active != null)
             {
-                fce.subpart = active.root.source.key ();
+                if (active == panelParent.panelEquations)
+                {
+                    fce.parentFocused = true;
+                }
+                else
+                {
+                    fce.parentFocused = false;
+                    fce.subpart = active.root.source.key ();
+                }
+
                 // Only save state of the active node, rather than all nodes.
                 // This seems sufficient for good user experience.
                 fce = createFocus (active.root);
@@ -843,7 +827,7 @@ public class PanelEquations extends JPanel
     public void takeFocus ()
     {
         if (viewTree) panelEquationTree .takeFocus ();
-        else          panelEquationGraph.takeFocus ();
+        else          panelGraph        .takeFocus ();
     }
 
     public boolean isEditing ()
@@ -1210,7 +1194,7 @@ public class PanelEquations extends JPanel
                         {
                             if (x < getIconWidth ())
                             {
-                                System.out.println ("toggle the part tree");
+                                panelParent.toggleOpen ();
                             }
                             else
                             {
@@ -1310,12 +1294,78 @@ public class PanelEquations extends JPanel
         }
     };
 
+    public class PanelGraph extends JPanel
+    {
+        public PanelGraph ()
+        {
+            setLayout (new BorderLayout ()
+            {
+                public void layoutContainer (Container target)
+                {
+                    super.layoutContainer (target);
+                    panelParent.setLocation (panelEquationGraph.getLocation ());
+                }
+            });
+        }
+
+        public boolean isOptimizedDrawingEnabled ()
+        {
+            return ! panelParent.isVisible ();
+        }
+
+        public void loadPart ()
+        {
+            panelEquationGraph.loadPart ();
+            breadcrumbRenderer.update ();
+
+            // Decide whether to open the part tree
+            boolean open = part.source.getBoolean ("$metadata", "gui", "bounds", "parent");
+            if (! open)
+            {
+                // Determine if part has any sub-parts
+                boolean hasChild = false;
+                Enumeration<?> e = part.children ();  // Unfiltered, so sub-parts will be included.
+                while (e.hasMoreElements ())
+                {
+                    Object o = e.nextElement ();
+                    if (o instanceof NodePart)
+                    {
+                        hasChild = true;
+                        break;
+                    }
+                }
+                if (! hasChild) open = true;
+
+                FocusCacheEntry fce = getFocus (part);
+                if (fce != null  &&  fce.parentFocused) open = true;
+            }
+            panelParent.setOpen (open);
+
+            validate ();  // In case breadcrumbRenderer changes shape.
+        }
+
+        public void clear ()
+        {
+            panelParent.clear ();
+            panelEquationGraph.clear ();  // releases fake roots on subparts
+            breadcrumbRenderer.update ();
+            validate ();
+        }
+
+        public void takeFocus ()
+        {
+            FocusCacheEntry fce = getFocus (part);
+            if (fce != null  &&  fce.parentFocused) panelParent       .takeFocus ();
+            else                                    panelEquationGraph.takeFocus (fce);
+        }
+    }
+
     public static class FocusCacheEntry
     {
-        boolean    open;      // state of PanelEquations.open when the associated part is viewed
-        StoredPath sp;        // of tree when this part is the root
-        Point      position;  // of viewport for graph
-        String     subpart;   // Name of graph node (sub-part) whose tree has keyboard focus
+        boolean    parentFocused; // select the parent drop-down node, rather than a member of the child (sub-part) graph
+        StoredPath sp;            // of tree when this part is the root
+        Point      position;      // of viewport for graph
+        String     subpart;       // Name of graph node (sub-part) whose tree has keyboard focus
     }
 
     /**
@@ -1351,14 +1401,17 @@ public class PanelEquations extends JPanel
 
         public void restore ()
         {
+            if (first)
+            {
+                // Avoid clawing back focus on first call, since that is the initial
+                // "do" of an edit operation, which may have been completed by a loss of focus.
+                first = false;
+                return;
+            }
             if (path == null) return;
 
-            // Hack focus cache to restore open state of parent tree. Only meaningful when viewTree is false.
-            int depth = path.size ();
-            FocusCacheEntry fce = createFocus (path.toArray ());
-            fce.open = asParent;
-
             // Retrieve model
+            int depth = path.size ();
             String key0 = path.get (0);
             MNode doc = AppData.models.child (key0);
             if (doc != record)
@@ -1367,25 +1420,31 @@ public class PanelEquations extends JPanel
                 if (depth == 1) return;  // since load() already called loadPart()
             }
 
-            // Hack focus cache to focus correct subpart. Only meaningful when viewTree is false.
-            int last = depth - 1;
-            if (last > 0)
+            // Determine position of part, as either parent or child node, in terms of graph view
+            int end;
+            if (asParent)
             {
-                fce = createFocus (path.subList (0, last).toArray ());
-                fce.subpart = path.get (last);
+                end = depth;
+                // Hack focus cache to restore open state of parent tree.
+                FocusCacheEntry fce = createFocus (path.toArray ());
+                fce.parentFocused = true;
+            }
+            else
+            {
+                end = depth - 1;
+                // Hack focus cache to focus correct subpart.
+                if (end > 0)
+                {
+                    FocusCacheEntry fce = createFocus (path.subList (0, end).toArray ());
+                    fce.subpart = path.get (end);
+                }
             }
 
             // Grab focus and select correct part
-            // Avoid clawing back focus on first call, since that is the initial
-            // "do" of an edit operation, which may have been completed by a loss of focus.
-            if (! first)
-            {
-                NodePart p = root;
-                for (int i = 1; i < last; i++) p = (NodePart) p.child (path.get (i));
-                if (p == part  ||  viewTree) takeFocus ();  // loadPart() won't run in this case, but we should still take focus.
-                else                         loadPart (p);
-            }
-            first = false;
+            NodePart p = root;
+            for (int i = 1; i < end; i++) p = (NodePart) p.child (path.get (i));
+            if (p == part  ||  viewTree) takeFocus ();  // loadPart() won't run in this case, but we should still take focus.
+            else                         loadPart (p);
         }
     }
 }
