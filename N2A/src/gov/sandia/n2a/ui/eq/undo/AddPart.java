@@ -94,10 +94,10 @@ public class AddPart extends Undoable
         NodePart createdNode = (NodePart) parent.child (name);
 
         PanelEquations pe = PanelModel.instance.panelEquations;
-        PanelEquationTree pet = parent.getTree ();
+        boolean graphParent =  parent == pe.part  &&  ! pe.viewTree;
+        PanelEquationTree pet = graphParent ? null : parent.getTree ();  // Only use tree if it is not the graph parent, since graph parent hides its sub-parts.
         FilteredTreeModel model = null;
         if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
-        boolean graphParent =  parent == pe.part  &&  ! pe.viewTree;
         PanelEquationGraph peg = pe.panelEquationGraph;  // only used if graphParent is true
 
         TreeNode[] createdPath = createdNode.getPath ();
@@ -134,6 +134,7 @@ public class AddPart extends Undoable
         {
             peg.reconnect ();
             peg.paintImmediately ();
+            if (peg.isEmpty ()) pe.panelParent.setOpen (true);
         }
     }
 
@@ -159,10 +160,10 @@ public class AddPart extends Undoable
         // Update GUI
 
         PanelEquations pe = PanelModel.instance.panelEquations;
-        PanelEquationTree pet = parent.getTree ();
+        boolean graphParent =  parent == pe.part  &&  ! pe.viewTree;
+        PanelEquationTree pet = graphParent ? null : parent.getTree ();
         FilteredTreeModel model = null;
         if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
-        boolean graphParent =  parent == pe.part  &&  ! pe.viewTree;
         PanelEquationGraph peg = pe.panelEquationGraph;
 
         boolean addGraphNode = false;
@@ -170,6 +171,7 @@ public class AddPart extends Undoable
         {
             addGraphNode = true;
             createdNode = new NodePart (createdPart);
+            createdNode.hide = graphParent;
             if (model == null) FilteredTreeModel.insertNodeIntoUnfilteredStatic (createdNode, parent, index);
             else               model.insertNodeIntoUnfiltered (createdNode, parent, index);
         }
@@ -193,6 +195,7 @@ public class AddPart extends Undoable
         if (graphParent)
         {
             if (addGraphNode) peg.addPart (createdNode);
+            createdNode.hide = false;
             createdNode.graph.takeFocus ();
             peg.reconnect ();
             peg.paintImmediately ();

@@ -29,12 +29,14 @@ import javax.swing.event.MouseInputAdapter;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Lay;
+import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
 
 @SuppressWarnings("serial")
 public class GraphParent extends JPanel
 {
     protected PanelEquations    container;
+    protected NodePart          part;
     public    PanelEquationTree panelEquations;
     protected ResizeListener    resizeListener = new ResizeListener ();
 
@@ -58,27 +60,38 @@ public class GraphParent extends JPanel
     {
         boolean nextOpen = ! isVisible ();
         setOpen (nextOpen);
-        if (! container.locked) container.part.source.set (nextOpen, "$metadata", "gui", "bounds", "parent");
+        if (! container.locked) part.source.set (nextOpen, "$metadata", "gui", "bounds", "parent");
     }
 
     public void setOpen (boolean open)
     {
-        setVisible (open);
         if (open)
         {
-            panelEquations.loadPart (container.part);
+            setVisible (true);
             setSize (getPreferredSize ());
             panelEquations.takeFocus ();
         }
         else
         {
-            panelEquations.clear ();
+            if (panelEquations.tree.hasFocus ()) panelEquations.tree.transferFocus ();
+            setVisible (false);
         }
+    }
+
+    public void loadPart ()
+    {
+        if (container.part == part) return;
+        if (part != null) part.fakeRoot (false);
+        part = container.part;
+        part.fakeRoot (true);
+        panelEquations.loadPart (part);
     }
 
     public void clear ()
     {
         panelEquations.clear ();
+        if (part != null) part.fakeRoot (false);
+        part = null;
     }
 
     public void takeFocus ()
@@ -90,7 +103,7 @@ public class GraphParent extends JPanel
     {
         int w = 0;
         int h = 0;
-        MNode boundsParent = container.part.source.child ("$metadata", "gui", "bounds", "parent");
+        MNode boundsParent = part.source.child ("$metadata", "gui", "bounds", "parent");
         if (boundsParent != null)
         {
             w = boundsParent.getInt ("width");
@@ -228,7 +241,7 @@ public class GraphParent extends JPanel
                     Rectangle now = getBounds ();
                     if (now.width  != old.width ) boundsParent.set (now.width,  "width");
                     if (now.height != old.height) boundsParent.set (now.height, "height");
-                    if (boundsParent.size () > 0) PanelModel.instance.undoManager.add (new ChangeGUI (container.part, guiTree));
+                    if (boundsParent.size () > 0) PanelModel.instance.undoManager.add (new ChangeGUI (part, guiTree));
                 }
             }
 
@@ -260,7 +273,7 @@ public class GraphParent extends JPanel
             g2.fill (border);
 
             GraphParent gp = (GraphParent) c;
-            g2.setPaint (EquationTreeCellRenderer.getForegroundFor (gp.container.part, false));
+            g2.setPaint (EquationTreeCellRenderer.getForegroundFor (gp.part, false));
             g2.draw (border);
 
             Shape line = new Line2D.Double (x, y, x+width-1, y);

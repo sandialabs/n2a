@@ -257,6 +257,11 @@ public class PanelEquationGraph extends JScrollPane
         graphPanel.rebuildEdges ();
     }
 
+    public boolean isEmpty ()
+    {
+        return graphPanel.getComponentCount () == 0;
+    }
+
     public void paintImmediately ()
     {
         paintImmediately (getBounds ());
@@ -342,6 +347,7 @@ public class PanelEquationGraph extends JScrollPane
             for (Component c : getComponents ())
             {
                 GraphNode gn = (GraphNode) c;
+                gn.panelEquations.clear ();
                 gn.node.graph = null;
                 gn.node.fakeRoot (false);
             }

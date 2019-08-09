@@ -17,10 +17,10 @@ import gov.sandia.n2a.ui.eq.tree.NodeBase;
 
 public class StoredPath
 {
-    boolean        selected; // Was anything selected?
-    boolean        expanded; // Was the selected node also expanded?
-    List<String>   keys   = new ArrayList<String> ();   // of the selected node
-    List<String[]> others = new ArrayList<String[]> (); // All the tree nodes that were expanded before. May include the current selection. These nodes get less detailed processing.
+    protected boolean        selected; // Was anything selected?
+    protected boolean        expanded; // Was the selected node also expanded?
+    protected List<String>   keys   = new ArrayList<String> ();   // of the selected node
+    protected List<String[]> others = new ArrayList<String[]> (); // All the tree nodes that were expanded before. May include the current selection. These nodes get less detailed processing.
 
     public StoredPath (JTree tree)
     {

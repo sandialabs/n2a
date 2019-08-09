@@ -65,6 +65,7 @@ public class NodePart extends NodeContainer
     public    GraphNode                   graph;
     public    PanelEquationTree           pet;                 // If this part is not bound to a graph node, it may be bound to a full-view tree. If not bound to either, then no tree operations are necessary.
     protected NodePart                    trueParent;
+    public    boolean                     hide;                // visible() should return false. Used to temporarily suppress node when adding to graph.  Allows us to avoid tampering with "parent" field.
 
     public NodePart (MPart source)
     {
@@ -188,7 +189,7 @@ public class NodePart extends NodeContainer
     public boolean visible (int filterLevel)
     {
         // Under "parent" graph node, don't display child parts, as these will have separate graph nodes.
-        if (parent == null) return false;
+        if (hide  ||  parent == null) return false;
 
         if (filterLevel >= FilteredTreeModel.LOCAL) return source.isFromTopDocument ();
         return true;  // Almost always visible, except for most stringent filter mode.
@@ -724,8 +725,8 @@ public class NodePart extends NodeContainer
     public PanelEquationTree getTree ()
     {
         if (pet   != null) return pet;
-        if (graph != null) return graph.panelEquations;  // Yes, this case actually happens. Graph nodes don't set "pet", because their tree is single-use only, so no need to call loadPart().
-        if (parent == null) return null;  // If this were actually a fake root, then at least one of {pet, graph} would be non-null.
+        if (graph != null) return graph.panelEquations;  // Graph nodes don't set "pet", because their tree is single-use only, so they don't need to call loadPart().
+        if (parent == null) return null;  // True root. If this were instead a fake root, then at least one of {pet, graph} would be non-null.
         return ((NodeBase) parent).getTree ();
     }
 

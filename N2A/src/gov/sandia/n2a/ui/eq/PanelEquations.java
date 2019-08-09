@@ -97,7 +97,7 @@ public class PanelEquations extends JPanel
     protected JPanel                   panelBreadcrumb;
     protected BreadcrumbRenderer       breadcrumbRenderer     = new BreadcrumbRenderer ();
     public    PanelEquationGraph       panelEquationGraph;
-    protected GraphParent              panelParent;
+    public    GraphParent              panelParent;
     public    PanelEquationTree        panelEquationTree;  // To display root as a tree.
     protected PanelEquationTree        active;             // Tree which most recently received focus. Could be panelEquationTree or a GraphNode.panelEquations.
     protected TransferHandler          transferHandler;
@@ -130,7 +130,7 @@ public class PanelEquations extends JPanel
     protected static ImageIcon iconViewGraph = ImageUtil.getImage ("viewGraph.png");
     protected static ImageIcon iconViewTree  = ImageUtil.getImage ("explore.gif");
 
-    protected static String noModel = "Select model from left or click New Model above.";
+    protected static String noModel = "Select a model from the left, or click New Model button above.";
 
     protected int jobCount = 0;  // for launching jobs
 
@@ -248,6 +248,13 @@ public class PanelEquations extends JPanel
                 {
                     if (xfer.isDrop ()) tree.setSelectionPath (path);
                     target = (NodeBase) path.getLastPathComponent ();
+                }
+
+                // Don't drop part directly on parent tree. Instead, deflect to graph panel.
+                if (tree == panelParent.panelEquations.tree  &&  schema.type.endsWith ("Part"))
+                {
+                    tree.repaint ();  // hide DnD target highlight
+                    tree = null;
                 }
 
                 // An import can either be a new node in the tree, or a link (via inheritance) to an existing part.
@@ -853,15 +860,18 @@ public class PanelEquations extends JPanel
     {
         if (viewTree) return;
         saveFocus ();
-        FocusCacheEntry fce = getFocus (part);
-        if (nextPart.getParent () == part) fce.subpart = nextPart.source.key ();
+        if (nextPart.getTrueParent () == part)
+        {
+            FocusCacheEntry fce = getFocus (part);  // guaranteed to exist, due to saveFocus() call above
+            fce.subpart = nextPart.source.key ();
+        }
         loadPart (nextPart);
     }
 
     public void drillUp ()
     {
         if (viewTree) return;
-        NodePart parent = (NodePart) part.getParent ();
+        NodePart parent = (NodePart) part.getTrueParent ();
         if (parent != null) drill (parent);
     }
 
@@ -873,7 +883,7 @@ public class PanelEquations extends JPanel
             if (record == null)
             {
                 AddDoc add = new AddDoc ();
-                if (viewTree) add.fromSearchPanel = false;
+                add.fromSearchPanel = ! viewTree;
                 PanelModel.instance.undoManager.add (add);
                 // After load(doc), active is null.
                 // PanelEquationTree focusGained() will set active, but won't be called before the test below.
@@ -1315,7 +1325,13 @@ public class PanelEquations extends JPanel
 
         public void loadPart ()
         {
+            // Release any existing trees, including their fake roots
+            panelParent.clear ();
+            panelEquationGraph.clear ();
+            // Load trees
             panelEquationGraph.loadPart ();
+            panelParent.loadPart ();
+
             breadcrumbRenderer.update ();
 
             // Decide whether to open the part tree
@@ -1346,8 +1362,9 @@ public class PanelEquations extends JPanel
 
         public void clear ()
         {
+            panelParent.setOpen (false);
             panelParent.clear ();
-            panelEquationGraph.clear ();  // releases fake roots on subparts
+            panelEquationGraph.clear ();
             breadcrumbRenderer.update ();
             validate ();
         }
