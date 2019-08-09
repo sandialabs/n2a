@@ -423,13 +423,19 @@ public class PanelEquationTree extends JScrollPane
         TreePath path = tree.getPathForRow (0);
         if (path == null) return super.getMinimumSize ();
         Dimension result = tree.getPathBounds (path).getSize ();
-        if (tree.isExpanded (0))
-        {
-            // Add some compensation, so scroll bars don't overwrite part name.
-            result.height += getHorizontalScrollBar ().getPreferredSize ().height;
-            result.width  += getVerticalScrollBar   ().getPreferredSize ().width;
-        }
+        // Add some compensation, so scroll bars don't overwrite part name.
+        result.height += getHorizontalScrollBar ().getPreferredSize ().height;
+        result.width  += getVerticalScrollBar   ().getPreferredSize ().width;
         return result;
+    }
+
+    public Dimension getPreferredSize ()
+    {
+        int rc = tree.getRowCount ();
+        rc = Math.min (rc, 20);  // The default from openjdk source code for JTree
+        rc = Math.max (rc, 6);   // An arbitrary lower limit
+        tree.setVisibleRowCount (rc);
+        return super.getPreferredSize ();
     }
 
     /**
