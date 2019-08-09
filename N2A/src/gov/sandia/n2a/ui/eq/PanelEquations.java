@@ -405,7 +405,7 @@ public class PanelEquations extends JPanel
             {
                 stopEditing ();
                 AddDoc add = new AddDoc ();
-                if (viewTree) add.fromSearchPanel = false;
+                add.fromSearchPanel = ! viewTree;
                 PanelModel.instance.undoManager.add (add);
             }
         });
