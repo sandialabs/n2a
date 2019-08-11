@@ -24,12 +24,9 @@ import java.awt.RenderingHints;
 import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.AdjustmentEvent;
-import java.awt.event.AdjustmentListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
-import java.awt.event.MouseWheelListener;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
@@ -63,7 +60,6 @@ public class PanelEquationGraph extends JScrollPane
 
     // Convenience references
     protected JViewport  vp;
-    protected JScrollBar hsb;
     protected JScrollBar vsb;
 
     protected static Color background = new Color (0xF0F0F0);  // light gray
@@ -78,60 +74,7 @@ public class PanelEquationGraph extends JScrollPane
         setTransferHandler (new GraphTransferHandler ());
 
         vp  = getViewport ();
-        hsb = getHorizontalScrollBar ();
         vsb = getVerticalScrollBar ();
-
-        hsb.addAdjustmentListener (new AdjustmentListener ()
-        {
-            public void adjustmentValueChanged (AdjustmentEvent e)
-            {
-                Point p = vp.getViewPosition ();
-                int i = e.getValue ();
-                if (i != p.x)
-                {
-                    p.x = i;
-                    vp.setViewPosition (p);
-                }
-            }
-        });
-
-        vsb.addAdjustmentListener (new AdjustmentListener ()
-        {
-            public void adjustmentValueChanged (AdjustmentEvent e)
-            {
-                Point p = vp.getViewPosition ();
-                int i = e.getValue ();
-                if (i != p.y)
-                {
-                    p.y = i;
-                    vp.setViewPosition (p);
-                }
-            }
-        });
-
-        addMouseWheelListener (new MouseWheelListener ()
-        {
-            public void mouseWheelMoved (MouseWheelEvent e)
-            {
-                if (e.getScrollType() == MouseWheelEvent.WHEEL_UNIT_SCROLL)
-                {
-                    // Should really get scaling from scrollbar, but since we configure it to do pixel increments,
-                    // we can hard code the multiplier in terms of how many pixels the scroll wheel should move.
-                    if (vsb.isVisible ()) vsb.setValue (vsb.getValue () + e.getUnitsToScroll () * 15);
-                }
-            }
-        });
-
-        addMouseListener (new MouseAdapter ()
-        {
-            public void mouseClicked (MouseEvent me)
-            {
-                if (SwingUtilities.isLeftMouseButton (me)  &&  me.getClickCount () == 2)
-                {
-                    container.drillUp ();
-                }
-            }
-        });
     }
 
     public void loadPart ()
@@ -274,24 +217,6 @@ public class PanelEquationGraph extends JScrollPane
         background = UIManager.getColor ("ScrollPane.background");
     }
 
-    public void doLayout ()
-    {
-        super.doLayout ();
-
-        // Update scroll bars
-        Point p          = vp.getViewPosition ();
-        Dimension size   = vp.getViewSize ();
-        Dimension extent = vp.getExtentSize ();
-        if (size.width > extent.width)
-        {
-            hsb.setValues (p.x, extent.width, 0, size.width);
-        }
-        if (size.height > extent.height)
-        {
-            vsb.setValues (p.y, extent.height, 0, size.height);
-        }
-    }
-
     public JViewport createViewport ()
     {
         return new JViewport ()
@@ -302,20 +227,41 @@ public class PanelEquationGraph extends JScrollPane
                 {
                     public void layoutContainer (Container parent)
                     {
-                        // The original version of this code (in OpenJDK) justifies (moves) the view if it is smaller
-                        // than the viewport extent. We don't want to move the viewport, so simply set its preferred size.
-                        // The original code also expands the view to fill the viewport.
-                        // TODO: vp position jumps to zero when scrollbar is activated.
+                        // The original version of this code in OpenJDK moves the view if it is smaller than the viewport extent.
+                        // Moving the viewport would disrupt user interaction, so we only set its size.
 
                         Dimension size   = graphPanel.getPreferredSize ();
+                        Point     p      = vp.getViewPosition ();
                         Dimension extent = vp.getExtentSize ();
-                        size.width  = Math.max (extent.width,  size.width);
-                        size.height = Math.max (extent.height, size.height);
+                        int visibleWidth  = size.width  - p.x;
+                        int visibleHeight = size.height - p.y;
+                        size.width  += Math.max (0, extent.width  - visibleWidth);
+                        size.height += Math.max (0, extent.height - visibleHeight);
                         vp.setViewSize (size);
                     }
                 };
             }
         };
+    }
+
+    public int getHorizontalScrollBarPolicy ()
+    {
+        if (vp != null)
+        {
+            Point p = vp.getViewPosition ();
+            if (p.x > 0) return HORIZONTAL_SCROLLBAR_ALWAYS;
+        }
+        return HORIZONTAL_SCROLLBAR_AS_NEEDED;
+    }
+
+    public int getVerticalScrollBarPolicy ()
+    {
+        if (vp != null)
+        {
+            Point p = vp.getViewPosition ();
+            if (p.y > 0) return VERTICAL_SCROLLBAR_ALWAYS;
+        }
+        return VERTICAL_SCROLLBAR_AS_NEEDED;
     }
 
     public class GraphPanel extends JPanel
@@ -333,6 +279,7 @@ public class PanelEquationGraph extends JScrollPane
             MouseAdapter mouseListener = new GraphMouseListener ();
             addMouseListener (mouseListener);
             addMouseMotionListener (mouseListener);
+            addMouseWheelListener (mouseListener);
         }
 
         public boolean isOptimizedDrawingEnabled ()
@@ -358,8 +305,6 @@ public class PanelEquationGraph extends JScrollPane
             layout.bounds = new Rectangle ();
             offset = new Point ();
             vp.setViewPosition (new Point ());
-            hsb.setValue (0);
-            vsb.setValue (0);
         }
 
         public void load ()
@@ -626,6 +571,8 @@ public class PanelEquationGraph extends JScrollPane
 
         public void layoutContainer (Container target)
         {
+            // TODO: shiftViewport() does not work well when dragging edge endpoints. Work on collapsing these two functions.
+
             // Only change layout if a component has moved into negative space.
             if (bounds.x >= 0  &&  bounds.y >= 0) return;
 
@@ -650,6 +597,52 @@ public class PanelEquationGraph extends JScrollPane
             {
                 ge.updateShape (false);
             }
+        }
+
+        /**
+            Moves viewport so that the given point is in the upper-left corner of the visible area.
+            Does a tight fit around existing components to minimize size of scrolled region.
+            This could result in a shift of components, even if the requested position is same as current position.
+            @param n New position of viewport, in terms of current viewport layout.
+            @return Amount to shift any external components to keep position relative to internal components.
+            This value should be added to their coordinates.
+        **/
+        public Point shiftViewport (Point n)
+        {
+            // Compute tight bounds which include new position
+            bounds = new Rectangle (n.x, n.y, 1, 1);
+            for (Component c : graphPanel.getComponents ())
+            {
+                bounds = bounds.union (c.getBounds ());
+            }
+            for (GraphEdge ge : graphPanel.edges)
+            {
+                bounds = bounds.union (ge.bounds);
+            }
+
+            // Shift components so bounds start at origin
+            Point d = new Point (-bounds.x, -bounds.y);
+            if (d.x != 0  ||  d.y != 0)
+            {
+                bounds.translate (d.x, d.y);
+                graphPanel.offset.translate (d.x, d.y);
+                n.translate (d.x, d.y);
+
+                // None of the following code is allowed to call componentMoved().
+                for (Component c : graphPanel.getComponents ())
+                {
+                    Point p = c.getLocation ();
+                    p.translate (d.x, d.y);
+                    c.setLocation (p);
+                }
+                for (GraphEdge ge : graphPanel.edges)
+                {
+                    ge.updateShape (false);
+                }
+            }
+
+            vp.setViewPosition (n);  // Doesn't do anything if n is same as current position.
+            return d;
         }
 
         public void componentMoved (Component comp)
@@ -698,6 +691,16 @@ public class PanelEquationGraph extends JScrollPane
             }
         }
 
+        public void mouseWheelMoved (MouseWheelEvent e)
+        {
+            if (e.getScrollType() == MouseWheelEvent.WHEEL_UNIT_SCROLL)
+            {
+                // Should really get scaling from scrollbar, but since we configure it to do pixel increments,
+                // we can hard code the multiplier in terms of how many pixels the scroll wheel should move.
+                if (vsb.isVisible ()) vsb.setValue (vsb.getValue () + e.getUnitsToScroll () * 15);
+            }
+        }
+
         public void mouseMoved (MouseEvent me)
         {
             if (container.locked) return;
@@ -728,58 +731,55 @@ public class PanelEquationGraph extends JScrollPane
 
         public void mouseDragged (MouseEvent me)
         {
+            Point here = me.getPoint ();  // relative to origin of viewport, which may not be visible
+
             Point pp = vp.getLocationOnScreen ();
             Point pm = me.getLocationOnScreen ();
-            pm.x -= pp.x;
+            pm.x -= pp.x;  // relative to upper-left corner of visible region
             pm.y -= pp.y;
             Dimension extent = vp.getExtentSize ();
-            boolean auto =  me == lastEvent;
-            if (pm.x < 0  ||  pm.x > extent.width  ||  pm.y < 0  ||  pm.y > extent.height)  // out of bounds
-            {
-                if (edge == null) return;
-                if (auto)
-                {
-                    int dx = pm.x < 0 ? pm.x : (pm.x > extent.width  ? pm.x - extent.width  : 0);
-                    int dy = pm.y < 0 ? pm.y : (pm.y > extent.height ? pm.y - extent.height : 0);
 
-                    me.translatePoint (dx, dy);  // Makes permanent change to lastEvent
-                    Point p = vp.getViewPosition ();
-                    p.translate (dx, dy);
-                    vp.setViewPosition (p);
-                }
-                else  // A regular drag
-                {
-                    lastEvent = me;  // Let the user adjust speed.
-                    timer.start ();
-                    return;  // Don't otherwise process it.
-                }
-            }
-            else  // in bounds
-            {
-                timer.stop ();
-                lastEvent = null;
-                if (auto) return;
-            }
-
-            Point here = me.getPoint ();
             if (edge != null)
             {
+                boolean auto =  me == lastEvent;
+                if (pm.x < 0  ||  pm.x > extent.width  ||  pm.y < 0  ||  pm.y > extent.height)  // out of bounds
+                {
+                    if (auto)
+                    {
+                        int dx = pm.x < 0 ? pm.x : (pm.x > extent.width  ? pm.x - extent.width  : 0);
+                        int dy = pm.y < 0 ? pm.y : (pm.y > extent.height ? pm.y - extent.height : 0);
+
+                        me.translatePoint (dx, dy);  // Makes permanent change to lastEvent
+                        Point p = vp.getViewPosition ();
+                        p.translate (dx, dy);
+                        vp.setViewPosition (p);
+                    }
+                    else  // A regular drag
+                    {
+                        lastEvent = me;  // Let the user adjust speed.
+                        timer.start ();
+                        return;  // Don't otherwise process it.
+                    }
+                }
+                else  // in bounds
+                {
+                    timer.stop ();
+                    lastEvent = null;
+                    if (auto) return;
+                }
+
                 edge.animate (here);
             }
             else if (startPan != null)
             {
-                int dx = here.x - startPan.x;
-                int dy = here.y - startPan.y;
-                if (dx != 0  &&  hsb.isVisible ())
-                {
-                    int old = hsb.getValue ();
-                    hsb.setValue (old - dx);
-                }
-                if (dy != 0  &&  vsb.isVisible ())
-                {
-                    int old = vsb.getValue ();
-                    vsb.setValue (old - dy);
-                }
+                Point p = vp.getViewPosition ();  // should be exactly same as current scrollbar values
+                p.x -= here.x - startPan.x;
+                p.y -= here.y - startPan.y;
+                Point d = graphPanel.layout.shiftViewport (p);
+                startPan.x += d.x;
+                startPan.y += d.y;
+                graphPanel.revalidate ();  // necessary to get scrollbars when components go past right or bottom
+                graphPanel.repaint ();
             }
         }
 

@@ -30,7 +30,7 @@ public class GraphEdge
     protected Shape     shape;
     protected Vector2   label;
     protected Rectangle textBox;
-    protected Rectangle bounds = new Rectangle (0, 0, -1, -1);  // empty. Allows call to animte() on brand-new edges that have not previously called updateShape().
+    protected Rectangle bounds = new Rectangle (0, 0, -1, -1);  // empty. Allows call to animate() on brand-new edges that have not previously called updateShape().
     protected Vector2   tip;
     protected boolean   tipDrag;
 
