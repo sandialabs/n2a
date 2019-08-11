@@ -136,12 +136,29 @@ public class GraphNode extends JPanel
 
     /**
         Subroutine of takeFocus(). Called either directly by takeFocus() or indirectly by title focus listener.
-     */
+    **/
     public void restoreFocus ()
     {
         container.active = panelEquations;
         parent.setComponentZOrder (this, 0);
         parent.scrollRectToVisible (getBounds ());
+        // Since parent node is always on top, we must shift the graph to avoid occlusion.
+        if (container.panelParent.isVisible ())
+        {
+            Point     me = getLocation ();
+            Dimension d  = container.panelParent.getSize ();
+            Point     p  = container.panelEquationGraph.vp.getViewPosition ();
+            int ox = d.width  - me.x + p.x;
+            int oy = d.height - me.y + p.y;
+            if (ox > 0  &&  oy > 0)
+            {
+                if (ox < oy) p.x -= ox;
+                else         p.y -= oy;
+                parent.layout.shiftViewport (p);
+                parent.revalidate ();
+                parent.repaint ();
+            }
+        }
     }
 
     public void switchFocus (boolean ontoTitle)
