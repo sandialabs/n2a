@@ -369,14 +369,17 @@ public class GraphNode extends JPanel
         }
 
         // Repaint all remaining edges
+        Point offsetBefore = new Point (parent.offset);
         for (GraphEdge ge : edgesOut)
         {
             paintRegion = paintRegion.union (ge.bounds);
             ge.updateShape (false);
             paintRegion = paintRegion.union (ge.bounds);
-            parent.layout.componentMoved (ge.bounds);
+            parent.layout.componentMoved (ge.bounds);  // This can shift all components, so need to shift paintRegion accordingly.
         }
         parent.scrollRectToVisible (edge.bounds);
+        paintRegion.x += parent.offset.x - offsetBefore.x;
+        paintRegion.y += parent.offset.y - offsetBefore.y;
         parent.paintImmediately (paintRegion);
     }
 
