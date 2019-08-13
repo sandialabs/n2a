@@ -37,6 +37,7 @@ import javax.swing.JViewport;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import javax.swing.TransferHandler;
 import javax.swing.UIManager;
 import javax.swing.border.AbstractBorder;
 import javax.swing.event.CellEditorListener;
@@ -57,7 +58,7 @@ public class GraphNode extends JPanel
     protected PanelEquations      container;
     protected GraphPanel          parent;
     public    NodePart            node;
-    protected TitleRenderer       title               = new TitleRenderer ();
+    protected TitleRenderer       title;
     protected TitleEditorListener titleEditorListener = new TitleEditorListener ();
     public    boolean             open;
     protected boolean             titleFocused;
@@ -84,6 +85,7 @@ public class GraphNode extends JPanel
         open         = node.source.getBoolean ("$metadata", "gui", "bounds", "open");
         titleFocused = true;  // sans any other knowledge, title should be selected first
 
+        title = new TitleRenderer ();
         title.getTreeCellRendererComponent (panelEquations.tree, node, false, open, false, -1, false);  // Configure JLabel with info from node.
         title.setFocusable (true);
         title.setRequestFocusEnabled (true);
@@ -142,6 +144,7 @@ public class GraphNode extends JPanel
         container.active = panelEquations;
         parent.setComponentZOrder (this, 0);
         parent.scrollRectToVisible (getBounds ());
+        repaint ();
         // Since parent node is always on top, we must shift the graph to avoid occlusion.
         if (container.panelParent.isVisible ())
         {
@@ -420,6 +423,8 @@ public class GraphNode extends JPanel
     {
         public TitleRenderer ()
         {
+            setTransferHandler (container.transferHandler);
+
             InputMap inputMap = getInputMap ();
             inputMap.put (KeyStroke.getKeyStroke ("UP"),               "close");
             inputMap.put (KeyStroke.getKeyStroke ("DOWN"),             "selectNext");
@@ -433,6 +438,9 @@ public class GraphNode extends JPanel
             inputMap.put (KeyStroke.getKeyStroke ("shift ctrl DOWN"),  "moveDown");
             inputMap.put (KeyStroke.getKeyStroke ("shift ctrl LEFT"),  "moveLeft");
             inputMap.put (KeyStroke.getKeyStroke ("shift ctrl RIGHT"), "moveRight");
+            inputMap.put (KeyStroke.getKeyStroke ("shift DELETE"),     "cut");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl INSERT"),      "copy");
+            inputMap.put (KeyStroke.getKeyStroke ("shift INSERT"),     "paste");
             inputMap.put (KeyStroke.getKeyStroke ("INSERT"),           "add");
             inputMap.put (KeyStroke.getKeyStroke ("DELETE"),           "delete");
             inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),       "delete");
@@ -492,6 +500,9 @@ public class GraphNode extends JPanel
                     nudge (e, 1, 0);
                 }
             });
+            actionMap.put ("cut",   TransferHandler.getCutAction ());
+            actionMap.put ("copy",  TransferHandler.getCopyAction ());
+            actionMap.put ("paste", TransferHandler.getPasteAction ());
             actionMap.put ("add", new AbstractAction ()
             {
                 public void actionPerformed (ActionEvent e)
@@ -627,8 +638,7 @@ public class GraphNode extends JPanel
                 {
                     hasFocus = true;
                     selected = true;
-                    restoreFocus ();
-                    GraphNode.this.repaint ();
+                    restoreFocus ();  // does repaint
                 }
 
                 public void focusLost (FocusEvent e)

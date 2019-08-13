@@ -500,13 +500,14 @@ public class PanelEquationTree extends JScrollPane
     public void restoreFocus ()
     {
         container.active = this;
-        if (tree.getSelectionCount () == 0  &&  root != null)
+        if (root != null)
         {
-            FocusCacheEntry fce = container.getFocus (root);
-            if (fce != null  &&  fce.sp != null) fce.sp.restore (tree);
-            if (tree.getSelectionCount () == 0)  // First-time display
+            if (root.graph != null) root.graph.restoreFocus ();  // Raise graph node to top of z-order. This will not produce an infinite loop, because only GraphNode.takeFocus() calls this.takeFocus().
+            if (tree.getSelectionCount () == 0)
             {
-                tree.setSelectionRow (0);
+                FocusCacheEntry fce = container.getFocus (root);
+                if (fce != null  &&  fce.sp != null) fce.sp.restore (tree);
+                if (tree.getSelectionCount () == 0) tree.setSelectionRow (0);  // First-time display
             }
         }
     }

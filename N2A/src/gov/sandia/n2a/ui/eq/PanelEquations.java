@@ -163,11 +163,18 @@ public class PanelEquations extends JPanel
                 }
 
                 // Determine paste/drop target.
-                JTree tree = null;
-                PanelEquationGraph peg = null;
+                JTree              tree = null;
+                PanelEquationGraph peg  = null;
+                GraphNode          gn   = null;
                 Component comp = xfer.getComponent ();
                 if      (comp instanceof JTree             ) tree = (JTree)              comp;
                 else if (comp instanceof PanelEquationGraph) peg  = (PanelEquationGraph) comp;
+                else if (comp instanceof GraphNode.TitleRenderer)
+                {
+                    gn = (GraphNode) comp.getParent ().getParent ();
+                    if (gn.open) tree = gn.panelEquations.tree;
+                    else         peg  = gn.container.panelEquationGraph;
+                }
 
                 TreePath path = null;
                 DropLocation dl = null;
@@ -182,6 +189,12 @@ public class PanelEquations extends JPanel
                     else
                     {
                         path = tree.getSelectionPath ();
+                        if (path == null  &&  gn != null)
+                        {
+                            Object[] o = new Object[1];
+                            o[0] = gn.node;
+                            path = new TreePath (o);
+                        }
                     }
                 }
 
@@ -339,6 +352,11 @@ public class PanelEquations extends JPanel
                     if (path != null) node = (NodeBase) path.getLastPathComponent ();
                     if (node == null) node = (NodeBase) tree.getModel ().getRoot ();
                 }
+                else if (comp instanceof GraphNode.TitleRenderer)
+                {
+                    GraphNode gn = (GraphNode) comp.getParent ().getParent ();
+                    node = gn.node;
+                }
                 if (node == null) return null;
 
                 MVolatile copy = new MVolatile ();
@@ -385,7 +403,8 @@ public class PanelEquations extends JPanel
                         }
                         else
                         {
-                            node.delete ((JTree) source, false);
+                            if (source instanceof JTree) node.delete ((JTree) source, false);
+                            else                         node.delete (null,           false);  // works for NodePart
                         }
                     }
                 }
