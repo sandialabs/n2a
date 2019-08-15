@@ -3131,7 +3131,7 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "path (String & result)\n");
             result.append ("{\n");
-            if (s.connectionBindings == null)
+            if (s.connectionBindings == null  ||  s.connectionBindings.size () == 1)  // Not a connection, or a unary connection
             {
                 // We assume that result is passed in as the empty string.
                 if (s.container != null)
@@ -3146,9 +3146,18 @@ public class JobC extends Thread
                         result.append ("  result = \"" + s.name + "\";\n");
                     }
                 }
-                if (bed.index != null) result.append ("  result += __24index;\n");
+                if (bed.index != null)
+                {
+                    result.append ("  result += __24index;\n");
+                }
+                else if (s.connectionBindings != null)
+                {
+                    ConnectionBinding c = s.connectionBindings.get (0);
+                    BackendDataC cbed = (BackendDataC) c.endpoint.backendData;
+                    if (cbed.index != null) result.append ("  result += " + mangle (c.alias) + "->__24index;\n");
+                }
             }
-            else
+            else  // binary or higher connection
             {
                 boolean first = true;
                 boolean temp  = false;

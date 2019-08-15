@@ -588,9 +588,20 @@ public class Part extends Instance
 
         // For connections, it is more understandable to show our endpoints rather than our own name.
         InternalBackendData bed = (InternalBackendData) equations.backendData;
-        String result = ((Part) valuesObject[bed.endpoints]).path ();
+        Part c = (Part) valuesObject[bed.endpoints];  // first endpoint
+        if (equations.connectionBindings.size () == 1)  // unary connection. In this case, it makes more sense to use our own name, but we lack an index, so fetch it from the endpoint.
+        {
+            String result = super.path ();
+            if (bed.index == null)
+            {
+                InternalBackendData cbed = (InternalBackendData) c.equations.backendData;
+                if (cbed.index != null) result += c.get (cbed.index);
+            }
+            return result;
+        }
+        String result = c.path ();
         int count = equations.connectionBindings.size ();
-        for (int i = 1; i < count; i++) result += "-" + ((Part) valuesObject[bed.endpoints+i]).path ();
+        for (int i = 1; i < count; i++) result += "-" + ((Part) valuesObject[bed.endpoints+i]).path ();  // other endpoints
         return result;
     }
 
