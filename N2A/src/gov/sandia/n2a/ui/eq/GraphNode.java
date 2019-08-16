@@ -173,7 +173,7 @@ public class GraphNode extends JPanel
         }
         else
         {
-            if (! open) toggleOpen ();
+            if (! open) setOpen (true);
             panelEquations.tree.scrollRowToVisible (0);
             panelEquations.tree.setSelectionRow (0);
             panelEquations.tree.requestFocusInWindow ();
@@ -273,7 +273,7 @@ public class GraphNode extends JPanel
         setSize (getPreferredSize ());  // GraphLayout won't do this, so we must do it manually.
         Rectangle next = getBounds ();
         parent.layout.componentMoved (this);
-        parent.paintImmediately (old.union (next));
+        parent.repaint (old.union (next));
     }
 
     /**
@@ -383,7 +383,16 @@ public class GraphNode extends JPanel
         parent.scrollRectToVisible (edge.bounds);
         paintRegion.x += parent.offset.x - offsetBefore.x;
         paintRegion.y += parent.offset.y - offsetBefore.y;
-        parent.paintImmediately (paintRegion);
+        parent.repaint (paintRegion);
+    }
+
+    /**
+        Sets bounds to current preferred size and updates everything affected by the change.
+    **/
+    public void animate ()
+    {
+        Rectangle next = new Rectangle (getLocation (), getPreferredSize ());
+        if (getBounds () != next) animate (next);
     }
 
     /**
@@ -415,8 +424,8 @@ public class GraphNode extends JPanel
                 parent.layout.componentMoved (ge.edgeOther.bounds);
             }
         }
-        validate ();  // Preemptively redo internal layout, so this component will paint correctly in the paintImmediately() call below.
-        parent.paintImmediately (paintRegion);
+        validate ();  // Preemptively redo internal layout, so this component will repaint correctly.
+        parent.repaint (paintRegion);
     }
 
     public class TitleRenderer extends EquationTreeCellRenderer

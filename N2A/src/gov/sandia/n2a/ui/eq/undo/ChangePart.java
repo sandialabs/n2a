@@ -145,11 +145,12 @@ public class ChangePart extends Undoable
         {
             pet.updateOrder (nodePath);
             pet.updateVisibility (nodePath);  // Will include nodeStructureChanged(), if necessary.
+            pet.animate ();
         }
         if (graphParent)
         {
             peg.reconnect ();
-            peg.paintImmediately ();
+            peg.repaint ();
         }
     }
 }

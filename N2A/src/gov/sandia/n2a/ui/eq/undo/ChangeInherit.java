@@ -76,10 +76,11 @@ public class ChangeInherit extends Undoable
         TreeNode[] nodePath = parent.child ("$inherit").getPath ();
         pet.updateOrder (nodePath);
         pet.updateVisibility (nodePath);
+        pet.animate ();
         if (grandparent != null  &&  grandparent == pe.part)
         {
             peg.reconnect ();
-            peg.paintImmediately ();
+            peg.repaint ();
         }
     }
 }

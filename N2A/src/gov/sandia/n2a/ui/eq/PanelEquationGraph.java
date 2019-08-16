@@ -141,8 +141,7 @@ public class PanelEquationGraph extends JScrollPane
         }
         if (gn != null)
         {
-            graphPanel.scrollRectToVisible (gn.getBounds ());  // possibly change the viewport position set above
-            gn.takeFocus ();
+            gn.takeFocus ();  // possibly change the viewport position set above
         }
     }
 
@@ -203,11 +202,6 @@ public class PanelEquationGraph extends JScrollPane
     public boolean isEmpty ()
     {
         return graphPanel.getComponentCount () == 0;
-    }
-
-    public void paintImmediately ()
-    {
-        paintImmediately (getBounds ());
     }
 
     public void updateUI ()

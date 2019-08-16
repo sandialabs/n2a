@@ -89,6 +89,7 @@ public class StoredPath
                 expanded = true;  // Always expand the parent when a child is lost.
                 break;
             }
+            if (n.isRoot ()) break;  // Could be fake root of a graph node.
 
             if (! n.visible (FilteredTreeModel.filterLevel))  // The node we actually found is currently filtered out, so find nearest sibling
             {

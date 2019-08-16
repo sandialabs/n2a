@@ -804,17 +804,17 @@ public class PanelEquations extends JPanel
             {
                 if (active == panelParent.panelEquations)
                 {
-                    fce.parentFocused = true;
+                    fce.subpart = null;
                 }
                 else
                 {
-                    fce.parentFocused = false;
                     fce.subpart = active.root.source.key ();
                 }
 
                 // Only save state of the active node, rather than all nodes.
                 // This seems sufficient for good user experience.
                 fce = createFocus (active.root);
+                if (active.root.graph != null) fce.titleFocused = active.root.graph.titleFocused;
                 fce.sp = active.saveFocus (fce.sp);
             }
         }
@@ -1353,9 +1353,9 @@ public class PanelEquations extends JPanel
 
             breadcrumbRenderer.update ();
 
-            // Decide whether to open the part tree
-            boolean open = part.source.getBoolean ("$metadata", "gui", "bounds", "parent");
-            if (! open)
+            // Decide whether to open the parent tree
+            boolean parentOpen = part.source.getBoolean ("$metadata", "gui", "bounds", "parent");
+            if (! parentOpen)
             {
                 // Determine if part has any sub-parts
                 boolean hasChild = false;
@@ -1369,12 +1369,12 @@ public class PanelEquations extends JPanel
                         break;
                     }
                 }
-                if (! hasChild) open = true;
+                if (! hasChild) parentOpen = true;
 
                 FocusCacheEntry fce = getFocus (part);
-                if (fce != null  &&  fce.parentFocused) open = true;
+                if (fce != null  &&  fce.subpart == null) parentOpen = true;
             }
-            panelParent.setOpen (open);
+            panelParent.setOpen (parentOpen);
 
             validate ();  // In case breadcrumbRenderer changes shape.
         }
@@ -1391,17 +1391,17 @@ public class PanelEquations extends JPanel
         public void takeFocus ()
         {
             FocusCacheEntry fce = getFocus (part);
-            if (fce != null  &&  fce.parentFocused) panelParent       .takeFocus ();
-            else                                    panelEquationGraph.takeFocus (fce);
+            if (fce != null  &&  fce.subpart == null) panelParent       .takeFocus ();
+            else                                      panelEquationGraph.takeFocus (fce);
         }
     }
 
     public static class FocusCacheEntry
     {
-        boolean    parentFocused; // select the parent drop-down node, rather than a member of the child (sub-part) graph
-        StoredPath sp;            // of tree when this part is the root
-        Point      position;      // of viewport for graph
-        String     subpart;       // Name of graph node (sub-part) whose tree has keyboard focus
+        boolean    titleFocused; // state of GraphNode.titleFocused when this part is the root
+        StoredPath sp;           // of tree when this part is the root
+        Point      position;     // of viewport for graph
+        String     subpart = ""; // Name of graph node (sub-part) whose tree has keyboard focus. If null, then parent node has focus.
     }
 
     /**
@@ -1463,7 +1463,7 @@ public class PanelEquations extends JPanel
                 end = depth;
                 // Hack focus cache to restore open state of parent tree.
                 FocusCacheEntry fce = createFocus (path.toArray ());
-                fce.parentFocused = true;
+                fce.subpart = null;
             }
             else
             {

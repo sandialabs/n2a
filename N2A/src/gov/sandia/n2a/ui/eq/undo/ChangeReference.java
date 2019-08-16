@@ -116,5 +116,6 @@ public class ChangeReference extends Undoable
         TreeNode[] nodePath = nodeAfter.getPath ();
         pet.updateOrder (nodePath);
         pet.updateVisibility (nodePath);
+        pet.animate ();
     }
 }

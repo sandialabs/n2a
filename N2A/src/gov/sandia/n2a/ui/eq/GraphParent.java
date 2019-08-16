@@ -141,7 +141,7 @@ public class GraphParent extends JPanel
         Rectangle nextRegion = new Rectangle (old.getLocation (), next);
         Rectangle paintRegion = nextRegion.union (old);
 
-        validate ();  // Preemptively redo internal layout, so this component will paint correctly in the paintImmediately() call below.
+        validate ();  // Preemptively redo internal layout, so this component will repaint correctly.
         ((JComponent) getParent ()).repaint (paintRegion);
     }
 

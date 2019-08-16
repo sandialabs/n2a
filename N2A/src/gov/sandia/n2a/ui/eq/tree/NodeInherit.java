@@ -170,7 +170,7 @@ public class NodeInherit extends NodeBase
                 FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
                 model.nodeChanged (this);
                 Rectangle bounds = tree.getPathBounds (new TreePath (getPath ()));
-                if (bounds != null) tree.paintImmediately (bounds);
+                if (bounds != null) tree.repaint (bounds);
             }
             return;
         }

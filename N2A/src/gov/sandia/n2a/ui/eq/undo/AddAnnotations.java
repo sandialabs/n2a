@@ -71,6 +71,7 @@ public class AddAnnotations extends Undoable
             node.filter (FilteredTreeModel.filterLevel);
         }
         pet.updateVisibility (nodePath, index);
+        pet.animate ();
     }
 
     public void redo ()
@@ -110,5 +111,6 @@ public class AddAnnotations extends Undoable
         node.build ();  // Replaces all nodes, so they are set to require tab initialization.
         node.filter (FilteredTreeModel.filterLevel);
         pet.updateVisibility (node.getPath ());
+        pet.animate ();
     }
 }

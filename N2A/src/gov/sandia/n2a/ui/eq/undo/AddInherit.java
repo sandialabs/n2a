@@ -69,10 +69,11 @@ public class AddInherit extends Undoable
 
         pet.updateOrder (nodePath);
         pet.updateVisibility (nodePath, index);
+        pet.animate ();
         if (grandparent != null  &&  grandparent == pe.part)
         {
             peg.reconnect ();
-            peg.paintImmediately ();
+            peg.repaint ();
         }
     }
 
@@ -104,10 +105,11 @@ public class AddInherit extends Undoable
         TreeNode[] createdPath = parent.child ("$inherit").getPath ();
         pet.updateOrder (createdPath);
         pet.updateVisibility (createdPath);
+        pet.animate ();
         if (grandparent != null  &&  grandparent == pe.part)
         {
             peg.reconnect ();
-            peg.paintImmediately ();
+            peg.repaint ();
         }
     }
 

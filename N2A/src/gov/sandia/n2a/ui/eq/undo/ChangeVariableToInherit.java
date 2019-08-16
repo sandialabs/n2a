@@ -73,10 +73,11 @@ public class ChangeVariableToInherit extends Undoable
         TreeNode[] nodePath = parent.child (nameBefore).getPath ();
         pet.updateOrder (nodePath);
         pet.updateVisibility (nodePath);
+        pet.animate ();
         if (grandparent != null  &&  grandparent == pe.part)
         {
             peg.reconnect ();
-            peg.paintImmediately ();
+            peg.repaint ();
         }
     }
 
@@ -110,10 +111,11 @@ public class ChangeVariableToInherit extends Undoable
         TreeNode[] nodePath = parent.child ("$inherit").getPath ();
         pet.updateOrder (nodePath);
         pet.updateVisibility (nodePath);
+        pet.animate ();
         if (grandparent != null  &&  grandparent == pe.part)
         {
             peg.reconnect ();
-            peg.paintImmediately ();
+            peg.repaint ();
         }
     }
 }

@@ -8,7 +8,6 @@ package gov.sandia.n2a.ui.eq.undo;
 
 import java.util.List;
 
-import javax.swing.tree.TreePath;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.UndoableEdit;
 
@@ -139,7 +138,6 @@ public class ChangeAnnotation extends Undoable
             AddAnnotation.restoreExpandedNodes (pet.tree, parent, expanded);
         }
         NodeBase nodeAfter = AddAnnotation.resolve (parent, nameAfter);
-        pet.tree.expandPath (new TreePath (nodeAfter.getPath ()));
         pet.updateVisibility (nodeAfter.getPath ());
 
         while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeContainer) parent.getParent ();

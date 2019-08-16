@@ -139,6 +139,7 @@ public class ChangeEquation extends Undoable
         parent.updateTabStops (fm);
         parent.allNodesChanged (model);
         pet.updateVisibility (nodeAfter.getPath ());
+        pet.animate ();
     }
 
     public boolean replaceEdit (UndoableEdit edit)

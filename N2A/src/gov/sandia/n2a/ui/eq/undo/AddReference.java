@@ -113,7 +113,7 @@ public class AddReference extends Undoable
                 if (parent instanceof NodePart)
                 {
                     model.removeNodeFromParent (container);
-                    // No need to update order, because we just destroyed $metadata, where order is stored.
+                    pet.updateOrder (createdPath);
                     // No need to update tab stops in grandparent, because block nodes don't offer any tab stops.
                     containerIsVisible = false;
                 }
@@ -137,6 +137,7 @@ public class AddReference extends Undoable
             container.allNodesChanged (model);
         }
         pet.updateVisibility (createdPath, index);
+        pet.animate ();
     }
 
     public void redo ()
@@ -191,6 +192,7 @@ public class AddReference extends Undoable
             TreeNode[] createdPath = createdNode.getPath ();
             pet.updateOrder (createdPath);
             pet.updateVisibility (createdPath);
+            pet.animate ();
         }
 
         return createdNode;

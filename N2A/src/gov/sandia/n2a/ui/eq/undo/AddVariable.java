@@ -113,6 +113,7 @@ public class AddVariable extends Undoable
 
         pet.updateOrder (createdPath);
         pet.updateVisibility (createdPath, index);  // includes nodeStructureChanged(), if necessary
+        pet.animate ();
     }
 
     public void redo ()
@@ -165,6 +166,7 @@ public class AddVariable extends Undoable
             }
         }
         pet.updateVisibility (createdPath);
+        pet.animate ();
 
         return createdNode;
     }

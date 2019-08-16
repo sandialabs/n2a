@@ -439,6 +439,16 @@ public class PanelEquationTree extends JScrollPane
     }
 
     /**
+        Resize graph node based on any changes in our preferred size.
+    **/
+    public void animate ()
+    {
+        if (root == null) return;
+        if (root.graph != null) root.graph.animate ();
+        else if (root == container.part  &&  container.panelParent.isVisible ()) container.panelParent.updateGUI ();
+    }
+
+    /**
         @param part Should always be non-null. To clear the tree, call clear() rather than setting null here.
     **/
     public void loadPart (NodePart part)
@@ -468,7 +478,7 @@ public class PanelEquationTree extends JScrollPane
 
     public StoredPath saveFocus (StoredPath previous)
     {
-        // Save tree state for current record, but only if it's better than the previously-saved state.
+        // Save tree state, but only if it's better than the previously-saved state.
         if (previous == null  ||  tree.getSelectionPath () != null) return new StoredPath (tree);
         return previous;
     }
@@ -502,7 +512,7 @@ public class PanelEquationTree extends JScrollPane
         container.active = this;
         if (root != null)
         {
-            if (root.graph != null) root.graph.restoreFocus ();  // Raise graph node to top of z-order. This will not produce an infinite loop, because only GraphNode.takeFocus() calls this.takeFocus().
+            if (root.graph != null) root.graph.restoreFocus ();  // Raise graph node to top of z-order.
             if (tree.getSelectionCount () == 0)
             {
                 FocusCacheEntry fce = container.getFocus (root);

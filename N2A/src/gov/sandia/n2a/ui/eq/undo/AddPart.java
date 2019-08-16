@@ -129,11 +129,12 @@ public class AddPart extends Undoable
         {
             pet.updateOrder (createdPath);
             pet.updateVisibility (createdPath, index);  // includes nodeStructureChanged(), if necessary
+            pet.animate ();
         }
         if (graphParent)
         {
             peg.reconnect ();
-            peg.paintImmediately ();
+            peg.repaint ();
             if (peg.isEmpty ()) pe.panelParent.setOpen (true);
         }
     }
@@ -190,6 +191,7 @@ public class AddPart extends Undoable
         {
             if (! nameIsGenerated) pet.updateOrder (createdPath);
             pet.updateVisibility (createdPath);
+            pet.animate ();
         }
 
         if (graphParent)
@@ -198,7 +200,7 @@ public class AddPart extends Undoable
             createdNode.hide = false;
             createdNode.graph.takeFocus ();
             peg.reconnect ();
-            peg.paintImmediately ();
+            peg.repaint ();
         }
 
         return createdNode;

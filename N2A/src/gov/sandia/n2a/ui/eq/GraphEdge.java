@@ -288,7 +288,7 @@ public class GraphEdge
             paintRegion = paintRegion.union (edgeOther.bounds);
             parent.layout.componentMoved (edgeOther.bounds);
         }
-        parent.paintImmediately (paintRegion);
+        parent.repaint (paintRegion);
     }
 
     /**

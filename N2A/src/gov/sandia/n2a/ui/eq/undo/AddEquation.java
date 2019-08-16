@@ -177,6 +177,7 @@ public class AddEquation extends Undoable
         parent.allNodesChanged (model);
         pet.updateOrder (createdPath);
         pet.updateVisibility (createdPath, index);
+        pet.animate ();
     }
 
     public void redo ()
@@ -240,6 +241,7 @@ public class AddEquation extends Undoable
             parent.updateTabStops (fm);
             parent.allNodesChanged (model);
             pet.updateVisibility (createdNode.getPath ());
+            pet.animate ();
         }
 
         return createdNode;
