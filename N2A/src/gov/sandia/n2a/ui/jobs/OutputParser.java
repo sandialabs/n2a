@@ -139,10 +139,21 @@ public class OutputParser
         {
             for (Double d : values)
             {
+                if (d.isInfinite ()  ||  d.isNaN ()) continue;
                 min = Math.min (min, d);
                 max = Math.max (max, d);
             }
-            range = max - min;
+            if (Double.isInfinite (max))  // There was no good data. If max is infinite, then so is min.
+            {
+                // Set defensive values, so plot doesn't explode
+                range = 0;
+                min   = 0;
+                max   = 0;
+            }
+            else
+            {
+                range = max - min;
+            }
         }
     }
 
@@ -150,7 +161,6 @@ public class OutputParser
     {
         public int compare (Column a, Column b)
         {
-            // Should probably also trap NaN
             if (a.range > b.range) return  1;
             if (a.range < b.range) return -1;
             return 0;
