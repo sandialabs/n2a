@@ -44,7 +44,11 @@ public class Part extends Instance
         if (equations.parts.size () > 0)
         {
             int i = 0;
-            for (EquationSet s : equations.parts) valuesObject[i++] = new Population (s, this);
+            for (EquationSet s : equations.parts)
+            {
+                s.priority = i;  // For anti-indexing into valuesObject during init
+                valuesObject[i++] = new Population (s, this);
+            }
         }
         for (EventSource es : bed.eventSources)
         {
@@ -174,8 +178,10 @@ public class Part extends Instance
             }
         }
 
-        int populations = equations.parts.size ();
-        for (int i = 0; i < populations; i++) ((Population) valuesObject[i]).init (simulator);
+        if (equations.parts.size () > 0)
+        {
+            for (EquationSet s : equations.orderedParts) ((Population) valuesObject[s.priority]).init (simulator);
+        }
     }
 
     public void integrate (Simulator simulator)
@@ -584,25 +590,15 @@ public class Part extends Instance
 
     public String path ()
     {
-        if (equations.connectionBindings == null) return super.path ();
+        String result = super.path ();
+        if (equations.connectionBindings == null) return result;
 
         // For connections, it is more understandable to show our endpoints rather than our own name.
         InternalBackendData bed = (InternalBackendData) equations.backendData;
-        Part c = (Part) valuesObject[bed.endpoints];  // first endpoint
-        if (equations.connectionBindings.size () == 1)  // unary connection. In this case, it makes more sense to use our own name, but we lack an index, so fetch it from the endpoint.
-        {
-            String result = super.path ();
-            if (bed.index == null)
-            {
-                InternalBackendData cbed = (InternalBackendData) c.equations.backendData;
-                if (cbed.index != null) result += c.get (cbed.index);
-            }
-            return result;
-        }
-        String result = c.path ();
+        result += "(" + ((Part) valuesObject[bed.endpoints]).path ();  // first endpoint
         int count = equations.connectionBindings.size ();
         for (int i = 1; i < count; i++) result += "-" + ((Part) valuesObject[bed.endpoints+i]).path ();  // other endpoints
-        return result;
+        return result + ")";
     }
 
     /**

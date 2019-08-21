@@ -1074,10 +1074,7 @@ public class Variable implements Comparable<Variable>, Cloneable
 
     public void setBefore (Variable after)
     {
-        if (before == null)
-        {
-            before = new ArrayList<Variable> ();
-        }
+        if (before == null) before = new ArrayList<Variable> ();
         before.add (after);  // I am before the given variable, and it is after me.
     }
 

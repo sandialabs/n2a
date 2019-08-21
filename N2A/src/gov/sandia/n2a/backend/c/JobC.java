@@ -293,6 +293,7 @@ public class JobC extends Thread
     {
         model.resolveConnectionBindings ();
         model.flatten ("c");
+        model.sortParts ();
         model.addGlobalConstants ();
         model.addSpecials ();  // $connect, $index, $init, $n, $t, $t', $type
         model.addAttribute ("global",      0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
@@ -2183,7 +2184,7 @@ public class JobC extends Thread
             }
 
             // contained populations
-            for (EquationSet e : s.parts)
+            for (EquationSet e : s.orderedParts)
             {
                 result.append ("  " + mangle (e.name) + ".init ();\n");
             }

@@ -69,6 +69,9 @@ public class EquationSet implements Comparable<EquationSet>
     public NavigableSet<AccountableConnection> accountableConnections; // Connections which declare a $min or $max w.r.t. this part. Note: connected can be true even if accountableConnections is null.
     public List<ConnectionBinding>             dependentConnections;   // Connection bindings which include this equation set along their path. Used to update the paths during flattening.
     public boolean                             needInstanceTracking;   // Instance tracking is necessary due to a connection path that runs through this part.
+    public EquationSet                         visited;                // Keeps track of path when visiting parts
+    public int                                 priority;               // Used for sorting parts according to connection dependency.
+    public List<EquationSet>                   orderedParts;           // According to connection dependency
     public MNode                               metadata;
     public List<Variable>                      ordered;
     public List<ArrayList<EquationSet>>        splits;                 // Enumeration of the $type splits this part can go through
@@ -529,6 +532,68 @@ public class EquationSet implements Comparable<EquationSet>
         if (container == null) return false;
         result.addResolution (container);
         return container.resolveConnectionBinding (query, result);
+    }
+
+    /**
+        Order parts according to dependency on connection targets.
+        Most connections have regular populations as endpoints. A connection (CC) can also target another connection population (C).
+        In that case, CC needs C to be instantiated before C can form connections. Under normal simulation, this can happen via polling.
+        At startup, it helps to instantiate C before CC. The goal of this function is to sort the parts collection so that CC will come after C.
+        These kind of dependencies should form a directed acyclic graph (DAG), and the depth is arbitrary.
+        This function follows the example of determineOrder() for variables.
+        Depends on results of: resolveConnectionBindings(), flatten()
+    **/
+    public void sortParts ()
+    {
+        for (EquationSet p : parts)
+        {
+            p.determineOrder ();  // Apply this process recursively.
+            p.priority = 0;  // Should not generally be needed, since we do this process only once, and priority is initialize to zero.
+        }
+
+        for (EquationSet p : parts)
+        {
+            p.setPriority (1, null);
+        }
+
+        // Assemble dependency tree into flat list
+        // This queue reverses the order, so larger priority numbers come first.
+        PriorityQueue<EquationSet> queuePriority = new PriorityQueue<EquationSet> (parts.size (), new Comparator<EquationSet> ()
+        {
+            public int compare (EquationSet a, EquationSet b)
+            {
+                return b.priority - a.priority;
+            }
+        });
+        queuePriority.addAll (parts);
+        orderedParts = new ArrayList<EquationSet> ();
+        for (EquationSet e = queuePriority.poll (); e != null; e = queuePriority.poll ())
+        {
+            orderedParts.add (e);
+        }
+    }
+
+    public void setPriority (int value, EquationSet from)
+    {
+        // Prevent infinite recursion
+        EquationSet p = from;
+        while (p != null)
+        {
+            if (p == this) return;
+            p = p.visited;
+        }
+        visited = from;
+
+        // Ripple-increment priority
+        if (value <= priority) return;
+        priority = value++;  // note the post-increment here
+        if (connectionBindings == null) return;
+        for (ConnectionBinding c : connectionBindings)
+        {
+            EquationSet e = c.endpoint;
+            if (e.container != container) continue;  // Don't exit the current equation set when setting priority.
+            e.setPriority (value, this);
+        }
     }
 
     /**
