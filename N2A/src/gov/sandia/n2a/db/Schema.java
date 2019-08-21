@@ -56,7 +56,9 @@ public class Schema
 
     public static Schema read (BufferedReader reader) throws IOException
     {
-        String line = reader.readLine ().trim ();
+        String line = reader.readLine ();
+        if (line == null) throw new IOException ("File is empty.");
+        line = line.trim ();
         if (! line.startsWith ("N2A.schema")) throw new IOException ("Schema line not found.");
         if (line.length () < 12) throw new IOException ("Malformed schema line.");
         char delimiter = line.charAt (10);
