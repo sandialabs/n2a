@@ -208,8 +208,6 @@ public class EquationSet implements Comparable<EquationSet>
 
     /**
         Construct a hierarchical tree of parts from a fully-resolved model.
-        @param part Generally this should be the MPart constructed from a given model, as MPart
-        handles all inheritance resolution.
     **/
     public EquationSet (MNode part) throws Exception
     {
@@ -256,8 +254,29 @@ public class EquationSet implements Comparable<EquationSet>
                 else
                 {
                     Variable v = new Variable (this, e);
-                    // A variable with no equations and no accumulating combiner is likely to be a revocation.
-                    if (v.equations.size () > 0) variables.add (v);
+                    if (v.equations.size () > 0)  // Note: a variable with no equations and no accumulating combiner is likely to be a revocation.
+                    {
+                        variables.add (v);
+
+                        // Also add a watch expression, if requested
+                        MNode p = getTopDocumentNode ();
+                        if (p != null)
+                        {
+                            MNode watch = p.child (e.key (), "$metadata", "watch");
+                            if (watch != null)
+                            {
+                                // Determine dummy variable name
+                                String dummy = "x0";
+                                int suffix = 1;
+                                while (find (new Variable (dummy)) != null) dummy = "x" + suffix++;
+                                while (source.child (dummy) != null) dummy = "x" + suffix++;
+
+                                // Create output expression
+                                Variable o = new Variable (this, new MVolatile ("output(" + v.nameString () + ")", dummy));
+                                variables.add (o);
+                            }
+                        }
+                    }
                 }
             }
             catch (ParseException pe)
@@ -311,6 +330,20 @@ public class EquationSet implements Comparable<EquationSet>
         String temp = container.prefix ();
         if (temp.length () > 0) return temp + "." + name;
         return name;
+    }
+
+    /**
+        Returns the top-level document node associated with this equation set,
+        assuming that $inherit was hacked to point to the name of the model in the database.
+        It is possible that the associated node is created by inheritance and thus does not appear in top document.
+        In that case we return null.
+    **/
+    public MNode getTopDocumentNode ()
+    {
+        if (container == null) return AppData.models.child (name);
+        MNode p = container.getTopDocumentNode ();
+        if (p == null) return null;
+        return p.child (name);
     }
 
     /**

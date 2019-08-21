@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
@@ -16,6 +17,7 @@ import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.ChangeOrder;
+import gov.sandia.n2a.ui.eq.undo.DeleteAnnotation;
 
 import java.awt.Dimension;
 import java.awt.FontMetrics;
@@ -445,7 +447,7 @@ public class PanelEquationTree extends JScrollPane
     {
         if (root == null) return;
         if (root.graph != null) root.graph.animate ();
-        else if (root == container.part  &&  container.panelParent.isVisible ()) container.panelParent.updateGUI ();
+        else if (root == container.part  &&  container.panelParent.isVisible ()) container.panelParent.animate ();
     }
 
     /**
@@ -573,6 +575,28 @@ public class PanelEquationTree extends JScrollPane
         if (selected != null) selected.delete (tree, false);
     }
 
+    public void watchSelected ()
+    {
+        if (container.locked) return;
+        NodeBase selected = getSelected ();
+        if (! (selected instanceof NodeVariable)) return;
+
+        // Toggle watch on the selected variable
+        MPart watch = (MPart) selected.source.child ("$metadata", "watch");
+        if (watch != null  &&  watch.isFromTopDocument ())  // currently on, so turn it off
+        {
+            DeleteAnnotation d = new DeleteAnnotation ((NodeAnnotation) selected.child ("watch"), false);
+            d.setSelection = false;
+            PanelModel.instance.undoManager.add (d);
+        }
+        else  // currently off, so turn it on
+        {
+            AddAnnotation a = new AddAnnotation (selected, selected.getChildCount (), new MVolatile ("", "watch"));
+            a.setSelection = false;
+            PanelModel.instance.undoManager.add (a);
+        }
+    }
+
     public void moveSelected (int direction)
     {
         if (container.locked) return;
@@ -607,9 +631,9 @@ public class PanelEquationTree extends JScrollPane
         updateVisibility (this, path, index, true);
     }
 
-    public void updateVisibility (TreeNode path[], boolean setSelection)
+    public void updateVisibility (TreeNode path[], int index, boolean setSelection)
     {
-        updateVisibility (this, path, -2, setSelection);
+        updateVisibility (this, path, index, setSelection);
     }
 
     /**

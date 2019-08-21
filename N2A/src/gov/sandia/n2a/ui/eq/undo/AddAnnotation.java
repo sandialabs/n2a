@@ -43,6 +43,7 @@ public class AddAnnotation extends Undoable
     protected MNode        createSubtree;
     protected boolean      nameIsGenerated;
     public    NodeBase     createdNode;  ///< Used by caller to initiate editing. Only valid immediately after call to redo().
+    public    boolean      setSelection = true;
 
     /**
         @param parent Direct container of the new node, even if not a $metadata node.
@@ -131,10 +132,10 @@ public class AddAnnotation extends Undoable
     {
         super.undo ();
         view.restore ();
-        destroy (path, false, name, prefix);
+        destroy (path, false, name, prefix, setSelection);
     }
 
-    public static void destroy (List<String> path, boolean canceled, String name, String prefix)
+    public static void destroy (List<String> path, boolean canceled, String name, String prefix, boolean setSelection)
     {
         // Retrieve created node
         NodeContainer parent = (NodeContainer) NodeBase.locateNode (path);
@@ -187,7 +188,8 @@ public class AddAnnotation extends Undoable
                 restoreExpandedNodes (pet.tree, parent, expanded);
             }
         }
-        pet.updateVisibility (createdPath, index);
+        pet.updateVisibility (createdPath, index, setSelection);
+        pet.animate ();
 
         while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeContainer) parent.getParent ();
         if (parent instanceof NodePart)
@@ -201,10 +203,10 @@ public class AddAnnotation extends Undoable
     {
         super.redo ();
         view.restore ();
-        createdNode = create (path, index, name, createSubtree, nameIsGenerated);
+        createdNode = create (path, index, name, createSubtree, nameIsGenerated, setSelection);
     }
 
-    public static NodeBase create (List<String> path, int index, String name, MNode createSubtree, boolean nameIsGenerated)
+    public static NodeBase create (List<String> path, int index, String name, MNode createSubtree, boolean nameIsGenerated, boolean setSelection)
     {
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null)
@@ -274,7 +276,8 @@ public class AddAnnotation extends Undoable
             }
             createdNode = resolve (container, name);
             pet.tree.expandPath (new TreePath (createdNode.getPath ()));
-            pet.updateVisibility (createdNode.getPath ());
+            pet.updateVisibility (createdNode.getPath (), -2, setSelection);
+            pet.animate ();
 
             while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeBase) parent.getParent ();
             if (parent instanceof NodePart)

@@ -112,6 +112,7 @@ public class PanelEquations extends JPanel
     protected JButton buttonAddEquation;
     protected JButton buttonAddAnnotation;
     protected JButton buttonAddReference;
+    protected JButton buttonWatch;
     protected JButton buttonFilter;
     protected JButton buttonView;
     protected JButton buttonRun;
@@ -464,6 +465,12 @@ public class PanelEquations extends JPanel
         buttonAddReference.setActionCommand ("Reference");
         buttonAddReference.addActionListener (listenerAdd);
 
+        buttonWatch = new JButton (ImageUtil.getImage ("watch.png"));
+        buttonWatch.setMargin (new Insets (2, 2, 2, 2));
+        buttonWatch.setFocusable (false);
+        buttonWatch.setToolTipText ("Toggle Output");
+        buttonWatch.addActionListener (listenerWatch);
+
         buttonFilter = new JButton (ImageUtil.getImage ("filter.png"));
         buttonFilter.setMargin (new Insets (2, 2, 2, 2));
         buttonFilter.setFocusable (false);
@@ -539,6 +546,8 @@ public class PanelEquations extends JPanel
                 buttonAddAnnotation,
                 buttonAddReference,
                 Box.createHorizontalStrut (15),
+                buttonWatch,
+                Box.createHorizontalStrut (15),
                 buttonFilter,
                 buttonView,
                 Box.createHorizontalStrut (15),
@@ -574,8 +583,8 @@ public class PanelEquations extends JPanel
         itemAddReference.setActionCommand ("Reference");
         itemAddReference.addActionListener (listenerAdd);
 
-        JMenuItem itemDelete = new JMenuItem ("Delete", ImageUtil.getImage ("remove.gif"));
-        itemDelete.addActionListener (listenerDelete);
+        JMenuItem itemWatch = new JMenuItem ("Watch", ImageUtil.getImage ("watch.png"));
+        itemWatch.addActionListener (listenerWatch);
 
         menuPopup = new JPopupMenu ();
         menuPopup.add (itemAddPart);
@@ -584,7 +593,7 @@ public class PanelEquations extends JPanel
         menuPopup.add (itemAddAnnotation);
         menuPopup.add (itemAddReference);
         menuPopup.addSeparator ();
-        menuPopup.add (itemDelete);
+        menuPopup.add (itemWatch);
 
         // Filter menu
 
@@ -955,6 +964,17 @@ public class PanelEquations extends JPanel
                 stopEditing ();  // It may seem odd to save a cell just before destroying it, but this gives cleaner UI painting.
                 active.deleteSelected ();
             }
+        }
+    };
+
+    ActionListener listenerWatch = new ActionListener ()
+    {
+        public void actionPerformed (ActionEvent e)
+        {
+            if (locked) return;
+            if (active == null) return;
+            stopEditing ();
+            active.watchSelected ();
         }
     };
 

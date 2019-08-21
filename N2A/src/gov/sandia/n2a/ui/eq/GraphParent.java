@@ -123,10 +123,7 @@ public class GraphParent extends JPanel
         return d;
     }
 
-    /**
-        Apply any changes from $metadata.
-    **/
-    public void updateGUI ()
+    public void animate ()
     {
         animate (getPreferredSize ());
     }

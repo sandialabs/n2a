@@ -29,6 +29,7 @@ public class DeleteAnnotation extends Undoable
     protected String       prefix;
     protected MNode        savedSubtree;
     protected boolean      neutralized;
+    public    boolean      setSelection = true;
 
     public DeleteAnnotation (NodeAnnotation node, boolean canceled)
     {
@@ -66,14 +67,14 @@ public class DeleteAnnotation extends Undoable
     {
         super.undo ();
         view.restore ();
-        AddAnnotation.create (path, index, name, savedSubtree, false);
+        AddAnnotation.create (path, index, name, savedSubtree, false, setSelection);
     }
 
     public void redo ()
     {
         super.redo ();
         view.restore ();
-        AddAnnotation.destroy (path, canceled, name, prefix);
+        AddAnnotation.destroy (path, canceled, name, prefix, setSelection);
     }
 
     public boolean replaceEdit (UndoableEdit edit)
